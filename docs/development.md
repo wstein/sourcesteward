@@ -92,22 +92,20 @@ lanes also cache the Git-from-source prefix with `actions/cache`, keyed by runne
 lane, the pinned Git version and the installer hash; a hit skips the build and the
 preflight still asserts the exact Git version. Caches written by a branch or PR are visible
 only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
-CI is tiered so stacked PRs do not repeat the heavy suite. The `check` job (static checks
+CI keeps the heavy suite out of the `check` job so every PR, stacked or not, finishes in reasonable time. The `check` job (static checks
 and the plain Go test suite) always runs; `-race` never runs on a pull request or a push
 (Spec 039), only in the scheduled race workflow. The two `Git/jj conformance` lanes live in the reusable
-workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for pushes to `main`, for PRs
-whose base is the default branch, and for any PR that carries the `ci-full` label when it is
-opened or pushed; a PR stacked on another PR branch skips it otherwise. The separate workflow
+workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for every push to `main` and every
+pull request, including a PR stacked on another PR branch (its base is not the default branch):
+`check` never runs `internal/workspace` (a plain run exceeds the 40 minute timeout), so the
+shards must run on stacked PRs too. Documentation-only PRs skip the shards (below). The separate workflow
 `ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
 never re-runs `check`. An unlabelled pull request runs only the `current` lane; a PR with the
 `ci-full` label runs both lanes on every push (`ci.yml`) and when labelled (`ci-full.yml`), and
 the `minimum` lane also runs on pushes to `main` (the post-merge gate) and in the scheduled race
-workflow. The owner or dispatcher puts `ci-full` on the top PR of a stack. A
-skipped job reports a neutral result, so it does not block merging; the stack tip with
-`ci-full` carries the evidence for the whole stack, and the post-merge push to `main` runs
-everything again. When GitHub retargets a stacked PR to `main` after its parent merged, the
-workflow does not react (no `edited` trigger) and the conformance job stays skipped: the
-dispatcher restacks (a push) or applies `ci-full`.
+workflow. The owner or dispatcher puts `ci-full` on the top PR of a stack to
+add the `minimum` lane there. The post-merge push to `main` runs everything again. A retarget of a
+stacked PR to `main` needs no action: the stacked and unstacked paths are the same.
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
@@ -136,9 +134,9 @@ a non-merge checkout, a failing `go list` and every event other than `pull_reque
 Any error of the classifier gives the same `all` with exit status 0. `scripts/test_ci_affected.py` scans the Go tests and
 fails when a test reads or builds another package's files, or reads a prose file, and has no entry of the right kind in that file;
 root-level `.go` files select the tests that build `./cmd/stw`.
-`ci_changes.py affected --files-from FILE` classifies a path list by path only. When the conformance
-tier applies (the `CONFORMANCE_TIER` value), `check` leaves `internal/workspace` to the shards and
-`ci_shards.py packages --within` drops it from the affected list; when it does not apply, `check` tests it plain.
+`ci_changes.py affected --files-from FILE` classifies a path list by path only. `check` always
+leaves `internal/workspace` to the shards and `ci_shards.py packages --within` drops it from the
+affected list.
 
 Never require a per-shard check: a shard skipped inside a matrix reports under the
 unexpanded matrix name and would stay pending. Require only checks that always report:
@@ -164,10 +162,10 @@ package and `shard 5` the real-CLI smoke checks
 (its own job, so the smoke scripts no longer lengthen shard 0). The aggregate job `suite` needs the shards of its own
 lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
-list none. When the conformance tier applies to the event (the same expression as the
-conformance `if:`, held once in the workflow-level `CONFORMANCE_TIER` value), `check` runs
+list none. On every event, `check` runs
 `go test` on every package except `internal/workspace`, which the shards cover on
-both lanes with jj; otherwise it runs `./...`, so nothing is skipped. The weights are local
+both lanes with jj. The conformance caller has no `if:` and `check` no tier switch, so the two
+cannot drift apart. The weights are local
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
 (the fixture speed-up work will do that).
 
