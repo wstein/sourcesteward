@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"reflect"
 	"sort"
 	"unicode/utf8"
 
@@ -46,14 +47,14 @@ func registrationPruneRefusal(code string) (string, RegistrationPruneVerdict) {
 		return "registration-prune-absence-unproven", RegistrationPruneRetain
 	case "prune-evidence-changed", "prune-absence-changed", "prune-mount-changed", "prune-parent-changed", "prune-registration-refused", "prune-pointer-refused", "prune-metadata-refused", "prune-repository-refused", "prune-repository-changed", "changed-ownership", "changed-state", "evidence-changed":
 		return "registration-prune-changed", RegistrationPruneBlocked
-	case "prune-sibling-refused":
+	case "prune-sibling-refused", "unknown-workspace-path", "active-workspace", "native-evidence-unavailable", "incomplete-native", "incomplete-evidence":
 		return "registration-prune-inventory-blocked", RegistrationPruneBlocked
-	case "prune-recovery-refused", "prune-metadata-limit", "record-limit", "state-overlap", "invalid-state", "prune-store-refused":
+	case "prune-recovery-refused", "prune-metadata-limit", "record-limit", "state-overlap", "invalid-state", "prune-store-refused", "git-output-limit", "git-observation-limit":
 		return "registration-prune-recovery-unavailable", RegistrationPruneBlocked
-	case "unsupported-backend", "git-ownership-refused", "git-unavailable", "git-sandbox-unavailable", "git-layout-refused", "git-metadata-refused":
+	case "unsupported-backend", "git-ownership-refused", "git-unavailable", "git-sandbox-unavailable", "git-layout-refused", "git-metadata-refused", "planning-environment-unavailable", "unsupported-workspace", "jj-task-unavailable", "git-worktree-config-refused", "git-attributes-refused", "git-active-filter-refused", "invalid-path":
 		return "registration-prune-unsupported", RegistrationPruneUnknown
 	default:
-		return "registration-prune-absence-unproven", RegistrationPruneRetain
+		return "registration-prune-unsupported", RegistrationPruneUnknown
 	}
 }
 
@@ -62,10 +63,23 @@ func registrationPruneRefusal(code string) (string, RegistrationPruneVerdict) {
 // authorization. Scope is re-derived so an edited row label cannot grant own.
 func SelectRegistrationPrunes(rows []RegistrationPrune, cfg Config) []RegistrationPrune {
 	out := []RegistrationPrune{}
+	// Compare all claims before admission: even an ineligible conflicting claim
+	// excludes its identity, regardless of input order.
+	first := map[string]RegistrationPrune{}
+	conflicts := map[string]bool{}
+	for _, row := range rows {
+		if previous, exists := first[row.ID]; exists {
+			if !reflect.DeepEqual(previous, row) {
+				conflicts[row.ID] = true
+			}
+		} else {
+			first[row.ID] = row
+		}
+	}
 	seen := map[string]bool{}
 	for _, row := range rows {
 		scope := owner.Resolve(owner.Item{TaskOwner: row.Owner}, cfg.Caller, cfg.Agent)
-		if row.Kind != "registration-prune" || row.Verdict != RegistrationPruneSafe || row.Reason != "registration-prune-ready" || row.Proof != "owned-missing-registration" || row.OwnerSource != owner.SourceTaskRecord || row.Owner == "" || row.Scope == owner.ScopeUnknown || row.Scope != scope.Scope || len(row.Effects) != 1 || row.Effects[0] != "remove-registration" || !registrationPruneDigest(row.EvidenceDigest) || cfg.Agent && (row.Scope != owner.ScopeOwn || cfg.Caller == "") {
+		if conflicts[row.ID] || row.ID != RegistrationPruneID(row.Repo, row.Name, row.GitDir) || row.Kind != "registration-prune" || row.Verdict != RegistrationPruneSafe || row.Reason != "registration-prune-ready" || row.Proof != "owned-missing-registration" || row.OwnerSource != owner.SourceTaskRecord || row.Owner == "" || row.Scope == owner.ScopeUnknown || row.Scope != scope.Scope || len(row.Effects) != 1 || row.Effects[0] != "remove-registration" || !registrationPruneDigest(row.EvidenceDigest) || cfg.Agent && (row.Scope != owner.ScopeOwn || cfg.Caller == "") {
 			continue
 		}
 		if seen[row.ID] {
