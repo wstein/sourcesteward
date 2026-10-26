@@ -154,7 +154,7 @@ because states 6 to 10 contain all of it with `T none`. The signals, each valid 
 
 | # | Signal | Why it cannot exist before the push |
 | --- | --- | --- |
-| V1 | the journal has `tag-pushing` or `tag-pushed` for the version (`tag-pushing` is written **before** the push, so a push whose answer was lost still counts) | the wizard writes it at the push |
+| V1 | the journal has `tag-pushing` or `tag-pushed` for the version (`tag-pushing` is written **before** the push, so a push whose answer was lost still counts; only a push the remote **explicitly rejected** (journal `tag-push-rejected`, for example by the ruleset) ends the restriction) | the wizard writes it at the push |
 | V2 | a run of the publish workflow with event `push` and `head_branch` equal to the tag name (the run of a tag push keeps the tag as its ref after the tag is deleted; bounded runs read) | the publish workflow triggers on the tag push; a `workflow_dispatch` run has `head_branch` `main` |
 | V3 | a **published** (non-draft) release whose `tag_name` is the tag | publication happens only after the tag (a published release without a tag is also rule 1) |
 | V4 | a `DeleteEvent` with `ref_type` tag and `ref` equal to the tag name in the bounded repository events read (at most 3 pages; GitHub keeps about 90 days; to be measured, T016b) | a deletion needs a tag |
@@ -231,7 +231,7 @@ verified artifacts are).
   `internal/tidywizard/derive/state.go:71-112`); the repo key is the SHA-256 of the resolved `host/owner/name`. Directories are created with an explicit
   `chmod 0700`, so a process umask of `0000` (spike item 13) cannot leave them open.
 - **Content:** one JSON object per line: `seq`, `at` (UTC), `event` (closed set: `planned`, `approval-observed-build`, `dispatching` (written **before** the POST),
-  `dispatched`, `dispatch-released`, `artifacts-verified`, `record-written`, `approval-observed-tag`, `tag-created-local`, `tag-pushing` (written **before** the push), `tag-pushed`, `abandoned`, `restarted-as`), the facts of that
+  `dispatched`, `dispatch-released`, `artifacts-verified`, `record-written`, `approval-observed-tag`, `tag-created-local`, `tag-pushing` (written **before** the push), `tag-push-rejected` (the remote refused the push with an explicit answer), `tag-pushed`, `abandoned`, `restarted-as`), the facts of that
   event (commit, version, `plan_id`, digests, the artifact directory path, the run URL) and `prev` (the SHA-256 of the previous line). The names, never the values, of the
   agent markers are recorded. **No token, no secret, no approval word.** The `approval-observed-*` events say that a typed line was accepted at that time; they are facts,
   they grant nothing and are never read as an approval.
@@ -356,7 +356,8 @@ Every step is safe to run again: the wizard derives the state first.
 | during the download | a partial directory | the directory is removed and the download repeated |
 | after `record --write`, before the pull request | the file on a topic branch | state 8; shows the commands again |
 | after the typed tag line, before the local tag | `approval-observed-tag` | fresh checks, new typed line |
-| local tag created, push failed or not made | `tag-local-only` | fresh checks, new typed line, then push; if the remote has a tag of that name at another commit: `conflict` |
+| local tag created, push not made, or explicitly rejected (`tag-push-rejected`) | `tag-local-only` | fresh checks, new typed line, then push; if the remote has a tag of that name at another commit: `conflict` |
+| `tag-pushing` written, outcome unknown (crash, timeout, lost answer), no remote tag | `tag-pushing` | `conflict`: the push may have created the tag; the owner checks the repository; only `abandoned` leaves it |
 | tag pushed, journal line missing | the remote tag | evidence shows `tag-pushed`; the journal is repaired |
 | tag pushed, then deleted by someone | journal `tag-pushed`, no remote tag | `conflict` (tag `vanished`): the wizard never re-creates it |
 | publish run failed | a tag, no published release | state 14: next version only |
