@@ -25,6 +25,8 @@ func TestRegistrationPruneRefusalReasonMapping(t *testing.T) {
 		verdict      RegistrationPruneVerdict
 	}{
 		{"prune-ownership-refused", "registration-prune-ownership-unproven", RegistrationPruneRetain},
+		{"invalid-ownership", "registration-prune-ownership-unproven", RegistrationPruneRetain},
+		{"invalid-plan", "registration-prune-ownership-unproven", RegistrationPruneRetain},
 		{"prune-lock-refused", "registration-prune-ownership-unproven", RegistrationPruneRetain},
 		{"prune-parent-unavailable", "registration-prune-absence-unproven", RegistrationPruneRetain},
 		{"prune-mount-unavailable", "registration-prune-absence-unproven", RegistrationPruneRetain},

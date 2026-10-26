@@ -40,7 +40,7 @@ func ClassifyRegistrationPrune(repo string, o workspace.RegistrationPruneV4Obser
 
 func registrationPruneRefusal(code string) (string, RegistrationPruneVerdict) {
 	switch code {
-	case "prune-lock-refused", "prune-ownership-refused", "prune-ownership-unavailable", "prune-selection-refused", "prune-scope-refused", "task-not-found", "task-incomplete", "invalid-task", "owner-mismatch":
+	case "prune-lock-refused", "prune-ownership-refused", "prune-ownership-unavailable", "prune-selection-refused", "prune-scope-refused", "task-not-found", "task-incomplete", "invalid-task", "owner-mismatch", "invalid-ownership", "invalid-plan":
 		return "registration-prune-ownership-unproven", RegistrationPruneRetain
 	case "prune-parent-unavailable", "prune-absence-unavailable", "prune-mount-unavailable", "prune-destination-present", "prune-path-refused":
 		return "registration-prune-absence-unproven", RegistrationPruneRetain
