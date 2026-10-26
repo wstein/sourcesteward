@@ -79,6 +79,9 @@ type integrationEngine struct {
 	phaseTimeout time.Duration
 	// trace, when set, sees the start of every class (tests assert the order).
 	trace func(class string)
+	// command, when set, sees every command before it starts (tests count
+	// processes and the commits handed to the patch stream through it).
+	command func(c integrationCommand)
 }
 
 func defaultIntegrationEngine() integrationEngine {
@@ -112,6 +115,13 @@ type integrationRun struct {
 	// reporting lifts the proof time budget while the review report collects
 	// its data: the report has its own bounds (FR-035).
 	reporting bool
+	// patchMemo, when set, remembers base-side patch-ids for the life of this
+	// run (see tidy_v3_integration_patchid_memo.go). Only the planning
+	// operation enables it; apply recomputes as before. Copies of the run for
+	// concurrent tips share it.
+	patchMemo *patchIDMemo
+	// patchStreamLimit overrides the 64 MiB patch stream bound; tests only.
+	patchStreamLimit int64
 }
 
 // beginTip starts the budget of one distinct tip (20 s) inside the forge-free
@@ -232,6 +242,9 @@ func (r *integrationRun) run(ctx context.Context, c integrationCommand, parse fu
 	if err := r.checkBudget(r.engine.now()); err != nil {
 		return -1, err
 	}
+	if r.engine.command != nil {
+		r.engine.command(c)
+	}
 	timeout := c.timeout
 	if timeout == 0 {
 		timeout = r.engine.commandTimeout
@@ -340,7 +353,10 @@ var (
 	specLog       = integrationSpec{"log %H %T %P", 1024, bothWidths(201728), '\n', func(r []byte, w int) bool {
 		return len(r) == 3*w+2 && hexExact(r[:w], w) && r[w] == ' ' && hexExact(r[w+1:2*w+1], w) && r[2*w+1] == ' ' && hexExact(r[2*w+2:], w)
 	}}
-	specPatchID = integrationSpec{"patch-id", 5120, [2]int64{537600, 5120 * (2*64 + 2)}, '\n', func(r []byte, w int) bool {
+	// specBaseCommits lists the commits of a base-side range (at most the 4,096 of
+	// FR-008, one object id per line).
+	specBaseCommits = integrationSpec{"rev-list --no-merges", 4096, [2]int64{4096 * 41, 4096 * 65}, '\n', func(r []byte, w int) bool { return hexExact(r, w) }}
+	specPatchID     = integrationSpec{"patch-id", 5120, [2]int64{537600, 5120 * (2*64 + 2)}, '\n', func(r []byte, w int) bool {
 		return len(r) == 2*w+1 && hexExact(r[:w], w) && r[w] == ' ' && hexExact(r[w+1:], w)
 	}}
 	specRaw = integrationSpec{"diff-tree --raw", 8192, bothWidths(34603008), '\n', func(r []byte, w int) bool {
