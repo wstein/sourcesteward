@@ -171,7 +171,6 @@ func TestIntegrationPhaseBudgetFollowsTheEngine(t *testing.T) {
 // phase at the fifth tip; with the window's rest no tip is exhausted.
 func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
 	// A synthetic clock and unsynchronized hooks: one item at a time keeps the test deterministic.
-	sequentialObserver(t)
 	repo := observeRepo(t)
 	for _, n := range []string{"p1", "p2", "p3", "p4", "p5", "p6"} {
 		commitIn(t, observeAdd(t, repo, n), n, n+"\n")
@@ -185,7 +184,7 @@ func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
 		clock = clock.Add(15 * time.Second)
 		return ancestry(ctx, s, target, base)
 	}
-	o, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase})
+	o, err := obs.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase, Width: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +206,6 @@ func TestObserveProofPhaseBudgetIsTheScaledOne(t *testing.T) {
 // 30 minute parent leaves the content reads and the proof phase at most 30 minutes.
 func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
 	// A synthetic clock and unsynchronized hooks: one item at a time keeps the test deterministic.
-	sequentialObserver(t)
 	repo := observeRepo(t)
 	commitIn(t, observeAdd(t, repo, "q1"), "q", "q\n")
 	obs := defaultWorktreeObserver()
@@ -229,7 +227,7 @@ func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
 	}
 	parent, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 	defer cancel()
-	if _, err := obs.observe(parent, ObserveOptions{Path: repo, Base: observeBase}); err != nil {
+	if _, err := obs.observe(parent, ObserveOptions{Path: repo, Base: observeBase, Width: 1}); err != nil {
 		t.Fatal(err)
 	}
 	for name, d := range map[string]time.Duration{"content": left, "proof": proofLeft} {
@@ -237,12 +235,4 @@ func TestObserveWindowsStayInsideTheParentDeadline(t *testing.T) {
 			t.Errorf("%s phase deadline %s, want within the 30 minute parent", name, d)
 		}
 	}
-}
-
-// sequentialObserver makes the observation read one item at a time for the rest of the test.
-func sequentialObserver(t *testing.T) {
-	t.Helper()
-	old := observerWidth
-	t.Cleanup(func() { observerWidth = old })
-	observerWidth = 1
 }

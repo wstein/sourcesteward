@@ -160,12 +160,49 @@ func TestObserveConcurrentEqualsSequential(t *testing.T) {
 			commitIn(t, w, "mine-"+n, "own work\n")
 		}
 	}
-	old := observerWidth
-	t.Cleanup(func() { observerWidth = old })
-	observerWidth = 1
-	seq := observe(t, repo)
-	observerWidth = 4
-	if conc := observe(t, repo); !reflect.DeepEqual(seq, conc) {
+	observeWith := func(width int) WorktreeObservation {
+		o, err := ObserveWorktrees(context.Background(), ObserveOptions{Path: repo, Base: observeBase, Width: width})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return o
+	}
+	seq := observeWith(1)
+	if conc := observeWith(4); !reflect.DeepEqual(seq, conc) {
 		t.Fatalf("sequential %+v\nconcurrent %+v", seq, conc)
+	}
+}
+
+// A window that ends while several workers are at work still gives every worktree and branch its
+// evidence: an item that was not started when the window ended is observed too and reports the
+// deadline as its Incomplete reason, as the sequential loop did. The slots are never left empty.
+func TestObserveWindowEndingMidRunLeavesNoEmptySlot(t *testing.T) {
+	repo := observeRepo(t)
+	for _, n := range []string{"a", "b", "c", "d", "e", "f", "g", "h"} {
+		observeAdd(t, repo, "task-"+n)
+	}
+	c := defaultWorktreeObserver()
+	c.window = func(_ context.Context, n int) time.Duration {
+		if n == 0 {
+			return time.Minute
+		}
+		return time.Nanosecond
+	}
+	o, err := c.observe(context.Background(), ObserveOptions{Path: repo, Base: observeBase, Width: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(o.Worktrees) != 9 || len(o.Branches) != 9 {
+		t.Fatalf("%d worktrees, %d branches", len(o.Worktrees), len(o.Branches))
+	}
+	for _, w := range o.Worktrees {
+		if w.Path == "" || (!w.Primary && w.Incomplete == "") {
+			t.Fatalf("an empty or unjudged worktree slot: %+v", w)
+		}
+	}
+	for _, b := range o.Branches {
+		if b.Name == "" || (b.Incomplete == "" && b.Proof == "") {
+			t.Fatalf("an empty branch slot: %+v", b)
+		}
 	}
 }

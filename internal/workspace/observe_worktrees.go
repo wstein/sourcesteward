@@ -28,6 +28,9 @@ type ObserveOptions struct {
 	Path, Base string
 	Online     bool
 	Remote     string
+	// Width is the number of worktrees, of branches and of tips of this repository that are read at
+	// the same time; zero is defaultObserveWidth, one reads them one after the other.
+	Width int
 }
 
 // WorktreeEvidence holds the facts of one registered worktree. The registration facts are always
@@ -183,7 +186,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseWorktrees, Total: nWorktrees})
 	out.Worktrees = make([]WorktreeEvidence, nWorktrees)
 	var worktreesDone atomic.Int64
-	observeAll(obsCtx, nWorktrees, observerWidth, func(i int) {
+	observeAll(obsCtx, nWorktrees, o.width(), func(i int) {
 		start := time.Now()
 		reg := observed.Native.Registrations[i]
 		w := WorktreeEvidence{Path: reg.Path, HeadOID: reg.HeadOID, HeadRef: reg.HeadRef, Locked: reg.Locked, LockReason: reg.LockReason, Prunable: reg.Prunable}
@@ -205,7 +208,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseBranches, Total: len(branches)})
 	out.Branches = make([]BranchEvidence, len(branches))
 	var branchesDone atomic.Int64
-	observeAll(obsCtx, len(branches), observerWidth, func(i int) {
+	observeAll(obsCtx, len(branches), o.width(), func(i int) {
 		start := time.Now()
 		r := branches[i]
 		b := BranchEvidence{Name: r.Name, OID: r.OID, IsBase: isBaseBranch(r.Name, o.Base)}
@@ -230,7 +233,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	}
 	defer closeRun()
 	// Every distinct tip is proven once, in the order its first item appears (worktrees, then
-	// branches); the tips are proven a few at a time (observerWidth), each under its own per-tip
+	// branches); the tips are proven a few at a time (Width), each under its own per-tip
 	// budget and the shared phase budget.
 	type tipOutcome struct{ proof, reason string }
 	var tips, tipLabel []string
@@ -255,7 +258,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	outcomes := make([]tipOutcome, len(tips))
 	var proven atomic.Int64
 	ReportObserve(ctx, ObserveEvent{Phase: ObservePhaseProofs, Total: len(tips)})
-	observeAll(proofCtx, len(tips), observerWidth, func(i int) {
+	observeAll(proofCtx, len(tips), o.width(), func(i int) {
 		start := time.Now()
 		p, r := proofs(proofCtx, tips[i])
 		outcomes[i] = tipOutcome{p, r}
@@ -289,11 +292,17 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	return out, nil
 }
 
-// observerWidth is the number of worktrees, and of branches, of one repository that are observed
-// at the same time (Spec 040 widths: the analysis already runs four repositories at the same
-// time, so at most sixteen items are read at once). A variable only so a test can compare the
-// sequential result with the concurrent one.
-var observerWidth = 4
+// defaultObserveWidth is the number of worktrees, and of branches, of one repository that are
+// observed at the same time (Spec 040 widths: the analysis already runs four repositories at the
+// same time, so at most sixteen items are read at once).
+const defaultObserveWidth = 4
+
+func (o ObserveOptions) width() int {
+	if o.Width < 1 {
+		return defaultObserveWidth
+	}
+	return o.Width
+}
 
 // observeAll runs fn(0..n-1) with at most width calls at the same time through internal/fanout and
 // returns when all have returned. Every item runs even when ctx has ended (the item itself then
