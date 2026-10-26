@@ -90,20 +90,21 @@ manifest-2 identities, when saving is implemented, use full 64-hex digests rathe
 than legacy 12-hex IDs. The combined candidate bound is 4096 and either output
 format is bounded to 4 MiB. Exit 0 means complete observation, exit 1 means
 incomplete evidence or truncated / failed output, and exit 2 means invalid
-usage. Registration observation stays offline. On this implementation branch,
-legacy authenticated reads still require `--online`; Spec 044 D13 changes only
-the human wizard to online by default, with `--offline` to opt out. Agent runs,
+usage. Registration observation stays offline. Today legacy authenticated reads
+require `--online`; Spec 044 D13 will make only the human wizard online by
+default, with `--offline` to opt out. Agent runs,
 `plan` and `--json` keep their offline default.
 
 Only visible registration rows suppress matching legacy worktree rows, by exact
 repository and destination. Output bounds may then cut either representation;
 `truncated: true` and exit 1 disclose that a target can be absent from both arrays.
-The unpublished v4 schema permits additive properties in its legacy candidate,
-summary and derived objects so Spec 044 can extend the shared producer without
-breaking v4. Existing required fields and their types remain checked; the root
-and registration-prune objects remain closed. Spec 044 T008 must update the v2
-schema and its freeze digest together with its producer tests; this PR does not
-modify frozen v2/v3 schemas or emit the new risk fields.
+The unpublished v4 schema keeps all objects closed. Candidates admit only the
+optional typed Spec 044 fields `risk`, `risk_reasons`, `group` and `pr`; the
+summary admits optional `risk` counts as a closed object with five nonnegative
+integer counts. Derived records keep their existing fields. Required legacy
+fields remain unchanged. Spec 044 T008 must update the v2 schema and its freeze
+digest together with its producer tests; this PR does not modify frozen v2/v3
+schemas or emit the new risk fields.
 
 **Observation window.** The analysis observes each repository under a deadline of 60 s plus 1 s per worktree (jj: workspace) and per local branch (jj: bookmark) of that repository, at most 10 minutes; the Git proof phase gets the rest of that window, at least 60 s, so without `--timeout` it can run up to 60 s past the window; with `--timeout` the given deadline bounds everything. `--timeout` is the deadline over the whole analysis; when given it also replaces that window, so it may be larger than the old fixed 60 s, up to 1 hour (more is a usage error, exit 2). The per-call limits (10 s per jj workspace, 10 s per proof command, 20 s per tip) and the plan, apply and restore deadlines of the expert layer are not scaled. When candidates are retained as `evidence-incomplete` with the evidence `deadline-exceeded` or `proof-budget-exhausted`, the overview ends with a notice `N of M not judged (deadline or proof budget); retry with a larger window, for example --timeout 15m`: N is the number of those candidates (`--timeout` widens the window, the content reads and the proof phase, but not the 20 s per-tip proof budget nor the per-worktree content budget, which also end as `proof-budget-exhausted` and are counted too, so the hint can fail for those items) and M the number of all candidates of the overview, counted after the view is narrowed (`--only`, `--mine`, `--by-owner`) and before the output is cut at the candidate bound. The notice is the text line `notice: ...` and an entry of the `notices` array of `--json`.
 
