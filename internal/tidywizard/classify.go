@@ -207,6 +207,14 @@ type Candidate struct {
 	// classifier already reads for `recently-active`; zero when unknown. It feeds the risk ladder
 	// (Spec 044 R1) only: it changes no verdict and is never part of the JSON document.
 	LastActivity time.Time `json:"-"`
+	// The additive fields of Spec 044. Risk, RiskReasons and Group are set by the renderer when it
+	// is given the run clock (never by the classifier); PR is the number of a pull request merged
+	// into the base whose head is the tip (online evidence), set by whoever read it. All are
+	// omitted from the JSON document while unset.
+	Risk        string   `json:"risk,omitempty"`
+	RiskReasons []string `json:"risk_reasons,omitempty"`
+	Group       string   `json:"group,omitempty"`
+	PR          int      `json:"pr,omitempty"`
 }
 
 // RepoResult reports one repository: State is analysed, skipped or error.
