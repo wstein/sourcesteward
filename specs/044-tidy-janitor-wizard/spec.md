@@ -68,6 +68,20 @@ Owner answers, verbatim (D16: "Ja, D16 ist in Ordnung, macht es so, ja"): "D1j D
 | D16 yes | In human mode the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-82`) are read from `/dev/tty`, not stdin; with no controlling terminal nothing is stored or applied (exit 1) | FR-018, SC-015, T013b; `--yes` with an explicit plan id is unchanged |
 | D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
+## Foreman decisions for phase 1 (owner may reverse)
+
+Found by the independent review of the P1 code (`stw` #308) as gaps or ambiguities of this text; resolved conservatively by the foreman on
+2026-10-26 and written into the sections named; the owner may reverse any of them.
+
+| # | Decision | Where |
+| --- | --- | --- |
+| F-1 | Group key = (effect class, family); the group carries its effect class; the live data gives 15 groups; the mockups show them | [Overview first](#overview-first), Screens 1 to 3 |
+| F-2 | R1 is inclusive at both ends (24 h and 72 h); an unknown, zero or future activity time counts as R1; a scope other than `own` (including an empty or unrecognized value) applies R1, and R2 treats it as `unknown`; the classifier's `recently-active` (under 24 h) stays a retain | [ladder](#the-ladder-exact-all-inputs-are-existing-evidence-unless-marked) step 3 |
+| F-3 | An unknown kind or proof word is red (`not-judged`) | [Levels](#levels) |
+| F-4 | Stale row with incomplete evidence, primary checkout with observed dirt, tracking reference with proof `none` and a reason other than `unmerged`: red; the jj proof word is yellow; unknown levels count as red in group counts | [Levels](#levels) |
+| F-5 | `proof-github-branch-absent` is a risk reason word; the words are an exported enumerable set | [Reasons](#reasons-why-orange) |
+| F-6 | Group keys use `[a-z]` of the lexically cleaned path only; `no-work` never cancels a red cause of a retained row; a merged-head fact carries the pull request number | [Overview first](#overview-first), [Levels](#levels) |
+
 ## Why
 
 Owner direction, 2026-10-26 (German, verbatim): "Hier geht es ums Aufräumen, ums Putzen. Das ist wie bei einer Putzfrau. Die putzt
@@ -196,6 +210,13 @@ their dirt is not necessarily known in this view, and the text says so ("integra
 risk function reads the observed facts (proof, `Dirty`, `IgnoredExtras`, `Incomplete`), not only the reason; where the adapter does not
 expose a fact, T001 adds it.
 
+**Foreman clarifications for the red and kept edges** (2026-10-26, conservative; the owner may reverse any of them): (a) a row whose kind or
+proof word is not one the ladder knows is **red** (`not-judged`), before any strength rule runs, for safe, decision and retained rows alike;
+(b) a stale-worktree row with incomplete evidence is **red** (not judged), a stale row without it stays kept; (c) a primary checkout with
+observed dirt is **red**; (d) a tracking reference with proof `none` and a reason other than `unmerged` is **red**; (e) the jj proof
+`empty-working-copy-integrated-parent` is **equivalent** (yellow), never strong; (f) `no-work` evidence only lifts strength on a safe row:
+it never cancels a red cause of a retained row (a record-missing row with proof `none` stays red).
+
 ### The ladder (exact, all inputs are existing evidence unless marked)
 
 1. **Strength of the proof, S.**
@@ -208,10 +229,13 @@ expose a fact, T001 adds it.
    restorable with `stw tidy restore` from its recovery ref (`docs/tidy.md:566`); the removal of a worktree directory is not restorable
    (`docs/tidy.md:584`, `:348-351`), but `safe` guarantees a clean tree with no ignored extras and a proven HEAD that stays pinned.
 3. **Raises**, each adds one step (green, yellow, orange), at most orange, each counted once:
-   - **R1 recent activity**: a worktree of scope `other` or `unknown` whose newest HEAD, index or tracked-file time is older than the
-     24-hour retain window but within 72 hours (`LastActivity`, already observed; the window is D6, decided).
-   - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown` (no task record, no path
-     convention).
+   - **R1 recent activity**: a worktree whose scope is not `own` and whose newest HEAD, index or tracked-file time (`LastActivity`, already
+     observed) is **at least 24 hours and at most 72 hours** old, **both ends inclusive** (the window is D6, decided). An **unknown, zero or
+     future** activity time counts as R1 (it cannot be shown to be old). A row younger than 24 hours is already `recently-active` and kept
+     by the classifier (`classify.go:413`, `<` 24 hours), so it never reaches the ladder. Every scope other than `own` counts, including an
+     empty or unrecognized scope value.
+   - **R2 nobody vouches**: a worktree, S equivalent, with no creation record and an owner of scope `unknown`; an empty or unrecognized
+     scope value counts as `unknown` (no task record, no path convention).
    - **R3 (phase 2) another owner's unfinished task**: a creation record exists, its owner is not the caller, and it has no done mark.
    - **R4 decision rows**: a `decision` row (`lock-mismatch`) is at least orange.
 4. **Weak corroboration never makes green.** Two facts only add text and, where stated, remove a raise; neither lifts `equivalent` to
@@ -228,7 +252,7 @@ expose a fact, T001 adds it.
 
 Every level carries `risk_reasons[]`: stable kebab-case words in JSON (`proof-ancestor`, `proof-no-net-change`, `no-own-commit`,
 `pr-merged-head`, `proof-equivalent`, `recent-activity`, `nobody-vouches`, `task-not-done`, `decision-row`, `upstream-gone`,
-`done-mark`, and for red `not-integrated`, `uncommitted-files`, `extra-files`, `not-judged`) and one human sentence per word in text.
+`done-mark`, `proof-github-branch-absent` (a tracking reference proof), and for red `not-integrated`, `uncommitted-files`, `extra-files`, `not-judged`) and one human sentence per word in text. The words are an exported, enumerable set (a list the sentence test walks, SC-010).
 Example, orange: "Why orange: the work is on main as equal patches (a rebase merge), not as the same commits; the directory is deleted for
 good; no record says whose it is."
 
@@ -293,9 +317,14 @@ equals a merged head stays red with the added text "merged as #N, but the local 
 The grouped overview replaces the row wall as the first screen of `stw tidy` and of the text of `stw tidy plan`. It is built from the
 same candidates the JSON carries; `--json` is unchanged except the additive fields in [Interfaces](#interfaces).
 
-**Groups.** One group per (kind and effect, place):
+**Groups.** The group key is (**effect class**, **family**). Effect classes: `branch` (delete-branch only), `directory` (remove registration and
+files) and `directory-with-branch` (the directory and its branch leg); tracking references form their own class (online only). The family of
+a **branch** group is its repository (the undo command is per repository); the family of a directory is its place and name family below.
+On the live data this gives **15 groups** (a hand count of the same rule; Screen 1), not the 7 of the first mockup: the 55 `whr-*` directories are
+two groups (40 without and 15 with a branch), the 43 branches are seven repository groups, and `crewbook-*` is two groups. A group carries its
+effect class so the renderer can tell groups of one family apart. Details of the places:
 
-- **Branch deletions** (`delete-branch` only), counted per repository.
+- **Branch deletions** (`delete-branch` only): one group per repository.
 - **Tracking references** (online only).
 - **Worktree directories**, by place: *agent scratchpads* (a path component equal to `scratchpad`), *`/tmp`* by **family** (the leading
   ASCII lowercase letters of the first path component below `/tmp`; for `/tmp/workharbor-baseline-0jbykfta/checkout` that is
@@ -303,7 +332,9 @@ same candidates the JSON carries; `--json` is unchanged except the additive fiel
   items go to "other in /tmp"), and *in the workspace* (anything else, by parent directory).
 - **Kept** rows are not groups; they are the [retain table](#retain-explained).
 
-The key is built only from `[a-z]` of the raw name, so a hostile name (for example one that starts with letters and carries ESC) cannot
+Paths are cleaned lexically (`path.Clean`, no resolution, no I/O) before the family and the `/tmp/` test, so `/tmp/../home/x` is not in
+`/tmp` and `/tmp//whr-a` has the family `whr`. A family has at least 3 members **in all effect classes together**, otherwise its items go to
+"other in /tmp". The key is built only from `[a-z]` of the cleaned name, so a hostile name (for example one that starts with letters and carries ESC) cannot
 inject bytes into a key; all names displayed pass `esc` and the 120-character bound.
 
 Groups are ordered by worst risk (green first), then by size. Each line says what happens, how many, how risky, and what undoes it.
@@ -528,15 +559,19 @@ evaluable; the numbering and the undo ids are invented; the GitHub line shows th
 ```text
 Workspace /workspaces/Anchorage   7 repositories analysed   GitHub: offline in this mockup
 
-Can be cleaned (165 of 1,129 candidates)                              risk
-  1  55 directories  /tmp/whr-*          files deleted, codex           yellow  (3 green, 52 yellow)
-  2  43 branches                         reversible                     yellow  (2 green, 41 yellow)
-  3  51 directories  /tmp/workharbor-*   files deleted, hint Werner     orange  (1 green, 50 orange)
-  4   7 directories  agent scratchpads   files deleted, hint Werner     orange
-  5   4 directories  /tmp/crewbook-*      files deleted, hint Werner     orange
-  6   4 directories  other in /tmp        files deleted, hint Werner     orange
-  7   1 directory    in the workspace     files deleted, hint Werner     orange
-     19 of the directories also delete their branch (reversible)
+Can be cleaned (165 of 1,129 candidates in 15 groups)                         risk
+   1    2 branches        .              reversible                          green
+   2   40 directories     /tmp/whr-*     files deleted, codex                yellow  (2 green, 38 yellow)
+   3   24 branches        sourcesteward  reversible                          yellow
+   4   15 directories +   /tmp/whr-*     files deleted, branch too, codex    yellow  (1 green, 14 yellow)
+   5    9 branches        bundledock     reversible                          yellow
+   6    5 branches        crewbook       reversible                          yellow
+   7    3 branches        chartscribe, sheetmill, workharbor (1 each)        yellow
+   8   51 directories     /tmp/workharbor-*  files deleted, hint Werner      orange  (1 green, 50 orange)
+   9    7 directories     agent scratchpads  files deleted, hint Werner      orange
+  10    4 directories     other in /tmp  files deleted, hint Werner          orange
+  11    3 directories +   /tmp/crewbook-*  files deleted, branch too         orange
+  12    2 directories     crewbook, in the workspace  files deleted          orange
 
 Kept (964): nothing here is offered for deletion
   394 may hold unique work (red): not merged, uncommitted or untracked files, not judged
@@ -546,21 +581,25 @@ Next: one question per group. Nothing changes until the final summary and your t
 Enter = continue   q = quit
 ```
 
+The mockup folds the three one-item branch groups (chartscribe, sheetmill, workharbor) into one line and the two one-item directory groups (crewbook
+and the workspace) into the last line, to fit a screen: they are still separate groups of the wizard (15 in all), and `l` shows them. Totals: 43
+branches (2, 24, 9, 5, 3), 122 directories (40, 15, 51, 7, 4, 3, 2).
+
 ### Screen 2 (mockup): one group step
 
 ```text
-Step 1 of 7   55 directories in /tmp:  whr-*                                  risk yellow
-  Owner     codex (55), found by path convention
-  Evidence  3 already on main, 52 on main as equal patches (a rebase merge)
-  Effect    55 directories are deleted for good, 15 of them also delete their branch
+Step 2 of 15   40 directories in /tmp:  whr-*                                 risk yellow
+  Owner     codex (40), found by path convention
+  Evidence  2 already on main, 38 on main as equal patches (a rebase merge)
+  Effect    40 directories are deleted for good (their branches stay)
   Recover   committed history stays pinned under refs/stw/recovery/v3/...;
-            deleted files are not restored; branches: stw tidy restore --contract 3
+            deleted files are not restored
   Why yellow  the work is on main as equal patches, not as the same commits
 
       1  yellow  /tmp/whr-006-t030-apply-20261020      codex/006-t030-apply-20261020
       2  yellow  /tmp/whr-006-t030-cli-20261020        codex/006-t030-cli-20261020
       3  yellow  /tmp/whr-006-t030-proposal-20261020   codex/006-t030-proposal-20261020
-     ... 52 more (l = list)
+     ... 37 more (l = list)
 
 Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit   (Enter = skip) :
 ```
@@ -569,11 +608,12 @@ Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit   (Ent
 
 ```text
 Summary: nothing has been changed yet
-  group                            items   risk     effect
-  55 directories /tmp/whr-*           55   yellow   delete 55 directories, 15 branches
-  43 branches                         43   yellow   delete 43 branches (7 claude, 2 codex, 34 hint Werner)
-  51 directories /tmp/workharbor-*    51   orange   delete 51 directories
-  skipped: 4 groups (16 directories)
+  group                              items   risk     effect
+  40 directories /tmp/whr-*             40   yellow   delete 40 directories
+  15 directories + branch /tmp/whr-*    15   yellow   delete 15 directories and 15 branches
+  43 branches (groups 1, 3, 5 to 7)     43   yellow   delete 43 branches (7 claude, 2 codex, 34 hint Werner)
+  51 directories /tmp/workharbor-*      51   orange   delete 51 directories
+  skipped: 5 groups (16 directories)
   total: 149 items in 7 repositories; 964 kept rows untouched
 Undo: branches only, one restore per repository:
       stw tidy restore REPO --contract 3 --state-dir DIR --plan ID   (ids: stw tidy history)
