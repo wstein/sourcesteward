@@ -1,0 +1,21 @@
+Workspace /workspaces/Anchorage   7 repositories analysed
+
+Can be cleaned (165 of 1,129 candidates)                                                 risk
+  1  55 directories  /tmp/whr*                         files deleted, codex              yellow  (3 green, 52 yellow)
+  2  43 branches     in 7 repositories                 reversible, 3 owners              yellow  (2 green, 41 yellow)
+  3  51 directories  /tmp/workharbor*                  files deleted, hint Werner Stein  orange  (1 green, 50 orange)
+  4  7 directories   agent scratchpads                 files deleted, hint Werner Stein  orange
+  5  4 directories   /tmp/crewbook*                    files deleted, hint Werner Stein  orange
+  6  4 directories   other in /tmp                     files deleted, hint Werner Stein  orange
+  7  1 directory     in /workspaces/Anchorage/scratch  files deleted, hint Werner Stein  orange
+     19 of the directories also delete their branch (reversible)
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR
+      PLAN_ID: see stw tidy history; deleted directories are not restored
+
+Kept (964): nothing here is offered for deletion
+  394 may hold unique work (red): not merged, uncommitted or untracked files, not judged
+  570 kept for another reason (record missing, branch in use, recently active, ...)
+notice: remote-tracking references are not read without --online (7 repositories)
+notice: Evidence is sampled and nontransactional; nothing was changed and nothing was fetched. (7 repositories)
+
+Every row with its codes: stw tidy --rows   The data: stw tidy --json
