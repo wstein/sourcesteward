@@ -839,3 +839,30 @@ func TestTidyBlockSummaryNameIsCutAndSetReposDedupes(t *testing.T) {
 		t.Fatalf("%q", got)
 	}
 }
+
+// The terminal gets lower than 5 rows in the middle of the run and higher again: the old block stays
+// as ordinary output, the plain line lands on its own line, and the next block starts below it.
+func TestTidyBlockHeightDroppingBelowTheMinimumAndBack(t *testing.T) {
+	p, screen, clk := liveSink(80, 24)
+	rows := 24
+	p.size = func() (int, int) { return 80, rows }
+	p.SetRepos([]string{"a", "b"})
+	p.Event(ev("a", 1, 2, workspace.ObservePhaseStart, 0, 0))
+	rows = 4
+	clk.advance(tidyProgressLiveEvery)
+	p.Event(ev("a", 1, 2, workspace.ObservePhaseWorktrees, 1, 2)) // not due for a plain line yet
+	clk.advance(tidyProgressPlainEvery)
+	p.Event(ev("a", 1, 2, workspace.ObservePhaseWorktrees, 2, 2))
+	rows = 24
+	clk.advance(tidyProgressLiveEvery)
+	p.Event(done("a", 1, 2))
+	p.Finish()
+	got := screen.lines()
+	if len(got) != 7 || got[0] != "stw tidy: 0/2 repos, 0ms" || !strings.HasPrefix(got[1], "▸ a starting") || got[3] != "[1/2] a: observing worktrees 2/2 (10s)" ||
+		!strings.HasPrefix(got[4], "stw tidy: 1/2 repos") || !strings.HasPrefix(got[5], "✓ a analysed") || !strings.HasPrefix(got[6], "· b not started") {
+		t.Fatalf("%q", got)
+	}
+	if screen.row != 7 || screen.col != 0 {
+		t.Fatalf("cursor %d,%d", screen.row, screen.col)
+	}
+}
