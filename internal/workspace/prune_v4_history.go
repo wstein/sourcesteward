@@ -49,7 +49,9 @@ type RegistrationPruneV4HistoryResult struct {
 func newPruneV4HistoryResult() RegistrationPruneV4HistoryResult {
 	return RegistrationPruneV4HistoryResult{SchemaVersion: 4, Command: "tidy-history", Operation: "registration-prune", Status: "refused", Entries: []RegistrationPruneV4HistoryEntry{}, Truncation: []V3HistoryTruncation{}, Diagnostics: []Diagnostic{}, Limitations: []string{
 		"Recovery pointers and recorded effects only; private payload bytes and native history pins are not verified by listing. Use restore inspection to verify recovery availability.",
-		"Newest first among the bounded scanned journals; total counts scanned matching records and is a lower bound when the directory scan is truncated.",
+		"Prune journals only: restore journals are not listed, so this listing cannot identify a completed or partial restore. Preserve the restore ID and journal pointer from the restore result for separate inspection.",
+		"History and restore --list select the repository from optional PATH, or the current directory when PATH is omitted; --state-dir alone does not select a repository.",
+		"Newest first among the bounded scanned journals; total counts only records matching the selected repository and is a lower bound when the directory or byte scan is truncated.",
 	}}
 }
 

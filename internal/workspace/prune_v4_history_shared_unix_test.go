@@ -117,3 +117,17 @@ func TestRegistrationPruneV4HistoryDisclosesRestoreVisibility(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistrationPruneV4HistoryStillRefusesInvalidForeignPlan(t *testing.T) {
+	state := gitTempDir(t)
+	pruneMust(t, os.Chmod(state, 0700))
+	a := pruneV4HistorySharedFixture(t, state, "repo-a")
+	b := pruneV4HistorySharedFixture(t, state, "repo-b")
+	a.SchemaVersion = 3
+	savePruneV4Fixture(t, a)
+	r := HistoryRegistrationPruneV4(context.Background(), RegistrationPruneV4HistoryOptions{Path: b.SourcePath, StateDir: state, Limit: 1})
+	const message = "Contract-4 plan version, operation, witness, scope or digest is invalid."
+	if r.Status != "refused" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "prune-plan-refused" || r.Diagnostics[0].Message != message || len(r.Entries) != 0 {
+		t.Fatalf("invalid foreign plan: %+v", r)
+	}
+}
