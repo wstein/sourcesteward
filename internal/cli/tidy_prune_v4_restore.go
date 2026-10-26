@@ -55,6 +55,11 @@ func runPruneV4Restore(cmd *cobra.Command, args []string, f tidyRestoreFlags) (e
 				return runtimeFailure{e}
 			}
 		}
+		for _, limit := range result.Limitations {
+			if _, e := fmt.Fprintf(cmd.OutOrStdout(), "Limit: %q\n", limit); e != nil {
+				return runtimeFailure{e}
+			}
+		}
 	}
 	if result.Status != "ok" {
 		return runtimeFailure{fmt.Errorf("%q", result.Error())}
