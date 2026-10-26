@@ -117,16 +117,105 @@ func TestTidyOverviewV4SchemaAcceptsMixedLegacyProducerAndAdditions(t *testing.T
 			row := item.(map[string]any)
 			row["risk"] = "yellow"
 			row["risk_reasons"] = []any{"proof-equivalent"}
-			row["group"] = "whr"
+			row["group"] = "group" + strings.Repeat("a", 64)
 			row["pr"] = 42
 		}
-		for _, level := range []string{"green", "yellow", "orange", "red", "kept"} {
-			value["summary"].(map[string]any)[level] = 1
-		}
-		value["derived"].([]any)[0].(map[string]any)["online"] = "off"
-		value["derived"].([]any)[0].(map[string]any)["online_reason"] = "offline flag"
+		value["summary"].(map[string]any)["risk"] = map[string]any{"green": 0, "yellow": 6, "orange": 0, "red": 0, "kept": 0}
 		if err := schema.Validate(value); err != nil {
 			t.Fatalf("Spec 044 additive compatibility: %v", err)
 		}
+	}
+}
+
+// These are the optional shapes emitted by Spec 044 P3, not new v4 producer fields.
+func overviewV4RiskValue(t *testing.T) map[string]any {
+	t.Helper()
+	in := overviewInput(nil)
+	in.PlanID = ""
+	raw, _, err := render.JSONV4(render.BuildV4(in, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v := value(t, raw).(map[string]any)
+	row := v["candidates"].([]any)[0].(map[string]any)
+	row["risk"] = "yellow"
+	row["risk_reasons"] = []any{"proof-equivalent"}
+	row["group"] = "group" + strings.Repeat("a", 64)
+	row["pr"] = 42
+	v["summary"].(map[string]any)["risk"] = map[string]any{"green": 0, "yellow": 1, "orange": 0, "red": 0, "kept": 0}
+	return v
+}
+
+func TestTidyOverviewV4SchemaTypesOptionalRiskExtensions(t *testing.T) {
+	schema := schemaAt(t, "v4", "tidy-overview")
+	first := func(v map[string]any) map[string]any { return v["candidates"].([]any)[0].(map[string]any) }
+	summary := func(v map[string]any) map[string]any { return v["summary"].(map[string]any) }
+	counts := func(v map[string]any) map[string]any { return summary(v)["risk"].(map[string]any) }
+	for _, level := range []string{"green", "yellow", "orange", "red", "kept"} {
+		v := overviewV4RiskValue(t)
+		first(v)["risk"] = level
+		if level == "kept" {
+			delete(first(v), "risk_reasons")
+			delete(first(v), "group")
+			delete(first(v), "pr")
+		}
+		if err := schema.Validate(v); err != nil {
+			t.Fatalf("valid %s: %v", level, err)
+		}
+	}
+	// Each addition is optional independently; old producer documents remain valid.
+	for _, field := range []string{"risk", "risk_reasons", "group", "pr"} {
+		v := overviewV4RiskValue(t)
+		delete(first(v), field)
+		if err := schema.Validate(v); err != nil {
+			t.Fatalf("optional %s: %v", field, err)
+		}
+	}
+	v := overviewV4RiskValue(t)
+	delete(summary(v), "risk")
+	if err := schema.Validate(v); err != nil {
+		t.Fatalf("optional summary risk: %v", err)
+	}
+	cases := map[string]func(map[string]any){
+		"unknown level":                  func(v map[string]any) { first(v)["risk"] = "purple" },
+		"unknown candidate field":        func(v map[string]any) { first(v)["raw_config"] = "secret" },
+		"unknown summary field":          func(v map[string]any) { summary(v)["extra"] = true },
+		"flat risk count":                func(v map[string]any) { summary(v)["green"] = 1 },
+		"unknown derived field":          func(v map[string]any) { v["derived"].([]any)[0].(map[string]any)["extra"] = true },
+		"invented derived online field":  func(v map[string]any) { v["derived"].([]any)[0].(map[string]any)["online"] = "off" },
+		"invented derived online reason": func(v map[string]any) { v["derived"].([]any)[0].(map[string]any)["online_reason"] = "flag" },
+		"risk null":                      func(v map[string]any) { first(v)["risk"] = nil },
+		"risk reasons null":              func(v map[string]any) { first(v)["risk_reasons"] = nil },
+		"risk reasons empty":             func(v map[string]any) { first(v)["risk_reasons"] = []any{} },
+		"risk reason wrong type":         func(v map[string]any) { first(v)["risk_reasons"] = []any{1} },
+		"risk reason invalid word":       func(v map[string]any) { first(v)["risk_reasons"] = []any{"Bad_reason"} },
+		"risk reasons wrong type":        func(v map[string]any) { first(v)["risk_reasons"] = "proof-equivalent" },
+		"group family instead of key":    func(v map[string]any) { first(v)["group"] = "whr" },
+		"group short":                    func(v map[string]any) { first(v)["group"] = "group" + strings.Repeat("a", 63) },
+		"group long":                     func(v map[string]any) { first(v)["group"] = "group" + strings.Repeat("a", 65) },
+		"group invalid alphabet":         func(v map[string]any) { first(v)["group"] = "group" + strings.Repeat("q", 64) },
+		"group wrong type":               func(v map[string]any) { first(v)["group"] = 1 },
+		"pr zero":                        func(v map[string]any) { first(v)["pr"] = 0 },
+		"pr negative":                    func(v map[string]any) { first(v)["pr"] = -1 },
+		"pr fraction":                    func(v map[string]any) { first(v)["pr"] = 1.5 },
+		"pr string":                      func(v map[string]any) { first(v)["pr"] = "42" },
+		"summary risk null":              func(v map[string]any) { summary(v)["risk"] = nil },
+		"summary risk string":            func(v map[string]any) { summary(v)["risk"] = "x" },
+		"summary risk unknown field":     func(v map[string]any) { counts(v)["purple"] = 1 },
+	}
+	for _, level := range []string{"green", "yellow", "orange", "red", "kept"} {
+		cases["missing count "+level] = func(v map[string]any) { delete(counts(v), level) }
+		cases["negative count "+level] = func(v map[string]any) { counts(v)[level] = -1 }
+		cases["fraction count "+level] = func(v map[string]any) { counts(v)[level] = 0.5 }
+		cases["string count "+level] = func(v map[string]any) { counts(v)[level] = "1" }
+	}
+	for name, mutate := range cases {
+		t.Run(name, func(t *testing.T) {
+			v := overviewV4RiskValue(t)
+			mutate(v)
+			if err := schema.Validate(v); err == nil {
+				t.Fatal("strict v4 schema admitted " + name)
+			}
+		})
 	}
 }
