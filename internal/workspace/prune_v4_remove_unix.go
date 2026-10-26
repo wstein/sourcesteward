@@ -5,6 +5,7 @@ package workspace
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"reflect"
 	"sort"
@@ -23,11 +24,15 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 	if id != expected.Registration {
 		return failure("prune-evidence-changed", "Registration identity changed before removal.")
 	}
-	regParent, _, e := openCanonical(filepath.Dir(p.Registration.GitDir))
+	regParent, parentID, e := openCanonical(filepath.Dir(p.Registration.GitDir))
 	if e != nil {
 		return e
 	}
 	defer regParent.Close()
+	if parentID != expected.RegistrationParent {
+		return failure("prune-evidence-changed", "Administrative parent identity changed before removal.")
+	}
+	pruneObservationStep(ctx, "v4-removal-opened", p.Registration.GitDir, nil)
 	entries := pruneV4RemovalOrder(p)
 	removed := map[string]bool{}
 	budgetChecked := false
@@ -69,6 +74,12 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 			return e
 		}
 		if m.Path == "." {
+			pruneObservationStep(ctx, "v4-before-root-rmdir", p.Registration.GitDir, nil)
+			named, nameErr := regParent.Lstat(p.Registration.Name)
+			held, heldErr := root.Stat(".")
+			if nameErr != nil || heldErr != nil || !os.SameFile(named, held) {
+				return failure("prune-evidence-changed", "Administrative parent entry no longer names the held registration.")
+			}
 			e = regParent.Remove(p.Registration.Name)
 		} else {
 			e = root.Remove(m.Path)
