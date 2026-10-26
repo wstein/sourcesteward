@@ -118,6 +118,9 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		return failTidyV3(r, err)
 	}
 	defer closeRun()
+	// The plan proves many tips against one base: remember the base-side patch-ids
+	// of this run (apply recomputes and never has a memo).
+	run.enablePatchMemo()
 	ranges, err := run.resolveConsolidationRanges(ctx, o.ConsolidationRanges)
 	if err != nil {
 		return failTidyV3(r, err)

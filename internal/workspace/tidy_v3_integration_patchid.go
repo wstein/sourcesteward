@@ -42,6 +42,20 @@ func logPatchArgs(rangeSpec string) []string {
 // patchIDs pipes one `log -p` stream into `patch-id --stable` and
 // `patch-id --verbatim` concurrently (one pass). The stream is never buffered.
 func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec string) (stable, verbatim []patchIDRow, err error) {
+	return r.patchStreams(ctx, integrationCommand{attrTree: attrTree, args: logPatchArgs(rangeSpec), limit: r.patchBound()}, nil)
+}
+
+// patchBound is the byte bound of one patch stream (FR-008: 64 MiB per tip).
+func (r *integrationRun) patchBound() int64 {
+	if r.patchStreamLimit > 0 {
+		return r.patchStreamLimit
+	}
+	return integrationPatchStream
+}
+
+// patchStreams runs the `log -p` command of logCmd into both `patch-id` modes.
+// A non-nil tap sees every byte of the stream too.
+func (r *integrationRun) patchStreams(ctx context.Context, logCmd integrationCommand, tap io.Writer) (stable, verbatim []patchIDRow, err error) {
 	type outcome struct {
 		rows []patchIDRow
 		err  error
@@ -65,8 +79,12 @@ func (r *integrationRun) patchIDs(ctx context.Context, attrTree, rangeSpec strin
 	stableReader, stableWriter := io.Pipe()
 	verbatimReader, verbatimWriter := io.Pipe()
 	stableDone, verbatimDone := start("--stable", stableReader), start("--verbatim", verbatimReader)
-	_, logErr := r.run(ctx, integrationCommand{attrTree: attrTree, args: logPatchArgs(rangeSpec), limit: integrationPatchStream}, func(out io.Reader) error {
-		_, e := io.Copy(io.MultiWriter(stableWriter, verbatimWriter), out)
+	sinks := []io.Writer{stableWriter, verbatimWriter}
+	if tap != nil {
+		sinks = append(sinks, tap)
+	}
+	_, logErr := r.run(ctx, logCmd, func(out io.Reader) error {
+		_, e := io.Copy(io.MultiWriter(sinks...), out)
 		return e
 	})
 	stableWriter.CloseWithError(logErr)
@@ -155,7 +173,7 @@ func (r *integrationRun) patchID(ctx context.Context, base, tip, mergeBase, tipT
 	if err != nil {
 		return fail(err)
 	}
-	baseStable, baseVerbatim, err := r.patchIDs(ctx, baseTree, baseRange)
+	baseStable, baseVerbatim, err := r.basePatchIDs(ctx, baseTree, baseRange, baseCount)
 	if err != nil {
 		return fail(err)
 	}
