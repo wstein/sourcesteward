@@ -6,8 +6,9 @@
 package risk
 
 import (
-	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"time"
+
+	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 )
 
 // Level is a display classification, not integration evidence or permission.
@@ -52,10 +53,9 @@ type Assessment struct {
 func Evaluate(f Facts, now time.Time) Assessment {
 	out := Assessment{Level: Kept, Reasons: []string{}}
 	worktree := f.Kind == "worktree"
-	branch := f.Kind == "branch"
 	noProof := f.Proof == "none" || f.Proof == ""
 	// Content facts outrank the classifier's first structural refusal reason.
-	if f.Reason == "unmerged" || (noProof && !f.NoWork && (branch || (worktree && !f.Primary && !f.DirectoryMissing))) {
+	if f.Reason == "unmerged" || (noProof && !f.Primary && !f.DirectoryMissing && f.Kind != "stale-worktree") {
 		out.Reasons = append(out.Reasons, "not-integrated")
 	}
 	if f.Dirty || f.Reason == "dirty" {
@@ -72,6 +72,13 @@ func Evaluate(f Facts, now time.Time) Assessment {
 		return corroborate(out, f)
 	}
 	if f.Verdict != "safe" && f.Verdict != "decision" {
+		return corroborate(out, f)
+	}
+	// Validate vocabulary before weak/corroborating flags can lift strength.
+	// A hand-mapped typo must never become a green default-deletion row.
+	if !knownKind(f.Kind) || !knownProof(f.Proof) {
+		out.Level = Red
+		out.Reasons = append(out.Reasons, "not-judged")
 		return corroborate(out, f)
 	}
 	equivalent := false
@@ -100,14 +107,14 @@ func Evaluate(f Facts, now time.Time) Assessment {
 		out.Reasons = append(out.Reasons, "not-judged")
 		return corroborate(out, f)
 	}
-	if worktree && (f.Scope == owner.ScopeOther || f.Scope == owner.ScopeUnknown) && !f.LastActivity.IsZero() {
-		age := now.Sub(f.LastActivity)
-		if age > 24*time.Hour && age <= 72*time.Hour {
-			out.Level = raise(out.Level)
-			out.Reasons = append(out.Reasons, "recent-activity")
-		}
+	// Unknown or future activity cannot lower a non-own worktree's risk.
+	// Rows younger than 24 hours are normally retained by the classifier; the
+	// conservative boundary also covers exact 24h and malformed caller facts.
+	if worktree && f.Scope != owner.ScopeOwn && (f.LastActivity.IsZero() || now.Sub(f.LastActivity) <= 72*time.Hour) {
+		out.Level = raise(out.Level)
+		out.Reasons = append(out.Reasons, "recent-activity")
 	}
-	if worktree && equivalent && !f.HasCreationRecord && f.Scope == owner.ScopeUnknown && f.OwnerSource != owner.SourcePathConvention {
+	if worktree && equivalent && !f.HasCreationRecord && f.Scope != owner.ScopeOwn && f.Scope != owner.ScopeOther && f.OwnerSource != owner.SourcePathConvention {
 		out.Level = raise(out.Level)
 		out.Reasons = append(out.Reasons, "nobody-vouches")
 	}
@@ -129,4 +136,15 @@ func corroborate(out Assessment, f Facts) Assessment {
 		out.Reasons = append(out.Reasons, "upstream-gone")
 	}
 	return out
+}
+
+func knownKind(kind string) bool {
+	return kind == "worktree" || kind == "branch" || kind == "tracking-ref"
+}
+func knownProof(proof string) bool {
+	switch proof {
+	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop":
+		return true
+	}
+	return false
 }
