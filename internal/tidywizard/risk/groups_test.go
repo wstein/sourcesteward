@@ -61,11 +61,23 @@ func TestGroupPlacesFamiliesAndKeys(t *testing.T) {
 	if got := GroupRows(reversed); !reflect.DeepEqual(got, groups) {
 		t.Fatal("group/key ordering depends on input order")
 	}
-	before := groups[0].Rows[0].Effects[0]
 	rows[0].Effects[0] = "mutated"
-	if groups[0].Rows[0].Effects[0] != before {
-		t.Fatal("group aliases caller effects")
+	rows[0].Risk.Reasons[0] = "mutated"
+	found := false
+	for _, g := range groups {
+		for _, r := range g.Rows {
+			if r.ID == "w1" {
+				found = true
+				if r.Effects[0] != "remove-registration" || r.Risk.Reasons[0] != "proof-ancestor" {
+					t.Fatal("group aliases caller effects or reasons")
+				}
+			}
+		}
 	}
+	if !found {
+		t.Fatal("missing w1 row")
+	}
+
 }
 
 func TestFamilyThresholdCountsOnlyDistinctChoosableDirectories(t *testing.T) {
