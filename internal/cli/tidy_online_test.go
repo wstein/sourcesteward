@@ -3,6 +3,8 @@ package cli
 
 import (
 	"bytes"
+	"context"
+	"net/http"
 	"strings"
 	"testing"
 
@@ -273,3 +275,25 @@ func TestAStopOfTheRunReplacesAGenericFallbackReason(t *testing.T) {
 		t.Errorf("%v %q", err, errOut)
 	}
 }
+
+// The production fetch hands the run budget of the wizard to the pull request reads: a budget that
+// already saw a rate limit judges the repository offline for that reason, without any session.
+func TestProductionFetchUsesTheSharedBudget(t *testing.T) {
+	stopped := hosting.NewTidyRunBudget(roundTripperFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 429, Header: http.Header{}, Body: http.NoBody}, nil
+	}), 10)
+	defer stopped.Close()
+	req, _ := http.NewRequest(http.MethodGet, "https://api.github.com/repos/o/r", nil)
+	if res, err := stopped.RoundTrip(req); err != nil || res.StatusCode != 429 {
+		t.Fatal(err)
+	}
+	cands := []tidywizard.Candidate{{ID: "branch:a:x", Repo: "a", Kind: tidywizard.KindBranch, Verdict: tidywizard.VerdictRetain, Reason: "unmerged", Proof: tidywizard.ProofNone, Tip: strings.Repeat("a", 40)}}
+	out := tidyOnlineFetch(context.Background(), []tidywizard.OnlineMember{{Name: "a", Path: "/nonexistent/a", Remote: "origin"}}, cands, stopped)
+	if len(out.Members) != 1 || out.Members[0].Reason != tidywizard.ReasonRateLimit || out.Stopped != hosting.TidyStopRateLimit || out.Requests != 1 {
+		t.Fatalf("%+v", out)
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

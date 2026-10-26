@@ -13,6 +13,8 @@ Closed set, all `GET`, exact allow-listed routes (add or remove only together wi
 
 No search endpoint, commit-association endpoint or GraphQL is added by this Spec. No filters by head or base name.
 
+*Amendment 2026-10-26 (Spec 044, foreman decision, owner may reverse):* the sentence above holds for contract 3 and for plan-time discovery, which are unchanged. The human tidy wizard of [Spec 044](../../044-tidy-janitor-wizard/spec.md) additionally reads `GET repos/OWNER/REPO/commits/SHA/pulls?per_page=30&page=1`, one read per distinct tip keyed by the full object id (already in the fixed endpoint set of the hosting layer), because one page of 100 closed pull requests can exceed the one MiB response bound. It keeps only pull requests of the same repository whose head is the tip and counts a merge only into the default branch.
+
 ## Algorithm
 
 1. Collect distinct unproven tip OIDs from the selected refs (after forge-free proofs). Zero OIDs: no request.

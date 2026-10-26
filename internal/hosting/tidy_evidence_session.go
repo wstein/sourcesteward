@@ -275,14 +275,14 @@ func (s *TidySession) get(ctx context.Context, endpoint string) ([]byte, http.He
 	res, err := s.api.client.Do(req)
 	if err != nil {
 		if errors.Is(err, errBodyLimit) {
-			return nil, nil, ErrTidyResponseTooLarge
+			return nil, nil, s.tooLarge(ctx)
 		}
 		return nil, nil, s.readError(ctx)
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, maxBytes+1))
 	if errors.Is(err, errBodyLimit) || len(raw) > maxBytes {
-		return nil, nil, ErrTidyResponseTooLarge
+		return nil, nil, s.tooLarge(ctx)
 	}
 	if err != nil {
 		return nil, nil, s.readError(ctx)
@@ -300,6 +300,15 @@ func (s *TidySession) get(ctx context.Context, endpoint string) ([]byte, http.He
 		return nil, nil, errors.New("invalid or duplicate tidy provider JSON")
 	}
 	return raw, res.Header, nil
+}
+
+// tooLarge is the error of a response over its bound. A deadline or an exhausted ledger stays what
+// it always was (ErrTidyLimit, reported as the shared limit); only otherwise is the size the cause.
+func (s *TidySession) tooLarge(ctx context.Context) error {
+	if err := s.readError(ctx); errors.Is(err, ErrTidyLimit) {
+		return err
+	}
+	return ErrTidyResponseTooLarge
 }
 func (s *TidySession) readError(ctx context.Context) error {
 	if ctx.Err() != nil {

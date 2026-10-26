@@ -50,7 +50,7 @@ Deletion is made more liberal by this Spec on the promise that recovery covers i
 
 ### Decision: discovery endpoint
 
-No second endpoint. Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting, and share the Spec 029 online budget with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidates (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment.
+No second endpoint (for contract 3; the wizard's per-tip read of Spec 044 is a dated amendment of FR-013). Keep the Spec 029 closed-PR collection (10 pages), fix per-OID aggregation, hint idempotency, selector-naming errors and coverage reporting, and share the Spec 029 online budget with explicit `discovery-budget-exhausted`. T021 measures why #81 required hints; candidates (commit-associated PR listing, issue search by SHA) are revisited only on that evidence in a later amendment.
 
 ### Decision: forge-free budget
 

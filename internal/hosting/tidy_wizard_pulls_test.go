@@ -72,12 +72,14 @@ func TestReadTipPullRequestsClassifiesByRepositoryAndBase(t *testing.T) {
 		tipN(6): "[]",
 		// 8: an open pull request and a draft are no evidence; 3 plus a merge wins over closed unmerged.
 		tipN(8): "[" + tipPR(12, tipN(8), "main", false, "open", 41, false) + "," + tipPR(13, tipN(8), "main", true, "closed", 41, true) + "]",
+		// 11: a pull request from this repository into a fork's main is not a merge into the base.
+		tipN(11): strings.Replace("["+tipPR(17, tipN(11), "main", true, "closed", 41, false)+"]", `"ref":"main","repo":{"id":41,"node_id":"R_repo"`, `"ref":"main","repo":{"id":99,"node_id":"R_99"`, 1),
 		// 10: closed by a merge whose merge commit is missing is not a merge.
 		tipN(10): strings.Replace("["+tipPR(16, tipN(10), "main", true, "closed", 41, false)+"]", `"`+strings.Repeat("c", 40)+`"`, "null", 1),
 		tipN(9):  "[" + tipPR(14, tipN(9), "main", false, "closed", 41, false) + "," + tipPR(15, tipN(9), "main", true, "closed", 41, false) + "]",
 	}}
 	s := tidyFixtureSession(t, srv.handle)
-	tips := []string{tipN(9), tipN(1), tipN(2), tipN(3), tipN(4), tipN(5), tipN(6), tipN(7), tipN(8), tipN(10)}
+	tips := []string{tipN(9), tipN(1), tipN(2), tipN(3), tipN(4), tipN(5), tipN(6), tipN(7), tipN(8), tipN(10), tipN(11)}
 	rows, err := s.ReadTipPullRequests(context.Background(), tips)
 	if err != nil {
 		t.Fatal(err)
@@ -93,6 +95,7 @@ func TestReadTipPullRequestsClassifiesByRepositoryAndBase(t *testing.T) {
 		tipN(8):  {Tip: tipN(8), State: TidyTipUnknown},
 		tipN(9):  {Tip: tipN(9), State: TidyTipMerged, Number: 15},
 		tipN(10): {Tip: tipN(10), State: TidyTipUnknown},
+		tipN(11): {Tip: tipN(11), State: TidyTipUnknown},
 	}
 	if len(rows) != len(want) {
 		t.Fatalf("%d rows", len(rows))
@@ -129,7 +132,7 @@ func TestReadTipPullRequestsFailuresProveNothing(t *testing.T) {
 		"duplicate":       {list: "[" + tipPR(1, tipN(1), "main", true, "closed", 41, false) + "," + tipPR(1, tipN(1), "main", true, "closed", 41, false) + "]", any: true},
 		"bad sha":         {list: strings.Replace("["+tipPR(1, tipN(1), "main", true, "closed", 41, false)+"]", tipN(1), "xyz", 1), any: true},
 		"bad base branch": {list: "[" + tipPR(1, tipN(1), "bad..ref", true, "closed", 41, false) + "]", any: true},
-		"31 items":        {list: "[" + strings.TrimSuffix(strings.Repeat(tipPR(1, tipN(1), "main", true, "closed", 41, false)+",", 31), ",") + "]", any: true},
+		"31 items":        {list: thirtyOne(), any: true},
 	} {
 		srv := &tipServer{t: t, lists: map[string]string{tipN(1): tc.list}, status: map[string]int{}}
 		if tc.status != 0 {
@@ -169,5 +172,73 @@ func TestTidyRunBudgetContextCarriesTheBudget(t *testing.T) {
 	b := NewTidyRunBudget(roundTripFunc(func(*http.Request) (*http.Response, error) { return response(200, `{}`), nil }), 5)
 	if TidyRunBudgetFrom(context.Background()) != nil || TidyRunBudgetFrom(WithTidyRunBudget(context.Background(), b)) != b {
 		t.Fatal("the budget travels in the context")
+	}
+}
+
+// thirtyOne is a valid list of 31 distinct pull requests: one more than a page may hold.
+func thirtyOne() string {
+	items := []string{}
+	for n := 1; n <= 31; n++ {
+		items = append(items, tipPR(n, tipN(1), "main", true, "closed", 41, false))
+	}
+	return "[" + strings.Join(items, ",") + "]"
+}
+
+// A list of exactly 30 is accepted (the bound is not lower).
+func TestReadTipPullRequestsAcceptsAFullPage(t *testing.T) {
+	items := []string{}
+	for n := 1; n <= 30; n++ {
+		items = append(items, tipPR(n, tipN(2), "main", true, "closed", 41, false))
+	}
+	items[0] = tipPR(1, tipN(1), "main", true, "closed", 41, false)
+	srv := &tipServer{t: t, lists: map[string]string{tipN(1): "[" + strings.Join(items, ",") + "]"}}
+	rows, err := tidyFixtureSession(t, srv.handle).ReadTipPullRequests(context.Background(), []string{tipN(1)})
+	if err != nil || len(rows) != 1 || rows[0].State != TidyTipMerged || rows[0].Number != 1 {
+		t.Fatalf("%v %+v", err, rows)
+	}
+}
+
+// Contract 3 keeps its error: an oversized body while the deadline has passed is the shared limit
+// (hosting-evidence-limit), as before the per-tip read existed; without a deadline it is the size;
+// a declared length over the bound (the guard refuses it before reading) is the size too.
+func TestOversizedResponseKeepsTheContract3Limit(t *testing.T) {
+	big := "[" + strings.Repeat(" ", maxBytes) + "]"
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s := tidyFixtureSession(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/repos/owner/repo" {
+			return response(200, tidyRepositoryJSON()), nil
+		}
+		cancel()
+		return response(200, big), nil
+	})
+	if _, err := s.DiscoverPullRequests(ctx, []string{tipN(1)}, nil); !errors.Is(err, ErrTidyLimit) || errors.Is(err, ErrTidyResponseTooLarge) {
+		t.Errorf("deadline passed: %v", err)
+	}
+	s = tidyFixtureSession(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/repos/owner/repo" {
+			return response(200, tidyRepositoryJSON()), nil
+		}
+		return response(200, big), nil
+	})
+	if _, err := s.DiscoverPullRequests(context.Background(), []string{tipN(1)}, nil); !errors.Is(err, ErrTidyResponseTooLarge) {
+		t.Errorf("no deadline: %v", err)
+	}
+	s = tidyFixtureSession(t, func(req *http.Request) (*http.Response, error) {
+		if req.URL.Path == "/repos/owner/repo" {
+			return response(200, tidyRepositoryJSON()), nil
+		}
+		res := response(200, `[]`)
+		res.ContentLength = maxBytes + 1
+		return res, nil
+	})
+	if _, err := s.DiscoverPullRequests(context.Background(), []string{tipN(1)}, nil); !errors.Is(err, ErrTidyResponseTooLarge) {
+		t.Errorf("declared length: %v", err)
+	}
+	s = tidyFixtureSession(t, func(req *http.Request) (*http.Response, error) { return response(200, tidyRepositoryJSON()), nil })
+	ctx2, cancel2 := context.WithCancel(context.Background())
+	cancel2()
+	if _, err := s.DiscoverPullRequests(ctx2, []string{tipN(1)}, nil); !errors.Is(err, ErrTidyLimit) {
+		t.Errorf("canceled: %v", err)
 	}
 }
