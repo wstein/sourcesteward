@@ -118,15 +118,6 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 		progressMode = tidyProgressPlain
 	}
 	prog := newTidyProgress(stderr, progressMode, tidyProgressNow)
-	if w.trace != "" {
-		f, err := tidyOpenTrace(w.trace)
-		if err != nil {
-			r.cancel()
-			return nil, fmt.Errorf("--trace: %s", escFull(err.Error()))
-		}
-		defer f.Close()
-		prog.trace = f
-	}
 	r.ctx = workspace.WithObserveProgress(r.ctx, prog.Event)
 	if w.verbose || w.trace != "" {
 		r.ctx = workspace.WithGitTrace(r.ctx, prog.Git)
@@ -134,6 +125,22 @@ func startWizard(cmd *cobra.Command, w *tidyWizardOptions, timeout time.Duration
 	preparing := tidyProgressNow()
 	prep, err := tidyPrepare(r.ctx, analysis.Options{Workspace: w.workspace, CWD: cwd, Members: w.member, MemberBases: w.memberBase, StateDirs: w.stateDirs, Online: cmd.Flags().Changed("online")})
 	prog.Prepared(tidyProgressNow().Sub(preparing))
+	if err == nil && w.trace != "" {
+		// The trace file is created only now, when the repositories are known: a new file inside
+		// one of them would be an untracked file that changes what the analysis finds.
+		roots := []string{prep.Workspace}
+		for _, spec := range prep.Specs {
+			roots = append(roots, spec.Path)
+		}
+		if root, inside := tracePathInside(cwd, w.trace, roots); inside {
+			err = &analysis.UsageError{Code: "trace-inside-repository", Message: fmt.Sprintf("--trace %q is inside %q; write the trace outside the workspace and its repositories", w.trace, root)}
+		} else if f, openErr := tidyOpenTrace(w.trace); openErr != nil {
+			err = &analysis.UsageError{Code: "trace-unusable", Message: openErr.Error()}
+		} else {
+			defer f.Close()
+			prog.trace = f
+		}
+	}
 	if err != nil {
 		r.cancel()
 		prog.Finish()

@@ -179,3 +179,67 @@ func TestShortDurationAndGroupDigits(t *testing.T) {
 		}
 	}
 }
+
+// The workers count before they report, so a report with a smaller count can arrive last: the
+// shown and summarized count never goes backwards.
+func TestTidyProgressCountNeverGoesBackwards(t *testing.T) {
+	clk := newClock()
+	var out bytes.Buffer
+	p := newTidyProgress(&out, tidyProgressOff, clk.now)
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 0, 9))
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 5, 9))
+	p.Event(ev("a", 1, 1, workspace.ObservePhaseWorktrees, 3, 9))
+	p.Summary()
+	if !strings.Contains(out.String(), "observing worktrees 5/9") {
+		t.Fatalf("%s", out.String())
+	}
+}
+
+// blockedWriter holds every write until it is released.
+type blockedWriter struct {
+	started chan struct{}
+	release chan struct{}
+}
+
+func (w *blockedWriter) Write(b []byte) (int, error) {
+	w.started <- struct{}{}
+	<-w.release
+	return len(b), nil
+}
+
+// A terminal that does not accept output holds up the one worker that writes to it; the other
+// workers drop their frames and go on, and the bookkeeping is not blocked.
+func TestTidyProgressStuckTerminalDoesNotStallTheOtherWorkers(t *testing.T) {
+	clk := newClock()
+	w := &blockedWriter{started: make(chan struct{}, 1), release: make(chan struct{})}
+	p := newTidyProgress(w, tidyProgressLive, clk.now)
+	done := make(chan struct{})
+	go func() { p.Event(ev("a", 1, 2, workspace.ObservePhaseWorktrees, 1, 9)); close(done) }()
+	<-w.started // the first worker is inside the blocked write
+	clk.advance(time.Second)
+	p.Event(ev("b", 2, 2, workspace.ObservePhaseWorktrees, 4, 9)) // returns at once: frame dropped
+	p.Git(workspace.GitCall{Repo: "b", Argv: []string{"x"}})
+	close(w.release)
+	<-done
+	p.mu.Lock()
+	got := p.repos["b"].phases[0].done
+	p.mu.Unlock()
+	if got != 4 {
+		t.Fatalf("the bookkeeping of the second worker was lost: %d", got)
+	}
+}
+
+// The Git processes of the discovery belong to no repository: they are counted with the
+// discovery, and no repository row is made for them.
+func TestTidyProgressDiscoveryCallsGetNoRepositoryRow(t *testing.T) {
+	clk := newClock()
+	var out bytes.Buffer
+	p := newTidyProgress(&out, tidyProgressOff, clk.now)
+	p.Prepared(time.Second)
+	p.Git(workspace.GitCall{Argv: []string{"rev-parse"}, Duration: 2 * time.Millisecond})
+	p.Summary()
+	want := "Timings: total 0ms\n  discovery and references: 1.0s (git processes: 1, 2ms in total)\n  observation window: not reached\n"
+	if out.String() != want {
+		t.Fatalf("%q", out.String())
+	}
+}

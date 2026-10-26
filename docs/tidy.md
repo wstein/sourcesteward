@@ -66,7 +66,7 @@ The sample is the real output of the wizard on the fixture of `TestTidyExampleMa
 
 ### Long runs: progress, `--verbose`, `--trace` and agent markers
 
-A large workspace takes minutes: the analysis reads every worktree and proves every distinct branch tip. The repositories are analysed four at a time, and inside one repository four worktrees, four branches and four tips at a time, so at most sixteen items are read at once.
+A large workspace takes minutes: the analysis reads every worktree and proves every distinct branch tip. The repositories are analyzed four at a time, and inside one repository four worktrees, four branches and four tips at a time, so at most sixteen items are read at once.
 
 **Progress.** When stderr is a terminal and the run is not `--json`, one line on stderr is rewritten as the analysis proceeds. It names the repository (position in the sorted list), the phase, the items done and the elapsed time of the whole analysis; once a phase is 5 percent and 3 seconds in, it adds a cautious estimate of the time left in that phase (an average over the phase, smoothed, rounded up to 5 seconds, prefixed `~`; it is not an estimate for the whole run):
 
@@ -74,26 +74,32 @@ A large workspace takes minutes: the analysis reads every worktree and proves ev
 [3/7] sourcesteward: observing worktrees 412/1,098 (38s, ~1m05s left)
 ```
 
-The line uses a carriage return and blanks, never an escape sequence, and is erased when the analysis ends, so nothing of it stays in the terminal; stdout is unchanged byte for byte. `--quiet` turns the line off. Without a terminal on stderr nothing is printed; `--progress` (or `--verbose`) then writes an ordinary line every 10 seconds instead. `--json` never prints progress.
+The line uses a carriage return and blanks, never an escape sequence, and is erased when the analysis ends, so nothing of it stays in the terminal; stdout is unchanged byte for byte. `--quiet` turns the line off. Without a terminal on stderr nothing is printed; `--progress` (or `--verbose`) then writes an ordinary line at the start of each repository and otherwise at most every 10 seconds instead. `--json` never prints progress.
 
-**`--verbose`** (on `stw tidy` and `stw tidy plan`) prints a report to stderr after the analysis: time per repository and phase with counts, the number and summed duration of the Git processes per repository (summed over concurrent processes, so it can exceed the wall time), the ten slowest items, and each repository and phase where the observation window ended. A sample:
+**`--verbose`** (on `stw tidy` and `stw tidy plan`) prints a report to stderr after the analysis: time per repository and phase with counts, the number and summed duration of the Git processes per repository, and those of the discovery on the line of the discovery (summed over concurrent processes, so it can exceed the wall time), the ten slowest items, and each repository and phase where the observation window ended. A sample from a real run on a small repository with two linked worktrees (the progress clock of the test moves one second per report, so the phase times are round; the Git counts, the times of the Git processes and the slowest items depend on the machine):
 
 ```text
-Timings: total 1m03s
-  discovery and references: 1.2s
-  [1/1] sourcesteward: analysed in 1m03s
-    observing worktrees 40/40: 21s
-    reading branch history 12/12: 2.0s
-    proving integration 30/30: 40s
-    git processes: 880, 1m01s in total
-  slowest 3 items:
-    4.2s  sourcesteward proving integration: refs/heads/codex/wide
-    1.8s  sourcesteward observing worktrees: /tmp/wt-037
-    150ms  sourcesteward reading branch history: refs/heads/codex/old-1
-  observation window reached: sourcesteward (proofs); raise --timeout or narrow the run with --member or --only
+Timings: total 17s
+  discovery and references: 1.0s
+  [1/1] fx: analysed in 13s
+    reading references: 1.0s
+    observing worktrees 3/3: 4.0s
+    reading branch history 4/4: 5.0s
+    proving integration 1/1: 2.0s
+    git processes: 120, 105ms in total
+  slowest 8 items:
+    25ms  fx observing worktrees: /tmp/wt-a
+    24ms  fx observing worktrees: /tmp/wt-b
+    10ms  fx observing worktrees: /tmp/fx
+    1ms  fx proving integration: /tmp/wt-a
+    0ms  fx reading branch history: refs/heads/old
+    0ms  fx reading branch history: refs/heads/main
+    0ms  fx reading branch history: refs/heads/task-a
+    0ms  fx reading branch history: refs/heads/task-b
+  observation window: not reached
 ```
 
-`--trace FILE` writes one JSON line per Git process to a new file (`repo`, `argv` without the fixed safety options and without URL credentials, `ms`, `exit`); an existing file is refused, and the file stops at 8 MiB with a `{"truncated":true}` line. For a long run, widen the window with `--timeout` (up to 1h) or narrow the work with `--member NAME`, `--only` and `--workspace`.
+`--trace FILE` writes one JSON line per Git process to a new file (`repo`, `argv` without the fixed safety options and without URL credentials, `ms`, `exit`); an existing file is refused, a path inside the workspace or one of its repositories is refused with `trace-inside-repository` (exit 2: a new file there is an untracked file and would turn a safe worktree into a retained one; a path inside another linked worktree has the same effect on that worktree, so choose a path outside every worktree), and the file stops at 8 MiB with a `{"truncated":true}` line. For a long run, widen the window with `--timeout` (up to 1h) or narrow the work with `--member NAME`, `--only` and `--workspace`.
 
 **Colors.** The human text is colored only when stdout is a terminal and `NO_COLOR` is unset or empty (`safe` green, `retain` and owner and reason text dim, `decision` yellow, repository errors red, repository headings and effects bold). The colors wrap text that has already been escaped, so a name with an escape sequence stays visible as an escape, and without color the bytes are the plain text; `--json` is never colored and the prompts stay plain.
 
