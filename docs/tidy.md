@@ -646,3 +646,51 @@ Run them by hand before a release:
 ```sh
 STW_ACCEPTANCE_SCALE=1 go test ./internal/workspace -run 'TestTidyV3ScaleSixty|TestTidyV3ManyBranches' -timeout 60m -v
 ```
+
+## Administrative registration restore (contract 4)
+
+Contract 4 keeps its registration plans, prune journals and private recovery
+payloads separate from branch recovery. Inspect one completed prune before
+restoring its administrative entry:
+
+```sh
+stw tidy restore --contract 4 --plan PLAN_ID --state-dir /private/state --json
+stw tidy restore --contract 4 --plan PLAN_ID --state-dir /private/state --apply --authorize --json
+stw tidy history /repository --contract 4 --state-dir /private/state --limit 256 --json
+stw tidy restore --contract 4 --list --state-dir /private/state --limit 256 --json
+```
+
+`PLAN_ID` is the original full 32-character lowercase hexadecimal prune plan ID.
+Inspection writes nothing. Mutation needs both `--apply` and `--authorize`, the
+stored caller/mode and fresh typed confirmation for another owner's registration.
+The original name must be unused, the original checkout must still be absent,
+and the saved ownership, ancestor/mount witnesses, recovery payload and native
+history pin must validate. An incomplete prune or prior restore refuses; a
+completed restore also refuses another restore because the occupied slot cannot
+be proved to be the same directory from the closed journal representation.
+
+Restore copies the exact bounded metadata into a private staging directory in
+the repository's common directory and publishes it at the original name with
+native no-replace rename. A separate restore journal records intent and outcome;
+the original prune journal and recovery payload stay unchanged. Failure after
+intent is partial and retains its journal and any staging directory for
+inspection; it never automatically retries, overwrites or removes a reused slot.
+The original checkout stays missing and locked. Restore does not recreate user
+files, their ownership, inodes or timestamps, or execute hooks or repair.
+
+If the owner finds the moved checkout, native `git worktree repair` is a
+separately authorized owner action. Inspection prints escaped argv data with an
+explicit found-path placeholder; it is guidance, not an executed transcript.
+After repair, verify the native registration, original lock, HEAD/index and
+user files. The source test fixture performs repair only in a temporary repo.
+
+History and `restore --list` list only the new namespace, newest first within
+the disclosed scan bound. They do not read raw recovery payloads or verify the
+pin, so a recorded payload is `unknown`, not verified `available`. The default
+limit is 256, the ceiling is 1024, and output is bounded to 4 MiB. Truncation is
+explicit and succeeds; invalid records or operational failures refuse. Exit
+codes are 0 for complete inspection/mutation/listing, 1 for refusal, partial or
+operational failure, and 2 for invalid usage. Old contracts are unchanged.
+
+[Restore/history evidence and limits](../specs/011-workspace-reference-tidy/evidence/registration-prune-v4-restore-history-20261026.md)
+separate source checks from pending native platform and acceptance evidence.
