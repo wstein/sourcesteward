@@ -126,16 +126,19 @@ func TestRegistrationPruneNativeLegacyStartingPointAndOptIn(t *testing.T) {
 }
 
 func TestRegistrationPruneNativeWholeInventoryAndOwnershipRefusals(t *testing.T) {
-	for _, kind := range []string{"unlocked-sibling", "missing-record", "copied-store", "partial-inventory", "jj-marker"} {
+	for _, kind := range []string{"unlocked-sibling", "copied-lock-sibling", "missing-record", "copied-store", "partial-inventory", "jj-marker"} {
 		t.Run(kind, func(t *testing.T) {
 			source, state, task := nativeRegistrationPruneFixture(t)
 			repos := []RepoSpec{{Name: "r", Path: source, Base: "HEAD"}}
 			stores := []derive.Store{{Path: state}}
 			wantReason := "registration-prune-ownership-unproven"
 			switch kind {
-			case "unlocked-sibling":
+			case "unlocked-sibling", "copied-lock-sibling":
 				path := filepath.Join(t.TempDir(), "sibling")
 				nativePruneGit(t, source, "worktree", "add", "-q", "--detach", path, "HEAD")
+				if kind == "copied-lock-sibling" {
+					nativePruneGit(t, source, "worktree", "lock", "--reason", "stw:"+task.TaskID, path)
+				}
 				if err := os.RemoveAll(path); err != nil {
 					t.Fatal(err)
 				}
@@ -183,7 +186,11 @@ func TestRegistrationPruneNativeWholeInventoryAndOwnershipRefusals(t *testing.T)
 			for _, row := range got.Rows {
 				if row.Destination == task.Destination {
 					found = true
-					if row.Reason != wantReason || row.Verdict == RegistrationPruneSafe || len(row.Effects) != 0 {
+					wantVerdict := RegistrationPruneRetain
+					if wantReason == "registration-prune-inventory-blocked" {
+						wantVerdict = RegistrationPruneBlocked
+					}
+					if row.Reason != wantReason || row.Verdict != wantVerdict || len(row.Effects) != 0 {
 						t.Fatalf("row=%+v want %s", row, wantReason)
 					}
 				}

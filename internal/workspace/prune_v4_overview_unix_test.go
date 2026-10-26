@@ -267,3 +267,94 @@ func TestRegistrationPruneV4OverviewDigestBindsEveryWitness(t *testing.T) {
 		t.Fatal("row and evidence domains interchangeable")
 	}
 }
+
+func TestRegistrationPruneV4OverviewInventoryGates(t *testing.T) {
+	cases := []struct {
+		name, status, code string
+		count              int
+	}{
+		{"no-parent-primary-only", "ok", "", 0},
+		{"no-parent-linked", "refused", "prune-sibling-refused", 0},
+		{"relative-pointer", "refused", "prune-pointer-refused", 0},
+		{"unclean-pointer", "refused", "prune-pointer-refused", 0},
+		{"wrong-pointer-basename", "refused", "prune-pointer-refused", 0},
+		{"duplicate-destination", "refused", "prune-sibling-refused", 0},
+		{"missing-mapping", "refused", "prune-registration-refused", 0},
+		{"invalid-lock-hint", "ok", "", 1},
+		{"present-checkout", "ok", "", 0},
+		{"bare-registration", "ok", "", 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			o, task := overviewPruneFixture(t)
+			calls := 0
+			ctx := pruneHookContext(func(at, path string, value any) {
+				if at != "v4-overview-inventory-read" {
+					return
+				}
+				calls++
+				native := value.(*[]V3Registration)
+				parent := filepath.Dir(o.GitDir)
+				switch tc.name {
+				case "no-parent-primary-only":
+					*native = (*native)[:1]
+					mustOverviewChange(t, os.Rename(parent, parent+"-away"))
+				case "no-parent-linked":
+					mustOverviewChange(t, os.Rename(parent, parent+"-away"))
+				case "relative-pointer":
+					mustOverviewChange(t, os.WriteFile(filepath.Join(o.GitDir, "gitdir"), []byte("relative/.git\n"), 0600))
+				case "unclean-pointer":
+					pointer := task.Destination + "/../" + filepath.Base(task.Destination) + "/.git\n"
+					mustOverviewChange(t, os.WriteFile(filepath.Join(o.GitDir, "gitdir"), []byte(pointer), 0600))
+				case "wrong-pointer-basename":
+					mustOverviewChange(t, os.WriteFile(filepath.Join(o.GitDir, "gitdir"), []byte(task.Destination+"/not-git\n"), 0600))
+				case "duplicate-destination":
+					duplicate := filepath.Join(parent, "duplicate")
+					mustOverviewChange(t, os.Mkdir(duplicate, 0700))
+					mustOverviewChange(t, os.WriteFile(filepath.Join(duplicate, "gitdir"), []byte(task.Destination+"/.git\n"), 0600))
+				case "missing-mapping":
+					mustOverviewChange(t, os.Rename(o.GitDir, filepath.Join(t.TempDir(), "removed")))
+				case "invalid-lock-hint":
+					mustOverviewChange(t, os.WriteFile(filepath.Join(o.GitDir, "locked"), []byte("stw:bad task\n"), 0600))
+				case "present-checkout":
+					mustOverviewChange(t, os.Rename(task.Destination+"-moved", task.Destination))
+				case "bare-registration":
+					// Linked bare registrations cannot be created by Git; exercise
+					// the defensive projection gate after the native list is read.
+					for i := range *native {
+						if (*native)[i].Path == task.Destination {
+							(*native)[i].Bare = true
+						}
+					}
+				}
+			})
+			got := ObserveRegistrationPruneV4Inventory(ctx, o.Path)
+			if calls != 1 || got.Status != tc.status || got.Diagnostic.Code != tc.code || len(got.Candidates) != tc.count {
+				t.Fatalf("hook calls=%d inventory=%+v want %s/%s/%d", calls, got, tc.status, tc.code, tc.count)
+			}
+			if tc.name == "invalid-lock-hint" && got.Candidates[0].Task != "" {
+				t.Fatalf("invalid task hint accepted: %+v", got.Candidates[0])
+			}
+		})
+	}
+}
+
+func TestRegistrationPruneV4OverviewFinalCancellation(t *testing.T) {
+	o, _ := overviewPruneFixture(t)
+	calls := 0
+	var cancel context.CancelFunc
+	ctx := pruneHookContext(func(at, path string, value any) {
+		if at == "v4-registration-observed" {
+			calls++
+			if calls == 2 {
+				cancel()
+			}
+		}
+	})
+	ctx, cancel = context.WithCancel(ctx)
+	defer cancel()
+	got := ObserveRegistrationPruneV4(ctx, o)
+	if calls != 2 || got.Status != "refused" || got.Diagnostic.Code != "native-evidence-unavailable" || got.Complete() || got.EvidenceDigest != "" {
+		t.Fatalf("calls=%d canceled observation=%+v", calls, got)
+	}
+}
