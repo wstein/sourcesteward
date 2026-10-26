@@ -203,6 +203,13 @@ func TestRegistrationPruneV4RestoreJournalBindsPayload(t *testing.T) {
 	b, e = pruneV4Canonical(j, "")
 	pruneMust(t, e)
 	pruneMust(t, os.WriteFile(path, append(b, '\n'), 0600))
+	s, e := openStoreKinds(filepath.Join(p.StateDir, pruneV4Namespace), false, []string{"journals"})
+	pruneMust(t, e)
+	defer s.Close()
+	original, e := readPruneV4PrivateFile(s.dirs["journals"], p.PlanID+".json", int64(pruneV4RecordLimit))
+	pruneMust(t, e)
+	_, e = readPruneV4RestoreForPlan(s, p, pruneV4Hash("stw-registration-journal-file-v4", original), pruneV4GuardJournal(t, p).PayloadDigest)
+	assertPruneReason(t, e, "prune-restore-refused", pruneV4RestoreError().Error())
 	r := RestoreRegistrationPruneV4(context.Background(), o)
 	pruneV4GuardReason(t, r, "refused", "prune-restore-refused")
 }
@@ -308,5 +315,38 @@ func TestRegistrationPruneV4RestoreStagingRemainsPrivate(t *testing.T) {
 	r := RestoreRegistrationPruneV4(ctx, o)
 	if !fired || r.Status != "ok" {
 		t.Fatalf("private staging fired=%v result=%+v", fired, r)
+	}
+}
+
+func TestRegistrationPruneV4RestoreRepairArgvForInspectAndApply(t *testing.T) {
+	p := restoreV4Fixture(t)
+	o := restoreV4Options(p)
+	for _, apply := range []bool{false, true} {
+		o.Apply, o.Authorize = apply, apply
+		r := RestoreRegistrationPruneV4(context.Background(), o)
+		if r.Status != "ok" || len(r.Actions) != 1 {
+			t.Fatalf("restore apply=%v: %+v", apply, r)
+		}
+		_, data, ok := strings.Cut(r.Actions[0].Detail, "Repair argv data (separate owner authorization): ")
+		if !ok {
+			t.Fatalf("repair argv absent for apply=%v: %s", apply, r.Actions[0].Detail)
+		}
+		var args []string
+		pruneMust(t, json.Unmarshal([]byte(data), &args))
+		if !reflect.DeepEqual(args, []string{"git", "-C", p.SourcePath, "worktree", "repair", "<owner-selected-found-path>"}) {
+			t.Fatalf("wrong repair argv: %#v", args)
+		}
+	}
+}
+func TestRegistrationPruneV4RestoreRefusesColocatedOwnershipWithoutWrites(t *testing.T) {
+	p := restoreV4Fixture(t)
+	pruneMust(t, os.Mkdir(filepath.Join(p.SourcePath, ".jj"), 0700))
+	o := restoreV4Options(p)
+	o.Apply, o.Authorize = true, true
+	before := treeSnapshot(t, p.StateDir, p.Expected.SourceSnapshot.Identity.RepositoryDir)
+	r := RestoreRegistrationPruneV4(context.Background(), o)
+	pruneV4GuardReason(t, r, "refused", "git-ownership-refused")
+	if !reflect.DeepEqual(before, treeSnapshot(t, p.StateDir, p.Expected.SourceSnapshot.Identity.RepositoryDir)) {
+		t.Fatal("colocated refusal changed protected state")
 	}
 }
