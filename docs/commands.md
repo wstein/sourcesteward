@@ -361,7 +361,9 @@ target interfaces follow the dated owner decisions; no old --pull-requests or re
 016 per-action remote authority stays separate from local apply/signing. Explicit saved plans use validated workspace .work metadata by default; selected 013 payload bytes remain external. Native jj capabilities are declared independently with no raw Git fallback. Optional local 015 re-sign requires a fixed trusted HOST helper/verifier and final signed SHA before review, never stw-held keys or unsigned fallback.
 Ready separately requires independent CLEAR for the exact current head, required CI green, `rebaseable == true` and accepted PR scope.
 [Spec 043](../specs/043-stw-land/spec.md) is the human owner's separate landing operation; conditional retarget/deletion order and unmeasured-shape
-gates stay there. No agent landing/merge/default push/tag/release/settings action is introduced.
+gates stay there. Owner decision 2026-10-26: a planned `stw land --stack` lands a whole linear chain of reviewed stacked pull requests with one fast-forward
+push of the tip and no retarget (preconditions, ruleset and measurement gates in the spec; dependent parts are by default one pull request with a commit
+series, which needs no `--stack`). It is not implemented. No agent landing/merge/default push/tag/release/settings action is introduced.
 
 Work transfer (017), amend/fixup/split editing (018), upstream synchronization (019) and native GitButler integration remain planned.
 Current inventory, local recovery evidence and read-only PR/CI do not implement those broader workflows. See the [roadmap](roadmap.md)

@@ -76,6 +76,12 @@ allowlists. 014 stays helper-free; 043 stays human-only with existing typed
 confirmation, conditional retarget/deletion and unmeasured-shape refusal.
 No build, schema-file change, helper execution or live operation is implied.
 
+Owner decision 2026-10-26 (stacked pull requests): dependent parts are by default ONE pull
+request with a commit series; `stw land --stack` (Spec 043, planned, first feature after
+v0.2.0) lands a whole linear chain with one fast-forward push of the tip, gated by spike
+measurements (research.md, "Stack landing") and a security review before code. Nothing is
+implemented or measured yet.
+
 ## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
 The read-only `stw restack plan` for native Git is implemented in source on `feat/015-restack-plan` (hidden command, unpublished
