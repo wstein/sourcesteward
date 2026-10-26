@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -52,5 +53,25 @@ func TestTidyPruneV4RestoreRejectsMixedGrammar(t *testing.T) {
 		if code != 2 || err.Len() == 0 {
 			t.Fatalf("usage reason missing args=%v exit=%d out=%s err=%s", extra, code, out.String(), err.String())
 		}
+	}
+}
+
+func TestTidyPruneV4RestoreHumanDisclosesLimitations(t *testing.T) {
+	repo := pruneCLIRepository(t)
+	code, planned, diag := pruneV4Invoke(t, repo)
+	if code != 0 {
+		t.Fatalf("plan %d %s", code, diag)
+	}
+	id := planned["plan"].(map[string]any)["plan_id"].(string)
+	var out, err bytes.Buffer
+	code = Run(context.Background(), "dev", []string{"tidy", "apply", "--contract", "4", "--plan", id, "--state-dir", repo.state, "--authorize", "--json"}, &out, &err)
+	if code != 0 {
+		t.Fatalf("apply %d %s", code, err.String())
+	}
+	out.Reset()
+	err.Reset()
+	code = Run(context.Background(), "dev", []string{"tidy", "restore", "--contract", "4", "--plan", id, "--state-dir", repo.state}, &out, &err)
+	if code != 0 || !strings.Contains(out.String(), "Only administrative metadata is restored") {
+		t.Fatalf("human limitations omitted: exit=%d out=%s err=%s", code, out.String(), err.String())
 	}
 }
