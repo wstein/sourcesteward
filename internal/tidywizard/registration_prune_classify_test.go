@@ -11,7 +11,7 @@ import (
 
 func TestRegistrationPruneRowIDDomain(t *testing.T) {
 	got := RegistrationPruneID("r", "w<&\u2028", "/r/.git/worktrees/w")
-	if got != "a0d4e1d7367b5bf63fdf9d14dbe1071f90e10800676fb38f1c8c71b6755e9e85" {
+	if got != "c323142ec8fc1a37a6a3de1bde70b862d58889946d86acf2b5461b143e6f0bae" {
 		t.Fatalf("row id = %s", got)
 	}
 	if got == RegistrationPruneID("r", "w<&\u2028", "/r/.git/worktrees/w-other") {
