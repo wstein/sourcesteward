@@ -42,6 +42,15 @@ var tidyFlagClasses = map[string]flagClass{
 	"report-max-lines": flagExpert, "report-max-commits": flagExpert, "plan": flagExpert, "authorize": flagExpert,
 }
 
+// tidyFlagClass resolves the command-specific overview selector. Bare tidy's
+// --contract is shared; plan/apply retain their expert contract dispatch.
+func tidyFlagClass(cmd *cobra.Command, name string) flagClass {
+	if name == "contract" && cmd.Name() == "tidy" {
+		return flagShared
+	}
+	return tidyFlagClasses[name]
+}
+
 // tidyWizardOptions holds the values of the wizard-only flags of `tidy plan`.
 type tidyWizardOptions struct {
 	workspace  string
@@ -158,7 +167,7 @@ func selectTidyPlanLayer(cmd *cobra.Command, args []string, o *tidyWizardOptions
 	}
 	var wizardOnly, expert []string
 	for _, name := range changedTidyFlags(cmd) {
-		switch tidyFlagClasses[name] {
+		switch tidyFlagClass(cmd, name) {
 		case flagWizard:
 			wizardOnly = append(wizardOnly, "--"+name)
 		case flagExpert:
