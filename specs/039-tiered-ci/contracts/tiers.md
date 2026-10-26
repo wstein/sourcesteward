@@ -31,6 +31,8 @@ Actions app, in which **all six `current` shard jobs concluded `success`** (exec
 | `affected_reason` | `docs-only`, `packages`, `all`; `all` for any changed path under `.github/` or `scripts/`, which `check` honours |
 | `tier` | `T1`, `T2`, `T3` |
 
+Interim implementation (2026-10-26, `scripts/ci_stack.py`, no `ci_tier.py` yet): `ci.yml` passes `stack_tip` to `conformance.yml`, which skips the shards and lets `suite` pass only for a `pull_request` that is documentation-only or has `stack_tip` `false`. `stack_tip` is `false` only when the event is `pull_request`, the head repository equals the base repository, the head branch is not the default branch, the listing of open pull requests contains this pull request, and another open pull request whose head and base repository are this repository has the head branch as its base branch (rows 8 and 9; evidence is not read). Every other case, including a failed lookup, is `true` (rows 2, 5, 7, 10, 11, 1). A `ci-full` label also forces the shards.
+
 Truth table (a row applies in this order; the first match wins; the child row precedes the default-branch row):
 
 | # | Event | Condition | `t2_required` | `reason` |
@@ -43,9 +45,9 @@ Truth table (a row applies in this order; the first match wins; the child row pr
 | 6 | pull_request | Draft | `false` | `draft` (WP-2 target; until WP-2 every PR runs the shards, amendment 2026-10-26) |
 | 7 | pull_request | head repository differs from base repository (fork) | `true` | `unstacked` |
 | 8 | pull_request | an open same-repo PR has this head ref as base, and tip evidence exists | `false` (evidence) | `evidence from tip #N run <id>` |
-| 9 | pull_request | an open same-repo PR has this head ref as base, no tip evidence | `false`, `suite` fails | `T2 pending on #N` (`deferred-to-tip #N` in the summary; WP-2 target, see the amendment of 2026-10-26: T1 cannot run `internal/workspace` plain) |
+| 9 | pull_request | an open same-repo PR has this head ref as base, no tip evidence | `false`, `suite` passes (skipped shards) | `deferred-to-tip #N`. Implemented by `ci_stack.py` (owner decision 2026-10-26, "C yes"): `is_stack_tip=false`; the tip runs the shards. The WP-2 reason `T2 pending on #N` with a failing `suite` is dropped |
 | 10 | pull_request | base is the default branch | `true` | `unstacked` |
-| 11 | pull_request | otherwise (stacked, no same-repo child) | `true` | `stack-tip` |
+| 11 | pull_request | otherwise (stacked, no same-repo child) | `true` | `stack-tip` (`is_stack_tip=true`) |
 
 `ready_for_review` is not a row: after a flip from Draft, row 6 no longer applies and the PR reaches rows 8 to 11. A fork PR that
 targets a branch of the base repository is never counted as a child in rows 8 and 9 (mutation target and test row).

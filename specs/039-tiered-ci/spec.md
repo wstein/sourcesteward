@@ -5,12 +5,24 @@
 **amends** the CI tier design recorded in [development](../../docs/development.md) (the former `CONFORMANCE_TIER` expression, removed
 on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/ci_shards.py`.
 
-> **Amendment 2026-10-26 (owner decision, answer "Ja, jeder PR gleich").** Every pull request, stacked or not, runs the
-> `current` conformance shards (docs-only PRs excepted) until WP-2 lands. This reverses the wish below to run the heavy tests on the
-> stack tip only: a stacked PR skipped the shards, so `check` ran `internal/workspace` plain and timed out after 40 minutes
-> (PR 299, run 40309873142). `ci.yml` has no `CONFORMANCE_TIER` and no base-branch condition any more. Cost per push is about 78 runner
-> minutes in 7 jobs; a restack of three PRs needs about 21 jobs (limit 20), so restack one PR at a time. Statements below that stacked
-> PRs skip T2, or that T1 may run `internal/workspace` plain, describe the WP-2 target and are void for `internal/workspace`.
+> **Amendment 2026-10-26 (owner decision, answer "Ja, jeder PR gleich"; corrected the same day by "C yes").** First decision: every
+> pull request, stacked or not, ran the `current` conformance shards, because a stacked PR skipped them and `check` then ran
+> `internal/workspace` plain and timed out after 40 minutes (PR 299, run 40309873142); that cost about 78 runner minutes in 7 jobs per
+> push, and a restack of three PRs needs about 21 jobs (limit 20).
+>
+> **Correction 2026-10-26 (owner decision "C yes": the heavy conformance gate runs only on the tip of a stack).** This restores the
+> original wish below. The `current` shards run for a push to `main`, for every pull request whose base is the default branch, for the
+> tip of a stack (a pull request whose head branch is not the base branch of any open pull request) and for a pull request with the
+> `ci-full` label; documentation-only pull requests still skip them. A pull request whose head branch **is** the base branch of
+> another open pull request of this repository (a head from a branch of this repository, not a fork) runs only the light lane: `check`
+> without `internal/workspace`, which the tip contains and tests. `check` and `Git/jj conformance (current) / suite` still report on every
+> pull request: `suite` passes with skipped shards for such a pull request, the same mechanism as for a documentation-only one. The
+> decision is made by the `changes` job of `ci.yml` with `scripts/ci_stack.py` from the open pull requests (`pull-requests: read` for that
+> job only) and fails closed: any doubt or lookup failure means tip. It is evaluated when the run starts (a new push, `reopened`, or a
+> re-run of the jobs): opening or closing a child pull request starts no run of its parent. A stack of three costs one heavy run
+> (about 78 runner minutes, 7 jobs) plus two light runs (about 10 minutes, 2 jobs each) per push cycle. Statements below that T2
+> evidence must exist before a parent is Ready, or that a parent's `suite` fails until then (`T2 pending on #N`), describe the WP-2
+> target and are replaced by this rule: the heavy gate of the tip covers every commit below it.
 
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 
@@ -231,7 +243,7 @@ before the default-branch check, so the bottom PR of a stack does not run T2 on 
 | same-head T2 evidence of its own | yes | no (evidence reused) | `evidence from run <id>` |
 | carries `ci-full` (any state) | yes | yes | `label` |
 | Draft, not labelled | yes | no | `draft` |
-| not Draft, has an open same-repo child | yes | no; Ready only with tip evidence (below) | `deferred-to-tip #N` |
+| not Draft, has an open same-repo child | yes (without `internal/workspace`) | no; the tip runs it (amendment 2026-10-26) | `deferred-to-tip #N` |
 | not Draft, base is the default branch, no child | yes | yes | `unstacked` |
 | not Draft, stacked, no child (the top) | yes | yes | `stack-tip` |
 

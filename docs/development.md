@@ -92,29 +92,51 @@ lanes also cache the Git-from-source prefix with `actions/cache`, keyed by runne
 lane, the pinned Git version and the installer hash; a hit skips the build and the
 preflight still asserts the exact Git version. Caches written by a branch or PR are visible
 only to that ref and its children, and never to other forks' runs (GitHub's default scoping).
-CI keeps the heavy suite out of the `check` job so every PR, stacked or not, finishes in reasonable time. The `check` job (static checks
+CI keeps the heavy suite out of the `check` job so every PR finishes in reasonable time. The `check` job (static checks
 and the plain Go test suite) always runs; `-race` never runs on a pull request or a push
 (Spec 039), only in the scheduled race workflow. The two `Git/jj conformance` lanes live in the reusable
 workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for every push to `main` and every
-pull request, including a PR stacked on another PR branch (its base is not the default branch):
-`check` never runs `internal/workspace` (a plain run exceeds the 40 minute timeout), so the
-shards must run on stacked PRs too. Documentation-only PRs skip the shards (below). The separate workflow
+pull request, and the shards run only for the tip of a stack (below): `check` never runs
+`internal/workspace` (a plain run exceeds the 40 minute timeout), so a PR that skips the shards
+leaves that package to the tip. Documentation-only PRs skip the shards too (below). The separate workflow
 `ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
 never re-runs `check`; it runs both lanes, so the `current` lane runs a second time (about 68
 runner minutes) next to the run `ci.yml` already made. An unlabelled pull request runs only the `current` lane; a PR with the
 `ci-full` label runs both lanes on every push (`ci.yml`) and when labelled (`ci-full.yml`), and
 the `minimum` lane also runs on pushes to `main` (the post-merge gate) and in the scheduled race
-workflow. Since every PR runs the `current` lane, the label is only useful to get the `minimum` lane
-early on the top PR of a stack (otherwise `main` runs it after the merge); it is optional. The
-post-merge push to `main` runs everything again. A retarget of a stacked PR to `main` needs no
-action: the stacked and unstacked paths are the same. If the `changes` job fails, `conformance`
+workflow. The label also forces the shards on a PR below the tip; it is optional and mainly gets the `minimum` lane
+early on the tip of a stack (otherwise `main` runs it after the merge). The
+post-merge push to `main` runs everything again. If the `changes` job fails, `conformance`
 is skipped and the required `suite` check does not report, so the merge is blocked (fail closed).
 
-Cost (owner decision 2026-10-26, Spec 039 amendment): one push to a PR runs about 78 runner
-minutes (`check` about 10, six `current` shards about 68) in 7 concurrent jobs, wall time about 14
-minutes. GitHub allows 20 concurrent jobs, so a restack of three PRs (about 21 jobs) queues:
-restack and push one PR at a time, and batch fixes into one push. A newer push cancels the
-older run of the same PR.
+Heavy gate on the tip of a stack (owner decision 2026-10-26, "C yes", Spec 039 amendment). The shards run
+for a push to `main`, for every PR whose base is the default branch, for the tip of a stack and for a PR with
+the `ci-full` label. A PR is below the tip when its head branch is the base branch of another open PR of
+this repository whose head is also a branch of this repository. Such a PR runs only the light lane: `check`
+(without `internal/workspace`) and the aggregate `suite`, which passes with the skipped shards, the same
+mechanism as for a documentation-only PR, so both required checks (`check` and
+`Git/jj conformance (current) / suite`) still report on every PR. The `changes` job decides this with
+`scripts/ci_stack.py`: it lists the open PRs with `gh api` (the job alone has `pull-requests: read`) and
+looks for a child. Branch names reach the script only through the environment. Any doubt means tip, so the
+shards run: a fork PR, a failed or incomplete listing, a listing without the PR itself, the default
+branch as head branch, a child from a fork.
+
+When the decision is made: when a run starts, that is a new push, a close and reopen, or a re-run of the jobs
+in the Actions UI (the lookup is repeated live). Opening, editing, retargeting, merging or closing another
+PR starts no run of this one, and no other trigger exists. So (1) a PR that was a tip keeps its earlier heavy
+run when a child appears later, and its next push runs only the light lane; the heavy run of the tip covers
+every commit below it, because the tip contains them. (2) When a child is merged or closed without
+merging, the parent's earlier light result stays: a parent whose child was closed unmerged has no heavy
+run for its head. Re-run its jobs or close and reopen it before merging it. (3) Merging the bottom PR by
+rebase makes GitHub retarget its child to `main`; that edit starts no run. The restack push that a rebase-merge
+needs does, and then the PR is on `main` or the tip and runs the shards. Merge a stack only after the tip is green.
+
+Cost: one push to a tip or a PR on `main` runs about 78 runner minutes (`check` about 10, six `current`
+shards about 68) in 7 concurrent jobs, wall time about 14 minutes. A PR below the tip runs `check` and `suite`
+about 10 minutes in 2 concurrent jobs (the `changes` job is small). A stack of three PRs therefore costs one
+heavy run plus two light ones per push cycle (about 98 runner minutes, 11 jobs) instead of three heavy
+ones (about 234, 21 jobs, over the limit of 20 concurrent jobs). A newer push cancels the older run
+of the same PR; batch fixes into one push.
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
@@ -126,8 +148,8 @@ scripts read them), and any rename out of those paths. An empty or unreadable ch
 checkout that is not a merge commit and every other event (push to `main`, `workflow_dispatch`,
 schedule, tags, the `ci-full` label run) give `false`. There is no `paths-ignore`, so every
 workflow still starts and reports. `conformance.yml` receives `docs_only`; its `shard` job is
-skipped only when `docs_only` is `true` on a `pull_request`, and the lane's `suite` job (always
-runs) passes on `success`, or on `skipped` only for that same docs-only pull request; failed,
+skipped only when `docs_only` is `true` or `stack_tip` is `false` on a `pull_request`, and the lane's `suite` job (always
+runs) passes on `success`, or on `skipped` only for such a pull request (docs-only or below the tip of a stack); failed,
 cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the Go test
 suite) and the docs, architecture and spec checks inside it always run.
 T1 tests only what a pull request can affect (Spec 039). The `changes` job also runs
