@@ -104,6 +104,7 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 	if e == nil {
 		if j.Phase != "complete" {
 			r.Status = "partial"
+			r.Actions = pruneV4JournalActions(p, j)
 			r.Diagnostics = []Diagnostic{{Code: "prune-incomplete", Message: "A prior prune attempt is incomplete; inspect its retained journal and recovery payload."}}
 			return r
 		}
@@ -150,6 +151,10 @@ func ApplyRegistrationPruneV4(ctx context.Context, o RegistrationPruneV4ApplyOpt
 		}
 		r.Diagnostics = []Diagnostic{{Code: code, Message: message}}
 		j.Phase = "partial"
+		if len(j.Remaining) == 0 {
+			j.Remaining = []string{"remove-registration"}
+		}
+		r.Actions = pruneV4JournalActions(p, j)
 		j.Diagnostics = r.Diagnostics
 		// Preserve the last confirmed phase and pending intent if persistence fails.
 		_ = writePruneV4Record(s.dirs["journals"], p.PlanID+".json", j, false)
@@ -244,7 +249,71 @@ func readPruneV4Journal(s *store, p RegistrationPruneV4Plan) (pruneV4Journal, er
 	if j.Phase == "complete" && (len(j.Remaining) != 0 || len(j.Diagnostics) != 0 || !pruneV4ID(j.PayloadDigest, 64)) {
 		return j, failure("prune-journal-refused", "Complete prune journal has incomplete recovery or remaining work.")
 	}
+	if !validPruneV4JournalEffects(p, j) {
+		return j, failure("prune-journal-refused", "Stored prune journal effects or remaining work do not match the exact ordered plan.")
+	}
 	return j, nil
+}
+
+func validPruneV4JournalEffects(p RegistrationPruneV4Plan, j pruneV4Journal) bool {
+	order := []string{}
+	for _, m := range pruneV4RemovalOrder(p) {
+		if m.Kind != "absent" {
+			order = append(order, m.Path)
+		}
+	}
+	if len(j.Effects) > 1+len(order) {
+		return false
+	}
+	for i, e := range j.Effects {
+		action, target, intent := "pin-history", pruneV4HistoryRef(p), "create-absent"
+		if i > 0 {
+			action, target, intent = "remove-metadata", order[i-1], "unlink-exact"
+		}
+		if e.Action != action || e.Target != target || e.Intent != intent {
+			return false
+		}
+		if i < len(j.Effects)-1 && e.Outcome != "observed" {
+			return false
+		}
+	}
+	all := []string{"prepare-recovery", "pin-history", "remove-registration"}
+	if len(j.Remaining) > len(all) {
+		return false
+	}
+	if !reflect.DeepEqual(j.Remaining, all[len(all)-len(j.Remaining):]) {
+		return false
+	}
+	if len(j.Effects) > 0 && !pruneV4ID(j.PayloadDigest, 64) {
+		return false
+	}
+	switch j.Phase {
+	case "prepared":
+		return len(j.Effects) <= 1
+	case "recovery-confirmed":
+		return len(j.Effects) == 1 && j.Effects[0].Outcome == "observed" && reflect.DeepEqual(j.Remaining, []string{"remove-registration"})
+	case "removing":
+		return len(j.Effects) > 1 && reflect.DeepEqual(j.Remaining, []string{"remove-registration"})
+	case "complete":
+		return len(j.Effects) == len(order)+1
+	case "partial":
+		return true
+	}
+	return false
+}
+
+// Summaries report recorded outcomes and recovery pointers, not a new claim of
+// current payload availability after cancellation or an external change.
+func pruneV4JournalActions(p RegistrationPruneV4Plan, j pruneV4Journal) []ActionOutcome {
+	out := []ActionOutcome{{Name: "recovery-record", Status: "incomplete", Detail: "Retained recovery payload location: " + p.PayloadPath + "; inspect the retained prune journal before any recovery."}}
+	for _, e := range j.Effects {
+		status := "incomplete"
+		if e.Outcome == "observed" {
+			status = "complete"
+		}
+		out = append(out, ActionOutcome{Name: e.Action, Status: status, Detail: "Recorded " + e.Outcome + " outcome for " + e.Target + "; no new effect was inferred."})
+	}
+	return out
 }
 func pinPruneV4History(ctx context.Context, p RegistrationPruneV4Plan) error {
 	bin, e := gitExecutable()

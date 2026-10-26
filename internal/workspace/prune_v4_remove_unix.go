@@ -27,28 +27,7 @@ func removePruneV4Metadata(ctx context.Context, p RegistrationPruneV4Plan, expec
 		return e
 	}
 	defer regParent.Close()
-	entries := append([]PruneV4Metadata{}, p.Expected.Metadata...)
-	// Descendants precede parents. Keep the original lock until all other files
-	// have been removed; there is no unlock-and-prune transition.
-	sort.Slice(entries, func(i, k int) bool {
-		rank := func(m PruneV4Metadata) int {
-			if m.Path == "." {
-				return -3
-			}
-			if m.Path == "locked" {
-				return -2
-			}
-			if m.Kind == "directory" {
-				return -1
-			}
-			return strings.Count(m.Path, "/") + 1
-		}
-		a, b := rank(entries[i]), rank(entries[k])
-		if a != b {
-			return a > b
-		}
-		return entries[i].Path > entries[k].Path
-	})
+	entries := pruneV4RemovalOrder(p)
 	removed := map[string]bool{}
 	for _, m := range entries {
 		if m.Kind == "absent" {
@@ -205,4 +184,30 @@ func validatePruneV4RemovalBoundary(ctx context.Context, p RegistrationPruneV4Pl
 		}
 	}
 	return nil
+}
+
+func pruneV4RemovalOrder(p RegistrationPruneV4Plan) []PruneV4Metadata {
+	entries := append([]PruneV4Metadata{}, p.Expected.Metadata...)
+	// Descendants precede parents. Keep the original lock until all other files
+	// have been removed; there is no unlock-and-prune transition.
+	sort.Slice(entries, func(i, k int) bool {
+		rank := func(m PruneV4Metadata) int {
+			if m.Path == "." {
+				return -3
+			}
+			if m.Path == "locked" {
+				return -2
+			}
+			if m.Kind == "directory" {
+				return -1
+			}
+			return strings.Count(m.Path, "/") + 1
+		}
+		a, b := rank(entries[i]), rank(entries[k])
+		if a != b {
+			return a > b
+		}
+		return entries[i].Path > entries[k].Path
+	})
+	return entries
 }
