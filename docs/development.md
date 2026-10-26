@@ -126,7 +126,7 @@ and `suite` does not report, so the merge is blocked.
 When the decision is made: when a run starts, that is a new push (also one that merging a child into this
 PR's branch makes), a close and reopen, or "Re-run all jobs" in the Actions UI (the lookup is repeated live;
 re-running only the conformance job reuses the stale `changes` output). Opening, editing, retargeting or
-closing a child, and a merge that does not move this PR's head, start no run of this one, and no other
+closing a child, a child's flip from Draft to Ready, and a merge that does not move this PR's head, start no run of this one, and no other
 trigger exists. So (1) a PR that was a tip keeps its earlier heavy run when a child appears later, and its
 next push runs only the light lane. (2) When a child is closed without merging, the parent's earlier
 light result stays: it has no heavy run for its head. Re-run all jobs or close and reopen it before merging
