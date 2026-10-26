@@ -52,6 +52,11 @@ type Assessment struct {
 // now is supplied by the run so every row shares one reference time.
 func Evaluate(f Facts, now time.Time) Assessment {
 	out := Assessment{Level: Kept, Reasons: []string{}}
+	// Primary checkouts and stale registrations remain structurally retained,
+	// including observed dirt or incomplete evidence (foreman clarification).
+	if f.Primary || f.Kind == "stale-worktree" {
+		return corroborate(out, f)
+	}
 	worktree := f.Kind == "worktree"
 	noProof := f.Proof == "none" || f.Proof == ""
 	// Content facts outrank the classifier's first structural refusal reason.
@@ -71,6 +76,9 @@ func Evaluate(f Facts, now time.Time) Assessment {
 		out.Level = Red
 		return corroborate(out, f)
 	}
+	// Retained rows keep their unselectable classification even with unknown
+	// kind/proof words. Closed vocabulary gates strength only for safe/decision
+	// rows; it must never promote retained rows into selectable ones.
 	if f.Verdict != "safe" && f.Verdict != "decision" {
 		return corroborate(out, f)
 	}
@@ -98,7 +106,7 @@ func Evaluate(f Facts, now time.Time) Assessment {
 	case f.Proof == "github-branch-absent":
 		out.Level = Green
 		out.Reasons = append(out.Reasons, ReasonProofGitHubBranchAbsent)
-	case f.Proof == "patch-id" || f.Proof == "merge-noop" || f.Proof == "empty-working-copy":
+	case f.Proof == "patch-id" || f.Proof == "merge-noop" || f.Proof == "empty-working-copy" || f.Proof == "empty-working-copy-integrated-parent":
 		out.Level = Yellow
 		equivalent = true
 		out.Reasons = append(out.Reasons, ReasonProofEquivalent)
@@ -143,7 +151,7 @@ func knownKind(kind string) bool {
 }
 func knownProof(proof string) bool {
 	switch proof {
-	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop", "empty-working-copy":
+	case "ancestor", "no-net-change", "github-branch-absent", "patch-id", "merge-noop", "empty-working-copy", "empty-working-copy-integrated-parent":
 		return true
 	}
 	return false
