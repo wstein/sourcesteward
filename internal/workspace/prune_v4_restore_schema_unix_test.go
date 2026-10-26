@@ -96,7 +96,7 @@ func TestRegistrationPruneV4RestoreSchemaPartialResult(t *testing.T) {
 		}
 	})
 	r := RestoreRegistrationPruneV4(ctx, o)
-	pruneV4GuardReason(t, r, "partial", "prune-restore-refused")
+	restoreV4ReviewReason(t, r, "partial", "prune-registration-occupied", "The original administrative registration slot is occupied; restore never overwrites or adopts an existing entry.")
 	b, e := json.Marshal(r)
 	pruneMust(t, e)
 	v, e := jsonschema.UnmarshalJSON(bytes.NewReader(b))
