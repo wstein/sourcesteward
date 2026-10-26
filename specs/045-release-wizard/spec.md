@@ -148,15 +148,15 @@ no draft, every earlier bound run concluded unsuccessfully) is not stopped by it
 `conflict` ("an earlier dispatch is still active or finished; cancel it, or check its draft, in the Actions page") because it could create or have created a draft. With a missing or corrupt journal there are no epochs: every run of
 the version counts, and a failed run plus a retry is a `conflict` the owner resolves by hand.
 
-**A tag that existed once.** A tag that is absent now is `vanished`, and its version blocked for good, only if a signal shows the tag was **pushed**. Only signals that cannot exist before the tag
+**A tag that existed once.** A tag whose remote copy is absent now (`T` none or local-only) is `vanished`, and its version blocked for good, only if a signal shows the tag was **pushed**. Only signals that cannot exist before the tag
 push count; the ordinary pre-tag evidence of a normal release (a draft whose `tag_name` is V, the record `docs/releases/V.json` on `main`, a successful build run) is **not** such a signal,
-because states 6 to 10 contain all of it with `T none`. The signals, each valid while `T` is `none`:
+because states 6 to 10 contain all of it with `T none`. The signals, each valid while the remote tag is absent (`T` none or local-only):
 
 | # | Signal | Why it cannot exist before the push |
 | --- | --- | --- |
-| V1 | the journal has `tag-pushing` or `tag-pushed` for the version (`tag-pushing` is written **before** the push, so a push whose answer was lost still counts; only a push the remote **explicitly rejected** (journal `tag-push-rejected`, for example by the ruleset) ends the restriction) | the wizard writes it at the push |
+| V1 | the journal has a `tag-pushed` line for the version (written only after the remote verification). A `tag-pushing` line alone is **not** V1: it is the open tag push of rule 2c, which `no-tag` or an explicit rejection (`tag-push-rejected`) closes | the wizard writes it after the push |
 | V2 | a run of a **publish workflow** (the table below the signals names the file) with event `push` and `head_branch` equal to the tag name (the run of a tag push keeps the tag as its ref after the tag is deleted; bounded runs read) | the publish workflow triggers on the tag push; a `workflow_dispatch` run has `head_branch` `main` |
-| V3 | a **published** (non-draft) release whose `tag_name` is the tag | publication happens only after the tag (a published release without a tag is also rule 1) |
+| V3 | a **published** (non-draft) release whose `tag_name` is the tag | publication happens only after the tag (it is handled by rule 1b, not 2b) |
 | V4 | a `DeleteEvent` with `ref_type` tag and `ref` equal to the tag name in the bounded repository events read (at most 3 pages; GitHub keeps about 90 days; to be measured, T016b) | a deletion needs a tag |
 
 The publish workflow file V2 reads, by project and time (a workflow that does not exist yet is marked): the convention is `release-publish.yml` in the directory of `ci.release_workflow`, plus the
@@ -179,12 +179,12 @@ deletion) is the protection.
 | --- | --- | --- |
 | 0 | `nothing` | `T none`, `R none`, `U none`, `M none`, no journal effect line |
 | 1 | `ready` | state 0 and `plan <C> --version V --online` has verdict `pass` (recomputed, not durable) |
-| 2 | `dispatch-unseen` | `U none`, `T none`, `R none`, and the latest epoch has a `dispatching` line **not followed by `dispatch-released` or `abandoned`** (with or without `dispatched`): a POST may have started a run that is not visible yet. The exits are in the decision table (wait, `no-run VERSION`, abandon) |
+| 2 | `dispatch-unseen` | `U none`, `T none`, `R none`, and the latest epoch has a `dispatching` line **not followed by `dispatch-released` or `abandoned`** (with or without `dispatched`): a POST may have started a run that is not visible yet. The exits are in the decision table (wait, `no-run PRODUCT VERSION`, abandon) |
 | 3 | `build-queued` | one bound run `queued` |
 | 4 | `build-running` | one bound run `running` |
 | 5 | `build-failed` | one bound run `failure`, and no draft with assets; with a draft: `conflict` |
 | 6 | `artifacts-built` | one bound run `success` and exactly one draft whose assets include `SHA256SUMS`, `build-manifest.json` and the files |
-| 7 | `artifacts-verified` | state 6 and the private directory re-hashes equal to the record candidate and the attestation read passes (re-derived, the journal line is only a pointer) |
+| 7 | `artifacts-verified` | state 6 and the private directory re-hashes equal to the record candidate and the attestation read passes (re-derived, the journal line is only a pointer); without it the state is 6 again |
 | 8 | `record-written` | state 7 and `M on-branch` |
 | 9 | `record-merged` | state 7 and `M on-main` (remote-tracking `main`; the owner fetched) |
 | 10 | `tag-ready` | state 9 and the prospective publish gates for the tip D pass (G10) and `T none`; `T local-only` is the same state with the sub-state `tag-local-only` |
@@ -196,20 +196,49 @@ deletion) is the protection.
 
 State 1 is not durable. States 2, 8 and the `dispatching` line exist because of the journal or the working tree.
 
-### Mapping rules (first match wins)
+### Mapping rules (first match wins; the model check implements exactly these)
 
-1. `R published` and `T at-D` and verification passes: 13. `R published` otherwise (no tag, another commit, verification fails): `conflict`.
-1a. The journal's latest line for the version is `abandoned` (typed by the owner, see "Leaving conflict"): **14**, whatever else the evidence shows, unless rule 1 already matched (a published release is shown as it is).
-2. `T lightweight`, `elsewhere` or `vanished`, or `tag-pushing` with an unknown outcome and no remote tag: `conflict` (a tag is never moved or re-created; a vanished tag blocks the version for good).
-3. `R drafts`, or `U several`, or `M on-main-different`: `conflict`.
-4. `T at-D`: `R draft` gives 11 or 12 by the publish run; a publish run `failure` gives 14; `R none` (no draft left) gives `conflict`.
-5. `U none`, `R none`, `T none`, `M none`: 2 if the latest epoch's `dispatching` is not followed by `dispatch-released` or `abandoned`; 14 if `abandoned`; otherwise 0 or 1 (so after `no-run VERSION` the version is `ready` again and a retry writes a new `dispatching` line, a new epoch).
-6. `T none` or `local-only`: `U success` and no draft gives `conflict`; `U failure` with a draft gives `conflict`; otherwise by `U`/`R`/`M`/`A` as the table above (3, 4, 5, 6 to 10).
-7. Any other vector: `conflict`.
+Notation: "remote tag absent" is `T none` or `T local-only`. Signals V1 to V4 are defined under "A tag that existed once" and count only while the remote tag is absent. An **open dispatch** is a
+latest-epoch `dispatching` line not followed by `dispatch-released` or `abandoned`; an **open tag push** is a latest `tag-pushing` line not followed by `tag-pushed`, `tag-push-rejected` or
+`tag-push-released`. A run of the current epoch is "bound"; earlier-epoch runs are `E`.
+
+| Rule | Condition | Outcome |
+| --- | --- | --- |
+| 1 | `R published` and `T at-D` | **13** (verification result shown) |
+| 1a | the journal's latest line for the version is `abandoned` | **14**, whatever else the evidence shows |
+| 1b | `R published` otherwise (no tag, another commit) | conflict `published-without-tag` |
+| 2a | `T differs` (lightweight, or another commit) | conflict `tag-differs` |
+| 2b | remote tag absent and (V1 or V2 or V4) | conflict `tag-vanished` |
+| 2c | remote tag absent and an open tag push | conflict `tag-push-unknown` |
+| 3a | an earlier-epoch run `E` is queued, in progress or succeeded | conflict `earlier-run` |
+| 3b | `R drafts` | conflict `drafts` |
+| 3c | `U several` | conflict `several-runs` |
+| 3d | `M on-main-different` | conflict `record-different` |
+| 4 | `T at-D`: publish run failed | **14** |
+| 4 | `T at-D`, `R draft`: publish run running or not seen yet | **12** or **11** |
+| 4 | `T at-D`, no draft | conflict `tag-without-draft` |
+| 5 | `U none`, `R none`, `M none`: an open dispatch | **2** |
+| 5 | the same, no open dispatch | **0** (and 1 when `plan` passes) |
+| 6a | `U queued` or `running` with a draft or a record | conflict `inconsistent`; else **3** or **4** |
+| 6b | `U failure`: no draft, no record | **5**; with a draft or record: conflict `failed-run-with-draft` |
+| 6c | `U success`, no draft | conflict `run-success-without-draft` |
+| 6d | `U success`, draft, **not verified** (or the private directory is gone) | **6**, whatever `M` says (download and verify again) |
+| 6e | `U success`, draft, verified: `M none` / `M on-branch` / `M on-main` | **7** / **8** / **9 or 10** (the tag screen; 9 while the prospective gates do not pass) |
+| 6f | `U none` with a draft | conflict `draft-without-run` |
+| 7 | anything else | conflict `inconsistent` |
+
+When several conflict rules apply to one vector, the **first in this table** names the kind (the precedence is the table order: `published-without-tag`, `tag-differs`, `tag-vanished`,
+`tag-push-unknown`, `earlier-run`, `drafts`, `several-runs`, `record-different`, then the rest); the evidence table of the conflict screen still lists every fact. Every combination of evidence and
+journal flags maps to exactly one outcome, and the catch-all (rule 7) is itself the conflict kind `inconsistent`, so there is no gap.
+
+**Model check.** A throwaway script encodes this table, enumerates 442,368 combinations of tag, release, run, earlier-run, record, publish-run, signal and journal flags, and checks: one outcome
+per vector; every conflict kind and the `abandon` action reach a defined state; the normal path 0 to 13 never conflicts, with the journal intact, lost, or missing its last line (the two moments
+where a crash legitimately shows state 2 or `tag-push-unknown` are the documented crash states); state 10 is never offered where a tag exists, existed (V1 to V4) or a push is open; `no-tag`,
+`no-run` and `abandon` act as stated. Its output is in the pull request that introduced it; it is not part of the repository (T012d makes the implementation's rule table agree with it on every vector).
 
 **The journal only restricts.** A journal line never advances a step. The effect lines (`dispatching`, `dispatched`, `tag-pushing`, `tag-pushed`) **block repeating**
 that effect for this version: after `dispatching` the wizard offers no second dispatch until a bound run is visible (then it waits), or until the owner has checked
-by hand that no run exists and types `no-run VERSION` (journal `dispatch-released`); after a tag line the version can never be tagged again by the wizard. A line the
+by hand that no run exists and types `no-run PRODUCT VERSION` (journal `dispatch-released`); after a tag line the version can never be tagged again by the wizard. A line the
 evidence contradicts keeps its restriction and prints a notice; it never produces an effect.
 
 ### What the wizard does in each state
@@ -217,7 +246,7 @@ evidence contradicts keeps its restriction and prints a notice; it never produce
 | State | The wizard offers |
 | --- | --- |
 | 0, 1 | Start at the product, commit and version screen |
-| 2 | Wait for the bound run for up to 30 minutes (queues are slow, spike item 12). After that the screen says "no run is visible; check the Actions page" and offers exactly three exits: **wait longer**; **`no-run VERSION`** (typed; you checked by hand that no run exists or that it was canceled): the journal gets `dispatch-released`, the restriction ends, and the version is `ready` again for a **retry of the same version** (a new dispatch needs its own typed `build` line and writes a new `dispatching` line, which starts a new binding epoch); **abandon** (journal `abandoned`): state 14, next version. It never dispatches on its own |
+| 2 | Wait for the bound run for up to 30 minutes (queues are slow, spike item 12). After that the screen says "no run is visible; check the Actions page" and offers exactly three exits: **wait longer**; **`no-run PRODUCT VERSION`** (typed; you checked by hand that no run exists or that it was canceled): the journal gets `dispatch-released`, the restriction ends, and the version is `ready` again for a **retry of the same version** (a new dispatch needs its own typed `build` line and writes a new `dispatching` line, which starts a new binding epoch); **abandon** (journal `abandoned`): state 14, next version. It never dispatches on its own |
 | 3, 4 | Wait (never dispatch again) |
 | 5 | Show the failure (run URL, failed job), then **the next version** (the default, as Spec 026 quickstart: delete the draft by hand, use the next version). Retrying the same version is possible only if the owner accepted D13 and no tag, release or draft exists |
 | 6, 7 | Download and verify, then the record |
@@ -226,26 +255,29 @@ evidence contradicts keeps its restriction and prints a notice; it never produce
 | 11, 12 | Wait for the publish run |
 | 13 | "Nothing to do." with the release URL and the verification result |
 | 14 | "This version cannot continue. A tag is never re-created." and offer the next version, starting at state 0 |
-| 15 | **Stop, with a way out.** Show both sides (what the journal says, what the evidence shows, the rule that matched) and the conflict kind, and offer **only** the actions of [Leaving `conflict`](#leaving-conflict) for that kind, never an effect step. Exit 3 for `status` || a higher version exists | Say so and offer the next greater version |
+| 15 | **Stop, with a way out.** Show both sides (what the journal says, what the evidence shows, the rule that matched) and the conflict kind, and offer **only** the actions of [Leaving `conflict`](#leaving-conflict) for that kind, never an effect step. Exit 3 for `status` |
+| a higher version exists | Say so and offer the next greater version |
 
 **Restart** always means a new version; it never reuses a tag. The previous release's journal stays as history.
 
 ### Leaving `conflict`
 
-`conflict` is a stop, not a dead end. Each kind has exact actions; every action that changes the journal needs its typed line on `/dev/tty` (plain, `VERB VERSION`), and none of them is an effect on
-GitHub or git: they only release a restriction or end the release. After any action the next call derives the state again.
+`conflict` is a stop, not a dead end. Each kind has exact actions; every action that changes the journal needs its typed line on `/dev/tty` (plain, `VERB PRODUCT VERSION`, where PRODUCT is the product
+name, or `-` when the repository has one product), and none of them is an effect on GitHub or git: they only release a restriction or end the release. After any action the next call derives the
+state again. **In agent mode or without a terminal** the conflict screen is shown (and `status` prints the kind and the evidence, exit 3) **with no action offered**.
 
 | Conflict kind | Evidence | Actions |
 | --- | --- | --- |
-| `tag-matches` (**not** a conflict) | the tag exists on the remote, is annotated and peels to exactly the planned commit D (the owner pushed it, or the crashed push had succeeded) | none needed: the state is 11 and the wizard repairs the journal (`tag-pushed`) after a fresh check that the tag object points to D |
-| `tag-differs` | a remote tag of that name is lightweight or names another commit | **`abandon VERSION`** (journal `abandoned`), then the next version. The wizard never touches the tag |
-| `tag-vanished` | the tag is absent now and signal V1 (a `tag-pushed` line), V2, V3 or V4 shows it was pushed | **`abandon VERSION`** only |
-| `tag-push-unknown` | a `tag-pushing` line without `tag-pushed`, the outcome unknown, no remote tag, and none of V2 to V4 | after the owner checked by hand (`git ls-remote --tags origin V` lists nothing): **`no-tag VERSION`** (journal `tag-push-released`), back to state 10 for a fresh checked and typed tag step; or **`abandon VERSION`** |
-| `earlier-run` | an earlier-epoch run still queued, in progress or succeeded | the owner cancels it or inspects its draft in the Actions page; the next call derives again; or **`abandon VERSION`** |
-| unknown or inconsistent (two drafts, several bound runs, a successful run without a draft, a failed run with a draft, a published release without the tag, a record different on `main`) | printed as an evidence table | the table, the exact **read-only** commands the owner can run to look (`gh run list`, `gh release list`, `git ls-remote --tags origin V`, `git log origin/main -- docs/releases/V.json`) and **`abandon VERSION`** |
+| (`tag-matches`, **not** a conflict) | the tag exists on the remote, is annotated and peels to exactly the planned commit D (the owner pushed it, or the crashed push had succeeded) | none needed: the state is 11 (rule 4) and the wizard repairs the journal (`tag-pushed`) after a fresh check that the tag object points to D |
+| `tag-differs` | a remote tag of that name is lightweight or names another commit | **`abandon PRODUCT VERSION`** (journal `abandoned`), then the next version. The wizard never touches the tag |
+| `tag-vanished` | the remote tag is absent and V1, V2 or V4 shows it was pushed | **`abandon PRODUCT VERSION`** only |
+| `tag-push-unknown` | an open tag push (a `tag-pushing` line without `tag-pushed`, `tag-push-rejected` or `tag-push-released`), no remote tag, and none of V1, V2, V4 | after the owner checked by hand (`git ls-remote --tags origin V` lists nothing): **`no-tag PRODUCT VERSION`** (journal `tag-push-released`), back to state 10 for a fresh checked and typed tag step; or **`abandon PRODUCT VERSION`** |
+| `earlier-run` | an earlier-epoch run still queued, in progress or succeeded | the owner cancels it or inspects its draft in the Actions page and the next call derives again; or **`abandon PRODUCT VERSION`** |
+| `published-without-tag` | a published release for V without the matching tag | **`abandon PRODUCT VERSION`** (rule 1a); the release itself is the owner's to inspect, `stw` never edits it |
+| `drafts`, `several-runs`, `record-different`, `tag-without-draft`, `draft-without-run`, `run-success-without-draft`, `failed-run-with-draft`, `inconsistent` | printed as an evidence table | the table, the exact **read-only** commands the owner can run to look (`gh run list`, `gh release list`, `git ls-remote --tags origin V`, `git log origin/main -- docs/releases/V.json`), and **`abandon PRODUCT VERSION`** |
 
-`abandoned` is terminal for the version: the wizard offers the next version and never re-creates or moves a tag. The mapping rule 1a lets the abandon line take effect even where the evidence still
-shows the conflict.
+`abandoned` is terminal for the version: the wizard offers the next version and never re-creates or moves a tag. Mapping rule 1a needs only that the **latest** journal line is `abandoned`; it
+lets the abandon take effect even where the evidence still shows the conflict (a published release with its tag, rule 1, is shown as it is).
 
 ## The journal
 
@@ -263,7 +295,7 @@ verified artifacts are).
   they grant nothing and are never read as an approval.
 - **Bounds:** at most 64 lines and 64 KiB per file, 256 files per repository. At the 256-file limit the wizard refuses to start a new release with `journal-limit` and tells the
   owner to remove old journals by hand; `stw` never deletes them. A file over its own bound is `journal-limit` for that release: evidence only, and the effect restrictions of
-  that release cannot be read, so the wizard asks for `no-run VERSION` style acknowledgements where a restriction would have applied.
+  that release cannot be read, so the wizard asks for `no-run PRODUCT VERSION` style acknowledgements where a restriction would have applied.
 - **Lock:** while a wizard holds an effect screen (from the typed line until the journal line of that effect is written) it holds an exclusive advisory `flock` on
   `<version>.lock` in the journal directory; a second wizard (another terminal, same machine) that finds the lock held starts **read-only** ("another stw release is running
   for this version"). The lock is the kernel's, so a crash leaves none. It does not cover two machines: there the evidence decides, which is why the build-in-flight guard reads
@@ -375,7 +407,7 @@ Every step is safe to run again: the wizard derives the state first.
 | --- | --- | --- |
 | before the typed line | nothing | start the step again |
 | after the line, before `dispatching` | journal `approval-observed-build` only | recompute the plan and ask again (the old line never applies) |
-| after `dispatching`, before or during the POST | `dispatching`, maybe a run | state 2: wait for the bound run, **no second dispatch** without `no-run VERSION` |
+| after `dispatching`, before or during the POST | `dispatching`, maybe a run | state 2: wait for the bound run, **no second dispatch** without `no-run PRODUCT VERSION` |
 | the POST returned an error or timed out | `dispatching` | the same: state 2 |
 | after the POST, before `dispatched` | `dispatching`, a run | the bound run shows `build-queued` or `build-running`; the journal is repaired |
 | during the build | a running run | wait |
@@ -383,7 +415,7 @@ Every step is safe to run again: the wizard derives the state first.
 | after `record --write`, before the pull request | the file on a topic branch | state 8; shows the commands again |
 | after the typed tag line, before the local tag | `approval-observed-tag` | fresh checks, new typed line |
 | local tag created, push not made, or explicitly rejected (`tag-push-rejected`) | `tag-local-only` | fresh checks, new typed line, then push; if the remote has a tag of that name at another commit: `conflict` |
-| `tag-pushing` written, outcome unknown (crash, timeout, lost answer) | `tag-pushing` | **if the push had succeeded** the remote tag names D: the evidence shows `tag-pushed` (state 11), the journal is repaired and nothing is pushed twice; **if it had not**, no remote tag: `conflict` kind `tag-push-unknown`: the owner checks by hand and types `no-tag VERSION` to retry the tag step, or `abandon VERSION` |
+| `tag-pushing` written, outcome unknown (crash, timeout, lost answer) | `tag-pushing` | **if the push had succeeded** the remote tag names D: the evidence shows `tag-pushed` (state 11), the journal is repaired and nothing is pushed twice; **if it had not**, no remote tag: `conflict` kind `tag-push-unknown`: the owner checks by hand and types `no-tag PRODUCT VERSION` to retry the tag step, or `abandon PRODUCT VERSION` |
 | tag pushed, journal line missing | the remote tag | evidence shows `tag-pushed`; the journal is repaired |
 | tag pushed, then deleted by someone | journal `tag-pushed`, no remote tag | `conflict` (tag `vanished`): the wizard never re-creates it |
 | publish run failed | a tag, no published release | state 14: next version only |
@@ -631,7 +663,7 @@ Release steps need a person at a terminal; nothing was changed.
   never re-created, a vanished tag blocks the version for good.
 - **FR-004** Every effect step (dispatch, tag) requires its typed line read from `/dev/tty`, bound as the table states; stdin or no terminal refuses.
 - **FR-005** Dispatch writes `dispatching` before the POST, uses `dispatch` plan and `--apply PLAN_ID` unchanged and sends exactly one POST; an error or timeout of the POST goes to
-  state 2; no second dispatch happens without a bound run being visible or the owner's `no-run VERSION`.
+  state 2; no second dispatch happens without a bound run being visible or the owner's `no-run PRODUCT VERSION`.
 - **FR-006** The tag step re-verifies from fresh reads before asking and before creating the tag, creates the annotated (unsigned, hook-free) tag object for the commit id D with the
   message above, checks the effective push URL, pushes only the explicit refspec `<tag-object-id>:refs/tags/V` without force and with `--no-verify`, and verifies through the API that
   the remote tag peels to exactly D.
@@ -685,7 +717,8 @@ Each is testable with temporary repositories and a fake hosting transport; the e
 - **SC-021** `verify` of an unresolved tag prints the code once (G11).
 - **SC-023** Two wizards: the second, started between the first's typed line and its journal write, finds the lock held and is read-only; a wizard that waited for the lock redraws when state or journal changed (FR-015).
 - **SC-024** Retry and vanished tags. Negative (must **not** stop): a **normal pre-tag release** in states 6 to 10, each with a draft named V, the record on `main` and `T none`, is never `vanished` or `conflict` for those reasons; a failed or canceled run of an earlier epoch does not make `several` and does not block a same-version retry. Positive (must stop as `conflict`): an earlier-epoch run still queued or in progress, an earlier-epoch run that succeeded, a tag absent now with the journal showing `tag-pushing` or `tag-pushed`, with the journal missing or corrupt a publish-workflow `push` run whose `head_branch` is V, a published release named V, or a `DeleteEvent` for V; a `tag-pushing` line with no remote tag is `conflict` kind `tag-push-unknown`.
-- **SC-025** Leaving `conflict`: the crashed tag push in both outcomes (the push had succeeded: the next call is state 11 with a repaired journal and no second push; the push had not happened: `tag-push-unknown`, then `no-tag VERSION` returns to state 10 and `abandon VERSION` reaches state 14 and offers the next version); `tag-differs` and `tag-vanished` offer only `abandon VERSION`; the unknown kinds print the evidence table and the read-only commands and offer `abandon VERSION`; mapping rule 1a lets an `abandoned` line win over a conflicting evidence vector; a wrong or missing typed verb changes nothing.
+- **SC-026** The implementation's rule table gives the same outcome as the mapping-rules table above on every combination of the model check (a generated table test; the throwaway model's enumeration is the oracle).
+- **SC-025** Leaving `conflict`: the crashed tag push in both outcomes (the push had succeeded: the next call is state 11 with a repaired journal and no second push; the push had not happened: `tag-push-unknown`, then `no-tag PRODUCT VERSION` returns to state 10 and `abandon PRODUCT VERSION` reaches state 14 and offers the next version); `tag-differs` and `tag-vanished` offer only `abandon PRODUCT VERSION`; the unknown kinds print the evidence table and the read-only commands and offer `abandon PRODUCT VERSION`; mapping rule 1a lets an `abandoned` line win over a conflicting evidence vector; a wrong or missing typed verb changes nothing.
 - **SC-022** The ruleset rule: `partial` and `absent` refuse the tag step; `unknown` requires `ruleset ok` at every attempt; the word is never stored or journaled.
 
 ## Edge cases
