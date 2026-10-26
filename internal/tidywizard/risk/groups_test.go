@@ -175,9 +175,10 @@ func TestGroupPathCleaningAndScratchpadFamilyExclusion(t *testing.T) {
 }
 
 func TestGroupConsequencesAndRepositoryCounts(t *testing.T) {
-	rows := []Row{riskRow("a", "repo-b", "/tmp/whr-a", Green), riskRow("b", "repo-a", "/tmp/whr-b", Yellow), riskRow("c", "repo-a", "/tmp/whr-c", Green)}
+	rows := []Row{riskRow("a", "repo-b", "/tmp/whr-a", Green), riskRow("b", "repo-a", "/tmp/whr-b", Yellow), riskRow("c", "repo-a", "/tmp/whr-c", Green), riskRow("d", "repo-a", "/tmp/whr-d", Green)}
 	rows[0].Effects = append(rows[0].Effects, "delete-branch:a", "delete-branch:a")
 	rows[1].Effects = append(rows[1].Effects, "delete-branch:b")
+	rows[3].Effects = append(rows[3].Effects, "delete-branch:d")
 	// Counts describe rows with an effect, not duplicate strings or risk scores.
 	for _, g := range GroupRows(rows) {
 		wantEffects := []EffectCount{{Effect: "remove-files", Count: len(g.Rows)}, {Effect: "remove-registration", Count: len(g.Rows)}}
@@ -185,7 +186,7 @@ func TestGroupConsequencesAndRepositoryCounts(t *testing.T) {
 		repoCounts := map[string]int{}
 		for _, r := range g.Rows {
 			repoCounts[r.Repo]++
-			if r.ID == "a" || r.ID == "b" {
+			if r.ID == "a" || r.ID == "b" || r.ID == "d" {
 				branches++
 			}
 		}
