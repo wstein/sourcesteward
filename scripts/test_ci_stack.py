@@ -17,8 +17,8 @@ _SPEC.loader.exec_module(STACK)
 REPO = 'wstein/sourcesteward'
 
 
-def pr(number, base, head_repo=REPO, base_repo=REPO):
-    return {'number': number, 'base_ref': base, 'base_repo': base_repo, 'head_repo': head_repo}
+def pr(number, base, head_repo=REPO, base_repo=REPO, draft=False):
+    return {'number': number, 'draft': draft, 'base_ref': base, 'base_repo': base_repo, 'head_repo': head_repo}
 
 
 def decide(prs, head='feat/a', number=2, event='pull_request', head_repo=REPO, base_repo=REPO, default='main'):
@@ -52,6 +52,15 @@ class DecisionTests(unittest.TestCase):
 
     def test_a_child_targeting_another_repository_does_not_count(self):
         self.assertTrue(decide([pr(2, 'main'), pr(3, 'feat/a', base_repo='other/repo')]))
+
+    def test_a_draft_child_does_not_count_but_a_ready_one_does(self):
+        self.assertTrue(decide([pr(2, 'main'), pr(3, 'feat/a', draft=True)]))
+        self.assertFalse(decide([pr(2, 'main'), pr(3, 'feat/a', draft=True), pr(4, 'feat/a')]))
+
+    def test_an_own_record_with_a_foreign_head_repository_is_a_tip(self):
+        prs = [pr(2, 'main', head_repo='evil/sourcesteward'), pr(3, 'feat/a')]
+        self.assertTrue(decide(prs))
+        self.assertTrue(decide([pr(2, 'main', base_repo='other/repo'), pr(3, 'feat/a')]))
 
     def test_a_pull_request_from_a_fork_is_always_a_tip(self):
         prs = [pr(2, 'main', head_repo='evil/sourcesteward'), pr(3, 'feat/a')]
@@ -98,8 +107,24 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(len(STACK.parse_prs(json.dumps([pr(2, 'main')]) + json.dumps([pr(3, 'x')]))), 2)
         self.assertEqual(STACK.parse_prs(' \n'), [])
 
+    def test_null_fields_are_accepted(self):
+        record = {'number': 2, 'draft': False, 'base_ref': None, 'base_repo': None, 'head_repo': None}
+        self.assertEqual(STACK.parse_prs(json.dumps(record)), [record])
+
+    def test_a_deleted_fork_listing_still_finds_the_child(self):
+        text = '\n'.join(json.dumps(r) for r in (pr(2, 'main'), pr(3, 'feat/a'), pr(4, 'x', head_repo=None)))
+        self.assertFalse(decide(STACK.parse_prs(text)))
+
+    def test_a_boolean_number_or_a_non_boolean_draft_is_rejected(self):
+        good = pr(2, 'main')
+        for patch in ({'number': True}, {'draft': 'no'}, {'draft': None}, {'number': 2.0}):
+            with self.assertRaises(ValueError, msg=patch):
+                STACK.parse_prs(json.dumps(dict(good, **patch)))
+        with self.assertRaises(ValueError):
+            STACK.parse_prs(json.dumps({k: v for k, v in good.items() if k != 'draft'}))
+
     def test_malformed_input_raises(self):
-        for text in ('{', 'nope', '[1]', '"x"', json.dumps({'number': 2}),
+        for text in ('{', 'nope', '[1]', '"x"', json.dumps({'number': 2}), json.dumps({'number': 2, 'draft': False, 'base_ref': 'a', 'base_repo': 'r'}),
                      json.dumps({'number': 'two', 'base_ref': 'a', 'base_repo': 'r', 'head_repo': 'r'}),
                      json.dumps({'number': 2, 'base_ref': 5, 'base_repo': 'r', 'head_repo': 'r'})):
             with self.assertRaises(ValueError, msg=text):

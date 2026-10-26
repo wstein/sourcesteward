@@ -74,7 +74,7 @@ jobs:
           prs="$RUNNER_TEMP/open-prs.json"
           if [ "$EVENT_NAME" = pull_request ]; then
             gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
-              --jq '.[] | {number, base_ref: .base.ref, base_repo: .base.repo.full_name, head_repo: .head.repo.full_name}' \
+              --jq '.[] | {number, draft, base_ref: .base.ref, base_repo: .base.repo.full_name, head_repo: .head.repo.full_name}' \
               > "$prs" || rm -f "$prs"
           fi
           python3 -B scripts/ci_stack.py --prs-file "$prs" >> "$GITHUB_OUTPUT"
@@ -148,7 +148,9 @@ jobs:
           # internal/workspace is never run plain here (it exceeds the 40 minute timeout): the
           # conformance shards run it (every push to main, every pull request that is neither
           # documentation-only nor below another open pull request). A pull request below the tip
-          # of a stack does not run it: the tip contains its commits and runs the shards.
+          # of a stack does not run it: the tip's shards test it only if the tip contains the
+          # current head of that pull request (restack the tip after a push below it), and the
+          # post-merge run on main is the last gate.
           if [ "$packages" = './...' ]; then
             packages="$(python3 -B scripts/ci_shards.py packages)"
             set -- $packages
@@ -198,8 +200,10 @@ jobs:
     with:
       lane: ${{ matrix.lane }}
       docs_only: ${{ needs.changes.outputs.docs_only }}
-      # Anything but an explicit false (including a failed changes output) runs the shards.
-      stack_tip: ${{ needs.changes.outputs.is_stack_tip != 'false' || contains(github.event.pull_request.labels.*.name, 'ci-full') }}
+      # Anything but an explicit false (including an empty output of a succeeding job) runs the shards.
+      # A failed changes job skips this job: the required suite then does not report and the merge is
+      # blocked (fail closed). The value is normalized to the strings 'true' and 'false'.
+      stack_tip: ${{ (needs.changes.outputs.is_stack_tip != 'false' || contains(github.event.pull_request.labels.*.name, 'ci-full')) && 'true' || 'false' }}
 
   pages:
     needs: [check, conformance]

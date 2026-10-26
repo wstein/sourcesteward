@@ -560,13 +560,13 @@ class StackTipWorkflowTests(unittest.TestCase):
         self.assertTrue(match)
         python = match.group(1).replace("needs.changes.outputs.is_stack_tip", 'out')
         python = python.replace("contains(github.event.pull_request.labels.*.name, 'ci-full')", "('ci-full' in labels)")
-        python = python.replace('||', ' or ')
+        python = python.replace('||', ' or ').replace('&&', ' and ')
         value = lambda out, labels=(): eval(python, {}, {'out': out, 'labels': list(labels)})
-        self.assertFalse(value('false'))
-        self.assertTrue(value('true'))
-        self.assertTrue(value(''))  # the changes job failed: fail closed
-        self.assertTrue(value('false', ['ci-full']))
-        self.assertFalse(value('false', ['other']))
+        self.assertEqual(value('false'), 'false')
+        self.assertEqual(value('true'), 'true')
+        self.assertEqual(value(''), 'true')  # an empty output of a succeeding job: fail closed
+        self.assertEqual(value('false', ['ci-full']), 'true')
+        self.assertEqual(value('false', ['other']), 'false')
         self.assertNotRegex(text, r'(?m)^    if:')
 
 
