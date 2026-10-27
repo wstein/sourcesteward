@@ -19,8 +19,16 @@ import (
 
 var update = flag.Bool("update", false, "rewrite the golden files")
 
+// golden compares a transcript with its file. A question ends in ": " and the next line follows
+// it in the captured text (the test input is not echoed); trailing spaces are trimmed so the
+// file carries none.
 func golden(t *testing.T, name, got string) {
 	t.Helper()
+	lines := strings.Split(got, "\n")
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], " ")
+	}
+	got = strings.Join(lines, "\n")
 	path := filepath.Join("testdata", name)
 	if *update {
 		if err := os.MkdirAll("testdata", 0o755); err != nil {
@@ -85,11 +93,6 @@ func chosenIDs(r FlowResult) []string {
 		out = append(out, row.ID)
 	}
 	return out
-}
-
-func lastLine(s string) string {
-	s = strings.TrimRight(s, "\n")
-	return s[strings.LastIndex(s, "\n")+1:]
 }
 
 // Enter takes a green group and skips a yellow and an orange one (D1, D5); the question names the
@@ -286,8 +289,9 @@ func TestFlowSummaryLastLineStatesTheDeletions(t *testing.T) {
 	if err != nil || len(res.Rows) != 6 {
 		t.Fatalf("%+v %v\n%s", res, err, out)
 	}
-	if got := lastLine(out); got != "This deletes 4 directories for good and 2 branches (restorable)." {
-		t.Errorf("last line %q", got)
+	// The test input is not echoed, so the line follows the prompt on the same row; nothing comes after it.
+	if !strings.HasSuffix(strings.TrimRight(out, "\n"), "This deletes 4 directories for good and 2 branches (restorable).") {
+		t.Errorf("the last line is not the deletion line:\n%s", out)
 	}
 	for _, want := range []string{
 		"Summary: nothing has been changed yet", "3 directories /tmp/whr-*", "yellow", "total: 6 items in 2 repositories; 964 kept rows untouched",
@@ -350,6 +354,10 @@ func TestFlowNarrowTerminal(t *testing.T) {
 	wide, narrow, tiny := step(100), step(50), step(30)
 	if !strings.Contains(wide, "codex/1") || strings.Contains(narrow, "codex/1") || !strings.Contains(narrow, "/tmp/whr-1") || strings.Contains(tiny, "/tmp/whr-1") {
 		t.Errorf("wide:\n%s\nnarrow:\n%s\ntiny:\n%s", wide, narrow, tiny)
+	}
+	// With no example rows the step still says how many rows it holds and how to list them.
+	if !strings.Contains(tiny, "... 3 more (l = list)") || strings.Contains(wide, "more (l = list)") {
+		t.Errorf("tiny:\n%s", tiny)
 	}
 	for _, out := range []string{wide, narrow, tiny} {
 		for _, want := range []string{"risk yellow", "1 green, 2 yellow", "Take this group?"} {

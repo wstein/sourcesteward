@@ -1,0 +1,32 @@
+Continue? [Enter] step through the groups  [a] take all green  [q] quit:
+Step 1 of 3   2 branches in a   risk green
+  Owner     codex (1), claude (1)
+  Effect    2 branches are deleted (restorable)
+      1  green   codex/old  a
+      2  green   claude/old  a
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = take):
+Step 2 of 3   3 directories /tmp/whr-*   risk yellow (1 green, 2 yellow)
+  Owner     codex (3)
+  Effect    3 directories are deleted for good (their branches stay)
+      3  green   /tmp/whr-1  codex/1
+      4  yellow  /tmp/whr-2  codex/2
+      5  yellow  /tmp/whr-3  codex/3
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Step 3 of 3   2 directories in /w   risk orange
+  Owner     unknown (2)
+      6  orange  /w/x
+      7  orange  /w/lock  (decision: choose it by number)
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Summary: nothing has been changed yet
+  group              items  risk    effect
+  2 branches in a        2  green   delete 2 branches
+  1 directory in /w      1  orange  delete 1 directory
+  skipped: 1 group (3 directories)
+  total: 3 items in 2 repositories; 964 kept rows untouched
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
+      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
+Typed words that will be asked (on /dev/tty): claude, codex, unknown
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 2 branches (restorable).
