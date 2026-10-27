@@ -2,13 +2,16 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"io"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 )
 
@@ -154,5 +157,50 @@ func TestRowsForeignRowTypedWordsAreAskedOnceAndCoverTheApply(t *testing.T) {
 	}
 	if err != nil || backend.calls == 0 || typed != 1 {
 		t.Fatalf("typed=%d backend calls=%d err=%v prompts=%q\n%s", typed, backend.calls, err, tty.prompts, out)
+	}
+}
+
+// Once the plan set is stored, a missing terminal at the apply question must not send the user to
+// `stw tidy plan --save` again: the next step is `stw tidy apply ID` from a terminal.
+func TestNoTerminalAfterTheStoreNamesTheStoredPlanSet(t *testing.T) {
+	for name, args := range map[string][]string{"janitor": nil, "rows": {"--rows"}} {
+		t.Run(name, func(t *testing.T) {
+			j := newJanitor(t)
+			input := "a\n\n"
+			if name == "rows" {
+				input = "1,3\n"
+			}
+			out := &bytes.Buffer{}
+			tty := &answeringTTY{out: out, reply: answerApply}
+			tidyConfirmOpener = func() (io.ReadWriteCloser, error) {
+				if len(storedSets(t, j.prep.PlanStore)) > 0 {
+					return nil, owner.ErrNoTerminal
+				}
+				return tty, nil
+			}
+			cmd := tidyCommand()
+			cmd.SetOut(out)
+			cmd.SetErr(&bytes.Buffer{})
+			cmd.SetIn(strings.NewReader(input))
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			id := planIDIn(t, out.String())
+			var failure runtimeFailure
+			if !errors.As(err, &failure) || !strings.Contains(err.Error(), "no controlling terminal") || strings.Contains(err.Error(), "plan --save") ||
+				!strings.Contains(err.Error(), "stw tidy apply "+id) || !strings.Contains(err.Error(), "nothing was applied") {
+				t.Fatalf("%v", err)
+			}
+		})
+	}
+}
+
+func TestSeparateApplyWithoutTerminalDoesNotSuggestSavingAgain(t *testing.T) {
+	got := fakeSet(t, okSet(), true, true)
+	old := tidyConfirmOpener
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return nil, owner.ErrNoTerminal }
+	t.Cleanup(func() { tidyConfirmOpener = old })
+	_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
+	if err == nil || strings.Contains(err.Error(), "plan --save") || !strings.Contains(err.Error(), "from a terminal") || !strings.Contains(err.Error(), "stw tidy apply "+setID) || len(*got) != 0 {
+		t.Fatalf("%v calls=%v", err, *got)
 	}
 }
