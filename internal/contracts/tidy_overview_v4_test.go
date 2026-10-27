@@ -219,3 +219,156 @@ func TestTidyOverviewV4SchemaTypesOptionalRiskExtensions(t *testing.T) {
 		})
 	}
 }
+
+// TestTidyOverviewV4SchemaTypesRegistrationRisk keeps the additive display
+// contract reproducible without changing the native row or its admission proof.
+func TestTidyOverviewV4SchemaTypesRegistrationRisk(t *testing.T) {
+	s := schemaAt(t, "v4", "tidy-overview")
+	row := func(v map[string]any) map[string]any {
+		return v["registration_prunes"].([]any)[0].(map[string]any)
+	}
+	base := func() map[string]any { return value(t, overviewV4Raw(t, nil)).(map[string]any) }
+	orange := func() map[string]any {
+		v := base()
+		row(v)["risk"] = "orange"
+		row(v)["risk_reasons"] = []any{"owned-missing-registration"}
+		return v
+	}
+	refused := func(verdict, reason, level string) map[string]any {
+		v := base()
+		p := row(v)
+		p["verdict"], p["reason"], p["risk"] = verdict, reason, level
+		p["proof"], p["effects"], p["evidence_digest"] = "none", []any{}, ""
+		p["owner"], p["owner_source"], p["scope"], p["task"] = "", "unknown", "unknown", ""
+		if level == "red" {
+			p["risk_reasons"] = []any{"not-judged"}
+		}
+		return v
+	}
+	counts := func() map[string]any {
+		return map[string]any{"green": 0, "yellow": 0, "orange": 1, "red": 0, "kept": 0}
+	}
+	for name, build := range map[string]func() map[string]any{
+		"old unannotated document": base,
+		"orange own":               orange,
+		"orange other": func() map[string]any {
+			v := orange()
+			row(v)["owner"], row(v)["scope"] = "someone", "other"
+			return v
+		},
+		"kept ownership refusal": func() map[string]any {
+			return refused("retain", "registration-prune-ownership-unproven", "kept")
+		},
+		"kept absence refusal": func() map[string]any {
+			return refused("retain", "registration-prune-absence-unproven", "kept")
+		},
+		"red blocked": func() map[string]any {
+			return refused("blocked", "registration-prune-inventory-blocked", "red")
+		},
+		"red unknown": func() map[string]any {
+			return refused("unknown", "registration-prune-unsupported", "red")
+		},
+		"red contradictory safe": func() map[string]any {
+			v := orange()
+			row(v)["scope"], row(v)["risk"], row(v)["risk_reasons"] = "unknown", "red", []any{"not-judged"}
+			return v
+		},
+		"separate registration counts": func() map[string]any {
+			v := orange()
+			v["summary"].(map[string]any)["registration_prunes"] = counts()
+			return v
+		},
+	} {
+		t.Run("accept/"+name, func(t *testing.T) {
+			if err := s.Validate(build()); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	for name, change := range map[string]func(map[string]any){
+		"orange missing reasons": func(v map[string]any) { delete(row(v), "risk_reasons") },
+		"orange wrong reason":    func(v map[string]any) { row(v)["risk_reasons"] = []any{"not-judged"} },
+		"orange unknown scope":   func(v map[string]any) { row(v)["scope"] = "unknown" },
+		"orange retain": func(v map[string]any) {
+			p := row(v)
+			p["verdict"], p["reason"], p["proof"], p["effects"] = "retain", "registration-prune-absence-unproven", "none", []any{}
+		},
+		"orange empty destination": func(v map[string]any) { row(v)["destination"] = "" },
+		"orange empty name":        func(v map[string]any) { row(v)["name"] = "" },
+		"red native reason":        func(v map[string]any) { row(v)["risk"] = "red" },
+		"red missing reasons": func(v map[string]any) {
+			row(v)["risk"] = "red"
+			delete(row(v), "risk_reasons")
+		},
+		"kept reasons present": func(v map[string]any) {
+			p := row(v)
+			p["verdict"], p["reason"], p["proof"], p["effects"], p["risk"] = "retain", "registration-prune-absence-unproven", "none", []any{}, "kept"
+		},
+		"kept blocked": func(v map[string]any) {
+			p := row(v)
+			p["verdict"], p["reason"], p["proof"], p["effects"], p["risk"] = "blocked", "registration-prune-inventory-blocked", "none", []any{}, "kept"
+			delete(p, "risk_reasons")
+		},
+		"kept changed reason": func(v map[string]any) {
+			p := row(v)
+			p["verdict"], p["reason"], p["proof"], p["effects"], p["risk"] = "retain", "registration-prune-changed", "none", []any{}, "kept"
+			delete(p, "risk_reasons")
+		},
+		"kept safe":            func(v map[string]any) { row(v)["risk"] = "kept"; delete(row(v), "risk_reasons") },
+		"reasons without risk": func(v map[string]any) { delete(row(v), "risk") },
+		"green native risk":    func(v map[string]any) { row(v)["risk"] = "green" },
+		"yellow native risk":   func(v map[string]any) { row(v)["risk"] = "yellow" },
+		"native PR":            func(v map[string]any) { row(v)["pr"] = 123 },
+		"native group":         func(v map[string]any) { row(v)["group"] = "groupaaa" },
+		"two reasons": func(v map[string]any) {
+			row(v)["risk_reasons"] = []any{"owned-missing-registration", "not-judged"}
+		},
+		"null risk":    func(v map[string]any) { row(v)["risk"] = nil },
+		"null reasons": func(v map[string]any) { row(v)["risk_reasons"] = nil },
+		"green count": func(v map[string]any) {
+			c := counts()
+			c["green"] = 1
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+		"yellow count": func(v map[string]any) {
+			c := counts()
+			c["yellow"] = 1
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+		"missing count": func(v map[string]any) {
+			c := counts()
+			delete(c, "kept")
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+		"extra count": func(v map[string]any) {
+			c := counts()
+			c["files"] = 1
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+		"negative count": func(v map[string]any) {
+			c := counts()
+			c["orange"] = -1
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+		"fractional count": func(v map[string]any) {
+			c := counts()
+			c["orange"] = 0.5
+			v["summary"].(map[string]any)["registration_prunes"] = c
+		},
+	} {
+		t.Run("refuse/"+name, func(t *testing.T) {
+			v := orange()
+			change(v)
+			if s.Validate(v) == nil {
+				t.Fatal("schema accepted invalid native risk combination")
+			}
+		})
+	}
+	for _, reason := range []string{"registration-prune-ownership-unproven", "registration-prune-absence-unproven"} {
+		t.Run("refuse/red retained "+reason, func(t *testing.T) {
+			if s.Validate(refused("retain", reason, "red")) == nil {
+				t.Fatal("retained refusal accepted as red; its level must always be kept")
+			}
+		})
+	}
+}
