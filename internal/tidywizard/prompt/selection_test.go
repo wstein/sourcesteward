@@ -58,7 +58,7 @@ func TestParseSelectionGrammar(t *testing.T) {
 		"m:b":                          {"b3", "w6"},
 		"a b":                          {"b1", "b2", "b3", "w4", "w10"},
 		"w except 5":                   {"w4", "w6", "w8", "w10"},
-		"w t except 5":                 {"w4", "w5", "w6", "w8", "w10"},
+		"w t except 5":                 {"w4", "w6", "w8", "w10"},
 		"w except t":                   {"w6", "w10"},
 		"1-6 except 2-3":               {"b1", "w4", "w5", "w6"},
 		"1,2 except 1,2":               {},
