@@ -76,7 +76,7 @@ func (s *session) summaryKeys() (again bool, err error) {
 			case "":
 				return false, nil
 			case "q":
-				return false, errQuit
+				return false, ErrQuit
 			case "a":
 				s.addGreen()
 				return true, nil
@@ -139,7 +139,7 @@ func (s *session) showSummary() {
 			}
 			continue
 		}
-		label := strings.TrimSpace(fmt.Sprintf("%d %s %s", len(sel), plural(len(sel), g.NounOne, g.NounMany), g.Place))
+		label := clip(strings.TrimSpace(fmt.Sprintf("%d %s %s", len(sel), plural(len(sel), g.NounOne, g.NounMany), g.Place)), 60)
 		if len([]rune(label)) > width {
 			width = len([]rune(label))
 		}
@@ -185,10 +185,19 @@ func (s *session) showSummary() {
 	if len(words) > 0 {
 		sorted := make([]string, 0, len(words))
 		for w := range words {
-			sorted = append(sorted, escape(w))
+			sorted = append(sorted, w)
 		}
 		sort.Strings(sorted)
-		fmt.Fprintf(s.out, "Typed words that will be asked (on /dev/tty): %s\n", strings.Join(sorted, ", "))
+		// At most three words, each cut; the typed prompt itself names the word it asks for.
+		shown := make([]string, 0, 6)
+		for i, w := range sorted {
+			if i == 3 {
+				shown = append(shown, fmt.Sprintf("and %d more", len(sorted)-3))
+				break
+			}
+			shown = append(shown, clip(escape(w), 16))
+		}
+		fmt.Fprintf(s.out, "Typed words that will be asked (on /dev/tty): %s\n", strings.Join(shown, ", "))
 	}
 }
 

@@ -109,7 +109,7 @@ func TestParseSelectionRejectsJunk(t *testing.T) {
 	for _, line := range []string{
 		"", "   ", "x", "9", "0", "11", "99", "4-9", "3-1", "1-", "-1", "1--2", "1 - 3", "1,,2", ",1", "1,", "1 ,, 2",
 		"except 1", "1 except", "1 except 2 except 3", "except", "a except", "w t except", "o:", "m:", `o:"x`, `o:"x"y`, `"a"`, `o:""`,
-		`o:a"b"`, "1;2", "1\t2", "a1", "0x1", "1234567890", "o:codex extra:", "A", "Y", "y", "n", "all", "o", "m", "o:co\x00dex", "1\x00", "\xff", "1\n2",
+		`o:a"b"`, "1;2", "1\t2", "a1", "0x1", "1234567890", "o:codex extra:", "1 except 99", "a except 0", "1-0000000001", "1 except x", "A", "Y", "y", "n", "all", "o", "m", "o:co\x00dex", "1\x00", "\xff", "1\n2",
 	} {
 		_, err := ParseSelection(line, selRows())
 		if !errors.Is(err, ErrSelection) {
@@ -171,6 +171,31 @@ func TestChoosable(t *testing.T) {
 	} {
 		if got := Choosable(tc.verdict, tc.level); got != tc.want {
 			t.Errorf("%s/%s: %v", tc.verdict, tc.level, got)
+		}
+	}
+}
+
+// A row that is not choosable has no number, whatever the caller passes: a red and a kept row are
+// never selected by a number, a range or a selector.
+func TestParseSelectionIgnoresRowsThatAreNotChoosable(t *testing.T) {
+	rows := append(selRows(),
+		Row{Number: 11, ID: "red", Verdict: Safe, Level: risk.Red, Kind: "worktree", Path: "/tmp/red", Owner: "codex", OwnerShown: "codex"},
+		Row{Number: 12, ID: "kept", Verdict: Safe, Level: risk.Kept, Kind: "branch", Repo: "a", Owner: "codex", OwnerShown: "codex"},
+		Row{Number: 13, ID: "retain", Verdict: "retain", Level: risk.Green, Kind: "branch", Repo: "a", Owner: "codex", OwnerShown: "codex"})
+	for _, line := range []string{"11", "12", "13", "10-13", "11-12"} {
+		if _, err := ParseSelection(line, rows); !errors.Is(err, ErrSelection) {
+			t.Errorf("%q: %v", line, err)
+		}
+	}
+	for _, line := range []string{"a", "b", "w", "t", "o:codex", "m:a"} {
+		got, err := ParseSelection(line, rows)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range got {
+			if r.ID == "red" || r.ID == "kept" || r.ID == "retain" {
+				t.Errorf("%q took %s", line, r.ID)
+			}
 		}
 	}
 }

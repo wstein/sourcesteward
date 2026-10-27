@@ -224,11 +224,25 @@ func askOwners(in *bufio.Reader, out io.Writer, items []Item) ([]Item, error) {
 // ErrTooManyInvalid. The end of input is ErrEndOfInput, also after an invalid answer. Without a
 // terminal it neither reads nor asks and answers no.
 func YesNo(in *bufio.Reader, out io.Writer, question string, interactive bool) (bool, error) {
+	return yesNo(in, out, question, interactive, false)
+}
+
+// YesNoQuit is YesNo for the janitor wizard, where `q` at any question quits (Spec 044 keys table):
+// it ends the question with ErrQuit and the prompt shows [y/N/q].
+func YesNoQuit(in *bufio.Reader, out io.Writer, question string, interactive bool) (bool, error) {
+	return yesNo(in, out, question, interactive, true)
+}
+
+func yesNo(in *bufio.Reader, out io.Writer, question string, interactive, quit bool) (bool, error) {
 	if !interactive {
 		return false, nil
 	}
 	for attempt := 1; ; attempt++ {
-		fmt.Fprintf(out, "%s [y/N]: ", question)
+		choices := "[y/N]"
+		if quit {
+			choices = "[y/N/q]"
+		}
+		fmt.Fprintf(out, "%s %s: ", question, choices)
 		line, ok := readLine(in)
 		if !ok {
 			return false, ErrEndOfInput
@@ -241,6 +255,10 @@ func YesNo(in *bufio.Reader, out io.Writer, question string, interactive bool) (
 		case "", "n":
 			if !line.tooLong {
 				return false, nil
+			}
+		case "q":
+			if quit && !line.tooLong {
+				return false, ErrQuit
 			}
 		}
 		if attempt == MaxAttempts {

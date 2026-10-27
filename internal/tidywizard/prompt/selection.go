@@ -114,6 +114,15 @@ func ParseSelection(line string, rows []Row) ([]Row, error) {
 	if seenExcept && len(minus) == 0 {
 		return nil, bad("except needs a term")
 	}
+	// A row that is not choosable (red, kept, any other verdict) has no number here, whatever the
+	// caller passed.
+	offered := make([]Row, 0, len(rows))
+	for _, r := range rows {
+		if Choosable(r.Verdict, r.Level) {
+			offered = append(offered, r)
+		}
+	}
+	rows = offered
 	byNumber := map[int]Row{}
 	for _, r := range rows {
 		byNumber[r.Number] = r

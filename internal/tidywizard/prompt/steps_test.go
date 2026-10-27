@@ -52,7 +52,7 @@ func golden(t *testing.T, name, got string) {
 func groupsFixture() []Group {
 	return []Group{
 		{
-			Key: "g1", Title: "2 branches in a", NounOne: "branch", NounMany: "branches", Place: "in a", Level: risk.Green, Counts: risk.Counts{Green: 2},
+			Title: "2 branches in a", NounOne: "branch", NounMany: "branches", Place: "in a", Level: risk.Green, Counts: risk.Counts{Green: 2},
 			Lines: []string{"  Owner     codex (1), claude (1)", "  Effect    2 branches are deleted (restorable)"},
 			Rows: []Row{
 				{Number: 1, ID: "b1", Verdict: Safe, Level: risk.Green, Kind: "branch", Repo: "a", Branch: "codex/old", Owner: "codex", OwnerShown: "codex", Word: "codex", Branches: 1},
@@ -60,7 +60,7 @@ func groupsFixture() []Group {
 			},
 		},
 		{
-			Key: "g2", Title: "3 directories /tmp/whr-*", NounOne: "directory", NounMany: "directories", Place: "/tmp/whr-*", Level: risk.Yellow, Counts: risk.Counts{Green: 1, Yellow: 2},
+			Title: "3 directories /tmp/whr-*", NounOne: "directory", NounMany: "directories", Place: "/tmp/whr-*", Level: risk.Yellow, Counts: risk.Counts{Green: 1, Yellow: 2},
 			Lines: []string{"  Owner     codex (3)", "  Effect    3 directories are deleted for good (their branches stay)"},
 			Rows: []Row{
 				{Number: 3, ID: "w3", Verdict: Safe, Level: risk.Green, Kind: "worktree", Repo: "a", Path: "/tmp/whr-1", Branch: "codex/1", Owner: "codex", OwnerShown: "codex", Word: "codex", Dirs: 1},
@@ -69,7 +69,7 @@ func groupsFixture() []Group {
 			},
 		},
 		{
-			Key: "g3", Title: "2 directories in /w", NounOne: "directory", NounMany: "directories", Place: "in /w", Level: risk.Orange, Counts: risk.Counts{Orange: 2},
+			Title: "2 directories in /w", NounOne: "directory", NounMany: "directories", Place: "in /w", Level: risk.Orange, Counts: risk.Counts{Orange: 2},
 			Lines: []string{"  Owner     unknown (2)"},
 			Rows: []Row{
 				{Number: 6, ID: "w6", Verdict: Safe, Level: risk.Orange, Kind: "worktree", Repo: "b", Path: "/w/x", Owner: "", OwnerShown: "unknown", Word: "unknown", Dirs: 1},
@@ -176,7 +176,7 @@ func TestFlowListAndDetails(t *testing.T) {
 	for n := 1; n <= 45; n++ {
 		rows = append(rows, Row{Number: n, ID: fmt.Sprintf("w%d", n), Verdict: Safe, Level: risk.Yellow, Kind: "worktree", Repo: "a", Path: fmt.Sprintf("/tmp/whr-%02d", n), Owner: "codex", OwnerShown: "codex", Dirs: 1, Detail: fmt.Sprintf("detail %d proof patch-id", n)})
 	}
-	groups := []Group{{Key: "g", Title: "45 directories /tmp/whr-*", NounOne: "directory", NounMany: "directories", Level: risk.Yellow, Counts: risk.Counts{Yellow: 45}, Rows: rows}}
+	groups := []Group{{Title: "45 directories /tmp/whr-*", NounOne: "directory", NounMany: "directories", Level: risk.Yellow, Counts: risk.Counts{Yellow: 45}, Rows: rows}}
 	res, out, err := flow(t, "\nl\n\n\nd 7\ns\n\n", groups, Options{})
 	if err != nil || res.Outcome != OutcomeNone {
 		t.Fatalf("%+v %v\n%s", res, err, out)
@@ -397,4 +397,87 @@ func TestFlowTranscriptGolden(t *testing.T) {
 		t.Fatal(err)
 	}
 	golden(t, "flow-transcript.txt.golden", out)
+}
+
+// RunFlow offers only choosable rows, whoever built the groups: a red or kept row in a group is
+// never shown, counted or taken.
+func TestFlowDropsRowsThatAreNotChoosable(t *testing.T) {
+	groups := groupsFixture()
+	groups[0].Rows = append(groups[0].Rows,
+		Row{Number: 20, ID: "red", Verdict: Safe, Level: risk.Red, Kind: "branch", Repo: "a", Branch: "red", Branches: 1},
+		Row{Number: 21, ID: "kept", Verdict: Safe, Level: risk.Kept, Kind: "branch", Repo: "a", Branch: "kept", Branches: 1})
+	res, out, err := flow(t, "\ny\ny\ny\n20\n\n", groups, Options{})
+	if err != nil || strings.Contains(out, "red") && strings.Contains(out, "  20 ") || len(res.Rows) == 0 {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, r := range res.Rows {
+		if r.ID == "red" || r.ID == "kept" {
+			t.Errorf("took %s", r.ID)
+		}
+	}
+	// A group of only such rows is no step.
+	res, _, err = flow(t, "", []Group{{Title: "x", Level: risk.Green, Rows: []Row{{Number: 1, ID: "r", Verdict: Safe, Level: risk.Red}}}}, Options{})
+	if err != nil || res.Outcome != OutcomeNone {
+		t.Errorf("%+v %v", res, err)
+	}
+}
+
+// Tracking references: counted in the summary, named in its effect column and in the line above the
+// deletion line, which stays the last line.
+func TestFlowSummaryCountsTrackingReferences(t *testing.T) {
+	groups := append(groupsFixture()[:1], Group{
+		Title: "2 tracking references in a", NounOne: "tracking reference", NounMany: "tracking references", Place: "in a", Level: risk.Green, Counts: risk.Counts{Green: 2},
+		Rows: []Row{
+			{Number: 3, ID: "t3", Verdict: Safe, Level: risk.Green, Kind: "tracking-ref", Repo: "a", Branch: "origin/x", Tracking: 1},
+			{Number: 4, ID: "t4", Verdict: Safe, Level: risk.Green, Kind: "tracking-ref", Repo: "a", Branch: "origin/y", Tracking: 1},
+		}})
+	_, out, err := flow(t, "a\n\n", groups, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"delete 2 tracking references", "It also deletes 2 local tracking references.\nThis deletes 0 directories for good and 2 branches (restorable)."} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+	if !strings.HasSuffix(strings.TrimRight(out, "\n"), "(restorable).") {
+		t.Errorf("the deletion line is not last:\n%s", out)
+	}
+}
+
+// FR-013: no line of a screen is longer than 120 characters, however long a name is or however
+// many owners and typed words there are; a cut shows "...".
+func TestFlowLinesStayWithinTheBound(t *testing.T) {
+	long := strings.Repeat("n", 300)
+	groups := groupsFixture()
+	groups[1].Title = "3 directories " + long
+	groups[1].Place = long
+	for gi := range groups {
+		for ri := range groups[gi].Rows {
+			r := &groups[gi].Rows[ri]
+			r.Path, r.Branch, r.Repo = "/tmp/"+long, long, long
+			r.Word = fmt.Sprintf("word%d%s", ri+gi*3, long)
+		}
+	}
+	for _, width := range []int{0, 500} {
+		_, out, _ := flow(t, "\ny\ny\ny\n\n", groups, Options{Width: width})
+		// The input is not echoed, so the deletion line follows the prompt on one row.
+		out = strings.Replace(out, "quit: This deletes", "quit:\nThis deletes", 1)
+		for _, line := range strings.Split(out, "\n") {
+			if n := len([]rune(line)); n > 120 {
+				t.Errorf("width %d: a line of %d characters: %.140q", width, n, line)
+			}
+		}
+		if !strings.Contains(out, "...") || !strings.Contains(out, "more") {
+			t.Errorf("no visible cut:\n%s", out)
+		}
+	}
+}
+
+// `q` quits at the decision confirmation.
+func TestFlowQuitAtTheDecisionConfirmation(t *testing.T) {
+	res, out, err := flow(t, "\n7\nq\n", groupsFixture(), Options{})
+	if err != nil || res.Outcome != OutcomeQuit || len(res.Rows) != 0 || !strings.Contains(out, "[y/N/q]") {
+		t.Errorf("%+v %v\n%s", res, err, out)
+	}
 }

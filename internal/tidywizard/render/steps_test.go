@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 )
 
@@ -92,10 +91,21 @@ func TestGroupRowsCarryTheirLevel(t *testing.T) {
 	if n[risk.Green] != 6 || n[risk.Yellow] != 93 || n[risk.Orange] != 66 {
 		t.Errorf("%v", n)
 	}
-	if got := d.CandidateByID("nope"); got != nil {
-		t.Errorf("%v", got)
+	if all := d.AllCandidates(); len(all) != 1129 {
+		t.Errorf("candidates %d", len(all))
 	}
-	if all := d.AllCandidates(); len(all) == 0 || d.CandidateByID(all[0].ID) == nil || d.CandidateByID(all[0].ID).Kind != tidywizard.Kind(all[0].Kind) {
-		t.Errorf("lookup")
+}
+
+// Many owners are named three at a time; the rest is counted (FR-013).
+func TestStepLinesCapTheOwnerList(t *testing.T) {
+	d := realDocument(t, longAgo)
+	g := Groups(d)[0]
+	g.owners = nil
+	for i := 0; i < 10; i++ {
+		g.owners = append(g.owners, ownerCount{label: strings.Repeat("o", 100), n: 1})
+	}
+	line := d.StepLines(g)[0]
+	if len([]rune(line)) > 120 || !strings.HasSuffix(line, "and 7 more") || strings.Count(line, "(1)") != 3 {
+		t.Errorf("%q", line)
 	}
 }

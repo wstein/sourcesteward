@@ -19,7 +19,6 @@ import (
 // and place. Title, Place and Lines are text the caller already put through `esc` (they come from
 // the renderer's own sentences and escaped names); every Row field is raw and escaped here.
 type Group struct {
-	Key string
 	// Title is the header of the step, for example "40 directories /tmp/whr-*".
 	Title string
 	// NounOne and NounMany name the rows ("directory", "directories"); Place is the escaped place
@@ -41,7 +40,7 @@ type FlowResult struct {
 	Confirmed map[string]bool
 }
 
-// ids returns the chosen ids in number order.
+// IDs returns the chosen ids in number order.
 func (r FlowResult) IDs() []string {
 	out := make([]string, 0, len(r.Rows))
 	for _, row := range r.Rows {
@@ -50,7 +49,19 @@ func (r FlowResult) IDs() []string {
 	return out
 }
 
-var errQuit = errors.New("quit")
+// ErrQuit is `q` at a question: the person ended the run on purpose; nothing is stored.
+var ErrQuit = errors.New("quit")
+
+// maxWidth is the longest line of the wizard (FR-013, the 120-character bound).
+const maxWidth = 120
+
+// clip cuts text that is already escaped to n runes, with a visible mark.
+func clip(s string, n int) string {
+	if rs := []rune(s); len(rs) > n {
+		return string(rs[:max(n-3, 0)]) + "..."
+	}
+	return s
+}
 
 // pageSize is how many rows `l` shows at a time.
 const pageSize = 20
@@ -65,6 +76,21 @@ func RunFlow(in *bufio.Reader, out io.Writer, groups []Group, opt Options) (Flow
 		none.Outcome = OutcomeNoTTY
 		return none, nil
 	}
+	// Only choosable rows are offered, whatever the caller passed; a group without one is no step.
+	var offered []Group
+	for _, g := range groups {
+		rows := make([]Row, 0, len(g.Rows))
+		for _, r := range g.Rows {
+			if Choosable(r.Verdict, r.Level) {
+				rows = append(rows, r)
+			}
+		}
+		if len(rows) > 0 {
+			g.Rows = rows
+			offered = append(offered, g)
+		}
+	}
+	groups = offered
 	if len(groups) == 0 {
 		return none, nil
 	}
@@ -80,7 +106,7 @@ func RunFlow(in *bufio.Reader, out io.Writer, groups []Group, opt Options) (Flow
 	switch {
 	case errors.Is(err, ErrEndOfInput):
 		return none, nil
-	case errors.Is(err, errQuit):
+	case errors.Is(err, ErrQuit):
 		fmt.Fprintln(out, "\nQuit; nothing was stored.")
 		none.Outcome = OutcomeQuit
 		return none, nil
@@ -102,8 +128,11 @@ type session struct {
 }
 
 func (s *session) width() int {
-	if s.opt.Width <= 0 {
+	switch {
+	case s.opt.Width <= 0:
 		return 80
+	case s.opt.Width > maxWidth:
+		return maxWidth
 	}
 	return s.opt.Width
 }
@@ -164,7 +193,7 @@ func (s *session) first() (skipSteps bool, err error) {
 				s.addGreen()
 				return true, nil
 			case "q":
-				return false, errQuit
+				return false, ErrQuit
 			}
 		}
 		if err := s.reject(&tries, "Answer Enter, a or q."); err != nil {
@@ -222,7 +251,7 @@ func (s *session) step(i int) error {
 		case "s":
 			return nil
 		case "q":
-			return errQuit
+			return ErrQuit
 		case "l":
 			if err := s.list(g); err != nil {
 				return err
@@ -295,7 +324,7 @@ func (s *session) addTerms(rows []Row) (int, error) {
 // caller put into the detail.
 func (s *session) confirmDecision(r Row) (bool, error) {
 	fmt.Fprintf(s.out, "[%d] is a decision row: %s\n", r.Number, escape(r.Detail))
-	yes, err := YesNo(s.in, s.out, "Choose it anyway?", true)
+	yes, err := YesNoQuit(s.in, s.out, "Choose it anyway?", true)
 	if err != nil {
 		return false, err
 	}
@@ -403,7 +432,9 @@ func levelCounts(c risk.Counts) string {
 }
 
 func (s *session) showGroup(i int, g Group) {
-	fmt.Fprintf(s.out, "\nStep %d of %d   %s   risk %s%s\n", i+1, len(s.groups), g.Title, g.Level, levelCounts(g.Counts))
+	head := fmt.Sprintf("Step %d of %d   ", i+1, len(s.groups))
+	tail := fmt.Sprintf("   risk %s%s", g.Level, levelCounts(g.Counts))
+	fmt.Fprintf(s.out, "\n%s%s%s\n", head, clip(g.Title, maxWidth-len(head)-len(tail)), tail)
 	for _, l := range g.Lines {
 		fmt.Fprintln(s.out, l)
 	}
@@ -431,6 +462,7 @@ func (s *session) rowLine(r Row) string {
 	if r.Path != "" {
 		subject, extra = escape(r.Path), escape(r.Branch)
 	}
+	extra = clip(extra, 30)
 	tail := ""
 	if r.Verdict == Decision {
 		tail = "  (decision: choose it by number)"
