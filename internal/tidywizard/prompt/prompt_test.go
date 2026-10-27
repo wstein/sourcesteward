@@ -311,3 +311,17 @@ func TestDetailsNumberIsStrictAndTextIsFlattened(t *testing.T) {
 		}
 	}
 }
+
+// The owner question agrees in number: claude has three safe items, codex two, one-item owners one.
+func TestOwnerQuestionAgreesInNumber(t *testing.T) {
+	list := append(items(), Item{Number: 7, ID: "x7", Verdict: Safe, Scope: owner.ScopeOther, Owner: "zed", Detail: "one"})
+	var out bytes.Buffer
+	if _, err := Select(bufio.NewReader(strings.NewReader("o\nn\nn\nn\n")), &out, list, Options{Interactive: true}); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Take the 3 safe items of owner claude?", "Take the 2 safe items of owner codex?", "Take the 1 safe item of owner zed?"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("%q missing:\n%s", want, out.String())
+		}
+	}
+}

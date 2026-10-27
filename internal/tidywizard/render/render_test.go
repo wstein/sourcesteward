@@ -660,3 +660,29 @@ func TestColorChangesNoByteOfThePlainText(t *testing.T) {
 		t.Error("error repository is not red or heading not bold")
 	}
 }
+
+// The row view agrees in number at 0, 1 and 2: the repositories of the first line and the decision
+// count of the summary line.
+func TestRowViewCountsAgreeInNumber(t *testing.T) {
+	for _, tc := range []struct {
+		repos, decisions int
+		wantRepos        string
+		wantDecisions    string
+	}{{1, 0, "Analysed 1 repository (", ""}, {1, 1, "Analysed 1 repository (", ", 1 decision\n"}, {2, 2, "Analysed 2 repositories (", ", 2 decisions\n"}} {
+		in := input()
+		in.Result.Repositories = in.Result.Repositories[:0]
+		for i := 0; i < tc.repos; i++ {
+			in.Result.Repositories = append(in.Result.Repositories, tidywizard.RepoResult{Name: "sourcesteward", State: "analysed", Notices: []string{}})
+		}
+		in.Result.Candidates = nil
+		for i := 0; i < tc.decisions; i++ {
+			c := cand("sourcesteward", tidywizard.KindWorktree, "/tmp/wt-dec"+string(rune('a'+i)), tidywizard.VerdictDecision, "locked-stw", owner.ScopeUnknown)
+			c.Effects = []string{"remove-registration", "remove-files"}
+			in.Result.Candidates = append(in.Result.Candidates, c)
+		}
+		out := Text(Build(in), TextOptions{})
+		if !strings.Contains(out, tc.wantRepos) || (tc.wantDecisions != "" && !strings.Contains(out, tc.wantDecisions)) || (tc.wantDecisions == "" && strings.Contains(out, "decision")) {
+			t.Errorf("%+v:\n%s", tc, out)
+		}
+	}
+}
