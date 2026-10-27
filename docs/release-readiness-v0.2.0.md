@@ -26,7 +26,7 @@ No other pull request is open.
 | #70 real tidy apply evidence | open; owner decision 2026-10-25: step 1 a full plan, save, apply, restore run in a throwaway clone workspace, step 2 exactly one owner-selected safe element on the live workspace with before and after evidence | Per that decision it gates the tag: step 1 and step 2 recorded, unless the owner drops them (owner decision 7). Step 2 needs the owner to approve the concrete element |
 | #326 separate `stw tidy apply` accepts `y` then end of input | open, existing behavior, outside #323 | Owner decision 8: fix, or list as a known limit (the notes draft lists it) |
 | #62, #69, #71 Spec 026 gates | open, re-scoped | Not required unless the owner switches to the self-hosted flow (tracker #263 text) |
-| #269, #218, #216, #195, #108, #98, #93, #74, #72, #64 | open | Owner to confirm that none gates the tag; none is named in the scope above |
+| #269, #218, #216, #195, #108, #98, #93, #74, #72, #64 | open | Owner decision 10 (proposal in the protocol: #269 is the only one that touches tidy locks; none is named in the scope above) |
 | #306, #311, #315 | open | v0.3.0 (owner decision 2026-10-26): not release items |
 
 Closed since the tracker was written: #217, #196, #241, #252, #253, #255, #95 (`gh issue view`).
