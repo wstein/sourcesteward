@@ -3,72 +3,89 @@
 **Status: checklist for the owner, written 2026-10-27, nothing here was run.** Decision D14 of
 [Spec 045](../specs/045-release-wizard/spec.md#decided-by-the-owner) is that `stw` v0.2.0 is released now, by hand,
 with the tag-first bootstrap flow of [Spec 034](../specs/034-bootstrap-release/spec.md), and that the steps are
-written down so the later release wizard can reproduce them (task T029). This page is that protocol before the
-run: fill the **Record** lines while you execute it. The [readiness checklist](release-readiness-v0.2.0.md)
+written down so the later release wizard can reproduce them (task T029, which names this protocol's final home as
+`specs/045-release-wizard/protocol/v0.2.0-stw.md`: copy the filled page there, or keep it here and record the
+deviation). Fill the **Record** lines while you execute it. The [readiness checklist](release-readiness-v0.2.0.md)
 says what must be closed first; the [release notes draft](release-notes/v0.2.0.md) is the text for step D3.
 
 An agent never tags, runs the workflow, publishes or edits the release (`AGENTS.md`, "Pull requests and history").
 Every step marked **OWNER** is yours; **read-only** steps may be run by anyone. Do not start a step before its
 preconditions hold; abort points are handled in [Stop and abort](#stop-and-abort).
+Each **Wizard** line names the wizard step or
+state ([states](../specs/045-release-wizard/spec.md#the-states)) that corresponds; the wizard drives the **dispatch** flow (build,
+record, then tag), not this tag-first flow ([phases](../specs/045-release-wizard/spec.md#scope-and-phases)).
 Placeholders: `REPO` is `wstein/sourcesteward`, `V` is `v0.2.0`, `C` the full 40-hex commit, `RUN` a workflow
-run id, `DIR` an empty download directory outside the repository.
+run id, `DIR` an empty download directory outside the repository. Run the commands in your own clone of `REPO`.
 
-## How the wizard will map each step
+## Owner decisions needed before the tag
 
-The wizard of Spec 045 drives the **dispatch** flow (build, record, then tag), not this tag-first flow
-([phases](../specs/045-release-wizard/spec.md#scope-and-phases)). Each **Wizard** line names the wizard step or
-state ([states](../specs/045-release-wizard/spec.md#the-states)) or says the step exists only here. Summary at the end.
+This page decides none of these; each is open.
+
+| # | Decision | Where it bites |
+| --- | --- | --- |
+| 1 | Create the `v*` tag ruleset first (the rule of `docs/releasing.md:54-57`), or record an explicit written waiver | A2, hard stop |
+| 2 | Release immutability on or off before V (read: off) | A2 |
+| 3 | Dry run of the workflow before the tag, yes or no (a build) | A5 |
+| 4 | After a failed run on an unchanged tag: re-run it once for the same tag, or always the next version | Stop table |
+| 5 | Release body: generated, curated notes, or both (v0.1.0 body was generated) | D3 |
+| 6 | Publish with the web UI or `gh release edit --draft=false` (how v0.1.0 was published is not recorded) | E1 |
+| 7 | Tracker #70: step 1 (full run in a throwaway clone) and step 2 (one safe element on the live workspace), required or dropped | readiness |
+| 8 | #326 (`y` plus end of input at `stw tidy apply`): fix before V or list as a known limit | readiness |
+
+Not open: #323 (Spec 044 P4b) and T016 are required (owner decision 2026-10-26); a record commit belongs to
+Spec 026 T047 (`specs/045-release-wizard/tasks.md:75`), not to V.
 
 ## A. Before the tag
 
 ### A1. Close the readiness checklist (OWNER, read-only)
 
-Every item of [release-readiness-v0.2.0.md](release-readiness-v0.2.0.md) is closed or accepted by you.
-Abort point: an open Draft that the release needs (for example #323) or a red check on `main`.
-Record: the date, and the pull requests you accepted as open. Wizard: none (the wizard has no readiness list).
+Every item of [release-readiness-v0.2.0.md](release-readiness-v0.2.0.md) is closed. Abort point: #323 or T016
+not done, or a red check on `main`. Record: the date. Wizard: none (the wizard has no readiness list).
 
-### A2. Check the repository settings (OWNER, read-only)
+### A2. Check the repository settings (OWNER, read-only, HARD STOP)
 
-`stw` and the workflow never change settings (`docs/releasing.md`). The observed state on 2026-10-27 is in brackets.
+`stw` and the workflow never change settings (`docs/releasing.md`). Observed 2026-10-27 in brackets.
 
 ```sh
 gh variable list --repo REPO                              # STW_RELEASE_DRAFT = true   [true]
 gh api repos/REPO/environments --jq '.environments[].name'   # contains release        [github-pages, release]
-gh api repos/REPO/rulesets --jq '.[] | [.name,.target,.enforcement] | @tsv'
+gh api repos/REPO/rulesets --jq '.[] | select(.target=="tag") | [.id,.name,.enforcement] | @tsv'   # [prints nothing]
+gh api repos/REPO/rulesets/ID --jq '{inc:.conditions.ref_name.include,rules:[.rules[].type],bypass:.bypass_actors}'
 gh api repos/REPO/immutable-releases                     # {"enabled":false,...}      [false]
 ```
 
-- `STW_RELEASE_DRAFT=true` makes the workflow create a **draft** (`.github/workflows/release.yml:301`); without it the
-  release is published directly. Keep it `true`.
-- Environment `release` is used by the publish job (`release.yml:250`); no reviewers are required by design.
-- A tag ruleset for `v*` restricting creation, update and deletion to you is required before the first real
-  product tag (`docs/releasing.md:54`, Spec 026 D11). **The rulesets read lists only `main` (target `branch`); no
-  tag ruleset was listed. Unknown, owner to confirm** whether one exists and how to read it; create it in
-  Settings, Rules, Rulesets if not.
-- Release immutability was **disabled** when read. Whether to enable it before v0.2.0 is **unknown, owner to
-  confirm** (it locks the tag and assets after publication; `docs/releasing.md:44`).
+- `STW_RELEASE_DRAFT=true` makes the workflow create a **draft** (`.github/workflows/release.yml:301`); environment
+  `release` is used by the publish job (`release.yml:250`), no reviewers by design.
+- **The tag ruleset is absent.** The rulesets read succeeded and lists only `main` (target `branch`, id 25683357);
+  the repository belongs to a user, so no organization ruleset applies. `docs/releasing.md:54-57` says `absent`
+  blocks the first real tag, and Spec 034 lists the ruleset as an owner action before the tag
+  (`specs/034-bootstrap-release/spec.md:93`). **Stop here.** Proceed only when the third command lists an active
+  ruleset and the fourth shows `refs/tags/v*`, `creation`, `update`, `deletion` and `non_fast_forward`, with a bypass
+  list that you confirm by hand is owner-only (`docs/releasing.md:37-40`: an admin role may not be owner-only).
+  Create it in Settings, Rules, Rulesets (owner decision 1). A waiver is only valid if you write it down with
+  the reason; v0.1.0 appears to have been tagged without a ruleset, which is a precedent, not the rule.
+- Release immutability is **off** (decision 2); when on it locks tag and assets after publication (`docs/releasing.md:44`).
 
-Record: the outputs. Abort point: `STW_RELEASE_DRAFT` is not `true`, or you do not accept the missing tag ruleset.
-Wizard: tag step, "The tag ruleset at the tag step" (advisory `unknown` asks for the typed acknowledgement `ruleset ok`).
+Record: the outputs, and the ruleset id or the waiver text. Abort point: no ruleset and no waiver, or the variable
+is not `true`. Wizard: tag step ruleset screen: `absent` **refuses**, only `unknown` asks `ruleset ok`
+([table](../specs/045-release-wizard/spec.md#the-tag-ruleset-at-the-tag-step)); this step is as strict as that refusal.
 
 ### A3. Choose C (OWNER, read-only)
 
-C is the tip of `main` that has a successful push run of `ci.yml`. A rebase merge runs CI only on the pushed tip,
-so an older commit may have no run (spike item 14); the workflow refuses a commit without one
-(`.github/scripts/release-verify.sh`, command `ci-green`).
+C is the tip of `origin/main` (as in Spec 045 step 2) and must have a successful push run of `ci.yml`; a rebase
+merge runs CI only on the pushed tip, so an older commit may have none (spike item 14). The workflow refuses a commit
+without one (`.github/scripts/release-verify.sh`, command `ci-green`, `:83`).
 
 ```sh
 git fetch origin --tags
-git rev-parse origin/main                       # this is C unless you chose an older commit; write the 40 hex characters
+git rev-parse origin/main                       # this is C; write the 40 hex characters
 gh run list --repo REPO --workflow ci.yml --branch main --event push --limit 5 --json headSha,conclusion,status
-git merge-base --is-ancestor C origin/main && echo ok
 ```
-
-Expected: a row with `headSha` equal to C, `status` `completed`, `conclusion` `success`; `ok` printed.
-The `ci-green` gate also needs the required checks `check` and `Git/jj conformance (current) / suite` to have passed
-(`main` ruleset). Record: C. Abort point: no green push run for C (wait; a queued run is not green), or `main`
-moved to a commit you did not review. `stw release plan` cannot be used here: this repository has no `.stw/release.toml`
-(`ls .stw` fails), which is why the tag-first flow applies. Wizard: step 2 "Commit and version" (`plan C --version V --online`, state 1 `ready`).
+Expected: a row with `headSha` equal to C, `status` `completed`, `conclusion` `success`. A successful push run
+means the `check` job and both conformance lanes passed (`release.yml:106-107`). Record: C. Abort point: no green
+push run for C (a queued run is not green; wait). `stw release plan` cannot be used: this repository has no
+`.stw/release.toml` (it refuses `config-missing`), which is why the tag-first flow applies.
+Wizard: step 2 "Commit and version" (`plan C --version V --online`, state 1 `ready`).
 
 ### A4. Check the version (OWNER, read-only)
 
@@ -78,17 +95,15 @@ gh release list --repo REPO --limit 5                      # v0.1.0 is Latest; V
 sh .github/scripts/release-verify.sh version V             # exit 0
 gh api "repos/REPO/releases" --paginate --jq '.[] | select(.tag_name == "V") | .id'   # prints nothing
 ```
-
-Expected: the tag does not exist, no release or draft named V exists, the grammar check exits 0
-(`release-verify.sh` command `version`; the `verify` job runs the same, `release.yml:62`). Record: the outputs.
-Abort point: V exists in any form: use the next version (`docs/releasing.md`, failure table).
-Wizard: step 2 (version proposal and the gates `version-not-monotonic`, `release-exists`).
+Expected: no tag, release or draft named V; the grammar check exits 0 (the `verify` job runs it, `release.yml:62`).
+Record: the outputs. Abort point: V exists in any form: use the next version (`docs/releasing.md`, failure table).
+Wizard: step 2 (version proposal; gates `version-not-monotonic`, `release-exists`).
 
 ### A5. Optional dry run of the workflow (OWNER, a build: needs your explicit approval)
 
-A dry run builds and smoke-tests all four targets from `main` and never publishes (`release.yml:68`, `dry_run`).
-Earlier dry runs of the same workflow succeeded on 2026-10-22 and 2026-10-23 (`specs/034-bootstrap-release/verification.md`).
-It is optional; whether to run it for v0.2.0 is **unknown, owner to confirm**.
+A dry run builds and smoke-tests all four targets from `main` and never publishes (`release.yml:68`). It
+skips the tag, CI and release-exists gates (`release.yml:86`, `:99`, `:111`), so it does not exercise them. The
+latest dry run (2026-10-23, `specs/034-bootstrap-release/verification.md`) took about 3 minutes 46 seconds. Decision 3.
 
 ```sh
 gh workflow run release.yml --repo REPO --ref main -f version=v0.0.0-dryrun
@@ -96,17 +111,24 @@ gh run list --repo REPO --workflow release --limit 3
 gh run watch RUN --repo REPO --exit-status
 ```
 
-Expected: jobs `verify`, `build` (4), `smoke` (4) pass and `publish` is skipped. The run is for the tip of `main` at
-dispatch time, so it is C only if `main` has not moved. Record: RUN, its head SHA, conclusion. Abort point: any
-failed job (read its log, fix on `main` through a pull request, restart at A3). Wizard: none (the dispatch flow
-has no dry run; the wizard's nearest equivalent is the plan gates of step 2). Duration: unknown.
+Expected: jobs `verify`, `build` (4), `smoke` (4) pass and `publish` is skipped. It runs on the tip of `main` at
+dispatch time. Record: RUN, head SHA, conclusion. Abort point: a failed job (fix through a pull request, restart at
+A3). Wizard: none (the dispatch flow has no dry run).
 
 ## B. The tag
 
 ### B1. Freeze (OWNER, read-only, immediately before B2)
 
-`git fetch origin && test "$(git rev-parse origin/main)" = C && echo unchanged`. Abort point: any other output
-(re-run A3 and A4). Wizard: step 8 "Tag" re-verifies the tip and the gates from fresh evidence first.
+```sh
+git fetch origin && test "$(git rev-parse origin/main)" = C && echo unchanged
+git ls-remote --tags origin "refs/tags/V*"        # prints nothing
+git remote get-url --push origin                  # github.com/wstein/sourcesteward (https or ssh form)
+git config --get-regexp '^url\..*insteadof$|^remote\.origin\.pushurl$'   # nothing that redirects to another repository
+git tag --list V                                  # prints nothing (no local tag either)
+```
+
+Abort point: any other output (re-run A3 and A4; an existing remote tag of that name is never reused).
+Record: the outputs and time. Wizard: step 8 "Tag" re-verifies the same facts before it asks anything.
 
 ### B2. Create the annotated tag (OWNER)
 
@@ -116,9 +138,8 @@ git cat-file -t V                  # tag   (a lightweight tag prints commit and 
 git rev-parse "V^{commit}"         # must print C
 ```
 
-The tagger is your global git identity; agents never set one. The workflow does not read the message
-(`release-verify.sh`, command `tag`, checks type, ancestry only). The wizard's own message format is in
-[Spec 045](../specs/045-release-wizard/spec.md#step-details) ("Tag message") and is optional by hand.
+The tagger is your global git identity. The workflow does not read the message (`release-verify.sh`, command
+`tag`, checks type and ancestry only); the wizard's message format ([Spec 045](../specs/045-release-wizard/spec.md#step-details)) is optional by hand.
 Record: the outputs. Abort point: wrong type or commit: `git tag -d V`, redo B2. Wizard: step 8 (local part, journal `tag-created-local`).
 
 ### B3. Push the tag (OWNER; this is the publication approval)
@@ -126,27 +147,23 @@ Record: the outputs. Abort point: wrong type or commit: `git tag -d V`, redo B2.
 ```sh
 git push origin refs/tags/V
 ```
-
-This is the only effect that cannot be undone: it starts the `release` workflow, which builds, attests and creates
-the release (`release.yml:10`, trigger `push` of `v[0-9]+.[0-9]+.[0-9]+`). The run is accepted only if you started it
-and pushed it (`release.yml:75-84`). Never move, delete and re-create, or force-push the tag; a failed release uses the
-next version. Record: the push output and the time. Wizard: step 8, typed line `tag VERSION DIGEST6`, state 10 to 11 (`tag-pushed`).
+One explicit ref: never `--tags`, `--follow-tags` or `--force`. This is the first effect that cannot be undone: it
+starts the `release` workflow, which builds, attests and creates the release (`release.yml:10`). The run is accepted
+only if you started and pushed it (`release.yml:75-84`). Never move, delete and re-create the tag. Record: the push
+output and the time. Wizard: step 8, typed line `tag VERSION DIGEST6`, state 10 to 11 (`tag-pushed`).
 
 ## C. The workflow run
 
 ### C1. Watch the run (OWNER, read-only)
 
-```sh
-gh run list --repo REPO --workflow release --limit 3        # a push run with headBranch V
-gh run watch RUN --repo REPO --exit-status
-```
+`gh run list --repo REPO --workflow release --limit 3` shows a push run with headBranch V; then
+`gh run watch RUN --repo REPO --exit-status`.
 
-Expected jobs, in order: `verify` (owner, annotated tag on `main`, `ci.yml` green for C, no release exists,
-`go mod verify`, `go vet`, docs and architecture checks, `internal/releaseworkflow` tests), `build` for
-`linux_amd64`, `linux_arm64`, `darwin_arm64`, `darwin_amd64` (each built twice and compared byte for byte), `smoke`
-on each platform's own runner, then `publish` (environment `release`, attests `stw_*.tar.gz` and `SHA256SUMS`,
-creates the release; a draft because of the variable). Record: RUN, each job's conclusion, timestamps.
-Wizard: "Wait for the publish", states 11 and 12; its flow builds before the tag, so the jobs differ.
+Expected jobs: `verify` (owner, annotated tag on `main`, `ci.yml` green for C, no release exists, vet, docs and
+architecture checks, `internal/releaseworkflow` tests), `build` for the four targets (each built twice and compared
+byte for byte), `smoke` on each platform's own runner, then `publish` (attests the archives and `SHA256SUMS`, creates
+a draft because of the variable). The v0.1.0 run took about 3 minutes 53 seconds (`gh api repos/REPO/actions/runs/39985568858`).
+Record: RUN, each job's conclusion, timestamps. Wizard: "Wait for the publish", states 11 and 12; its flow builds before the tag.
 
 ## D. Inspect the draft
 
@@ -157,48 +174,45 @@ gh release view V --repo REPO --json isDraft,tagName,assets --jq '{isDraft,tagNa
 ```
 
 Expected: `isDraft` true, `tagName` V, five assets: `SHA256SUMS` and `stw_0.2.0_{linux,darwin}_{amd64,arm64}.tar.gz`
-(as for v0.1.0, `specs/034-bootstrap-release/verification.md`). Wizard: none (tag-first draft inspection; the dispatch flow downloads and verifies before the tag, step 5).
+(as for v0.1.0). v0.1.0 was a draft first (assets 16:21Z, published 16:33Z, 2026-10-23); V is unmeasured. Record: the output. Wizard: none here (the dispatch flow verifies before the tag, step 5).
 
 ### D2. Download and verify (OWNER, read-only)
 
 ```sh
 mkdir DIR && gh release download V --repo REPO -D DIR
-(cd DIR && shasum -a 256 --check SHA256SUMS)
 for f in DIR/stw_0.2.0_*.tar.gz; do gh attestation verify "$f" --repo REPO; done
-tar -xzf DIR/stw_0.2.0_linux_amd64.tar.gz -C DIR && DIR/stw_0.2.0_linux_amd64/stw version   # your platform
+(cd DIR && shasum -a 256 --check SHA256SUMS)    # macOS; on Linux without shasum use the coreutils checker
+tar -xzf DIR/stw_0.2.0_darwin_arm64.tar.gz -C DIR && DIR/stw_0.2.0_darwin_arm64/stw version   # Apple silicon
+tar -xzf DIR/stw_0.2.0_linux_amd64.tar.gz -C DIR && DIR/stw_0.2.0_linux_amd64/stw version     # Linux amd64
 ```
 
-Expected: four `OK` lines, four successful attestation verifications, and `SourceSteward v0.2.0` (the workflow
-smoke ran the same check on every platform, `.github/scripts/release-smoke.sh:66`). Downloading a draft by tag with `gh release
-download` is **unmeasured for this repository (the spike runbook step A4 was written, not run): unknown, owner to
-confirm**; if it fails, download the assets in the web UI. `stw release verify --published` cannot be used: a
-bootstrap release has no `build-manifest.json` and no record (spike item 3). Record: the outputs. Abort point:
-a checksum mismatch or a failed attestation: do not publish. Wizard: step 5 "Download and verify" (different evidence in the dispatch flow).
+Run the checksum line and the one `stw version` line for your platform. Expected: four `OK` lines, four successful
+attestation verifications, `SourceSteward v0.2.0` (the workflow smoke ran the same check on every platform,
+`.github/scripts/release-smoke.sh:66`). `stw release verify --published` cannot be used: a bootstrap release has no
+`build-manifest.json` and no record (spike item 3). Record: the outputs. Abort point: a checksum mismatch or a failed
+attestation: do not publish. Wizard: step 5 "Download and verify" (different evidence in the dispatch flow).
 
-### D3. Release notes (OWNER, decision)
+### D3. Release notes (OWNER, decision 5)
 
-The draft body is the generated text of `.github/scripts/release-notes.sh` (header, verification instructions and
-a commit-subject list). To use the curated [notes](release-notes/v0.2.0.md), edit the body:
+The draft body is the generated text of `.github/scripts/release-notes.sh` (header, verification instructions and a
+commit-subject list). To use the curated [notes](release-notes/v0.2.0.md), edit the body and keep the verification
+instructions:
 
 ```sh
 gh release view V --repo REPO --json body --jq .body > DIR/body.md      # edit, then:
-gh release edit V --repo REPO --notes-file DIR/body.md
+gh release edit V --repo REPO --notes-file DIR/body.md   # then: shasum -a 256 DIR/body.md
 ```
-
-Whether to replace, extend or keep the generated body is **unknown, owner to confirm**; no repository document
-decides it. Keep the "Verify a download" instructions. Wizard: the wizard offers no notes assistance in phase 1 (Spec 045 phase 2).
+Record: which option, and the SHA-256 of the final body. If `gh release edit` fails, use the web UI; never re-tag.
+Wizard: none (notes assistance is phase 2 of Spec 045).
 
 ## E. Publish and verify
 
-### E1. Publish the draft (OWNER)
+### E1. Publish the draft (OWNER, decision 6)
 
-```sh
-gh release edit V --repo REPO --draft=false
-```
-
-The command comes from the spike runbook (step A5); the spike did not run it for a real release, so it is
-**unmeasured: unknown, owner to confirm** (the web UI "Publish release" is the alternative). Publishing is not
-repeatable: from now on assets and tag are public. Wizard: none for the tag-first flow (the wizard's publish workflow does this, step 9).
+`gh release edit V --repo REPO --draft=false`, or the web UI "Publish release". How v0.1.0 was published is not
+recorded, and neither command has been run for this repository by an agent. Publishing is not repeatable: from now on
+assets and tag are public. Record: the command or click, the output and the time. If it fails, use the other
+method. Wizard: none for the tag-first flow (the dispatch flow's publish workflow does this, step 9).
 
 ### E2. Verify the published release (OWNER, read-only)
 
@@ -206,44 +220,27 @@ repeatable: from now on assets and tag are public. Wizard: none for the tag-firs
 gh release view V --repo REPO --json isDraft,publishedAt,assets --jq '{isDraft,publishedAt,n:(.assets|length)}'
 gh api repos/REPO/git/ref/tags/V --jq .object.type               # tag
 rm -rf DIR && mkdir DIR && gh release download V --repo REPO -D DIR
-(cd DIR && shasum -a 256 --check SHA256SUMS) && for f in DIR/stw_0.2.0_*.tar.gz; do gh attestation verify "$f" --repo REPO; done
+# then the checksum, attestation and version lines of D2
 ```
-
 Expected: `isDraft` false, `n` 5, the ref type `tag`, all checks pass. Record: the outputs and `publishedAt`.
 Wizard: step 10 and state 13 `published` (`verify TAG --published --online`; by hand here because there is no record).
 
 ## F. After the release (OWNER, none of these is automatic)
-
-1. Close or update tracker #263 and the readiness checklist; record this run. T029 of Spec 045
-   expects the executed protocol at `specs/045-release-wizard/protocol/v0.2.0-stw.md` (`specs/045-release-wizard/tasks.md:72`);
-   the filled copy's location is **unknown, owner to confirm**.
-2. Update the `sourcesteward` gitlink in Anchorage, only you do (workspace `AGENTS.md`).
-3. The toolbox bundle entry follows only after `whr` v0.2.0 is also finished (owner decision 2026-10-25); consumer
-   image activation is a separate approval; the US-English sweep starts after the release.
-4. A record commit R (`docs/releasing.md`, bootstrap section) followed no tag so far: `specs/034-bootstrap-release/verification.md`
-   says no record exists for v0.1.0. Whether v0.2.0 gets one is **unknown, owner to confirm**.
+Update tracker #263 and record this run (T029 note at the top); update the `sourcesteward` gitlink in Anchorage
+(only you do); the toolbox bundle entry follows only after `whr` v0.2.0 is finished (owner decision 2026-10-25);
+consumer image activation is a separate approval; the US-English sweep starts after the release.
 
 ## Stop and abort
 
 | Where | What happened | What to do |
 | --- | --- | --- |
-| A1 to A4 | a gate is red, a setting differs, V exists | Stop. Fix it through a pull request or a setting, then restart at A3. Nothing remote has changed. |
+| A1 to A4 | a gate is red, a setting differs, V exists | Stop. Fix it through a pull request or a setting, restart at A3. Nothing remote has changed. |
+| B1 | tip moved, remote tag found, odd push URL | Stop; nothing is created. |
 | B2 | wrong tag object or commit | `git tag -d V`, redo B2. |
-| C1 `verify` fails | owner, annotated, CI or release-exists check | No release was created. The tag exists remotely: do not move it. Next version, new tag (`docs/releasing.md`, "Wrong or previously used tag"). |
-| C1 `build` or `smoke` fails | a platform differs or a test fails | Same: no release exists. Read the logs, fix on `main`, use the next version. Re-running a failed workflow does not authorize a different tag. |
-| C1 `publish` fails | draft may or may not exist | Look at `gh release list`; delete a leftover draft by hand; next version. A re-run by anyone but the owner is refused (`release.yml:274-275`). |
-| D2 mismatch | checksum or attestation fails | Do not publish; keep the draft for evidence; investigate; next version. |
-| E1 done | a problem found later | `stw` cannot undo publication. Publish a fix as the next version and say so in its notes. |
-
-## Wizard mapping at a glance
-
-| Hand step | Wizard step or state | Shared? |
-| --- | --- | --- |
-| A3, A4 choose C and V, the gates | step 2, state 1 `ready` | yes |
-| A2 settings, the ruleset | tag step ruleset screen | yes |
-| A5 dry run | none | tag-first only |
-| B1 to B3 tag and push | step 8, states 10 to 11 | yes |
-| C1 watch the run | steps 4 and 9, states 3, 4, 11, 12 | order differs (build after tag) |
-| D1, D2 inspect the draft | step 5, states 6, 7 | evidence differs |
-| D3 notes, E1 publish | publish workflow (step 9) | tag-first only |
-| E2 verify the release | step 10, state 13 | yes |
+| B3 | push rejected, or the outcome is unknown (timeout, lost answer) | `git ls-remote origin refs/tags/V`. If it names your tag object, continue at C1. If absent, push the same local object again. Never create a second tag object. |
+| after B3 | no `release` run appears | Do not push again. Check Actions settings and the run list; investigate. |
+| C1 `verify`, `build` or `smoke` fails | a gate, a platform or a test | No release exists. The tag is remote: never move it. Read the logs, fix on `main`, next version (state 14 `abandoned` in the wizard). |
+| C1 transient failure | runner loss, API flake in `ci-green` | Owner decision 4: re-run once for the same unchanged tag (`gh run rerun RUN --failed`; the workflow re-checks owner, tag commit and absence of a release, `release.yml:274-281`), or the next version. |
+| C1 `publish` fails | a draft may or may not exist | Look at `gh release list`; delete a leftover draft by hand; then decision 4. Another actor's re-run is refused (`release.yml:274-275`). |
+| D2 mismatch | checksum or attestation fails | Do not publish; keep the draft for evidence; next version. |
+| D3, E1, later | `gh release edit` fails; a problem found after publication | Use the web UI, never re-tag. `stw` cannot undo publication: publish a fix as the next version. |
