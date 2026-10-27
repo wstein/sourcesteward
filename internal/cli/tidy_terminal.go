@@ -19,7 +19,7 @@ func openTidyTerminal() (io.ReadWriteCloser, error) {
 		terminal, err = tidyConfirmOpener()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("%w; nothing was stored or applied. Run `stw tidy plan --save`, then apply from a terminal", owner.ErrNoTerminal)
+		return nil, fmt.Errorf("%w. Run `stw tidy plan --save`, then apply from a terminal", owner.ErrNoTerminal)
 	}
 	return terminal, nil
 }
@@ -28,7 +28,7 @@ func openTidyTerminal() (io.ReadWriteCloser, error) {
 func tidyTerminalAvailable() error {
 	terminal, err := openTidyTerminal()
 	if err != nil {
-		return err
+		return fmt.Errorf("%w; nothing was stored or applied", err)
 	}
 	return terminal.Close()
 }

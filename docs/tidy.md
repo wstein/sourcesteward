@@ -438,9 +438,9 @@ Quit; nothing was stored.
 
 **The final summary.** After the last group (or at once after `a` at the first question) one summary says that nothing has been changed yet, then lists the selected rows by group with the item count, the worst level and the effect, the skipped groups with what they would delete, the total with the number of untouched kept rows, the undo line when a branch is among the rows (branches only: deleted directories are not restored), and the typed words that will be asked, at most three and then `and N more`. After Enter, when the selection holds a local tracking reference, a line says how many it deletes; then comes the last line, `This deletes N directories for good and M branches (restorable).`, directly before the first typed prompt or the store question. Removing a worktree directory has no second typed word: the summary line and the typed prompt are the whole confirmation. An empty selection says `Nothing was chosen; nothing will be stored.` (and then `Nothing chosen; nothing was stored.`) and ends like every other path (exit 0 for a complete analysis).
 
-When every chosen row is `own`, no word is asked and the store question follows the summary:
+When every chosen row is `own`, no word is asked and the store question follows the summary. The store question and the apply question are asked on the controlling terminal, so they are not in the output below; in this sample `y` was typed at the store question and the apply question was declined:
 
-Answers, in order: `a`, Enter, `y`.
+Answers, in order: `a`, Enter.
 
 ```text
 Continue? [Enter] step through the groups  [a] take all green  [q] quit:
@@ -452,7 +452,7 @@ Summary: nothing has been changed yet
 Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
       PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
 Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 1 branch (restorable).
-Store this plan set? [y/N/q]:
+
 Stored plan set 3f9c2a7e41b8 (3 effects in 1 repositories). Nothing has been changed.
 Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
 ```

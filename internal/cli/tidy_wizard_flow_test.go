@@ -281,6 +281,7 @@ func TestJanitorTypedWordRefusalsStoreNothing(t *testing.T) {
 	}
 	// No terminal: the build fails before anything is planned.
 	j := newJanitor(t)
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { j.confirmOpened++; return nil, owner.ErrNoTerminal }
 	var out bytes.Buffer
 	cmd := tidyCommand()
 	cmd.SetOut(&out)
@@ -310,12 +311,13 @@ func TestJanitorOwnOnlySelectionAsksToStore(t *testing.T) {
 			}
 		}
 		j.res.Candidates = own
-		out, tty, err := j.run(tc.stdin, rightWord)
+		tty := setTerminalAnswers(t, strings.TrimPrefix(tc.stdin, "a\n\n"))
+		out, err := runTidy(t, "a\n\ny\n")
 		stored := len(storedSets(t, j.prep.PlanStore)) == 1
-		if stored != tc.stored || len(tty.prompts) != 0 || j.confirmOpened != 0 || len(j.applied) != 0 {
-			t.Errorf("%s: stored %v err %v prompts %q\n%s", name, stored, err, tty.prompts, out)
+		if stored != tc.stored || strings.Contains(tty.String(), "Foreign items") || tty.opens != 2 || len(j.applied) != 0 {
+			t.Errorf("%s: stored %v err %v prompts %q\n%s", name, stored, err, tty.String(), out)
 		}
-		if !strings.Contains(out, "Store this plan set?") {
+		if !strings.Contains(tty.String(), "Store this plan set?") || strings.Contains(out, "Store this plan set?") {
 			t.Errorf("%s: no store question\n%s", name, out)
 		}
 	}
@@ -527,7 +529,7 @@ func TestJanitorQuitAtTheStoreQuestionAndAtTheDecisionConfirmation(t *testing.T)
 		}
 	}
 	j.res.Candidates = own
-	out, _, err := j.run("a\n\nq\n", rightWord)
+	out, _, err := j.run("a\n\n", func(string) string { return "q" })
 	if err != nil || len(storedSets(t, j.prep.PlanStore)) != 0 || !strings.Contains(out, "Quit; nothing was stored.") {
 		t.Errorf("store question: %v\n%s", err, out)
 	}
