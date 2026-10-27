@@ -96,3 +96,63 @@ func TestRowsCancelDuringPartialApplyDoesNotClaimNothingChanged(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
 }
+
+// An interrupt that arrived while the apply question was open is an interruption, whatever the
+// answer was: the apply context carries no deadline, so nothing else would stop the apply.
+func TestJanitorInterruptAtTheApplyQuestionAppliesNothing(t *testing.T) {
+	for name, tc := range map[string]struct {
+		timeout string
+		stop    func(cancel func())
+		want    string
+	}{
+		"cancel":          {"", func(cancel func()) { cancel() }, "interrupted"},
+		"timeout elapsed": {"1s", func(func()) { time.Sleep(1100 * time.Millisecond) }, "interrupted"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			j := newJanitor(t)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			applies := 0
+			tidyApplyPlanSet = func(context.Context, planset.ApplyRequest) planset.ApplyResult {
+				applies++
+				return okSet()
+			}
+			var args []string
+			if tc.timeout != "" {
+				args = []string{"--timeout", tc.timeout}
+			}
+			out, err := j.runContext(ctx, "a\n\n", func(q string) string {
+				if strings.Contains(q, "Apply it now?") {
+					tc.stop(cancel)
+					return "y"
+				}
+				return rightWord(q)
+			}, args...)
+			var failure runtimeFailure
+			if !errors.As(err, &failure) || !strings.Contains(err.Error(), tc.want) || !strings.Contains(err.Error(), "nothing was applied") || applies != 0 {
+				t.Fatalf("applies=%d err=%v\n%s", applies, err, out)
+			}
+		})
+	}
+}
+
+// With --rows a foreign row needs its typed words once; the same words cover the apply that follows
+// "y" (SC-014), so the real plan-set apply gets the receipt and reaches the backend.
+func TestRowsForeignRowTypedWordsAreAskedOnceAndCoverTheApply(t *testing.T) {
+	j := newJanitor(t)
+	backend := &p4bCountingApplier{}
+	tidyApplyPlanSet = func(ctx context.Context, req planset.ApplyRequest) planset.ApplyResult {
+		req.Applier = backend
+		return planset.Apply(ctx, req)
+	}
+	out, tty, err := j.run("1,3\n", answerApply, "--rows")
+	typed := 0
+	for _, q := range tty.prompts {
+		if strings.Contains(q, "Type ") {
+			typed++
+		}
+	}
+	if err != nil || backend.calls == 0 || typed != 1 {
+		t.Fatalf("typed=%d backend calls=%d err=%v prompts=%q\n%s", typed, backend.calls, err, tty.prompts, out)
+	}
+}
