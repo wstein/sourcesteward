@@ -868,7 +868,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 | No terminal on stdin or stdout, or agent marker | grouped overview only, offline, no question, nothing stored, exit 0 |
 | Narrow terminal (below 60 columns) | rows drop the branch column, then the example rows; the level word and counts never wrap away; width from the terminal, 80 if unknown |
 | 960 or more retained rows | one table, no rows until asked; the first screen stays within 24 logical lines (a wrapped or truncated `Derived` line is one line) |
-| Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and nothing was applied (as today, `interruptedWizard` in `tidy_interactive.go`) |
+| Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and, until the apply starts, nothing was applied (`interruptedWizard` in `tidy_interactive.go`); once the apply has run, its printed result says what was applied (a cancel names the plan set and `stw tidy apply ID` to finish it), and the `--timeout` deadline bounds the analysis only, so a completed apply exits 0 (`runTidyApplyPlanSet` in `tidy_planset.go`) |
 | All rows red or kept | summary says "nothing can be cleaned"; the retain table follows; no questions |
 | Nothing to clean | one line "Nothing to clean."; exit 0 |
 | A group of 1 item | the step is still shown; one line header |

@@ -93,13 +93,14 @@ func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, st
 	if err := writeTidyPlanSetResult(cmd.OutOrStdout(), res, structured); err != nil {
 		return runtimeFailure{err}
 	}
-	if err := cmd.Context().Err(); err != nil {
-		return runtimeFailure{err}
+	if res.Status == "ok" {
+		// Everything was applied; a signal that arrived meanwhile changes nothing about that.
+		return nil
 	}
-	if res.Status != "ok" {
-		return runtimeFailure{fmt.Errorf("tidy plan set %q: %q", res.PlanID, res.Status)}
+	if cmd.Context().Err() != nil {
+		return runtimeFailure{fmt.Errorf("interrupted during the apply of plan set %s (status %q); the result above shows what was applied; run `stw tidy apply %s` again to finish", id, res.Status, id)}
 	}
-	return nil
+	return runtimeFailure{fmt.Errorf("tidy plan set %q: %q", res.PlanID, res.Status)}
 }
 
 func writeTidyPlanSetResult(w io.Writer, res planset.ApplyResult, structured bool) error {

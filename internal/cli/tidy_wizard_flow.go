@@ -82,11 +82,9 @@ func (terminalApplyStep) Confirm(h wizardHandoff) error {
 	if err != nil {
 		return fmt.Errorf("%s; the plan set %s is stored and nothing was applied", escFull(err.Error()), h.Set.PlanID)
 	}
-	err = runTidyApplyPlanSet(h.Cmd, h.Set.PlanID, h.Store, true, false, h.Receipt)
-	if cause := interruption(h.Run.ctx, h.Run.timeoutSet, h.Run.timeout); cause != nil {
-		return fmt.Errorf("%v; plan set %s is stored; inspect the apply result before retrying", cause, h.Set.PlanID)
-	}
-	return err
+	// The --timeout deadline bounds the analysis only: once the apply has run, its own result
+	// (and a Ctrl-C during it) is reported by runTidyApplyPlanSet, never "nothing was changed".
+	return runTidyApplyPlanSet(h.Cmd, h.Set.PlanID, h.Store, true, false, h.Receipt)
 }
 
 // tidyApplyStep is the handoff seam; every real apply still passes through planset.Apply.
