@@ -242,8 +242,135 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "risk": {
+                "const": "orange"
+              }
+            },
+            "required": [
+              "risk"
+            ]
+          },
+          "then": {
+            "properties": {
+              "destination": {
+                "minLength": 1
+              },
+              "effects": {
+                "const": [
+                  "remove-registration"
+                ]
+              },
+              "evidence_digest": {
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "gitdir": {
+                "minLength": 1
+              },
+              "name": {
+                "minLength": 1
+              },
+              "owner": {
+                "minLength": 1
+              },
+              "owner_source": {
+                "const": "task-record"
+              },
+              "proof": {
+                "const": "owned-missing-registration"
+              },
+              "reason": {
+                "const": "registration-prune-ready"
+              },
+              "repo": {
+                "minLength": 1
+              },
+              "risk_reasons": {
+                "const": [
+                  "owned-missing-registration"
+                ]
+              },
+              "scope": {
+                "enum": [
+                  "own",
+                  "other"
+                ]
+              },
+              "task": {
+                "minLength": 1
+              },
+              "verdict": {
+                "const": "safe"
+              }
+            },
+            "required": [
+              "risk_reasons"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "risk": {
+                "const": "red"
+              }
+            },
+            "required": [
+              "risk"
+            ]
+          },
+          "then": {
+            "properties": {
+              "risk_reasons": {
+                "const": [
+                  "not-judged"
+                ]
+              }
+            },
+            "required": [
+              "risk_reasons"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "risk": {
+                "const": "kept"
+              }
+            },
+            "required": [
+              "risk"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "risk_reasons"
+              ]
+            },
+            "properties": {
+              "reason": {
+                "enum": [
+                  "registration-prune-absence-unproven",
+                  "registration-prune-ownership-unproven"
+                ]
+              },
+              "verdict": {
+                "const": "retain"
+              }
+            }
+          }
         }
       ],
+      "dependentRequired": {
+        "risk_reasons": [
+          "risk"
+        ]
+      },
       "properties": {
         "destination": {
           "type": "string"
@@ -307,6 +434,26 @@
         "repo": {
           "type": "string"
         },
+        "risk": {
+          "description": "Owner-accepted native registration-prune display assessment (2026-10-27), never integration proof, selection or effect authorization. No green or yellow assessment.",
+          "enum": [
+            "orange",
+            "red",
+            "kept"
+          ]
+        },
+        "risk_reasons": {
+          "description": "Native display reason: owned-missing-registration for orange, not-judged for red; omitted for kept.",
+          "items": {
+            "enum": [
+              "owned-missing-registration",
+              "not-judged"
+            ]
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "type": "array"
+        },
         "scope": {
           "enum": [
             "own",
@@ -343,6 +490,40 @@
         "effects",
         "evidence_digest",
         "limitations"
+      ],
+      "type": "object"
+    },
+    "RegistrationPruneRiskCounts": {
+      "additionalProperties": false,
+      "description": "All observed registration-prune rows in the filtered view per display risk before output truncation; separate from selected effects, legacy candidate totals and summary.risk. Native assessments are never green or yellow.",
+      "properties": {
+        "green": {
+          "const": 0,
+          "type": "integer"
+        },
+        "kept": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "orange": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "red": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "yellow": {
+          "const": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "green",
+        "yellow",
+        "orange",
+        "red",
+        "kept"
       ],
       "type": "object"
     },
@@ -392,6 +573,9 @@
         "decision": {
           "minimum": 0,
           "type": "integer"
+        },
+        "registration_prunes": {
+          "$ref": "#/$defs/RegistrationPruneRiskCounts"
         },
         "retain": {
           "minimum": 0,

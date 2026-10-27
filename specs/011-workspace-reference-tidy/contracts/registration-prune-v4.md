@@ -1,34 +1,37 @@
-# Registration prune: proposed contract 4
+# Registration prune: contract 4
 
-Status: **PROPOSED / UNPUBLISHED**. Option B was decided by the owner on
-2026-10-25: a separate versioned operation with explicit dispatch, unchanged
+Status: **OWNER-ACCEPTED / UNPUBLISHED**. The owner accepted the contract-4
+interface on 2026-10-25 and its additive display-risk composition on 2026-10-27
+([decision record, PR #319](https://github.com/wstein/sourcesteward/pull/319)). Option B is a
+separate versioned operation with explicit dispatch, unchanged
 frozen tidy-overview v2 and tidy v3 bytes, no silent migration and rejection of
-unknown/old incompatible plans. The exact representation below needs independent
-CLEAR and explicit owner acceptance before planner/stored-plan implementation.
-No schema file is added, generated, frozen, published or enabled by this document.
+unknown/old incompatible plans. The expert planner, apply, restore and recovery
+decisions are already accepted.
+The 2026-10-27 amendment only specifies additive overview display fields/counts;
+it changes no product Go code and does not activate wizard selection or apply.
 
 ## Boundary and version domains
 
 The [narrow-prune contract](narrow-registration-prune.md) remains authoritative
 for one exact stw-owned locked registration, absence/ownership witnesses, quotas,
-no-follow protection, recovery before effects and restore limits. This proposal
+no-follow protection, recovery before effects and restore limits. This contract
 only assigns the interface and storage representation. Broad prune, unlocking,
 checkout deletion, reference cleanup and automatic repair remain excluded.
 
-Propose CLI **contract 4**, operation `registration-prune`. New result, overview,
+CLI **contract 4**, operation `registration-prune`. New result, overview,
 plan, journal, restore and history documents use integer `schema_version: 4`.
-Their proposed future schema files are `schemas/v4/tidy-overview.schema.json`
+Their schema files are `schemas/v4/tidy-overview.schema.json`
 and `schemas/v4/registration-prune.schema.json` (named definitions for each
-record). These files do not exist yet. Plan sets have their own version domain:
+record). These schemas exist; existence alone does not establish runtime acceptance.
+Plan sets have their own version domain:
 new manifest `schema_version: 2`, proposed `schemas/v2/tidy-plan-set.schema.json`.
 Do not confuse the frozen overview's directory v2 with its current JSON
-`schema_version: 1`. Existing schema files and their freeze digests stay intact.
+`schema_version: 1`. Frozen overview-v2/tidy-v3 schema files and their freeze digests stay intact.
 
 Default wizard/expert behavior stays on its current contract. Contract 4 is an
 explicit opt-in, not a new default. Old readers remain strict and unchanged.
-Future cross-artifact amendments in
-Specs 029 and 041 must adopt these proposed interfaces only after acceptance;
-this PR neither changes their current commands nor enables T012b.
+Wizard integration in Spec 041 remains subject to its T012b test-first tasks;
+this display amendment enables no command or effect. Existing expert behavior is unchanged.
 
 ## Complete impact and dispatch table
 
@@ -191,8 +194,50 @@ candidates and `registration_prunes`. A registration represented in the new arra
 from the legacy candidate array in overview 4, so no target is counted twice. The new overview
 `plan_id` is empty until save, then the full 64-hex manifest ID. Truncation or incomplete
 inventory never authorizes the omitted or uncertain rows. Contract-4 human wizard starts with no
-selection. Later T012b `all`/`--save` may select only safe rows through the new manifest; an
-old-contract stale row never becomes safe merely because this proposal exists.
+selection. Later T012b explicit human selection and agent own-scope `--save` may
+select only safe rows through the approved new manifest. Human Enter, `a` and default
+selection never take prune rows; an old-contract stale row stays retained.
+
+## Accepted overview display-risk amendment (2026-10-27)
+
+The owner accepted all three composition decisions in [PR #319](https://github.com/wstein/sourcesteward/pull/319).
+This section adds only optional presentation fields to the overview schema. The original
+16 required registration fields and every existing plan, manifest, journal, recovery,
+ID/digest encoding and version domain remain unchanged. No `pr` or `group` property is
+added to a registration row; online evidence adds nothing to its absence proof.
+
+- Optional `risk` is `orange`, `red` or `kept`, never `green` or `yellow`.
+- Optional `risk_reasons` is the singleton `owned-missing-registration` for orange,
+  the singleton `not-judged` for red, and omitted for kept. Reasons require a risk.
+- Orange requires complete native admission and a consistent safe row: exact native
+  proof, ready reason, only `remove-registration`, original task-record ownership,
+  nonempty identity/owner/task, full evidence digest and proven `own` or `other` scope.
+  Shape validation cannot replace that native proof or fresh planning.
+- Retained ownership/absence refusals are kept with their exact existing row reason.
+  Blocked, unknown, incomplete or contradictory evidence is red/not-judged and never
+  choosable. This red rule takes precedence over an ordinary retained refusal.
+  Legacy unproven stale rows remain kept. A conservative red display never grants a native capability.
+
+Optional `summary.registration_prunes` counts the whole observed registration view
+after filters and before output truncation; these are not selected-effect counts. It is a separate object with required nonnegative integer keys
+`green`, `yellow`, `orange`, `red`, `kept`; green and yellow are exactly zero. The existing
+`summary.safe`, `retain`, `decision` and `summary.risk` keep their legacy-candidate meaning.
+A renderer computes metadata-only groups independently; no new stored row group is needed.
+Directory and branch deletion counts exclude these registrations.
+
+Human selection remains explicit and subject to this contract's stricter owner/scope
+rules, never janitor owner-independent choosability. Agent selection remains proven
+own only; unknown ownership is never admitted, including by the literal word `unknown`.
+Enter, `a` and default answers select no prune row. The metadata-only consequence is
+shown separately from directories deleted for good: registration removal removes no
+user files or branches. Recovery is not prepared by an observation.
+
+Old documents without the optional annotations/counts still validate. Older strict
+readers may reject the newly annotated documents; do not silently strip fields,
+downgrade, migrate or reinterpret an old contract. This additive schema surface does
+not change frozen overview-v2/tidy-v3 definitions or publish/activate an implementation.
+The later Spec 044 T012c gate concerns the single typed-word receipt, not the accepted
+expert prune apply path. T012b wizard integration remains unimplemented by this amendment.
 
 ## Digest encodings and domains
 
