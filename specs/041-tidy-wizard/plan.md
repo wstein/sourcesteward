@@ -80,11 +80,22 @@ Remaining: T012b (deferred). T020 is done (the Spec 037 hint is `stw tidy`). T01
 
 ## T012b narrow registration extension
 
-Follow the [proposed amendment](spec.md#t012b-proposed-narrow-registration-amendment-2026-10-25)
-and Spec 011's narrow prune contract. Expert capability and the owner schema/interface
-decision precede T012b1–T012b4. The absence predicate is already defined, not an additional
-owner decision. Replace the real locked-missing `evidence-incomplete` / `!w.Prunable`
-classifier gate with that evidence. Add distinct one-registration grouping,
-strict identity hashing, explicit ordering and dispatch only after failing tests; no implicit
-branch leg or present-checkout retirement substitution. Preserve the current retained row
-until the final implementation PR and verify schema compatibility under the owner's choice.
+Follow the [accepted amendment](spec.md#t012b-proposed-narrow-registration-amendment-2026-10-25)
+and Spec 011's accepted contract 4. Expert capability and the interface/absence/recovery
+rules are already decided. The default legacy retained row stays separate from the merged
+explicit read-only native-prune source; do not forge integration proof or a branch leg.
+
+The owner accepted the display composition on 2026-10-27 ([PR #319](https://github.com/wstein/sourcesteward/pull/319)):
+complete native admission maps to orange, retained ownership/absence refusals to kept,
+and blocked/unknown/incomplete or contradictory evidence to red/not-judged. Add only optional
+row risk/reasons and separate metadata-only summary counts; no green/yellow, PR field,
+Enter/`a`/default selection or unknown-owner admission. Human choices retain the strict
+proven own/other scope gate; agents remain own only. Preserve existing row/hash/version
+semantics, old documents without risk and frozen v2/v3 bytes; strict older readers may
+reject new annotations, never silently downgrade them.
+
+After the artifact amendment merges, write failing product tests before the adapter and
+wizard changes. T012b3/T012b4 retain their existing manifest-2/order/dispatch/recovery
+requirements, with one registration per sub-plan and no implicit branch leg. T012c is the
+separate later receipt gate, not a new gate for the accepted expert prune apply path.
+This artifact work implements nothing and does not verify final T012b completion.
