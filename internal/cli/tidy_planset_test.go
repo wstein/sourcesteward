@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -80,11 +81,12 @@ func TestTidyApplyPlanIDWithYesAuthorizesAndReportsJSON(t *testing.T) {
 
 func TestTidyApplyConfirmsOnTheControllingTerminalNeverOnStdin(t *testing.T) {
 	got := fakeSet(t, okSet(), false, false)
+	setTerminalAnswers(t, "")
 	if _, err := runTidy(t, "codex 3f9c2a\n", "apply", setID, "--yes", "--state-dir", "/s"); err != nil {
 		t.Fatal(err)
 	}
 	confirm := (*got)[0].Confirm
-	if confirm == nil || reflect.ValueOf(confirm).Pointer() != reflect.ValueOf(owner.DevTTY).Pointer() {
+	if confirm == nil || reflect.ValueOf(confirm).Pointer() != reflect.ValueOf(tidyConfirmOpener).Pointer() {
 		t.Fatal("the typed confirmation must be read from /dev/tty (owner.DevTTY), not from stdin")
 	}
 }
@@ -122,18 +124,19 @@ func TestTidyApplyWithoutYesAndWithoutTerminalIsNotAuthorized(t *testing.T) {
 func TestTidyApplyPromptOnATerminal(t *testing.T) {
 	for answer, want := range map[string]bool{"y\n": true, "n\n": false, "\n": false, "yes\n": false, "Y\n": false, "": false} {
 		got := fakeSet(t, okSet(), true, true)
-		out, err := runTidy(t, answer, "apply", setID, "--state-dir", "/s")
+		tty := setTerminalAnswers(t, answer)
+		out, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
 		if want {
 			if err != nil || len(*got) != 1 || !(*got)[0].Authorize || (*got)[0].Mode.Mode != owner.ModeHuman {
 				t.Errorf("%q: err %v calls %+v", answer, err, *got)
 			}
-			if !strings.Contains(out, "Apply plan "+setID+" (2 sub-plans, 3 items)? [y/N]") {
+			if !strings.Contains(tty.String(), "Apply plan "+setID+" (2 sub-plans, 3 items)? [y/N]") || strings.Contains(out, "[y/N]") {
 				t.Errorf("prompt: %q", out)
 			}
 			continue
 		}
 		var failure runtimeFailure
-		if !errors.As(err, &failure) || len(*got) != 0 {
+		if !errors.As(err, &failure) || !strings.Contains(err.Error(), "was not authorized; nothing was changed") || len(*got) != 0 {
 			t.Errorf("%q must cancel with exit 1 and apply nothing: err %v calls %d", answer, err, len(*got))
 		}
 	}
@@ -196,5 +199,45 @@ func TestTidyApplyLegacyFormIsUnchanged(t *testing.T) {
 	cmd.SetArgs([]string{"apply", "--plan", "p", "--state-dir", "/s", "--authorize"})
 	if err := cmd.Execute(); err != nil || !called || len(*got) != 0 {
 		t.Fatalf("legacy apply: %v called %t set calls %d", err, called, len(*got))
+	}
+}
+
+func TestTidySeparateApplyNeedsControllingTerminal(t *testing.T) {
+	got := fakeSet(t, okSet(), true, true)
+	old := tidyConfirmOpener
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return nil, owner.ErrNoTerminal }
+	t.Cleanup(func() { tidyConfirmOpener = old })
+	_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
+	var failure runtimeFailure
+	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "no controlling terminal") || !strings.Contains(err.Error(), "apply from a terminal") || len(*got) != 0 {
+		t.Fatalf("%v calls=%v", err, *got)
+	}
+}
+
+// terminalAnswers keeps all questions and answers on the same terminal handle. Opening it for
+// the availability check consumes no answer; closing a handle leaves later answers available.
+type terminalAnswers struct {
+	io.Reader
+	bytes.Buffer
+	opens int
+}
+
+func (t *terminalAnswers) Read(p []byte) (int, error) { return t.Reader.Read(p) }
+func (t *terminalAnswers) Close() error               { return nil }
+func setTerminalAnswers(t *testing.T, answers string) *terminalAnswers {
+	t.Helper()
+	tty := &terminalAnswers{Reader: strings.NewReader(answers)}
+	old := tidyConfirmOpener
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { tty.opens++; return tty, nil }
+	t.Cleanup(func() { tidyConfirmOpener = old })
+	return tty
+}
+
+func TestTidySeparateApplyTerminalYesIgnoresStdinNo(t *testing.T) {
+	got := fakeSet(t, okSet(), true, true)
+	tty := setTerminalAnswers(t, "y\n")
+	_, err := runTidy(t, "n\n", "apply", setID, "--state-dir", "/s")
+	if err != nil || len(*got) != 1 || !(*got)[0].Authorize || strings.Count(tty.String(), "Apply plan ") != 1 || tty.opens != 1 {
+		t.Fatalf("err=%v calls=%v tty=%q opens=%d", err, *got, tty.String(), tty.opens)
 	}
 }
