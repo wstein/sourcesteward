@@ -19,6 +19,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
@@ -347,7 +348,7 @@ func Text(d Document, opts TextOptions) string {
 			failed++
 		}
 	}
-	fmt.Fprintf(&b, "Analysed %d repositories (%d skipped, %d with errors)\n", len(d.Repositories), skipped, failed)
+	fmt.Fprintf(&b, "Analysed %s (%d skipped, %d with errors)\n", pluralize.Count(len(d.Repositories), "repository", "repositories"), skipped, failed)
 	numbers := map[string]int{}
 	for _, n := range Numbered(d) {
 		numbers[n.Candidate.ID] = n.Number
@@ -395,7 +396,7 @@ func Text(d Document, opts TextOptions) string {
 	}
 	fmt.Fprintf(&b, "\nsummary: %d safe (%d own, %d other), %d retain", d.Summary.Safe, own, other, d.Summary.Retain)
 	if d.Summary.Decision > 0 {
-		fmt.Fprintf(&b, ", %d decision", d.Summary.Decision)
+		fmt.Fprintf(&b, ", %s", pluralize.Count(d.Summary.Decision, "decision", "decisions"))
 	}
 	b.WriteString("\n")
 	for _, n := range d.runNotices {

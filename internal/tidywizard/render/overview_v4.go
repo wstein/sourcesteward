@@ -10,6 +10,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
@@ -250,7 +251,7 @@ rows:
 			}
 		}
 	}
-	w.line("\nlegacy candidates: %d safe, %d retain, %d decision", d.Summary.Safe, d.Summary.Retain, d.Summary.Decision)
+	w.line("\nlegacy candidates: %d safe, %d retain, %s", d.Summary.Safe, d.Summary.Retain, pluralize.Count(d.Summary.Decision, "decision", "decisions"))
 	counts := map[tidywizard.RegistrationPruneVerdict]int{}
 	for _, p := range d.RegistrationPrunes {
 		counts[p.Verdict]++

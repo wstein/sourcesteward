@@ -22,6 +22,7 @@ import (
 	"strings"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 )
 
 // The verdicts of choosable rows.
@@ -208,7 +209,7 @@ func askOwners(in *bufio.Reader, out io.Writer, items []Item) ([]Item, error) {
 	sort.Strings(labels)
 	var chosen []Item
 	for _, l := range labels {
-		yes, err := YesNo(in, out, fmt.Sprintf("Take the %d safe item(s) of owner %s?", len(byOwner[l]), sanitize(l)), true)
+		yes, err := YesNo(in, out, fmt.Sprintf("Take the %s of owner %s?", pluralize.Count(len(byOwner[l]), "safe item", "safe items"), sanitize(l)), true)
 		if err != nil {
 			return nil, err
 		}
