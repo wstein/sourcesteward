@@ -87,7 +87,7 @@ func TestTidyApplyConfirmsOnTheControllingTerminalNeverOnStdin(t *testing.T) {
 	}
 	confirm := (*got)[0].Confirm
 	if confirm == nil || reflect.ValueOf(confirm).Pointer() != reflect.ValueOf(tidyConfirmOpener).Pointer() {
-		t.Fatal("the typed confirmation must be read from /dev/tty (owner.DevTTY), not from stdin")
+		t.Fatal("the Confirm of the apply request must be the opener of the tidy command (TestProductionTerminalOpenerIsTheControllingTerminal pins that it is owner.DevTTY)")
 	}
 }
 
