@@ -111,7 +111,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 			return err
 		}
 		if len(args) == 1 {
-			return runTidyApplyPlanSet(cmd, args[0], applyOptions.StateDir, applyYes, applyStructured)
+			return runTidyApplyPlanSet(cmd, args[0], applyOptions.StateDir, applyYes, applyStructured, nil)
 		}
 		if cmd.Flags().Changed("contract") {
 			if applyContract == "4" {
