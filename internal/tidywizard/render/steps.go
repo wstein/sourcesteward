@@ -21,17 +21,6 @@ func (d Document) AllCandidates() []tidywizard.Candidate {
 	return append([]tidywizard.Candidate(nil), d.all...)
 }
 
-// CandidateByID finds a candidate of the analysis, or nil.
-func (d Document) CandidateByID(id string) *tidywizard.Candidate {
-	for i := range d.all {
-		if d.all[i].ID == id {
-			c := d.all[i]
-			return &c
-		}
-	}
-	return nil
-}
-
 // RiskReasons are the risk words of a candidate (the codes of --json and of `d N`).
 func (d Document) RiskReasons(id string) []string {
 	return append([]string(nil), d.assessed[id].Reasons...)
@@ -72,9 +61,17 @@ func (g OverviewGroup) PlaceText() string { return g.place() }
 func (d Document) StepLines(g OverviewGroup) []string {
 	e := untrusted.Esc
 	var lines []string
-	owners := make([]string, 0, len(g.owners))
-	for _, o := range g.owners {
-		owners = append(owners, fmt.Sprintf("%s (%d)", e(o.label), o.n))
+	owners := make([]string, 0, 4)
+	for i, o := range g.owners {
+		if i == 3 {
+			owners = append(owners, fmt.Sprintf("and %d more", len(g.owners)-3))
+			break
+		}
+		label := e(o.label)
+		if rs := []rune(label); len(rs) > 24 {
+			label = string(rs[:21]) + "..."
+		}
+		owners = append(owners, fmt.Sprintf("%s (%d)", label, o.n))
 	}
 	lines = append(lines, "  Owner     "+strings.Join(owners, ", "))
 

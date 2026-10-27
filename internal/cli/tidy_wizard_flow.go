@@ -74,15 +74,6 @@ type janitorPlan struct {
 	kept   int
 }
 
-// rows is every offered row in number order.
-func (p janitorPlan) rows() []prompt.Row {
-	var out []prompt.Row
-	for _, g := range p.groups {
-		out = append(out, g.Rows...)
-	}
-	return out
-}
-
 // buildJanitorPlan turns the groups of the overview into the steps of the wizard (Spec 044 FR-001,
 // FR-003). A row is choosable iff its verdict is safe or decision and its level is green, yellow
 // or orange, whoever owns it; red and kept rows are in no group and have no number. The numbers
@@ -95,7 +86,7 @@ func buildJanitorPlan(doc render.Document) janitorPlan {
 	plan := janitorPlan{kept: doc.KeptRows()}
 	n := 0
 	for _, g := range render.Groups(doc) {
-		pg := prompt.Group{Key: g.Key, Title: g.Label(), Place: g.PlaceText(), Level: g.Level, Counts: g.Counts, Lines: doc.StepLines(g)}
+		pg := prompt.Group{Title: g.Label(), Place: g.PlaceText(), Level: g.Level, Counts: g.Counts, Lines: doc.StepLines(g)}
 		pg.NounOne, pg.NounMany = g.Noun()
 		for _, r := range g.Rows {
 			c, ok := byID[r.ID]
@@ -182,13 +173,16 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 	}
 	if !foreign {
 		// An own-only selection has no typed word; the summary line is followed by the store question.
-		yes, err := prompt.YesNo(in, out, "Store this plan set?", true)
+		yes, err := prompt.YesNoQuit(in, out, "Store this plan set?", true)
 		if cause := interruptedWizard(run, ""); cause != nil {
 			return runtimeFailure{cause}
 		}
 		switch {
 		case errors.Is(err, prompt.ErrEndOfInput):
 			fmt.Fprintln(out, "\nNothing was stored.")
+			return exit()
+		case errors.Is(err, prompt.ErrQuit):
+			fmt.Fprintln(out, "\nQuit; nothing was stored.")
 			return exit()
 		case err != nil:
 			return runtimeFailure{errors.New("too many invalid answers at the store question; nothing was stored")}

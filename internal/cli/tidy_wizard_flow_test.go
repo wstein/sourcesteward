@@ -16,6 +16,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
+	"github.com/wstein/sourcesteward/internal/tidywizard/prompt"
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
 )
 
@@ -65,6 +66,14 @@ func (j *janitor) doc() render.Document {
 }
 
 func (j *janitor) plan() janitorPlan { return buildJanitorPlan(j.doc()) }
+
+func (p janitorPlan) rows() []prompt.Row {
+	var out []prompt.Row
+	for _, g := range p.groups {
+		out = append(out, g.Rows...)
+	}
+	return out
+}
 
 // number is the number the wizard gives to a candidate, or 0 when it is not offered.
 func (j *janitor) number(id string) int {
@@ -232,16 +241,23 @@ func TestJanitorDecisionRowOnlyByItsNumber(t *testing.T) {
 	if len(tty.prompts) != 1 || !strings.Contains(tty.prompts[0], "Foreign items (unknown)") {
 		t.Errorf("prompts %q", tty.prompts)
 	}
-	// `y` on the group that holds it, `w`, `a` and `o:unknown` never take it.
+	// `w`, `a`, `b` and `o:unknown` take their rows and never the decision row: a set is stored and
+	// the lock is not in it.
 	for _, line := range []string{"w", "a", "o:unknown", "b"} {
 		j2 := newJanitor(t)
 		out, _, err = j2.run("\n"+line+"\ns\ns\ns\ns\ns\n\n", rightWord)
-		for _, s := range storedSets(t, j2.prep.PlanStore) {
-			if strings.Contains(s, "lock") {
-				t.Errorf("%s stored %v", line, s)
+		if err != nil {
+			t.Fatalf("%s: %v\n%s", line, err, out)
+		}
+		ids := j2.storedIDs(t)
+		if len(ids) == 0 {
+			t.Errorf("%s: nothing stored", line)
+		}
+		for _, id := range ids {
+			if id == "worktree:b:lock" {
+				t.Errorf("%s took the decision row", line)
 			}
 		}
-		_ = err
 	}
 }
 
@@ -498,5 +514,27 @@ func TestJanitorPlanGroupsCoverTheChoosableRowsOnce(t *testing.T) {
 	}
 	if n != 7 || len(p.rows()) != 7 {
 		t.Errorf("%d rows", n)
+	}
+}
+
+// `q` quits at the store question too (Spec 044 keys table), and nothing is stored.
+func TestJanitorQuitAtTheStoreQuestionAndAtTheDecisionConfirmation(t *testing.T) {
+	j := newJanitor(t)
+	var own []tidywizard.Candidate
+	for _, c := range j.res.Candidates {
+		if c.Scope == owner.ScopeOwn && c.Verdict == tidywizard.VerdictSafe {
+			own = append(own, c)
+		}
+	}
+	j.res.Candidates = own
+	out, _, err := j.run("a\n\nq\n", rightWord)
+	if err != nil || len(storedSets(t, j.prep.PlanStore)) != 0 || !strings.Contains(out, "Quit; nothing was stored.") {
+		t.Errorf("store question: %v\n%s", err, out)
+	}
+	j = newJanitor(t)
+	n := j.number("worktree:b:lock")
+	out, _, err = j.run("\n"+fmt.Sprint(n)+"\nq\n", rightWord)
+	if err != nil || len(storedSets(t, j.prep.PlanStore)) != 0 || !strings.Contains(out, "Quit; nothing was stored.") {
+		t.Errorf("decision confirmation: %v\n%s", err, out)
 	}
 }
