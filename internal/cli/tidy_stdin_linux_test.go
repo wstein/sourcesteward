@@ -107,7 +107,7 @@ func TestBareTidyAsksOnARealTerminalThroughRunWithStdin(t *testing.T) {
 	master, tty := testPTYPair(t)
 	i := newInteractive(t, true, true)
 	terminalMaster := terminalPTY(t)
-	if _, err := terminalMaster.WriteString("y\n"); err != nil {
+	if _, err := terminalMaster.WriteString("y\nn\n"); err != nil {
 		t.Fatal(err)
 	}
 	tidyTerminalFacts = owner.TerminalFacts // the real descriptors, not the stub
