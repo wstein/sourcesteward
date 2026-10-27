@@ -10,7 +10,6 @@ foreman decides them ([Open questions](#open-questions)).
 
 > **Amended by [Spec 044](../044-tidy-janitor-wizard/spec.md) (2026-10-26) for the human wizard only:** The amendment table of that specification lists every text that changes; this specification is otherwise unchanged.
 
-
 ## Problem
 
 Today the owner cannot operate `stw tidy`. `stw tidy plan` works on **one repository** and demands a bundle of typed inputs:

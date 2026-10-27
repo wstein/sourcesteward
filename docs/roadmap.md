@@ -54,7 +54,7 @@ and durably records native recovery before changes. Owned retirement has distinc
 and exact-path file effects, full fresh disk proof and versioned v2 results. Git registration-only
 removal of a present worktree retains unsupported; jj forget preserves files. Read the
 [tidy guide](tidy.md) and [Spec 011 evidence](../specs/011-workspace-reference-tidy/verification.md).
-`stw tidy` without arguments is the workspace-wide wizard of [Spec 041](../specs/041-tidy-wizard/spec.md): read-only overview of all repositories and owners, a stored plan set and `stw tidy apply PLAN-ID`; it is implemented with an unpublished schema and its plan-only dogfood dry run (T021) is recorded in the [evidence](../specs/041-tidy-wizard/evidence/T021.md). [Spec 044](../specs/044-tidy-janitor-wizard/spec.md) turns the human path into a janitor wizard (risk levels, online evidence by default, a grouped overview and one step per group); its phase 1 is in progress and the feature stays `planned` until it ships.
+`stw tidy` without arguments is the workspace-wide wizard of [Spec 041](../specs/041-tidy-wizard/spec.md): read-only overview of all repositories and owners, a stored plan set and `stw tidy apply PLAN-ID`; it is implemented with an unpublished schema and its plan-only dogfood dry run (T021) is recorded in the [evidence](../specs/041-tidy-wizard/evidence/T021.md). [Spec 044](../specs/044-tidy-janitor-wizard/spec.md) turns the human path into a janitor wizard (risk levels, online evidence by default, a grouped overview and one step per group); phase 1 is in progress; the feature stays `planned` until it ships.
 External races/ABA remain sampled; recovery is bounded manual evidence, not automatic restoration.
 
 ## Worktrees, jj and GitButler
