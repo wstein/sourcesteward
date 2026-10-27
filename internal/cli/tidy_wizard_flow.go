@@ -16,7 +16,6 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 	"github.com/wstein/sourcesteward/internal/tidywizard/prompt"
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
-	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 )
 
 // tidyTerminalWidth is the width of the terminal the wizard writes to, in columns; zero when it is
@@ -104,7 +103,8 @@ func buildJanitorPlan(doc render.Document) janitorPlan {
 				continue
 			}
 			n++
-			pg.Rows = append(pg.Rows, janitorRow(c, r.Risk.Level, n, doc))
+			pg.Rows = append(pg.Rows, janitorRow(c, n, doc))
+			pg.Rows[len(pg.Rows)-1].Level = r.Risk.Level
 		}
 		if len(pg.Rows) > 0 {
 			plan.groups = append(plan.groups, pg)
@@ -113,9 +113,10 @@ func buildJanitorPlan(doc render.Document) janitorPlan {
 	return plan
 }
 
-func janitorRow(c tidywizard.Candidate, level risk.Level, number int, doc render.Document) prompt.Row {
+// janitorRow is the row of a candidate; the caller sets its Level (the CLI imports no risk package).
+func janitorRow(c tidywizard.Candidate, number int, doc render.Document) prompt.Row {
 	row := prompt.Row{
-		Number: number, ID: c.ID, Verdict: string(c.Verdict), Level: level, Kind: string(c.Kind), Repo: c.Repo, Path: c.Path, Branch: c.Branch,
+		Number: number, ID: c.ID, Verdict: string(c.Verdict), Kind: string(c.Kind), Repo: c.Repo, Path: c.Path, Branch: c.Branch,
 		Owner: c.Owner, OwnerShown: render.OwnerLabel(c),
 	}
 	if c.Scope != owner.ScopeOwn {
@@ -135,7 +136,7 @@ func janitorRow(c tidywizard.Candidate, level risk.Level, number int, doc render
 	if c.Evidence != "" {
 		detail += "; evidence " + c.Evidence
 	}
-	detail += "; owner " + render.OwnerLabel(c) + " (" + string(c.OwnerSource) + ", scope " + string(c.Scope) + "); risk " + string(level)
+	detail += "; owner " + render.OwnerLabel(c) + " (" + string(c.OwnerSource) + ", scope " + string(c.Scope) + "); risk " + string(doc.RiskLevel(c.ID))
 	if reasons := doc.RiskReasons(c.ID); len(reasons) > 0 {
 		detail += " (" + strings.Join(reasons, ", ") + ")"
 	}

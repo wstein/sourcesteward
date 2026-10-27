@@ -37,6 +37,9 @@ func (d Document) RiskReasons(id string) []string {
 	return append([]string(nil), d.assessed[id].Reasons...)
 }
 
+// RiskLevel is the risk level of a candidate (green, yellow, orange, red or kept).
+func (d Document) RiskLevel(id string) risk.Level { return d.assessed[id].Level }
+
 // KeptRows is how many rows are kept or red: the rows no group offers for deletion.
 func (d Document) KeptRows() int {
 	n := 0
