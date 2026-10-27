@@ -81,7 +81,11 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
 	fmt.Fprintf(out, "\nStored plan set %s (%s). Nothing has been changed.\n", set.PlanID, summarize(set, res.Candidates))
-	yes, err := tidyTerminalQuestion(fmt.Sprintf("Apply it now? Run: stw tidy apply %s (or answer y here)", set.PlanID), false)
+	question := fmt.Sprintf("Apply it now? Run: stw tidy apply %s (or answer y here)", set.PlanID)
+	if receipt != nil {
+		question += "; the words typed above cover this plan"
+	}
+	yes, err := tidyTerminalQuestion(question, false)
 	if cause := interruptedWizard(run, set.PlanID); cause != nil {
 		return runtimeFailure{cause}
 	}
