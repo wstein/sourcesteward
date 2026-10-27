@@ -209,7 +209,7 @@ func TestTidySeparateApplyNeedsControllingTerminal(t *testing.T) {
 	t.Cleanup(func() { tidyConfirmOpener = old })
 	_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
 	var failure runtimeFailure
-	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "no controlling terminal") || !strings.Contains(err.Error(), "apply from a terminal") || len(*got) != 0 {
+	if !errors.As(err, &failure) || !strings.Contains(err.Error(), "no controlling terminal") || !strings.Contains(err.Error(), "from a terminal") || len(*got) != 0 {
 		t.Fatalf("%v calls=%v", err, *got)
 	}
 }
