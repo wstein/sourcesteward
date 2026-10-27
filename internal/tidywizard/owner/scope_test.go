@@ -3,6 +3,8 @@
 package owner
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"reflect"
 	"testing"
@@ -163,5 +165,31 @@ func TestAuthorizedScopesArePartOfThePlanID(t *testing.T) {
 	changed.Selected = []string{"s1"}
 	if PlanID(changed) == id {
 		t.Fatal("selection is not part of the plan id")
+	}
+}
+
+func TestPlanDigestPreservesCanonicalBytesAndPlanIDPrefix(t *testing.T) {
+	canonical := `{"sub_plans":["p1","p2"],"derived":[],"selected":["s1","s2"],"authorized_scopes":["other","unknown"],"mode":{"mode":"human","stdin_tty":false,"stdout_tty":false,"markers":["A","B"],"mine":false,"by_owner":["a","b"],"caller":"","caller_source":""}}`
+	sum := sha256.Sum256([]byte(canonical))
+	want := hex.EncodeToString(sum[:])
+	content := PlanContent{
+		SubPlans: []string{"p2", "p1"}, Selected: []string{"s2", "s1"},
+		AuthorizedScopes: []Scope{ScopeUnknown, ScopeOther},
+		Mode:             Evidence{Mode: ModeHuman, Markers: []string{"B", "A"}, ByOwner: []string{"b", "a"}},
+	}
+	if got := PlanDigest(content); got != want {
+		t.Fatalf("full canonical digest = %q, want %q", got, want)
+	}
+	if got := PlanID(content); got != want[:12] {
+		t.Fatalf("plan id changed: %q, want %q", got, want[:12])
+	}
+	if got := PlanDigest(PlanContent{Mode: Evidence{Mode: ModeHuman}}); got != PlanDigest(PlanContent{
+		SubPlans: []string{}, Selected: []string{}, Derived: []derive.Derived{}, AuthorizedScopes: []Scope{},
+		Mode: Evidence{Mode: ModeHuman, Markers: []string{}, ByOwner: []string{}},
+	}) {
+		t.Fatal("nil and empty content give different full digests")
+	}
+	if content.SubPlans[0] != "p2" || content.Mode.Markers[0] != "B" || content.AuthorizedScopes[0] != ScopeUnknown {
+		t.Fatal("canonicalization mutated caller slices")
 	}
 }
