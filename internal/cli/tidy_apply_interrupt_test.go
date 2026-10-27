@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
 )
@@ -202,5 +203,58 @@ func TestSeparateApplyWithoutTerminalDoesNotSuggestSavingAgain(t *testing.T) {
 	_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
 	if err == nil || strings.Contains(err.Error(), "plan --save") || !strings.Contains(err.Error(), "from a terminal") || !strings.Contains(err.Error(), "stw tidy apply "+setID) || len(*got) != 0 {
 		t.Fatalf("%v calls=%v", err, *got)
+	}
+}
+
+// The --rows apply question says that typed words already cover the plan, like the janitor one;
+// with no typed words (own rows only) it keeps the Spec 041 text.
+func TestRowsApplyQuestionSaysWhenTheTypedWordsCoverThePlan(t *testing.T) {
+	for name, tc := range map[string]struct {
+		rows  string
+		cover bool
+	}{"foreign row": {"1,3\n", true}, "own rows only": {"1\n", false}} {
+		t.Run(name, func(t *testing.T) {
+			j := newJanitor(t)
+			_, tty, err := j.run(tc.rows, func(q string) string {
+				if strings.Contains(q, "Apply it now?") {
+					return "n"
+				}
+				return rightWord(q)
+			}, "--rows")
+			if err != nil {
+				t.Fatal(err)
+			}
+			question := ""
+			for _, q := range tty.prompts {
+				if strings.Contains(q, "Apply it now?") {
+					question = q
+				}
+			}
+			if question == "" || strings.Contains(question, "the words typed above cover this plan") != tc.cover {
+				t.Fatalf("cover=%v question=%q", tc.cover, question)
+			}
+		})
+	}
+}
+
+// The stored-plan summary agrees in number (0, 1 and 2 of each unit).
+func TestSummarizeAgreesInNumber(t *testing.T) {
+	cands := []tidywizard.Candidate{
+		{ID: "a", Repo: "r1", Effects: []string{"x"}},
+		{ID: "b", Repo: "r2", Effects: []string{"x", "y"}},
+	}
+	item := func(id string) planset.Item { return planset.Item{ID: id} }
+	for name, tc := range map[string]struct {
+		items []planset.Item
+		want  string
+	}{
+		"none":     {nil, "0 effects in 0 repositories"},
+		"one":      {[]planset.Item{item("a")}, "1 effect in 1 repository"},
+		"two":      {[]planset.Item{item("a"), item("b")}, "3 effects in 2 repositories"},
+		"two in 1": {[]planset.Item{item("b")}, "2 effects in 1 repository"},
+	} {
+		if got := summarize(planset.Set{Items: tc.items}, cands); got != tc.want {
+			t.Errorf("%s: %q want %q", name, got, tc.want)
+		}
 	}
 }
