@@ -2,6 +2,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	"github.com/wstein/sourcesteward/internal/tidywizard/prompt"
 )
 
 // docSession is one session of the janitor wizard that docs/tidy.md shows. The sessions run on the
@@ -126,5 +128,9 @@ func TestTidyDocsShowTheJanitorSessions(t *testing.T) {
 				t.Errorf("docs/tidy.md does not contain the typed prompts of the session %q:\n%s", s.name, got)
 			}
 		}
+	}
+	// The one number of the prose that the sessions do not show is pinned to the code.
+	if want := fmt.Sprintf("lines over %d bytes", prompt.MaxSelectionBytes); !strings.Contains(doc, want) {
+		t.Errorf("docs/tidy.md does not say %q", want)
 	}
 }
