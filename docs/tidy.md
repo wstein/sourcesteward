@@ -56,7 +56,7 @@ Stored plan set 3f9c2a7e41b8 (5 effects in 2 repositories). Nothing has been cha
 Apply it now? Run: stw tidy apply 3f9c2a7e41b8 (or answer y here) [y/N]:
 ```
 
-The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs` (the answers `a` and `n` are typed and not echoed; the plan id is the first 12 hex characters of a SHA-256 over the plan content and is shown here as `3f9c2a7e41b8` so the sample stays stable).
+The sample is the real output of the wizard on the fixture of `TestTidyExampleMatchesTheDocs`, which runs it with `--rows` (the row view and question of Spec 041; the janitor steps are described below, and the label `$ stw tidy` is kept so the sample matches Spec 041); the answers `a` and `n` are typed and not echoed; the plan id is the first 12 hex characters of a SHA-256 over the plan content and is shown here as `3f9c2a7e41b8` so the sample stays stable.
 
 **Reading the summary.** `summary: N safe (A own, B other)` splits the safe rows by scope: `A` counts scope `own`, and `B` counts every other safe row, so `B` includes the rows of scope `unknown` as well as those of scope `other`; the sample above has one `other` and no `unknown` safe row. In agent mode only an item owned by a task record is `own`: a branch or worktree that merely follows the naming convention, such as `claude/*`, shows `owner claude (path-convention) [unknown]` even when the caller is `claude`, appears under `owner unknown`, is counted in `B`, is refused for an agent apply (`scope-not-authorized`) and needs the typed confirmation of a human at a terminal. The summary does not number `unknown` rows separately; they are listed under the heading `owner unknown`, and `--json` gives each candidate's `scope`.
 
@@ -186,14 +186,290 @@ named, escaped, instead of being left out. The rows themselves are shown on requ
 
 **`--rows`** prints the row view of Spec 041, byte for byte as before (one line per candidate with the codes, grouped by owner, at most 10 rows per
 repository in each owner group; `--json` lists every candidate). It is a wizard-layer flag (not accepted with a `PATH` or an expert flag, exit 2) and
-changes nothing in `--json`. In this version a person on a terminal who runs bare `stw tidy` still chooses by the numbers of the row view; the
-grouped steps of Spec 044 are not implemented yet.
+changes nothing in `--json`. A person on a terminal who runs bare `stw tidy` without `--rows` goes through the group steps
+([The janitor steps](#the-janitor-steps-spec-044)); with `--rows` the numbered question of Spec 041 stays.
 
 **JSON.** The `tidy-overview` document gains optional members, present whenever the command knows the time of the run (`stw tidy plan --json`
 and `stw tidy --json` always do): each candidate has `risk` (`green`, `yellow`, `orange`, `red` or `kept`), `risk_reasons[]` (stable words such as
 `proof-equivalent` or `not-integrated`; absent for a kept row), `group` (an opaque key shared by the rows of one group, only for green, yellow and
-orange rows) and `pr` (the number of a pull request of the repository, merged into the base, whose head is the tip; only the human wizard reads it, online by default, so it is absent from `--offline` runs, `stw tidy plan` and `--json`, and for a tip that was not asked or whose answer was unknown or closed without a merge). In this version no command prints the document of a human run (the human wizard shows the row view), so `pr` appears in no output yet; it is carried for the group steps, and `summary.risk` counts the
+orange rows) and `pr` (the number of a pull request of the repository, merged into the base, whose head is the tip; only the human wizard reads it, online by default, so it is absent from `--offline` runs, `stw tidy plan` and `--json`, and for a tip that was not asked or whose answer was unknown or closed without a merge). No command prints the document of a human run (the human wizard shows the grouped steps, not the document), so `pr` appears in no output; its effect is the green level `pr-merged-head`, and `summary.risk` counts the
 candidates per level. The existing members, their values and the order of the candidates are unchanged.
+
+### The janitor steps (Spec 044)
+
+Bare `stw tidy` on a terminal, without `--rows`, walks the groups of the overview one step at a time. This is Spec 041 human mode: stdin and stdout are terminals, no agent marker is in the environment and `--mine` is not given. Agent runs, `stw tidy plan`, `--json`, `--save` and `stw tidy apply` are not changed by anything in this section. The steps only build a selection: a selection applies nothing, and the wizard stores a plan set of it only after the final summary. If no group has a row that can be chosen, no question is asked, as the overview says (`Nothing can be cleaned` or `Nothing to clean.`) and the exit code is 0.
+
+**What changes against Spec 041.** This is the human-path list of the amendment table of [Spec 044](../specs/044-tidy-janitor-wizard/spec.md#amendments-to-spec-041-and-the-online-contract); the specification has it line by line against Spec 041.
+
+- Who can be chosen: any `safe` row of any owner whose level is green, yellow or orange, and a `decision` row by its own number only. Spec 041 let `a` take the rows of scope `own` only. The owner (`codex`, `hint NAME`, `unknown`) is shown as information and feeds the level; it does not decide what you may choose.
+- Red and kept rows have no number and match no selector, so no input can choose them.
+- `a` takes every green row of every owner. It never takes a yellow, orange or `decision` row.
+- Enter takes a green group and skips a yellow or orange group (Spec 041 had "default none"). Every question that stores, applies or deletes keeps the default no.
+- The steps replace the single question `Apply which?` and the owner question; they are followed by one final summary whose last line says how many directories are deleted for good.
+- A selection that holds no row of another owner has no typed word, so the wizard asks `Store this plan set? [y/N/q]` instead (new).
+- The first screen is the grouped overview and the retain table described above; `--rows` keeps the Spec 041 row view and its question `Apply which?` (below).
+- The human wizard reads GitHub by default and `--offline` turns that off (see **Online reads** above).
+- Unchanged: the proofs, the plan id, the stale checks, the typed words and their text, the `stw tidy apply` path and the exit codes 0, 1 and 2.
+
+**A session.** The sample is the real output of the wizard on the fixture of `TestTidyDocsShowTheJanitorSessions` (`internal/cli/tidy_wizard_docs_test.go`), which fails when this text drifts: two repositories, nine candidates, four groups. The answers are typed and not echoed, so the output after a question continues on the same line; the plan id (the first 12 hex characters of a SHA-256 over the plan content) is shown as `3f9c2a7e41b8` and the state directory as `/state` so the sample stays stable. Paths such as `/ws` and `/w` belong to the fixture.
+
+Answers, in order: Enter, Enter, Enter, Enter, `l`, `d 6`, `7`, `s`, Enter.
+
+```text
+Workspace /ws   2 repositories analyzed
+Derived:   workspace /ws (discovery), remote:a origin (origin), remote:b origin (origin), online default (human wizard)
+Mode:      human (stdin tty, stdout tty, no agent marker)
+
+Can be cleaned (7 of 9 candidates in 4 groups)                        risk
+  1  2 branches     in a           reversible, claude and codex       green
+  2  1 directory    other in /tmp  files deleted, codex               green
+  3  1 branch       in b           reversible, hint Werner Stein      yellow
+  4  3 directories  in /w          files deleted, unknown and claude  orange  (1 green, 2 orange)
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
+      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
+
+Kept (2): nothing here is offered for deletion
+    1 may hold unique work (red): not merged, uncommitted or untracked files, not judged
+    1 kept for another reason (record missing, branch in use, recently active, ...)
+The rows with their codes: stw tidy --rows (10 per repository and owner)   Every row: stw tidy --json
+
+Kept: 2 candidates. Nothing here is offered for deletion.
+  count  level  why                                        what to do
+      1  kept   main checkout of a repository              never offered
+      1  RED    not merged: it has commits the base lacks  nothing is deleted; review: stw tidy plan REPO --contract 3 --base BASE --report-dir DIR
+Rows with their codes: stw tidy --rows (10 per repository and owner); every row: stw tidy --json
+Continue? [Enter] step through the groups  [a] take all green  [q] quit:
+Step 1 of 4   2 branches in a   risk green
+  Owner     claude (1), codex (1)
+  Evidence  all of its work is already on the base branch (2)
+  Effect    2 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why green  provably on the base branch
+      1  green   claude/old  a
+      2  green   codex/old  a
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = take):
+Step 2 of 4   1 directory other in /tmp   risk green
+  Owner     codex (1)
+  Evidence  all of its work is already on the base branch (1)
+  Effect    1 directory is deleted for good in 1 repository (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why green  provably on the base branch
+      3  green   /tmp/whr-1
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = take):
+Step 3 of 4   1 branch in b   risk yellow
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+  Effect    1 branch is deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+      4  yellow  feat/x  b
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Step 4 of 4   3 directories in /w   risk orange (1 green, 2 orange)
+  Owner     unknown (2), claude (1)
+  Evidence  all of its work is already on the base branch (2)
+            the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+            no record says whose it is (1)
+            and 1 more facts
+  Effect    3 directories are deleted for good in 2 repositories (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; it needs a decision of its own; no record says whose it is
+      5  green   /w/own1
+      6  orange  /w/lock  (decision: choose it by number)
+      7  orange  /w/unk
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):       5  green   /w/own1
+      6  orange  /w/lock  (decision: choose it by number)
+      7  orange  /w/unk
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] /w/lock: reason lock-mismatch; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): Added 1 row; 4 chosen so far. This group is still open.
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Summary: nothing has been changed yet
+  group                      items  risk    effect
+  2 branches in a                2  green   delete 2 branches
+  1 directory other in /tmp      1  green   delete 1 directory
+  1 directory in /w              1  orange  delete 1 directory
+  skipped: 1 group (1 branch)
+  total: 4 items in 2 repositories; 2 kept rows untouched
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
+      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
+Typed words that will be asked (on /dev/tty): codex, unknown
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 2 directories for good and 2 branches (restorable).
+
+Stored plan set 3f9c2a7e41b8 (6 effects in 2 repositories). Nothing has been changed.
+Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
+```
+
+The typed words are not part of that output: they are asked on the controlling terminal (`/dev/tty`), once per word in sorted order, and the plan id prefix in them is the first six characters of the id above.
+
+```text
+Foreign items (codex). Type "codex 3f9c2a" to confirm:
+Foreign items (unknown). Type "unknown 3f9c2a" to confirm:
+```
+
+A step shows the group (`Step N of M`, the rows' count and place, the worst level and, when the group has several levels, how many rows each has), then one line each for the owners, the evidence (at most three facts, then `and N more facts`), the effect, how to recover, and why the worst level got its level. Below that come at most three example rows: the number, the level, the path of a directory or the name of a branch, and then the branch of a directory or the repository of a branch. When there are more rows the step says `... N more (l = list)`. A terminal under 60 columns drops that last column and one under 40 columns shows no example rows; a row line is cut to the terminal width, at most 120 columns, and every name passes `esc`. The numbers run through the groups in the order of the steps and stay the same for the whole run.
+
+**Keys and defaults.**
+
+| Where | Input | Meaning |
+| --- | --- | --- |
+| First question | Enter | step through the groups |
+| | `a` | take every green row of every owner and go to the final summary |
+| | `q` | quit; nothing is stored |
+| Group step | Enter | green group: take its rows; yellow or orange group: skip it (the question says `Enter = take` or `Enter = skip`) |
+| | `y` | take the choosable rows of the group, whatever the level; never a `decision` row |
+| | `s` | skip the group (rows taken earlier stay taken) |
+| | `l` | list every row of the group, 20 at a time (`-- N more (Enter = next 20, q = stop)`) |
+| | `r` | review each row: `Take it? [y/n/q] (default n)`; a `decision` row is named and not asked; `q` ends the review and goes on to the next group |
+| | `d N` | the details of row N, with the codes (a number that is not offered is an invalid answer) |
+| | `q` | quit; nothing is stored |
+| | a line of terms | add rows (grammar below); the group stays open and the question comes again |
+| Decision row | `y` | `Choose it anyway? [y/N/q]`, default no |
+| Final summary | Enter | continue to the typed words or the store question |
+| | `e` | edit: a line of terms replaces the whole selection; an empty line keeps it |
+| | `a` | add every green row; the summary is shown again |
+| | `q` | quit; nothing is stored |
+| Store question | `y` | store the plan set; Enter or `n` do not; `q` quits |
+
+An answer is one line read after the question; there is no raw mode. A line longer than 256 bytes is an invalid answer. Three invalid answers to one question end the run with exit 1 and nothing stored; the end of input anywhere chooses nothing (exit 0), and so does `q` (`Quit; nothing was stored.`).
+
+**The selection grammar.** One line of terms is accepted at a group question and at `e`:
+
+```text
+line      = term { (" " | ",") term } [ " except " term { (" " | ",") term } ]
+term      = NUMBER | NUMBER "-" NUMBER | selector
+selector  = "a"                all green rows
+          | "b"                all branch deletions
+          | "w"                all worktree directories
+          | "t"                all worktree directories whose path starts with /tmp/
+          | "o:" LABEL         all rows of that owner, as shown; quote a label with a space: o:"hint Werner Stein"
+          | "m:" REPO          all rows of that repository
+```
+
+The result is the union of the terms before `except` minus the union of the terms after it. Rules and limits:
+
+- A number or a range names rows by their display numbers. A number that is not offered (a red or kept row, or a number past the last row), a range that runs backwards and a range with a number that is not offered are invalid. A range and every selector take safe rows only, so a `decision` row is chosen by its own number and by nothing else; each such row first asks its own confirmation naming its lock.
+- A selector that matches nothing is not an error. `t` looks at the lexically cleaned path (no resolution), so an agent scratchpad counts only when it lies under `/tmp/`. `o:` accepts the derived label (`codex`, `author:Werner Stein`) or the wording the steps show (`hint Werner Stein`), exactly. `m:` takes the repository name as the overview shows it.
+- The separators are spaces and single commas; a comma may not lead, trail or double. `except` must come at most once, after at least one term and before at least one term. A double quote is allowed only as the value of `o:` or `m:` and must be closed and followed by a separator. Control characters, text that is not UTF-8, numbers of more than nine digits and lines over 256 bytes are invalid.
+- A refused line says why in a fixed sentence and never repeats your input. Terms at a group question may name rows of any group, not only the open one.
+
+Answers, in order: Enter, `r`, `y`, `n`, `s`.
+
+```text
+Step 1 of 4   2 branches in a   risk green
+  Owner     claude (1), codex (1)
+  Evidence  all of its work is already on the base branch (2)
+  Effect    2 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why green  provably on the base branch
+      1  green   claude/old  a
+      2  green   codex/old  a
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = take):       1  green   claude/old  a
+Take it? [y/n/q] (default n):       2  green   codex/old  a
+Take it? [y/n/q] (default n):
+Step 2 of 4   1 directory other in /tmp   risk green
+  Owner     codex (1)
+  Evidence  all of its work is already on the base branch (1)
+  Effect    1 directory is deleted for good in 1 repository (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why green  provably on the base branch
+      3  green   /tmp/whr-1
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = take):
+```
+
+Answers, in order: Enter, `s`, `s`, `s`, `9`, `w except`, `w except 3`, `s`, `e`, `o:codex`, Enter.
+
+```text
+      7  orange  /w/unk
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): not understood: a number is not offered. Answer y, s, l, r, q, d N, or numbers like 1,2 or 3-5 or a selector (a b w t o:LABEL m:REPO, except).
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): not understood: except needs a term. Answer y, s, l, r, q, d N, or numbers like 1,2 or 3-5 or a selector (a b w t o:LABEL m:REPO, except).
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): Added 2 rows; 2 chosen so far. This group is still open.
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Summary: nothing has been changed yet
+  group                items  risk    effect
+  2 directories in /w      2  orange  delete 2 directories
+  skipped: 3 groups (1 directory, 3 branches)
+  total: 2 items in 2 repositories; 2 kept rows untouched
+Typed words that will be asked (on /dev/tty): unknown
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: Terms (numbers, ranges, a b w t o:LABEL m:REPO, except; Enter keeps the selection):
+Summary: nothing has been changed yet
+  group                      items  risk    effect
+  1 branch in a                  1  green   delete 1 branch
+  1 directory other in /tmp      1  green   delete 1 directory
+  skipped: 2 groups (3 directories, 1 branch)
+  total: 2 items in 1 repository; 2 kept rows untouched
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
+      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
+Typed words that will be asked (on /dev/tty): codex
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 1 branch (restorable).
+
+Stored plan set 3f9c2a7e41b8 (3 effects in 1 repositories). Nothing has been changed.
+Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
+```
+
+Answers, in order: Enter, `s`, `s`, `s`, `6`, `y`, `s`, `q`.
+
+```text
+      7  orange  /w/unk
+
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] is a decision row: reason lock-mismatch; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
+Choose it anyway? [y/N/q]: Added 1 row; 1 chosen so far. This group is still open.
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
+Summary: nothing has been changed yet
+  group              items  risk    effect
+  1 directory in /w      1  orange  delete 1 directory
+  skipped: 3 groups (1 directory, 3 branches)
+  total: 1 item in 1 repository; 2 kept rows untouched
+Typed words that will be asked (on /dev/tty): unknown
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit:
+Quit; nothing was stored.
+```
+
+**The final summary.** After the last group (or at once after `a` at the first question) one summary says that nothing has been changed yet, then lists the selected rows by group with the item count, the worst level and the effect, the skipped groups with what they would delete, the total with the number of untouched kept rows, the undo line when a branch is among the rows (branches only: deleted directories are not restored), and the typed words that will be asked, at most three and then `and N more`. After Enter, when the selection holds a local tracking reference, a line says how many it deletes; then comes the last line, `This deletes N directories for good and M branches (restorable).`, directly before the first typed prompt or the store question. Removing a worktree directory has no second typed word: the summary line and the typed prompt are the whole confirmation. An empty selection says `Nothing was chosen; nothing will be stored.` (and then `Nothing chosen; nothing was stored.`) and exits 0.
+
+When every chosen row is `own`, no word is asked and the store question follows the summary:
+
+Answers, in order: `a`, Enter, `y`.
+
+```text
+Continue? [Enter] step through the groups  [a] take all green  [q] quit:
+Summary: nothing has been changed yet
+  group              items  risk    effect
+  1 branch in a          1  green   delete 1 branch
+  1 directory in /w      1  green   delete 1 directory
+  total: 2 items in 1 repository
+Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-dir DIR --apply --authorize
+      PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
+Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 1 branch (restorable).
+Store this plan set? [y/N/q]:
+Stored plan set 3f9c2a7e41b8 (3 effects in 1 repositories). Nothing has been changed.
+Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
+```
+
+**What the wizard never does in this version.** The janitor steps never apply. When the plan set is stored the wizard prints `Stored plan set ID (N effects in M repositories). Nothing has been changed.` and the one command that applies it, `Apply it with: stw tidy apply ID --state-dir DIR` (a directory that needs quoting is quoted and escaped), and exits. That line is the seam where the apply step will attach. `stw tidy apply ID` is the expert command of this guide: it re-checks the stored plan, asks for its own confirmation, including the typed words for rows of other owners, and then applies. The wizard also never offers red or kept rows, never deletes a branch or a directory by itself, writes nothing to GitHub and fetches nothing. A refused or missing typed word stores no plan set; the planner has already written its per-repository plans to the state directory by then (`internal/tidywizard/planset/planset.go:482` builds the plans, `:492` asks the words), and they stay there unused. `--rows` is the exception to "never applies": it keeps the whole Spec 041 flow, including its question `Apply it now?`, which applies after an explicit `y`.
+
+**Arrives with P4b.** The wizard applying in the same run, with the single typed confirmation of Spec 044 D12 (the receipt), and the store and apply answers read from `/dev/tty` instead of stdin (D16), are not part of this version. Until they land, the typed words are asked when the plan set is built and again by `stw tidy apply`, and the answers to `Store this plan set?` and, with `--rows`, `Apply it now?` are read from stdin. This section and the paragraph below are final only after that work has merged.
+
+**Online, offline and `--rows`.** The human wizard reads GitHub by default (**Online reads** above); `--offline` makes no network read, and its `Derived:` line then says `online off (--offline)`. Without a terminal, in an agent run, with `plan` or `--json` the run stays offline unless `--online` is given. `--rows` prints the row view of Spec 041 byte for byte and asks `Apply which?` as in Spec 041, where `a` takes the rows of scope `own` only; it is refused with a `PATH` or an expert flag.
+
+**The risk ladder and its reasons.** The level of a row is a presentation of the evidence and never permission; the verdict, the proof, the choosable rows and the apply path are those of the analysis. Every row of a group step carries the reason words that `d N` and `--json` (`risk_reasons`) show, and the step says why the worst level got its level in a sentence.
+
+| Level | Reason words | Offered |
+| --- | --- | --- |
+| green | `proof-ancestor`, `proof-no-net-change`, `proof-github-branch-absent` (a tracking reference), `no-own-commit` (a worktree with no commit of its own), `pr-merged-head` (a merged pull request had the tip as its head) | yes |
+| yellow | `proof-equivalent` (`patch-id`, `merge-noop`, and the jj word `empty-working-copy-integrated-parent`: equal patches, not the same commits) | yes |
+| orange | the reasons of the base level plus `recent-activity` (a worktree of another or an unknown owner whose last change is at most 72 hours old or unknown), `nobody-vouches` (an equal-patches worktree with no creation record, an owner of scope `unknown` and no path convention) or `decision-row` | yes, never a default |
+| red | `not-integrated`, `uncommitted-files`, `extra-files`, `not-judged` | never |
+| kept | none of the above; the classifier's reason says why (primary checkout, stale registration, branch in use, recently active, record missing for an integrated row) | never |
+
+Each raise adds one step and never goes beyond orange. `upstream-gone` (a branch whose upstream is gone, read from the local references) only adds text and changes no level. A kind or proof word outside the closed set is red (`not-judged`) for a candidate. The exact rules are in [Spec 044](../specs/044-tidy-janitor-wizard/spec.md#the-ladder-exact-all-inputs-are-existing-evidence-unless-marked).
+
+**The safety model.** A selection applies nothing; it is a list, and the wizard writes only the plans of the planner and, after the final summary, the stored plan set, both in the state directory. Rows of other owners can be chosen on purpose, because the owner is information, so the protection sits after the choice and not in who owns the row. For rows of another owner (and for `unknown` ones) it is the typed word: the owner label, or the literal word `unknown`, and the first six characters of the plan id, read from the controlling terminal and never from stdin, in plain text and bound to this exact plan set. That stops piped or redirected answers and a tool shell with no controlling terminal (opening `/dev/tty` fails there, and no plan set is stored), and a word typed for one plan does not fit another. It does not stop a process of the same user that allocates its own pseudo-terminal and types the words, input injected into your own terminal session, or a process that rewrites the state directory; the agent markers in the environment are an accident guard in front of the prompt, not a boundary. What keeps the deletion itself safe is unchanged: the proofs, the checks at apply that the evidence is still the same, and the recovery references, with the level as presentation only. Red and kept rows cannot be chosen at all, and a `decision` row needs its own number and its own confirmation. Directories are deleted for good and branches can be restored, which is why the summary names both counts directly before the typed prompt. What the typed prompt does not yet cover are the two answers read from stdin and the second prompt at apply described under **Arrives with P4b** above.
 
 ### Long runs: progress, `--verbose`, `--trace` and agent markers
 
