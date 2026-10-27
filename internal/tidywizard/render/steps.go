@@ -100,7 +100,7 @@ func (d Document) StepLines(g OverviewGroup) []string {
 		}
 	}
 	if len(evidence) > 3 {
-		evidence = append(evidence[:3], fmt.Sprintf("and %d more facts", len(evidence)-3))
+		evidence = append(evidence[:3], moreFacts(len(evidence)-3))
 	}
 	for i, f := range evidence {
 		prefix := "  Evidence  "
@@ -157,4 +157,12 @@ func (d Document) StepLines(g OverviewGroup) []string {
 	}
 	lines = append(lines, fmt.Sprintf("  Why %s  %s", g.Level, why))
 	return lines
+}
+
+// moreFacts is the line that counts the facts cut from the evidence list.
+func moreFacts(n int) string {
+	if n == 1 {
+		return "and 1 more fact"
+	}
+	return fmt.Sprintf("and %d more facts", n)
 }

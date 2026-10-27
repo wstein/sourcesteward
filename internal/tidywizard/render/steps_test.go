@@ -109,3 +109,12 @@ func TestStepLinesCapTheOwnerList(t *testing.T) {
 		t.Errorf("%q", line)
 	}
 }
+
+// The evidence list cuts at three facts and counts the rest in the singular or the plural.
+func TestMoreFactsAgreesInNumber(t *testing.T) {
+	for n, want := range map[int]string{1: "and 1 more fact", 2: "and 2 more facts", 5: "and 5 more facts"} {
+		if got := moreFacts(n); got != want {
+			t.Errorf("%d: %q want %q", n, got, want)
+		}
+	}
+}
