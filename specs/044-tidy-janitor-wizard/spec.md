@@ -66,7 +66,7 @@ Owner answers, verbatim (D16: "Ja, D16 ist in Ordnung, macht es so, ja"): "D1j D
 | D14 yes | `a` takes all green rows of every owner, the same rule as Enter | FR-002 |
 | D15 yes | The grouped text overview replaces the owner grouping of decision #255; `--rows` keeps the old view | Amendment table |
 | D16 yes | In human mode the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-84`) are read from `/dev/tty`, not stdin; with no controlling terminal nothing is stored or applied (exit 1) | FR-018, SC-015, T013b; `--yes` with an explicit plan id is unchanged |
-| T012c option A (2026-10-27) | The typed `/dev/tty` prompt is the protection; agent markers stay an accident guard (Spec 041 FR-006g). No parent-process checks and no out-of-terminal human proof | [What the design protects](#what-the-design-protects-and-what-it-does-not) |
+| T012c option A (owner decision, 2026-10-27) | The typed `/dev/tty` prompt is the protection; agent markers stay an accident guard (Spec 041 FR-006g). No parent-process checks and no out-of-terminal human proof | [What the design protects](#what-the-design-protects-and-what-it-does-not) |
 | D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
 ## Foreman decisions for phase 1 (owner may reverse)
@@ -415,7 +415,7 @@ default no on every storing and applying question, and the separate `stw tidy ap
 
 ### Single confirmation per wizard run (D12)
 
-**Decision (owner, 2026-10-26): one typed word per wizard run.** This changes the apply path and therefore **requires an independent
+**Decision (owner, 2026-10-26): each typed word is asked once per wizard run.** This changes the apply path and therefore **requires an independent
 security review of the design and of the exact code head before any code is merged** (T012c; the review also covers the cases below).
 
 **Mechanism.**
@@ -745,7 +745,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
   are sorted (`claude`, `codex`, `unknown`) and the prompt text is the real one.
 - **SC-014** Single confirmation (D12): in one run the typed words are asked once, then the apply runs; with a receipt for plan A, applying
   plan B, A with an edited `authorized_scopes`, or A with an added foreign word **asks the typed words** (a receipt never skips a prompt
-  it does not exactly cover); a second apply attempt after the first started asks the words (single use, consumed when apply starts, also
+  it does not exactly cover); a second apply attempt after the first started asks the words (single use, consumed as the first action of `Apply`, also
   after a failed or interrupted first attempt); `n`, Enter or end of input at "Apply it now?" discards the receipt; a separate `stw tidy
   apply PLAN-ID` of the stored plan asks the words again and passes no receipt (the call in `internal/cli/tidy.go`); agent-mode apply of a foreign plan without
   `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse with `evidence-changed`; the separate-apply and agent-mode tests of Spec 041 are unchanged **except the answer source of D16**. Receipt tests (in-package unless stated): `&Receipt{}`, a nil receipt, and a receipt dereferenced and copied after a first use (`c := *r`) each ask the words; a receipt with the right digest and a missing word asks; a first `Apply` that is refused (not found, invalid set, agent mode) still consumes it, so a second `Apply` of the right plan asks; a receipt with `Authorize=false` asks or refuses; a receipt plus agent-mode evidence gives `scope-not-authorized` with no prompt skipped; `Build` own-only returns a nil receipt, a wrong word returns an error and a nil receipt; `stw tidy apply` passes `Receipt == nil` (a seam test) and `plan --save` gets none; a grep or `ast-grep` test asserts that the unexported state is allocated at exactly one site, in `Build`; contract-4 prune apply still asks its typed word. Each property has a mutant that must die (apply ignoring the receipt, skip without the digest compare, `used` stored in the value, consume only on a match, skip placed before the refusals, the zero value honored).
@@ -753,7 +753,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
   prompt are read from `/dev/tty`: a `y` on stdin alone stores and applies nothing; with both streams on terminals but **no controlling
   terminal** the question is not asked, nothing is stored or applied, and the run ends with exit 1 and a message that names the missing
   terminal and the safe alternatives (`stw tidy plan --save`, then apply from a terminal); `--yes` with an explicit plan id behaves as before
-  (foreign items still refuse it); agent mode is unaffected. **No controlling terminal is checked before `planset.Build`, for every selection, own-only included** (the `terminalAvailable` check): `Build` otherwise writes the sub-plans before any question, so "nothing is stored" would be false. Without it the wizard prints the FR-018 message, makes no sub-plan and stores no plan set (exit 1); "nothing is stored" means no plan set and no sub-plan in the state directory, checked with a before-and-after listing of the store. `TestTidyApplyPromptOnATerminal` keeps its answer table (`y` authorizes; `n`, empty, `yes`, `Y` and end of input refuse) with the answers given on the terminal seam, and the same answers on stdin alone authorize nothing; `y` on stdin with `n` on the terminal stores and applies nothing, the reverse applies; the agent path and `--yes` with an explicit id stay byte-identical.
+  (foreign items still refuse it); agent mode is unaffected. **The controlling terminal is checked before `planset.Build`, for every selection, own-only included** (the `terminalAvailable` check): `Build` otherwise writes the sub-plans before any question, so "nothing is stored" would be false. Without it the wizard prints the FR-018 message, makes no sub-plan and stores no plan set (exit 1); "nothing is stored" means no plan set and no sub-plan in the state directory, checked with a before-and-after listing of the store. `TestTidyApplyPromptOnATerminal` keeps its answer table (`y` authorizes; `n`, empty, `yes`, `Y` and end of input refuse) with the answers given on the terminal seam, and the same answers on stdin alone authorize nothing; `y` on stdin with `n` on the terminal stores and applies nothing, the reverse applies; the agent path and `--yes` with an explicit id stay byte-identical.
 - **SC-008** The typed prompt: a bare `y`, the wrong word, stdin input and no controlling terminal refuse and store or apply nothing; the
   prompt text is unchanged byte for byte.
 - **SC-009** Hostile names (ESC, CR, NUL, bidi, a name starting with letters then ESC) in branch, path and owner reach no terminal byte

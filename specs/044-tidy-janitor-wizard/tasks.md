@@ -4,7 +4,7 @@
 implement. A box is ticked only by the pull request that implements the task, with its evidence in the pull request body or a per-package file (never `tasks.md` or `docs/progress.md`; those are set by the last pull request of a wave). Nothing here builds, releases, tags, applies a plan to a real repository or pushes the default branch. All boxes are open:
 this pull request is the specification only.
 
-**Gate**: no task starts before the independent review of this specification is CLEAR. All owner decisions D1 to D16 are made (2026-10-26); D12 (one typed word per run) additionally needs T012c before any code of T013a.
+**Gate**: no task starts before the independent review of this specification is CLEAR. All owner decisions D1 to D16 are made (2026-10-26); D12 (each typed word once per run) additionally needs T012c before any code of T013a.
 
 ## Phase 1 (v0.2.0)
 
