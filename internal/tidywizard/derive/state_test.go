@@ -541,3 +541,11 @@ func TestIndexRecordsRetainsOnlyTheJoinFields(t *testing.T) {
 		t.Errorf("%+v", r.Record.TaskID)
 	}
 }
+
+func TestStoresDerivedCountsOneRecordInTheSingular(t *testing.T) {
+	dir := t.TempDir()
+	d := StoresDerived([]Store{{Path: dir, Source: "--state-dir", Records: 1}})
+	if d.Value != dir+" (1 record)" {
+		t.Errorf("%q", d.Value)
+	}
+}

@@ -186,10 +186,10 @@ func TestFlowListAndDetails(t *testing.T) {
 			t.Errorf("%q missing:\n%s", want, out)
 		}
 	}
-	// `q` stops the listing and the question is asked again.
-	_, out, err = flow(t, "\nl\nq\ns\n\n", groups, Options{})
-	if err != nil || strings.Contains(out, "/tmp/whr-21") || strings.Count(out, "Take this group?") != 2 {
-		t.Errorf("%v\n%s", err, out)
+	// `q` at the pager quits the wizard like `q` at every other question (Spec 044 keys).
+	res, out, err = flow(t, "\nl\nq\ns\n\n", groups, Options{})
+	if err != nil || res.Outcome != OutcomeQuit || strings.Contains(out, "/tmp/whr-21") || !strings.Contains(out, "Quit; nothing was stored.") {
+		t.Errorf("%+v %v\n%s", res, err, out)
 	}
 	// d with a number that is not offered is an invalid answer.
 	_, _, err = flow(t, "\nd 99\nd x\nd 1000\n", groups, Options{})

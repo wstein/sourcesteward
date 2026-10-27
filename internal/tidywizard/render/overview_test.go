@@ -472,3 +472,14 @@ func TestMergedPullRequestTurnsAGroupGreenInTheOverview(t *testing.T) {
 		t.Errorf("without the number:\n%s", out)
 	}
 }
+
+// The title of the first screen agrees in number: one candidate in one group.
+func TestOverviewTitleAgreesInNumberForOne(t *testing.T) {
+	one := riskInput()
+	c := cand("bundledock", tidywizard.KindBranch, "old", tidywizard.VerdictSafe, "", owner.ScopeOwn)
+	c.Proof, c.Effects = tidywizard.ProofAncestor, []string{"delete-branch:old"}
+	one.Result.Candidates = []tidywizard.Candidate{c}
+	if out := Overview(Build(one), OverviewOptions{}); !strings.Contains(out, "Can be cleaned (1 of 1 candidate in 1 group)") {
+		t.Errorf("title:\n%s", out)
+	}
+}
