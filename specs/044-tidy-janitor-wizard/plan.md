@@ -26,5 +26,5 @@ the checkboxes and status lines are set only by the last pull request of a wave.
 (SC-007); a request-counting hosting double with 7 members and about 466 tips that fails on any write method (SC-005); the Spec 041 suites unchanged (SC-011). One dogfood
 dry run of the wizard on a copy of the live workspace answering `q` at the final summary, never applying; applying is the owner's operation.
 
-**Rollback.** The new text is additive: `--json` keeps its shape except additive fields, and the expert layer is untouched (the D12 receipt is a separate commit that can be reverted alone), so a revert of
+**Rollback.** The new text is additive: `--json` keeps its shape except additive fields, and the expert layer is untouched (the D12 receipt is a separate commit that can be reverted alone; the D16 commit is **not** reverted without the D12 commit), so a revert of
 P3 and P4 restores the Spec 041 wizard.
