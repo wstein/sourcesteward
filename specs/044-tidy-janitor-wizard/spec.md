@@ -41,8 +41,8 @@ own branches carry only a commit-author hint.
 
 **What does not change.** No auto-apply; nothing unmerged is ever deleted; no agent-mode loosening; no new GitHub write; no new
 dependency in phase 1; the typed `/dev/tty` confirmation stays plain; the proofs, plan ids, stale checks, journals, effects and recovery
-manifests are untouched. The one change to the shared apply entry is the single-confirmation receipt of D12, which only the wizard
-passes; `stw tidy apply` and agent mode never do.
+manifests are untouched. The changes to the shared apply entry are the single-confirmation receipt of D12, which only the wizard passes
+(`stw tidy apply` and agent mode never do), and the answer source of D16 (the store, apply and separate-apply answers are read from `/dev/tty`).
 
 ## Decided by the owner (2026-10-26)
 
@@ -62,10 +62,11 @@ Owner answers, verbatim (D16: "Ja, D16 ist in Ordnung, macht es so, ja"): "D1j D
 | D9 read-only | `stw watch` and `stw pulls` stay read-only; no automatic done marking | Phase 2 `done` is explicit only |
 | D10 phase 2 | A real TUI checklist in phase 2, after the line wizard has been used | T022; the line wizard stays the fallback |
 | D11 with phase 2 | The agent workflow sentence goes into the workspace `AGENTS.md` with phase 2 | T021 |
-| D12 once per run | **One** typed word per wizard run: the plan built and applied at once with `y` in the same run asks once; a later separate `stw tidy apply PLAN-ID` asks again; the agent path is unchanged. Replaces "twice, as today" | [Single confirmation](#single-confirmation-per-wizard-run-d12); needs a security review (T012c) before code |
+| D12 once per run | **Each typed word once** per wizard run (a set with `claude`, `codex` and `unknown` asks three words, once each): the plan built and applied at once with `y` in the same run asks once; a later separate `stw tidy apply PLAN-ID` asks again; the agent path is unchanged. Replaces "twice, as today" | [Single confirmation](#single-confirmation-per-wizard-run-d12); needs a security review (T012c) before code |
 | D14 yes | `a` takes all green rows of every owner, the same rule as Enter | FR-002 |
 | D15 yes | The grouped text overview replaces the owner grouping of decision #255; `--rows` keeps the old view | Amendment table |
-| D16 yes | In human mode the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-82`) are read from `/dev/tty`, not stdin; with no controlling terminal nothing is stored or applied (exit 1) | FR-018, SC-015, T013b; `--yes` with an explicit plan id is unchanged |
+| D16 yes | In human mode the answers to "Store this plan set?", "Apply it now?" and the prompt of a separate `stw tidy apply PLAN-ID` (`internal/cli/tidy_planset.go:73-84`) are read from `/dev/tty`, not stdin; with no controlling terminal nothing is stored or applied (exit 1) | FR-018, SC-015, T013b; `--yes` with an explicit plan id is unchanged |
+| T012c option A (2026-10-27) | The typed `/dev/tty` prompt is the protection; agent markers stay an accident guard (Spec 041 FR-006g). No parent-process checks and no out-of-terminal human proof | [What the design protects](#what-the-design-protects-and-what-it-does-not) |
 | D13 yes | Online is the default in the human wizard; offline is opt-in (`--offline`) | [Online by default](#online-by-default-in-the-human-wizard-d13) |
 
 ## Foreman decisions for phase 1 (owner may reverse)
@@ -404,13 +405,13 @@ directories for good and M branches (restorable)."** (Owner condition for D2.) T
    `/dev/tty`, plain, while the plan set is built (`planset.go:492`); if all chosen items are own, the new question "Store this plan set?
    [y/N]" (default no) follows the line;
 3. the stored plan id and the question "Apply it now?" (default no), whose text now repeats the counts;
-4. on `y`, the apply runs **without a second typed word** (D12): the words of step 2 already covered this very plan.
+4. on `y` (read from `/dev/tty`, D16), the apply runs **without a second typed word** (D12): the words of step 2 already covered this very plan. The apply question says so ("the words typed above cover this plan"), so that nobody types a word again at "Apply it now?".
 
-**What changes against today's flow** (`internal/cli/tidy_interactive.go:48-93`, where a choice is built and stored at once, then "Apply it
+**What changes against today's flow** (`internal/cli/tidy_interactive.go`, the flow from `planset.Build` to `runTidyApplyPlanSet`, where a choice is built and stored at once, then "Apply it
 now?", and the apply path asks the typed words again): the grouped steps and the summary replace the single "Apply which?" question; the
-summary's last line is new; the store question for an own-only selection is new; the apply question gains the counts; **the typed word
+summary's last line is new; the store question for an own-only selection is new; the apply question gains the counts; **each typed word
 is asked once per run, not twice** (D12). **Unchanged**: the words and their text, the plan set built by `planset.Build` (which additionally returns the receipt), the store, the stale checks, the
-default no on every storing and applying question, and the whole path of a separate `stw tidy apply PLAN-ID`.
+default no on every storing and applying question, and the separate `stw tidy apply PLAN-ID` **except** that its confirmation answer is read from `/dev/tty` (D16, below).
 
 ### Single confirmation per wizard run (D12)
 
@@ -419,38 +420,52 @@ security review of the design and of the exact code head before any code is merg
 
 **Mechanism.**
 
-- **Creation.** `planset.Build` (`planset.go:463`, which asks the words at `:491-492`) returns, next to the set, a **confirmation
-  receipt** when and only when it just obtained the typed word for every foreign word of this set from `/dev/tty` (a set of own items
-  only has no words and gets no receipt). The receipt is a value of an opaque type of package `planset` with unexported fields that
-  nothing else can construct: the full 12-character plan id, the sorted words that were confirmed, and a used flag. It is never written
-  to the state directory, a file, the environment or an argument and has no serialized form. (Build already refuses agent mode for foreign
-  words, so a receipt exists only for a human run; no separate mode or nonce field is kept.)
-- **Use.** `ApplyRequest` (`apply.go:198-205`) gains one field, the receipt. Apply skips the typed prompt for a word only if **all**
-  hold: the receipt is present and unused; its plan id equals the plan id of the set being applied (content-addressed over the items,
-  `authorized_scopes` and the mode evidence, so another plan, an edited plan or a plan with an added foreign word never matches); and
-  every word the set requires now (`confirmWords`, `apply.go:235-243`) is in the receipt's list. Otherwise the typed prompt is asked as
-  today. A mismatch never skips a prompt and never refuses by itself.
-- **Who passes it.** The shared entry `runTidyApplyPlanSet` (`internal/cli/tidy_planset.go:57`) gets one parameter for the receipt.
-  Its two callers are `stw tidy apply` (`internal/cli/tidy.go:111`), which always passes none, and the wizard
-  (`internal/cli/tidy_interactive.go:93`), which passes the receipt from its own `Build`. Both files are in work package P4.
-- **Single use.** The receipt is **consumed when apply starts** (after the plan id check, before the first effect), whether the apply then
-  succeeds, fails or is interrupted; a second apply attempt in the same process asks the words. It dies with the run: answering `n`,
-  Enter or end of input at "Apply it now?", an interrupt or any error before apply discards it, and it is never kept for a later `apply`.
-- **Nothing else is relaxed**: the stored plan is re-verified (store mode, owner, content-addressed id) and every stale check runs at
-  apply exactly as today; a stale plan refuses with `evidence-changed` and changes nothing; `--yes` is still not honored for plans with
-  foreign items.
+- **Creation.** `planset.Build` (which asks the words after `assemble`) returns, next to the set, a **confirmation receipt** when and only when it just obtained the typed word for every foreign word
+  of this set from `/dev/tty` (a set of own items only has no words and gets no receipt; a wrong word, an error or agent mode returns none). The receipt is **`*planset.Receipt`**, a struct with a
+  **single unexported pointer field** to an unexported state (the full plan digest, the sorted words that were confirmed, and `used`). **Copies share that state.** Only `Build` allocates the
+  state. A nil `*Receipt`, a `Receipt` whose state pointer is nil (the zero value, which any package can write) and a used receipt are "**no receipt**" and never skip a prompt;
+  `ApplyRequest.Receipt` has type `*planset.Receipt`. A Go struct with unexported fields and a `used` flag held by value would not do: any package can write the zero value and can copy it, so
+  the flag would mark one copy only. The receipt is never written to the state directory, a file, the environment or an argument and has no serialized form. There is no mode or nonce field
+  (Build already refuses agent mode for foreign words and `Apply` re-checks human mode).
+- **Binding.** The state holds the **full 64-hex SHA-256** of the plan content (the untruncated input digest of `owner.PlanID`; the 12-hex id is its prefix and only 48 bits). `Apply` recomputes the
+  digest from the loaded set, and the confirmed word list must **equal** the words the set requires now (`confirmWords`, a set equality, not a subset). The six-character prefix of the typed word
+  is not used by the receipt.
+- **Consumption.** `Apply` consumes the receipt **as its first action**, before `Find` and before any check, **unconditionally** (it sets `used` on the shared state), whether the apply then
+  matches, refuses, succeeds, fails or is interrupted. A crash or kill loses the receipt with the process; a retry (`stw tidy apply PLAN-ID`) asks the words; sub-plans already applied replay as
+  verified no-ops as today.
+- **Use.** The skip is evaluated **only inside the confirm loop**, after the mode-evidence check, the human-mode refusal and the `authorized_scopes` refusals have passed: a receipt never replaces any
+  of them. It skips the typed prompt only if the receipt was valid when `Apply` took it (not nil, not zero, not used), its digest equals the recomputed digest, its words equal the required
+  words, **and `req.Authorize` is true**, which the wizard sets only from a `y` it read from `/dev/tty` (D16). Otherwise the typed prompt is asked as today. A mismatch never skips a prompt and never
+  refuses by itself.
+- **Who passes it.** The shared entry `runTidyApplyPlanSet` gets one parameter for the receipt. Its two callers are `stw tidy apply` (the call in `internal/cli/tidy.go`), which always passes
+  none, and the wizard (the call at the end of `runTidyInteractive`, `internal/cli/tidy_interactive.go`), which passes the receipt from its own `Build`. `stw tidy plan --save`
+  (`internal/cli/tidy_wizard.go`) discards whatever `Build` returns besides the set and never receives a receipt (it has no words). Both files are in work package P4.
+- **Order with D16.** D16 (the store, apply and separate-apply answers read from `/dev/tty`) lands **before or in the same pull request as** the receipt; no head on the default branch ever carries the
+  receipt while the "Apply it now?" answer is read from stdin. Reverting D16 requires reverting D12 too; reverting D12 alone is allowed (it brings back the two prompts).
+- **Nothing else is relaxed**: the stored plan is re-verified (store mode, owner, content-addressed id) and every stale check runs at apply exactly as today; a stale plan refuses with
+  `evidence-changed` and changes nothing; `--yes` is still not honored for plans with foreign items. **The receipt is read only by `planset.Apply`.** It is never passed to the contract-3 or contract-4
+  apply (`--contract 3|4`), the registration-prune typed confirmation (contract 4) is asked as today, and if a prune kind ever enters the plan set it keeps its own gate.
+- **One terminal seam.** Every `/dev/tty` read of the human path (the typed words at build and at apply, the store, apply and separate-apply answers) goes through **one opener seam**. Each question
+  is written to the same terminal handle it is read from, as `owner.Confirm` does, and its text is unchanged. Tests count opens and prompts per run and use a stdin reader that fails the test if it
+  is read after the selection.
 
-**Residual risk, stated precisely.** Today, applying a plan with foreign items needs a typed word read from `/dev/tty` at the apply as
-well. With the receipt, within one run the apply rests on the `y` answer to "Apply it now?", which is read from **stdin**
-(`internal/cli/tidy_interactive.go:74`), after the words were typed at build. What a stdin writer gains: it can approve the apply of exactly
-the plan whose words the human just typed on `/dev/tty`, not another plan and not a later one. The same stdin `y` is already the only gate
-before applying an own-only plan. D16 (decided) reads this answer from `/dev/tty` too, which removes this residual risk.
+### What the design protects, and what it does not
+
+(Owner decision, 2026-10-27, T012c option A: the typed `/dev/tty` prompt is the protection and the agent markers stay an accident guard, Spec 041
+FR-006g; no parent-process checks, no out-of-terminal proof.) With D16 landed, it protects against: piped or redirected answers (`yes | stw tidy`, heredocs, `< answers`) and an agent tool shell with no
+controlling terminal (measured on 2026-10-27: opening `/dev/tty` fails with ENXIO), for the typed words and for every store or apply answer; reuse of the confirmation for another plan, an edited plan, a plan
+with an added word, a stored plan applied later, a copied plan file or journal, and another process or run (the receipt exists only in the memory of the run that typed the words); a second apply in
+the same process, a retry after a failure or crash, and a non-matching call (single use, consumed first); accidental passing by another caller (only `Build` allocates it); and drift between
+confirmation and apply (the stored set is reloaded, its id recomputed, every sub-plan stale check runs). It does **not** protect against: a same-user process that allocates a pty (`script`,
+`expect`, Python `pty`) and unsets the markers, which can type every word, **before and after D12**; input injected into the human's own terminal session (for example `tmux send-keys`); a same-user
+process that ptraces `stw` or rewrites the state directory. D12 changes the cost for these only from two typed prompts to one; both were equally scriptable. An expiry, a nonce, type-ahead flushing
+and process-ancestry checks are not added: they would be over-hardening for this threat model.
 
 **Other runs.** A plan stored by an earlier run, or applied by a separate `stw tidy apply PLAN-ID` (with or without `--yes`), has no
 receipt, so the typed words are asked at apply exactly as today. The agent path is unchanged: agent mode never builds a receipt and its
 `apply` still refuses `other` and `unknown` items without `authorized_scopes` and still needs the human path for them.
 
-**Security review questions** (T012c): can any code outside `planset.Build` construct or copy a receipt; whether consuming it when apply starts is enough; can a receipt
+**Security review questions** (T012c): can any code outside `planset.Build` construct or copy a receipt; whether consuming it as the first action of `Apply` is enough; can a receipt
 authorize a plan other than the one confirmed (including a plan with the same six-character prefix); what a same-user process can do that it could not
 do before (it already can drive a pty, 041 FR-006g); the window between the confirmation and the apply, and the stale checks across it;
 behavior on interrupt, concurrent wizard runs and a plan store changed in between; and regression of the separate apply and the agent path.
@@ -693,8 +708,8 @@ Rows: l = list a reason, or run  stw tidy --rows
 - **FR-011** The final summary ends with the line stating the directories deleted for good and the branches, directly before the first
   typed prompt (or the store question); the typed prompt text is unchanged, read from `/dev/tty`, plain, once per word, refused without a
   terminal or with a wrong word; within one wizard run the words are asked once (FR-017).
-- **FR-018** (D16) In human mode the answers to the store question, the apply question and the prompt of a separate `stw tidy apply PLAN-ID` are read from `/dev/tty`; without a controlling terminal nothing is stored or applied (exit 1); `--yes` with an explicit plan id and agent mode are unchanged.
-- **FR-017** Single confirmation (D12): a receipt as specified covers the apply of the plan set built in the same run and nothing else;
+- **FR-018** (D16) In human mode the answers to the store question, the apply question and the prompt of a separate `stw tidy apply PLAN-ID` are read from `/dev/tty`; without a controlling terminal (checked **before** `planset.Build`) nothing is stored or applied (exit 1); `--yes` with an explicit plan id and agent mode are unchanged.
+- **FR-017** Single confirmation (D12): a receipt as specified covers the apply of the plan set built in the same run and nothing else (and only with `Authorize`);
   a separate or later `stw tidy apply PLAN-ID` and agent mode ask as today.
 - **FR-012** The retain table lists every reason with count, level, sentence and action; counts sum to the retained total.
 - **FR-013** Output obeys `esc`, the 120-character bound and the row bounds (FR-042, FR-041); color is decoration only (the level word is
@@ -732,20 +747,19 @@ Each is testable with temporary repositories and a fake hosting transport (no re
   plan B, A with an edited `authorized_scopes`, or A with an added foreign word **asks the typed words** (a receipt never skips a prompt
   it does not exactly cover); a second apply attempt after the first started asks the words (single use, consumed when apply starts, also
   after a failed or interrupted first attempt); `n`, Enter or end of input at "Apply it now?" discards the receipt; a separate `stw tidy
-  apply PLAN-ID` of the stored plan asks the words again and passes no receipt (`tidy.go:111`); agent-mode apply of a foreign plan without
-  `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse with `evidence-changed`; the separate-apply and
-  agent-mode tests of Spec 041 pass unchanged.
+  apply PLAN-ID` of the stored plan asks the words again and passes no receipt (the call in `internal/cli/tidy.go`); agent-mode apply of a foreign plan without
+  `authorized_scopes` still exits 1 `scope-not-authorized`; stale checks still refuse with `evidence-changed`; the separate-apply and agent-mode tests of Spec 041 are unchanged **except the answer source of D16**. Receipt tests (in-package unless stated): `&Receipt{}`, a nil receipt, and a receipt dereferenced and copied after a first use (`c := *r`) each ask the words; a receipt with the right digest and a missing word asks; a first `Apply` that is refused (not found, invalid set, agent mode) still consumes it, so a second `Apply` of the right plan asks; a receipt with `Authorize=false` asks or refuses; a receipt plus agent-mode evidence gives `scope-not-authorized` with no prompt skipped; `Build` own-only returns a nil receipt, a wrong word returns an error and a nil receipt; `stw tidy apply` passes `Receipt == nil` (a seam test) and `plan --save` gets none; a grep or `ast-grep` test asserts that the unexported state is allocated at exactly one site, in `Build`; contract-4 prune apply still asks its typed word. Each property has a mutant that must die (apply ignoring the receipt, skip without the digest compare, `used` stored in the value, consume only on a match, skip placed before the refusals, the zero value honored).
 - **SC-015** (D16, decided) In human mode the answers to "Store this plan set?", "Apply it now?" and the `stw tidy apply PLAN-ID`
   prompt are read from `/dev/tty`: a `y` on stdin alone stores and applies nothing; with both streams on terminals but **no controlling
   terminal** the question is not asked, nothing is stored or applied, and the run ends with exit 1 and a message that names the missing
   terminal and the safe alternatives (`stw tidy plan --save`, then apply from a terminal); `--yes` with an explicit plan id behaves as before
-  (foreign items still refuse it); agent mode is unaffected.
+  (foreign items still refuse it); agent mode is unaffected. **No controlling terminal is checked before `planset.Build`, for every selection, own-only included** (the `terminalAvailable` check): `Build` otherwise writes the sub-plans before any question, so "nothing is stored" would be false. Without it the wizard prints the FR-018 message, makes no sub-plan and stores no plan set (exit 1); "nothing is stored" means no plan set and no sub-plan in the state directory, checked with a before-and-after listing of the store. `TestTidyApplyPromptOnATerminal` keeps its answer table (`y` authorizes; `n`, empty, `yes`, `Y` and end of input refuse) with the answers given on the terminal seam, and the same answers on stdin alone authorize nothing; `y` on stdin with `n` on the terminal stores and applies nothing, the reverse applies; the agent path and `--yes` with an explicit id stay byte-identical.
 - **SC-008** The typed prompt: a bare `y`, the wrong word, stdin input and no controlling terminal refuse and store or apply nothing; the
   prompt text is unchanged byte for byte.
 - **SC-009** Hostile names (ESC, CR, NUL, bidi, a name starting with letters then ESC) in branch, path and owner reach no terminal byte
   unescaped in any screen, group key or example row; the family key contains only `[a-z]`; `--json` carries them as data.
 - **SC-010** Every reason, proof and risk word has a sentence and an action; a new code without one fails the test.
-- **SC-011** `stw tidy --json`, the expert layer and every Spec 041 test and golden other than the text overview pass unchanged; the
+- **SC-011** `stw tidy --json`, the expert layer and every Spec 041 test and golden other than the text overview pass unchanged (the separate-apply prompt test moves its answers to the terminal seam, D16); the
   tidy flags are all classified (`--rows` and `--offline` included).
 - **SC-012** With at least 960 retained rows and 165 choosable rows the first screen has at most 24 **logical lines** and no row of a retained code; the fold rule above holds (green groups never folded; other groups fold smallest first within one effect class into a line naming the effect and the count, and a fold line may absorb more than the smallest groups to reach 24 lines). The `Derived` line counts as one logical line: it may wrap or be truncated to the terminal width, its full text is in `--verbose`.
 - **SC-013 (phase 2)** `workspace done`: idempotent, state directory only (a before and after snapshot of every repository and worktree
@@ -760,7 +774,7 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 | No terminal on stdin or stdout, or agent marker | grouped overview only, offline, no question, nothing stored, exit 0 |
 | Narrow terminal (below 60 columns) | rows drop the branch column, then the example rows; the level word and counts never wrap away; width from the terminal, 80 if unknown |
 | 960 or more retained rows | one table, no rows until asked; the first screen stays within 24 logical lines (a wrapped or truncated `Derived` line is one line) |
-| Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and nothing was applied (as today, `tidy_interactive.go:98`) |
+| Interrupted run (Ctrl-C, `--timeout`) | exit 1 naming the cause; before the plan set is stored nothing exists, after it the id is named and nothing was applied (as today, `interruptedWizard` in `tidy_interactive.go`) |
 | All rows red or kept | summary says "nothing can be cleaned"; the retain table follows; no questions |
 | Nothing to clean | one line "Nothing to clean."; exit 0 |
 | A group of 1 item | the step is still shown; one line header |
@@ -775,8 +789,8 @@ Each is testable with temporary repositories and a fake hosting transport (no re
 - **#297 (merged).** Progress on stderr (`internal/cli/tidy_progress.go`), `--verbose` timings, `--quiet`, `--progress` and `--trace`
   are unchanged; the grouped overview and the steps write to stdout, progress never does. The analysis and the online reads run before
   the first screen.
-- **The strict prompt.** The janitor flow only builds the selection and the summary; it calls `planset.Build` (`internal/cli/tidy_interactive.go:60`), which now also returns the opaque confirmation receipt (D12), the
-  same typed prompt, and `runTidyApplyPlanSet` (`:93`) with a new receipt parameter; `stw tidy apply` (`tidy.go:111`) calls the same function and
+- **The strict prompt.** The janitor flow only builds the selection and the summary; it calls `planset.Build` (`internal/cli/tidy_interactive.go`), which now also returns the opaque confirmation receipt (D12), the
+  same typed prompt, and `runTidyApplyPlanSet` with a new receipt parameter; `stw tidy apply` (`internal/cli/tidy.go`) calls the same function and
   passes none.
 - **Spec 042.** The done command uses the attribution gate (D5) with the limits stated above. No session id is printed or stored in the
   new records.
