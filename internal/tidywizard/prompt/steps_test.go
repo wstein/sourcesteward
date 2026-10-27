@@ -200,10 +200,15 @@ func TestFlowListAndDetails(t *testing.T) {
 
 // `r` asks per row (y, n, q); a decision row is never asked there, only named.
 func TestFlowReviewEachRow(t *testing.T) {
-	// Step 2: w3 y, w4 n, w5 q (the review stops); step 3: skip.
-	res, out, err := flow(t, "\ns\nr\ny\nn\nq\ns\n\n", groupsFixture(), Options{})
-	if err != nil || !reflect.DeepEqual(chosenIDs(res), []string{"w3"}) {
+	// Step 2: w3 y, w4 n, w5 y; step 3: skip.
+	res, out, err := flow(t, "\ns\nr\ny\nn\ny\ns\n\n", groupsFixture(), Options{})
+	if err != nil || !reflect.DeepEqual(chosenIDs(res), []string{"w3", "w5"}) {
 		t.Fatalf("%v %v\n%s", chosenIDs(res), err, out)
+	}
+	// `q` at the per-row question quits the wizard like `q` everywhere else (Spec 044 keys).
+	res, out, err = flow(t, "\ns\nr\ny\nq\n", groupsFixture(), Options{})
+	if err != nil || res.Outcome != OutcomeQuit || len(res.Rows) != 0 || !strings.Contains(out, "Quit; nothing was stored.") {
+		t.Fatalf("%+v %v\n%s", res, err, out)
 	}
 	if !strings.Contains(out, "Take it?") {
 		t.Errorf("no per-row question:\n%s", out)

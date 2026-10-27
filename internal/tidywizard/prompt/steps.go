@@ -402,7 +402,7 @@ rows:
 				case "", "n":
 					continue rows
 				case "q":
-					break rows
+					return ErrQuit
 				}
 			}
 			if err := s.reject(&tries, "Answer y, n or q (default n)."); err != nil {
