@@ -666,7 +666,7 @@ func TestAdapterRetainsAJJWorkspaceWithAmbiguousRecordsAndReportsSkippedOnes(t *
 	}
 	// The notice is a fixed text with honest counts: unreadable records and, apart from them,
 	// stores that could not be listed at all. No record id is echoed.
-	want := "creation-records-unreadable: 2 records, 1 stores that could not be listed"
+	want := "creation-records-unreadable: 2 records, 1 store that could not be listed"
 	n := 0
 	for _, x := range f.Notices {
 		if strings.Contains(x, "creation-records-unreadable") {

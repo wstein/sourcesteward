@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 )
 
@@ -42,7 +43,7 @@ func (s *session) summary() (FlowResult, error) {
 	return FlowResult{Outcome: OutcomeChosen, Rows: rows, Confirmed: confirmed}, nil
 }
 
-func count(n int, one, many string) string { return fmt.Sprintf("%d %s", n, plural(n, one, many)) }
+func count(n int, one, many string) string { return pluralize.Count(n, one, many) }
 
 func tally(rows []Row) (dirs, branches, tracking int) {
 	for _, r := range rows {

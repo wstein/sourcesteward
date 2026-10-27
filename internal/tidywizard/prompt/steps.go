@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
@@ -286,12 +287,7 @@ func (s *session) step(i int) error {
 
 const stepHelp = "Answer y, s, l, r, q, d N, or numbers like 1,2 or 3-5 or a selector (a b w t o:LABEL m:REPO, except)."
 
-func plural(n int, one, many string) string {
-	if n == 1 {
-		return one
-	}
-	return many
-}
+func plural(n int, one, many string) string { return pluralize.Pick(n, one, many) }
 
 func (s *session) takeGroup(g Group) {
 	if n := s.take(g.Rows); n == 0 {
@@ -373,7 +369,7 @@ func (s *session) list(g Group) error {
 				return err
 			}
 			if a.text == "q" {
-				return nil
+				return ErrQuit
 			}
 		}
 	}
