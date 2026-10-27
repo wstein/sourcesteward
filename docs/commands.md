@@ -21,7 +21,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
 | `stw workspace retire-plan [PATH]` | Prepare retention and retirement evidence | Preparation only; does not delete a workspace |
-| `stw tidy` | Interactive workspace-wide cleanup: overview, choice, stored plan set | Read-only analysis; stores a plan set after your choice; applies only after an explicit `y` |
+| `stw tidy` | Interactive workspace-wide cleanup: grouped overview, one step per group, stored plan set | Read-only analysis; stores a plan set after your choice (and the typed words for rows of other owners); the steps never apply, `--rows` keeps the Spec 041 question that applies after an explicit `y` |
 | `stw tidy plan` (no PATH, no expert flag) | Non-interactive workspace overview (grouped by kind and risk; `--rows` for the rows); `--save` stores the safe own items | Read-only; `--save` writes a private plan set |
 | `stw tidy plan [PATH]` | Review branch/bookmark integration or owned-workspace retirement | No deletion; optional private stored plan |
 | `stw tidy apply PLAN-ID` | Apply a stored plan set | Typed or explicit authorization; recovery evidence and fresh checks per sub-plan |
@@ -267,9 +267,13 @@ files. See [task workspaces](workspaces.md) for prerequisites and refusal cases.
 
 ## Tidy a whole workspace
 
-`stw tidy` is the wizard (see the [tidy guide](tidy.md#the-tidy-wizard)). It finds the Git workspace, analyses every
-member repository read only, prints an overview, asks `Apply which?`, stores the chosen plan set and asks whether to apply it. It changes
-nothing until you answer `y` for that plan id.
+`stw tidy` is the wizard (see the [tidy guide](tidy.md#the-tidy-wizard)). It finds the Git workspace, analyzes every
+member repository read only and prints a grouped overview: what can be cleaned, with a risk level per group, and a table of what is kept and
+why. On a terminal it then walks the groups one step at a time (Enter takes a green group and skips a yellow or orange one; numbers, ranges and
+selectors choose rows), ends with a summary that says how many directories are deleted for good, stores the plan set and prints the command that
+applies it, `stw tidy apply PLAN-ID`. The steps change nothing. Rows of other owners can be chosen; they need the typed word on the terminal.
+On a terminal the wizard reads GitHub (read-only) unless you pass `--offline`. With `--rows` it keeps the numbered row view, asks `Apply which?`,
+stores the chosen plan set and asks whether to apply it; that path changes nothing until you answer `y` for that plan id.
 
 ```sh
 stw tidy                      # interactive wizard on a terminal

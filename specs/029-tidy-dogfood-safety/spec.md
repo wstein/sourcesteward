@@ -6,6 +6,8 @@
 **Input**: User request: "this fix findings, then rerun tidy and analyze result again". The selected findings are rewritten PR integration, completed legacy attached worktrees, the base-tree metadata limit, and stale local remote-tracking references.
 
 > **Status note (2026-10-26):** the tidy v3 behavior is implemented in source on `main`; the feature stays `planned` for the open gates T043 to T049 (see docs/progress.md).
+>
+> **See also [Spec 044](../044-tidy-janitor-wizard/spec.md) (2026-10-26):** it amends the human wizard's online default (FR-001 stays unchanged for the expert layer, agents and `plan`); its amendment table lists the changed texts.
 
 **Later work**: owned retirement is reused by the workspace-wide `stw tidy` wizard of [Spec 041](../041-tidy-wizard/spec.md), which also relaxes the ownership binding after a branch switch (issue #174).
 
