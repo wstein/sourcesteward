@@ -12,6 +12,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"github.com/wstein/sourcesteward/internal/tidywizard/planset"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/tidywizard/prompt"
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
 )
@@ -154,5 +155,5 @@ func summarize(set planset.Set, cands []tidywizard.Candidate) string {
 		effects += len(c.Effects)
 		repos[c.Repo] = true
 	}
-	return fmt.Sprintf("%d effects in %d repositories", effects, len(repos))
+	return fmt.Sprintf("%s in %s", pluralize.Count(effects, "effect", "effects"), pluralize.Count(len(repos), "repository", "repositories"))
 }
