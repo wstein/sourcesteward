@@ -325,7 +325,7 @@ func TestMergedPullRequestNumberReachesTheCandidates(t *testing.T) {
 		{Repo: "a", Tip: "tipOld"}: {State: tidywizard.PRMerged, Number: 42},
 		{Repo: "a", Tip: "tipOwn"}: {State: tidywizard.PRUnknown},
 	}}
-	if _, _, err := runTidyBoth(t, "a\nn\n"); err != nil {
+	if _, _, err := runTidyBoth(t, "a\nn\n", "--rows"); err != nil {
 		t.Fatal(err)
 	}
 	got := prs(w)
@@ -341,7 +341,7 @@ func TestMergedPullRequestNumberReachesTheCandidates(t *testing.T) {
 		}
 	}
 	w.online = tidywizard.OnlineOutcome{Facts: map[tidywizard.TipKey]tidywizard.PREvidence{{Repo: "a", Tip: "tipOld"}: {State: tidywizard.PRMerged, Number: 42}}}
-	if _, _, err := runTidyBoth(t, "a\nn\n", "--offline"); err != nil {
+	if _, _, err := runTidyBoth(t, "a\nn\n", "--rows", "--offline"); err != nil {
 		t.Fatal(err)
 	}
 	if got := prs(w); got["branch:a:claude/old"] != 0 || len(got) == 0 {

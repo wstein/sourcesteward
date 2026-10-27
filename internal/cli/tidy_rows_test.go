@@ -97,16 +97,20 @@ func TestBareTidyWithoutATerminalPrintsTheGroupedOverview(t *testing.T) {
 	}
 }
 
-// The numbered choice of the interactive wizard still needs the numbers of the row view until the
-// group steps replace it, so a human on a terminal keeps seeing the rows.
-func TestBareTidyOnATerminalKeepsTheNumberedRows(t *testing.T) {
+// A human on a terminal goes through the group steps of Spec 044; the numbered row view and its
+// question of Spec 041 stay with --rows.
+func TestBareTidyOnATerminalGoesThroughTheGroupStepsAndRowsKeepsTheNumbers(t *testing.T) {
 	newInteractive(t, true, true)
 	out, err := runTidy(t, "\n")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "[1] safe") || !strings.Contains(out, "Apply which?") {
+	if !strings.Contains(out, "Continue?") || strings.Contains(out, "[1] safe") || strings.Contains(out, "Apply which?") {
 		t.Errorf("%s", out)
+	}
+	out, err = runTidy(t, "\n", "--rows")
+	if err != nil || !strings.Contains(out, "[1] safe") || !strings.Contains(out, "Apply which?") {
+		t.Errorf("--rows: %v\n%s", err, out)
 	}
 }
 
