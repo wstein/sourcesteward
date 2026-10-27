@@ -27,6 +27,8 @@ type docSession struct {
 	// from and until cut the shown part: it starts at the first occurrence of from and ends before
 	// the first occurrence of until after it (either may be empty).
 	from, until string
+	// storeYes answers the store question, which is read from the controlling terminal, with y.
+	storeYes bool
 	// showTyped shows the text written to the controlling terminal for the typed words.
 	showTyped bool
 }
@@ -36,7 +38,7 @@ var docSessions = []docSession{
 	{name: "review", answers: []string{"", "r", "y", "n", "s"}, from: "Step 1 of 4", until: "Step 3 of 4"},
 	{name: "terms", answers: []string{"", "s", "s", "s", "9", "w except", "w except 3", "s", "e", "o:codex", ""}, from: "      7  orange  /w/unk"},
 	{name: "decision", answers: []string{"", "s", "s", "s", "6", "y", "s", "q"}, from: "      7  orange  /w/unk"},
-	{name: "own", answers: []string{"a", "", "y"}, ownOnly: true},
+	{name: "own", answers: []string{"a", ""}, ownOnly: true, storeYes: true},
 }
 
 var (
@@ -73,7 +75,12 @@ func docOutput(t *testing.T, s docSession) (stdout, typed string) {
 		}
 		j.res.Candidates = own
 	}
-	out, tty, err := j.run(strings.Join(s.answers, "\n")+"\n", rightWord)
+	out, tty, err := j.run(strings.Join(s.answers, "\n")+"\n", func(q string) string {
+		if s.storeYes && strings.Contains(q, "Store this plan set?") {
+			return "y"
+		}
+		return rightWord(q)
+	})
 	if err != nil {
 		t.Fatalf("%s: %v\n%s", s.name, err, out)
 	}

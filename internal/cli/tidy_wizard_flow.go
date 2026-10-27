@@ -166,6 +166,9 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 		}
 		return exit()
 	}
+	if err := tidyTerminalAvailable(); err != nil {
+		return runtimeFailure{err}
+	}
 	prep := run.prep
 	foreign := false
 	for _, r := range res.Rows {
@@ -173,7 +176,7 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 	}
 	if !foreign {
 		// An own-only selection has no typed word; the summary line is followed by the store question.
-		yes, err := prompt.YesNoQuit(in, out, "Store this plan set?", true)
+		yes, err := tidyTerminalQuestion("Store this plan set?", true)
 		if cause := interruptedWizard(run, ""); cause != nil {
 			return runtimeFailure{cause}
 		}

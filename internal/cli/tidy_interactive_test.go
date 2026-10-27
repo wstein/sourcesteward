@@ -25,11 +25,12 @@ type interactive struct {
 	applied []planset.ApplyRequest
 	// confirmOpened counts the openings of the controlling terminal for the typed confirmation.
 	confirmOpened int
+	tty           *terminalAnswers
 }
 
 func newInteractive(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *interactive {
 	t.Helper()
-	i := &interactive{wizardWorld: newWizardWorld(t, stdinTTY, stdoutTTY, environ...)}
+	i := &interactive{wizardWorld: newWizardWorld(t, stdinTTY, stdoutTTY, environ...), tty: &terminalAnswers{Reader: strings.NewReader("n\n")}}
 	oldApply, oldConfirm := tidyApplyPlanSet, tidyConfirmOpener
 	t.Cleanup(func() { tidyApplyPlanSet, tidyConfirmOpener = oldApply, oldConfirm })
 	tidyApplyPlanSet = func(_ context.Context, r planset.ApplyRequest) planset.ApplyResult {
@@ -38,7 +39,7 @@ func newInteractive(t *testing.T, stdinTTY, stdoutTTY bool, environ ...string) *
 	}
 	tidyConfirmOpener = func() (io.ReadWriteCloser, error) {
 		i.confirmOpened++
-		return nil, owner.ErrNoTerminal
+		return i.tty, nil
 	}
 	return i
 }
@@ -82,10 +83,13 @@ func TestInteractiveStoresTheChosenPlanSetAndDoesNotApplyByDefault(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Analysed 2 repositories", "Apply which?", "Stored plan set ", "(5 effects in 2 repositories)", "Nothing has been changed", "Apply it now?", "stw tidy apply "} {
+	for _, want := range []string{"Analysed 2 repositories", "Apply which?", "Stored plan set ", "(5 effects in 2 repositories)", "Nothing has been changed"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("%q missing:\n%s", want, out)
 		}
+	}
+	if !strings.Contains(i.tty.String(), "Apply it now? Run: stw tidy apply ") {
+		t.Errorf("terminal prompt: %q", i.tty.String())
 	}
 	if len(i.applied) != 0 || len(i.planner.specs) == 0 {
 		t.Errorf("applied %d, planned %d", len(i.applied), len(i.planner.specs))
@@ -96,7 +100,8 @@ func TestInteractiveStoresTheChosenPlanSetAndDoesNotApplyByDefault(t *testing.T)
 // authorization and the plan store first.
 func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 	i := newInteractive(t, true, true)
-	out, err := runTidy(t, "a\ny\n", "--rows")
+	i.tty.Reader = strings.NewReader("y\n")
+	out, err := runTidy(t, "a\nn\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +117,8 @@ func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 	}
 	for _, answer := range []string{"a\nyes\nyes\nyes\n", "a\nn\n", "a\n", "a\nY\nY\nY\n"} {
 		i := newInteractive(t, true, true)
-		_, err := runTidy(t, answer, "--rows")
+		i.tty.Reader = strings.NewReader(strings.TrimPrefix(answer, "a\n"))
+		_, err := runTidy(t, "a\ny\n", "--rows")
 		if len(i.applied) != 0 {
 			t.Errorf("%q applied %d (err %v)", answer, len(i.applied), err)
 		}
@@ -195,6 +201,7 @@ func TestInteractiveAgentModeDoesNotPrompt(t *testing.T) {
 // one the choice fails with exit 1 and nothing is stored or applied.
 func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 	i := newInteractive(t, true, true)
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { i.confirmOpened++; return nil, owner.ErrNoTerminal }
 	_, err := runTidy(t, "4\n", "--rows")
 	var failure runtimeFailure
 	if !errors.As(err, &failure) || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 || i.confirmOpened == 0 {
@@ -313,7 +320,8 @@ func TestInteractiveDecliningKeepsTheExitRules(t *testing.T) {
 // stored and that nothing was applied.
 func TestInteractiveInvalidAnswersAtTheApplyQuestion(t *testing.T) {
 	i := newInteractive(t, true, true)
-	_, err := runTidy(t, "a\nx\nx\nx\n", "--rows")
+	i.tty.Reader = strings.NewReader("x\nx\nx\n")
+	_, err := runTidy(t, "a\ny\n", "--rows")
 	var failure runtimeFailure
 	files := storedSets(t, i.prep.PlanStore)
 	if !errors.As(err, &failure) || len(files) != 1 || len(i.applied) != 0 {
@@ -386,7 +394,12 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 		var out bytes.Buffer
 		cmd.SetOut(&out)
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetIn(in)
+		if tc.after == 1 {
+			cmd.SetIn(strings.NewReader("a\n"))
+			i.tty.Reader = &cancelOnRead{r: strings.NewReader("y\n"), cancel: cancel, after: 0}
+		} else {
+			cmd.SetIn(in)
+		}
 		cmd.SetArgs([]string{"--rows"})
 		err := cmd.ExecuteContext(ctx)
 		var failure runtimeFailure
@@ -402,11 +415,13 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 // The sample session of docs/tidy.md and of the specification is the real output of the wizard on
 // this fixture (answers a and n); the plan id (12 hex characters of a SHA-256 over the plan content) is normalized to 3f9c2a7e41b8 so the sample stays stable.
 func TestTidyExampleMatchesTheDocs(t *testing.T) {
-	newInteractive(t, true, true)
+	i := newInteractive(t, true, true)
 	out, err := runTidy(t, "a\nn\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The terminal question follows the stored-set message; the example combines both streams.
+	out += i.tty.String()
 	out = regexp.MustCompile(`\b[0-9a-f]{12}\b`).ReplaceAllString(out, "3f9c2a7e41b8")
 	lines := strings.Split(out, "\n")
 	for i := range lines {

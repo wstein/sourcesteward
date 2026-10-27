@@ -16,7 +16,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard/render"
 )
 
-// tidyConfirmOpener opens the controlling terminal for the typed confirmation of foreign rows; a
+// tidyConfirmOpener opens the controlling terminal for every human store/apply answer and typed word; a
 // seam so that tests need no terminal. It is never stdin or stdout.
 var tidyConfirmOpener owner.Opener = owner.DevTTY
 
@@ -47,7 +47,7 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 		fmt.Fprintln(out, "\nNo terminal (or an agent run): nothing was asked and nothing was stored.\nRun `stw tidy plan --save` to store a plan set, or `stw tidy plan --json` for the whole overview.")
 		return exit()
 	}
-	in := bufio.NewReader(cmd.InOrStdin())
+	in := bufio.NewReader(tidySelectionReader{cmd.InOrStdin()})
 	if !w.rows {
 		return runTidyJanitor(cmd, run, doc, in, exit)
 	}
@@ -64,6 +64,9 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 		fmt.Fprintln(out, "Nothing chosen; nothing was stored.")
 		return exit()
 	}
+	if err := tidyTerminalAvailable(); err != nil {
+		return runtimeFailure{err}
+	}
 	set, err := planset.Build(run.ctx, planset.Request{Candidates: res.Candidates, Chosen: choice.Chosen, Derived: prep.Derived, Mode: mode, DecisionConfirmed: choice.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
 	if err != nil {
 		if cause := interruptedWizard(run, ""); cause != nil {
@@ -78,7 +81,7 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
 	fmt.Fprintf(out, "\nStored plan set %s (%s). Nothing has been changed.\n", set.PlanID, summarize(set, res.Candidates))
-	yes, err := prompt.YesNo(in, out, fmt.Sprintf("Apply it now? Run: stw tidy apply %s (or answer y here)", set.PlanID), true)
+	yes, err := tidyTerminalQuestion(fmt.Sprintf("Apply it now? Run: stw tidy apply %s (or answer y here)", set.PlanID), false)
 	if cause := interruptedWizard(run, set.PlanID); cause != nil {
 		return runtimeFailure{cause}
 	}
