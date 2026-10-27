@@ -258,3 +258,17 @@ func TestSummarizeAgreesInNumber(t *testing.T) {
 		}
 	}
 }
+
+// A Ctrl-C that arrives after the last item was applied does not make the finished apply a failure.
+func TestJanitorCancelAfterACompleteApplyIsSuccess(t *testing.T) {
+	j := newJanitor(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	tidyApplyPlanSet = func(context.Context, planset.ApplyRequest) planset.ApplyResult {
+		cancel()
+		return okSet()
+	}
+	out, err := j.runContext(ctx, "a\n\n", answerApply)
+	if err != nil || !strings.Contains(out, `Status: "ok"`) {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
