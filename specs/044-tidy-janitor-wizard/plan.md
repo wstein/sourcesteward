@@ -28,3 +28,26 @@ dry run of the wizard on a copy of the live workspace answering `q` at the final
 
 **Rollback.** The new text is additive: `--json` keeps its shape except additive fields, and the expert layer is untouched (the D12 receipt is a separate commit that can be reverted alone; the D16 commit is **not** reverted without the D12 commit), so a revert of
 P3 and P4 restores the Spec 041 wizard.
+
+## Accepted T012b display composition (2026-10-27)
+
+Apply the owner's [three accepted decisions](https://github.com/wstein/sourcesteward/pull/319)
+through the [native-prune exception](spec.md#accepted-registration-prune-composition-2026-10-27).
+A separate pure adapter consumes the existing typed registration evidence; it never
+feeds native absence into the integration-strength ladder. Orange requires complete
+admission and strict row gates; ownership/absence refusals are kept, blocked/unknown/
+incomplete evidence red, overriding ordinary retained refusals. No green/yellow, online promotion or PR attachment exists here.
+
+Keep metadata-only groups/counts distinct from directories and branches. Only optional
+registration `risk`/`risk_reasons` and separate `summary.registration_prunes` are added
+to overview 4. Counts cover the whole observed filtered view before output cuts, not
+selected effects. Existing candidate definitions, all original required row fields, hash
+inputs/version domains, accepted expert effects and frozen v2/v3 schemas stay unchanged.
+New display combinations may be stricter only when optional risk is present; old rows
+without annotations still validate. Older strict readers may reject the additions.
+
+After this artifact amendment merges, write failing adapter/schema/selection tests and
+causal mutations before product changes. Keep no/default selection, exact disclosure,
+strict owner/scope checks, agent own only, and no unknown ownership override. Manifest-2
+wizard integration follows existing T012b3/T012b4 dependencies; the later D12 receipt
+still needs T012c. This amendment implements no product path and marks no task complete.

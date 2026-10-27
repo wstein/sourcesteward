@@ -14,6 +14,11 @@ this pull request is the specification only.
 - [ ] T002 Failing test and implementation for the group key (effect class, family; branch groups per repository; 15 groups on the live data), path cleaning, and the family rule (leading ASCII lowercase letters of the first path component below `/tmp`, so `/tmp/workharbor-baseline-x/checkout` is `workharbor`; at least 3 members; scratchpads; a key is `[a-z]` only, hostile names).
 - [ ] T003 Failing test and implementation for the group level (worst row) and the counts per level.
 
+Accepted composition addition (2026-10-27; [spec](spec.md#accepted-registration-prune-composition-2026-10-27)):
+T001 must also test the distinct native orange/kept/red mapping, exact proof/effect/
+owner/scope gates, incomplete/contradictory evidence and no green/yellow or online lift.
+Unknown legacy words and unproven legacy stale rows retain their existing behavior.
+
 ### P2 evidence
 
 - [ ] T004 Failing test and implementation of the upstream-gone fact from the local reference database for branches (no network, no write); it adds text only and changes no level; an unreadable state is "not known".
@@ -26,6 +31,11 @@ this pull request is the specification only.
 - [ ] T007 Failing golden tests (SC-007, SC-012) and implementation of the grouped overview, the retain table and `--rows`; the old row view is `--rows`.
 - [ ] T008 Failing tests and implementation of the additive JSON fields (`risk`, `risk_reasons`, `group`, `pr`, `summary` per level), schema, fixtures and freeze digest; classify `--rows` in the flag test (SC-011).
 
+Accepted composition addition: T006/T008 cover optional contract-4 registration risk
+fields, their exact reason combinations, old rows without risk, and separate five-key
+registration counts (green/yellow zero), without changing legacy candidate definitions.
+T007 keeps metadata-only groups/consequences separate; no native-row PR/group field.
+
 ### P4 steps
 
 - [ ] T010 Failing grammar table test (SC-006) and implementation of the selection parser: numbers, ranges, selectors, `except`, junk, 257 bytes, red numbers.
@@ -36,6 +46,12 @@ this pull request is the specification only.
 - [ ] T013b (D16, decided; before or with T013a) Failing tests (SC-015) and implementation reading the store, apply and separate-apply answers from `/dev/tty` in human mode through one opener seam, checking the terminal **before** `planset.Build`, refusing with exit 1 and no sub-plan when there is none; `TestTidyApplyPromptOnATerminal` moves its answers to the seam.
 - [ ] T013 Failing tests (SC-008) and implementation of the final summary, whose last line states the directories deleted for good and the branches, directly before the unchanged typed prompt (and in the apply question); sorted typed words; the prompt text byte-equal; wrong word, bare `y`, stdin input and no terminal refuse and store nothing.
 - [ ] T014 Failing tests (SC-009) for hostile names in every screen, group key and example row; narrow terminal, no terminal, all red, nothing to clean, interrupt (edge-case table).
+
+Accepted composition addition: T011/T012/T013 must preserve the strict original prune
+gate, human explicit proven own/other choices, agent own only and unknown never; no
+Enter/`a`/default prune selection. Refusal tests assert exit and exact reason, with causal
+swaps for proof, scope, unsafe defaults and counts. T012c still gates only the later
+single-word receipt; accepted expert apply is not reopened. No boxes are changed here.
 
 ### P5 docs
 
