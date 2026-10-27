@@ -98,6 +98,11 @@ type PlanContent struct {
 // PlanID returns the content-addressed id: 12 hex characters of the SHA-256 of the canonical
 // content. Editing any bound field, authorized_scopes included, changes the id.
 func PlanID(c PlanContent) string {
+	return PlanDigest(c)[:12]
+}
+
+// PlanDigest returns the full SHA-256 of the same canonical content that PlanID binds.
+func PlanDigest(c PlanContent) string {
 	c.SubPlans = sortedCopy(c.SubPlans)
 	c.Selected = sortedCopy(c.Selected)
 	scopes := append([]Scope{}, c.AuthorizedScopes...)
@@ -110,7 +115,7 @@ func PlanID(c PlanContent) string {
 	}
 	b, _ := json.Marshal(c) // plain strings and bools: cannot fail
 	sum := sha256.Sum256(b)
-	return hex.EncodeToString(sum[:])[:12]
+	return hex.EncodeToString(sum[:])
 }
 
 func sortedCopy(in []string) []string {
