@@ -3,6 +3,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -97,5 +98,27 @@ func TestJanitorReceiptReachesRealPlanSetApply(t *testing.T) {
 	}
 	if typed != 1 {
 		t.Fatalf("receipt must cross CLI handoff: typed=%d prompts=%q", typed, tty.prompts)
+	}
+}
+
+func TestJanitorApplyReportsPartialEffectsWithoutClaimingNothingApplied(t *testing.T) {
+	j := newJanitor(t)
+	tidyApplyPlanSet = func(context.Context, planset.ApplyRequest) planset.ApplyResult {
+		result := okSet()
+		result.Status = "partial"
+		return result
+	}
+	out, _, err := j.run("a\n\n", func(q string) string {
+		if strings.Contains(q, "Apply it now?") {
+			return "y"
+		}
+		return rightWord(q)
+	})
+	var failure runtimeFailure
+	if !errors.As(err, &failure) || !strings.Contains(out, `Status: "partial"`) {
+		t.Fatalf("partial result must remain observable: %v\n%s", err, out)
+	}
+	if strings.Contains(err.Error(), "nothing was applied") {
+		t.Fatalf("a partial apply must not claim no effects: %v", err)
 	}
 }
