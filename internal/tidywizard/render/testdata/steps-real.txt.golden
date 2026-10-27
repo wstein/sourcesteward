@@ -1,0 +1,113 @@
+Step 1 of 15   2 branches in .   risk green
+  Owner     hint Werner Stein (2)
+  Evidence  all of its work is already on the base branch (2)
+  Effect    2 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why green  provably on the base branch
+
+Step 2 of 15   40 directories /tmp/whr*   risk yellow
+  Owner     codex (40)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (38)
+            it has no commit of its own (2)
+  Effect    40 directories are deleted for good in 1 repository (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 3 of 15   24 branches in sourcesteward   risk yellow
+  Owner     hint Werner Stein (19), claude (3), codex (2)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (24)
+  Effect    24 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 4 of 15   15 directories /tmp/whr*   risk yellow
+  Owner     codex (15)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (14)
+            it has no commit of its own (1)
+  Effect    15 directories are deleted for good in 1 repository, and their branches too (restorable)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 5 of 15   9 branches in bundledock   risk yellow
+  Owner     hint Werner Stein (5), claude (4)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (9)
+  Effect    9 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 6 of 15   5 branches in crewbook   risk yellow
+  Owner     hint Werner Stein (5)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (5)
+  Effect    5 branches are deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 7 of 15   1 branch in chartscribe   risk yellow
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+  Effect    1 branch is deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 8 of 15   1 branch in workharbor   risk yellow
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+  Effect    1 branch is deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 9 of 15   1 branch in sheetmill   risk yellow
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+  Effect    1 branch is deleted in 1 repository (restorable)
+  Recover   history stays under refs/stw/recovery/v3/...; undo with stw tidy restore (see stw tidy history)
+  Why yellow  on the base as equal patches, not as the same commits
+
+Step 10 of 15   51 directories /tmp/workharbor*   risk orange
+  Owner     hint Werner Stein (51)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (50)
+            no record says whose it is (50)
+            it has no commit of its own (1)
+  Effect    51 directories are deleted for good in 1 repository (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
+
+Step 11 of 15   7 directories agent scratchpads   risk orange
+  Owner     hint Werner Stein (7)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (7)
+            no record says whose it is (7)
+  Effect    7 directories are deleted for good in 2 repositories (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
+
+Step 12 of 15   4 directories other in /tmp   risk orange
+  Owner     hint Werner Stein (4)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (4)
+            no record says whose it is (4)
+  Effect    4 directories are deleted for good in 2 repositories (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
+
+Step 13 of 15   3 directories /tmp/crewbook*   risk orange
+  Owner     hint Werner Stein (3)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (3)
+            no record says whose it is (3)
+  Effect    3 directories are deleted for good in 1 repository, and their branches too (restorable)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
+
+Step 14 of 15   1 directory /tmp/crewbook*   risk orange
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+            no record says whose it is (1)
+  Effect    1 directory is deleted for good in 1 repository (their branches stay)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
+
+Step 15 of 15   1 directory in /workspaces/Anchorage/scratch   risk orange
+  Owner     hint Werner Stein (1)
+  Evidence  the work is on the base as equal patches (a rebase merge), not as the same commits (1)
+            no record says whose it is (1)
+  Effect    1 directory is deleted for good in 1 repository, and their branches too (restorable)
+  Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
+  Why orange  on the base as equal patches and one more fact raises the risk; no record says whose it is
