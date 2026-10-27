@@ -749,10 +749,12 @@ waits for a locked-plus-prunable marker. Historical T012a/T013 completion does n
 
 [Spec 044's accepted native exception](../044-tidy-janitor-wizard/spec.md#accepted-registration-prune-composition-2026-10-27)
 assigns orange only after complete admission and a consistent safe row with exact native
-proof, original task-record ownership and proven own/other scope. Retained ownership/
-absence refusals are kept with their row reason; blocked, unknown, incomplete or
-contradictory evidence is red/not-judged, overriding the ordinary retained-refusal
-rule. Legacy unproven stale rows remain kept. Native prunes are never green/yellow. Optional
+proof, original task-record ownership and proven own/other scope. Verdict `retain`
+with reason `registration-prune-ownership-unproven` or `registration-prune-absence-unproven`
+is always kept with that exact row reason. Verdict `blocked` or `unknown`, or a safe
+row contradicting native admission, is red/not-judged. Observation incompleteness does
+not override the retained mapping. Legacy stale-worktree rows not represented in the
+contract-4 registration array stay kept. Native prunes are never green/yellow. Optional
 contract-4 `risk`/`risk_reasons` and separate `summary.registration_prunes` counts are
 additive display fields; counts cover the whole observed filtered view before output
 cuts, not selected effects. No registration `pr`/`group`, frozen v2/v3 change or ID/digest

@@ -88,8 +88,8 @@ No source work in this specification PR; no existing task state changes.
 ## Accepted T012b risk composition (2026-10-27)
 
 The owner accepted [all three choices in PR #319](https://github.com/wstein/sourcesteward/pull/319).
-T012b1/T012b2's follow-up tests must cover native orange, ownership/absence-refusal kept,
-blocked/unknown/incomplete/contradictory red, exact risk reasons and optional overview-4
+T012b1/T012b2's follow-up tests must cover native orange, retained ownership/absence-refusal
+always kept, blocked/unknown or contradictory safe rows red, exact risk reasons and optional overview-4
 risk fields with old unannotated rows still valid. Separate metadata-only groups/counts
 exclude directory/branch totals. Human explicit choices require proven own/other scope,
 agents own only, unknown never; Enter/`a`/default never select prune rows, and online

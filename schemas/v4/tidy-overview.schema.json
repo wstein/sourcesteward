@@ -328,6 +328,13 @@
                 "const": [
                   "not-judged"
                 ]
+              },
+              "verdict": {
+                "enum": [
+                  "safe",
+                  "blocked",
+                  "unknown"
+                ]
               }
             },
             "required": [

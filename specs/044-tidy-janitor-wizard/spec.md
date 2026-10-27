@@ -23,11 +23,12 @@ outside the integration ladder, without coercing its kind or proof to legacy wor
 | Native evidence and row | Display level | Risk reasons | Selection |
 | --- | --- | --- | --- |
 | Complete admission and consistent safe row: ready reason, native proof, only `remove-registration`, original task-record ownership, nonempty exact identity/owner/task, full evidence digest, proven own/other scope | orange | `owned-missing-registration` | Explicit human choice under the strict contract-4 gate; agents own only |
-| Retained ownership/absence refusal, with its exact existing row reason | kept | omitted | Never |
-| Blocked, unknown, incomplete or contradictory evidence | red | `not-judged` | Never |
+| Verdict `retain` with reason `registration-prune-ownership-unproven` or `registration-prune-absence-unproven` | always kept, with that exact row reason | omitted | Never |
+| Verdict `blocked` or `unknown`, or a safe row whose fields contradict its native admission | red | `not-judged` | Never |
 
-Blocked, unknown, incomplete or contradictory evidence takes precedence over the
-ordinary retained-refusal rule. Legacy unproven stale-worktree rows stay kept.
+The mapping follows the classified row, not observation completeness alone: an
+incomplete observation does not turn either retained refusal red. A legacy
+`stale-worktree` row not represented in contract-4 `registration_prunes` stays kept.
 
 The orange sentence is: "Only the registration would be removed; the missing checkout
 may have been moved." Absence does not prove deletion rather than a move; observing a

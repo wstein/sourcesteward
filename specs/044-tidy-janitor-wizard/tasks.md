@@ -16,7 +16,8 @@ this pull request is the specification only.
 
 Accepted composition addition (2026-10-27; [spec](spec.md#accepted-registration-prune-composition-2026-10-27)):
 T001 must also test the distinct native orange/kept/red mapping, exact proof/effect/
-owner/scope gates, incomplete/contradictory evidence and no green/yellow or online lift.
+owner/scope gates, retained ownership/absence-refusal always kept despite incomplete
+observation, blocked/unknown or contradictory safe rows red, and no green/yellow or online lift.
 Unknown legacy words and unproven legacy stale rows retain their existing behavior.
 
 ### P2 evidence

@@ -213,10 +213,12 @@ added to a registration row; online evidence adds nothing to its absence proof.
   proof, ready reason, only `remove-registration`, original task-record ownership,
   nonempty identity/owner/task, full evidence digest and proven `own` or `other` scope.
   Shape validation cannot replace that native proof or fresh planning.
-- Retained ownership/absence refusals are kept with their exact existing row reason.
-  Blocked, unknown, incomplete or contradictory evidence is red/not-judged and never
-  choosable. This red rule takes precedence over an ordinary retained refusal.
-  Legacy unproven stale rows remain kept. A conservative red display never grants a native capability.
+- Verdict `retain` with reason `registration-prune-ownership-unproven` or
+  `registration-prune-absence-unproven` is always kept with that exact row reason.
+  Verdict `blocked` or `unknown`, or a safe row whose fields contradict its native
+  admission, is red/not-judged and never choosable. An incomplete observation alone
+  does not override the classified row's kept mapping. Legacy stale-worktree rows
+  not represented in the contract-4 registration array remain kept.
 
 Optional `summary.registration_prunes` counts the whole observed registration view
 after filters and before output truncation; these are not selected-effect counts. It is a separate object with required nonnegative integer keys
