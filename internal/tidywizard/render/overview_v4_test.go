@@ -196,3 +196,20 @@ func TestOverviewV4SortsUnorderedRegistrationRows(t *testing.T) {
 		t.Fatal("sort mutated input")
 	}
 }
+
+// The legacy line of the overview 4 text agrees in number: 0, 1 and 2 decisions.
+func TestOverviewV4DecisionCountAgreesInNumber(t *testing.T) {
+	for n, want := range map[int]string{0: "0 decisions", 1: "1 decision\n", 2: "2 decisions"} {
+		in := input()
+		in.Result.Candidates = nil
+		for i := 0; i < n; i++ {
+			c := cand("sourcesteward", tidywizard.KindWorktree, "/tmp/wt-dec"+string(rune('a'+i)), tidywizard.VerdictDecision, "locked-stw", owner.ScopeUnknown)
+			c.Effects = []string{"remove-registration", "remove-files"}
+			in.Result.Candidates = append(in.Result.Candidates, c)
+		}
+		out, _ := TextV4(BuildV4(in, nil), TextOptions{})
+		if !strings.Contains(out, want) {
+			t.Errorf("%d decisions: want %q in\n%s", n, want, out)
+		}
+	}
+}
