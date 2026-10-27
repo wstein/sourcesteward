@@ -86,8 +86,9 @@ rules are already decided. The default legacy retained row stays separate from t
 explicit read-only native-prune source; do not forge integration proof or a branch leg.
 
 The owner accepted the display composition on 2026-10-27 ([PR #319](https://github.com/wstein/sourcesteward/pull/319)):
-complete native admission maps to orange, retained ownership/absence refusals to kept,
-and blocked/unknown/incomplete or contradictory evidence to red/not-judged. Add only optional
+complete native admission maps to orange; retained ownership-unproven/absence-unproven
+rows are always kept with their exact reason, while blocked/unknown or contradictory
+safe rows are red/not-judged. Observation incompleteness alone does not override kept. Add only optional
 row risk/reasons and separate metadata-only summary counts; no green/yellow, PR field,
 Enter/`a`/default selection or unknown-owner admission. Human choices retain the strict
 proven own/other scope gate; agents remain own only. Preserve existing row/hash/version

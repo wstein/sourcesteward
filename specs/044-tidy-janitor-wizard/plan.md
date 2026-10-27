@@ -35,8 +35,10 @@ Apply the owner's [three accepted decisions](https://github.com/wstein/sourceste
 through the [native-prune exception](spec.md#accepted-registration-prune-composition-2026-10-27).
 A separate pure adapter consumes the existing typed registration evidence; it never
 feeds native absence into the integration-strength ladder. Orange requires complete
-admission and strict row gates; ownership/absence refusals are kept, blocked/unknown/
-incomplete evidence red, overriding ordinary retained refusals. No green/yellow, online promotion or PR attachment exists here.
+admission and strict row gates. Verdict `retain` with the ownership-unproven or
+absence-unproven reason is always kept with that exact reason; blocked/unknown and
+contradictory safe rows are red/not-judged. Observation incompleteness alone does not
+change this row mapping. No green/yellow, online promotion or PR attachment exists here.
 
 Keep metadata-only groups/counts distinct from directories and branches. Only optional
 registration `risk`/`risk_reasons` and separate `summary.registration_prunes` are added
