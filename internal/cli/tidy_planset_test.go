@@ -70,7 +70,7 @@ func TestTidyApplyPlanIDWithYesAuthorizesAndReportsJSON(t *testing.T) {
 		t.Fatalf("calls %d", len(*got))
 	}
 	r := (*got)[0]
-	if r.PlanID != setID || !r.Authorize || len(r.StateDirs) == 0 || r.StateDirs[0] != "/s/one" || r.Mode.Mode != owner.ModeAgent || r.Applier == nil || r.Confirm == nil {
+	if r.PlanID != setID || !r.Authorize || len(r.StateDirs) == 0 || r.StateDirs[0] != "/s/one" || r.Mode.Mode != owner.ModeAgent || r.Applier == nil || r.Confirm == nil || r.Receipt != nil {
 		t.Fatalf("%+v", r)
 	}
 	var res planset.ApplyResult

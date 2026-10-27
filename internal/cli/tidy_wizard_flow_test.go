@@ -323,9 +323,9 @@ func TestJanitorOwnOnlySelectionAsksToStore(t *testing.T) {
 	}
 }
 
-// Until the confirmation receipt exists the wizard only prints the exact next command and never
-// applies; the seam gets the stored set and nothing else (Spec 044 P4b implements it).
-func TestJanitorHandsOverToTheApplyStepAndNeverApplies(t *testing.T) {
+// The default-no terminal apply step retains the exact next command for a later run.
+// The handoff includes the stored set and its receipt, but no stdin answer source.
+func TestJanitorHandsOverToTheApplyStepAndDoesNotApplyByDefault(t *testing.T) {
 	j := newJanitor(t)
 	out, _, err := j.run("a\n\n", rightWord)
 	if err != nil {
@@ -338,9 +338,9 @@ func TestJanitorHandsOverToTheApplyStepAndNeverApplies(t *testing.T) {
 		t.Errorf("%s", out)
 	}
 	if strings.Contains(out, "Apply it now?") {
-		t.Errorf("the wizard asks to apply before the receipt exists:\n%s", out)
+		t.Errorf("the apply question must go to the controlling terminal, not stdout:\n%s", out)
 	}
-	// The seam is an interface: a double sees the stored set and the same streams.
+	// The seam receives the stored set and the same-run opaque receipt.
 	j = newJanitor(t)
 	spy := &applySpy{}
 	old := tidyApplyStep
@@ -349,7 +349,7 @@ func TestJanitorHandsOverToTheApplyStepAndNeverApplies(t *testing.T) {
 	if _, _, err = j.run("a\n\n", rightWord); err != nil {
 		t.Fatal(err)
 	}
-	if len(spy.got) != 1 || spy.got[0].Set.PlanID == "" || spy.got[0].Store != j.prep.PlanStore || len(spy.got[0].Set.Items) != 4 || len(j.applied) != 0 {
+	if len(spy.got) != 1 || spy.got[0].Set.PlanID == "" || spy.got[0].Store != j.prep.PlanStore || len(spy.got[0].Set.Items) != 4 || spy.got[0].Receipt == nil || len(j.applied) != 0 {
 		t.Errorf("%+v", spy.got)
 	}
 }

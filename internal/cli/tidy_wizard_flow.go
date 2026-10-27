@@ -25,37 +25,72 @@ var tidyTerminalWidth = func(out io.Writer) int {
 	return cols
 }
 
-// wizardApplyStep is what the janitor wizard hands the stored plan set to (Spec 044 P4). Until the
-// confirmation receipt exists (D12, T013a) the only implementation prints the exact command that
-// applies the set and never applies it; the receipt step replaces it and asks the remaining
-// questions on /dev/tty (D16, T013b).
+// wizardApplyStep receives the stored selection and its same-run confirmation receipt.
+// The terminal apply step obtains explicit authorization before entering the shared apply path.
 type wizardApplyStep interface {
 	Confirm(h wizardHandoff) error
 }
 
 // wizardHandoff is everything the apply step may use: the stored set, its store, the streams of the
-// run. It carries no receipt and no word that was typed.
+// run, and an opaque receipt. It carries no word that was typed or stdin answer source.
 type wizardHandoff struct {
 	Cmd     *cobra.Command
 	Run     *wizardRun
 	Set     planset.Set
 	Store   string
 	Summary string
-	In      *bufio.Reader
+	Receipt *planset.Receipt
 	Out     io.Writer
 }
 
-// printNextCommand is the apply step of the wizard before the receipt: it says that nothing has
-// been changed and prints the one expert command that applies the stored plan set.
-type printNextCommand struct{}
+// terminalApplyStep asks the remaining authorization question on the controlling terminal.
+type terminalApplyStep struct{}
 
-func (printNextCommand) Confirm(h wizardHandoff) error {
-	_, err := fmt.Fprintf(h.Out, "\nStored plan set %s (%s). Nothing has been changed.\nApply it with: stw tidy apply %s --state-dir %s\n", h.Set.PlanID, h.Summary, h.Set.PlanID, shellWord(h.Store))
+func (terminalApplyStep) Confirm(h wizardHandoff) error {
+	if _, err := fmt.Fprintf(h.Out, "\nStored plan set %s (%s). Nothing has been changed.\nApply it with: stw tidy apply %s --state-dir %s\n", h.Set.PlanID, h.Summary, h.Set.PlanID, shellWord(h.Store)); err != nil {
+		return err
+	}
+	dirs, branches := 0, 0
+	chosen := map[string]bool{}
+	for _, item := range h.Set.Items {
+		chosen[item.ID] = true
+	}
+	for _, candidate := range h.Run.res.Candidates {
+		if !chosen[candidate.ID] {
+			continue
+		}
+		for _, effect := range candidate.Effects {
+			if effect == "remove-files" {
+				dirs++
+			}
+			if strings.HasPrefix(effect, "delete-branch:") {
+				branches++
+			}
+		}
+	}
+	question := fmt.Sprintf("Apply it now? Plan %s (directories deleted for good: %d; branches (restorable): %d)", h.Set.PlanID, dirs, branches)
+	if h.Receipt != nil {
+		question += "; the words typed above cover this plan"
+	}
+	yes, err := tidyTerminalQuestion(question, false)
+	if cause := interruptedWizard(h.Run, h.Set.PlanID); cause != nil {
+		return cause
+	}
+	if errors.Is(err, prompt.ErrEndOfInput) || errors.Is(err, prompt.ErrQuit) || (err == nil && !yes) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("%s; the plan set %s is stored and nothing was applied", escFull(err.Error()), h.Set.PlanID)
+	}
+	err = runTidyApplyPlanSet(h.Cmd, h.Set.PlanID, h.Store, true, false, h.Receipt)
+	if cause := interruption(h.Run.ctx, h.Run.timeoutSet, h.Run.timeout); cause != nil {
+		return fmt.Errorf("%v; plan set %s is stored; inspect the apply result before retrying", cause, h.Set.PlanID)
+	}
 	return err
 }
 
-// tidyApplyStep is the seam of the hand-over.
-var tidyApplyStep wizardApplyStep = printNextCommand{}
+// tidyApplyStep is the handoff seam; every real apply still passes through planset.Apply.
+var tidyApplyStep wizardApplyStep = terminalApplyStep{}
 
 var shellSafe = regexp.MustCompile(`\A[A-Za-z0-9_./:@%+=,-]+\z`)
 
@@ -194,7 +229,7 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 			return exit()
 		}
 	}
-	set, _, err := planset.Build(run.ctx, planset.Request{Candidates: run.res.Candidates, Chosen: res.IDs(), Derived: prep.Derived, Mode: run.mode, DecisionConfirmed: res.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
+	set, receipt, err := planset.Build(run.ctx, planset.Request{Candidates: run.res.Candidates, Chosen: res.IDs(), Derived: prep.Derived, Mode: run.mode, DecisionConfirmed: res.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
 	if err != nil {
 		if cause := interruptedWizard(run, ""); cause != nil {
 			return runtimeFailure{cause}
@@ -207,11 +242,8 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 	if err := planset.Store(prep.PlanStore, set); err != nil {
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
-	if err := tidyApplyStep.Confirm(wizardHandoff{Cmd: cmd, Run: run, Set: set, Store: prep.PlanStore, Summary: summarize(set, run.res.Candidates), In: in, Out: out}); err != nil {
-		if cause := interruptedWizard(run, set.PlanID); cause != nil {
-			return runtimeFailure{cause}
-		}
-		return runtimeFailure{fmt.Errorf("%s; the plan set %s is stored and nothing was applied", escFull(err.Error()), set.PlanID)}
+	if err := tidyApplyStep.Confirm(wizardHandoff{Cmd: cmd, Run: run, Set: set, Store: prep.PlanStore, Summary: summarize(set, run.res.Candidates), Receipt: receipt, Out: out}); err != nil {
+		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
 	return exit()
 }

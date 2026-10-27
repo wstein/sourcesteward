@@ -54,7 +54,7 @@ func validateTidyPlanSetApply(cmd *cobra.Command, args []string, yes bool) error
 	return nil
 }
 
-func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, structured bool) error {
+func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, structured bool, receipt *planset.Receipt) error {
 	var flags []string
 	if stateDir != "" {
 		flags = append(flags, stateDir)
@@ -89,7 +89,7 @@ func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, st
 			authorize = true
 		}
 	}
-	res := tidyApplyPlanSet(cmd.Context(), planset.ApplyRequest{StateDirs: dirs, PlanID: id, Mode: mode, Authorize: authorize, Confirm: tidyConfirmOpener, Applier: planset.V3Applier{ApplyFunc: workspace.ApplyTidyV3}})
+	res := tidyApplyPlanSet(cmd.Context(), planset.ApplyRequest{StateDirs: dirs, PlanID: id, Mode: mode, Authorize: authorize, Receipt: receipt, Confirm: tidyConfirmOpener, Applier: planset.V3Applier{ApplyFunc: workspace.ApplyTidyV3}})
 	if err := writeTidyPlanSetResult(cmd.OutOrStdout(), res, structured); err != nil {
 		return runtimeFailure{err}
 	}
