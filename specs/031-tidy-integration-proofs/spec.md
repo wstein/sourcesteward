@@ -5,6 +5,8 @@
 **Input**: Dogfooding `stw tidy` (Spec 029 contract 3) on this repository (149 local branches, 111 worktrees, GitHub rebase-merge) and on the Anchorage umbrella (submodules). Forge issues: #79 (plan refused for `submodule.*` or `core.hooksPath` configuration), #80 (v1 plan fails at the 64 KiB `nativeOutputLimit` around 146 branches/86 worktrees), #81 (v3 online plan needs explicit `--pr OID=N`; duplicate OIDs rejected as duplicate hints; offline rebase-merge integration is not detected: 93 of 149 refs `integration-not-proven`).
 
 > **Status note (2026-10-26):** parts are implemented in source (acceptance runner PR 110, restore and history PR 109, review report PR 104, branch config PR 113); T037 keeps the status `planned` until the acceptance tasks (T038 to T044, T052) are done.
+>
+> **See also [Spec 044](../044-tidy-janitor-wizard/spec.md) (2026-10-26):** it amends the online reads of the human wizard (the endpoint and budget amendment in FR-013 and FR-018); its amendment table lists the changed texts.
 
 ## Scope and decision status
 
