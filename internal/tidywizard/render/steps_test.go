@@ -48,18 +48,21 @@ func TestStepLinesAreSentencesNotCodes(t *testing.T) {
 	for i, g := range Groups(d) {
 		fmt.Fprintf(&b, "Step %d of %d   %s   risk %s\n", i+1, len(Groups(d)), g.Label(), g.Level)
 		lines := d.StepLines(g)
-		if len(lines) < 3 || len(lines) > 6 {
+		if len(lines) < 4 || len(lines) > 8 {
 			t.Errorf("group %d has %d step lines", i, len(lines))
 		}
 		for _, l := range lines {
 			if code.MatchString(l) {
 				t.Errorf("group %d: a code in %q", i, l)
 			}
+			if n := len([]rune(l)); n > 120 {
+				t.Errorf("group %d: a line of %d characters: %q", i, n, l)
+			}
 			b.WriteString(l + "\n")
 		}
 		b.WriteString("\n")
 	}
-	golden(t, "steps-real.txt.golden", []byte(b.String()))
+	golden(t, "steps-real.txt.golden", []byte(strings.TrimRight(b.String(), "\n")+"\n"))
 }
 
 // A hostile owner label reaches the step lines escaped.
