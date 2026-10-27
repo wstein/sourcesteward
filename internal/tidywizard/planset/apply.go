@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -194,13 +195,15 @@ func (a V3Applier) Apply(ctx context.Context, s Step) workspace.V3Result {
 // ApplyRequest asks for the application of a stored plan set. StateDirs are searched in order for
 // the set. Authorize is the explicit authorization of this plan id (an answered prompt, or --yes
 // with the id on the command line); it never stands for the typed confirmation of a set with
-// authorized_scopes, which Confirm reads from the terminal. Mode is the evidence of this run.
+// authorized_scopes, which Confirm reads from the terminal unless Receipt covers those words
+// from this run and Authorize is true. Mode is the evidence of this run.
 type ApplyRequest struct {
 	StateDirs []string
 	PlanID    string
 	Mode      owner.Evidence
 	Authorize bool
 	Confirm   owner.Opener
+	Receipt   *Receipt
 	Applier   Applier
 }
 
@@ -268,6 +271,7 @@ func Find(stateDirs []string, id string) (Set, error) {
 // re-checks its own evidence: a sub-plan that turned stale or failed is reported and the others
 // continue. A sub-plan that was already completed replays as a verified no-op of that apply.
 func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
+	receipt := req.Receipt.consume()
 	if err := workspace.ValidateV3RunMode(runMode(req.Mode)); err != nil {
 		return refused(req.PlanID, CodeModeEvidenceInvalid, "the mode evidence of this run cannot be recorded in the journal: %v Fix the environment (for example STW_OWNER) and retry.", err)
 	}
@@ -293,7 +297,11 @@ func Apply(ctx context.Context, req ApplyRequest) ApplyResult {
 		}
 	}
 	if set.NeedsAuthorization() {
-		for _, w := range confirmWords(set.Items) {
+		words := confirmWords(set.Items)
+		for _, w := range words {
+			if receipt != nil && req.Authorize && receipt.digest == set.computeDigest() && slices.Equal(receipt.words, words) {
+				continue
+			}
 			if req.Confirm == nil {
 				return refused(set.PlanID, CodeConfirmationRefused, "typed confirmation %q failed: %v", w, owner.ErrNoTerminal)
 			}

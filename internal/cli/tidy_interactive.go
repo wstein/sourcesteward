@@ -67,7 +67,7 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 	if err := tidyTerminalAvailable(); err != nil {
 		return runtimeFailure{err}
 	}
-	set, err := planset.Build(run.ctx, planset.Request{Candidates: res.Candidates, Chosen: choice.Chosen, Derived: prep.Derived, Mode: mode, DecisionConfirmed: choice.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
+	set, _, err := planset.Build(run.ctx, planset.Request{Candidates: res.Candidates, Chosen: choice.Chosen, Derived: prep.Derived, Mode: mode, DecisionConfirmed: choice.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
 	if err != nil {
 		if cause := interruptedWizard(run, ""); cause != nil {
 			return runtimeFailure{cause}

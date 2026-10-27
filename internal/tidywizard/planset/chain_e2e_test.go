@@ -85,7 +85,7 @@ func newRealChain(t *testing.T, n int, branches bool) *realChain {
 		}
 		cands, chosen = append(cands, c), append(chosen, c.ID)
 	}
-	set, err := Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human}, planner)
+	set, _, err := Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human}, planner)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}
