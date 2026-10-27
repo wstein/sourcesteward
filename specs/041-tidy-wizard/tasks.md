@@ -80,7 +80,20 @@ FR and SC traceability for these tasks is the table in [plan.md](plan.md#traceab
 Dependencies: accepted Spec 011 T501–T507 and this spec's existing T012a/T013 machinery.
 No source work in this specification PR; no existing task state changes.
 
-- [ ] T012b1 Write failing classifier/selection/overview tests: owned registration satisfying the defined absence predicate is safe with only removal-of-registration effect, selected by own-scope `--save` and "all"; locked missing entries need no native prunable marker; every missing ancestor/device/mount observation or ownership/protection refusal stays unselectable; no forged integration proof or branch leg. Assert the current real-Git `evidence-incomplete` starting point; replace `classify.go:440`'s native-prunable requirement with the new evidence. Validate the owner-approved frozen-schema strategy. Depends on accepted Spec 011 T507.
+- [ ] T012b1 Write failing classifier/selection/overview tests: owned registration satisfying the defined absence predicate is safe with only removal-of-registration effect, eligible for later own-scope agent `--save` and explicit human selection under the strict prune gate, never Enter/`a`/default; locked missing entries need no native prunable marker; every missing ancestor/device/mount observation or ownership/protection refusal stays unselectable; no forged integration proof or branch leg. Assert the current real-Git `evidence-incomplete` starting point; replace `classify.go:440`'s native-prunable requirement with the new evidence. Validate the owner-approved frozen-schema strategy. Depends on accepted Spec 011 T507.
 - [ ] T012b2 Implement only that classifier/selection/overview contract and stable approved reason mapping. Until the new evidence/capability is supported, real locked-missing entries retain `evidence-incomplete`; preserve the synthetic `stale-registration-no-plan-kind` fallback where applicable, without claiming real Git emits locked-plus-prunable. Depends on T012b1 observed red.
 - [ ] T012b3 Write failing grouping/hash/store/planner/apply tests for exactly one named registration per distinct sub-plan, explicit approved ordering, state-directory ownership, tampering/stale refusal, recovery-before-effect, interrupted outcome and verified replay; assert no implicit branch cleanup or jj Git fallback. Depends on T012b2.
 - [ ] T012b4 Implement the approved distinct sub-plan dispatch and ordering, run native and schema acceptance, update reason tables (including docs/tidy.md) and examples only from real fixture output, independently review exact head and report all gaps. Depends on T012b3 observed red. Only this final accepted PR may tick T012b and reconcile completion records.
+
+## Accepted T012b risk composition (2026-10-27)
+
+The owner accepted [all three choices in PR #319](https://github.com/wstein/sourcesteward/pull/319).
+T012b1/T012b2's follow-up tests must cover native orange, ownership/absence-refusal kept,
+blocked/unknown/incomplete/contradictory red, exact risk reasons and optional overview-4
+risk fields with old unannotated rows still valid. Separate metadata-only groups/counts
+exclude directory/branch totals. Human explicit choices require proven own/other scope,
+agents own only, unknown never; Enter/`a`/default never select prune rows, and online
+cannot promote them. Refusal tests assert exit and exact reason and kill causal gate/count swaps.
+T012b3/T012b4's accepted grouping/hash/manifest/order/recovery/dispatch work remains open;
+no expert apply decision is reopened, and T012c still concerns only the later receipt.
+No completion box is changed or implied by this artifact amendment.

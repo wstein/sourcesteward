@@ -731,34 +731,54 @@ mentioning. Specs 011 and 029 get a pointer to this spec; their text is not rewr
 
 ## T012b proposed narrow registration amendment (2026-10-25)
 
-The owner lifted the scope deferral for the
-[Spec 011 narrow prune contract](../011-workspace-reference-tidy/contracts/narrow-registration-prune.md).
-Current `classifyStale` retains a matching stw-owned locked missing registration as
-`stale-worktree` / `evidence-incomplete`, with "the Git administrative entry is not
-provably prunable" (`internal/tidywizard/classify.go:440`). Git does not emit native
-`prunable` for that locked entry. Earlier ownership/record checks still take precedence.
-`stale-registration-no-plan-kind` remains only the synthetic locked-plus-prunable
-fallback. T012b must replace the `!w.Prunable` gate with the new predicate, not wait
-for an unreachable native marker. Historical T012a/T013 completion does not implement
-this extension.
+**Accepted interface, with display composition accepted 2026-10-27.** The historical
+heading is retained for links. The owner lifted the scope deferral for the
+[Spec 011 narrow prune contract](../011-workspace-reference-tidy/contracts/narrow-registration-prune.md),
+accepted contract 4/version 4/manifest 2, and accepted all three risk-composition choices
+in [PR #319](https://github.com/wstein/sourcesteward/pull/319). The expert planner, apply,
+restore, recovery, ID/digest encodings and version domains are settled; this amendment
+only reconciles overview display and later wizard selection.
 
-Future behavior: a row becomes `safe` only with exact original stw ownership/lock,
-one named registration and Spec 011's defined ENOENT/ancestor/device/mount predicate
-plus complete recovery feasibility. Its only effect is removal of that registration, in its own distinct sub-plan;
-no user files or dependent branch leg. Own-scope `--save` and "all" may select that safe row.
-Every refused or unsupported case stays retained without effects. The predicate does
-not prove historical deletion: a same-filesystem move is an explicit residual risk
-bounded by metadata restoration and separately authorized native repair. Native jj
-and colocated jj have no raw Git fallback.
+The default legacy classifier still retains a real matching locked missing registration
+as `stale-worktree` / `evidence-incomplete`: Git omits `prunable` for a locked entry.
+The merged explicit read-only `--contract 4` source instead reuses full native ownership,
+absence/ancestor/device/mount and recovery-feasibility admission. Its separate row has
+kind `registration-prune`, proof `owned-missing-registration`, only `remove-registration`,
+and no file effect or dependent branch leg. Neither representation invents ancestry or
+waits for a locked-plus-prunable marker. Historical T012a/T013 completion does not finish T012b.
 
-Plan-set identity, strict validation, explicit ordering, apply and recovery must cover the
-new operation without treating it as present-checkout retirement. The exact kind spelling,
-proof/reason representation, selector and restore interface need owner decision under the
-contract's frozen-schema options; this amendment reserves no enum or version and changes
-no frozen bytes. Existing branch restore is not registration restoration. The future
-recovery path uses the additional private raw payload, separate authorization and partial
-reporting in that contract. T012b1–T012b4 implement and verify the future behavior after
-Spec 011's accepted expert capability; until then the retain fallback remains.
+[Spec 044's accepted native exception](../044-tidy-janitor-wizard/spec.md#accepted-registration-prune-composition-2026-10-27)
+assigns orange only after complete admission and a consistent safe row with exact native
+proof, original task-record ownership and proven own/other scope. Retained ownership/
+absence refusals are kept with their row reason; blocked, unknown, incomplete or
+contradictory evidence is red/not-judged, overriding the ordinary retained-refusal
+rule. Legacy unproven stale rows remain kept. Native prunes are never green/yellow. Optional
+contract-4 `risk`/`risk_reasons` and separate `summary.registration_prunes` counts are
+additive display fields; counts cover the whole observed filtered view before output
+cuts, not selected effects. No registration `pr`/`group`, frozen v2/v3 change or ID/digest
+change. Metadata-only groups/counts never add to file/directory or branch deletion counts.
+Old rows without annotations remain valid; older strict readers may reject new fields,
+which must not be silently stripped, downgraded or migrated.
+
+Later own-scope agent `--save` may select only safe rows under the approved manifest-2
+gates. Human selection is explicit for verified own/other scope; janitor owner-independent
+choosability never applies, and unknown ownership never qualifies, including by the word
+`unknown`. Historical own-scope "all" wording is superseded: Enter, `a` and default answers
+select no prune row. Risk is not selection, plan persistence, confirmation or effect authorization.
+Existing disclosure and typed confirmations remain exact; T012c separately gates the
+later single-word receipt, not the already accepted expert apply path.
+
+For example (normative cases, not program output), a completely admitted own registration
+is orange and remains unselected on Enter/`a`; an admitted other-owned registration needs
+explicit human choice and the accepted confirmation; an unknown-owner or incomplete row
+is never selected. Each selected registration has only its own metadata-only sub-plan.
+No case deletes user files or branches. Observation prepares no recovery, and absence
+does not distinguish a same-filesystem move from deletion; restoration/repair limits remain.
+Native jj and colocated jj have no raw Git fallback.
+
+T012b3/T012b4 still cover manifest-2 grouping/hash/store/dispatch, stale refusal,
+recovery-before-effect, replay and final native/schema acceptance. No product implementation,
+apply activation, task completion or fabricated fixture output is supplied by this amendment.
 
 ## Verification note: stale registrations do not block a repository (issue 284)
 
