@@ -93,8 +93,7 @@ sh .github/scripts/release-verify.sh version V             # exit 0
 gh api "repos/REPO/releases" --paginate --jq '.[] | select(.tag_name == "V") | .id'   # prints nothing
 ```
 Expected: no tag, release or draft named V; the grammar check exits 0 (`release.yml:62`). Record: the outputs.
-Abort point: V exists in any form: use the next version (`docs/releasing.md`, failure table).
-Wizard: step 2 (version proposal; gates `version-not-monotonic`, `release-exists`).
+Abort point: V exists in any form: use the next version (`docs/releasing.md`, failure table). Wizard: step 2 (gates `version-not-monotonic`, `release-exists`).
 
 ### A5. Optional dry run of the workflow (OWNER, a build: needs your explicit approval)
 
