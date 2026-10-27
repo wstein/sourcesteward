@@ -92,7 +92,8 @@ func noTTY() (io.ReadWriteCloser, error) { return nil, owner.ErrNoTerminal }
 
 func build(t *testing.T, cands []tidywizard.Candidate, chosen []string, ev owner.Evidence, p Planner) (Set, error) {
 	t.Helper()
-	return Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Derived: []derive.Derived{{Name: "remote:r", Value: "origin", Source: "origin"}}, Mode: ev}, p)
+	set, _, err := Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Derived: []derive.Derived{{Name: "remote:r", Value: "origin", Source: "origin"}}, Mode: ev}, p)
+	return set, err
 }
 
 func ids(cs ...tidywizard.Candidate) []string {
@@ -239,7 +240,7 @@ func TestPlanIDIsStableAndBindsEveryPart(t *testing.T) {
 	if diffMode.PlanID == base.PlanID {
 		t.Error("the mode evidence is part of the id")
 	}
-	diffDerived, _ := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{w1, w2}, Chosen: ids(w1, w2), Mode: human}, &fakePlanner{})
+	diffDerived, _, _ := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{w1, w2}, Chosen: ids(w1, w2), Mode: human}, &fakePlanner{})
 	if diffDerived.PlanID == base.PlanID {
 		t.Error("the derived values are part of the id")
 	}
@@ -288,7 +289,7 @@ func TestBuildForeignItemsNeedTheTypedConfirmationAndRecordScopes(t *testing.T) 
 	var err error
 	// The confirmation is "<label> <first 6 of the plan id>".
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, chosen, human)
-	set, err = Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: chosen, Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	set, _, err = Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: chosen, Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil {
 		t.Fatalf("typed confirmation: %v", err)
 	}
@@ -334,14 +335,14 @@ func TestBuildConfirmationRefusals(t *testing.T) {
 		"nil opener":         nil,
 	} {
 		p := &fakePlanner{}
-		_, err := Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human, Confirm: open}, p)
+		_, _, err := Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human, Confirm: open}, p)
 		if err == nil {
 			t.Errorf("%s: a foreign item without the typed confirmation must refuse", name)
 		}
 	}
 	// Without a terminal nothing is planned (so nothing is stored by the planner).
 	p := &fakePlanner{}
-	_, _ = Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human, Confirm: noTTY}, p)
+	_, _, _ = Build(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: human, Confirm: noTTY}, p)
 	if len(p.specs) != 0 {
 		t.Errorf("no terminal: the planner ran %d times, want 0", len(p.specs))
 	}
@@ -350,7 +351,7 @@ func TestBuildConfirmationRefusals(t *testing.T) {
 func TestBuildUnknownScopeUsesTheUnknownWord(t *testing.T) {
 	u := cand(tidywizard.KindWorktree, "r", "u", tidywizard.VerdictSafe, "", owner.SourceUnknown, owner.ScopeUnknown)
 	prefix := planIDFor(t, []tidywizard.Candidate{u}, ids(u), human)
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{u}, Chosen: ids(u), Mode: human, Confirm: ttyWith("unknown " + prefix + "\n")}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{u}, Chosen: ids(u), Mode: human, Confirm: ttyWith("unknown " + prefix + "\n")}, &fakePlanner{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +402,7 @@ func TestBuildRefusesRowsThatAreNotChoosable(t *testing.T) {
 		"nothing chosen":       {nil, nil},
 	} {
 		p := &fakePlanner{}
-		_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{ret, dec}, Chosen: tc.chosen, Mode: human, DecisionConfirmed: tc.decide}, p)
+		_, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{ret, dec}, Chosen: tc.chosen, Mode: human, DecisionConfirmed: tc.decide}, p)
 		if err == nil {
 			t.Errorf("%s must be refused", name)
 		}
@@ -409,7 +410,7 @@ func TestBuildRefusesRowsThatAreNotChoosable(t *testing.T) {
 			t.Errorf("%s: nothing may be planned", name)
 		}
 	}
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{ret, dec}, Chosen: ids(dec), Mode: human, DecisionConfirmed: map[string]bool{dec.ID: true}}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{ret, dec}, Chosen: ids(dec), Mode: human, DecisionConfirmed: map[string]bool{dec.ID: true}}, &fakePlanner{})
 	if err != nil || len(set.Items) != 1 {
 		t.Fatalf("a confirmed decision row is choosable: %v %v", set.Items, err)
 	}
@@ -471,7 +472,7 @@ func TestValidateRefusesIncoherentSets(t *testing.T) {
 func TestValidateRefusesAuthorizedScopesInAgentMode(t *testing.T) {
 	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil || set.Validate() != nil {
 		t.Fatalf("fixture: %v", err)
 	}
@@ -486,7 +487,7 @@ func TestValidateRefusesAuthorizedScopesInAgentMode(t *testing.T) {
 func TestValidateRefusesAnAuthorizedScopeThatNoItemCarries(t *testing.T) {
 	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil || set.Validate() != nil {
 		t.Fatalf("fixture: %v", err)
 	}
@@ -529,7 +530,7 @@ func TestLoadRefusesAnEditedStore(t *testing.T) {
 	}
 	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -623,7 +624,7 @@ func TestAnOwnedJJWorkspaceIsNeverSelectedOrPlanned(t *testing.T) {
 		"chosen":            {Candidates: res.Candidates, Chosen: ids(c), Mode: human},
 		"chosen, confirmed": {Candidates: res.Candidates, Chosen: ids(c), Mode: human, DecisionConfirmed: map[string]bool{c.ID: true}},
 	} {
-		if _, err := Build(context.Background(), req, p); err == nil {
+		if _, _, err := Build(context.Background(), req, p); err == nil {
 			t.Errorf("%s: built", name)
 		}
 	}

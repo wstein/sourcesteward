@@ -383,7 +383,7 @@ func savePlanSet(ctx context.Context, prep analysis.Prepared, res tidywizard.Res
 	if len(chosen) == 0 {
 		return "", "", "nothing to save: no safe item of your own", nil
 	}
-	set, err := planset.Build(ctx, planset.Request{Candidates: res.Candidates, Chosen: chosen, Derived: prep.Derived, Mode: mode}, tidyPlannerFor(prep))
+	set, _, err := planset.Build(ctx, planset.Request{Candidates: res.Candidates, Chosen: chosen, Derived: prep.Derived, Mode: mode}, tidyPlannerFor(prep))
 	if err != nil {
 		return "", "", "", err
 	}

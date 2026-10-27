@@ -194,7 +194,7 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 			return exit()
 		}
 	}
-	set, err := planset.Build(run.ctx, planset.Request{Candidates: run.res.Candidates, Chosen: res.IDs(), Derived: prep.Derived, Mode: run.mode, DecisionConfirmed: res.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
+	set, _, err := planset.Build(run.ctx, planset.Request{Candidates: run.res.Candidates, Chosen: res.IDs(), Derived: prep.Derived, Mode: run.mode, DecisionConfirmed: res.Confirmed, Confirm: tidyConfirmOpener}, tidyPlannerFor(prep))
 	if err != nil {
 		if cause := interruptedWizard(run, ""); cause != nil {
 			return runtimeFailure{cause}

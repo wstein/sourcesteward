@@ -198,7 +198,7 @@ func TestOptionsNeverGuessMissingInputs(t *testing.T) {
 func TestStaleRegistrationHasNoPlanKind(t *testing.T) {
 	r := &recorder{}
 	s := own(tidywizard.KindStaleWorktree, "r", "gone")
-	_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{s}, Chosen: ids(s), Mode: human}, newPlanner(r))
+	_, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{s}, Chosen: ids(s), Mode: human}, newPlanner(r))
 	if !errors.Is(err, ErrNotPlannable) || reasonOf(t, err) != ReasonStaleNoPlanKind {
 		t.Fatal(err)
 	}
@@ -312,7 +312,7 @@ func TestPreflightRefusesBeforeTheFirstSubPlanIsPlanned(t *testing.T) {
 	b := own(tidywizard.KindBranch, "r", "x") // plannable, and its id sorts before the tracking reference
 	tr := own(tidywizard.KindTrackingRef, "r", "refs/remotes/origin/old")
 	tr.Branch = "refs/remotes/origin/old"
-	_, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{b, tr}, Chosen: ids(b, tr), Mode: human}, p)
+	_, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{b, tr}, Chosen: ids(b, tr), Mode: human}, p)
 	if reasonOf(t, err) != ReasonTrackingOnline {
 		t.Fatalf("err %v", err)
 	}

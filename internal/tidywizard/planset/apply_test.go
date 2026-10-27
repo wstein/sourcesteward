@@ -282,7 +282,7 @@ func TestApplyStopsAndReportsTheRestWhenCancelled(t *testing.T) {
 func TestApplyScopeNotAuthorized(t *testing.T) {
 	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
-	authorized, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	authorized, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -314,7 +314,7 @@ func TestApplyScopeNotAuthorized(t *testing.T) {
 func TestApplyOfAuthorizedScopesNeedsTheTypedConfirmation(t *testing.T) {
 	a, f := own(tidywizard.KindWorktree, "r", "a"), foreign(tidywizard.KindWorktree, "r", "f")
 	prefix := planIDFor(t, []tidywizard.Candidate{a, f}, ids(a, f), human)
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a, f}, Chosen: ids(a, f), Mode: human, Confirm: ttyWith("codex " + prefix + "\n")}, &fakePlanner{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestApplyOnARealRepositoryDeletesTheMergedBranchAndReplaysAsANoOp(t *testin
 	git("merge", "-q", "--no-ff", "-m", "merge", "merged")
 	planner := V3Planner{Repos: map[string]RepoSpec{"r": {Name: "r", Path: repo, Base: "refs/heads/main"}}, PlanStore: state, PlanFunc: workspace.PlanTidyV3}
 	b := own(tidywizard.KindBranch, "r", "merged")
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{b}, Chosen: ids(b), Mode: human}, planner)
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{b}, Chosen: ids(b), Mode: human}, planner)
 	if err != nil {
 		t.Fatal(err)
 	}

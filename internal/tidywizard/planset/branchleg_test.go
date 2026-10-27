@@ -448,7 +448,7 @@ func newRealLeg(t *testing.T, chosen string) *realLeg {
 	c := cand(tidywizard.KindWorktree, "r", "wt", tidywizard.VerdictSafe, "claude", owner.SourceTaskRecord, owner.ScopeOwn)
 	c.Path, c.ID, c.Task, c.Branch = f.wt, "worktree:r:"+f.wt, "task1", "feat"
 	c.Effects = []string{"remove-registration", "remove-files", "delete-branch:" + chosen}
-	set, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{c}, Chosen: []string{c.ID}, Mode: human}, planner)
+	set, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{c}, Chosen: []string{c.ID}, Mode: human}, planner)
 	if err != nil {
 		t.Fatalf("build: %v", err)
 	}

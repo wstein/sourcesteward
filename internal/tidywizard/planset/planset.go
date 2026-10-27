@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
@@ -114,6 +115,10 @@ type Set struct {
 }
 
 func (s Set) computeID() string {
+	return s.computeDigest()[:12]
+}
+
+func (s Set) computeDigest() string {
 	subs := make([]string, 0, len(s.SubPlans))
 	for _, p := range s.SubPlans {
 		subs = append(subs, p.key())
@@ -122,7 +127,7 @@ func (s Set) computeID() string {
 	for _, i := range s.Items {
 		selected = append(selected, i.key())
 	}
-	return owner.PlanID(owner.PlanContent{SubPlans: subs, Derived: s.Derived, Selected: selected, AuthorizedScopes: s.AuthorizedScopes, Mode: s.Mode})
+	return owner.PlanDigest(owner.PlanContent{SubPlans: subs, Derived: s.Derived, Selected: selected, AuthorizedScopes: s.AuthorizedScopes, Mode: s.Mode})
 }
 
 // NeedsAuthorization reports whether the set holds an item of scope other or unknown. Apply
@@ -455,15 +460,36 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 	return set, nil
 }
 
+// Receipt is the in-memory confirmation of the foreign words of one built set. Copies share
+// its single-use state. A nil receipt or a zero value never covers a typed prompt.
+type Receipt struct {
+	state *receiptState
+}
+
+type receiptState struct {
+	digest string
+	words  []string
+	used   atomic.Bool
+}
+
+// consume takes the shared state once, including when Apply will refuse before loading a set.
+func (r *Receipt) consume() *receiptState {
+	if r == nil || r.state == nil || r.state.used.Swap(true) {
+		return nil
+	}
+	return r.state
+}
+
 // Build plans the chosen items into a set. A chosen item of scope other or unknown needs the
 // human path and the typed confirmation read from the terminal Confirm opens (the label or
 // "unknown" plus the first 6 characters of the plan id, asked once per word); without a terminal
 // the build fails before any sub-plan is made, and a wrong answer fails after the sub-plans were
-// planned (they are ordinary stored plans that nothing applies). Build never deletes.
-func Build(ctx context.Context, req Request, planner Planner) (Set, error) {
+// planned (they are ordinary stored plans that nothing applies). Build returns a receipt only
+// after every word was confirmed; own-only sets return none. Build never deletes.
+func Build(ctx context.Context, req Request, planner Planner) (Set, *Receipt, error) {
 	chosen, err := choose(req)
 	if err != nil {
-		return Set{}, err
+		return Set{}, nil, err
 	}
 	words := map[string]bool{}
 	for _, c := range chosen {
@@ -473,15 +499,15 @@ func Build(ctx context.Context, req Request, planner Planner) (Set, error) {
 	}
 	if len(words) > 0 {
 		if req.Mode.Mode != owner.ModeHuman {
-			return Set{}, fmt.Errorf("%w: %v", ErrNotPlannable, owner.ErrAgentMode)
+			return Set{}, nil, fmt.Errorf("%w: %v", ErrNotPlannable, owner.ErrAgentMode)
 		}
 		if err := terminalAvailable(req.Confirm); err != nil {
-			return Set{}, err
+			return Set{}, nil, err
 		}
 	}
 	set, err := assemble(ctx, req, planner)
 	if err != nil {
-		return Set{}, err
+		return Set{}, nil, err
 	}
 	list := make([]string, 0, len(words))
 	for w := range words {
@@ -490,10 +516,13 @@ func Build(ctx context.Context, req Request, planner Planner) (Set, error) {
 	sort.Strings(list)
 	for _, w := range list {
 		if err := owner.Confirm(req.Confirm, w, set.PlanID); err != nil {
-			return Set{}, err
+			return Set{}, nil, err
 		}
 	}
-	return set, nil
+	if len(list) == 0 {
+		return set, nil, nil
+	}
+	return set, &Receipt{state: &receiptState{digest: set.computeDigest(), words: list}}, nil
 }
 
 func terminalAvailable(open owner.Opener) error {
