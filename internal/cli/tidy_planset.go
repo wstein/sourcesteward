@@ -74,15 +74,22 @@ func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, st
 	if !yes && mode.Mode == owner.ModeHuman {
 		set, err := tidyFindPlanSet(dirs, id)
 		if err == nil {
-			_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Apply plan %s (%d sub-plans, %d items)? [y/N]: ", id, len(set.SubPlans), len(set.Items))
-			line, _ := bufio.NewReader(io.LimitReader(cmd.InOrStdin(), 256)).ReadString('\n')
+			terminal, err := openTidyTerminal()
+			if err != nil {
+				return runtimeFailure{err}
+			}
+			defer terminal.Close()
+			if _, err := fmt.Fprintf(terminal, "Apply plan %s (%d sub-plans, %d items)? [y/N]: ", id, len(set.SubPlans), len(set.Items)); err != nil {
+				return runtimeFailure{err}
+			}
+			line, _ := bufio.NewReader(io.LimitReader(tidySelectionReader{terminal}, 256)).ReadString('\n')
 			if strings.TrimRight(line, "\r\n") != "y" {
 				return runtimeFailure{fmt.Errorf("plan %s was not authorized; nothing was changed", id)}
 			}
 			authorize = true
 		}
 	}
-	res := tidyApplyPlanSet(cmd.Context(), planset.ApplyRequest{StateDirs: dirs, PlanID: id, Mode: mode, Authorize: authorize, Confirm: owner.DevTTY, Applier: planset.V3Applier{ApplyFunc: workspace.ApplyTidyV3}})
+	res := tidyApplyPlanSet(cmd.Context(), planset.ApplyRequest{StateDirs: dirs, PlanID: id, Mode: mode, Authorize: authorize, Confirm: tidyConfirmOpener, Applier: planset.V3Applier{ApplyFunc: workspace.ApplyTidyV3}})
 	if err := writeTidyPlanSetResult(cmd.OutOrStdout(), res, structured); err != nil {
 		return runtimeFailure{err}
 	}
