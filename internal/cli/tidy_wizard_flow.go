@@ -79,6 +79,9 @@ func (terminalApplyStep) Confirm(h wizardHandoff) error {
 	if errors.Is(err, prompt.ErrEndOfInput) || errors.Is(err, prompt.ErrQuit) || (err == nil && !yes) {
 		return nil
 	}
+	if errors.Is(err, owner.ErrNoTerminal) {
+		return storedNeedsTerminal(err, h.Set.PlanID, h.Store)
+	}
 	if err != nil {
 		return fmt.Errorf("%s; the plan set %s is stored and nothing was applied", escFull(err.Error()), h.Set.PlanID)
 	}

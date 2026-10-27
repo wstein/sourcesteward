@@ -88,6 +88,8 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 	switch {
 	case errors.Is(err, prompt.ErrEndOfInput):
 		return exit()
+	case errors.Is(err, owner.ErrNoTerminal):
+		return runtimeFailure{storedNeedsTerminal(err, set.PlanID, prep.PlanStore)}
 	case err != nil:
 		// The plan set is stored; say so, and that nothing was applied.
 		reason := escFull(err.Error())

@@ -76,7 +76,7 @@ func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, st
 		if err == nil {
 			terminal, err := openTidyTerminal()
 			if err != nil {
-				return runtimeFailure{err}
+				return runtimeFailure{storedNeedsTerminal(err, id, stateDir)}
 			}
 			defer terminal.Close()
 			if _, err := fmt.Fprintf(terminal, "Apply plan %s (%d sub-plans, %d items)? [y/N]: ", id, len(set.SubPlans), len(set.Items)); err != nil {
