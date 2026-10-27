@@ -66,7 +66,7 @@ func storedSets(t *testing.T, store string) []string {
 // The helper itself sees a stored plan set (it is not vacuous).
 func TestInteractiveStoredSetsHelperSeesAStoredSet(t *testing.T) {
 	i := newInteractive(t, true, true)
-	if _, err := runTidy(t, "a\n\n"); err != nil {
+	if _, err := runTidy(t, "a\n\n", "--rows"); err != nil {
 		t.Fatal(err)
 	}
 	if got := storedSets(t, i.prep.PlanStore); len(got) != 1 {
@@ -78,7 +78,7 @@ func TestInteractiveStoredSetsHelperSeesAStoredSet(t *testing.T) {
 // choice, says nothing has been changed, and asks whether to apply; the default is no.
 func TestInteractiveStoresTheChosenPlanSetAndDoesNotApplyByDefault(t *testing.T) {
 	i := newInteractive(t, true, true)
-	out, err := runTidy(t, "a\n\n")
+	out, err := runTidy(t, "a\n\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,7 +96,7 @@ func TestInteractiveStoresTheChosenPlanSetAndDoesNotApplyByDefault(t *testing.T)
 // authorization and the plan store first.
 func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 	i := newInteractive(t, true, true)
-	out, err := runTidy(t, "a\ny\n")
+	out, err := runTidy(t, "a\ny\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 	}
 	for _, answer := range []string{"a\nyes\nyes\nyes\n", "a\nn\n", "a\n", "a\nY\nY\nY\n"} {
 		i := newInteractive(t, true, true)
-		_, err := runTidy(t, answer)
+		_, err := runTidy(t, answer, "--rows")
 		if len(i.applied) != 0 {
 			t.Errorf("%q applied %d (err %v)", answer, len(i.applied), err)
 		}
@@ -129,7 +129,7 @@ func TestInteractiveAppliesOnlyAfterAnExplicitYes(t *testing.T) {
 func TestInteractiveNothingChosenStoresNothing(t *testing.T) {
 	for _, in := range []string{"\n", "n\n", ""} {
 		i := newInteractive(t, true, true)
-		out, err := runTidy(t, in)
+		out, err := runTidy(t, in, "--rows")
 		if err != nil || len(i.planner.specs) != 0 || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 || strings.Contains(out, "Stored plan set") {
 			t.Errorf("%q: err %v\n%s", in, err, out)
 		}
@@ -139,7 +139,7 @@ func TestInteractiveNothingChosenStoresNothing(t *testing.T) {
 // Three invalid answers end the run with exit 1 and nothing stored.
 func TestInteractiveThreeInvalidAnswers(t *testing.T) {
 	i := newInteractive(t, true, true)
-	_, err := runTidy(t, "x\ny\nz\na\n")
+	_, err := runTidy(t, "x\ny\nz\na\n", "--rows")
 	var failure runtimeFailure
 	if !errors.As(err, &failure) || len(i.planner.specs) != 0 || len(i.applied) != 0 {
 		t.Errorf("%v planned %d", err, len(i.planner.specs))
@@ -195,7 +195,7 @@ func TestInteractiveAgentModeDoesNotPrompt(t *testing.T) {
 // one the choice fails with exit 1 and nothing is stored or applied.
 func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 	i := newInteractive(t, true, true)
-	_, err := runTidy(t, "4\n")
+	_, err := runTidy(t, "4\n", "--rows")
 	var failure runtimeFailure
 	if !errors.As(err, &failure) || len(i.applied) != 0 || len(storedSets(t, i.prep.PlanStore)) != 0 || i.confirmOpened == 0 {
 		t.Errorf("err %v, terminal opened %d times", err, i.confirmOpened)
@@ -207,7 +207,7 @@ func TestInteractiveForeignChoiceNeedsTheTypedConfirmation(t *testing.T) {
 func TestInteractiveDetailsAreEscaped(t *testing.T) {
 	i := newInteractive(t, true, true)
 	i.res.Candidates[3].Evidence = "stw lock \x1b[31mforged\x1b[0m\nline"
-	out, err := runTidy(t, "d 5\nn\n")
+	out, err := runTidy(t, "d 5\nn\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +259,7 @@ func TestInteractiveDecisionRowNamesTheLockAndNeedsItsConfirmation(t *testing.T)
 	dec.Proof, dec.Effects = tidywizard.ProofAncestor, []string{"remove-registration", "remove-files"}
 	addCandidate(i, dec)
 	n := numberOf(t, i, dec.ID)
-	out, err := runTidy(t, strconv.Itoa(n)+"\ny\nn\n")
+	out, err := runTidy(t, strconv.Itoa(n)+"\ny\nn\n", "--rows")
 	if err != nil {
 		t.Fatalf("%v\n%s", err, out)
 	}
@@ -277,7 +277,7 @@ func TestInteractiveDecisionRowNamesTheLockAndNeedsItsConfirmation(t *testing.T)
 	// Declined: nothing is stored.
 	i = newInteractive(t, true, true)
 	addCandidate(i, dec)
-	if _, err = runTidy(t, strconv.Itoa(n)+"\nn\n"); err != nil || len(storedSets(t, i.prep.PlanStore)) != 0 {
+	if _, err = runTidy(t, strconv.Itoa(n)+"\nn\n", "--rows"); err != nil || len(storedSets(t, i.prep.PlanStore)) != 0 {
 		t.Errorf("%v %v", err, storedSets(t, i.prep.PlanStore))
 	}
 }
@@ -287,7 +287,7 @@ func TestInteractiveOwnerLabelsAreEscaped(t *testing.T) {
 	i := newInteractive(t, true, true)
 	o := wcand("a", tidywizard.KindWorktree, "hostile", tidywizard.VerdictSafe, "co\x1b[31mdex\n", owner.SourcePathConvention, owner.ScopeOther)
 	addCandidate(i, o)
-	out, err := runTidy(t, "o\nn\nn\nn\n")
+	out, err := runTidy(t, "o\nn\nn\nn\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +301,7 @@ func TestInteractiveDecliningKeepsTheExitRules(t *testing.T) {
 	i := newInteractive(t, true, true)
 	i.res.Repositories[1] = tidywizard.RepoResult{Name: "b", State: "error", Reason: "boom", Notices: []string{}}
 	for _, in := range []string{"n\n", "\n", "a\nn\n"} {
-		_, err := runTidy(t, in)
+		_, err := runTidy(t, in, "--rows")
 		var failure runtimeFailure
 		if !errors.As(err, &failure) {
 			t.Errorf("%q: %v", in, err)
@@ -313,7 +313,7 @@ func TestInteractiveDecliningKeepsTheExitRules(t *testing.T) {
 // stored and that nothing was applied.
 func TestInteractiveInvalidAnswersAtTheApplyQuestion(t *testing.T) {
 	i := newInteractive(t, true, true)
-	_, err := runTidy(t, "a\nx\nx\nx\n")
+	_, err := runTidy(t, "a\nx\nx\nx\n", "--rows")
 	var failure runtimeFailure
 	files := storedSets(t, i.prep.PlanStore)
 	if !errors.As(err, &failure) || len(files) != 1 || len(i.applied) != 0 {
@@ -331,7 +331,7 @@ func TestInteractiveStoreFailureIsReported(t *testing.T) {
 	if err := os.Chmod(i.prep.PlanStore, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	out, err := runTidy(t, "a\ny\n")
+	out, err := runTidy(t, "a\ny\n", "--rows")
 	var failure runtimeFailure
 	if !errors.As(err, &failure) || strings.Contains(out, "Stored plan set") || len(i.applied) != 0 {
 		t.Errorf("%v\n%s", err, out)
@@ -387,7 +387,7 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 		cmd.SetOut(&out)
 		cmd.SetErr(&bytes.Buffer{})
 		cmd.SetIn(in)
-		cmd.SetArgs(nil)
+		cmd.SetArgs([]string{"--rows"})
 		err := cmd.ExecuteContext(ctx)
 		var failure runtimeFailure
 		if !errors.As(err, &failure) || !strings.Contains(err.Error(), "interrupted") || !strings.Contains(err.Error(), tc.want) || strings.Contains(err.Error(), "context canceled") || len(i.applied) != 0 {
@@ -403,7 +403,7 @@ func TestInteractiveInterruptIsReportedAsAnInterruption(t *testing.T) {
 // this fixture (answers a and n); the plan id (12 hex characters of a SHA-256 over the plan content) is normalized to 3f9c2a7e41b8 so the sample stays stable.
 func TestTidyExampleMatchesTheDocs(t *testing.T) {
 	newInteractive(t, true, true)
-	out, err := runTidy(t, "a\nn\n")
+	out, err := runTidy(t, "a\nn\n", "--rows")
 	if err != nil {
 		t.Fatal(err)
 	}

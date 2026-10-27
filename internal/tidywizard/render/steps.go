@@ -32,6 +32,11 @@ func (d Document) CandidateByID(id string) *tidywizard.Candidate {
 	return nil
 }
 
+// RiskReasons are the risk words of a candidate (the codes of --json and of `d N`).
+func (d Document) RiskReasons(id string) []string {
+	return append([]string(nil), d.assessed[id].Reasons...)
+}
+
 // KeptRows is how many rows are kept or red: the rows no group offers for deletion.
 func (d Document) KeptRows() int {
 	n := 0
@@ -40,6 +45,10 @@ func (d Document) KeptRows() int {
 	}
 	return n
 }
+
+// OwnerLabel is the owner as the overview shows it: the derived label, a commit-author hint as
+// "hint NAME", and "unknown" for none. It is information, never a selector of its own.
+func OwnerLabel(c tidywizard.Candidate) string { return ownerLabel(c) }
 
 // Noun names the rows of a group: "directory" and "directories", "branch" and "branches".
 func (g OverviewGroup) Noun() (one, many string) {

@@ -33,10 +33,10 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 	prep, res, mode := run.prep, run.res, run.mode
 	doc := render.Build(render.Input{Workspace: prep.Workspace, Derived: prep.Derived, Repos: prep.Meta, Result: res, Mode: mode, Notices: prep.Notices, Now: run.now})
 	out := cmd.OutOrStdout()
-	// A person on a terminal still chooses by the numbers of the row view until the group steps of
-	// Spec 044 replace the question; everyone else gets the grouped overview unless --rows asks for
-	// the rows.
-	text := tidyOverviewText(out, doc, w.rows || mode.Mode == owner.ModeHuman)
+	// Everyone gets the grouped overview unless --rows asks for the rows (Spec 044). A person on a
+	// terminal then goes through the group steps; with --rows the numbered row question of Spec 041
+	// stays.
+	text := tidyOverviewText(out, doc, w.rows)
 	if _, err := io.WriteString(out, text); err != nil {
 		return runtimeFailure{err}
 	}
@@ -48,6 +48,9 @@ func runTidyInteractive(cmd *cobra.Command, w *tidyWizardOptions, timeout time.D
 		return exit()
 	}
 	in := bufio.NewReader(cmd.InOrStdin())
+	if !w.rows {
+		return runTidyJanitor(cmd, run, doc, in, exit)
+	}
 	items := promptItems(doc)
 	choice, err := prompt.Select(in, out, items, prompt.Options{Interactive: true})
 	// An interrupt that arrived at a prompt is reported as one, whatever the answer was.

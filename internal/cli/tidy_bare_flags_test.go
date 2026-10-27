@@ -130,7 +130,7 @@ func TestBareTidyJSONNeverPromptsOrStores(t *testing.T) {
 func TestBareTidyHumanIsText(t *testing.T) {
 	newInteractive(t, true, true)
 	out, err := runTidy(t, "\n", "--human")
-	if err != nil || !strings.Contains(out, "Apply which?") {
+	if err != nil || !strings.Contains(out, "Continue?") {
 		t.Errorf("%v\n%s", err, out)
 	}
 }
