@@ -37,16 +37,20 @@ or proof words outside this exact exception keep the existing fail-closed rules.
 
 Janitor owner-independent choosability and the typed word `unknown` never override the
 prune gate: exact original task-record ownership and proven own/other scope are required,
-with agents limited to own. Human choice stays explicit, with the accepted target details
-and confirmations; Enter, `a` and default answers never take a prune row. Its risk level
+with agents limited to own. A gated prune row may be chosen by its displayed number,
+per-row review with `r`, `y` on its dedicated metadata-only group, or the `o:`/`m:`
+selectors. These inputs admit verified human own/other scope, with the accepted target
+details and typed confirmations; they do not mean human own-scope only. `b`, `w` and `t`
+never match native prunes; Enter, `a` and default answers never take one. Its risk level
 alone grants no selection, plan persistence or effects. Existing confirmations are unchanged;
 Spec 044 T012c separately gates the later single typed-word receipt, not accepted expert apply.
 
 Native-prune groups/counts form a distinct metadata-only effect class. They never add
 to directory or branch deletion counts, even when their path family matches. Before the
-unchanged final directories/branches line, show their count and metadata-only consequence
-separately: no user files or branches are removed. This is a wording requirement, not
-recorded output. Legacy unproven stale rows stay kept; historical measured counts stay historical.
+unchanged final directories/branches line, show this exact separate sentence:
+"N registrations removed (metadata only, no user files or branches removed)."
+This is a wording requirement, not recorded output. Legacy stale-worktree rows not
+represented in contract-4 `registration_prunes` remain kept; measured counts stay historical.
 
 Only the overview-4 registration row gains optional `risk` and `risk_reasons`; no `pr`
 or stored `group` field is added. Optional `summary.registration_prunes` is a separate
@@ -181,7 +185,7 @@ information and feed the risk rules R2 and R3.
 in human mode, `internal/tidywizard/owner/scope.go:56`), and `--by-owner` already narrows only the view. What blocks the owner
 today is the shortcuts: `a` takes `own` rows only, `o` asks per owner label, and the layout groups by owner. Those change.
 
-**New meaning of "explicit choice".** Spec 041 requires an explicit human choice for work of other owners and forbids preselecting it.
+**New meaning of "explicit choice" (legacy candidates; native-prune inputs are restricted below).** Spec 041 requires an explicit human choice for work of other owners and forbids preselecting it.
 In janitor mode a **selection** is made by number, selector, a group answer (Enter on a green group, `y`) or `a`; each counts as the
 explicit choice. A selection applies nothing. What protects the owner is unchanged and sits after it: the final summary, the typed
 `/dev/tty` words, the stored plan and the apply path (changed only by the D12 receipt, below). In agent mode there is no selection at all.
@@ -259,14 +263,14 @@ prunes use only the accepted orange/kept/red exception above, with their origina
 `registration-record-missing` before the content reasons, `internal/tidywizard/classify.go:396-409`), for which at least one of
 these holds: proof `none` on a branch or an existing directory (`unmerged`, and also `registration-record-missing` rows that are not
 integrated); `dirty` or `ignored-extras` observed; or the row is **not judged** (`evidence-incomplete`), because then unique work cannot
-be ruled out. Primary checkouts (kept: "the repository's own checkout, never a candidate"), legacy stale registrations without accepted native-prune admission whose directory is gone (kept: "the directory is gone, nothing to delete here"), and rows that are integrated (proof not `none`) and
+be ruled out. Primary checkouts (kept: "the repository's own checkout, never a candidate"), legacy stale-worktree rows (any registration not represented in the contract-4 `registration_prunes` array) (kept: "the directory is gone, nothing to delete here"), and rows that are integrated (proof not `none`) and
 kept for `registration-record-missing`, `branch-attached-elsewhere`, `recently-active`, `locked-foreign` or `protected` are **kept**:
 the row says why it is kept (for example "integrated, but no creation record was found") and states no claim about uncommitted files the view does not know. The
 risk function reads the observed facts (proof, `Dirty`, `IgnoredExtras`, `Incomplete`), not only the reason; where the adapter does not
 expose a fact, T001 adds it.
 
 **Foreman clarifications for the red and kept edges** (2026-10-26, conservative; the owner may reverse any of them): (a) for legacy candidates the proof words are a **closed set**: `ancestor`, `no-net-change`, `patch-id`, `merge-noop`, `none`, `github-branch-absent` and the one jj word `empty-working-copy-integrated-parent`; the kinds are `worktree`, `branch`, `tracking-ref` and `stale-worktree`. A **candidate** (verdict `safe` or `decision`) whose kind or proof word is outside its set is **red** (`not-judged`), before any strength rule runs; a **retained** row with such a kind or word is **kept** (never selectable), because a retained row is already not a candidate;
-(b) a legacy stale-worktree row (the directory is gone, without the distinct native-prune admission) is **kept** whatever its evidence says, never red and never selectable, because a stale registration with incomplete evidence is not a deletion candidate at all (the foreman reading of 2026-10-26 replaces the earlier "red"); (c) a primary checkout is **kept** even with observed dirt, never red and never selectable, because a primary checkout is never a candidate; (d) a tracking reference with proof `none` and a reason other than `unmerged` is **red**; (e) of the closed set, the jj word
+(b) a legacy stale-worktree row (any registration not represented in the contract-4 `registration_prunes` array) is **kept** whatever its evidence says, never red and never selectable, because a stale registration with incomplete evidence is not a deletion candidate at all (the foreman reading of 2026-10-26 replaces the earlier "red"); (c) a primary checkout is **kept** even with observed dirt, never red and never selectable, because a primary checkout is never a candidate; (d) a tracking reference with proof `none` and a reason other than `unmerged` is **red**; (e) of the closed set, the jj word
 `empty-working-copy-integrated-parent` is **equivalent** (yellow), never strong, and `github-branch-absent` is strong; no other word is yellow (the rule for words outside the set is (a)); (f) `no-work` evidence only lifts strength on a safe row:
 it never cancels a red cause of a retained row (a record-missing row with proof `none` stays red); (g) a level the code does not know counts as **red** when group counts and the worst level are computed.
 
@@ -431,12 +435,12 @@ rows, then the question. Answers are one line followed by Enter (no raw mode in 
 | Input | Where | Meaning |
 | --- | --- | --- |
 | Enter | group step | the default of the group: **take** for a green group, **skip** for yellow and orange (D1, D5) |
-| `y` | group step | take the whole group's choosable rows (also yellow and orange); never a `decision` row |
+| `y` | group step | take the whole group's choosable rows (also yellow and orange); gated native prunes only in their dedicated metadata-only group; never a `decision` row |
 | `s` | group step | skip the group |
 | `l` | group step, retain table | list every row of the group (20 at a time) with its number |
-| `r` | group step | review each row: `y`, `n` or `q` per row (the only place a number-less row choice is possible) |
+| `r` | group step | review each row: `y`, `n` or `q` per row; native-prune choices still require the strict proof/scope gate (the only place a number-less row choice is possible) |
 | `d N` | any list | show the details and the codes of row N |
-| `a` | overview, final summary | take **all green rows** of every owner (D14); never yellow, orange or `decision` rows |
+| `a` | overview, final summary | take **all green rows** of every owner (D14); never native-prune, yellow, orange or `decision` rows |
 | `e` | final summary | edit the selection with a line of terms (below) |
 | `q` | any question | quit; nothing is stored |
 | a term line | group question, `e` | numbers, ranges, selectors and `except` |
@@ -445,17 +449,20 @@ rows, then the question. Answers are one line followed by Enter (no raw mode in 
 line      = term { (" " | ",") term } [ " except " term { (" " | ",") term } ]
 term      = NUMBER | NUMBER "-" NUMBER | selector
 selector  = "a"                all green rows
-          | "b"                all branch deletions
-          | "w"                all worktree directories
-          | "t"                all worktree directories whose path starts with /tmp/ (this includes the agent scratchpads)
+          | "b"                all branch deletions; never native prunes
+          | "w"                all worktree directories; never native prunes
+          | "t"                all worktree directories whose path starts with /tmp/ (including agent scratchpads); never native prunes
           | "o:" LABEL         all rows of that owner label, exact as shown; a label with a space is quoted: o:"author:Werner Stein"
           | "m:" REPO          all rows of that repository
 ```
 
 The result is the union of the terms before `except`, minus the union after it, intersected with the choosable rows.
-Native prunes are additionally intersected with their strict proof/ownership gate;
-Enter, `a` and default answers never include them. Other explicit choices must preserve
-the accepted contract-4 target disclosure and confirmation rules; unknown ownership never qualifies. Red and kept rows
+Native prunes are additionally intersected with their strict proof/ownership gate.
+Only their displayed number, `r` review, `y` on their dedicated metadata-only group,
+and `o:`/`m:` selectors may take them. `b`, `w` and `t` never match native prunes;
+Enter, `a` and default answers never include them. These explicit choices admit verified
+human own/other scope with the accepted target disclosure and typed confirmations;
+agent selection stays own only and unknown ownership never qualifies. Red and kept rows
 have no number and match no selector. **`decision` rows are taken by their number only**, each with the Spec 041 per-row second
 confirmation, and never by `y`, `a`, Enter or any other selector. A word that does not parse, a number that is not choosable, an
 empty `except`, an unterminated quote, or a line over 256 bytes is an invalid answer (three end the run, as today). Example:
@@ -463,8 +470,9 @@ empty `except`, an unterminated quote, or a line over 256 bytes is an invalid an
 
 ### Final summary and the typed prompt
 
-Native registration counts and their metadata-only consequence are a separate line,
-before the final irreversible directories/branches line; they contribute to neither count.
+Native registration counts use the exact separate sentence
+"N registrations removed (metadata only, no user files or branches removed)."
+It comes before the final irreversible directories/branches line and adds to neither count.
 
 After the last group, one summary lists the selection by group with counts, level counts, effects, the typed words that will be asked,
 and the undo lines (screen 3). **Its last line, directly before the first typed prompt, states the irreversible effect: "This deletes N
@@ -559,7 +567,7 @@ request (`l` at the table, or `--rows`). Red rows are counted separately because
 | Not judged (`evidence-incomplete`) | 17 | red | A deadline or proof budget ran out, or Git refused the tree | Run again with a larger window, for example `--timeout 15m`; until then assume unique work |
 | Repository checkout (`primary-checkout`) | 7 | kept | The main checkout of a repository | Never offered |
 | Uncommitted changes (`dirty`) | 6 | red | Tracked files differ from the commit | Commit or discard them yourself |
-| Registration without directory (`unregistered`, legacy stale) | 3 | kept | A legacy worktree entry without complete native-prune admission | Keep it; the separate contract-4 row requires exact original ownership and absence evidence |
+| Registration without directory (`unregistered`, legacy stale) | 3 | kept | A worktree entry whose directory is gone | Keep it; the separate contract-4 row requires exact original ownership and absence evidence |
 
 The counts are those of the live workspace and sum to 964 (394 red, 570 kept); the sentences are fixed text per code (SC-010).
 
@@ -767,9 +775,15 @@ Rows: l = list a reason, or run  stw tidy --rows
 - **FR-001** Except for the strict native-prune exception, in janitor mode every row with verdict `safe` is choosable by number, group answer, `a` or selector regardless of `owner`,
   `owner_source` and `scope`; a `decision` row is choosable **by its number only**, with the 041 per-row second confirmation, never by
   a group, `y`, `a`, Enter or a selector; agent mode is unchanged (041 FR-006c, FR-006d).
+  Native-prune choices use only their displayed number, `r`, `y` on their dedicated
+  metadata-only group, or `o:`/`m:`, under the strict gate and typed confirmations;
+  human verified own/other scope remains admitted. `b`, `w`, `t`, Enter, `a` and default
+  never take them; agents remain own only.
 - **FR-002** Enter on a green group takes it; `a` takes all green rows of every owner (D14); neither takes a yellow, orange or `decision`
   row.
-- **FR-003** Each annotated row has `risk` and the applicable `risk_reasons[]` (omitted for kept); native-prune rows follow the separate accepted mapping; each group has the worst level and counts per level. Red rows (possible unique
+- **FR-003** Each legacy candidate row has `risk` and `risk_reasons[]` (reasons omitted for kept);
+  only a contract-4 native registration row has the optional annotations of the accepted
+  exception. Each group has the worst level and counts per level. Red rows (possible unique
   work, see the risk model) have no number and match no selector.
 - **FR-004** The ladder reads only evidence of the analysis (proof word, evidence word, observed dirt facts, activity time, creation
   record, owner source, upstream state read from the local reference database) and the online reads. No other input.
@@ -782,7 +796,10 @@ Rows: l = list a reason, or run  stw tidy --rows
   only) and an upper bound of size only when already known.
 - **FR-008** One question per group with the keys and defaults of the table; the strict parsing of Spec 041 is kept.
 - **FR-010** Selection grammar, `except`, quoting and selectors as specified; red and kept rows match nothing.
-- **FR-011** Native metadata-only counts stay separate and add no directory/branch count. The final summary ends with the line stating the directories deleted for good and the branches, directly before the first
+- **FR-011** Native metadata-only counts use the exact separate sentence
+  "N registrations removed (metadata only, no user files or branches removed)."
+  They add no directory/branch count. The final summary ends with the line stating the
+  directories deleted for good and the branches, directly before the first
   typed prompt (or the store question); the typed prompt text is unchanged, read from `/dev/tty`, plain, once per word, refused without a
   terminal or with a wrong word; within one wizard run the words are asked once (FR-017).
 - **FR-018** (D16) In human mode the answers to the store question, the apply question and the prompt of a separate `stw tidy apply PLAN-ID` are read from `/dev/tty`; without a controlling terminal (checked **before** `planset.Build`) nothing is stored or applied (exit 1); `--yes` with an explicit plan id and agent mode are unchanged.

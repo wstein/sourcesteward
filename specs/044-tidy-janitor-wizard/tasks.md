@@ -18,7 +18,8 @@ Accepted composition addition (2026-10-27; [spec](spec.md#accepted-registration-
 T001 must also test the distinct native orange/kept/red mapping, exact proof/effect/
 owner/scope gates, retained ownership/absence-refusal always kept despite incomplete
 observation, blocked/unknown or contradictory safe rows red, and no green/yellow or online lift.
-Unknown legacy words and unproven legacy stale rows retain their existing behavior.
+Unknown legacy words retain their existing behavior; legacy stale-worktree rows not
+represented in the contract-4 registration array always stay kept.
 
 ### P2 evidence
 
@@ -45,12 +46,13 @@ T007 keeps metadata-only groups/consequences separate; no native-row PR/group fi
 - [ ] T012c **Independent security review before code** of the D12 design: done on 2026-10-27 (CLEAR WITH AMENDMENTS, applied in the spec: pointer receipt, D16 before or with D12, consume first, one answer source, terminal check before `Build`, full digest, the gates never touched, one seam); the exact code head of T013a and T013b is reviewed again.
 - [ ] T013a Failing tests (SC-014) and implementation of the confirmation receipt: `*planset.Receipt` with a shared hidden state allocated only in `planset.Build`, full digest and word-set equality, consumed as the first action of `Apply`, honored only inside the confirm loop after the refusals and only with `Authorize`, one parameter on `runTidyApplyPlanSet`, `stw tidy apply` and `plan --save` pass none; the agent path is byte-identical to Spec 041, the separate apply is unchanged except the answer source of D16. **T013b lands before or in the same pull request as T013a.**
 - [ ] T013b (D16, decided; before or with T013a) Failing tests (SC-015) and implementation reading the store, apply and separate-apply answers from `/dev/tty` in human mode through one opener seam, checking the terminal **before** `planset.Build`, refusing with exit 1 and no sub-plan when there is none; `TestTidyApplyPromptOnATerminal` moves its answers to the seam.
-- [ ] T013 Failing tests (SC-008) and implementation of the final summary, whose last line states the directories deleted for good and the branches, directly before the unchanged typed prompt (and in the apply question); sorted typed words; the prompt text byte-equal; wrong word, bare `y`, stdin input and no terminal refuse and store nothing.
+- [ ] T013 Failing tests (SC-008) and implementation of the final summary, whose last line states the directories deleted for good and the branches, directly before the unchanged typed prompt (and in the apply question); sorted typed words; the prompt text byte-equal; wrong word, bare `y`, stdin input and no terminal refuse and store nothing. Include a byte-equal test for the exact separate sentence "N registrations removed (metadata only, no user files or branches removed)." before the final directories/branches line.
 - [ ] T014 Failing tests (SC-009) for hostile names in every screen, group key and example row; narrow terminal, no terminal, all red, nothing to clean, interrupt (edge-case table).
 
 Accepted composition addition: T011/T012/T013 must preserve the strict original prune
-gate, human explicit proven own/other choices, agent own only and unknown never; no
-Enter/`a`/default prune selection. Refusal tests assert exit and exact reason, with causal
+gate, human explicit proven own/other choices, agent own only and unknown never.
+Native inputs are the displayed number, `r`, `y` on the dedicated metadata-only group,
+and `o:`/`m:`; `b`/`w`/`t` and Enter/`a`/default never match prune rows. Refusal tests assert exit and exact reason, with causal
 swaps for proof, scope, unsafe defaults and counts. T012c still gates only the later
 single-word receipt; accepted expert apply is not reopened. No boxes are changed here.
 

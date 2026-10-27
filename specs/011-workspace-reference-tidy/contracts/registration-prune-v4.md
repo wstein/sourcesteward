@@ -230,9 +230,12 @@ Directory and branch deletion counts exclude these registrations.
 Human selection remains explicit and subject to this contract's stricter owner/scope
 rules, never janitor owner-independent choosability. Agent selection remains proven
 own only; unknown ownership is never admitted, including by the literal word `unknown`.
-Enter, `a` and default answers select no prune row. The metadata-only consequence is
-shown separately from directories deleted for good: registration removal removes no
-user files or branches. Recovery is not prepared by an observation.
+Allowed human inputs are the displayed number, `r`, `y` on the dedicated metadata-only
+group and `o:`/`m:`, with this contract's proof/scope gate and typed confirmations for
+verified own/other scope. `b`, `w` and `t` never match native prunes; Enter, `a` and
+default answers select none. The exact metadata-only consequence sentence is specified
+in [Spec 044's final summary](../../044-tidy-janitor-wizard/spec.md#final-summary-and-the-typed-prompt),
+separately from directories deleted for good. Recovery is not prepared by an observation.
 
 Old documents without the optional annotations/counts still validate. Older strict
 readers may reject the newly annotated documents; do not silently strip fields,
