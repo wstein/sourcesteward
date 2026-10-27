@@ -7,8 +7,10 @@ package cli
 import (
 	"bytes"
 	"context"
+	"io"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
@@ -38,6 +40,17 @@ func testPTYPair(t *testing.T) (master, slave *os.File) {
 	return m, s
 }
 
+// terminalPTY makes the controlling-terminal seam use a different real terminal from stdin.
+// Each open gets its own descriptor, so the availability probe can close it normally.
+func terminalPTY(t *testing.T) *os.File {
+	t.Helper()
+	master, terminal := testPTYPair(t)
+	old := tidyConfirmOpener
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return os.OpenFile(terminal.Name(), os.O_RDWR|unix.O_NOCTTY, 0) }
+	t.Cleanup(func() { tidyConfirmOpener = old })
+	return master
+}
+
 // End to end over a pseudo-terminal through the real entry point: `stw tidy apply ID` on a terminal
 // asks "Apply plan ID ...? [y/N]" and a typed y authorizes it, a bare Enter does not; with the
 // empty reader of Run the same command line is agent mode and never asks.
@@ -47,6 +60,7 @@ func TestApplyPromptsOnARealTerminalThroughRunWithStdin(t *testing.T) {
 		want  bool
 	}{{"y\n", true}, {"\n", false}, {"n\n", false}} {
 		master, tty := testPTYPair(t)
+		terminalMaster := terminalPTY(t)
 		var calls []planset.ApplyRequest
 		oldApply, oldFind, oldEnv := tidyApplyPlanSet, tidyFindPlanSet, tidyEnviron
 		t.Cleanup(func() { tidyApplyPlanSet, tidyFindPlanSet, tidyEnviron = oldApply, oldFind, oldEnv })
@@ -61,14 +75,21 @@ func TestApplyPromptsOnARealTerminalThroughRunWithStdin(t *testing.T) {
 		tidyFindPlanSet = func([]string, string) (planset.Set, error) {
 			return planset.Set{PlanID: setID, SubPlans: []planset.SubPlan{{ID: "a"}}, Items: []planset.Item{{ID: "i"}}}, nil
 		}
-		if _, err := master.WriteString(tc.typed); err != nil {
+		if _, err := terminalMaster.WriteString(tc.typed); err != nil {
+			t.Fatal(err)
+		}
+		stdin := "y\n"
+		if tc.want {
+			stdin = "n\n"
+		}
+		if _, err := master.WriteString(stdin); err != nil {
 			t.Fatal(err)
 		}
 		var diag bytes.Buffer
 		code := RunWithStdin(context.Background(), "test", []string{"tidy", "apply", setID, "--state-dir", "/s"}, tty, tty, &diag)
 		if !tc.want {
 			// Declining stops before the apply path: exit 1, nothing applied.
-			if len(calls) != 0 || code != 1 {
+			if len(calls) != 0 || code != 1 || !strings.Contains(diag.String(), "was not authorized; nothing was changed") {
 				t.Errorf("typed %q: code %d, calls %+v, stderr %q", tc.typed, code, calls, diag.String())
 			}
 			continue
@@ -85,8 +106,12 @@ func TestApplyPromptsOnARealTerminalThroughRunWithStdin(t *testing.T) {
 func TestBareTidyAsksOnARealTerminalThroughRunWithStdin(t *testing.T) {
 	master, tty := testPTYPair(t)
 	i := newInteractive(t, true, true)
+	terminalMaster := terminalPTY(t)
+	if _, err := terminalMaster.WriteString("y\n"); err != nil {
+		t.Fatal(err)
+	}
 	tidyTerminalFacts = owner.TerminalFacts // the real descriptors, not the stub
-	if _, err := master.WriteString("a\n\ny\n"); err != nil {
+	if _, err := master.WriteString("a\n\nn\n"); err != nil {
 		t.Fatal(err)
 	}
 	var diag bytes.Buffer
