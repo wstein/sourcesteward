@@ -59,6 +59,10 @@ type Item struct {
 // Options say whether the run has a terminal on both streams.
 type Options struct {
 	Interactive bool
+	// Width is the terminal width in columns for RunFlow; zero or less means 80.
+	Width int
+	// Kept is the number of rows that are kept or red, named in the summary (RunFlow).
+	Kept int
 }
 
 // Outcome is what a prompt run ended with.
@@ -69,6 +73,8 @@ const (
 	OutcomeNone Outcome = iota
 	OutcomeChosen
 	OutcomeNoTTY
+	// OutcomeQuit is `q`: the person ended the run on purpose; nothing is stored.
+	OutcomeQuit
 )
 
 // Result is the chosen ids in number order. Confirmed holds the decision rows whose second
