@@ -224,7 +224,7 @@ The reason a tracking reference is retained with comes from a closed list, appli
 | Worktree of another owner or created by another tool (no stw registration), proven integrated, clean, unlocked, not recently active | `safe`, `scope` `other` or `unknown`, evidence `no-work` when it has no commit of its own | human mode: shown, never preselected, removable only by explicit choice; removal of an unregistered worktree uses the Spec 029 legacy completion (exact path, declared complete, cooperative); agent mode: not shown and not plannable |
 | The same, but dirty, unmerged or locked by another | `retain` | none |
 | Worktree of scope `other` or `unknown` whose `HEAD`, index or any tracked-file mtime is within the last 24 hours (a possibly running job, for example a fresh `/tmp/whr010-*` at the base commit is trivially an ancestor and clean) | `retain` `recently-active` | none; the window is OQ15 |
-| Worktree directory missing, registration present | `retain` (`stale-worktree`): a real stw-locked missing registration with a matching creation record reaches `evidence-incomplete` ("the Git administrative entry is not provably prunable"), because Git does not mark locked entries prunable. Earlier missing/mismatched record protections still win. `stale-registration-no-plan-kind` is the existing synthetic stw-owned + prunable fallback, not the real locked-missing case. T012b replaces that prunable gate with its new evidence; currently not selectable by `--save` or `a`. | none |
+| Worktree directory missing, registration present | `retain` (`stale-worktree`): a real stw-locked missing registration with a matching creation record reaches `evidence-incomplete` ("the Git administrative entry is not provably prunable"), because Git does not mark locked entries prunable. Earlier missing/mismatched record protections still win. `stale-registration-no-plan-kind` is the existing synthetic stw-owned + prunable fallback, not the real locked-missing case. T012b supplies separate contract-4 evidence: after T012b, only agent own-scope `--save` or explicit human choice may select that separate row, never Enter, `a` or default; the legacy row remains retained. | none |
 | Branch integrated, not checked out anywhere | `safe` | delete branch with recovery ref (Spec 011 WI2) |
 | Branch integrated but checked out in a retained worktree | `retain` `branch-attached-elsewhere` | none |
 | The worktree of the current working directory | `retain` `current-worktree` | none |
@@ -765,8 +765,10 @@ which must not be silently stripped, downgraded or migrated.
 Later own-scope agent `--save` may select only safe rows under the approved manifest-2
 gates. Human selection is explicit for verified own/other scope; janitor owner-independent
 choosability never applies, and unknown ownership never qualifies, including by the word
-`unknown`. Historical own-scope "all" wording is superseded: Enter, `a` and default answers
-select no prune row. Risk is not selection, plan persistence, confirmation or effect authorization.
+`unknown`. Allowed human inputs are the displayed number, `r`, `y` on the dedicated
+metadata-only group, and `o:`/`m:`, with the accepted confirmations for own/other scope.
+`b`, `w` and `t` never match native prunes. Historical own-scope "all" wording is
+superseded: Enter, `a` and default answers select no prune row. Risk is not selection, plan persistence, confirmation or effect authorization.
 Existing disclosure and typed confirmations remain exact; T012c separately gates the
 later single-word receipt, not the already accepted expert apply path.
 

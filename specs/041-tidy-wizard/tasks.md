@@ -92,8 +92,9 @@ T012b1/T012b2's follow-up tests must cover native orange, retained ownership/abs
 always kept, blocked/unknown or contradictory safe rows red, exact risk reasons and optional overview-4
 risk fields with old unannotated rows still valid. Separate metadata-only groups/counts
 exclude directory/branch totals. Human explicit choices require proven own/other scope,
-agents own only, unknown never; Enter/`a`/default never select prune rows, and online
-cannot promote them. Refusal tests assert exit and exact reason and kill causal gate/count swaps.
+agents own only, unknown never. Human inputs are the number, `r`, `y` on the dedicated
+metadata-only group and `o:`/`m:` under the strict gate; `b`/`w`/`t` and Enter/`a`/default
+never select prune rows, and online cannot promote them. Refusal tests assert exit and exact reason and kill causal gate/count swaps.
 T012b3/T012b4's accepted grouping/hash/manifest/order/recovery/dispatch work remains open;
 no expert apply decision is reopened, and T012c still concerns only the later receipt.
 No completion box is changed or implied by this artifact amendment.

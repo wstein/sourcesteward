@@ -90,8 +90,10 @@ complete native admission maps to orange; retained ownership-unproven/absence-un
 rows are always kept with their exact reason, while blocked/unknown or contradictory
 safe rows are red/not-judged. Observation incompleteness alone does not override kept. Add only optional
 row risk/reasons and separate metadata-only summary counts; no green/yellow, PR field,
-Enter/`a`/default selection or unknown-owner admission. Human choices retain the strict
-proven own/other scope gate; agents remain own only. Preserve existing row/hash/version
+Enter/`a`/default selection or unknown-owner admission. Human choices use only the
+number, `r`, `y` on the dedicated metadata-only group and `o:`/`m:` under the strict
+proven own/other scope gate and confirmations; `b`/`w`/`t` exclude native prunes.
+Agents remain own only. Preserve existing row/hash/version
 semantics, old documents without risk and frozen v2/v3 bytes; strict older readers may
 reject new annotations, never silently downgrade them.
 
@@ -100,3 +102,7 @@ wizard changes. T012b3/T012b4 retain their existing manifest-2/order/dispatch/re
 requirements, with one registration per sub-plan and no implicit branch leg. T012c is the
 separate later receipt gate, not a new gate for the accepted expert prune apply path.
 This artifact work implements nothing and does not verify final T012b completion.
+
+The future implementation must also reword the "all-selection callers" comment in
+`internal/tidywizard/registration_prune_classify.go` to match these explicit-input limits;
+this documentation/schema package changes no runtime selection code.
