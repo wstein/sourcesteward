@@ -684,7 +684,7 @@ func TestAdapterRetainsAJJWorkspaceWithAmbiguousRecordsAndReportsSkippedOnes(t *
 	f2, _ := a2.Facts(context.Background(), "r")
 	n = 0
 	for _, x := range f2.Notices {
-		if x == "creation-records-unreadable: 1 records, 0 stores that could not be listed" {
+		if x == "creation-records-unreadable: 1 record, 0 stores that could not be listed" {
 			n++
 		}
 	}
