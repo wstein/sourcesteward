@@ -12,6 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -195,7 +196,7 @@ func StoresDerived(stores []Store) Derived {
 		if s.Issue != nil {
 			values = append(values, fmt.Sprintf("%s (skipped: %s)", s.Path, s.Issue.Code))
 		} else {
-			values = append(values, fmt.Sprintf("%s (%d records)", s.Path, s.Records))
+			values = append(values, fmt.Sprintf("%s (%s)", s.Path, pluralize.Count(s.Records, "record", "records")))
 		}
 		known := false
 		for _, have := range sources {

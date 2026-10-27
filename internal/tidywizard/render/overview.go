@@ -9,6 +9,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
@@ -114,9 +115,9 @@ func (g OverviewGroup) noun() string {
 
 func plural(one bool, s, p string) string {
 	if one {
-		return s
+		return pluralize.Pick(1, s, p)
 	}
-	return p
+	return pluralize.Pick(2, s, p)
 }
 
 func (g OverviewGroup) place() string {
@@ -435,7 +436,7 @@ func writeGroups(b *strings.Builder, groups []OverviewGroup, choosable, total in
 		}
 		return s + gap
 	}
-	title := fmt.Sprintf("Can be cleaned (%s of %s candidates in %d groups)", thousands(choosable), thousands(total), len(groups))
+	title := fmt.Sprintf("Can be cleaned (%s of %s %s in %s)", thousands(choosable), thousands(total), pluralize.Pick(total, "candidate", "candidates"), pluralize.Count(len(groups), "group", "groups"))
 	width := 2 + len(w.num) + 2 + len([]rune(w.what)) + 2 + len([]rune(w.place)) + 2 + len([]rune(w.effect)) + 2
 	fmt.Fprintf(b, "%s%s%s\n", title, strings.Repeat(" ", max(2, width-len([]rune(title)))), "risk")
 	for _, l := range rows {

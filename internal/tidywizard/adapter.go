@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
+	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
 	"github.com/wstein/sourcesteward/internal/workspace"
 )
 
@@ -129,7 +130,7 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	if jj != nil {
 		if records, stores := jj.Skips(); len(records)+stores > 0 {
 			// A fixed text with counts: the ids of unreadable records are never echoed.
-			f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %d records, %d stores that could not be listed", len(records), stores))
+			f.Notices = append(f.Notices, fmt.Sprintf("creation-records-unreadable: %s, %s that could not be listed", pluralize.Count(len(records), "record", "records"), pluralize.Count(stores, "store", "stores")))
 		}
 	}
 	if obs.TrackingSkipped != "" {
