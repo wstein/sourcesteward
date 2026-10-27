@@ -141,6 +141,20 @@ func (j *janitor) run(stdin string, reply func(string) string, args ...string) (
 	return out.String(), tty, err
 }
 
+// runContext is run with a context, for the interrupt tests; it returns only the output and error.
+func (j *janitor) runContext(ctx context.Context, stdin string, reply func(string) string, args ...string) (string, error) {
+	var out bytes.Buffer
+	tty := &answeringTTY{out: &out, reply: reply}
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return tty, nil }
+	cmd := tidyCommand()
+	cmd.SetOut(&out)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetIn(strings.NewReader(stdin))
+	cmd.SetArgs(args)
+	err := cmd.ExecuteContext(ctx)
+	return out.String(), err
+}
+
 // storedIDs are the candidate ids of the one stored plan set.
 func (j *janitor) storedIDs(t *testing.T) []string {
 	t.Helper()
