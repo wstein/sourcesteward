@@ -176,7 +176,7 @@ func TestJanitorAllTakesTheGreenRowsOfEveryOwnerOnly(t *testing.T) {
 		t.Errorf("stored %v want %v", got, want)
 	}
 	// The one foreign word is asked once, on the terminal, after the summary's last line.
-	if len(tty.prompts) != 1 || !strings.Contains(tty.prompts[0], "Foreign items (codex). Type ") {
+	if len(tty.prompts) != 2 || !strings.Contains(tty.prompts[0], "Foreign items (codex). Type ") || !strings.Contains(tty.prompts[1], "Apply it now?") {
 		t.Errorf("prompts %q", tty.prompts)
 	}
 	if !strings.HasSuffix(strings.TrimRight(tty.snapshot, "\n"), "This deletes 2 directories for good and 2 branches (restorable).") {
@@ -238,7 +238,7 @@ func TestJanitorDecisionRowOnlyByItsNumber(t *testing.T) {
 			t.Errorf("%q missing:\n%s", want, out)
 		}
 	}
-	if len(tty.prompts) != 1 || !strings.Contains(tty.prompts[0], "Foreign items (unknown)") {
+	if len(tty.prompts) != 2 || !strings.Contains(tty.prompts[0], "Foreign items (unknown)") || !strings.Contains(tty.prompts[1], "Apply it now?") {
 		t.Errorf("prompts %q", tty.prompts)
 	}
 	// `w`, `a`, `b` and `o:unknown` take their rows and never the decision row: a set is stored and
@@ -314,7 +314,11 @@ func TestJanitorOwnOnlySelectionAsksToStore(t *testing.T) {
 		tty := setTerminalAnswers(t, strings.TrimPrefix(tc.stdin, "a\n\n"))
 		out, err := runTidy(t, "a\n\ny\n")
 		stored := len(storedSets(t, j.prep.PlanStore)) == 1
-		if stored != tc.stored || strings.Contains(tty.String(), "Foreign items") || tty.opens != 2 || len(j.applied) != 0 {
+		wantOpens := 2 // availability check and store question
+		if tc.stored {
+			wantOpens++
+		} // stored selection also asks whether to apply
+		if stored != tc.stored || strings.Contains(tty.String(), "Foreign items") || tty.opens != wantOpens || strings.Contains(tty.String(), "Apply it now?") != tc.stored || len(j.applied) != 0 {
 			t.Errorf("%s: stored %v err %v prompts %q\n%s", name, stored, err, tty.String(), out)
 		}
 		if !strings.Contains(tty.String(), "Store this plan set?") || strings.Contains(out, "Store this plan set?") {
