@@ -415,7 +415,7 @@ Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-
 Typed words that will be asked (on /dev/tty): codex
 Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 1 branch (restorable).
 
-Stored plan set 3f9c2a7e41b8 (3 effects in 1 repositories). Nothing has been changed.
+Stored plan set 3f9c2a7e41b8 (3 effects in 1 repository). Nothing has been changed.
 Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
 ```
 
@@ -454,7 +454,7 @@ Undo (branches only): stw tidy restore PATH --contract 3 --plan PLAN_ID --state-
       PLAN_ID: see stw tidy history --contract 3 --state-dir DIR; deleted directories are not restored
 Next: [Enter] continue  [e] edit the selection  [a] add all green  [q] quit: This deletes 1 directory for good and 1 branch (restorable).
 
-Stored plan set 3f9c2a7e41b8 (3 effects in 1 repositories). Nothing has been changed.
+Stored plan set 3f9c2a7e41b8 (3 effects in 1 repository). Nothing has been changed.
 Apply it with: stw tidy apply 3f9c2a7e41b8 --state-dir /state
 ```
 
