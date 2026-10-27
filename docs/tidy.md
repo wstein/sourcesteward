@@ -276,7 +276,7 @@ Step 4 of 4   3 directories in /w   risk orange (1 green, 2 orange)
   Evidence  all of its work is already on the base branch (2)
             the work is on the base as equal patches (a rebase merge), not as the same commits (1)
             no record says whose it is (1)
-            and 1 more facts
+            and 1 more fact
   Effect    3 directories are deleted for good in 2 repositories (their branches stay)
   Recover   committed history stays pinned under refs/stw/recovery/v3/...; deleted files are not restored
   Why orange  on the base as equal patches and one more fact raises the risk; it needs a decision of its own; no record says whose it is
@@ -325,8 +325,8 @@ A step shows the group (`Step N of M`, the rows' count and place, the worst leve
 | Group step | Enter | green group: take its rows; yellow or orange group: skip it (the question says `Enter = take` or `Enter = skip`) |
 | | `y` | take the choosable rows of the group, whatever the level; never a `decision` row |
 | | `s` | skip the group (rows taken earlier stay taken) |
-| | `l` | list every row of the group, one page at a time (`-- N more`: Enter shows the next page, `q` stops) |
-| | `r` | review each row: `Take it? [y/n/q] (default n)`; a `decision` row is named and not asked; `q` ends the review and goes on to the next group |
+| | `l` | list every row of the group, one page at a time (`-- N more`: Enter shows the next page, `q` quits) |
+| | `r` | review each row: `Take it? [y/n/q] (default n)`; a `decision` row is named and not asked; `q` quits |
 | | `d N` | the details of row N, with the codes (a number that is not offered is an invalid answer) |
 | | `q` | quit; nothing is stored |
 | | a line of terms | add rows (grammar below); the group stays open and the question comes again |
