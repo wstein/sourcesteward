@@ -62,13 +62,24 @@ func TestD4EveryFailingSubPlanIsReportedNotOnlyTheFirst(t *testing.T) {
 
 // admitPlanner is a Planner that fails the admission of the kinds named in fail.
 type admitPlanner struct {
-	fail    map[string]error
-	planned int
+	fail      map[string]error
+	planned   int
+	planFail  error
+	admitted  int
+	preflight error
 }
 
-func (p *admitPlanner) Admit(_ context.Context, s SubSpec) error { return p.fail[string(s.Kind)] }
+func (p *admitPlanner) Preflight(SubSpec) error { return p.preflight }
+
+func (p *admitPlanner) Admit(_ context.Context, s SubSpec) error {
+	p.admitted++
+	return p.fail[string(s.Kind)]
+}
 func (p *admitPlanner) Plan(_ context.Context, s SubSpec) (Planned, error) {
 	p.planned++
+	if p.planFail != nil {
+		return Planned{}, p.planFail
+	}
 	return Planned{ID: fmt.Sprintf("sub%d", p.planned), StateDir: "/state"}, nil
 }
 
@@ -148,5 +159,27 @@ func TestDecisionRowIsRefusedCleanlyAndStoresNothing(t *testing.T) {
 	}
 	if plans, _ := filepath.Glob(filepath.Join(f.state, "tidy-v3-plans", "*")); len(plans) != 0 {
 		t.Errorf("a refused decision row must store nothing: %v", plans)
+	}
+}
+
+// A mapping refusal is final: the admission of that sub-plan is not asked on top of it.
+func TestMappingRefusalIsNotOverwrittenByTheAdmission(t *testing.T) {
+	a := own(tidywizard.KindBranch, "r", "a")
+	p := &admitPlanner{preflight: unplannable("plan-base-missing", "no base")}
+	err := Admit(context.Background(), Request{Candidates: []tidywizard.Candidate{a}, Chosen: ids(a), Mode: human}, p)
+	var refused *Refused
+	if !errors.As(err, &refused) || p.admitted != 0 || !strings.Contains(err.Error(), "plan-base-missing") {
+		t.Fatalf("admitted %d: %v", p.admitted, err)
+	}
+}
+
+// A sub-plan that passed the admission but fails when planned is the same typed refusal.
+func TestPlanFailureAfterAdmissionIsARefusal(t *testing.T) {
+	a := own(tidywizard.KindBranch, "r", "a")
+	p := &admitPlanner{planFail: errors.New("boom")}
+	_, _, err := Build(context.Background(), Request{Candidates: []tidywizard.Candidate{a}, Chosen: ids(a), Mode: human}, p)
+	var refused *Refused
+	if !errors.As(err, &refused) || len(refused.Failures) != 1 || refused.Failures[0].Items[0] != a.ID || !strings.Contains(err.Error(), "planning branches sub-plan of r: boom") {
+		t.Fatalf("%v", err)
 	}
 }

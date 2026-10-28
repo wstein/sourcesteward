@@ -612,3 +612,27 @@ func TestJanitorRefusedSelectionCanBeQuitWithoutAnError(t *testing.T) {
 		t.Errorf("stored %v\n%s", storedSets(t, j.prep.PlanStore), out)
 	}
 }
+
+// A selection that is refused before any sub-plan (here a row without an effect) is named as well
+// and returns to the edit prompt; the error is not swallowed.
+func TestJanitorRefusalThatIsNotASubPlanIsShown(t *testing.T) {
+	j := newJanitor(t)
+	for i := range j.res.Candidates {
+		if j.res.Candidates[i].ID == "branch:a:claude/old" {
+			j.res.Candidates[i].Effects = []string{}
+		}
+	}
+	if j.number("branch:a:claude/old") == 0 {
+		t.Fatal("fixture: the row is not offered")
+	}
+	// a: every green row; Enter: accept the summary (refused); the end of input ends the edit prompt.
+	out, err := runTidy(t, "a\n\n")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	for _, want := range []string{"cannot be planned; nothing was stored", "carries no effect", "Terms ("} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+}

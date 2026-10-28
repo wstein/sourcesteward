@@ -36,7 +36,7 @@ func canonicalTemp(t *testing.T) string {
 
 // The physical owner is the effective user: the same directory is refused when the owner function
 // stands for another user (an injected owner function, no real chown).
-func TestRetirementLocationAdmissionRequiresTheOwnerOfTheDirectories(t *testing.T) {
+func TestRetirementAdmissionRequiresTheOwnerOfTheDirectories(t *testing.T) {
 	parent := canonicalTemp(t)
 	if err := os.Chmod(parent, 0700); err != nil {
 		t.Fatal(err)
@@ -45,13 +45,16 @@ func TestRetirementLocationAdmissionRequiresTheOwnerOfTheDirectories(t *testing.
 	if err := os.Mkdir(dest, 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := RetirementLocationAdmission(dest); err != nil {
-		t.Fatalf("a directory of the user in a directory of the user: %v", err)
+	if err := RetirementDestinationAdmission(dest); err != nil {
+		t.Fatalf("a directory of the user: %v", err)
+	}
+	if err := RetirementParentAdmission(parent); err != nil {
+		t.Fatalf("a directory of the user that holds only entries of the user: %v", err)
 	}
 	old := physicalOwnerUID
 	t.Cleanup(func() { physicalOwnerUID = old })
 	physicalOwnerUID = func() uint32 { return uint32(os.Geteuid()) + 1 }
-	if err := RetirementLocationAdmission(dest); err == nil || !strings.Contains(err.Error(), "foreign") {
+	if err := RetirementParentAdmission(parent); err == nil || !strings.Contains(err.Error(), "foreign") {
 		t.Errorf("another owner must be refused, got %v", err)
 	}
 	if err := RetirementParentAdmission(parent); err == nil {
@@ -143,11 +146,22 @@ func TestRefusedRegistrationAgreesWithTheQualificationOfThePlans(t *testing.T) {
 			t.Error("the plan must refuse the same overlap")
 		}
 	})
-	t.Run("a cancelled context is refused, not admitted", func(t *testing.T) {
+	t.Run("state directory overlap of a weakly admitted registration", func(t *testing.T) {
+		state := filepath.Join(missing, "state")
+		got, refused := RefusedRegistration(context.Background(), []RegistrationFact{{Path: missing, Prunable: true}}, state)
+		if !refused || got.Code != AdmissionStateOverlap || got.Path != missing {
+			t.Errorf("%+v %t", got, refused)
+		}
+		native := V3NativeState{Registrations: []V3Registration{{Path: missing, Prunable: true}}}
+		if err := qualifyTidyV3Registrations(context.Background(), native, nil, state); err == nil {
+			t.Error("the plan must refuse the same overlap")
+		}
+	})
+	t.Run("a canceled context is refused, not admitted", func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 		if _, refused := RefusedRegistration(ctx, []RegistrationFact{{Path: present}}, ""); !refused {
-			t.Error("a cancelled check must not admit")
+			t.Error("a canceled check must not admit")
 		}
 	})
 }
