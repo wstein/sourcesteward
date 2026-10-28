@@ -45,6 +45,15 @@ type wizardWorld struct {
 type spyPlanner struct {
 	specs []planset.SubSpec
 	err   error
+	// admit, when set, is the read-only admission of a sub-plan (planset.Admitter).
+	admit func(planset.SubSpec) error
+}
+
+func (p *spyPlanner) Admit(_ context.Context, s planset.SubSpec) error {
+	if p.admit != nil {
+		return p.admit(s)
+	}
+	return nil
 }
 
 func (p *spyPlanner) Plan(_ context.Context, s planset.SubSpec) (planset.Planned, error) {

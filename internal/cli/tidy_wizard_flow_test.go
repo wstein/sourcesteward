@@ -558,3 +558,57 @@ func TestJanitorQuitAtTheStoreQuestionAndAtTheDecisionConfirmation(t *testing.T)
 		t.Errorf("decision confirmation: %v\n%s", err, out)
 	}
 }
+
+// D4 of the T016 dogfood run: a selection that planning refuses is named (group, row, reason)
+// before any typed word, nothing is stored, and the wizard returns to the edit prompt with the
+// selection kept instead of ending the run with exit 1.
+func TestJanitorRefusedSelectionReturnsToTheEditPrompt(t *testing.T) {
+	j := newJanitor(t)
+	refusedWorktree := "/tmp/whr-1"
+	j.planner.admit = func(s planset.SubSpec) error {
+		if s.Kind == planset.KindRetire && s.Worktree == refusedWorktree {
+			return fmt.Errorf("%w: %w", planset.ErrNotPlannable, &planset.Unplannable{Reason: "retirement-parent-foreign", Detail: "the directory around it is not yours"})
+		}
+		return nil
+	}
+	ownBranch := j.number("branch:a:claude/old")
+	if ownBranch == 0 {
+		t.Fatal("fixture: the own branch is not offered")
+	}
+	tty := setTerminalAnswers(t, "y\nn\n")
+	// a: every green row; Enter: accept the summary (refused); the edit line keeps one own branch;
+	// Enter accepts the new summary; the store question and the apply question answer on the terminal.
+	out, err := runTidy(t, fmt.Sprintf("a\n\n%d\n\n", ownBranch))
+	if err != nil {
+		t.Fatalf("a refused selection must return to the edit prompt, not end the run: %v\n%s", err, out)
+	}
+	for _, want := range []string{"cannot be planned; nothing was stored", `group "`, "whr-1", "retirement-parent-foreign", "Terms ("} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+	if n := strings.Count(out, "This deletes"); n != 1 {
+		t.Errorf("the last line of the summary must come once, after the refusal; got %d:\n%s", n, out)
+	}
+	if ids := j.storedIDs(t); len(ids) != 1 || ids[0] != "branch:a:claude/old" {
+		t.Errorf("stored %v, want the one own branch", ids)
+	}
+	if strings.Contains(tty.String(), "Foreign items") {
+		t.Errorf("no typed word is asked for an own-only selection:\n%s", tty.String())
+	}
+}
+
+// The same refusal, left unedited, never ends in an error: the person can quit at the summary.
+func TestJanitorRefusedSelectionCanBeQuitWithoutAnError(t *testing.T) {
+	j := newJanitor(t)
+	j.planner.admit = func(s planset.SubSpec) error {
+		return fmt.Errorf("%w: %w", planset.ErrNotPlannable, &planset.Unplannable{Reason: "legacy-owner-unknown", Detail: "no owner"})
+	}
+	out, err := runTidy(t, "a\n\n\nq\n")
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	if len(storedSets(t, j.prep.PlanStore)) != 0 || !strings.Contains(out, "legacy-owner-unknown") {
+		t.Errorf("stored %v\n%s", storedSets(t, j.prep.PlanStore), out)
+	}
+}
