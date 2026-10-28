@@ -284,8 +284,9 @@ type Preflight interface {
 
 // Admitter is an optional interface of a Planner: Admit runs every observation and judgement of
 // the sub-plan that Plan runs, up to the point where the plan would be stored, and stores nothing.
-// Build and Admit ask it for every sub-plan before the first one is planned, so a refusal of a
-// later sub-plan can no longer leave the earlier ones stored.
+// Build and Admit ask it for every sub-plan before the first one is planned, so a refusal that is
+// known before storing leaves nothing stored. The dry run stops before the store is opened, so a
+// failure at that step, or a tree that changes meanwhile, can still leave earlier sub-plans stored.
 type Admitter interface {
 	Admit(ctx context.Context, spec SubSpec) error
 }
