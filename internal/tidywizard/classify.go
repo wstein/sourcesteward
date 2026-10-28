@@ -486,10 +486,9 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		// yet (Spec 041 T011a5): the workspace stays and no deletion path is opened for it.
 		return c.retain("jj-retirement-unsupported", "owned by a creation record; no plan kind retires a jj workspace yet")
 	case record == RecordMismatch:
-		c.Verdict, c.Reason = VerdictDecision, "locked-stw"
-		c.Evidence = "stw lock whose creation record does not match"
-		c.Effects = []string{"remove-registration", "remove-files"}
-		return c
+		// Owner decision of 2026-10-28: kept, never offered. The legacy completion refuses a
+		// locked registration (no owned record), so a decision row could never be planned.
+		return c.retain("lock-mismatch", "stw lock whose creation record does not match")
 	}
 	c.Verdict = VerdictSafe
 	c.Effects = []string{"remove-registration", "remove-files"}
