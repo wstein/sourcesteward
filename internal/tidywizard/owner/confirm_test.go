@@ -147,3 +147,39 @@ func TestUnknownItemsAreConfirmable(t *testing.T) {
 		}
 	}
 }
+
+// A confirmation cut off by the end of input is refused, also when the words are right.
+func TestConfirmWithoutNewlineIsRefused(t *testing.T) {
+	for _, in := range []string{"codex 3f9c2a", "codex 3f9c2a\r"} {
+		open, _ := tty(in)
+		if err := Confirm(open, "codex", planID); !errors.Is(err, ErrConfirmationRefused) {
+			t.Errorf("input %q: err = %v, want ErrConfirmationRefused", in, err)
+		}
+	}
+	open, _ := tty("codex 3f9c2a\r\n")
+	if err := Confirm(open, "codex", planID); err != nil {
+		t.Errorf("CRLF still confirms: %v", err)
+	}
+}
+
+type errTTY struct {
+	fakeTTY
+	data string
+}
+
+func (e *errTTY) Read(p []byte) (int, error) {
+	if e.data == "" {
+		return 0, errors.New("i/o failure")
+	}
+	n := copy(p, e.data)
+	e.data = e.data[n:]
+	return n, nil
+}
+
+func TestConfirmReadErrorAfterTheWordsIsNoConfirmation(t *testing.T) {
+	f := &errTTY{data: "codex 3f9c2a"}
+	open := func() (io.ReadWriteCloser, error) { return f, nil }
+	if err := Confirm(open, "codex", planID); err == nil {
+		t.Fatal("confirmed")
+	}
+}

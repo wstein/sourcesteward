@@ -315,26 +315,15 @@ type line struct {
 	tooLong bool
 }
 
-// readLine reads one line of at most maxLine bytes; a longer line is drained and flagged. ok is
-// false at the end of input with nothing read.
+// readLine reads one terminated line of at most maxLine bytes; a longer line is drained and
+// flagged. ok is false at the end of input or on a read error: an answer cut off by the end of
+// input (no newline) is no answer, so a "y" followed by EOF never counts (Issue 326).
 func readLine(in *bufio.Reader) (line, bool) {
-	var l line
-	read := false
-	for {
-		part, isPrefix, err := in.ReadLine()
-		if err != nil {
-			return l, read
-		}
-		read = true
-		if len(l.text)+len(part) > maxLine {
-			l.tooLong = true
-		} else {
-			l.text += string(part)
-		}
-		if !isPrefix {
-			return l, true
-		}
+	text, tooLong, err := owner.ReadAnswer(in, maxLine)
+	if err != nil {
+		return line{}, false
 	}
+	return line{text: text, tooLong: tooLong}, true
 }
 
 // sanitize keeps a label or detail on one line of the prompt; the real escaping of outside text

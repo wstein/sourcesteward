@@ -325,3 +325,57 @@ func TestOwnerQuestionAgreesInNumber(t *testing.T) {
 		}
 	}
 }
+
+// An answer needs its newline: a last line cut off by the end of input is no answer (Issue 326,
+// the rule of the whole wizard: EOF is no answer, also after a "y"). The same text with its
+// newline still counts.
+func TestAnswerWithoutNewlineIsEndOfInput(t *testing.T) {
+	for _, in := range []string{"y", "yes", "n", "zz", "zz\ny"} {
+		got, err := YesNo(bufio.NewReader(strings.NewReader(in)), io.Discard, "Q?", true)
+		if got || !errors.Is(err, ErrEndOfInput) {
+			t.Errorf("YesNo %q: %v %v", in, got, err)
+		}
+		got, err = YesNoQuit(bufio.NewReader(strings.NewReader(in)), io.Discard, "Q?", true)
+		if got || !errors.Is(err, ErrEndOfInput) {
+			t.Errorf("YesNoQuit %q: %v %v", in, got, err)
+		}
+	}
+	got, err := YesNo(bufio.NewReader(strings.NewReader("y")), io.Discard, "Q?", true)
+	if got || !errors.Is(err, ErrEndOfInput) {
+		t.Errorf("a bare y at the end of input must be ErrEndOfInput: %v %v", got, err)
+	}
+	got, err = YesNo(bufio.NewReader(strings.NewReader("y\r\n")), io.Discard, "Q?", true)
+	if err != nil || !got {
+		t.Errorf("y with CRLF still applies: %v %v", got, err)
+	}
+	res, err := Select(bufio.NewReader(strings.NewReader("a")), io.Discard, items(), Options{Interactive: true})
+	if err != nil || res.Outcome == OutcomeChosen || len(res.Chosen) != 0 {
+		t.Errorf("Select a without newline chose something: %+v %v", res, err)
+	}
+	res, err = Select(bufio.NewReader(strings.NewReader("a\n")), io.Discard, items(), Options{Interactive: true})
+	if err != nil || len(res.Chosen) == 0 {
+		t.Errorf("Select a with newline must still choose: %+v %v", res, err)
+	}
+}
+
+type failAfter struct {
+	data string
+	err  error
+}
+
+func (f *failAfter) Read(p []byte) (int, error) {
+	if f.data == "" {
+		return 0, f.err
+	}
+	n := copy(p, f.data)
+	f.data = f.data[n:]
+	return n, nil
+}
+
+// A read error other than EOF after a "y" is no consent either.
+func TestAnswerWithReadErrorIsNoConsent(t *testing.T) {
+	got, err := YesNo(bufio.NewReader(&failAfter{"y", errors.New("i/o failure")}), io.Discard, "Q?", true)
+	if got || err == nil {
+		t.Errorf("%v %v", got, err)
+	}
+}

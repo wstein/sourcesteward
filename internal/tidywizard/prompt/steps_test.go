@@ -486,3 +486,18 @@ func TestFlowQuitAtTheDecisionConfirmation(t *testing.T) {
 		t.Errorf("%+v %v\n%s", res, err, out)
 	}
 }
+
+// The group steps ask through the same line reader: a "y" that confirms the summary is cut off
+// by the end of input and confirms nothing; the same answers with their newlines still do.
+func TestFlowAnswerWithoutNewlineTakesNothing(t *testing.T) {
+	res, _, err := flow(t, "a\n\n", groupsFixture(), Options{})
+	if err != nil || len(res.Rows) == 0 {
+		t.Fatalf("with newlines the green rows are taken: %v %v", chosenIDs(res), err)
+	}
+	for _, in := range []string{"a", "a\n", "a\ny", "\ny"} {
+		res, _, err = flow(t, in, groupsFixture(), Options{})
+		if len(res.Rows) != 0 || res.Outcome == OutcomeChosen {
+			t.Errorf("%q chose %v (%v)", in, chosenIDs(res), err)
+		}
+	}
+}
