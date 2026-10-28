@@ -24,8 +24,20 @@ func (s *session) summary() (FlowResult, error) {
 		if err != nil {
 			return FlowResult{}, err
 		}
-		if !again {
+		if again {
+			continue
+		}
+		refused := s.admit()
+		if len(refused) == 0 {
 			break
+		}
+		fmt.Fprintln(s.out, "\nThis selection cannot be planned; nothing was stored. Refused:")
+		for _, r := range refused {
+			fmt.Fprintf(s.out, "  %s\n", escape(r.Text))
+		}
+		fmt.Fprintln(s.out, "Change the selection (leave out or replace the rows named above).")
+		if err := s.edit(); err != nil {
+			return FlowResult{}, err
 		}
 	}
 	rows := s.chosen()
@@ -41,6 +53,18 @@ func (s *session) summary() (FlowResult, error) {
 		}
 	}
 	return FlowResult{Outcome: OutcomeChosen, Rows: rows, Confirmed: confirmed}, nil
+}
+
+// admit asks the caller whether the selection can be planned; nil without a check.
+func (s *session) admit() []Refusal {
+	if s.opt.Admit == nil {
+		return nil
+	}
+	confirmed := map[string]bool{}
+	for id := range s.confirmed {
+		confirmed[id] = true
+	}
+	return s.opt.Admit(s.chosen(), confirmed)
 }
 
 func count(n int, one, many string) string { return pluralize.Count(n, one, many) }

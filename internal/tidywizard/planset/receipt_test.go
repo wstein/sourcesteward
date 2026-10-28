@@ -29,7 +29,7 @@ func confirmedSet(t *testing.T, candidates ...tidywizard.Candidate) (string, Set
 		candidates = []tidywizard.Candidate{foreign(tidywizard.KindBranch, "r", "f")}
 	}
 	request := Request{Candidates: candidates, Chosen: ids(candidates...), Mode: human}
-	preview, err := assemble(context.Background(), request, &fakePlanner{})
+	preview, err := assemble(context.Background(), request, &fakePlanner{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

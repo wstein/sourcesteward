@@ -61,6 +61,11 @@ type V3PlanOptions struct {
 	DecisionsFile string
 	// Timeout replaces the default deadlines of the operation when positive.
 	Timeout time.Duration
+	// DryRun runs every observation and judgement of the plan and stops before the plan is
+	// written: nothing is stored, no state directory is opened for writing and no report is
+	// written. A refusal is the refusal the stored plan would have met; a plan that passes is
+	// returned (with a plan id that is never stored) and is not a stored plan.
+	DryRun bool
 }
 type V3ApplyOptions struct {
 	StateDir, PlanID         string

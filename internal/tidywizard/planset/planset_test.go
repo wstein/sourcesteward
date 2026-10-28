@@ -316,7 +316,7 @@ func TestBuildForeignItemsNeedTheTypedConfirmationAndRecordScopes(t *testing.T) 
 // planIDFor returns the 6-character prefix a confirmation of the set must type.
 func planIDFor(t *testing.T, cands []tidywizard.Candidate, chosen []string, ev owner.Evidence) string {
 	t.Helper()
-	s, err := assemble(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: ev}, &fakePlanner{})
+	s, err := assemble(context.Background(), Request{Candidates: cands, Chosen: chosen, Mode: ev}, &fakePlanner{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -189,7 +189,11 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 		// Nothing is offered for deletion: the overview said so and why; no question is asked.
 		return exit()
 	}
-	res, err := prompt.RunFlow(in, out, plan.groups, prompt.Options{Interactive: true, Width: tidyTerminalWidth(out), Kept: plan.kept})
+	prep := run.prep
+	admit := func(rows []prompt.Row, confirmed map[string]bool) []prompt.Refusal {
+		return admitSelection(run, plan, rows, confirmed)
+	}
+	res, err := prompt.RunFlow(in, out, plan.groups, prompt.Options{Interactive: true, Width: tidyTerminalWidth(out), Kept: plan.kept, Admit: admit})
 	if cause := interruptedWizard(run, ""); cause != nil {
 		return runtimeFailure{cause}
 	}
@@ -205,7 +209,6 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 	if err := tidyTerminalAvailable(); err != nil {
 		return runtimeFailure{err}
 	}
-	prep := run.prep
 	foreign := false
 	for _, r := range res.Rows {
 		foreign = foreign || r.Word != ""
@@ -247,4 +250,60 @@ func runTidyJanitor(cmd *cobra.Command, run *wizardRun, doc render.Document, in 
 		return runtimeFailure{errors.New(escFull(err.Error()))}
 	}
 	return exit()
+}
+
+// admitSelection asks the planner, read-only, whether the selected rows can be planned, before
+// the summary's last line and any typed word (Spec 044 D4 of the T016 dogfood run). It returns one
+// refusal per failing sub-plan, naming the group of the wizard, the first row and the reason; the
+// wizard then goes back to the edit prompt with the selection kept. A refusal that names no
+// sub-plan (for example a row that is retained) is one refusal with the error text.
+func admitSelection(run *wizardRun, plan janitorPlan, rows []prompt.Row, confirmed map[string]bool) []prompt.Refusal {
+	chosen := make([]string, 0, len(rows))
+	for _, r := range rows {
+		chosen = append(chosen, r.ID)
+	}
+	err := planset.Admit(run.ctx, planset.Request{Candidates: run.res.Candidates, Chosen: chosen, Derived: run.prep.Derived, Mode: run.mode, DecisionConfirmed: confirmed}, tidyPlannerFor(run.prep))
+	if err == nil {
+		return nil
+	}
+	var refused *planset.Refused
+	if !errors.As(err, &refused) {
+		return []prompt.Refusal{{IDs: chosen, Text: err.Error()}}
+	}
+	groupOf := map[string]string{}
+	rowOf := map[string]prompt.Row{}
+	for _, g := range plan.groups {
+		title := strings.TrimSpace(g.Title + " " + g.Place)
+		for _, r := range g.Rows {
+			groupOf[r.ID], rowOf[r.ID] = title, r
+		}
+	}
+	out := make([]prompt.Refusal, 0, len(refused.Failures))
+	for _, f := range refused.Failures {
+		first := f.Items[0]
+		row := rowOf[first]
+		subject := row.Path
+		if subject == "" {
+			subject = row.Branch
+		}
+		more := ""
+		if n := len(f.Items) - 1; n > 0 {
+			more = fmt.Sprintf(" and %d more", n)
+		}
+		out = append(out, prompt.Refusal{IDs: f.Items, Text: fmt.Sprintf("group %q, [%d] %s%s: %s", groupOf[first], row.Number, subject, more, refusalReason(f.Err))})
+	}
+	return out
+}
+
+// refusalReason is the sentence of a planner refusal: the reason code with its wording when it is
+// a known code, else the text of the error, flattened to one line.
+func refusalReason(err error) string {
+	var u *planset.Unplannable
+	if errors.As(err, &u) {
+		if s, ok := render.ReasonSentence(u.Reason); ok {
+			return u.Reason + " (" + s.Why + ")"
+		}
+		return u.Reason + ": " + u.Detail
+	}
+	return strings.Join(strings.Fields(err.Error()), " ")
 }
