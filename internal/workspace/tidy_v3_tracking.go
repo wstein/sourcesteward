@@ -294,7 +294,7 @@ func (c tidyV3TrackingCoordinator) planTracking(ctx context.Context, o V3PlanOpt
 	if err = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); err != nil {
 		return failTidyV3Tracking(r, err)
 	}
-	if p.StateDir != "" {
+	if p.StateDir != "" && !o.DryRun {
 		store, err := openV3Store(p.StateDir, true, v3NativeRoots(fresh.Native), fresh.Native.ProtectedRoots)
 		if err != nil {
 			return failTidyV3Tracking(r, err)

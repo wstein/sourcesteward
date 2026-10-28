@@ -268,14 +268,14 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err = qualifyTidyV3Registrations(ctx, fresh.Native, nil, o.StateDir); err != nil {
 		return failTidyV3(r, err)
 	}
-	if written != nil {
+	if written != nil && !o.DryRun {
 		// The report is written before the plan is stored: a failed write stores
 		// no plan.
 		if err = c.writeReport(o.ReportDir, rendered.Markdown, rendered.JSON); err != nil {
 			return failTidyV3(r, err)
 		}
 	}
-	if p.StateDir != "" {
+	if p.StateDir != "" && !o.DryRun {
 		s, e := openV3Store(p.StateDir, true, v3NativeRoots(fresh.Native), fresh.Native.ProtectedRoots)
 		if e != nil {
 			return failTidyV3(r, e)

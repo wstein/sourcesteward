@@ -151,3 +151,78 @@ func TestRefusedRegistrationAgreesWithTheQualificationOfThePlans(t *testing.T) {
 		}
 	})
 }
+
+func listFiles(t *testing.T, dir string) []string {
+	t.Helper()
+	var out []string
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err == nil {
+			out = append(out, path)
+		}
+		return nil
+	})
+	return out
+}
+
+// DryRun runs the whole plan and writes nothing: a refusal is the same as without it, a plan that
+// passes is returned and the state directory is untouched.
+func TestPlanTidyV3DryRunWritesNothing(t *testing.T) {
+	repo := admissionRepo(t)
+	admissionGit(t, repo, "switch", "-q", "-c", "done")
+	admissionGit(t, repo, "commit", "-q", "--allow-empty", "-m", "work")
+	admissionGit(t, repo, "switch", "-q", "main")
+	admissionGit(t, repo, "merge", "-q", "--no-ff", "-m", "merge", "done")
+	state := filepath.Join(canonicalTemp(t), "state")
+	if err := os.Mkdir(state, 0700); err != nil {
+		t.Fatal(err)
+	}
+	before := listFiles(t, state)
+	o := V3PlanOptions{Path: repo, Base: "refs/heads/main", StateDir: state, Refs: []string{"refs/heads/done"}, ProtectWorktrees: []string{}, DryRun: true}
+	res := PlanTidyV3(context.Background(), o)
+	if res.Status != "ok" || res.Plan == nil || len(res.Plan.Candidates) != 1 || res.Plan.Candidates[0].Decision != "delete" {
+		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
+	}
+	if after := listFiles(t, state); strings.Join(before, "\n") != strings.Join(after, "\n") {
+		t.Errorf("a dry run wrote to the state directory: %v", after)
+	}
+	o.DryRun = false
+	if real := PlanTidyV3(context.Background(), o); real.Status != "ok" || len(listFiles(t, filepath.Join(state, "tidy-v3-plans"))) < 2 {
+		t.Errorf("the real plan must store the plan: %+v", real.Status)
+	}
+	// The refusal is the same: an unknown reference is refused in a dry run too.
+	o.DryRun, o.Refs = true, []string{"refs/heads/nope"}
+	if res := PlanTidyV3(context.Background(), o); res.Status == "ok" {
+		t.Errorf("a dry run must refuse what the plan refuses: %+v", res.Status)
+	}
+}
+
+// DryRun of a legacy retirement reaches the physical checks (here: the owner) and stores nothing.
+func TestPlanTidyV3DryRunOfARetirementChecksThePlaceAndWritesNothing(t *testing.T) {
+	repo := admissionRepo(t)
+	root := canonicalTemp(t)
+	parent := filepath.Join(root, "wts")
+	if err := os.Mkdir(parent, 0700); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(parent, "wt")
+	admissionGit(t, repo, "worktree", "add", "-q", "--detach", dest, "main")
+	state := filepath.Join(root, "state")
+	if err := os.Mkdir(state, 0700); err != nil {
+		t.Fatal(err)
+	}
+	before := listFiles(t, state)
+	o := V3PlanOptions{Path: repo, Base: "refs/heads/main", StateDir: state, CompletedWorktree: dest, Owner: "codex", RemoveRegistration: true, RemoveFiles: dest, ProtectWorktrees: []string{}, DryRun: true}
+	res := PlanTidyV3(context.Background(), o)
+	if res.Status != "ok" || res.Plan == nil {
+		t.Fatalf("%+v %+v", res.Status, res.Diagnostics)
+	}
+	if after := listFiles(t, state); strings.Join(before, "\n") != strings.Join(after, "\n") {
+		t.Errorf("a dry run wrote to the state directory: %v", after)
+	}
+	old := physicalOwnerUID
+	t.Cleanup(func() { physicalOwnerUID = old })
+	physicalOwnerUID = func() uint32 { return uint32(os.Geteuid()) + 1 }
+	if res := PlanTidyV3(context.Background(), o); res.Status == "ok" {
+		t.Error("a dry run must meet the physical owner check of the plan")
+	}
+}

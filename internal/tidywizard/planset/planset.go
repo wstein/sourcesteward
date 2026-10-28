@@ -282,6 +282,14 @@ type Preflight interface {
 	Preflight(spec SubSpec) error
 }
 
+// Admitter is an optional interface of a Planner: Admit runs every observation and judgement of
+// the sub-plan that Plan runs, up to the point where the plan would be stored, and stores nothing.
+// Build and Admit ask it for every sub-plan before the first one is planned, so a refusal of a
+// later sub-plan can no longer leave the earlier ones stored.
+type Admitter interface {
+	Admit(ctx context.Context, spec SubSpec) error
+}
+
 // Request is what Build needs. Chosen are candidate ids (the wizard maps numbers to ids).
 // DecisionConfirmed names the decision rows the second confirmation covered. Confirm opens the
 // terminal for the typed confirmation of foreign items; it is only used when Chosen has one.
@@ -374,7 +382,7 @@ func choose(req Request) ([]tidywizard.Candidate, error) {
 
 // assemble makes the sub-plans for the chosen items and returns the set with its id. It does not
 // ask for the typed confirmation.
-func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
+func assemble(ctx context.Context, req Request, planner Planner, checkOnly bool) (Set, error) {
 	chosen, err := choose(req)
 	if err != nil {
 		return Set{}, err
@@ -429,19 +437,42 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 	for _, c := range chosen {
 		set.Items = append(set.Items, Item{ID: c.ID, Repo: c.Repo, Kind: string(c.Kind), Owner: c.Owner, OwnerSource: c.OwnerSource, Scope: c.Scope, Path: c.Path, Branch: c.Branch, Task: c.Task, Effects: append([]string{}, c.Effects...)})
 	}
-	if pre, ok := planner.(Preflight); ok {
-		for _, key := range order {
-			g := groups[key]
-			if err := pre.Preflight(SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items}); err != nil {
-				return Set{}, err
-			}
+	// Every sub-plan is checked before any is planned: first the mapping, then the full read-only
+	// admission (the plan's own judgement without storing it). Every failure is collected.
+	var failures []*SubPlanFailure
+	for _, key := range order {
+		g := groups[key]
+		spec := SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items}
+		var cause error
+		if pre, ok := planner.(Preflight); ok {
+			cause = pre.Preflight(spec)
 		}
+		if adm, ok := planner.(Admitter); ok && cause == nil {
+			cause = adm.Admit(ctx, spec)
+		}
+		if cause != nil {
+			f := &SubPlanFailure{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Err: cause}
+			for _, c := range g.items {
+				f.Items = append(f.Items, c.ID)
+			}
+			failures = append(failures, f)
+		}
+	}
+	if len(failures) > 0 {
+		return Set{}, &Refused{Failures: failures}
+	}
+	if checkOnly {
+		return set, nil
 	}
 	for _, key := range order {
 		g := groups[key]
 		planned, err := planner.Plan(ctx, SubSpec{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Items: g.items})
 		if err != nil {
-			return Set{}, fmt.Errorf("planning %s sub-plan of %s: %w", g.kind, g.repo, err)
+			f := &SubPlanFailure{Repo: g.repo, Kind: g.kind, Worktree: g.worktree, Err: err}
+			for _, c := range g.items {
+				f.Items = append(f.Items, c.ID)
+			}
+			return Set{}, &Refused{Failures: []*SubPlanFailure{f}}
 		}
 		if !validPlanID(planned.ID) {
 			return Set{}, fmt.Errorf("%w: the planner returned the sub-plan id %q", ErrInvalid, planned.ID)
@@ -458,6 +489,15 @@ func assemble(ctx context.Context, req Request, planner Planner) (Set, error) {
 	}
 	set.PlanID = set.computeID()
 	return set, nil
+}
+
+// Admit runs the checks of Build on the chosen items, up to the full read-only admission of every
+// sub-plan, and plans nothing, stores nothing and asks no typed word. A nil result means Build
+// meets no refusal that is known before the confirmation; a refusal is a *Refused that names every
+// failing sub-plan with the ids of its rows.
+func Admit(ctx context.Context, req Request, planner Planner) error {
+	_, err := assemble(ctx, req, planner, true)
+	return err
 }
 
 // Receipt is the in-memory confirmation of the foreign words of one built set. Copies share
@@ -505,7 +545,7 @@ func Build(ctx context.Context, req Request, planner Planner) (Set, *Receipt, er
 			return Set{}, nil, err
 		}
 	}
-	set, err := assemble(ctx, req, planner)
+	set, err := assemble(ctx, req, planner, false)
 	if err != nil {
 		return Set{}, nil, err
 	}

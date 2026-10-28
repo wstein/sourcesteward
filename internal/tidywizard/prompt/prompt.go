@@ -64,6 +64,19 @@ type Options struct {
 	Width int
 	// Kept is the number of rows that are kept or red, named in the summary (RunFlow).
 	Kept int
+	// Admit, when set, is asked after the person accepted the summary and before the last line
+	// of the summary: it checks that the selection can be planned (read-only, nothing is stored)
+	// and returns the refusals, none when it can. The wizard then names them and returns to the
+	// edit prompt with the selection kept. confirmed holds the decision rows the person
+	// confirmed.
+	Admit func(rows []Row, confirmed map[string]bool) []Refusal
+}
+
+// Refusal is a part of the selection that cannot be planned: the row ids it covers and the text
+// that names the group, the row and the reason (raw text; the prompt escapes it).
+type Refusal struct {
+	IDs  []string
+	Text string
 }
 
 // Outcome is what a prompt run ended with.

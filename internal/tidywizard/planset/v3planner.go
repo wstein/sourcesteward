@@ -187,13 +187,32 @@ func (p V3Planner) Plan(ctx context.Context, s SubSpec) (Planned, error) {
 	if err != nil {
 		return Planned{}, err
 	}
+	return p.run(ctx, s, o)
+}
+
+// Admit makes the plan with every observation and judgement of Plan and stops before it is
+// stored (V3PlanOptions.DryRun): the refusal is the refusal Plan would meet, and nothing is
+// written. It costs the planning once more.
+func (p V3Planner) Admit(ctx context.Context, s SubSpec) error {
+	o, err := p.Options(s)
+	if err != nil {
+		return err
+	}
+	o.DryRun = true
+	_, err = p.run(ctx, s, o)
+	return err
+}
+
+// run plans through PlanFunc and applies the judgement of notDeletable. Its errors carry no
+// "planning KIND sub-plan of REPO" prefix: the caller adds it once.
+func (p V3Planner) run(ctx context.Context, s SubSpec, o workspace.V3PlanOptions) (Planned, error) {
 	res := p.PlanFunc(ctx, o)
 	if res.Status != "ok" || res.Plan == nil {
 		code, msg := res.Status, "no plan"
 		if len(res.Diagnostics) > 0 {
 			code, msg = res.Diagnostics[0].Code, res.Diagnostics[0].Message
 		}
-		return Planned{}, fmt.Errorf("planning %s sub-plan of %s: %s: %s", s.Kind, s.Repo, code, msg)
+		return Planned{}, fmt.Errorf("%s: %s", code, msg)
 	}
 	if reason := notDeletable(res.Plan, s.Kind); reason != "" {
 		return Planned{}, unplannable(reason, "the %s plan of %s retains an item", s.Kind, s.Repo)
@@ -236,4 +255,5 @@ func nonEmpty(s, d string) string {
 var (
 	_ Planner   = V3Planner{}
 	_ Preflight = V3Planner{}
+	_ Admitter  = V3Planner{}
 )

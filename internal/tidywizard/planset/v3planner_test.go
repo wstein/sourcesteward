@@ -316,8 +316,10 @@ func TestPreflightRefusesBeforeTheFirstSubPlanIsPlanned(t *testing.T) {
 	if reasonOf(t, err) != ReasonTrackingOnline {
 		t.Fatalf("err %v", err)
 	}
-	if len(r.opts) != 0 {
-		t.Fatalf("the branch sub-plan was planned (%d) although the tracking sub-plan cannot be", len(r.opts))
+	for _, o := range r.opts {
+		if !o.DryRun {
+			t.Fatalf("the branch sub-plan was planned (%+v) although the tracking sub-plan cannot be", o)
+		}
 	}
 }
 

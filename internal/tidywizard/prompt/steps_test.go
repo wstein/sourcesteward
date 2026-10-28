@@ -486,3 +486,50 @@ func TestFlowQuitAtTheDecisionConfirmation(t *testing.T) {
 		t.Errorf("%+v %v\n%s", res, err, out)
 	}
 }
+
+// The admission of the selection (Spec 044 D4 of the T016 run): a refusal is named, nothing is
+// chosen, and the person is back at the edit prompt with the selection kept.
+func TestSummaryAdmissionRefusalReturnsToTheEditPrompt(t *testing.T) {
+	calls := 0
+	opt := Options{Interactive: true, Width: 100, Admit: func(rows []Row, _ map[string]bool) []Refusal {
+		calls++
+		for _, r := range rows {
+			if r.ID == "w4" {
+				return []Refusal{{IDs: []string{"w4"}, Text: "group \"3 directories\", [4] /tmp/whr-2\x1b[31m: retirement-parent-foreign"}}
+			}
+		}
+		return nil
+	}}
+	// a: all green, to the summary; e: edit, 3-4 replaces the selection with a row the hook
+	// refuses; Enter is refused and asks for terms; 1-2 is admitted by the next Enter.
+	res, out, err := flow(t, "a\ne\n3-4\n\n1-2\n\n", groupsFixture(), opt)
+	if err != nil || res.Outcome != OutcomeChosen || len(res.Rows) != 2 {
+		t.Fatalf("%+v %v\n%s", res, err, out)
+	}
+	if calls < 2 {
+		t.Errorf("Admit asked %d times", calls)
+	}
+	for _, want := range []string{"cannot be planned; nothing was stored", "retirement-parent-foreign", "Terms ("} {
+		if !strings.Contains(out, want) {
+			t.Errorf("%q missing:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "\x1b") {
+		t.Errorf("the refusal text must be escaped:\n%q", out)
+	}
+	if n := strings.Count(out, "This deletes"); n != 1 {
+		t.Errorf("the last line of the summary comes once, after the admission: %d\n%s", n, out)
+	}
+}
+
+// Without the hook nothing changes; a hook that admits everything changes nothing either.
+func TestSummaryAdmissionAdmitsAndAddsNoText(t *testing.T) {
+	_, plain, err := flow(t, "a\n\n", groupsFixture(), Options{Interactive: true, Width: 100})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, hooked, err := flow(t, "a\n\n", groupsFixture(), Options{Interactive: true, Width: 100, Admit: func([]Row, map[string]bool) []Refusal { return nil }})
+	if err != nil || plain != hooked {
+		t.Errorf("%v\n--- plain\n%s\n--- hooked\n%s", err, plain, hooked)
+	}
+}

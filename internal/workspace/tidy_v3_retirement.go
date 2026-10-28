@@ -121,6 +121,11 @@ func (c tidyV3RetirementCoordinator) plan(ctx context.Context, o V3PlanOptions) 
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	if o.DryRun {
+		r.Status, r.Plan, r.Boundary.Complete = "ok", &p, true
+		r.Limitations = append([]string{}, p.RecoveryLimits...)
+		return r
+	}
 	s, err := c.openStore(p.StateDir, true, v3NativeRoots(fresh.Native.Native), fresh.Native.Native.ProtectedRoots)
 	if err != nil {
 		return failTidyV3(r, err)
