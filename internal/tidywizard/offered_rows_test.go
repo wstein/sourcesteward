@@ -4,6 +4,8 @@ package tidywizard
 
 import (
 	"context"
+	"github.com/wstein/sourcesteward/internal/tidywizard/derive"
+	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	"os"
 	"strings"
 	"testing"
@@ -145,5 +147,86 @@ func TestAdapterRunsNoGitAdmissionForAJJRepository(t *testing.T) {
 		if w.Admission != "" {
 			t.Errorf("%s: %q", w.Path, w.Admission)
 		}
+	}
+}
+
+// D1 for every scope and for several worktrees under one refused parent (the live shape: many
+// worktrees directly under /tmp). Each is kept, whoever owns it, and the parent is checked once.
+func TestParentAdmissionKeepsEveryWorktreeUnderOneRefusedParentOfEveryScope(t *testing.T) {
+	own := evid("/shared/own", "refs/heads/o")
+	own.Locked, own.LockReason = true, "stw:own"
+	other := evid("/shared/whr-codex", "refs/heads/codex/x") // owner codex by branch convention, scope other
+	hinted := evid("/shared/hinted", "refs/heads/h")         // only a commit author: scope unknown
+	plain := evid("/shared/whr-2", "refs/heads/w2")
+	obs := workspace.WorktreeObservation{Worktrees: []workspace.WorktreeEvidence{evid("/ws/r", "refs/heads/main"), own, other, hinted, plain}}
+	obs.Worktrees[0].Primary = true
+	a, _ := testAdapter(obs, map[string]derive.TaskLookup{"own": found("own", "werner", "/shared/own")})
+	asked := map[string]int{}
+	a.ParentAdmission = func(parent string) error { asked[parent]++; return os.ErrPermission }
+	res := Classify(context.Background(), a, []string{"r"}, cfg())
+	scopes := map[owner.Scope]bool{}
+	kept := 0
+	for _, c := range res.Candidates {
+		if c.Kind != KindWorktree || c.Reason == "primary-checkout" {
+			continue
+		}
+		scopes[c.Scope] = true
+		if c.Verdict != VerdictRetain || c.Reason != "retirement-parent-foreign" {
+			t.Errorf("%s (scope %s): %s %q, want retain retirement-parent-foreign", c.ID, c.Scope, c.Verdict, c.Reason)
+		}
+		kept++
+	}
+	if kept != 4 || !scopes[owner.ScopeOwn] || !scopes[owner.ScopeOther] || !scopes[owner.ScopeUnknown] {
+		t.Errorf("fixture: %d rows, scopes %v", kept, scopes)
+	}
+	if asked["/shared"] != 1 {
+		t.Errorf("the parent is checked once per repository, got %d", asked["/shared"])
+	}
+}
+
+// The destination check refuses a worktree whose own directory fails, whatever its parent.
+func TestDestinationAdmissionKeepsTheWorktree(t *testing.T) {
+	obs := workspace.WorktreeObservation{Worktrees: []workspace.WorktreeEvidence{evid("/ws/r", "refs/heads/main"), evid("/ws/wt/a", "refs/heads/a")}}
+	obs.Worktrees[0].Primary = true
+	a, _ := testAdapter(obs, nil)
+	a.DestinationAdmission = func(string) error { return os.ErrPermission }
+	res := Classify(context.Background(), a, []string{"r"}, cfg())
+	for _, c := range res.Candidates {
+		if c.Kind == KindWorktree && c.Reason != "primary-checkout" && c.Reason != "retirement-parent-foreign" {
+			t.Errorf("%+v", c)
+		}
+	}
+}
+
+// The state directory of the plans reaches the registration check (the overlap rule).
+func TestAdapterPassesThePlanStoreToTheRegistrationCheck(t *testing.T) {
+	a := NewAdapter(nil, []derive.Store{{Path: "/state/one"}})
+	if a.State != "/state/one" {
+		t.Fatalf("State %q", a.State)
+	}
+	obs := workspace.WorktreeObservation{Worktrees: []workspace.WorktreeEvidence{evid("/ws/r", "refs/heads/main")}}
+	b, _ := testAdapter(obs, nil)
+	b.State = "/state/one"
+	got := ""
+	b.Registrations = func(_ context.Context, _ []workspace.RegistrationFact, state string) (workspace.RegistrationRefusal, bool) {
+		got = state
+		return workspace.RegistrationRefusal{}, false
+	}
+	if _, err := b.Facts(context.Background(), "r"); err != nil || got != "/state/one" {
+		t.Errorf("state %q err %v", got, err)
+	}
+}
+
+// A decision row (a lock whose record does not match) in a refused repository is kept too.
+func TestBlockedRepositoryKeepsTheDecisionRow(t *testing.T) {
+	w := stwTree("d")
+	w.Record, w.TaskOwner = RecordMismatch, ""
+	f := repo([]Worktree{w}, nil)
+	if c := only(t, f, cfg()); c.Verdict != VerdictDecision {
+		t.Fatalf("fixture: %s", c.Verdict)
+	}
+	f.Blocked = workspace.AdmissionUnknownWorkspacePath
+	if c := only(t, f, cfg()); c.Verdict != VerdictRetain || c.Reason != "unknown-workspace-path" || len(c.Effects) != 0 {
+		t.Errorf("%+v", c)
 	}
 }
