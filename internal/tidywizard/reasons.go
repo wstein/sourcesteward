@@ -5,7 +5,8 @@ package tidywizard
 // AllReasons lists every reason code a candidate can carry, in a stable order: the classifier's own
 // keep reasons, the protections of the derivation, the closed list of tracking reasons and the
 // native reasons of jj branches, plus `unregistered` and `locked-stw`, which are information on a
-// safe row and the reason of the one decision row. The renderer needs a sentence and an action for
+// safe row and the word of a decision row, which the classifier no longer makes (owner decision of
+// 2026-10-28: a lock whose record does not match is kept as `lock-mismatch`). The renderer needs a sentence and an action for
 // each (Spec 044 SC-010). Each call owns its slice.
 func AllReasons() []string {
 	return []string{
