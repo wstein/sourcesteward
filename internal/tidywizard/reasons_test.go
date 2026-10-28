@@ -47,7 +47,7 @@ func TestAllReasonsListsEveryReasonTheClassifierEmits(t *testing.T) {
 	// derivation, the closed tracking list of the adapter and the native reasons of jj branches.
 	for _, r := range []string{"primary-checkout", "current-worktree", "remote-counterpart", "recovery-reference", "lock-mismatch",
 		// The adapter hands these codes of workspace admission to the classifier (Admission, Blocked).
-		"retirement-parent-foreign"} {
+		"retirement-parent-foreign", "unknown-workspace-path", "state-overlap"} {
 		found[r] = true
 	}
 	for r := range trackingReasons {

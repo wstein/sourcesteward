@@ -169,6 +169,14 @@ type RepoFacts struct {
 	// OnlineFallback is the reason (one of the Reason words) that the implicit online read of this
 	// repository failed and it was judged offline; empty otherwise (Spec 044 D13).
 	OnlineFallback string
+	// Blocked is the reason code (a workspace.Admission code) when planning refuses the whole
+	// repository, for example because a registration is locked and its directory is gone. Every
+	// row that would be offered is then kept with that reason (Spec 044 D3); the repository
+	// carries one notice that names the remedy.
+	Blocked string
+	// BaseOID is the object id of the base commit; a branch at that commit is the selected base
+	// for the planner and is kept. Empty when unknown.
+	BaseOID string
 }
 
 // Source supplies the facts of a repository; it is the I/O seam of the classifier.
@@ -352,16 +360,22 @@ func classifyRepo(f RepoFacts, cfg Config) []Candidate {
 	for _, b := range f.Branches {
 		branches[b.Name] = b
 	}
+	// A branch is attached to any registration that names it or stands at its tip, a registration
+	// whose directory is gone included: planning keeps such a branch as workspace-used.
 	attached := map[string]int{}
+	attachedTips := map[string]bool{}
 	for _, w := range f.Worktrees {
-		if w.Branch != "" && !w.DirMissing {
+		if w.Branch != "" {
 			attached[w.Branch]++
+		}
+		if w.Tip != "" {
+			attachedTips[w.Tip] = true
 		}
 	}
 	out := []Candidate{}
 	deleted := map[string]bool{}
 	for _, w := range f.Worktrees {
-		c := classifyWorktree(f.Name, w, protected[w.Path], cfg)
+		c := block(classifyWorktree(f.Name, w, protected[w.Path], cfg), f.Blocked)
 		if w.Branch != "" && c.Verdict == VerdictSafe && c.Kind == KindWorktree {
 			if b, ok := branches[w.Branch]; ok && !b.IsBase && b.Incomplete == "" && b.Reason == "" && proven(b.Proof) && attached[w.Branch] == 1 {
 				c.Effects = append(c.Effects, "delete-branch:"+w.Branch)
@@ -374,10 +388,12 @@ func classifyRepo(f RepoFacts, cfg Config) []Candidate {
 		if b.IsBase || deleted[b.Name] {
 			continue
 		}
-		out = append(out, classifyBranch(f.Name, b, attached[b.Name] > 0, cfg))
+		atBase := b.Tip != "" && b.Tip == f.BaseOID
+		held := attached[b.Name] > 0 || (b.Tip != "" && attachedTips[b.Tip])
+		out = append(out, block(classifyBranch(f.Name, b, held, atBase, cfg), f.Blocked))
 	}
 	for _, r := range f.TrackingRefs {
-		out = append(out, classifyTrackingRef(f.Name, r, cfg))
+		out = append(out, block(classifyTrackingRef(f.Name, r, cfg), f.Blocked))
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
@@ -391,6 +407,16 @@ func toDerive(ws []Worktree) []derive.Worktree {
 		}
 	}
 	return out
+}
+
+// block keeps a row that would be offered when planning refuses the whole repository (reason is
+// the code of the refusal); a row that is already kept keeps its own, more specific reason.
+func block(c Candidate, reason string) Candidate {
+	if reason == "" || (c.Verdict != VerdictSafe && c.Verdict != VerdictDecision) {
+		return c
+	}
+	c.Effects = []string{}
+	return c.retain(reason, "planning refuses this repository; see its notice")
 }
 
 func newCandidate(repo string, kind Kind, subject string) Candidate {
@@ -494,7 +520,7 @@ func classifyStale(c Candidate, w Worktree, record Record) Candidate {
 	return c.retain("stale-registration-no-plan-kind", "the registration is prunable; no plan kind removes it yet")
 }
 
-func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate {
+func classifyBranch(repo string, b Branch, attached, atBase bool, cfg Config) Candidate {
 	c := newCandidate(repo, KindBranch, b.Name)
 	c.Branch, c.Proof, c.Upstream, c.Tip = b.Name, normalize(b.Proof), b.Upstream, b.Tip
 	c = c.withOwner(owner.Resolve(owner.Item{Branch: b.Name, AuthorHint: b.AuthorHint}, cfg.Caller, cfg.Agent))
@@ -505,8 +531,10 @@ func classifyBranch(repo string, b Branch, attached bool, cfg Config) Candidate 
 		return c.retain(b.Reason, b.Reason)
 	case !proven(c.Proof):
 		return c.retain("unmerged", aheadEvidence(b.Ahead, b.Name))
+	case atBase:
+		return c.retain("selected-base", "at the commit of the base")
 	case attached:
-		return c.retain("branch-attached-elsewhere", "checked out in a worktree that is retained or kept")
+		return c.retain("branch-attached-elsewhere", "checked out in, or at the commit of, a registered worktree that is retained, kept or gone")
 	}
 	c.Verdict = VerdictSafe
 	c.Effects = []string{"delete-branch:" + b.Name}

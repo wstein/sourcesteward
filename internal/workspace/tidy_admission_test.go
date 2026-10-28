@@ -5,12 +5,25 @@
 package workspace
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
 )
+
+func admissionGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
 
 func canonicalTemp(t *testing.T) string {
 	t.Helper()
@@ -68,4 +81,73 @@ func TestRetirementParentAdmissionRefusesASymbolicLinkSibling(t *testing.T) {
 	if err := RetirementParentAdmission(parent); err == nil {
 		t.Error("a symbolic link next to the worktree must be refused (retirement-sibling-refused)")
 	}
+}
+
+func admissionRepo(t *testing.T) string {
+	t.Helper()
+	repo := filepath.Join(canonicalTemp(t), "repo")
+	if err := os.Mkdir(repo, 0755); err != nil {
+		t.Fatal(err)
+	}
+	admissionGit(t, repo, "init", "-q", "-b", "main")
+	admissionGit(t, repo, "commit", "-q", "--allow-empty", "-m", "base")
+	return repo
+}
+
+// RefusedRegistration agrees with qualifyTidyV3Registrations for every shape of registration.
+func TestRefusedRegistrationAgreesWithTheQualificationOfThePlans(t *testing.T) {
+	root := canonicalTemp(t)
+	present := filepath.Join(root, "present")
+	if err := os.Mkdir(present, 0755); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(root, "alias")
+	if err := os.Symlink(present, alias); err != nil {
+		t.Fatal(err)
+	}
+	missing := filepath.Join(root, "missing")
+	orphan := filepath.Join(root, "no-parent", "missing")
+	cases := []struct {
+		name    string
+		reg     RegistrationFact
+		refused bool
+		code    string
+	}{
+		{"present", RegistrationFact{Path: present}, false, ""},
+		{"prunable, unlocked, absent below a real parent", RegistrationFact{Path: missing, Prunable: true}, false, ""},
+		{"locked and absent", RegistrationFact{Path: missing, Prunable: true, Locked: true}, true, AdmissionUnknownWorkspacePath},
+		{"absent but not prunable", RegistrationFact{Path: missing}, true, AdmissionUnknownWorkspacePath},
+		{"prunable with a parent that does not exist", RegistrationFact{Path: orphan, Prunable: true}, true, AdmissionUnknownWorkspacePath},
+		{"symbolic link alias", RegistrationFact{Path: alias}, true, AdmissionUnknownWorkspacePath},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, refused := RefusedRegistration(context.Background(), []RegistrationFact{{Path: present}, tc.reg}, "")
+			native := V3NativeState{Registrations: []V3Registration{{Path: present}, {Path: tc.reg.Path, Locked: tc.reg.Locked, Prunable: tc.reg.Prunable, Bare: tc.reg.Bare}}}
+			planErr := qualifyTidyV3Registrations(context.Background(), native, nil, "")
+			if refused != tc.refused || (planErr != nil) != tc.refused {
+				t.Fatalf("admission refused=%t plan error=%v, want refused=%t", refused, planErr, tc.refused)
+			}
+			if refused && (got.Code != tc.code || got.Path != tc.reg.Path || got.Locked != tc.reg.Locked) {
+				t.Errorf("%+v, want code %s path %s", got, tc.code, tc.reg.Path)
+			}
+		})
+	}
+	t.Run("state directory overlap", func(t *testing.T) {
+		state := filepath.Join(present, "state")
+		got, refused := RefusedRegistration(context.Background(), []RegistrationFact{{Path: present}}, state)
+		if !refused || got.Code != AdmissionStateOverlap {
+			t.Errorf("%+v %t", got, refused)
+		}
+		if err := qualifyTidyV3Registrations(context.Background(), V3NativeState{Registrations: []V3Registration{{Path: present}}}, nil, state); err == nil {
+			t.Error("the plan must refuse the same overlap")
+		}
+	})
+	t.Run("a cancelled context is refused, not admitted", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if _, refused := RefusedRegistration(ctx, []RegistrationFact{{Path: present}}, ""); !refused {
+			t.Error("a cancelled check must not admit")
+		}
+	})
 }

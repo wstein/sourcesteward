@@ -33,6 +33,8 @@ var reasonSentences = map[string]Sentence{
 	"stale-registration-no-plan-kind": {"worktree entry whose directory is gone", "no stw action yet"},
 	"retirement-parent-foreign":       {"its directory sits in a place that is not yours, for example /tmp", "stw cannot remove it; remove it yourself with git worktree remove"},
 	"legacy-owner-unknown":            {"no stw record and no owner label, only a commit author", "stw cannot remove it; remove it yourself if you know it is finished"},
+	"unknown-workspace-path":          {"a worktree entry of this repository is locked or its directory is gone", "see the notice of the repository: git worktree unlock, then git worktree prune"},
+	"state-overlap":                   {"the state directory overlaps a worktree of this repository", "give another --state-dir"},
 	"remote-source-present":           {"the branch still exists on the remote", "keep it; it is not gone upstream"},
 	"symbolic-reference":              {"a symbolic reference", "never offered"},
 	"selected-base":                   {"the base branch", "never offered"},

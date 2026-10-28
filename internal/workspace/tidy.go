@@ -402,7 +402,7 @@ func qualifyTidyWorkspaceRoots(ctx context.Context, paths []string, state string
 func qualifyTidyV3Registrations(ctx context.Context, native V3NativeState, extra []string, state string) error {
 	paths := []string{}
 	for _, r := range native.Registrations {
-		if r.Prunable && !r.Locked && !r.Bare && absentBelowCanonicalParent(r.Path) {
+		if weaklyAdmittedRegistration(r) {
 			if state != "" && overlaps(state, r.Path) {
 				return failure("state-overlap", "Tidy state directory must be disjoint from every registered workspace, including unselected or detached work.")
 			}
@@ -411,6 +411,13 @@ func qualifyTidyV3Registrations(ctx context.Context, native V3NativeState, extra
 		paths = append(paths, r.Path)
 	}
 	return qualifyTidyWorkspaceRoots(ctx, append(paths, extra...), state)
+}
+
+// weaklyAdmittedRegistration is the weaker rule of qualifyTidyV3Registrations: Git reports the
+// registration prunable, it is not locked and not bare, and its leaf is absent below a canonical
+// real parent.
+func weaklyAdmittedRegistration(r V3Registration) bool {
+	return r.Prunable && !r.Locked && !r.Bare && absentBelowCanonicalParent(r.Path)
 }
 
 func absentBelowCanonicalParent(path string) bool {

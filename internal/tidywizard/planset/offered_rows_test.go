@@ -287,7 +287,11 @@ func TestD3LockedMissingWorktreeKeepsTheRepositoryWithOneNotice(t *testing.T) {
 	f.staleStwWorktree("gone1", "lockme")
 	control := f.controlWorktree("fine")
 	res := f.classify()
-	for _, id := range []string{"branch:r:plain", "branch:r:lockme", "worktree:r:" + control} {
+	// The branch held by the stale registration is kept for its own, more specific reason.
+	if c := rowOf(t, res, "branch:r:lockme"); c.Verdict != tidywizard.VerdictRetain || c.Reason != "branch-attached-elsewhere" {
+		t.Errorf("branch:r:lockme: verdict %s reason %q, want retain branch-attached-elsewhere", c.Verdict, c.Reason)
+	}
+	for _, id := range []string{"branch:r:plain", "worktree:r:" + control} {
 		c := rowOf(t, res, id)
 		if c.Verdict != tidywizard.VerdictRetain || c.Reason != "unknown-workspace-path" {
 			t.Errorf("%s: verdict %s reason %q, want retain unknown-workspace-path", id, c.Verdict, c.Reason)
