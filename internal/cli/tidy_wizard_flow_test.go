@@ -52,7 +52,7 @@ func newJanitor(t *testing.T) *janitor {
 	codexWT.Path = "/tmp/whr-1"
 	unkWT := mk("b", tidywizard.KindWorktree, "unk", tidywizard.VerdictSafe, "", owner.SourceUnknown, owner.ScopeUnknown, tidywizard.ProofPatchID)
 	dec := mk("b", tidywizard.KindWorktree, "lock", tidywizard.VerdictDecision, "", owner.SourceUnknown, owner.ScopeUnknown, tidywizard.ProofAncestor)
-	dec.Reason, dec.Evidence, dec.Task = "lock-mismatch", "stw lock whose creation record does not match", "t9"
+	dec.Reason, dec.Evidence, dec.Task = "locked-stw", "stw lock whose creation record does not match", "t9"
 	red := wcand("a", tidywizard.KindBranch, "feat/unmerged", tidywizard.VerdictRetain, "codex", owner.SourcePathConvention, owner.ScopeOther)
 	red.Reason = "unmerged"
 	kept := wcand("a", tidywizard.KindWorktree, "primary", tidywizard.VerdictRetain, "", owner.SourceUnknown, owner.ScopeUnknown)

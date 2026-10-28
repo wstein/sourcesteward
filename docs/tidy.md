@@ -174,7 +174,7 @@ each has. The owner is information only: one owner is named, two are named toget
 (`github-branch-absent`), the worktree has no commit of its own, or a merged pull request had the tip as its head. `yellow`: the work is on the
 base as equal patches (`patch-id`, `merge-noop`), for example after a rebase merge. `orange`: a row with one more fact. Each of these facts raises
 a row one step, green to yellow or yellow to orange, never beyond orange: a worktree of another or an unknown owner whose last change is at most 72
-hours old or unknown, and an equal-patches worktree that no record and no path convention claims; a `decision` row is orange. `red`: the row may hold
+hours old or unknown, and an equal-patches worktree that no record and no path convention claims; a `decision` row is orange (the analysis makes none since the owner decision of 2026-10-28, see below, but the wizard still handles one). `red`: the row may hold
 unique work: its commits are not on the base, it has uncommitted or untracked files, or it could not be judged. `kept`: kept for a structural
 reason without a known danger. Red and kept rows are never in a group and never offered. A level is a presentation of the evidence and never permission: the verdict,
 the proof, the choosable rows and the apply path are the ones of the analysis. The overview's activity time is the one the analysis already reads
@@ -218,7 +218,7 @@ Bare `stw tidy` on a terminal, without `--rows`, walks the groups of the overvie
 - A row is offered only when planning accepts it; a worktree whose stw lock does not match its creation record is kept as `lock-mismatch` for that reason. The analysis keeps, with a reason, a worktree whose directory or parent directory is not owned by you (`retirement-parent-foreign`, for example a worktree directly under `/tmp`), a repository that has a locked registration whose directory is gone (`unknown-workspace-path`, with one notice per repository that names `git worktree unlock` and `git worktree prune`), and a branch that is checked out in a registration (also one whose directory is gone) or that stands at the commit of a registration or of the base. If planning still refuses a selection, the summary names the group, the row and the reason, stores nothing, asks no typed word and returns to the edit prompt with the selection kept.
 - Unchanged: the proofs, the plan id, the stale checks, the typed words and their text, the `stw tidy apply` path and the exit codes 0, 1 and 2.
 
-**A session.** The sample is the real output of the wizard on the fixture of `TestTidyDocsShowTheJanitorSessions` (`internal/cli/tidy_wizard_docs_test.go`), which fails when this text drifts: two repositories, nine candidates, four groups. The answers are typed and not echoed, so the output after a question continues on the same line; the plan id (the first 12 hex characters of a SHA-256 over the plan content) is shown as `3f9c2a7e41b8` and the state directory as `/state` so the sample stays stable. Paths such as `/ws` and `/w` belong to the fixture.
+**A session.** The sample is the real output of the wizard on the fixture of `TestTidyDocsShowTheJanitorSessions` (`internal/cli/tidy_wizard_docs_test.go`), which fails when this text drifts: two repositories, nine candidates, four groups. The answers are typed and not echoed, so the output after a question continues on the same line; the plan id (the first 12 hex characters of a SHA-256 over the plan content) is shown as `3f9c2a7e41b8` and the state directory as `/state` so the sample stays stable. Paths such as `/ws` and `/w` belong to the fixture. The fixture also holds one `decision` row (`/w/lock`, reason `locked-stw`) that the test makes by hand to show the prompts the wizard still has for such a row; the analysis itself makes no `decision` row, and a lock that does not match is kept as `lock-mismatch` (see the Verdicts below).
 
 Answers, in order: Enter, Enter, Enter, Enter, `l`, `d 6`, `7`, `s`, Enter.
 
@@ -290,7 +290,7 @@ Step 4 of 4   3 directories in /w   risk orange (1 green, 2 orange)
 Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):       5  green   /w/own1
       6  orange  /w/lock  (decision: choose it by number)
       7  orange  /w/unk
-Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] /w/lock: reason lock-mismatch; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] /w/lock: reason locked-stw; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
 Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): Added 1 row; 4 chosen so far. This group is still open.
 Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
 Summary: nothing has been changed yet
@@ -425,7 +425,7 @@ Answers, in order: Enter, `s`, `s`, `s`, `6`, `y`, `s`, `q`.
 ```text
       7  orange  /w/unk
 
-Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] is a decision row: reason lock-mismatch; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
+Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip): [6] is a decision row: reason locked-stw; proof ancestor; evidence stw lock whose creation record does not match; owner unknown (unknown, scope unknown); risk orange (proof-ancestor, decision-row) [lock stw:t9; path /w/lock]
 Choose it anyway? [y/N/q]: Added 1 row; 1 chosen so far. This group is still open.
 Take this group?  [y] take  [s] skip  [l] list  [r] review each  [q] quit  (Enter = skip):
 Summary: nothing has been changed yet
@@ -647,7 +647,7 @@ Every value the wizard assumed is shown in the overview and in `derived[]` (`nam
 
 Every code below is a string of the code base; the file names are the places to check.
 
-**Why an item is kept (`retain`, or the one `decision`).** The reason is the `reason` of the candidate and the evidence line says why
+**Why an item is kept (`retain`).** The reason is the `reason` of the candidate and the evidence line says why
 (`internal/tidywizard/classify.go`).
 
 | Applies to | Reasons |
