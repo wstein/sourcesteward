@@ -4,6 +4,7 @@ package tidywizard
 
 import (
 	"context"
+	"os"
 	"strings"
 	"testing"
 
@@ -119,6 +120,30 @@ func TestBranchAtTheBaseOrAtARegistrationTipIsKept(t *testing.T) {
 		c := got[id]
 		if reason == "" && c.Verdict != VerdictSafe || reason != "" && (c.Verdict != VerdictRetain || c.Reason != reason) {
 			t.Errorf("%s: %s %q, want reason %q", id, c.Verdict, c.Reason, reason)
+		}
+	}
+}
+
+// The physical and registration checks are those of the Git plans: a jj repository has no Git
+// registrations and no plan kind, so none of them runs for it.
+func TestAdapterRunsNoGitAdmissionForAJJRepository(t *testing.T) {
+	obs := workspace.WorktreeObservation{Backend: "jj", Worktrees: []workspace.WorktreeEvidence{evid("/ws/r", "refs/heads/main"), evid("/ws/wt/jj", "")}}
+	obs.Worktrees[0].Primary = true
+	a, _ := testAdapter(obs, nil)
+	asked := false
+	a.Registrations = func(context.Context, []workspace.RegistrationFact, string) (workspace.RegistrationRefusal, bool) {
+		asked = true
+		return workspace.RegistrationRefusal{Path: "/ws/wt/jj", Code: workspace.AdmissionUnknownWorkspacePath}, true
+	}
+	a.DestinationAdmission = func(string) error { asked = true; return os.ErrPermission }
+	a.ParentAdmission = func(string) error { asked = true; return os.ErrPermission }
+	f, err := a.Facts(context.Background(), "r")
+	if err != nil || asked || f.Blocked != "" {
+		t.Fatalf("err %v asked %t blocked %q", err, asked, f.Blocked)
+	}
+	for _, w := range f.Worktrees {
+		if w.Admission != "" {
+			t.Errorf("%s: %q", w.Path, w.Admission)
 		}
 	}
 }
