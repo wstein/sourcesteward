@@ -192,7 +192,8 @@ func (p V3Planner) Plan(ctx context.Context, s SubSpec) (Planned, error) {
 
 // Admit makes the plan with every observation and judgement of Plan and stops before it is
 // stored (V3PlanOptions.DryRun): the refusal is the refusal Plan would meet, and nothing is
-// written. It costs the planning once more.
+// written. It costs a full planning each time it runs: in the wizard every selected sub-plan is
+// planned three times (the admission after the summary, the admission inside Build, and Plan).
 func (p V3Planner) Admit(ctx context.Context, s SubSpec) error {
 	o, err := p.Options(s)
 	if err != nil {

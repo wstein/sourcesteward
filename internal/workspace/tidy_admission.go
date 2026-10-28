@@ -5,7 +5,6 @@ package workspace
 import (
 	"context"
 	"errors"
-	"path/filepath"
 )
 
 // This file exposes, read-only, the checks that the tidy v3 planners run on a repository and on
@@ -43,15 +42,6 @@ func RetirementParentAdmission(parent string) error {
 	}
 	_, err = retirementV3Siblings(id.Path, "")
 	return err
-}
-
-// RetirementLocationAdmission is both checks for one worktree directory: the destination and
-// its parent. A nil result means these checks pass; the plan runs more.
-func RetirementLocationAdmission(dest string) error {
-	if err := RetirementDestinationAdmission(dest); err != nil {
-		return err
-	}
-	return RetirementParentAdmission(filepath.Dir(dest))
 }
 
 // RegistrationFact is what the registration check reads of one linked worktree registration.
