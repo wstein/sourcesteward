@@ -13,7 +13,8 @@ import (
 // newline is io.EOF, whatever was typed before it: an answer cut off by EOF (for example "y"
 // without a newline) is no answer and never consent (Issue 326). Any other read error is
 // returned as it is. At most limit bytes of the line are kept; tooLong reports that more were
-// typed, and the rest of the line is drained.
+// typed, and the rest of the line is drained. limit must be smaller than the reader's buffer
+// size: the carriage return is removed only in the chunk that holds the newline.
 func ReadAnswer(in *bufio.Reader, limit int) (line string, tooLong bool, err error) {
 	var kept []byte
 	for {
