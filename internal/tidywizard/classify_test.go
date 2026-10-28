@@ -89,7 +89,7 @@ func TestWorktreeBehaviourTable(t *testing.T) {
 		{"owned jj workspace that is dirty keeps the specific reason", func() Worktree { w := jjOwned("t"); w.Dirty = true; return w }(), VerdictRetain, "dirty", owner.ScopeOwn, nil},
 		{"owned jj workspace that is unmerged keeps the specific reason", func() Worktree { w := jjOwned("t"); w.Proof = ProofNone; return w }(), VerdictRetain, "unmerged", owner.ScopeOwn, nil},
 		{"owned jj workspace with incomplete evidence", func() Worktree { w := jjOwned("t"); w.Incomplete = "x"; return w }(), VerdictRetain, "evidence-incomplete", owner.ScopeOwn, nil},
-		{"unowned jj workspace is unchanged", func() Worktree { w := jjOwned("t"); w.JJOwned, w.Task, w.TaskOwner = false, "", ""; return w }(), VerdictSafe, "unregistered", owner.ScopeUnknown, []string{"remove-registration", "remove-files"}},
+		{"unowned jj workspace has no owner the legacy completion can declare", func() Worktree { w := jjOwned("t"); w.JJOwned, w.Task, w.TaskOwner = false, "", ""; return w }(), VerdictRetain, "legacy-owner-unknown", owner.ScopeUnknown, nil},
 		{"cwd worktree", mod(func(w *Worktree) { w.Path = "/ws/repo/cwd-tree" }), VerdictRetain, "current-worktree", owner.ScopeOwn, nil},
 		{"sibling with a common prefix", mod(func(w *Worktree) { w.Path = "/ws/repo/cwd-tree-2" }), VerdictSafe, "", owner.ScopeOwn, []string{"remove-registration", "remove-files"}},
 	}
@@ -193,7 +193,7 @@ func TestUnregisteredAndForeignWorktrees(t *testing.T) {
 		a := cfg()
 		a.Agent = true
 		c := only(t, repo([]Worktree{w}, nil), a)
-		if c.OwnerSource == owner.SourceTaskRecord || c.Scope == owner.ScopeOwn || c.Reason != "unregistered" {
+		if c.OwnerSource == owner.SourceTaskRecord || c.Scope == owner.ScopeOwn || c.Reason != "legacy-owner-unknown" {
 			t.Fatalf("%+v", c)
 		}
 	})
@@ -204,9 +204,9 @@ func TestUnregisteredAndForeignWorktrees(t *testing.T) {
 			t.Fatalf("%+v", c)
 		}
 	})
-	t.Run("unknown owner worktree is safe but scope unknown", func(t *testing.T) {
+	t.Run("unknown owner worktree is kept: the legacy completion cannot declare it", func(t *testing.T) {
 		c := only(t, repo([]Worktree{unregistered("/home/x/misc", "topic")}, nil), cfg())
-		if c.Verdict != VerdictSafe || c.Scope != owner.ScopeUnknown || c.OwnerSource != owner.SourceUnknown {
+		if c.Verdict != VerdictRetain || c.Reason != "legacy-owner-unknown" || len(c.Effects) != 0 || c.Scope != owner.ScopeUnknown || c.OwnerSource != owner.SourceUnknown {
 			t.Fatalf("%+v", c)
 		}
 	})

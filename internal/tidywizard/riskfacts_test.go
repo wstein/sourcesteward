@@ -40,15 +40,18 @@ func TestRiskFactsMapEveryClassifierShape(t *testing.T) {
 			w.Lock = LockNone
 			w.Record = RecordNone
 			w.TaskOwner = ""
+			w.Path = "/tmp/whr-x" // owner codex: a label the legacy completion can declare
 			w.Proof = ProofAncestor
 			w.HasOwnCommit = false
 		}), risk.Green, []string{risk.ReasonNoOwnCommit}},
-		{"unregistered, nobody vouches", tree(func(w *Worktree) {
+		// Only a commit author or nobody owns it: the legacy completion cannot declare an owner, so
+		// the row is kept (Spec 044 D2) and no longer reaches the ladder as an offered row.
+		{"unregistered, no declarable owner", tree(func(w *Worktree) {
 			w.Lock = LockNone
 			w.Record = RecordNone
 			w.TaskOwner = ""
 			w.Path = "/somewhere/else"
-		}), risk.Orange, []string{risk.ReasonProofEquivalent, risk.ReasonNobodyVouches}},
+		}), risk.Kept, []string{}},
 		{"decision row", tree(func(w *Worktree) { w.Record = RecordMismatch; w.TaskOwner = "" }), risk.Orange, []string{risk.ReasonProofEquivalent, risk.ReasonNobodyVouches, risk.ReasonDecisionRow}},
 		{"unmerged worktree", tree(func(w *Worktree) { w.Proof = ProofNone; w.Ahead = 2 }), risk.Red, []string{risk.ReasonNotIntegrated}},
 		{"dirty worktree", tree(func(w *Worktree) { w.Dirty = true }), risk.Red, []string{risk.ReasonUncommittedFiles}},

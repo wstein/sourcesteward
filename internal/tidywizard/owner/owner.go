@@ -99,3 +99,27 @@ func scopeOf(label, caller string) Scope {
 	}
 	return ScopeOther
 }
+
+// ValidLabel reports whether s is one plain identifier: 1 to 128 ASCII letters, digits and, after
+// the first character, dots, underscores and hyphens. A commit author hint ("author:NAME") and an
+// empty label are not.
+func ValidLabel(s string) bool {
+	if s == "" || len(s) > 128 {
+		return false
+	}
+	for i, c := range []byte(s) {
+		switch {
+		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
+		case i > 0 && (c == '.' || c == '_' || c == '-'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// LegacyDeclarable reports whether the owner of an unregistered worktree can be declared by the
+// legacy completion (Spec 029): one plain label with a known scope. The planner refuses every
+// other owner (an unknown one, a commit author hint), and so the analysis keeps such a row
+// instead of offering it (Spec 044 D2).
+func LegacyDeclarable(o Owner) bool { return ValidLabel(o.Label) && o.Scope != ScopeUnknown }

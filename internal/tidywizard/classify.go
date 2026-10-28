@@ -453,6 +453,8 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		return c.retain("recently-active", "HEAD, index or a tracked file changed within the last 24 hours")
 	case w.Admission != "":
 		return c.retain(w.Admission, "its directory, the directory around it or an entry next to it is not owned by you or not a plain file or directory")
+	case w.Lock != LockStw && !w.JJOwned && !owner.LegacyDeclarable(owner.Owner{Label: c.Owner, Source: c.OwnerSource, Scope: c.Scope}):
+		return c.retain("legacy-owner-unknown", "no stw record and no owner label that can be declared; only a commit author or nobody")
 	case w.JJOwned && w.Lock == LockNone:
 		// The owner is known from the creation record, but no plan kind retires a jj workspace
 		// yet (Spec 041 T011a5): the workspace stays and no deletion path is opened for it.

@@ -91,21 +91,6 @@ func NewV3Planner(repos []RepoSpec, stores []derive.Store) V3Planner {
 	return p
 }
 
-func validLabel(s string) bool {
-	if s == "" || len(s) > 128 {
-		return false
-	}
-	for i, c := range []byte(s) {
-		switch {
-		case c >= 'a' && c <= 'z', c >= 'A' && c <= 'Z', c >= '0' && c <= '9':
-		case i > 0 && (c == '.' || c == '_' || c == '-'):
-		default:
-			return false
-		}
-	}
-	return true
-}
-
 // Options maps one sub-plan spec to the options of the existing plan kind. It reads nothing and
 // plans nothing. An input that is not supplied is a typed *Unplannable (inside ErrNotPlannable)
 // with a stable reason, never a guess.
@@ -178,7 +163,7 @@ func (p V3Planner) retirement(o workspace.V3PlanOptions, s SubSpec) (workspace.V
 	// An unregistered worktree: the Spec 029 legacy completion, with the owner the candidate
 	// carries. A label that is not one plain identifier (an unknown owner, a commit author hint)
 	// is never turned into one.
-	if !validLabel(c.Owner) || c.Scope == owner.ScopeUnknown {
+	if !owner.LegacyDeclarable(owner.Owner{Label: c.Owner, Source: c.OwnerSource, Scope: c.Scope}) {
 		return o, unplannable(ReasonLegacyOwnerUnknown, "worktree %q has no owner label that can be declared", s.Worktree)
 	}
 	if p.PlanStore == "" {

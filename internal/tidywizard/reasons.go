@@ -13,7 +13,7 @@ func AllReasons() []string {
 		"registration-record-missing", "registration-record-ambiguous", "locked-foreign", "locked-stw", "lock-mismatch",
 		"unregistered", "primary-checkout", "current-worktree", "recently-active", "branch-attached-elsewhere",
 		"jj-retirement-unsupported", "stale-registration-no-plan-kind",
-		"retirement-parent-foreign",
+		"retirement-parent-foreign", "legacy-owner-unknown",
 		"remote-source-present", "symbolic-reference", "selected-base", "workspace-used",
 		"remote-counterpart", "recovery-reference",
 	}
