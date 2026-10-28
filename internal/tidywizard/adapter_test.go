@@ -434,10 +434,11 @@ func TestAdapterAcceptsTheEmptyWorkingCopyProofForWorktreesOnly(t *testing.T) {
 	if got := f.Branches[0]; got.Incomplete != "unknown-proof" {
 		t.Errorf("branch: %+v", got)
 	}
-	// Without a lock or a record the workspace is unregistered, and safe only for a human.
+	// Without a lock or a record the workspace is unregistered; its owner is only a commit author,
+	// which the legacy completion cannot declare, so it is kept (Spec 044 D2).
 	res := Classify(context.Background(), a, []string{"r"}, cfg())
 	for _, c := range res.Candidates {
-		if c.Kind == KindWorktree && (c.Verdict != VerdictSafe || c.Reason != "unregistered" || c.Scope == "own") {
+		if c.Kind == KindWorktree && (c.Verdict != VerdictRetain || c.Reason != "legacy-owner-unknown" || c.Scope == "own") {
 			t.Errorf("%+v", c)
 		}
 	}
