@@ -281,7 +281,7 @@ stw tidy --json               # the overview document only: no prompt, nothing s
 stw tidy plan                 # the same overview, never asks, stores nothing
 stw tidy plan --json          # one tidy-overview document
 stw tidy plan --save --json   # also store the plan set of the safe own items; prints the plan id
-stw tidy apply PLAN-ID        # asks "Apply plan PLAN-ID (N sub-plans, M items)? [y/N]"; only an exact `y` applies
+stw tidy apply PLAN-ID        # asks "Apply plan PLAN-ID (N sub-plans, M items)? [y/N]"; only an exact `y` ended by Enter applies; the end of input, also right after `y`, does not
 stw tidy apply PLAN-ID --yes  # non-interactive; the explicit plan id is the authorization
 ```
 

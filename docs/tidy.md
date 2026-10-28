@@ -340,7 +340,7 @@ A step shows the group (`Step N of M`, the rows' count and place, the worst leve
 | | `q` | quit; nothing is stored |
 | Store question | `y` | store the plan set; Enter or `n` do not; `q` quits |
 
-An answer is one line read after the question; there is no raw mode. A line longer than 256 bytes is an invalid answer. Three invalid answers to one question end the run with exit 1 and nothing stored; the end of input anywhere chooses nothing (exit 0 unless the analysis was incomplete, see above), and so does `q` (`Quit; nothing was stored.`).
+An answer is one line read after the question and ends at its newline; there is no raw mode. A last line cut off by the end of input, such as `y` without a newline, is no answer: it counts as the end of input, never as consent. A line longer than 256 bytes is an invalid answer. Three invalid answers to one question end the run with exit 1 and nothing stored; the end of input anywhere chooses nothing (exit 0 unless the analysis was incomplete, see above), and so does `q` (`Quit; nothing was stored.`).
 
 **The selection grammar.** One line of terms is accepted at a group question and at `e`:
 
