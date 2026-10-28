@@ -45,7 +45,9 @@ func TestAllReasonsListsEveryReasonTheClassifierEmits(t *testing.T) {
 	})
 	// The reasons that do not appear as a literal in the classifier: the protections of the
 	// derivation, the closed tracking list of the adapter and the native reasons of jj branches.
-	for _, r := range []string{"primary-checkout", "current-worktree", "remote-counterpart", "recovery-reference", "lock-mismatch"} {
+	for _, r := range []string{"primary-checkout", "current-worktree", "remote-counterpart", "recovery-reference", "lock-mismatch",
+		// The adapter hands these codes of workspace admission to the classifier (Admission, Blocked).
+		"retirement-parent-foreign"} {
 		found[r] = true
 	}
 	for r := range trackingReasons {

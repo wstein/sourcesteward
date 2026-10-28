@@ -122,6 +122,10 @@ type Worktree struct {
 	// Incomplete is the reason the observation of this worktree could not finish; the item is
 	// then retained as evidence-incomplete whatever the other facts say.
 	Incomplete string
+	// Admission is the reason code (workspace.AdmissionRetirementParentForeign) when the physical
+	// place of the directory fails a check the retirement plan runs: the row is then kept
+	// instead of offered, because planning would refuse it (Spec 044 D1).
+	Admission string
 }
 
 // Branch holds the facts of one local branch or jj bookmark.
@@ -447,6 +451,8 @@ func classifyWorktree(repo string, w Worktree, protectedReason string, cfg Confi
 		return c.retain("evidence-incomplete", "no activity time was observed")
 	case c.Scope != owner.ScopeOwn && cfg.Now.Sub(w.LastActivity) < RecentWindow:
 		return c.retain("recently-active", "HEAD, index or a tracked file changed within the last 24 hours")
+	case w.Admission != "":
+		return c.retain(w.Admission, "its directory, the directory around it or an entry next to it is not owned by you or not a plain file or directory")
 	case w.JJOwned && w.Lock == LockNone:
 		// The owner is known from the creation record, but no plan kind retires a jj workspace
 		// yet (Spec 041 T011a5): the workspace stays and no deletion path is opened for it.

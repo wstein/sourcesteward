@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -42,6 +43,11 @@ type Adapter struct {
 	// run is joined against the same snapshot.
 	JJRecords func() JJRecords
 	jj        *jjSnapshot
+	// DestinationAdmission and ParentAdmission are the read-only physical checks the retirement
+	// plans run (internal/workspace admission); a nil one is not run. NewAdapter sets the
+	// production functions.
+	DestinationAdmission func(dest string) error
+	ParentAdmission      func(parent string) error
 }
 
 // JJRecords is the snapshot of the creation records a jj workspace is joined against; see
@@ -69,7 +75,8 @@ func (a Adapter) jjRecords() JJRecords {
 // NewAdapter returns the adapter for the repositories, looking creation records up in the stores.
 func NewAdapter(repos []RepoSpec, stores []derive.Store) Adapter {
 	a := Adapter{Repos: map[string]RepoSpec{}, Observe: workspace.ObserveWorktrees, Records: func(task string) derive.TaskLookup { return derive.LookupTask(stores, task) },
-		JJRecords: func() JJRecords { return derive.IndexRecords(stores, "jj") }, jj: &jjSnapshot{}}
+		JJRecords: func() JJRecords { return derive.IndexRecords(stores, "jj") }, jj: &jjSnapshot{},
+		DestinationAdmission: workspace.RetirementDestinationAdmission, ParentAdmission: workspace.RetirementParentAdmission}
 	for _, r := range repos {
 		a.Repos[r.Name] = r
 	}
@@ -95,12 +102,16 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		return RepoFacts{}, err
 	}
 	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}}
+	parents := map[string]bool{}
 	var jj JJRecords
 	if obs.Backend == "jj" && a.JJRecords != nil {
 		jj = a.jjRecords()
 	}
 	for _, e := range obs.Worktrees {
 		w := a.worktree(e)
+		if !e.Primary && !e.DirMissing && e.Path != "" {
+			w.Admission = a.admission(e.Path, parents)
+		}
 		if jj != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
 			joinJJRecord(jj, &w, obs.RepositoryDir)
 		}
@@ -138,6 +149,28 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	f.Notices = append(f.Notices, obs.Limitations...)
 	return f, nil
+}
+
+// admission runs the physical checks of a retirement on one directory; parents remembers the
+// result per parent directory, so a directory that holds many worktrees is scanned once per
+// repository. It returns the reason code of a failed check and "" when all pass or none is wired.
+func (a Adapter) admission(path string, parents map[string]bool) string {
+	if a.DestinationAdmission != nil && a.DestinationAdmission(path) != nil {
+		return workspace.AdmissionRetirementParentForeign
+	}
+	if a.ParentAdmission == nil {
+		return ""
+	}
+	parent := filepath.Dir(path)
+	ok, seen := parents[parent]
+	if !seen {
+		ok = a.ParentAdmission(parent) == nil
+		parents[parent] = ok
+	}
+	if !ok {
+		return workspace.AdmissionRetirementParentForeign
+	}
+	return ""
 }
 
 // failedTracking returns the fallback reason of a repository whose implicit online read failed as
