@@ -75,11 +75,14 @@ func Confirm(open Opener, word, planID string) error {
 	if _, err = fmt.Fprintf(t, "Foreign items (%s). Type %q to confirm: ", word, want); err != nil {
 		return fmt.Errorf("%w: %v", ErrNoTerminal, err)
 	}
-	line, err := bufio.NewReader(io.LimitReader(t, maxAnswer)).ReadString('\n')
-	if err != nil && err != io.EOF {
+	line, tooLong, err := ReadAnswer(bufio.NewReader(t), maxAnswer)
+	if errors.Is(err, io.EOF) {
+		return ErrConfirmationRefused // an answer cut off by the end of input is no answer
+	}
+	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNoTerminal, err)
 	}
-	if !strings.HasSuffix(line, "\n") && len(line) >= maxAnswer {
+	if tooLong {
 		return ErrConfirmationRefused // an over-long line is refused, not truncated
 	}
 	if strings.TrimSpace(line) != want {

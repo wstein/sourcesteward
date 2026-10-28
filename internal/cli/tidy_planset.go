@@ -82,8 +82,10 @@ func runTidyApplyPlanSet(cmd *cobra.Command, id string, stateDir string, yes, st
 			if _, err := fmt.Fprintf(terminal, "Apply plan %s (%d sub-plans, %d items)? [y/N]: ", id, len(set.SubPlans), len(set.Items)); err != nil {
 				return runtimeFailure{err}
 			}
-			line, _ := bufio.NewReader(io.LimitReader(tidySelectionReader{terminal}, 256)).ReadString('\n')
-			if strings.TrimRight(line, "\r\n") != "y" {
+			// Only a terminated line counts: "y" cut off by the end of input, an over-long line or a
+			// read error is no authorization (Issue 326).
+			line, tooLong, err := owner.ReadAnswer(bufio.NewReader(tidySelectionReader{terminal}), 256)
+			if err != nil || tooLong || line != "y" {
 				return runtimeFailure{fmt.Errorf("plan %s was not authorized; nothing was changed", id)}
 			}
 			authorize = true

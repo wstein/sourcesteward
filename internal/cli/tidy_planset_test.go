@@ -241,3 +241,50 @@ func TestTidySeparateApplyTerminalYesIgnoresStdinNo(t *testing.T) {
 		t.Fatalf("err=%v calls=%v tty=%q opens=%d", err, *got, tty.String(), tty.opens)
 	}
 }
+
+type failingTerminal struct {
+	data string
+	err  error
+}
+
+func (f *failingTerminal) Read(p []byte) (int, error) {
+	if f.data == "" {
+		return 0, f.err
+	}
+	n := copy(p, f.data)
+	f.data = f.data[n:]
+	return n, nil
+}
+
+// Issue 326 (owner decision 2026-10-27): the end of input is never a yes, also after a "y".
+func TestTidyApplyPromptEndOfInputIsNo(t *testing.T) {
+	for _, answer := range []string{"y", "yes", "yes\n", "n", "", "\n", "Y", " y", "y "} {
+		got := fakeSet(t, okSet(), true, true)
+		setTerminalAnswers(t, answer)
+		_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")
+		var failure runtimeFailure
+		if !errors.As(err, &failure) || !strings.Contains(err.Error(), "was not authorized; nothing was changed") || len(*got) != 0 {
+			t.Errorf("%q must not authorize: err %v calls %d", answer, err, len(*got))
+		}
+	}
+	for _, answer := range []string{"y\n", "y\r\n"} {
+		got := fakeSet(t, okSet(), true, true)
+		setTerminalAnswers(t, answer)
+		if _, err := runTidy(t, "", "apply", setID, "--state-dir", "/s"); err != nil || len(*got) != 1 || !(*got)[0].Authorize {
+			t.Errorf("%q must apply: err %v calls %v", answer, err, *got)
+		}
+	}
+}
+
+func TestTidyApplyPromptReadErrorAfterYIsNo(t *testing.T) {
+	got := fakeSet(t, okSet(), true, true)
+	tty := &terminalAnswers{Reader: &failingTerminal{data: "y", err: errors.New("i/o failure")}}
+	old := tidyConfirmOpener
+	tidyConfirmOpener = func() (io.ReadWriteCloser, error) { return tty, nil }
+	t.Cleanup(func() { tidyConfirmOpener = old })
+	_, err := runTidy(t, "", "apply", setID, "--state-dir", "/s")
+	var failure runtimeFailure
+	if !errors.As(err, &failure) || len(*got) != 0 || !strings.Contains(err.Error(), "nothing was changed") {
+		t.Fatalf("err %v calls %d", err, len(*got))
+	}
+}
