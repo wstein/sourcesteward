@@ -128,12 +128,9 @@ func TestAdmitPlansNothingAndAsksNoWord(t *testing.T) {
 	}
 }
 
-// OPEN QUESTION for the owner (see the pull request): a decision row (locked-stw: an stw lock whose
-// creation record does not match) is offered by number, but the legacy completion refuses a locked
-// registration (active-workspace) and an owner that is only a commit author. Its selection is
-// therefore refused. This test pins the present behavior: the refusal is clean (one *Refused that
-// names the row) and nothing is stored; the row itself stays offered until the owner decides.
-func TestDecisionRowIsRefusedCleanlyAndStoresNothing(t *testing.T) {
+// Owner decision of 2026-10-28: a lock whose creation record does not match is kept as
+// lock-mismatch and never offered, because the legacy completion refuses a locked registration.
+func TestLockMismatchWorktreeIsKeptNotOffered(t *testing.T) {
 	f := newOfferedFixture(t)
 	f.mergedBranch("dec")
 	dest := filepath.Join(f.root, "wts", "dec")
@@ -149,17 +146,10 @@ func TestDecisionRowIsRefusedCleanlyAndStoresNothing(t *testing.T) {
 	f.git(f.repo, "worktree", "move", "-f", "-f", dest, moved) // the creation record names the old place
 	res := f.classify()
 	row := rowOf(t, res, "worktree:r:"+moved)
-	if row.Verdict != tidywizard.VerdictDecision || row.Reason != "locked-stw" {
-		t.Fatalf("fixture: %s %q", row.Verdict, row.Reason)
+	if row.Verdict != tidywizard.VerdictRetain || row.Reason != "lock-mismatch" || len(row.Effects) != 0 {
+		t.Fatalf("%s %q %v", row.Verdict, row.Reason, row.Effects)
 	}
-	_, _, err := Build(context.Background(), Request{Candidates: res.Candidates, Chosen: []string{row.ID}, Mode: human, DecisionConfirmed: map[string]bool{row.ID: true}, Confirm: typingOpener()}, f.planner())
-	var refused *Refused
-	if !asRefused(err, &refused) || len(refused.Failures) != 1 || refused.Failures[0].Items[0] != row.ID {
-		t.Fatalf("want one clean refusal naming the row, got %v", err)
-	}
-	if plans, _ := filepath.Glob(filepath.Join(f.state, "tidy-v3-plans", "*")); len(plans) != 0 {
-		t.Errorf("a refused decision row must store nothing: %v", plans)
-	}
+	requireOfferedRowsBuild(t, f, res)
 }
 
 // A mapping refusal is final: the admission of that sub-plan is not asked on top of it.

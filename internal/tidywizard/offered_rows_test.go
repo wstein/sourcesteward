@@ -217,16 +217,11 @@ func TestAdapterPassesThePlanStoreToTheRegistrationCheck(t *testing.T) {
 	}
 }
 
-// A decision row (a lock whose record does not match) in a refused repository is kept too.
-func TestBlockedRepositoryKeepsTheDecisionRow(t *testing.T) {
-	w := stwTree("d")
-	w.Record, w.TaskOwner = RecordMismatch, ""
-	f := repo([]Worktree{w}, nil)
-	if c := only(t, f, cfg()); c.Verdict != VerdictDecision {
-		t.Fatalf("fixture: %s", c.Verdict)
-	}
-	f.Blocked = workspace.AdmissionUnknownWorkspacePath
-	if c := only(t, f, cfg()); c.Verdict != VerdictRetain || c.Reason != "unknown-workspace-path" || len(c.Effects) != 0 {
+// A decision candidate (the classifier makes none now, the wizard still knows the verdict) in a
+// refused repository is kept too.
+func TestBlockDecisionCandidate(t *testing.T) {
+	c := block(Candidate{ID: "worktree:r:/w", Verdict: VerdictDecision, Reason: "locked-stw", Effects: []string{"remove-files"}}, workspace.AdmissionUnknownWorkspacePath)
+	if c.Verdict != VerdictRetain || c.Reason != "unknown-workspace-path" || len(c.Effects) != 0 {
 		t.Errorf("%+v", c)
 	}
 }

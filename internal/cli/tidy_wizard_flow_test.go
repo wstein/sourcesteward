@@ -636,3 +636,45 @@ func TestJanitorRefusalThatIsNotASubPlanIsShown(t *testing.T) {
 		}
 	}
 }
+
+type mismatchSource struct{ facts tidywizard.RepoFacts }
+
+func (m mismatchSource) Facts(context.Context, string) (tidywizard.RepoFacts, error) {
+	return m.facts, nil
+}
+
+// Owner decision of 2026-10-28: a worktree with an stw lock whose creation record does not match is
+// kept as lock-mismatch. It has no number, is no group row and no selector takes it; the overview
+// counts it as kept.
+func TestJanitorLockMismatchWorktreeIsKeptAndNeverNumbered(t *testing.T) {
+	long := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	w := tidywizard.Worktree{Path: "/ws/wt/mm", Branch: "feat/mm", Lock: tidywizard.LockStw, Task: "mm", Record: tidywizard.RecordMismatch, Proof: tidywizard.ProofAncestor, LastActivity: long, HasOwnCommit: true}
+	good := tidywizard.Worktree{Path: "/tmp/whr-ok", Branch: "feat/ok", Proof: tidywizard.ProofAncestor, LastActivity: long, HasOwnCommit: true}
+	res := tidywizard.Classify(context.Background(), mismatchSource{tidywizard.RepoFacts{Name: "r", Worktrees: []tidywizard.Worktree{w, good}}}, []string{"r"}, tidywizard.Config{Caller: "werner", CWD: "/cwd", Now: long.Add(40 * 24 * time.Hour)})
+	var mm tidywizard.Candidate
+	for _, c := range res.Candidates {
+		if c.Path == "/ws/wt/mm" {
+			mm = c
+		}
+	}
+	if mm.Verdict != tidywizard.VerdictRetain || mm.Reason != "lock-mismatch" || len(mm.Effects) != 0 {
+		t.Fatalf("%+v", mm)
+	}
+	doc := render.Build(render.Input{Workspace: "/ws", Result: res, Mode: owner.Evidence{Mode: owner.ModeHuman}, Now: long.Add(40 * 24 * time.Hour)})
+	plan := buildJanitorPlan(doc)
+	for _, r := range plan.rows() {
+		if r.ID == mm.ID {
+			t.Errorf("a lock-mismatch row must have no number: %+v", r)
+		}
+	}
+	if len(plan.rows()) != 1 || plan.kept < 1 {
+		t.Errorf("rows %d kept %d", len(plan.rows()), plan.kept)
+	}
+	found := false
+	for _, c := range doc.AllCandidates() {
+		found = found || (c.ID == mm.ID && c.Reason == "lock-mismatch")
+	}
+	if !found {
+		t.Error("the overview does not carry the lock-mismatch row")
+	}
+}
