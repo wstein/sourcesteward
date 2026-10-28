@@ -31,6 +31,8 @@ func lookupFailure(code string) derive.TaskLookup {
 func testAdapter(obs workspace.WorktreeObservation, records map[string]derive.TaskLookup) (Adapter, *workspace.ObserveOptions) {
 	var seen workspace.ObserveOptions
 	a := NewAdapter([]RepoSpec{{Name: "r", Path: "/ws/r", Base: "refs/heads/main"}}, nil)
+	// The paths of this observation do not exist: the physical admission checks are not run.
+	a.DestinationAdmission, a.ParentAdmission = nil, nil
 	a.Observe = func(_ context.Context, o workspace.ObserveOptions) (workspace.WorktreeObservation, error) {
 		seen = o
 		return obs, nil

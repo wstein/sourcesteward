@@ -31,6 +31,7 @@ var reasonSentences = map[string]Sentence{
 	"branch-attached-elsewhere":       {"branch is checked out in a kept worktree", "decide on that worktree first, then run again"},
 	"jj-retirement-unsupported":       {"a jj workspace; stw cannot retire it yet", "no stw action yet"},
 	"stale-registration-no-plan-kind": {"worktree entry whose directory is gone", "no stw action yet"},
+	"retirement-parent-foreign":       {"its directory sits in a place that is not yours, for example /tmp", "stw cannot remove it; remove it yourself with git worktree remove"},
 	"remote-source-present":           {"the branch still exists on the remote", "keep it; it is not gone upstream"},
 	"symbolic-reference":              {"a symbolic reference", "never offered"},
 	"selected-base":                   {"the base branch", "never offered"},

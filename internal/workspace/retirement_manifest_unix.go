@@ -10,6 +10,10 @@ import (
 	"syscall"
 )
 
+// physicalOwnerUID is the user id the physical identities of a retirement must carry; a variable
+// only so a test can stand for another user.
+var physicalOwnerUID = func() uint32 { return uint32(os.Geteuid()) }
+
 func retirementSingleLink(st os.FileInfo) bool {
 	s, ok := st.Sys().(*syscall.Stat_t)
 	return ok && s.Nlink == 1
@@ -19,7 +23,7 @@ func retirementSingleLink(st os.FileInfo) bool {
 // Refuse unsupported Stat_t layouts rather than synthesizing timestamp facts.
 func retirementV3Physical(path string, st os.FileInfo) (V3PhysicalIdentity, error) {
 	s, ok := st.Sys().(*syscall.Stat_t)
-	if !ok || s.Uid != uint32(os.Geteuid()) {
+	if !ok || s.Uid != physicalOwnerUID() {
 		return V3PhysicalIdentity{}, errors.New("v3 physical owner capability unavailable or foreign")
 	}
 	kind := "regular"
