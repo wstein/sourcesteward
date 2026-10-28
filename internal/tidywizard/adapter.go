@@ -109,7 +109,9 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 		return RepoFacts{}, err
 	}
 	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}, BaseOID: obs.BaseOID}
-	if a.Registrations != nil {
+	// The checks are those of the Git plans; a jj repository has no Git registration and no plan kind.
+	git := obs.Backend != "jj"
+	if git && a.Registrations != nil {
 		regs := make([]workspace.RegistrationFact, 0, len(obs.Worktrees))
 		for _, e := range obs.Worktrees {
 			regs = append(regs, workspace.RegistrationFact{Path: e.Path, Locked: e.Locked, Prunable: e.Prunable})
@@ -126,7 +128,7 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	}
 	for _, e := range obs.Worktrees {
 		w := a.worktree(e)
-		if !e.Primary && !e.DirMissing && e.Path != "" {
+		if git && !e.Primary && !e.DirMissing && e.Path != "" {
 			w.Admission = a.admission(e.Path, parents)
 		}
 		if jj != nil && !e.Primary && !e.DirMissing && e.Path != "" && !e.Locked {
