@@ -342,11 +342,11 @@ func TestBranches(t *testing.T) {
 			t.Fatalf("%+v", got)
 		}
 	})
-	t.Run("a stale registration does not count as attached", func(t *testing.T) {
+	t.Run("a stale registration counts as attached: planning keeps the branch as workspace-used", func(t *testing.T) {
 		live, gone := stwTree("a"), stwTree("gone")
 		live.Branch, gone.Branch, gone.DirMissing, gone.Prunable = "feat/x", "feat/x", true, true
 		got := classifyRepo(repo([]Worktree{live, gone}, []Branch{br("feat/x", ProofAncestor)}), cfg())
-		if !reflect.DeepEqual(byID(got, "worktree:r:/ws/wt/a").Effects, []string{"remove-registration", "remove-files", "delete-branch:feat/x"}) {
+		if !reflect.DeepEqual(byID(got, "worktree:r:/ws/wt/a").Effects, []string{"remove-registration", "remove-files"}) || byKind(got, KindBranch).Reason != "branch-attached-elsewhere" {
 			t.Fatalf("%+v", got)
 		}
 	})

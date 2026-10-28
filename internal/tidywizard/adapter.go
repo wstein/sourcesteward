@@ -48,6 +48,10 @@ type Adapter struct {
 	// production functions.
 	DestinationAdmission func(dest string) error
 	ParentAdmission      func(parent string) error
+	// Registrations is the check every plan of a repository runs on its registrations. State is the
+	// state directory plans are written to ("" when none), for the overlap rule.
+	Registrations func(ctx context.Context, regs []workspace.RegistrationFact, state string) (workspace.RegistrationRefusal, bool)
+	State         string
 }
 
 // JJRecords is the snapshot of the creation records a jj workspace is joined against; see
@@ -76,7 +80,10 @@ func (a Adapter) jjRecords() JJRecords {
 func NewAdapter(repos []RepoSpec, stores []derive.Store) Adapter {
 	a := Adapter{Repos: map[string]RepoSpec{}, Observe: workspace.ObserveWorktrees, Records: func(task string) derive.TaskLookup { return derive.LookupTask(stores, task) },
 		JJRecords: func() JJRecords { return derive.IndexRecords(stores, "jj") }, jj: &jjSnapshot{},
-		DestinationAdmission: workspace.RetirementDestinationAdmission, ParentAdmission: workspace.RetirementParentAdmission}
+		DestinationAdmission: workspace.RetirementDestinationAdmission, ParentAdmission: workspace.RetirementParentAdmission, Registrations: workspace.RefusedRegistration}
+	if s, ok := derive.PlanStore(stores); ok {
+		a.State = s.Path
+	}
 	for _, r := range repos {
 		a.Repos[r.Name] = r
 	}
@@ -101,7 +108,17 @@ func (a Adapter) Facts(ctx context.Context, name string) (RepoFacts, error) {
 	if err != nil {
 		return RepoFacts{}, err
 	}
-	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}}
+	f := RepoFacts{Name: name, Worktrees: []Worktree{}, Branches: []Branch{}, TrackingRefs: []TrackingRef{}, BaseOID: obs.BaseOID}
+	if a.Registrations != nil {
+		regs := make([]workspace.RegistrationFact, 0, len(obs.Worktrees))
+		for _, e := range obs.Worktrees {
+			regs = append(regs, workspace.RegistrationFact{Path: e.Path, Locked: e.Locked, Prunable: e.Prunable})
+		}
+		if refusal, refused := a.Registrations(ctx, regs, a.State); refused {
+			f.Blocked = refusal.Code
+			f.Notices = append(f.Notices, registrationNotice(refusal))
+		}
+	}
 	parents := map[string]bool{}
 	var jj JJRecords
 	if obs.Backend == "jj" && a.JJRecords != nil {
@@ -171,6 +188,21 @@ func (a Adapter) admission(path string, parents map[string]bool) string {
 		return workspace.AdmissionRetirementParentForeign
 	}
 	return ""
+}
+
+// registrationNotice is the one notice of a repository that planning refuses: it says that every
+// row is kept, names the remedy first (the overview cuts a notice at 120 characters) and then the
+// first registration. stw has no command for it (stale-registration-no-plan-kind), so the remedy is
+// Git's own.
+func registrationNotice(r workspace.RegistrationRefusal) string {
+	const head = "worktree-registration-refused: every row is kept; "
+	if r.Code == workspace.AdmissionStateOverlap {
+		return fmt.Sprintf("%sgive another --state-dir; it overlaps the worktree %q", head, r.Path)
+	}
+	if r.Locked {
+		return fmt.Sprintf(`%srun "git worktree unlock PATH", then "git worktree prune"; first PATH: %q`, head, r.Path)
+	}
+	return fmt.Sprintf(`%srun "git worktree prune" or repair the entry; first entry: %q`, head, r.Path)
 }
 
 // failedTracking returns the fallback reason of a repository whose implicit online read failed as
