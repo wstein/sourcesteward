@@ -258,7 +258,7 @@ func (f *failingTerminal) Read(p []byte) (int, error) {
 
 // Issue 326 (owner decision 2026-10-27): the end of input is never a yes, also after a "y".
 func TestTidyApplyPromptEndOfInputIsNo(t *testing.T) {
-	for _, answer := range []string{"y", "yes", "yes\n", "n", "", "\n", "Y", " y", "y "} {
+	for _, answer := range []string{"y", "yes", "yes\n", "n", "n\n", "", "\n", "Y", "Y\n", " y", "y ", " y\n", "y \n", "y\t\n", strings.Repeat("x", 4096) + "y\n", strings.Repeat("x", 300) + "\ny\n"} {
 		got := fakeSet(t, okSet(), true, true)
 		setTerminalAnswers(t, answer)
 		_, err := runTidy(t, "y\n", "apply", setID, "--state-dir", "/s")

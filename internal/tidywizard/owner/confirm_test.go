@@ -179,7 +179,16 @@ func (e *errTTY) Read(p []byte) (int, error) {
 func TestConfirmReadErrorAfterTheWordsIsNoConfirmation(t *testing.T) {
 	f := &errTTY{data: "codex 3f9c2a"}
 	open := func() (io.ReadWriteCloser, error) { return f, nil }
-	if err := Confirm(open, "codex", planID); err == nil {
-		t.Fatal("confirmed")
+	// A guard: the old code refused this too, with the same error.
+	if err := Confirm(open, "codex", planID); !errors.Is(err, ErrNoTerminal) {
+		t.Fatalf("err = %v, want ErrNoTerminal", err)
+	}
+}
+
+// The tail of an over-long line is drained, so it can never be read as an answer (Issue 326).
+func TestConfirmOverLongLineWithTheWordsAtTheEndIsRefused(t *testing.T) {
+	open, _ := tty(strings.Repeat("x", 4096) + "codex 3f9c2a\n")
+	if err := Confirm(open, "codex", planID); !errors.Is(err, ErrConfirmationRefused) {
+		t.Fatalf("err = %v, want ErrConfirmationRefused", err)
 	}
 }

@@ -379,3 +379,16 @@ func TestAnswerWithReadErrorIsNoConsent(t *testing.T) {
 		t.Errorf("%v %v", got, err)
 	}
 }
+
+// A line longer than the reader's buffer is drained as a whole: its tail "y" is not an answer.
+func TestOverLongLineTailIsNotConsent(t *testing.T) {
+	in := strings.Repeat("x", 4096) + "y\n"
+	got, err := YesNo(bufio.NewReader(strings.NewReader(in)), io.Discard, "Q?", true)
+	if got {
+		t.Errorf("YesNo: %v %v", got, err)
+	}
+	r := bufio.NewReader(strings.NewReader(in + "n\n"))
+	if got, err := YesNo(r, io.Discard, "Q?", true); got || err != nil && !errors.Is(err, ErrTooManyInvalid) {
+		t.Errorf("YesNo with a following line: %v %v", got, err)
+	}
+}
