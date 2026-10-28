@@ -52,7 +52,7 @@ func TestRiskFactsMapEveryClassifierShape(t *testing.T) {
 			w.TaskOwner = ""
 			w.Path = "/somewhere/else"
 		}), risk.Kept, []string{}},
-		{"decision row", tree(func(w *Worktree) { w.Record = RecordMismatch; w.TaskOwner = "" }), risk.Orange, []string{risk.ReasonProofEquivalent, risk.ReasonNobodyVouches, risk.ReasonDecisionRow}},
+		{"lock mismatch is kept", tree(func(w *Worktree) { w.Record = RecordMismatch; w.TaskOwner = "" }), risk.Kept, []string{}},
 		{"unmerged worktree", tree(func(w *Worktree) { w.Proof = ProofNone; w.Ahead = 2 }), risk.Red, []string{risk.ReasonNotIntegrated}},
 		{"dirty worktree", tree(func(w *Worktree) { w.Dirty = true }), risk.Red, []string{risk.ReasonUncommittedFiles}},
 		{"ignored extras", tree(func(w *Worktree) { w.IgnoredExtras = true }), risk.Red, []string{risk.ReasonExtraFiles}},

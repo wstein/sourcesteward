@@ -73,7 +73,7 @@ func TestWorktreeBehaviourTable(t *testing.T) {
 		{"dirty", mod(func(w *Worktree) { w.Dirty = true }), VerdictRetain, "dirty", owner.ScopeOwn, nil},
 		{"ignored extras", mod(func(w *Worktree) { w.IgnoredExtras = true }), VerdictRetain, "ignored-extras", owner.ScopeOwn, nil},
 		{"dirty and unmerged is dirty", mod(func(w *Worktree) { w.Dirty = true; w.Proof = ProofNone }), VerdictRetain, "dirty", owner.ScopeOwn, nil},
-		{"locked-stw is a lock mismatch", mod(func(w *Worktree) { w.Record = RecordMismatch; w.TaskOwner = "" }), VerdictDecision, "locked-stw", owner.ScopeUnknown, []string{"remove-registration", "remove-files"}},
+		{"a lock whose record does not match is kept, never a decision row (owner decision 2026-10-28)", mod(func(w *Worktree) { w.Record = RecordMismatch; w.TaskOwner = "" }), VerdictRetain, "lock-mismatch", owner.ScopeUnknown, nil},
 		{"lock mismatch but dirty retains", mod(func(w *Worktree) { w.Record = RecordMismatch; w.Dirty = true }), VerdictRetain, "dirty", owner.ScopeUnknown, nil},
 		{"lock mismatch but unmerged retains", mod(func(w *Worktree) { w.Record = RecordMismatch; w.Proof = ProofNone }), VerdictRetain, "unmerged", owner.ScopeUnknown, nil},
 		{"zero record state fails closed", mod(func(w *Worktree) { w.Record = RecordNone; w.TaskOwner = "" }), VerdictRetain, "registration-record-missing", owner.ScopeUnknown, nil},

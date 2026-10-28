@@ -197,10 +197,7 @@ func requireOfferedRowsBuild(t *testing.T, f *offeredFixture, res tidywizard.Res
 	for _, c := range rows {
 		confirmed := map[string]bool{}
 		if c.Verdict == tidywizard.VerdictDecision {
-			// Open question for the owner: a decision row is refused by planning today (see
-			// TestDecisionRowIsRefusedCleanlyAndStoresNothing), so the property holds for the rows
-			// that are chosen by Enter, a, a group or a selector, which are the safe rows.
-			continue
+			confirmed[c.ID] = true
 		}
 		_, _, err := Build(context.Background(), Request{Candidates: res.Candidates, Chosen: []string{c.ID}, Mode: human, DecisionConfirmed: confirmed, Confirm: typingOpener()}, f.planner())
 		if err != nil {
