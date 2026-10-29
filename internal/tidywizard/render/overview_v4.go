@@ -11,6 +11,7 @@ import (
 	"github.com/wstein/sourcesteward/internal/tidywizard"
 	"github.com/wstein/sourcesteward/internal/tidywizard/owner"
 	pluralize "github.com/wstein/sourcesteward/internal/tidywizard/plural"
+	"github.com/wstein/sourcesteward/internal/tidywizard/risk"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
@@ -26,9 +27,14 @@ type DocumentV4 struct {
 func BuildV4(in Input, rows []tidywizard.RegistrationPrune) DocumentV4 {
 	type target struct{ repo, path string }
 	represented := map[target]bool{}
+	assessments := []risk.Assessment{}
 	prunes := append([]tidywizard.RegistrationPrune{}, rows...)
 	for i := range prunes {
 		represented[target{prunes[i].Repo, prunes[i].Destination}] = true
+		a := tidywizard.RegistrationPruneRisk(prunes[i], in.Mode.Caller)
+		assessments = append(assessments, a)
+		prunes[i].Risk = string(a.Level)
+		prunes[i].RiskReasons = append([]string(nil), a.Reasons...)
 		prunes[i].Effects = append([]string{}, prunes[i].Effects...)
 		prunes[i].Limitations = append([]string{}, prunes[i].Limitations...)
 	}
@@ -55,6 +61,8 @@ func BuildV4(in Input, rows []tidywizard.RegistrationPrune) DocumentV4 {
 	in.Result.Candidates = candidates
 	d := DocumentV4{Document: Build(in), RegistrationPrunes: prunes}
 	d.SchemaVersion = 4
+	counts := risk.Count(assessments)
+	d.Summary.RegistrationPrunes = &RiskCounts{Green: counts.Green, Yellow: counts.Yellow, Orange: counts.Orange, Red: counts.Red, Kept: counts.Kept}
 	if len(d.RegistrationPrunes) > tidywizard.MaxCandidates {
 		d.RegistrationPrunes = d.RegistrationPrunes[:tidywizard.MaxCandidates]
 		d.Truncated = true
@@ -233,11 +241,17 @@ rows:
 				continue
 			}
 			p := r.prune
-			if !w.line("  [-] %s %s %s at %s", e(string(p.Verdict)), e(p.Kind), e(p.Name), e(p.Destination)) {
+			if !w.line("  [-] %s %s %s at %s risk %s", e(string(p.Verdict)), e(p.Kind), e(p.Name), e(p.Destination), e(p.Risk)) {
 				break rows
 			}
 			if !w.line("    gitdir %s task %s reason %s proof %s", e(p.GitDir), e(p.Task), e(p.Reason), e(p.Proof)) {
 				break rows
+			}
+			for _, reason := range p.RiskReasons {
+				sentence, _ := RiskReasonSentence(reason)
+				if !w.line("    %s. %s.", e(sentence.Why), e(sentence.Action)) {
+					break rows
+				}
 			}
 			for _, effect := range p.Effects {
 				if !w.line("    effect: %s", e(effect)) {
@@ -255,6 +269,9 @@ rows:
 	counts := map[tidywizard.RegistrationPruneVerdict]int{}
 	for _, p := range d.RegistrationPrunes {
 		counts[p.Verdict]++
+	}
+	if c := d.Summary.RegistrationPrunes; c != nil {
+		w.line("registration risks: %d green, %d yellow, %d orange, %d red, %d kept", c.Green, c.Yellow, c.Orange, c.Red, c.Kept)
 	}
 	w.line("registration prunes: %d safe, %d retain, %d blocked, %d unknown", counts[tidywizard.RegistrationPruneSafe], counts[tidywizard.RegistrationPruneRetain], counts[tidywizard.RegistrationPruneBlocked], counts[tidywizard.RegistrationPruneUnknown])
 	for _, n := range d.runNotices {
