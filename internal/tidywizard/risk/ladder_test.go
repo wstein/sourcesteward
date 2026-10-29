@@ -193,7 +193,7 @@ func TestLadderUnknownScopeIsConservative(t *testing.T) {
 }
 
 func TestAllReasonsIsCompleteAndIndependent(t *testing.T) {
-	want := []string{"proof-ancestor", "proof-no-net-change", "proof-github-branch-absent", "no-own-commit", "pr-merged-head", "proof-equivalent", "recent-activity", "nobody-vouches", "decision-row", "upstream-gone", "not-integrated", "uncommitted-files", "extra-files", "not-judged"}
+	want := []string{"proof-ancestor", "proof-no-net-change", "proof-github-branch-absent", "no-own-commit", "pr-merged-head", "proof-equivalent", "recent-activity", "nobody-vouches", "decision-row", "upstream-gone", "not-integrated", "uncommitted-files", "extra-files", "not-judged", "owned-missing-registration"}
 	if got := AllReasons(); !reflect.DeepEqual(got, want) {
 		t.Fatalf("catalog: %v want %v", got, want)
 	}
@@ -203,7 +203,7 @@ func TestAllReasonsIsCompleteAndIndependent(t *testing.T) {
 		t.Fatal("caller changed shared reason catalog")
 	}
 	// Each spelling is exported so P3 does not duplicate the package's literals.
-	constants := []string{ReasonProofAncestor, ReasonProofNoNetChange, ReasonProofGitHubBranchAbsent, ReasonNoOwnCommit, ReasonPRMergedHead, ReasonProofEquivalent, ReasonRecentActivity, ReasonNobodyVouches, ReasonDecisionRow, ReasonUpstreamGone, ReasonNotIntegrated, ReasonUncommittedFiles, ReasonExtraFiles, ReasonNotJudged}
+	constants := []string{ReasonProofAncestor, ReasonProofNoNetChange, ReasonProofGitHubBranchAbsent, ReasonNoOwnCommit, ReasonPRMergedHead, ReasonProofEquivalent, ReasonRecentActivity, ReasonNobodyVouches, ReasonDecisionRow, ReasonUpstreamGone, ReasonNotIntegrated, ReasonUncommittedFiles, ReasonExtraFiles, ReasonNotJudged, ReasonOwnedMissingRegistration}
 	if !reflect.DeepEqual(constants, want) {
 		t.Fatalf("reason constants: %v", constants)
 	}
