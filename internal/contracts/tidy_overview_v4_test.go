@@ -13,7 +13,8 @@ import (
 
 func overviewV4Raw(t *testing.T, mutate func(*tidywizard.RegistrationPrune)) []byte {
 	t.Helper()
-	p := tidywizard.RegistrationPrune{ID: strings.Repeat("a", 64), Kind: "registration-prune", Repo: "a", Name: "missing", GitDir: "/repo/.git/worktrees/missing", Destination: "/missing", Owner: "codex", OwnerSource: owner.SourceTaskRecord, Scope: owner.ScopeOwn, Task: "task", Verdict: tidywizard.RegistrationPruneSafe, Reason: "registration-prune-ready", Proof: "owned-missing-registration", Effects: []string{"remove-registration"}, EvidenceDigest: strings.Repeat("b", 64), Limitations: []string{"Metadata only."}}
+	p := tidywizard.RegistrationPrune{Kind: "registration-prune", Repo: "a", Name: "missing", GitDir: "/repo/.git/worktrees/missing", Destination: "/missing", Owner: "codex", OwnerSource: owner.SourceTaskRecord, Scope: owner.ScopeOwn, Task: "task", Verdict: tidywizard.RegistrationPruneSafe, Reason: "registration-prune-ready", Proof: "owned-missing-registration", Effects: []string{"remove-registration"}, EvidenceDigest: strings.Repeat("b", 64), Limitations: []string{"Metadata only."}}
+	p.ID = tidywizard.RegistrationPruneID(p.Repo, p.Name, p.GitDir)
 	if mutate != nil {
 		mutate(&p)
 	}
@@ -28,17 +29,36 @@ func TestTidyOverviewV4SchemaAcceptsTypedProducer(t *testing.T) {
 	s := schemaAt(t, "v4", "tidy-overview")
 	raw := overviewV4Raw(t, nil)
 	valid(t, s, raw)
-	valid(t, s, overviewV4Raw(t, func(p *tidywizard.RegistrationPrune) {
-		p.Verdict = tidywizard.RegistrationPruneBlocked
-		p.Reason = "registration-prune-inventory-blocked"
-		p.Owner = ""
-		p.OwnerSource = owner.SourceUnknown
-		p.Scope = owner.ScopeUnknown
-		p.Task = ""
-		p.Proof = "none"
-		p.Effects = nil
-		p.EvidenceDigest = ""
-	}))
+	produced := value(t, raw).(map[string]any)["registration_prunes"].([]any)[0].(map[string]any)
+	if produced["risk"] != "orange" {
+		t.Fatalf("canonical admitted producer is not orange: %v", produced)
+	}
+	for _, tc := range []struct {
+		verdict       tidywizard.RegistrationPruneVerdict
+		reason, level string
+	}{
+		{tidywizard.RegistrationPruneBlocked, "registration-prune-inventory-blocked", "red"},
+		{tidywizard.RegistrationPruneRetain, "registration-prune-ownership-unproven", "kept"},
+		{tidywizard.RegistrationPruneRetain, "registration-prune-absence-unproven", "kept"},
+	} {
+		t.Run(tc.reason, func(t *testing.T) {
+			raw := overviewV4Raw(t, func(p *tidywizard.RegistrationPrune) {
+				p.Verdict, p.Reason = tc.verdict, tc.reason
+				p.Owner, p.OwnerSource, p.Scope, p.Task = "", owner.SourceUnknown, owner.ScopeUnknown, ""
+				p.Proof, p.Effects, p.EvidenceDigest = "none", nil, ""
+			})
+			valid(t, s, raw)
+			produced := value(t, raw).(map[string]any)["registration_prunes"].([]any)[0].(map[string]any)
+			if produced["risk"] != tc.level || produced["reason"] != tc.reason {
+				t.Fatalf("producer lost the refusal assessment: %v", produced)
+			}
+			if tc.level == "kept" {
+				if _, present := produced["risk_reasons"]; present {
+					t.Fatalf("kept producer carries risk reasons: %v", produced)
+				}
+			}
+		})
+	}
 	if schemaAt(t, "v2", "tidy-overview").Validate(value(t, raw)) == nil {
 		t.Fatal("legacy schema accepted overview4")
 	}
@@ -227,7 +247,14 @@ func TestTidyOverviewV4SchemaTypesRegistrationRisk(t *testing.T) {
 	row := func(v map[string]any) map[string]any {
 		return v["registration_prunes"].([]any)[0].(map[string]any)
 	}
-	base := func() map[string]any { return value(t, overviewV4Raw(t, nil)).(map[string]any) }
+	base := func() map[string]any {
+		v := value(t, overviewV4Raw(t, nil)).(map[string]any)
+		// Model the original document explicitly; the current producer annotates rows.
+		delete(row(v), "risk")
+		delete(row(v), "risk_reasons")
+		delete(v["summary"].(map[string]any), "registration_prunes")
+		return v
+	}
 	orange := func() map[string]any {
 		v := base()
 		row(v)["risk"] = "orange"
@@ -240,6 +267,7 @@ func TestTidyOverviewV4SchemaTypesRegistrationRisk(t *testing.T) {
 		p["verdict"], p["reason"], p["risk"] = verdict, reason, level
 		p["proof"], p["effects"], p["evidence_digest"] = "none", []any{}, ""
 		p["owner"], p["owner_source"], p["scope"], p["task"] = "", "unknown", "unknown", ""
+		delete(p, "risk_reasons")
 		if level == "red" {
 			p["risk_reasons"] = []any{"not-judged"}
 		}
@@ -303,6 +331,7 @@ func TestTidyOverviewV4SchemaTypesRegistrationRisk(t *testing.T) {
 		"kept reasons present": func(v map[string]any) {
 			p := row(v)
 			p["verdict"], p["reason"], p["proof"], p["effects"], p["risk"] = "retain", "registration-prune-absence-unproven", "none", []any{}, "kept"
+			p["risk_reasons"] = []any{"owned-missing-registration"}
 		},
 		"kept blocked": func(v map[string]any) {
 			p := row(v)
