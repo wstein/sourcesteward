@@ -694,3 +694,39 @@ although it applies to 21 or 22 of 72 rows.
 - `--workspace` was given; discovery from the working directory was not exercised on the copy.
 - Groups 4 to 8, 10 to 17 were walked but not chosen to the end, except as stated in the table; the cause of D1 was found by experiment, not traced in the code.
 - The copy is a snapshot (08:16 to 08:23 UTC); the live workspace changed while the runs went on (see the proof above).
+
+## Rerun after the D1-D4 fix (stw #332, head ecbbe8e9fb717db16387ef6679cd26317527f5aa, 2026-10-29)
+
+The wizard ran again as a dry run, offline, on the same copy (`--workspace /workspaces/Anchorage`, same namespace, uid 1000, pseudo-terminal driver, 120x50)
+with the code of stw #332 at `ecbbe8e9fb71`. The repositories are the 2026-10-28 snapshot, so the counts are comparable; the copy was not taken again.
+No apply, no store and no real confirmation word was typed. Runs repeated: R1 (overview, `q`), rA (group 1 `y`, group 2 `y`, Enter, wrong word),
+rB (`a`, take all green) and `--json`. The other runs (RC, RD, RE, RE2, RF, RA, RB, RI) could not be repeated: their rows (directories and branches of other repositories)
+are no longer offered.
+
+**Result.** The wizard offers 3 of 1,248 candidates in 2 groups (earlier 193 of 1,222 in 17): group 1 is 2 branches in `.` (green), group 2 is 1 branch in
+workharbor (yellow, `archive/w1-pre-ingress-f9ee51f5`). `--json` reports safe 3 and retain 1245 (green 2, yellow 1, orange 0, red 517, kept 728), exit 0.
+
+| Finding | Before | After the fix |
+| --- | --- | --- |
+| D1, directories in `/tmp` | offered, then refused by the planner | 75 rows kept ("directory in a place that is not yours"); none offered, none reaches the planner |
+| D2, owner known only from a commit author | offered, then refused by the planner | 75 rows kept ("no stw record and no owner label, only a commit author"); none offered |
+| D3, locked or missing worktree registrations | offered, then refused by the planner | 29 rows kept; the overview prints the notice `worktree-registration-refused: every row is kept; run "git worktree unlock PATH", then "git worktree prune"` for 5 repositories |
+| D4, late raw error | the run ended with a raw error | gone: the plan is built without error, `This deletes 0 directories for good and 3 branches (restorable).`, the typed prompt `Type "unknown 2878ca" to confirm`, a wrong word gives `Error: confirmation refused`, exit 1 |
+
+D4 in detail. In rA all 3 offered rows were chosen: the summary reads `total: 3 items in 2 repositories` and all sub-plans, including the one of workharbor, were built.
+The refusal with exit 1 is the intended one. In rB (`a`, take all green) 2 green items (2 branches in `.`) were planned without error, the typed prompt was reached, the wrong
+word was refused, exit 1. Earlier, take all green had 6 green rows including 4 directories and failed.
+
+The 29 registrations of D3 are cleaned by the owner by hand (owner decision 2026-10-29), as the notice says (`git worktree unlock PATH`, `git worktree prune`).
+The branches of sourcesteward, bundledock, crewbook, chartscribe and sheetmill are not offered, and the 11 branches of D17 are not offered either.
+
+**New observations.** (1) The wizard now offers only 3 rows, so the cleanup value for this workspace is nearly nil until the owner has unlocked and pruned the 29 registrations.
+(2) The `Next:` line "Typed words" shows only `unknown`.
+
+**Caveats.**
+
+- The copy is not pristine: its state directory held 4 plan files from the first run and now holds 6 (two more from the refused typed confirmations here, by design).
+- Planning of a directory row was not exercised, because no directory is offered.
+- D6 (`q` at the edit prompt) was not exercised. D7 (skipped line) was seen only in rB, where `skipped: 1 group (1 branch)` is right.
+
+Runtime: 2m34s to 2m58s per wizard run (R1 2m53s, rA 2m35s, rB 2m58s), `--json` 2m24s, about 13 minutes in all; the first-run analysis dominates as before.
