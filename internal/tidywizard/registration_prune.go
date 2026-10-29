@@ -34,4 +34,7 @@ type RegistrationPrune struct {
 	Effects        []string                 `json:"effects"`
 	EvidenceDigest string                   `json:"evidence_digest"`
 	Limitations    []string                 `json:"limitations"`
+	// Risk fields are optional overview annotations, never admission evidence.
+	Risk        string   `json:"risk,omitempty"`
+	RiskReasons []string `json:"risk_reasons,omitempty"`
 }

@@ -56,20 +56,21 @@ var proofSentences = map[string]Sentence{
 
 // riskReasonSentences covers every risk.AllReasons word (the "why green, yellow, orange or red").
 var riskReasonSentences = map[string]Sentence{
-	risk.ReasonProofAncestor:           {"all of its work is already on the base branch", "nothing is lost by deleting it"},
-	risk.ReasonProofNoNetChange:        {"its changes cancel out against the base branch", "nothing is lost by deleting it"},
-	risk.ReasonProofGitHubBranchAbsent: {"the remote no longer has the branch", "the local reference can go"},
-	risk.ReasonNoOwnCommit:             {"it has no commit of its own", "nothing is lost by deleting it"},
-	risk.ReasonPRMergedHead:            {"its tip was merged as a pull request", "nothing is lost by deleting it"},
-	risk.ReasonProofEquivalent:         {"the work is on the base as equal patches (a rebase merge), not as the same commits", "compare with the base if unsure"},
-	risk.ReasonRecentActivity:          {"it changed in the last 3 days or its last change is unknown", "make sure nobody is still working there"},
-	risk.ReasonNobodyVouches:           {"no record says whose it is", "make sure it is not somebody's current work"},
-	risk.ReasonDecisionRow:             {"it needs a decision of its own", "choose it by its number and confirm it"},
-	risk.ReasonUpstreamGone:            {"the upstream branch is gone", "a closed or deleted pull request looks the same; it proves nothing"},
-	risk.ReasonNotIntegrated:           {"its commits are not on the base branch", "nothing is deleted; unique work may exist"},
-	risk.ReasonUncommittedFiles:        {"it has uncommitted changes", "commit or discard them yourself"},
-	risk.ReasonExtraFiles:              {"it holds untracked or ignored files", "look inside; remove them yourself if junk"},
-	risk.ReasonNotJudged:               {"it could not be judged", "run again with a larger window; until then assume unique work"},
+	risk.ReasonProofAncestor:            {"all of its work is already on the base branch", "nothing is lost by deleting it"},
+	risk.ReasonProofNoNetChange:         {"its changes cancel out against the base branch", "nothing is lost by deleting it"},
+	risk.ReasonProofGitHubBranchAbsent:  {"the remote no longer has the branch", "the local reference can go"},
+	risk.ReasonNoOwnCommit:              {"it has no commit of its own", "nothing is lost by deleting it"},
+	risk.ReasonPRMergedHead:             {"its tip was merged as a pull request", "nothing is lost by deleting it"},
+	risk.ReasonProofEquivalent:          {"the work is on the base as equal patches (a rebase merge), not as the same commits", "compare with the base if unsure"},
+	risk.ReasonRecentActivity:           {"it changed in the last 3 days or its last change is unknown", "make sure nobody is still working there"},
+	risk.ReasonNobodyVouches:            {"no record says whose it is", "make sure it is not somebody's current work"},
+	risk.ReasonDecisionRow:              {"it needs a decision of its own", "choose it by its number and confirm it"},
+	risk.ReasonUpstreamGone:             {"the upstream branch is gone", "a closed or deleted pull request looks the same; it proves nothing"},
+	risk.ReasonNotIntegrated:            {"its commits are not on the base branch", "nothing is deleted; unique work may exist"},
+	risk.ReasonUncommittedFiles:         {"it has uncommitted changes", "commit or discard them yourself"},
+	risk.ReasonExtraFiles:               {"it holds untracked or ignored files", "look inside; remove them yourself if junk"},
+	risk.ReasonOwnedMissingRegistration: {"Only the registration would be removed; the missing checkout may have been moved", "observation prepares no recovery"},
+	risk.ReasonNotJudged:                {"it could not be judged", "run again with a larger window; until then assume unique work"},
 }
 
 // levelSentences covers the five risk levels.

@@ -58,8 +58,9 @@ func registrationPruneRefusal(code string) (string, RegistrationPruneVerdict) {
 	}
 }
 
-// SelectRegistrationPrunes is the safe selection shared by future --save and
-// all-selection callers. It does not store plans or grant typed other-owner
+// SelectRegistrationPrunes gates future explicit human choice and agent own-scope
+// --save. Enter, a and default selections must never include these rows.
+// It does not store plans or grant typed other-owner
 // authorization. Scope is re-derived so an edited row label cannot grant own.
 func SelectRegistrationPrunes(rows []RegistrationPrune, cfg Config) []RegistrationPrune {
 	out := []RegistrationPrune{}
