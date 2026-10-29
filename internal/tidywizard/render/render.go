@@ -71,6 +71,8 @@ type Summary struct {
 	Decision int `json:"decision"`
 	// Risk counts the candidates per risk level (Spec 044); set only with the run clock.
 	Risk *RiskCounts `json:"risk,omitempty"`
+	// RegistrationPrunes counts the filtered native view before output cuts.
+	RegistrationPrunes *RiskCounts `json:"registration_prunes,omitempty"`
 }
 
 // RiskCounts is the number of candidates per risk level.

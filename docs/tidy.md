@@ -75,6 +75,15 @@ explicit selector prints text. Both forms only observe: they never read a choice
 store a plan or apply cleanup, even at a human terminal. The default overview
 and expert `plan` / `apply` dispatch retain their existing contracts.
 
+Native registration rows carry display-only `risk` and `risk_reasons`. A fully
+admitted row is orange: "Only the registration would be removed; the missing
+checkout may have been moved." Observation prepares no recovery. Retained
+ownership and absence refusals are kept with their exact existing reason;
+blocked, unknown or contradictory safe rows are red (`not-judged`). The separate
+`summary.registration_prunes` counts the filtered view before output truncation,
+with green and yellow always zero. These counts do not add directories or branches
+to the legacy totals. No registration is selected, stored or applied by this overview.
+
 The additional `registration_prunes` array describes owned, locked Git
 registrations whose checkout directory is missing. Each row carries its own
 native absence, ownership and recovery witnesses; integration ancestry is not
