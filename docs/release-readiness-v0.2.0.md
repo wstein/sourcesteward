@@ -13,7 +13,7 @@ implementation of Spec 016 (v0.3.0). `whr` is released separately.
 
 | Item | State | Needed before the tag |
 | --- | --- | --- |
-| [#323](https://github.com/wstein/sourcesteward/pull/323) Spec 044 P4b, terminal-authorized janitor apply | Draft, head `6bb53928`, merge state CLEAN, all checks pass; Draft blockers named in its body: the foreman's exact-head security review and ledger entry. Author agent: Codex | **Required**: merged (owner decision 2026-10-26, "Erst Janitor-Wizard Phase 1, dann v0.2.0"; the D12 receipt and D16 are part of phase 1) |
+| [#323](https://github.com/wstein/sourcesteward/pull/323) Spec 044 P4b, terminal-authorized janitor apply | Merged (head `2b9a44f8`); `origin/main` was `23ef6edf` when this row was updated (2026-10-29). The D1 to D4 findings of the T016 dogfood run are fixed in [#332](https://github.com/wstein/sourcesteward/pull/332) (head `ecbbe8e9`); the rerun evidence is in the [rerun section](../specs/044-tidy-janitor-wizard/evidence/T016-dogfood.md#rerun-after-the-d1-d4-fix-stw-332-head-ecbbe8e9fb717db16387ef6679cd26317527f5aa-2026-10-29). Author agent: Codex | Done (owner decision 2026-10-26, "Erst Janitor-Wizard Phase 1, dann v0.2.0"; the D12 receipt and D16 are part of phase 1) |
 | This documentation pull request | Draft | Reviewed and merged before the tag, so the protocol is in the tagged tree |
 
 No other pull request is open.
@@ -35,7 +35,7 @@ Closed since the tracker was written: #217, #196, #241, #252, #253, #255, #95 (`
 
 | Item | State | Needed |
 | --- | --- | --- |
-| T016 dogfood dry run of the janitor on a copy of the live workspace, no apply (`specs/044-tidy-janitor-wizard/tasks.md:43`) | open; no evidence file exists (`specs/044-tidy-janitor-wizard/evidence` is absent) | **Required** (owner decision 2026-10-26): run it after #323 merges, record it in a pull request body with an independent review of the exact head |
+| T016 dogfood dry run of the janitor on a copy of the live workspace, no apply (`specs/044-tidy-janitor-wizard/tasks.md:43`) | run 2026-10-28 and rerun 2026-10-29 after the D1 to D4 fix in #332; evidence in [T016-dogfood.md](../specs/044-tidy-janitor-wizard/evidence/T016-dogfood.md) (merged in #331). D1 to D4 are fixed: the rerun offers 3 of 1,248 candidates and plans them without error; the 29 locked or missing worktree registrations are cleaned by the owner by hand (owner decision 2026-10-29); planning of a directory row, D6 and D7 were not exercised | Independent review of the exact head of this documentation; the task checkbox is ticked by the last pull request of the wave |
 | Dry run of the release workflow (`workflow_dispatch`, a build) | last dry runs succeeded 2026-10-22 and 2026-10-23, before 800+ commits; none on current `main` | **Required** once before the tag (owner decision 2026-10-27, step A5 of the protocol); a build, needs the owner's approval |
 | Native CI on the commit to tag | green on `ab4c657c` | Green on the final C (step A3) |
 | Smoke of the janitor in the shipped archive | the workflow smoke runs `version`, `--help`, `inspect`, `status` only; `tidy`, `sync` and `workspace` are covered by the `ci.yml` conformance lanes (`specs/034-bootstrap-release/spec.md`, smoke) | Nothing new; stated so nobody expects more |
