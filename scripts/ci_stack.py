@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: EUPL-1.2
-"""Decide whether a pull request is the tip of a stack (Spec 039, owner decision 2026-10-26).
+"""Decide whether a pull request is the tip of a stack (Spec 039).
 
-The CI `changes` job lists the open pull requests of the repository with `gh api` into a file and runs
-`ci_stack.py --prs-file FILE`, which prints `is_stack_tip=<bool>` for the job to append to GITHUB_OUTPUT. The heavy
-Git/jj conformance shards run only for a tip: a pull request is NOT a tip when another open pull request of the
-same repository, from a branch of the same repository, has this pull request's head branch as its base branch.
-A Draft child does not count: authors push early as Draft, and a forgotten Draft must not remove the heavy gate.
+Since the owner decision of 2026-11-01 (label-driven heavy gate) this is a safeguard only: the `stack` job of
+`ci-full.yml` runs `ci_stack.py --prs-file FILE` when the `ci-full` label is applied and reports a label on a pull
+request below the tip. The shards run anyway. The job lists the open pull requests of the repository with `gh api` into a
+file and appends the printed `is_stack_tip=<bool>` decision to its summary. A pull request is NOT a tip when another open
+pull request of the same repository, from a branch of the same repository, has this pull request's head branch as its base
+branch. A Draft child does not count: authors push early as Draft.
 
 Fail closed: every doubt gives `true` (run the shards): an event other than pull_request, a fork pull request, an
 unknown head repository or branch, the default branch as head branch, a missing, unreadable or malformed listing, a
