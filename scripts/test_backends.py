@@ -103,16 +103,14 @@ class BackendInstallerTests(unittest.TestCase):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
         workflow = (ROOT / '.github/workflows/conformance.yml').read_text()
         self.assertIn('needs: [check, conformance]', ci)
-        # Both lanes on push and for a PR labelled ci-full; only current for an unlabelled PR.
+        # Both lanes on push (and for the ci-full label run of ci-full.yml); ci.yml runs only current for a PR.
         match = re.search(r'(?m)^        lane: \$\{\{ fromJSON\((.+)\) \}\}$', ci)
         self.assertIsNotNone(match)
         python = match.group(1).replace('github.event_name', 'event')
-        python = python.replace("!contains(github.event.pull_request.labels.*.name, 'ci-full')",
-                                "('ci-full' not in labels)")
         python = python.replace('&&', ' and ').replace('||', ' or ')
         lanes = lambda event, labels=(): json.loads(eval(python, {}, {'event': event, 'labels': list(labels)}))
         self.assertEqual(lanes('push'), ['minimum', 'current'])
-        self.assertEqual(lanes('pull_request', ['ci-full']), ['minimum', 'current'])
+        self.assertEqual(lanes('pull_request', ['ci-full']), ['current'])  # the label run is ci-full.yml
         self.assertEqual(lanes('pull_request'), ['current'])
         for required in ('STW_REQUIRE_JJ:', 'scripts/smoke-jj-inspection.py'):
             self.assertIn(required, workflow)

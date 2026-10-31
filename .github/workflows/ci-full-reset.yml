@@ -1,0 +1,35 @@
+name: CI full reset
+
+# Removes the ci-full label from a pull request on every push to its branch (owner decision
+# 2026-11-01, Spec 039): the label is the heavy-lane evidence for one reviewed head, so a new head
+# needs a new CLEAR and a new label. The workflow checks out and runs no pull request code and uses
+# the plain pull request trigger. A fork pull request has a read-only token: the removal is skipped there
+# and the reviewer checks the head before trusting a label.
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-full-reset-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  reset:
+    if: contains(github.event.pull_request.labels.*.name, 'ci-full') && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Remove the ci-full label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ci-full"
+          echo "Removed the ci-full label from #$PR_NUMBER: the new head needs a new review and label" >> "$GITHUB_STEP_SUMMARY"
