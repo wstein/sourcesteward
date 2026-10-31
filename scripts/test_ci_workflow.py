@@ -17,7 +17,9 @@ WORKFLOW = (ROOT / '.github/workflows/ci.yml').read_text()
 CONFORMANCE = (ROOT / '.github/workflows/conformance.yml').read_text()
 FULL = (ROOT / '.github/workflows/ci-full.yml').read_text()
 RACE = (ROOT / '.github/workflows/race.yml').read_text()
-ALL = (WORKFLOW, CONFORMANCE, FULL, RACE)
+_RESET = ROOT / '.github/workflows/ci-full-reset.yml'
+RESET = _RESET.read_text() if _RESET.exists() else ''  # a missing file fails its tests, not the import
+ALL = (WORKFLOW, CONFORMANCE, FULL, RACE, RESET)
 _SPEC = importlib.util.spec_from_file_location('ci_shards', ROOT / 'scripts/ci_shards.py')
 SHARDS = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(SHARDS)
@@ -111,7 +113,7 @@ class NoRaceOnPullRequestTests(unittest.TestCase):
 
 class NoForbiddenTriggerTests(unittest.TestCase):
     def test_no_workflow_uses_pull_request_target_or_an_edited_trigger(self):
-        for name, text in (('ci.yml', WORKFLOW), ('ci-full.yml', FULL), ('conformance.yml', CONFORMANCE)):
+        for name, text in (('ci.yml', WORKFLOW), ('ci-full.yml', FULL), ('conformance.yml', CONFORMANCE), ('ci-full-reset.yml', RESET)):
             self.assertNotIn('pull_request_target', text, name)
         self.assertNotRegex(WORKFLOW.split('\npermissions:', 1)[0], r'edited')
 
@@ -217,23 +219,21 @@ class TieringTests(unittest.TestCase):
         self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', text)
 
     LANES = ("lane: ${{ fromJSON(github.event_name == 'pull_request' "
-             "&& !contains(github.event.pull_request.labels.*.name, 'ci-full') "
              "&& '[\"current\"]' || '[\"minimum\",\"current\"]') }}")
 
-    def test_pull_requests_run_only_the_current_lane_unless_labelled_ci_full(self):
-        # The minimum lane gates main after merge, labelled PRs and the race schedule.
+    def test_pull_requests_of_ci_yml_run_only_the_current_lane_whatever_the_label(self):
+        # The minimum lane gates main after merge, labelled PRs (ci-full.yml) and the race schedule.
         import json
         match = re.search(r"lane: \$\{\{ fromJSON\((.+)\) \}\}", job_text('conformance'))
         self.assertTrue(match)
         python = match.group(1).replace('github.event_name', 'event')
-        python = python.replace("!contains(github.event.pull_request.labels.*.name, 'ci-full')",
-                                "('ci-full' not in labels)")
+        self.assertNotIn('labels', python, 'ci.yml never reads the label for the lanes')
         python = python.replace('&&', ' and ').replace('||', ' or ')
         lanes = lambda event, labels=(): json.loads(
             eval(python, {}, {'event': event, 'labels': list(labels)}))
         self.assertEqual(lanes('pull_request'), ['current'])
         self.assertEqual(lanes('pull_request', ['other']), ['current'])
-        self.assertEqual(lanes('pull_request', ['ci-full']), ['minimum', 'current'])
+        self.assertEqual(lanes('pull_request', ['ci-full']), ['current'])
         self.assertEqual(lanes('push'), ['minimum', 'current'])
 
     def test_check_job_always_runs(self):
@@ -498,25 +498,26 @@ class DocsOnlyWorkflowTests(unittest.TestCase):
     def test_ci_full_label_runs_never_skip(self):
         self.assertNotIn('docs_only', FULL)
 
-    def test_shards_skip_only_for_a_docs_only_pull_request_or_one_below_the_stack_tip(self):
+    def test_shards_skip_only_for_a_docs_only_pull_request_or_one_without_the_heavy_gate(self):
         text = job_text('shard', CONFORMANCE)
-        self.assertIn("if: github.event_name != 'pull_request' || (inputs.docs_only != 'true' && inputs.stack_tip != 'false')\n", text)
+        self.assertIn("if: github.event_name != 'pull_request' || (inputs.docs_only != 'true' && inputs.heavy != 'false')\n", text)
         self.assertRegex(CONFORMANCE, r"docs_only:\n(?:\s+[a-z]+: .*\n)*?\s+default: 'false'")
-        self.assertRegex(CONFORMANCE, r"stack_tip:\n(?:\s+[a-z]+: .*\n)*?\s+default: 'true'")
+        self.assertRegex(CONFORMANCE, r"heavy:\n(?:\s+[a-z]+: .*\n)*?\s+default: 'true'")
+        self.assertNotIn('stack_tip', CONFORMANCE)
 
-    def test_every_step_of_the_shard_job_stays_unconditional_on_docs_only_and_stack_tip(self):
+    def test_every_step_of_the_shard_job_stays_unconditional_on_docs_only_and_heavy(self):
         text = job_text('shard', CONFORMANCE)
         self.assertEqual(text.count('docs_only'), 1)
         self.assertEqual(len(re.findall(r'inputs\.docs_only', text)), 1)
-        self.assertEqual(len(re.findall(r'inputs\.stack_tip', text)), 1)
+        self.assertEqual(len(re.findall(r'inputs\.heavy', text)), 1)
 
     def test_the_shard_condition_for_every_case(self):
         text = job_text('shard', CONFORMANCE)
         expr = re.search(r'(?m)^    if: (.*)$', text).group(1)
         python = (expr.replace('github.event_name', 'event').replace('inputs.docs_only', 'docs_only')
-                  .replace('inputs.stack_tip', 'stack_tip').replace('&&', ' and ').replace('||', ' or '))
-        runs = lambda event, docs_only='false', stack_tip='true': eval(
-            python, {}, {'event': event, 'docs_only': docs_only, 'stack_tip': stack_tip})
+                  .replace('inputs.heavy', 'heavy').replace('&&', ' and ').replace('||', ' or '))
+        runs = lambda event, docs_only='false', heavy='true': eval(
+            python, {}, {'event': event, 'docs_only': docs_only, 'heavy': heavy})
         self.assertTrue(runs('push'))
         self.assertTrue(runs('push', 'true', 'false'))  # only a pull request may skip
         self.assertTrue(runs('pull_request'))
@@ -528,46 +529,83 @@ class DocsOnlyWorkflowTests(unittest.TestCase):
         self.assertTrue(runs('workflow_dispatch', 'true', 'false'))
 
 
-class StackTipWorkflowTests(unittest.TestCase):
-    def test_changes_job_has_exactly_the_extra_read_permission(self):
-        text = job_text('changes')
-        self.assertRegex(text, r'(?m)^    permissions:\n      contents: read\n      pull-requests: read\n(?!      )')
-        for name in ('check', 'conformance', 'pages'):
-            self.assertNotIn('pull-requests', job_text(name))
-        head = WORKFLOW.split('\njobs:', 1)[0]
-        self.assertNotIn('pull-requests', head)
+class HeavyGateWorkflowTests(unittest.TestCase):
+    """Owner decision 2026-11-01 (variant B): the heavy lane runs on main and for the ci-full label only."""
 
-    def test_changes_job_exposes_the_decision_and_passes_data_by_environment(self):
-        text = job_text('changes')
-        self.assertIn('is_stack_tip: ${{ steps.stack.outputs.is_stack_tip }}', text)
-        step = text.split('- name: Detect the tip of a stack\n', 1)[1]
-        env, run = step.split('        run: |\n', 1)
-        for name in ('HEAD_REF: ${{ github.event.pull_request.head.ref }}', 'HEAD_REPO:', 'BASE_REPO:', 'PR_NUMBER:',
-                     'DEFAULT_BRANCH:', 'EVENT_NAME: ${{ github.event_name }}'):
-            self.assertIn(name, env)
-        self.assertNotIn('${{', run, 'no expression, so no untrusted text, inside the shell script')
-        self.assertIn('python3 -B scripts/ci_stack.py --prs-file "$prs" >> "$GITHUB_OUTPUT"', run)
-        self.assertIn('|| rm -f "$prs"', run)  # a failed lookup leaves no listing: the script treats it as a tip
+    def test_ci_yml_has_no_pull_request_lookup_and_no_extra_permission(self):
+        self.assertNotIn('pull-requests', WORKFLOW)
+        self.assertNotIn('ci_stack', WORKFLOW)
+        self.assertNotIn('is_stack_tip', WORKFLOW)
+        self.assertNotIn('stack_tip', WORKFLOW)
+
+    def test_ci_yml_never_reads_the_label_so_a_push_cannot_reuse_a_stale_one(self):
+        self.assertNotIn('ci-full', '\n'.join(l for l in WORKFLOW.splitlines() if not l.lstrip().startswith('#')))
+        self.assertNotIn('labels', '\n'.join(l for l in WORKFLOW.splitlines() if not l.lstrip().startswith('#')))
+
+    def test_ci_yml_never_starts_the_shards_for_a_pull_request(self):
+        text = job_text('conformance')
+        match = re.search(r"heavy: \$\{\{ (.+) \}\}", text)
+        self.assertTrue(match)
+        python = match.group(1).replace('github.event_name', 'event').replace('||', ' or ').replace('&&', ' and ')
+        self.assertEqual(eval(python, {}, {'event': 'pull_request'}), 'false')
+        self.assertEqual(eval(python, {}, {'event': 'push'}), 'true')
+        self.assertNotRegex(text, r'(?m)^    if:')
 
     def test_no_untrusted_expression_is_interpolated_into_any_run_line(self):
         for text in ALL:
             for run in re.findall(r'(?m)^\s+run: (.*)$', text):
                 self.assertNotRegex(run, r'github\.event\.pull_request\.(head|title|body)|github\.head_ref')
 
-    def test_conformance_receives_the_decision_and_the_ci_full_label_forces_the_shards(self):
-        text = job_text('conformance')
-        match = re.search(r'stack_tip: \$\{\{ (.+) \}\}', text)
-        self.assertTrue(match)
-        python = match.group(1).replace("needs.changes.outputs.is_stack_tip", 'out')
-        python = python.replace("contains(github.event.pull_request.labels.*.name, 'ci-full')", "('ci-full' in labels)")
-        python = python.replace('||', ' or ').replace('&&', ' and ')
-        value = lambda out, labels=(): eval(python, {}, {'out': out, 'labels': list(labels)})
-        self.assertEqual(value('false'), 'false')
-        self.assertEqual(value('true'), 'true')
-        self.assertEqual(value(''), 'true')  # an empty output of a succeeding job: fail closed
-        self.assertEqual(value('false', ['ci-full']), 'true')
-        self.assertEqual(value('false', ['other']), 'false')
-        self.assertNotRegex(text, r'(?m)^    if:')
+    def test_ci_full_reports_a_label_below_the_tip_but_still_runs_the_shards(self):
+        text = job_text('stack', FULL)
+        self.assertRegex(text, r'(?m)^    permissions:\n      contents: read\n      pull-requests: read\n(?!      )')
+        self.assertIn("if: github.event.label.name == 'ci-full'", text)
+        step = text.split('- name: Report a label below the tip of a stack\n', 1)[1]
+        env, run = step.split('        run: |\n', 1)
+        for name in ('HEAD_REF: ${{ github.event.pull_request.head.ref }}', 'HEAD_REPO:', 'BASE_REPO:', 'PR_NUMBER:',
+                     'DEFAULT_BRANCH:', 'EVENT_NAME: ${{ github.event_name }}'):
+            self.assertIn(name, env)
+        self.assertNotIn('${{', run, 'no expression, so no untrusted text, inside the shell script')
+        self.assertIn('python3 -B scripts/ci_stack.py --prs-file "$prs"', run)
+        self.assertIn('::warning', run)
+        self.assertIn('GITHUB_STEP_SUMMARY', run)
+        self.assertIn('|| rm -f "$prs"', run)
+        conformance = job_text('conformance', FULL)
+        self.assertNotIn('needs:', conformance, 'the report never gates or skips the shards')
+        self.assertNotIn('pull-requests', conformance)
+        self.assertNotIn('pull-requests', FULL.split('\njobs:', 1)[0])
+
+
+class CiFullResetWorkflowTests(unittest.TestCase):
+    def test_runs_only_on_synchronize_and_never_on_pull_request_target(self):
+        on = RESET.split('\npermissions:', 1)[0]
+        self.assertRegex(on, r'(?m)^  pull_request:\n    types: \[synchronize\]\n')
+        self.assertNotIn('pull_request_target', RESET)
+        self.assertNotIn('push:', on)
+
+    def test_write_permission_is_only_pull_requests_on_the_one_job(self):
+        head = RESET.split('\njobs:', 1)[0]
+        self.assertRegex(head, r'(?m)^permissions:\n  contents: read\n(?!  )')
+        text = job_text('reset', RESET)
+        self.assertRegex(text, r'(?m)^    permissions:\n      contents: read\n      pull-requests: write\n(?!      )')
+        self.assertEqual(RESET.count('write'), 1)
+
+    def test_it_checks_out_and_runs_no_pull_request_code(self):
+        self.assertNotIn('actions/checkout', RESET)
+        self.assertNotIn('uses: ./', RESET)
+
+    def test_it_removes_exactly_the_ci_full_label_with_data_from_the_environment(self):
+        text = job_text('reset', RESET)
+        self.assertIn("contains(github.event.pull_request.labels.*.name, 'ci-full')", text)
+        self.assertIn('head.repo.full_name == github.repository', text)
+        step = text.split('- name: Remove the ci-full label\n', 1)[1]
+        env, run = step.split('        run: |\n', 1)
+        self.assertIn('PR_NUMBER: ${{ github.event.pull_request.number }}', env)
+        self.assertNotIn('${{', run)
+        self.assertIn('gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ci-full"', run)
+
+    def test_runs_of_one_pull_request_do_not_cancel_each_other_unsafely(self):
+        self.assertIn('group: ci-full-reset-${{ github.event.pull_request.number }}', RESET)
 
 
 class SuiteAggregateTests(unittest.TestCase):
@@ -576,8 +614,8 @@ class SuiteAggregateTests(unittest.TestCase):
         text = job_text('suite', CONFORMANCE)
         return re.search(r'run: \|\n((?:          .*\n?)+)', text).group(1)
 
-    def passes(self, result, docs_only, event='pull_request', stack_tip='true'):
-        env = dict(os.environ, SHARDS_RESULT=result, DOCS_ONLY=docs_only, EVENT_NAME=event, STACK_TIP=stack_tip)
+    def passes(self, result, docs_only, event='pull_request', heavy='true'):
+        env = dict(os.environ, SHARDS_RESULT=result, DOCS_ONLY=docs_only, EVENT_NAME=event, HEAVY=heavy)
         done = subprocess.run(['bash', '-e', '-c', self.script()], env=env, capture_output=True, text=True)
         return done.returncode == 0
 
@@ -587,7 +625,7 @@ class SuiteAggregateTests(unittest.TestCase):
         self.assertIn('needs: [shard]', text)
         self.assertIn('SHARDS_RESULT: ${{ needs.shard.result }}', text)
         self.assertIn('DOCS_ONLY: ${{ inputs.docs_only }}', text)
-        self.assertIn('STACK_TIP: ${{ inputs.stack_tip }}', text)
+        self.assertIn('HEAVY: ${{ inputs.heavy }}', text)
         self.assertIn('EVENT_NAME: ${{ github.event_name }}', text)
 
     def test_success_passes_everywhere(self):
@@ -600,7 +638,7 @@ class SuiteAggregateTests(unittest.TestCase):
             for docs_only in ('true', 'false'):
                 self.assertFalse(self.passes(result, docs_only), (result, docs_only))
 
-    def test_skipped_shards_pass_only_for_a_docs_only_pull_request_or_one_below_the_stack_tip(self):
+    def test_skipped_shards_pass_only_for_a_docs_only_pull_request_or_one_without_the_heavy_gate(self):
         self.assertTrue(self.passes('skipped', 'true', 'pull_request'))
         self.assertTrue(self.passes('skipped', 'false', 'pull_request', 'false'))
         self.assertTrue(self.passes('skipped', 'true', 'pull_request', 'false'))
@@ -609,11 +647,11 @@ class SuiteAggregateTests(unittest.TestCase):
         self.assertFalse(self.passes('skipped', 'false', 'pull_request', ''))
         self.assertFalse(self.passes('skipped', 'false', 'pull_request', 'bogus'))
         for event in ('push', 'workflow_dispatch', 'schedule', 'release', 'create'):
-            for stack_tip in ('true', 'false'):
-                self.assertFalse(self.passes('skipped', 'true', event, stack_tip), event)
-                self.assertFalse(self.passes('skipped', 'false', event, stack_tip), event)
+            for heavy in ('true', 'false'):
+                self.assertFalse(self.passes('skipped', 'true', event, heavy), event)
+                self.assertFalse(self.passes('skipped', 'false', event, heavy), event)
 
-    def test_failed_or_cancelled_shards_fail_below_the_stack_tip_too(self):
+    def test_failed_or_cancelled_shards_fail_without_the_heavy_gate_too(self):
         for result in ('failure', 'cancelled', ''):
             self.assertFalse(self.passes(result, 'false', 'pull_request', 'false'), result)
 
