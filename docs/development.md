@@ -95,62 +95,42 @@ only to that ref and its children, and never to other forks' runs (GitHub's defa
 CI keeps the heavy suite out of the `check` job so every PR finishes in reasonable time. The `check` job (static checks
 and the plain Go test suite) always runs; `-race` never runs on a pull request or a push
 (Spec 039), only in the scheduled race workflow. The two `Git/jj conformance` lanes live in the reusable
-workflow `.github/workflows/conformance.yml`. `ci.yml` calls it for every push to `main` and every
-pull request, and the shards run only for the tip of a stack (below): `check` never runs
-`internal/workspace` (a plain run exceeds the 40 minute timeout), so a PR that skips the shards
-leaves that package to the tip. Documentation-only PRs skip the shards too (below). The separate workflow
-`ci-full.yml` runs it when the `ci-full` label is applied (a `labeled` event), so labelling
-never re-runs `check`; it runs both lanes, so the `current` lane runs a second time (about 68
-runner minutes) next to the run `ci.yml` already made. An unlabelled pull request runs only the `current` lane; a PR with the
-`ci-full` label runs both lanes on every push (`ci.yml`) and when labelled (`ci-full.yml`), and
-the `minimum` lane also runs on pushes to `main` (the post-merge gate) and in the scheduled race
-workflow. The label also forces the shards on a PR below the tip; it is optional and mainly gets the `minimum` lane
-early on the tip of a stack (otherwise `main` runs it after the merge). The
-post-merge push to `main` runs everything again. If the `changes` job fails, `conformance`
-is skipped and the required `suite` check does not report, so the merge is blocked (fail closed).
+workflow `.github/workflows/conformance.yml`. `check` never runs `internal/workspace` (a plain run exceeds
+the 40 minute timeout), so that package, the other conformance shards and the real-CLI smoke checks run only in the heavy lane.
 
-Heavy gate on the tip of a stack (owner decision 2026-10-26, "C yes", Spec 039 amendment). The shards run
-for a push to `main`, for every PR whose base is the default branch, for the tip of a stack and for a PR with
-the `ci-full` label. A PR is below the tip when its head branch is the base branch of another open,
-non-Draft PR of this repository whose head is also a branch of this repository. A Draft child does not
-count (authors push early as Draft), so a forgotten Draft child cannot remove the heavy gate. Such a PR runs only the light lane: `check`
-(without `internal/workspace`) and the aggregate `suite`, which passes with the skipped shards, the same
-mechanism as for a documentation-only PR, so both required checks (`check` and
-`Git/jj conformance (current) / suite`) still report on every PR. The `changes` job decides this with
-`scripts/ci_stack.py`: it lists the open PRs with `gh api` (the job alone has `pull-requests: read`) and
-looks for a child. Branch names reach the script only through the environment. Any doubt means tip, so the
-shards run: a fork PR, a failed or incomplete listing, a listing without the PR itself, the default
-branch as head branch, a child from a fork. If the `changes` job itself fails, `conformance` is skipped
-and `suite` does not report, so the merge is blocked.
+Heavy gate by label (owner decision 2026-11-01, variant B, Spec 039 amendment; it replaces the stack-tip rule of 2026-10-26).
+The heavy lane runs (a) for every push to `main` (`ci.yml`, both lanes) and (b) for a pull request that carries the `ci-full`
+label (`ci-full.yml`, both lanes, started by the `labeled` event). `ci.yml` never starts the shards for a pull request and
+never reads the label, so no stale label can start a run on a later head. Every pull request runs the light lane: `check`
+(without `internal/workspace`) and the aggregate `Git/jj conformance (current) / suite`, which passes with skipped shards for a
+pull request, so both required checks still report. Documentation-only pull requests skip the heavy lane as before, unless a
+reviewer labels one: an explicit label is never ignored.
 
-When the decision is made: when a run starts, that is a new push (also one that merging a child into this
-PR's branch makes), a close and reopen, or "Re-run all jobs" in the Actions UI (the lookup is repeated live;
-re-running only the conformance job reuses the stale `changes` output). Opening, editing, retargeting or
-closing a child, a child's flip from Draft to Ready, and a merge that does not move this PR's head, start no run of this one, and no other
-trigger exists. So (1) a PR that was a tip keeps its earlier heavy run when a child appears later, and its
-next push runs only the light lane. (2) When a child is closed without merging, the parent's earlier
-light result stays: it has no heavy run for its head. Re-run all jobs or close and reopen it before merging
-it. (3) Merging the bottom PR by rebase makes GitHub retarget its child to `main`; that edit starts no run.
-The restack push that a rebase-merge needs does, and then the PR is on `main` or the tip and runs the shards.
+Who sets and removes the label. The independent reviewer sets `ci-full` when the verdict is CLEAR, on the exact head of the top of
+the stack (for an unstacked pull request, on its head). The reviewer first checks that the head is still the reviewed SHA. The
+workflow `ci-full-reset.yml` removes the label on every `synchronize` event (every push to the pull request branch), so a new head
+needs a new CLEAR and a new label. It uses the plain `pull_request` trigger with `pull-requests: write` on one job, checks out
+and runs no pull request code, and skips fork pull requests (their token is read-only), where the reviewer must verify the head
+before trusting a label. If a reviewer labels the new head before the reset of an earlier push has run, the reset can remove that
+label: check the label after a push and set it again.
 
-Residual risk and the rule for owner and authors. The heavy run of the tip covers the commits below it only
-when the tip contains the parent's CURRENT head: a push to the parent after the child exists runs only the
-light lane, and the tip does not contain that commit until it is restacked. The tip's shards also run
-against its own base (the parent branch), never against `main`, and the required `suite` of a PR below the
-tip is green without shards, so GitHub does not enforce the rule. Therefore: before merging a PR below the
-tip, the latest heavy run of the tip must be green on a head that contains the parent's current head
-(restack the tip after every push below it); otherwise apply the `ci-full` label to the parent, which runs
-the shards for it. After a web rebase-merge the rewritten SHAs on `main` meet the shards only in the
-post-merge run on `main`: that run is the last gate. With `stw land --stack` (one fast-forward of the tip) the
-tip's run covers the chain exactly.
+Stack safeguard. `scripts/ci_stack.py` stays. When the label is applied, the `stack` job of `ci-full.yml` lists the open PRs with
+`gh api` (this job alone has `pull-requests: read`) and, if the head branch of the labeled PR is the base branch of another open,
+non-Draft PR of this repository (a head from a branch of this repository, not a fork), writes a warning annotation and a step
+summary line. The shards still run (an explicit label wins over a guess), and the job gates nothing. Any doubt or failed lookup
+counts as a tip and gives no report. Branch names reach the script only through the environment.
 
-Cost: one push to a tip or a PR on `main` runs about 78 runner minutes (`check` about 10, six `current`
-shards about 68) in 7 concurrent jobs, wall time about 14 minutes. A PR below the tip runs `check` and `suite`
-about 10 minutes in 2 concurrent jobs (`check` and `suite`; plus the small `changes` job). A stack of three
-PRs therefore costs one heavy run plus two light ones per push cycle (about 98 runner minutes; 7 + 2 + 2 =
-11 concurrent jobs, not counting `changes`) instead of three heavy ones (about 234 minutes, 21 jobs, over
-the limit of 20 concurrent jobs). A newer push cancels the older run
-of the same PR; batch fixes into one push.
+Residual risk and the rule for reviewers and the owner. The heavy run of the tip covers the commits below it only when the tip
+contains the parent's CURRENT head: restack the tip after every push below it, and label only after that. The tip's shards run
+against its own base (the parent branch), never against `main`, and the required `suite` of a pull request without the label is
+green without shards, so GitHub does not enforce the rule. After a web rebase-merge the rewritten SHAs on `main` meet the shards only
+in the post-merge run on `main`: that run is the last gate. `stw land --stack` (one fast-forward of the tip) is only documented
+(Spec 043) and not implemented; with it the tip's run would cover the chain exactly.
+
+Cost: a pull request without the label runs `check` and `suite` (about 10 minutes in 2 concurrent jobs, plus the small `changes`
+job). A label run adds both lanes (the `current` lane alone is about 68 runner minutes in 6 shards; the `minimum` lane is not measured here)
+once per labeled head; a push to `main` runs the same. A newer push cancels the older `ci.yml` run of the same PR; batch fixes
+into one push. A labeled run of `ci-full.yml` for an older head is not cancelled by a push (its group does not cancel in progress).
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
@@ -162,8 +142,8 @@ scripts read them), and any rename out of those paths. An empty or unreadable ch
 checkout that is not a merge commit and every other event (push to `main`, `workflow_dispatch`,
 schedule, tags, the `ci-full` label run) give `false`. There is no `paths-ignore`, so every
 workflow still starts and reports. `conformance.yml` receives `docs_only`; its `shard` job is
-skipped only when `docs_only` is `true` or `stack_tip` is `false` on a `pull_request`, and the lane's `suite` job (always
-runs) passes on `success`, or on `skipped` only for such a pull request (docs-only or below the tip of a stack); failed,
+skipped only when `docs_only` is `true` or `heavy` is `false` on a `pull_request` (`ci.yml` always passes `false` for a pull request), and the lane's `suite` job (always
+runs) passes on `success`, or on `skipped` only for such a pull request (docs-only or without the label run); failed,
 cancelled or skipped-otherwise fails it. `check` (static and documentation checks, the Go test
 suite) and the docs, architecture and spec checks inside it always run.
 T1 tests only what a pull request can affect (Spec 039). The `changes` job also runs
@@ -193,8 +173,9 @@ Check names of the conformance jobs are prefixed by the calling job: a lane repo
 `Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`), from `ci.yml` and from
 `ci-full.yml` alike. Classic branch protection is not used; the ruleset `main` (id 25683357)
 requires exactly `check` and `Git/jj conformance (current) / suite`. Never require
-`Git/jj conformance (minimum) / suite`: an unlabelled pull request does not run the `minimum`
-lane, so the check would stay pending forever. The `minimum` lane runs on pushes to `main`, for
+`Git/jj conformance (minimum) / suite`: a pull request without a label run does not run the `minimum`
+lane, so the check would stay pending forever. A labeled head has two `current` suite reports with the same name
+(`ci.yml` skipped-pass, `ci-full.yml` real); how the ruleset treats duplicates is not verified here. The `minimum` lane runs on pushes to `main`, for
 the `ci-full` label and in the scheduled race runs.
 The cache key also hashes `scripts/backend-releases.json`.
 
@@ -209,8 +190,8 @@ lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
 list none. Whenever `check` runs Go tests (not for
 documentation-only PRs; with reason `packages` only the affected list), it leaves out
-`internal/workspace`, which the shards run with jj (the `current` lane on pull requests, both
-lanes on `main` and with `ci-full`). The conformance caller has no `if:` and `check` no tier switch, so the two
+`internal/workspace`, which the shards run with jj (both lanes on `main` and for a pull request with
+the `ci-full` label; an unlabeled pull request does not run it). The conformance caller has no `if:` and `check` no tier switch, so the two
 cannot drift apart. The weights are local
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change
 (the fixture speed-up work will do that).
