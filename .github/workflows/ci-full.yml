@@ -1,8 +1,10 @@
 name: CI full
 
-# Applying the ci-full label to a pull request runs the full conformance lanes for it, e.g. for
-# the top PR of a stack. This is a separate workflow so that labelling never re-runs the check
-# job of ci.yml. Later pushes to a labelled PR run both lanes through ci.yml itself.
+# Applying the ci-full label to a pull request runs the heavy lane (both conformance lanes) for it
+# (owner decision 2026-11-01, Spec 039): the independent reviewer sets the label on a CLEAR verdict,
+# on the exact head of the top of the stack. This is the only way a pull request runs the shards;
+# ci.yml never reads the label. A push removes the label again (ci-full-reset.yml), so a new head
+# needs a new CLEAR and a new label. Labelling never re-runs the check job of ci.yml.
 on:
   pull_request:
     types: [labeled]
@@ -15,6 +17,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Safeguard (scripts/ci_stack.py): the label belongs on the top of a stack. When this pull request's head
+  # branch is the base branch of another open, non-Draft pull request, the run says so in an annotation and
+  # the summary. The shards still run (an explicit label wins), and this job gates nothing.
+  stack:
+    if: github.event.label.name == 'ci-full'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Branch names are untrusted data: they reach the script only through the environment and are
+      # never part of a shell line. A failed lookup removes the file and counts as a tip (no report).
+      - name: Report a label below the tip of a stack
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.event.pull_request.base.repo.full_name }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          prs="$RUNNER_TEMP/open-prs.json"
+          gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+            --jq '.[] | {number, draft, base_ref: .base.ref, base_repo: .base.repo.full_name, head_repo: .head.repo.full_name}' \
+            > "$prs" || rm -f "$prs"
+          decision="$(python3 -B scripts/ci_stack.py --prs-file "$prs")"
+          if [ "$decision" = is_stack_tip=false ]; then
+            msg="ci-full is set on a pull request below the tip of a stack: the label belongs on the top pull request. The shards run anyway."
+            echo "::warning title=ci-full below the tip of a stack::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "$decision: the label is on the tip of a stack or on an unstacked pull request" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   conformance:
     name: Git/jj conformance (${{ matrix.lane }})
     if: github.event.label.name == 'ci-full'
