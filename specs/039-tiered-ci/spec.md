@@ -10,7 +10,7 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > `internal/workspace` plain and timed out after 40 minutes (PR 299, run 40309873142); that cost about 78 runner minutes in 7 jobs per
 > push, and a restack of three PRs needs about 21 jobs (limit 20).
 >
-> **Correction 2026-10-26 (owner decision "C yes": the heavy conformance gate runs only on the tip of a stack).** This restores the
+> **Correction 2026-10-26 (superseded on 2026-11-01 by the amendment below; owner decision "C yes": the heavy conformance gate runs only on the tip of a stack).** This restores the
 > original wish below. The `current` shards run for a push to `main`, for every pull request whose base is the default branch, for the
 > tip of a stack (a pull request whose head branch is not the base branch of any open pull request) and for a pull request with the
 > `ci-full` label; documentation-only pull requests still skip them. A pull request whose head branch **is** the base branch of
@@ -28,6 +28,22 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > request below the tip, the tip's latest heavy run must be green on a head that contains the parent's current head, or the parent carries
 > `ci-full`; after a web rebase-merge the post-merge run on `main` is the last gate; `stw land --stack` (one fast-forward of the tip)
 > removes the gap.
+
+> **Amendment 2026-11-01 (owner decision, variant B: the heavy gate is label-driven; it supersedes the "Correction 2026-10-26" above).**
+> The heavy lane (the Git/jj conformance shards, which include the end-to-end and long tests) no longer runs automatically on a pull
+> request, whatever its base or position in a stack. It runs (a) for every push to `main` and (b) for a pull request that carries the
+> `ci-full` label, both lanes (`minimum` and `current`), started by the `labeled` event in `ci-full.yml`. The independent reviewer sets the
+> label when the verdict is CLEAR, on the exact head of the top of the stack. `ci.yml` never starts the shards for a pull request and
+> never reads the label for that purpose, so a push cannot reuse a stale label. The light lane (`check` and the aggregate
+> `Git/jj conformance (current) / suite`, which passes with skipped shards for a pull request) runs on every pull request. A
+> documentation-only pull request that is labeled still runs the shards (an explicit label is never ignored). A new workflow,
+> `ci-full-reset.yml`, removes the label on every `synchronize` event, so a new head needs a new CLEAR and a new label. The label is the
+> evidence for one head only; the rule "the tip's latest heavy run must contain the parent's current head" of the correction above stays,
+> now as the reviewer's duty when labeling. `scripts/ci_stack.py` stays as a safeguard: when the label is applied to a pull request whose
+> head branch is the base branch of another open, non-Draft pull request, `ci-full.yml` reports it as a warning annotation and in the step
+> summary and still runs the shards (an explicit label is more reliable than a guess, and a missing run costs more than a redundant one).
+> The `changes` job of `ci.yml` no longer looks up pull requests and loses `pull-requests: read`. Cost: a pull request without the label
+> costs about 10 runner minutes (2 jobs); a label run costs both lanes (the `current` lane alone is about 68 runner minutes) once per reviewed head.
 
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 
