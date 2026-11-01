@@ -132,15 +132,19 @@ func WithRulesEnvironment(o Options) Options {
 func validateRulesOptions(o Options) error {
 	if o.RulesPath != "" {
 		p := o.RulesPath
+		name := "--rules-path"
+		if o.RulesPathSource == "env" {
+			name = "STW_RULES_PATH"
+		}
 		switch {
 		case len(p) > 4096 || !utf8.ValidString(p) || strings.ContainsRune(p, 0):
-			return errors.New("--rules-path must be valid UTF-8 text without NUL, at most 4096 bytes")
+			return errors.New(name + " must be valid UTF-8 text without NUL, at most 4096 bytes")
 		case strings.HasPrefix(p, "-"):
-			return errors.New("--rules-path must not start with \"-\"; prefix it with ./")
+			return errors.New(name + " must not start with \"-\"; prefix it with ./")
 		}
 		for _, part := range strings.Split(filepath.ToSlash(p), "/") {
 			if part == ".." {
-				return errors.New("--rules-path must not contain \"..\"")
+				return errors.New(name + " must not contain \"..\"")
 			}
 		}
 		if o.RulesPathSource != "" && o.RulesPathSource != "flag" && o.RulesPathSource != "env" {
@@ -319,12 +323,18 @@ func (s *session) updateRules(ctx context.Context, root, e env, r *Rules, def, u
 		rulesBeforeMerge(e.dir)
 	}
 	// The checks ran on this exact commit; merge exactly it, never a ref that could have moved. --ff-only makes git itself
-	// refuse anything that is not a fast-forward to it, so HEAD is that commit after a success. Git's hooks run (post-merge),
-	// as for every other change of stw sync.
+	// refuse anything that is not a fast-forward to it, so HEAD is that commit right after the merge, but Git's hooks run (post-merge,
+	// as for every other change of stw sync) and may move it: HEAD is compared again below.
 	out, err := e.g(ctx, "-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", upOID)
 	newOID := e.revParse(ctx, e.dir, "HEAD")
 	if err != nil || out.Code != 0 || newOID == "" {
 		reason := "git merge --ff-only failed: " + firstLine(out.Diagnostic+"\n"+out.Out)
+		_ = j.finish(i, stateFailed, "", "", reason)
+		return failed(reason)
+	}
+	if newOID != upOID {
+		// A hook (post-merge) moved HEAD after the merge: the checked commit is not what the checkout holds now.
+		reason := fmt.Sprintf("HEAD is %s after the merge, not the checked commit %s (a hook moved it); the new commits are not verified", newOID[:min(7, len(newOID))], upOID[:7])
 		_ = j.finish(i, stateFailed, "", "", reason)
 		return failed(reason)
 	}

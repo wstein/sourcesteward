@@ -734,3 +734,40 @@ func TestRulesMergeIsFastForwardOnly(t *testing.T) {
 		t.Fatalf("a merge commit was made: %v", parents)
 	}
 }
+
+// A post-merge hook runs after the merge (Spec 032) and can move HEAD: the result must not claim the checked commit then.
+func TestRulesFailsWhenAHookMovesHeadAfterTheMerge(t *testing.T) {
+	f := newRulesFixture(t)
+	f.publish(t, "a.md", owner, owner)
+	hookScript(t, filepath.Join(f.checkout, ".git"), "post-merge", "git -c user.name=X -c user.email=x@x commit -q --allow-empty -m unchecked\n")
+	checked := runGit(t, f.pusher, "rev-parse", "HEAD")
+	r := f.report(t, f.options(func(o *Options) { o.Rules = true }))
+	moved := f.head(t)
+	if moved == checked {
+		t.Fatal("the hook did not move HEAD")
+	}
+	if r.Outcome != OutcomeFailed || r.NewOID != nil || r.Reason == nil || !strings.Contains(*r.Reason, checked[:7]) || !strings.Contains(*r.Reason, moved[:7]) {
+		t.Fatalf("%s", dump(r))
+	}
+	for _, n := range r.Notes {
+		if strings.Contains(n, "applies to NEW sessions") {
+			t.Fatalf("success note on a failed update: %q", n)
+		}
+	}
+}
+
+// The message names where the invalid path came from.
+func TestRulesPathErrorsNameTheirSource(t *testing.T) {
+	for _, tc := range []struct{ source, bad, want string }{
+		{"env", "../x", "STW_RULES_PATH"}, {"env", "-x", "STW_RULES_PATH"}, {"env", "a\x00b", "STW_RULES_PATH"},
+		{"flag", "../x", "--rules-path"}, {"flag", "-x", "--rules-path"}, {"flag", "a\x00b", "--rules-path"},
+	} {
+		err := ValidateOptions(Options{RulesPath: tc.bad, RulesPathSource: tc.source})
+		if err == nil || !strings.HasPrefix(err.Error(), tc.want) {
+			t.Errorf("%s %q: %v", tc.source, tc.bad, err)
+		}
+		if tc.source == "env" && err != nil && strings.Contains(err.Error(), "--rules-path") {
+			t.Errorf("%q: the environment error names the flag: %v", tc.bad, err)
+		}
+	}
+}
