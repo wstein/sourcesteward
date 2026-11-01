@@ -175,3 +175,25 @@ func TestBuildPlansSkipsUnsafeNames(t *testing.T) {
 		t.Errorf("remote: %+v", s)
 	}
 }
+
+// The fetch and the push of the plan use the remote of the run (--remote); the new base of the lowest
+// level must be that remote's branch as well, not a fixed origin.
+func TestBuildPlansUsesTheRemoteOfTheRunForTheBase(t *testing.T) {
+	plans := BuildPlans("o/a", "upstream", planFixture())
+	if len(plans) != 1 {
+		t.Fatalf("%d plans", len(plans))
+	}
+	low := plans[0].Steps[0]
+	if low.Rebase[0] != "git fetch upstream" || low.Rebase[2] != "git rebase --onto upstream/feat-zero "+sh("e")+" feat-one" {
+		t.Fatalf("rebase of the lowest level: %v", low.Rebase)
+	}
+	if low.Verify[0] != "git range-diff "+sh("e")+".."+sh("6")+" upstream/feat-zero..feat-one" {
+		t.Fatalf("range-diff: %v", low.Verify)
+	}
+	if low.Push != "git push --force-with-lease=feat-one:"+sh("6")+" upstream feat-one" {
+		t.Fatalf("push: %q", low.Push)
+	}
+	if strings.Contains(plans[0].Brief, "origin/") {
+		t.Fatalf("the brief names origin although the remote is upstream:\n%s", plans[0].Brief)
+	}
+}

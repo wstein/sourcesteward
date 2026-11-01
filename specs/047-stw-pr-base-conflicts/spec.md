@@ -42,9 +42,9 @@ A conflict never appears as Ready. A Draft keeps its group `draft` and still sho
 ## Restack plan and agent brief (`--restack-plan`, implies `--conflicts`)
 
 Output only. Per tree with a conflict: the lowest conflicting level and every level above it, bottom first. Per level the commands
-`git fetch`, `git switch <branch>`, `git rebase --onto <new> <old> <branch>` (lowest level: `origin/<base>` and the merge base from the
+`git fetch`, `git switch <branch>`, `git rebase --onto <new> <old> <branch>` (lowest level: `<remote>/<base>`, with the remote of `--remote` (default `origin`), and the merge base from the
 probe; above it: the rebased parent branch and its old head), `git range-diff <old>..<old head> <new>..<branch>` and, separately, the
-push `git push --force-with-lease=<branch>:<old head> origin <branch>` that runs only after the review of the new head. For pull
+push `git push --force-with-lease=<branch>:<old head> <remote> <branch>` that runs only after the review of the new head. For pull
 requests that form a gh stack the same cascade as `gh stack checkout <root>`, `gh stack rebase`, `gh stack push`. A fork head, a name
 that fails the allowlist or a missing SHA gets no commands and a reason.
 
