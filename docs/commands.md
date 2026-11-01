@@ -191,7 +191,7 @@ The default run is the highest run ID, never a file time, so restoring an older 
 
 `stw sync` adds one block for the agent-rules checkout (wstein/agent-rules, the rules every agent session loads) when it
 finds one: `--rules-path PATH`, else `STW_RULES_PATH`, else the one workspace member whose remote is named `agent-rules`.
-Nothing else is searched, and without a checkout and without a request nothing is printed. The line reads `agent-rules:
+Nothing else is searched, and without a checkout and without a request nothing is printed. The ordinary sync never touches that checkout (result `skipped-rules`), also when it is a workspace member or a pinned submodule. The line reads `agent-rules:
 current`, `behind N commits of origin/main`, `ahead`, `diverged`, `dirty`, `not on default branch` or `not found`, with
 "as of last fetch" when the fetch of `origin` did not run or failed. This part only reads.
 
@@ -202,10 +202,11 @@ of `origin/DEFAULT`, and author and committer of every new commit are owner iden
 `--allowed-committer "Name <email>"` adds allowed committers, such as the GitHub rebase-merge committer
 `<login>@users.noreply.github.com`. Anything else is refused with the reason and nothing changes. Before a change the
 new commits and the changed files are listed, with `claude/CLAUDE.md`, `claude/skills/**`, hooks and `install.sh`
-marked `*`; `--plan` stops there. After a change `stw` says that the rules apply to new sessions only and, when
+marked `*`; `--plan` stops there. The update is journaled like a branch change (run ID, recovery ref at the old tip; `stw sync restore PATH` inside the checkout undoes it). After a change `stw` says that the rules apply to new sessions only and, when
 `~/.claude/CLAUDE.md` is not a symlink into the checkout, to run `install.sh --dry-run` first (owner action). `stw` never
 runs `install.sh`, never writes below `~/.claude` and never writes a Git configuration. A refusal exits 0 like a skipped
-repository; a failed update exits 1.
+repository; a failed update exits 1. `stw status --rules [--rules-path PATH]` shows the same line (and the JSON member `rules`); it is
+opt-in, read-only and fetches only with `--fetch`.
 
 ## Show what needs action in the workspace
 

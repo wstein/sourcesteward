@@ -49,5 +49,6 @@
 ## Amendment: agent-rules (issue 363)
 
 - [x] T021 Failing tests then the rules block and `--rules`: states (current, behind, ahead, diverged, dirty, wrong branch, detached, not found, fetch failure), workspace-member and flag detection, fast-forward with sensitive-file marking, dry run, refusals (dirty, colliding untracked, other branch, diverged, foreign author, foreign committer), allowed noreply committer, install detection (symlink, copy, absent), no write to the home directory or the Git configuration; each guard checked by a mutation. Delivered in `internal/stwsync/rules.go`, `internal/cli/sync.go` and the additive `rules` member of the sync schema.
+- [x] T022 Failing tests then the exclusion of the agent-rules checkout from the ordinary sync (mutation: without the exclusion a sync moves it), the journal entry and recovery ref of `--rules`, and `stw status --rules` (opt-in, no fetch without `--fetch`, absent from the document otherwise).
 
 Traceability: FR-001 T002/T006; FR-002 T006/T017; FR-003 T006/T008; FR-004 T010; FR-005 T002/T008/T011; FR-006 T006; FR-007 T005/T019; FR-008 T007; FR-009 T006; FR-010 T013; FR-011 T003; FR-012 T009; FR-013 T016/T018; FR-015 T015; FR-014 T002/T004.
