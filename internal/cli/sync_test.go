@@ -438,3 +438,30 @@ func TestSyncRendersTheSkippedRulesCheckout(t *testing.T) {
 		t.Fatalf("%v %s", err, out)
 	}
 }
+
+// An invalid STW_RULES_PATH must not break a plain sync: it is ignored with a one-line notice. With --rules it is a usage error.
+func TestSyncIgnoresAnInvalidRulesPathFromTheEnvironmentWithoutRules(t *testing.T) {
+	t.Setenv("STW_RULES_PATH", "../x")
+	var got stwsync.Options
+	run := func(args ...string) (int, string, error) {
+		calls := 0
+		cmd := syncCommandWith(func(_ context.Context, o stwsync.Options) stwsync.Result { calls++; got = o; return syncCLIResult() }, nil)
+		var errOut bytes.Buffer
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&errOut)
+		cmd.SetArgs(args)
+		err := cmd.ExecuteContext(context.Background())
+		return calls, errOut.String(), err
+	}
+	calls, notice, err := run()
+	if err != nil || calls != 1 || got.RulesPath != "" || strings.Count(notice, "\n") != 1 || !strings.Contains(notice, "STW_RULES_PATH") {
+		t.Fatalf("%v calls=%d path=%q notice=%q", err, calls, got.RulesPath, notice)
+	}
+	var failure runtimeFailure
+	if calls, _, err = run("--rules"); err == nil || errors.As(err, &failure) || calls != 0 {
+		t.Fatalf("--rules with an invalid environment path: %v calls=%d", err, calls)
+	}
+	if calls, _, err = run("--rules-path", "../x"); err == nil || calls != 0 {
+		t.Fatalf("an invalid --rules-path stays a usage error: %v", err)
+	}
+}
