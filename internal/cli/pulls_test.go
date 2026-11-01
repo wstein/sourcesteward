@@ -244,3 +244,14 @@ func TestPullsMergeableOverTheGuardedReader(t *testing.T) {
 		t.Fatalf("exit %d", status)
 	}
 }
+
+func TestPullsStackOverTheGuardedReader(t *testing.T) {
+	watchEnv(t, true)
+	status, out, errOut := pullsRun(t, pullsForge(t), "--repo", "o/r", "--stack", "--human")
+	if status != 0 || errOut != "" || out != "no stacked pull requests\n\n2 single pull requests not shown\n" {
+		t.Fatalf("%d %q %q", status, out, errOut)
+	}
+	if status, _, _ := pullsRun(t, pullsForge(t), "--repo", "o/r", "--stack", "--mergeable"); status != 2 {
+		t.Fatalf("exit %d", status)
+	}
+}

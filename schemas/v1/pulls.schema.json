@@ -97,6 +97,9 @@
         },
         "mergeable": {
           "type": "boolean"
+        },
+        "stack": {
+          "type": "boolean"
         }
       }
     },
@@ -492,6 +495,33 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/queueEntry"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stack": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "trees",
+            "singles"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "trees": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/stackNode"
+              }
+            },
+            "singles": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         },
         {
@@ -1168,6 +1198,100 @@
             "minimum": 1
           },
           "uniqueItems": true
+        }
+      }
+    },
+    "stackNode": {
+      "type": "object",
+      "required": [
+        "repo",
+        "number",
+        "title",
+        "url",
+        "draft",
+        "group",
+        "checks",
+        "review",
+        "hints",
+        "base",
+        "head_ref",
+        "children"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "draft": {
+          "type": "boolean"
+        },
+        "group": {
+          "enum": [
+            "ready",
+            "checks",
+            "conflict",
+            "draft",
+            "blocked"
+          ]
+        },
+        "checks": {
+          "anyOf": [
+            {
+              "enum": [
+                "none",
+                "pending",
+                "green",
+                "red"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/reviewState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hints": {
+          "$ref": "#/$defs/hints"
+        },
+        "base": {
+          "$ref": "#/$defs/str"
+        },
+        "head_ref": {
+          "$ref": "#/$defs/str"
+        },
+        "children": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/stackNode"
+          }
         }
       }
     }
