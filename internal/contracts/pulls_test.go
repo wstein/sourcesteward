@@ -245,7 +245,7 @@ func TestPullsSchemaRejectsBrokenReviewMembers(t *testing.T) {
 
 func queueEntry() map[string]any {
 	return map[string]any{"position": 1, "repo": "o/r", "number": 4, "title": "t", "url": "https://github.com/o/r/pull/4", "head": strings.Repeat("a", 40),
-		"review": "clear", "reason": "CLEAR for head aaaaaaa per comment 2026-11-01T09:00Z, checks green, mergeable clean, base main", "then": []any{5, 6}}
+		"review": "clear", "reason": "CLEAR for head aaaaaaa per OWNER comment 2026-11-01T09:00Z, checks green, mergeable clean, base main", "then": []any{5, 6}}
 }
 
 func withQueue(t *testing.T, fn func(e, m map[string]any)) string {

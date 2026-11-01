@@ -90,7 +90,11 @@ func reason(r pulls.Row) string {
 	if r.MergeableState != nil {
 		state = *r.MergeableState
 	}
-	return fmt.Sprintf("%s for head %s per comment %s, checks %s, mergeable %s, base %s", verdict, short(r.Head), at, checks, state, r.Base)
+	by := "comment"
+	if r.Review.Association != "" {
+		by = r.Review.Association + " comment"
+	}
+	return fmt.Sprintf("%s for head %s per %s %s, checks %s, mergeable %s, base %s", verdict, short(r.Head), by, at, checks, state, r.Base)
 }
 
 func short(sha string) string {

@@ -107,7 +107,7 @@ stw pulls --mergeable --json | jq '.owner_queue[] | .repo + "#" + (.number|tostr
 The owner list answers "what can I merge now" for the owner, who decides and merges. It reads like the list and prints the rows with
 `ready-mergeable` per repository (sorted by name), oldest `created_at` first, then by number. Because `ready-mergeable` needs the default
 branch as base, only the bottom of a stack qualifies. Each entry has a reason built from facts, for example `CLEAR for head 3f2a9c1 per
-comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (`CLEAR (carried from <sha>)` after a carry-over), and `then: #13, #14`,
+MEMBER comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (the association of the decisive comment; only comments of an owner, member or collaborator count, so a stranger's line never makes a pull request mergeable) (`CLEAR (carried from <sha>)` after a carry-over), and `then: #13, #14`,
 the open pull requests that follow it (those based on its head branch, transitively; the head branch of a fork pull request is not a branch of
 the repository). The last line counts the non-draft pull requests with `base-not-default` as waiting for a parent. The JSON keeps the groups of the
 list and adds `owner_queue` (null without the flag) and `summary.waiting_for_parent`. `--mergeable` cannot be combined with `--review`,

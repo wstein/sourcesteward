@@ -160,3 +160,39 @@ func TestExecuteMergeableEscapesUntrustedTitles(t *testing.T) {
 		t.Fatalf("%v %q", err, out)
 	}
 }
+
+func TestExecuteMergeableListsNoPullRequestWhoseCLEARIsAStrangers(t *testing.T) {
+	src := stackSource()
+	// #4 and #1 are listed with the CLEAR of the owner; the CLEAR of #4 is replaced by one of a stranger.
+	for _, assoc := range []string{"NONE", "CONTRIBUTOR", "FIRST_TIME_CONTRIBUTOR", ""} {
+		comments := src.fakeSource.comments["o/a#4"]
+		comments[0].Association = assoc
+		f := baseFlags()
+		f.Repos, f.JSON, f.Mergeable = []string{"o/a"}, true, true
+		out, _, err := execReview(t, src, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var numbers []int
+		for _, e := range decode(t, out)["owner_queue"].([]any) {
+			numbers = append(numbers, int(e.(map[string]any)["number"].(float64)))
+		}
+		if fmt.Sprint(numbers) != "[1]" {
+			t.Errorf("association %q: owner list %v, a stranger's CLEAR must not make #4 mergeable", assoc, numbers)
+		}
+	}
+}
+
+func TestExecuteMergeableReasonNamesTheAssociation(t *testing.T) {
+	src := stackSource()
+	src.fakeSource.comments["o/a#4"][0].Association = "COLLABORATOR"
+	f := baseFlags()
+	f.Repos, f.Human, f.Mergeable = []string{"o/a"}, true, true
+	out, _, err := execReview(t, src, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, " per COLLABORATOR comment ") || !strings.Contains(out, " per OWNER comment ") {
+		t.Fatalf("the reason names the association of the decisive comment:\n%s", out)
+	}
+}
