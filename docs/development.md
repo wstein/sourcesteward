@@ -120,7 +120,7 @@ workflow `.github/workflows/conformance.yml`. `check` never runs `internal/works
 the 40 minute timeout), so that package, the other conformance shards and the real-CLI smoke checks run only in the heavy lane.
 
 Heavy gate by label (owner decision 2026-11-01, variant B, Spec 039 amendment; it replaces the stack-tip rule of 2026-10-26).
-The heavy lane runs (a) for every push to `main` (`ci.yml`, both lanes) and (b) for a pull request that carries the `ci-full`
+The heavy lane runs (a) for every push to `main` (`ci.yml`, lane `current` only; the `minimum` lane runs in the nightly `race.yml`) and (b) for a pull request that carries the `ci-full`
 label (`ci-full.yml`, both lanes, started by the `labeled` event). `ci.yml` never starts the shards for a pull request and
 never reads the label, so no stale label can start a run on a later head. Every pull request runs the light lane: `check`
 (without `internal/workspace`) and the aggregate `Git/jj conformance (current) / suite`, which passes with skipped shards for a
@@ -150,7 +150,7 @@ in the post-merge run on `main`: that run is the last gate. `stw land --stack` (
 
 Cost: a pull request without the label runs `check` and `suite` (about 10 minutes in 2 concurrent jobs, plus the small `changes`
 job). A label run adds both lanes (the `current` lane alone is about 68 runner minutes in 6 shards; the `minimum` lane is not measured here)
-once per labeled head; a push to `main` runs the same. A newer push cancels the older `ci.yml` run of the same PR; batch fixes
+once per labeled head; a push to `main` runs the `current` lane only. A newer push cancels the older `ci.yml` run of the same PR; batch fixes
 into one push. A labeled run of `ci-full.yml` for an older head is canceled by the next push: `ci-full.yml` also
 triggers on `synchronize` (all its jobs are skipped there) and its group `ci-full-<ref>` cancels in progress, and so does a new `ci-full`
 label event for the same pull request. An unrelated label gets its own group and cancels nothing. The workflow has no `push` trigger, so
@@ -199,7 +199,7 @@ full commit SHA with a version comment, and a workflow without any `uses:` line 
 checked, and any other workflow without actions stays red.
 
 Check names of the conformance jobs are prefixed by the calling job: `ci.yml` reports a lane as
-`Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`; the `current` lane on every pull request, both on `main`),
+`Git/jj conformance (<lane>) / suite` (lane `current` on every pull request and on `main`; the `minimum` lane is not part of `ci.yml`),
 and the label run of `ci-full.yml` reports as `Heavy lane (<lane>) / suite`, a name `ci.yml` never uses. Classic branch
 protection is not used; the ruleset `main` (id 25683357) requires exactly `check` and `Git/jj conformance (current) / suite`.
 Never require `Git/jj conformance (minimum) / suite` or a `Heavy lane` check: a pull request without a label run does not
@@ -208,8 +208,8 @@ report them, so they would stay pending forever.
 The ruleset does NOT block a red `ci-full` run: on a pull request the required `Git/jj conformance (current) / suite` is always
 green (skipped shards). The guideline is therefore a process one (owner line 2026-11-01: pragmatic, tightened once the gate is stable): Ready and merge should have a green `Heavy lane (current) / suite` and
 `Heavy lane (minimum) / suite` of the `ci-full` run on the exact head of the top of the stack. The agent sets Ready after
-that run is green; the owner checks it before the merge. The `minimum` lane also runs on pushes to `main` and in the scheduled
-race runs.
+that run is green; the owner checks it before the merge. The `minimum` lane no longer runs on pushes to `main`; it runs in the
+nightly race runs (a failure only the `minimum` lane shows is found up to a day after the merge).
 The cache key also hashes `scripts/backend-releases.json`.
 
 The heavy `internal/workspace` package is sharded. `scripts/ci_shards.py` lists its top-level
@@ -223,7 +223,7 @@ lane only, so the lane's check name stays stable. The `check` job runs
 `python3 scripts/ci_shards.py check`, which fails if the shards miss a test, run one twice or
 list none. Whenever `check` runs Go tests (not for
 documentation-only PRs; with reason `packages` only the affected list), it leaves out
-`internal/workspace`, which the shards run with jj (both lanes on `main` and for a pull request with
+`internal/workspace`, which the shards run with jj (the `current` lane on `main`, both lanes for a pull request with
 the `ci-full` label; an unlabeled pull request does not run it). The conformance caller has no `if:` and `check` no tier switch, so the two
 cannot drift apart. The weights are local
 non-race seconds from a timed `go test -json` run; refresh them after the heavy tests change

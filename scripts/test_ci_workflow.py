@@ -215,26 +215,18 @@ class TieringTests(unittest.TestCase):
         self.assertNotRegex(text, r'(?m)^    if:')
         self.assertIn('uses: ./.github/workflows/conformance.yml', text)
         self.assertIn(self.LANES, text)
-        self.assertNotIn('lane: [minimum, current]', text)
+        self.assertNotIn('minimum', text)
         self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', text)
 
-    LANES = ("lane: ${{ fromJSON(github.event_name == 'pull_request' "
-             "&& '[\"current\"]' || '[\"minimum\",\"current\"]') }}")
+    LANES = 'lane: [current]'
 
-    def test_pull_requests_of_ci_yml_run_only_the_current_lane_whatever_the_label(self):
-        # The minimum lane gates main after merge, labeled PRs (ci-full.yml) and the race schedule.
-        import json
-        match = re.search(r"lane: \$\{\{ fromJSON\((.+)\) \}\}", job_text('conformance'))
-        self.assertTrue(match)
-        python = match.group(1).replace('github.event_name', 'event')
-        self.assertNotIn('labels', python, 'ci.yml never reads the label for the lanes')
-        python = python.replace('&&', ' and ').replace('||', ' or ')
-        lanes = lambda event, labels=(): json.loads(
-            eval(python, {}, {'event': event, 'labels': list(labels)}))
-        self.assertEqual(lanes('pull_request'), ['current'])
-        self.assertEqual(lanes('pull_request', ['other']), ['current'])
-        self.assertEqual(lanes('pull_request', ['ci-full']), ['current'])
-        self.assertEqual(lanes('push'), ['minimum', 'current'])
+    def test_ci_yml_runs_only_the_current_lane_on_pull_requests_and_on_main(self):
+        # Issue #373: the minimum lane left the push to main; it runs in the nightly race.yml. The required check
+        # name `Git/jj conformance (current) / suite` is unchanged, and the label run keeps both lanes.
+        text = job_text('conformance')
+        self.assertRegex(text, r'(?m)^      matrix:\n        lane: \[current\]\n')
+        self.assertNotIn('fromJSON', text)
+        self.assertNotIn('labels', text, 'ci.yml never reads the label for the lanes')
 
     def test_check_job_always_runs(self):
         self.assertNotRegex(job_text('check'), r'(?m)^    if: (?!\$\{\{ !cancelled\(\) \}\}$)')
