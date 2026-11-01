@@ -302,14 +302,15 @@ class ProseReadsTests(unittest.TestCase):
     """Prose that a Go test reads is not docs-only: its readers run (Spec 039 T1)."""
 
     GRAPH = [pkg(d) for d in ('internal/cli', 'internal/release', 'internal/contracts', 'internal/releaseworkflow',
-                              'internal/watch', 'internal/watchcmd', 'internal/workspace', 'cmd/stw')] + [pkg('.')]
+                              'internal/watch', 'internal/watchcmd', 'internal/workspace', 'internal/stwsync', 'cmd/stw')] + [pkg('.')]
 
     def affected(self, paths):
         return CH.affected_from_paths(paths, self.GRAPH, '/repo')
 
     def test_a_readme_only_change_selects_exactly_its_readers(self):
         self.assertEqual(self.affected(['README.md']),
-                         ('packages', [M + '/internal/release', M + '/internal/releaseworkflow']))
+                         ('packages', [M + '/internal/cli', M + '/internal/release', M + '/internal/releaseworkflow',
+                                       M + '/internal/stwsync']))
 
     def test_a_spec_prose_change_selects_its_reader(self):
         self.assertEqual(self.affected(['specs/027-inventory-limits/data-model.md']), ('packages', [M + '/internal/contracts']))
