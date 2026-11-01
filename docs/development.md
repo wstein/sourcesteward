@@ -36,6 +36,24 @@ private temporary isolation/probe files outside the target. Effects fixtures inc
 files, stale workspaces, divergent operation heads, configuration helpers and attempted
 index/type-file repairs; source checks alone do not establish those guarantees.
 
+## Local runs on macOS
+The Apple `/usr/bin/git` launcher cannot run inside the required executable sandbox, so native
+Git operations fail with `git-sandbox-unavailable` and the tests that use them fail. Install a
+current Git yourself (for example `brew install git`) and put its directory first on PATH
+before `go test ./...`, for example `PATH=/opt/homebrew/bin:$PATH go test ./...`. Nothing in the
+repository installs it.
+
+Some tests skip locally with a reason instead of failing when a tool is missing:
+- The Pages packaging test needs the pinned Hugo (`python3 scripts/install-hugo.py`, or `HUGO`).
+- `scripts/test_release_toml.py` and the release contract tests need Python 3.11+ (`tomllib`);
+  the macOS system Python is 3.9. Install a newer `python3` and put it first on PATH.
+- The hostile-branch pins test needs a file system that accepts non-UTF-8 names (APFS does not).
+- Tidy plan-set fixtures that need a worktree below `/tmp/whr*` skip where `/tmp` is a symlink
+  (macOS: `/private/tmp`).
+
+Under `GITHUB_ACTIONS` the Hugo and `tomllib` tests fail instead of skipping, so CI cannot
+silently lose them. `actionlint` appears only in verification records; no test or script calls it.
+
 ## Build the local CLI
 
 ```sh
