@@ -56,17 +56,36 @@ func (b *limited) Write(p []byte) (int, error) {
 	return b.Buffer.Write(p)
 }
 
+// networkEnv are the only GIT_ variables that pass: they select how the one fetch reaches the remote.
+// Every other GIT_ variable is dropped (repository selection, GIT_CONFIG_*, GIT_DIFF_OPTS,
+// GIT_EXTERNAL_DIFF, GIT_PAGER, GIT_EXEC_PATH, GIT_TRACE*, GIT_ATTR_SOURCE, GIT_NOTES_REF and more).
+var networkEnv = map[string]bool{"GIT_SSH": true, "GIT_SSH_COMMAND": true, "GIT_SSH_VARIANT": true, "GIT_ASKPASS": true, "GIT_SSL_CAINFO": true, "GIT_SSL_CAPATH": true, "GIT_PROXY_COMMAND": true}
+
+// environment is the process environment without every GIT_ variable but networkEnv, plus fixed
+// values. The global and system configuration files are replaced by the null device, so only the
+// configuration of the repository itself (its url, extensions, local settings) still applies.
 func environment() []string {
 	var env []string
 	for _, kv := range os.Environ() {
 		name, _, _ := strings.Cut(kv, "=")
-		switch name {
-		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_PREFIX":
+		if strings.HasPrefix(name, "GIT_") && !networkEnv[name] {
 			continue
 		}
 		env = append(env, kv)
 	}
-	return append(env, "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C")
+	return append(env, "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C",
+		"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_ATTR_NOSYSTEM=1", "GIT_PAGER=cat")
+}
+
+// pinnedConfig fixes, per call and without writing any configuration, the keys of the repository's
+// own configuration that change diff, log or fetch behavior and have no flag. The keys that have a
+// flag are pinned by patchFlags and by the guard.
+var pinnedConfig = []string{
+	"core.fsmonitor=false", "core.hooksPath=" + os.DevNull, "gc.auto=0", "maintenance.auto=false",
+	"core.quotePath=true", "core.bigFileThreshold=512m", "core.attributesFile=" + os.DevNull,
+	"diff.suppressBlankEmpty=false", "diff.wsErrorHighlight=none", "diff.mnemonicPrefix=false", "diff.noprefix=false",
+	"log.showRoot=true", "log.follow=false", "log.mailmap=false",
+	"core.notesRef=refs/notes/commits", "i18n.commitEncoding=UTF-8", "core.abbrev=no", "fetch.writeCommitGraph=false",
 }
 
 const (
@@ -78,10 +97,16 @@ const (
 // FETCH_HEAD, no submodules, and an empty refmap so that a configured remote.<name>.fetch writes nothing.
 var fetchFlags = []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--refmap=", "--"}
 
+// patchFlags are the flags both the diff and the log vector carry. They fix every output option that
+// has a flag; the keys without a flag are fixed by pinnedConfig.
+var patchFlags = []string{"--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--full-index",
+	"--ignore-submodules=none", "--submodule=short", "--no-relative", "-U3", "--inter-hunk-context=0", "--diff-algorithm=myers",
+	"--indent-heuristic", "--src-prefix=a/", "--dst-prefix=b/", "--no-color-moved", "-O" + os.DevNull}
+
 // diffFlags and logFlags are the exact leading flags of the diff and the log vector.
 var (
-	diffFlags = []string{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--ignore-submodules=none", "--submodule=short"}
-	logFlags  = []string{"log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--ignore-submodules=none", "--submodule=short", "-p", logFormat, "--end-of-options"}
+	diffFlags = append([]string{"diff"}, patchFlags...)
+	logFlags  = append(append([]string{"log", "--reverse", "--no-merges", "--no-show-signature", "--no-notes", "--encoding=UTF-8"}, patchFlags...), "-p", logFormat, "--end-of-options")
 )
 
 // shape reports whether args is exactly fixed followed by one argument per validator.
@@ -153,7 +178,11 @@ func (r *Runner) run(ctx context.Context, stdin []byte, args ...string) (result,
 	}
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
-	full := append([]string{"--no-replace-objects", "--literal-pathspecs", "-c", "core.hooksPath=" + os.DevNull, "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", r.Dir}, args...)
+	full := []string{"--no-replace-objects", "--no-pager", "--literal-pathspecs"}
+	for _, kv := range pinnedConfig {
+		full = append(full, "-c", kv)
+	}
+	full = append(append(full, "-C", r.Dir), args...)
 	cmd := exec.CommandContext(ctx, r.Bin, full...)
 	cmd.Env = environment()
 	if stdin != nil {

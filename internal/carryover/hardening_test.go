@@ -87,9 +87,19 @@ func TestEnvironmentDropsTheRepositorySelectingVariables(t *testing.T) {
 		t.Setenv(n, "/nonexistent/"+n)
 	}
 	t.Setenv("KEEP_ME", "1")
+	for _, n := range []string{"GIT_CONFIG_COUNT", "GIT_CONFIG_PARAMETERS", "GIT_DIFF_OPTS", "GIT_EXTERNAL_DIFF", "GIT_PAGER", "GIT_EXEC_PATH", "GIT_TRACE", "GIT_ATTR_SOURCE", "GIT_NOTES_REF"} {
+		t.Setenv(n, "hostile")
+		names = append(names, n)
+	}
+	t.Setenv("GIT_SSH_COMMAND", "ssh -o Batch=yes")
 	env := strings.Join(environment(), "\n")
+	for _, want := range []string{"GIT_SSH_COMMAND=ssh -o Batch=yes", "GIT_CONFIG_GLOBAL=" + os.DevNull, "GIT_CONFIG_SYSTEM=" + os.DevNull, "GIT_CONFIG_NOSYSTEM=1", "GIT_PAGER=cat"} {
+		if !strings.Contains(env, want) {
+			t.Errorf("%s missing", want)
+		}
+	}
 	for _, n := range names {
-		if strings.Contains(env, n+"=") {
+		if strings.Contains(env, n+"=/nonexistent") || strings.Contains(env, n+"=hostile") {
 			t.Errorf("%s is passed to Git", n)
 		}
 	}
@@ -142,30 +152,41 @@ func TestGuardRefusesAnExtraArgumentOnEveryShape(t *testing.T) {
 	}
 }
 
-func TestDiffAndLogPinTheSubmoduleAndBinaryFlags(t *testing.T) {
-	for _, flag := range []string{"--binary", "--ignore-submodules=none", "--submodule=short"} {
+func TestDiffAndLogPinEveryOutputFlag(t *testing.T) {
+	for _, flag := range append(append([]string{}, patchFlags...), "--no-notes", "--encoding=UTF-8", "--no-show-signature") {
 		for name, flags := range map[string][]string{"diff": diffFlags, "log": logFlags} {
+			if name == "diff" && (flag == "--no-notes" || flag == "--encoding=UTF-8" || flag == "--no-show-signature") {
+				continue
+			}
+			var without []string
 			found := false
 			for _, f := range flags {
-				found = found || f == flag
+				if f == flag {
+					found = true
+					continue
+				}
+				without = append(without, f)
 			}
 			if !found {
 				t.Errorf("%s vector lacks %s", name, flag)
+				continue
 			}
-			var without []string
-			for _, f := range flags {
-				if f != flag {
-					without = append(without, f)
-				}
-			}
-			tail := sha("1") + ".." + sha("2")
-			args := append(append([]string{}, without...), tail)
+			args := append(append([]string{}, without...), sha("1")+".."+sha("2"))
 			if name == "diff" {
 				args = append(append([]string{}, without...), sha("1")+"..."+sha("2"), "--")
 			}
 			if err := guard(args); err == nil {
 				t.Errorf("%s without %s is allowed", name, flag)
 			}
+		}
+	}
+	for _, want := range []string{"--no-relative", "-U3"} {
+		found := false
+		for _, f := range patchFlags {
+			found = found || f == want
+		}
+		if !found {
+			t.Errorf("patchFlags lack %s", want)
 		}
 	}
 }
