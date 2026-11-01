@@ -366,7 +366,8 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(mode) && searchReadEndpoint(endpoint)) ||
 		(mode.admitsIssueReads() && issueReadEndpoint(endpoint)) || (admitsIssueSearch(mode) && issueSearchReadEndpoint(endpoint)) ||
 		(admitsLand(mode) && landReadEndpoint(endpoint)) ||
-		(mode.admitsLintReads() && lintReadEndpoint(endpoint))
+		(mode.admitsLintReads() && lintReadEndpoint(endpoint)) ||
+		(mode.admitsReviewReads() && reviewReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {

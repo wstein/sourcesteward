@@ -395,7 +395,7 @@ func (r *WatchReader) fetch(parent context.Context, kind WatchKind, endpoint, et
 	if !validETag(etag) {
 		return WatchResponse{}, malformed("invalid ETag")
 	}
-	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) && !(r.mode.admitsIssueReads() && issueReadEndpoint(endpoint)) && !(admitsIssueSearch(r.mode) && issueSearchReadEndpoint(endpoint)) && !(admitsLand(r.mode) && landReadEndpoint(endpoint)) && !(r.mode.admitsLintReads() && lintReadEndpoint(endpoint)) {
+	if !watchReadEndpoint(endpoint) && !transportReadEndpoint(endpoint) && !(admitsSearch(r.mode) && searchReadEndpoint(endpoint)) && !(r.mode.admitsIssueReads() && issueReadEndpoint(endpoint)) && !(admitsIssueSearch(r.mode) && issueSearchReadEndpoint(endpoint)) && !(admitsLand(r.mode) && landReadEndpoint(endpoint)) && !(r.mode.admitsLintReads() && lintReadEndpoint(endpoint)) && !(r.mode.admitsReviewReads() && reviewReadEndpoint(endpoint)) {
 		return WatchResponse{}, malformed("endpoint is not an allowed watch read")
 	}
 	ctx, cancel := context.WithTimeout(parent, r.RequestTimeout())
