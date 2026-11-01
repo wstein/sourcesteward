@@ -149,7 +149,7 @@ func TestCoAuthoredBy(t *testing.T) {
 }
 
 func TestConventionalCommit(t *testing.T) {
-	bad := []string{"Add the thing", "feat add: x", "feat(): x", "feature: x", "feat:x", "fix(scope) x", "feat: ", "Feat: x"}
+	bad := []string{"Add the thing", "feat add: x", "feat(): x", "feature: x", "feat:x", "fix(scope) x", "feat: ", "Feat: x", "Add feat: x", "WIP fix(a): x"}
 	for _, subject := range bad {
 		in := goodInput()
 		in.Commits[0].Message = subject + "\n\nCo-Authored-By: C <c@d.e>"
@@ -247,6 +247,14 @@ func TestReviewLineFormat(t *testing.T) {
 		"verdict":        strings.Replace(good, "CLEAR", "OK", 1),
 		"patch short":    fmt.Sprintf("Review: CLEAR head=%s patch-id=%s pr=7", headSHA, patchID[:20]),
 		"carried order":  fmt.Sprintf("Carried-over: to=%s from=%s patch-id=%s pr=7", headSHA, headSHA, patchID),
+		"long sha":       fmt.Sprintf("Review: CLEAR head=%s0 patch-id=%s pr=7", headSHA, patchID),
+		"long patch":     fmt.Sprintf("Review: CLEAR head=%s patch-id=%s0 pr=7", headSHA, patchID),
+		"bold key":       "**Review**: CLEAR head=" + headSHA,
+		"no colon":       "Review CLEAR head=" + headSHA,
+		"no colon FIND":  "review findings",
+		"heading only":   "## Review",
+		"heading colon":  "### Review:",
+		"carried bold":   "**Carried-over**: from=" + headSHA,
 		"leading blank":  "\n" + good,
 		"leading space":  " " + good,
 		"lowercase word": strings.Replace(good, "Review", "review", 1),
@@ -286,6 +294,13 @@ func TestReviewCommentLength(t *testing.T) {
 	in.Comments = []Comment{{ID: 4, Body: lines(60)}}
 	if has(Lint(in, cfg()), RuleReviewLength) {
 		t.Errorf("non-review comment limited")
+	}
+	// The other spellings of a review comment are limited too.
+	for _, key := range []string{"**Review**: CLEAR", "Review CLEAR", "## Review", "review findings", "**Carried-over**: x"} {
+		in.Comments = []Comment{{ID: 4, Body: key + "\n" + lines(20)}}
+		if !has(Lint(in, cfg()), RuleReviewLength) {
+			t.Errorf("%q: long review not limited", key)
+		}
 	}
 	// A malformed review line is still a review comment for the length rule.
 	in.Comments = []Comment{{ID: 4, Body: "Review: CLEAR\n" + lines(20)}}
