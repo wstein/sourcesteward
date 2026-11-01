@@ -51,6 +51,11 @@ func tomlToJSON(t *testing.T, path string) map[string]any {
 	if _, err := exec.LookPath("python3"); err != nil {
 		t.Skip("python3 is required for the tomllib reference conversion")
 	}
+	if os.Getenv("GITHUB_ACTIONS") == "" {
+		if err := exec.Command("python3", "-I", "-c", "import tomllib").Run(); err != nil {
+			t.Skip("python3 needs the tomllib module (Python 3.11+); put a newer python3 first on PATH")
+		}
+	}
 	script := "import json,sys,tomllib\nprint(json.dumps(tomllib.load(open(sys.argv[1],'rb'))))"
 	out, err := exec.Command("python3", "-I", "-c", script, path).Output()
 	if err != nil {
