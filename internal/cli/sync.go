@@ -88,7 +88,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			if options.RulesPathSource == "env" && options.RulesPath != "" && !rules {
 				// a plain sync does not use the path: an invalid environment value is ignored, not a usage error
 				if err := stwsync.ValidateOptions(stwsync.Options{RulesPath: options.RulesPath, RulesPathSource: "env"}); err != nil {
-					fmt.Fprintf(cmd.ErrOrStderr(), "stw sync: ignoring STW_RULES_PATH: %s\n", err)
+					fmt.Fprintf(cmd.ErrOrStderr(), "stw sync: ignoring the invalid value: %s\n", err)
 					options.RulesPath = ""
 				}
 			}
