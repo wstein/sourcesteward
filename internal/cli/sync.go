@@ -17,10 +17,12 @@ func syncCommand() *cobra.Command { return syncCommandWith(stwsync.Sync, stwsync
 
 func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result, restore func(context.Context, stwsync.RestoreOptions) stwsync.Result) *cobra.Command {
 	var runID string
-	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, submodules, autostash, noAutostash, prune, noPrune bool
+	var jsonOutput, planOnly, dryRun, rebase, ffOnly, merge, submodules, autostash, noAutostash, prune, noPrune, rules bool
+	var rulesPath string
+	var owners, committers []string
 	var options stwsync.Options
 	command := &cobra.Command{
-		Use:   "sync [restore] [PATH] [--run ID] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--submodules] [--json]",
+		Use:   "sync [restore] [PATH] [--run ID] [--plan] [--rebase|--ff-only|--merge] [--autostash|--no-autostash] [--prune|--no-prune] [--submodules] [--rules [--rules-path PATH] [--owner-identity IDENTITY]... [--allowed-committer IDENTITY]...] [--json]",
 		Short: "Bring the workspace root and its submodules up to date, like git pull",
 		Long: "Do what git pull would do in every repository of the workspace, from any directory inside it: the top-level\n" +
 			"superproject and, depth-first, each initialized submodule (nested ones too; uninitialized ones are reported, never cloned).\n" +
@@ -40,6 +42,14 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			"--submodules also brings each initialized detached (pinned) submodule to the commit the superproject records, when that is a\n" +
 			"fast-forward of its HEAD (git submodule sync and update --no-fetch --checkout; never a clone, fetch or init; the move is reported\n" +
 			"with old and new commit, not journaled and not restored); an uninitialized one or a missing commit is unreachable.\n" +
+			"The agent-rules checkout (the rules every agent session loads) is reported on one extra block when it is found as a workspace\n" +
+			"member whose remote is named agent-rules, or named by --rules-path or STW_RULES_PATH (nothing else is searched): current,\n" +
+			"behind N commits of origin/DEFAULT, ahead, diverged, dirty, not on the default branch or not found, from the same kind of fetch.\n" +
+			"--rules fast-forwards it with git merge --ff-only, and only when its worktree is clean, it is on the default branch, its tip is an\n" +
+			"ancestor of origin/DEFAULT and author and committer of every new commit are owner identities (--owner-identity, repeatable, default\n" +
+			"user.name and user.email of the workspace root; --allowed-committer adds committers such as the GitHub rebase-merge committer).\n" +
+			"Otherwise it refuses with the reason and changes nothing; --plan shows the result without a change. The new commits and changed files\n" +
+			"are listed, with CLAUDE.md, skills, hooks and install.sh marked. stw never runs install.sh and never writes to ~/.claude.\n" +
 			"Each branch change is journaled with a recovery ref under refs/stw/recovery/sync/RUN_ID. Git only: a jj-owned path is refused.\n" +
 			"stw sync restore [PATH] [--run ID] moves each branch the run changed back to its journaled old tip, only where the branch\n" +
 			"still points at the tip the run left and a checked-out worktree is clean (git reset --keep); other branches are reported\n" +
@@ -51,7 +61,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 && args[0] == "restore" {
-				for _, name := range []string{"plan", "dry-run", "rebase", "ff-only", "merge", "autostash", "no-autostash", "prune", "no-prune", "submodules"} {
+				for _, name := range []string{"plan", "dry-run", "rebase", "ff-only", "merge", "autostash", "no-autostash", "prune", "no-prune", "submodules", "rules", "rules-path", "owner-identity", "allowed-committer"} {
 					if cmd.Flags().Changed(name) {
 						return fmt.Errorf("--%s does not apply to stw sync restore", name)
 					}
@@ -72,6 +82,9 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			options.Submodules = submodules
 			options.Autostash = triFlag(autostash, noAutostash)
 			options.Prune = triFlag(prune, noPrune)
+			options.Rules, options.OwnerIdentities, options.AllowedCommitters = rules, owners, committers
+			options.RulesPath, options.RulesPathSource = rulesPath, "flag"
+			options = stwsync.WithRulesEnvironment(options)
 			if err := stwsync.ValidateOptions(options); err != nil {
 				return err
 			}
@@ -90,6 +103,10 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 	flags.BoolVar(&noPrune, "no-prune", false, "Fetch without pruning")
 	flags.StringVar(&runID, "run", "", "With restore: the run ID to undo (default: the latest run)")
 	flags.BoolVar(&submodules, "submodules", false, "Also bring pinned (detached) submodules to the commit the superproject records, when that is a fast-forward: git submodule sync and update --no-fetch, never a clone, fetch or init")
+	flags.BoolVar(&rules, "rules", false, "Fast-forward the agent-rules checkout (merge --ff-only) when it is clean, on the default branch, not diverged and every new commit is by an owner identity; with --plan only say what it would do")
+	flags.StringVar(&rulesPath, "rules-path", "", "The agent-rules checkout (default: STW_RULES_PATH, else the workspace member whose remote is named agent-rules)")
+	flags.StringArrayVar(&owners, "owner-identity", nil, "Owner identity \"Name <email>\" for author and committer of the new rules commits (repeatable; default: user.name and user.email of the workspace root)")
+	flags.StringArrayVar(&committers, "allowed-committer", nil, "Further allowed committer \"Name <email>\", such as the GitHub rebase-merge committer <login>@users.noreply.github.com (repeatable)")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	command.MarkFlagsMutuallyExclusive("rebase", "ff-only", "merge")
 	command.MarkFlagsMutuallyExclusive("autostash", "no-autostash")
@@ -265,6 +282,7 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 			}
 		}
 	}
+	renderRules(line, r.Rules)
 	var counts []string
 	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultUpdated, stwsync.ResultUnreachable, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
 	for _, name := range order {
@@ -293,4 +311,94 @@ func syncBranch(rp stwsync.Repo) string {
 		return "-"
 	}
 	return *rp.Branch
+}
+
+// renderRules prints the agent-rules block: one state line, then the refusal or the update with its commits and files.
+func renderRules(line func(string), r *stwsync.Rules) {
+	if r == nil {
+		return
+	}
+	asOf := ""
+	if r.AsOfLastFetch {
+		asOf = " (as of last fetch)"
+	}
+	def := "origin"
+	if r.DefaultBranch != nil {
+		def = "origin/" + *r.DefaultBranch
+	}
+	var state string
+	switch r.State {
+	case stwsync.RulesCurrent:
+		state = "current"
+	case stwsync.RulesBehind:
+		state = "behind " + plural(r.Behind, "commit", "commits") + " of " + def
+	case stwsync.RulesAhead:
+		state = "ahead " + plural(r.Ahead, "commit", "commits") + " of " + def
+	case stwsync.RulesDiverged:
+		state = fmt.Sprintf("diverged (%d ahead, %d behind %s)", r.Ahead, r.Behind, def)
+	case stwsync.RulesDirty:
+		state = "dirty"
+	case stwsync.RulesNotDefault:
+		state = "not on default branch"
+	default:
+		state = "not found"
+	}
+	if r.Reason != nil && r.Outcome == stwsync.OutcomeNone {
+		state += ": " + *r.Reason
+	}
+	where := ""
+	if r.Path != nil {
+		where = " [" + *r.Path + "]"
+	}
+	line("agent-rules: " + state + asOf + where)
+	switch r.Outcome {
+	case stwsync.OutcomeRefused:
+		reason := "no reason given"
+		if r.Reason != nil {
+			reason = *r.Reason
+		}
+		line("  --rules refused, nothing changed: " + reason)
+	case stwsync.OutcomeFailed:
+		reason := ""
+		if r.Reason != nil {
+			reason = *r.Reason
+		}
+		line("  --rules failed: " + reason)
+	case stwsync.OutcomeUpToDate:
+		line("  --rules: nothing to update")
+	}
+	if len(r.Commits) > 0 && (r.Outcome == stwsync.OutcomeWouldFastForward || r.Outcome == stwsync.OutcomeFastForwarded || r.Outcome == stwsync.OutcomeRefused) {
+		verb := "new commits"
+		if r.Outcome == stwsync.OutcomeFastForwarded {
+			verb = "applied commits"
+		}
+		line("  " + verb + ":")
+		for _, c := range r.Commits {
+			line("    " + c.OID[:7] + " " + c.Subject + " (author " + c.Author + ", committer " + c.Committer + ")")
+		}
+		if len(r.Commits) < r.Behind {
+			line(fmt.Sprintf("    ... and %d more", r.Behind-len(r.Commits)))
+		}
+		line("  changed files (* = affects agent behavior or installation):")
+		for _, f := range r.Files {
+			mark := "  "
+			if f.Sensitive {
+				mark = "* "
+			}
+			line("    " + mark + f.Path)
+		}
+	}
+	if r.Outcome == stwsync.OutcomeWouldFastForward {
+		line("  would fast-forward " + oldNew(r))
+	}
+	if r.Outcome == stwsync.OutcomeFastForwarded {
+		line("  fast-forwarded " + oldNew(r))
+	}
+	for _, n := range r.Notes {
+		line("  note: " + n)
+	}
+}
+
+func oldNew(r *stwsync.Rules) string {
+	return reposAbbrevOID(r.OldOID) + ".." + reposAbbrevOID(r.NewOID)
 }
