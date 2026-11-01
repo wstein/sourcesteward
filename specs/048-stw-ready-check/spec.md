@@ -38,8 +38,9 @@ Decisions and limits:
   branch passes only when another open pull request of the same repository has that branch as head branch (the lowest number is named,
   and "merge #N first" is stated as evidence). The list of open pull requests does not give the head repository, so a fork branch with the
   same name is not told apart. A text line "Merge #N first" is no evidence.
-- A Blocker line is any line in which the word "blocker" or "blockers" is followed, after an optional parenthesis, by a colon, a pipe
-  or a dash (an em or en dash, or a hyphen followed by a space), wherever it stands in the line. The value is the text after it; quote,
+- A Blocker line is any line in which the word "blocker" or "blockers" is followed, after an optional parenthesis, by a colon (ASCII or
+  fullwidth), a pipe or a dash (any Unicode dash, the minus sign, two hyphens, or a hyphen followed by a space; Unicode spaces count as spaces),
+  wherever it stands in the line. The value is the text after it; quote,
   list, number and heading marks and emphasis are ignored. Matching forms: `Blocker: x`, `**Blocker (Draft):** x`, `1. Blocker: x`,
   `> Blocker: x`, `## Blocker: x`, `Status: Draft. Blocker: x`, `Blocker - x`, `Blocker — x`, `| Blocker | x |`. A line with several
   labels is checked per label. A heading with the word, a bare `Blocker` word, or a label without a value takes the lines below as value:
@@ -47,6 +48,9 @@ Decisions and limits:
   must be a none spelling (list mark, emphasis, table pipes and a trailing period or comma ignored), else the condition fails; no
   value fails. Prose that only uses the word (`a blocker for CI was removed`, `Blocker-free`) is not a Blocker line. The whole body is
   scanned. A Blocker line in a code block or a quote is read like any other (fail-closed).
+- Fail-open limits of the label rule: free text between the word and the separator hides the label (`Blocker is: x`, `Blocker (a)(b): x`,
+  `The blocker list: x` pass). Widening the rule would flag prose, so the shared Blocker parser of the PR-text lint takes over; this check
+  does not widen it further.
 - Evidence is cut to 400 bytes (the schema allows 400 characters); control characters are escaped first.
 - The command reads the head once. A push between the read and the flip is not detected; `--expect-head`-style resampling is the
   trusted check of issue #64.
