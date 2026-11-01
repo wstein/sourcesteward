@@ -49,7 +49,7 @@ Decisions and limits:
   value fails. Prose that only uses the word (`a blocker for CI was removed`, `Blocker-free`) is not a Blocker line. The whole body is
   scanned. A Blocker line in a code block or a quote is read like any other (fail-closed).
 - Fail-open limits of the label rule: free text between the word and the separator hides the label (`Blocker is: x`, `Blocker (a)(b): x`,
-  `The blocker list: x` pass). Widening the rule would flag prose, so the shared Blocker parser of the PR-text lint takes over; this check
+  `The blocker list: x` pass). Widening the rule would flag prose, so the shared Blocker parser of the PR-text lint (sourcesteward #369) takes over; this check
   does not widen it further.
 - Evidence is cut to 400 bytes (the schema allows 400 characters); control characters are escaped first.
 - The command reads the head once. A push between the read and the flip is not detected; `--expect-head`-style resampling is the
