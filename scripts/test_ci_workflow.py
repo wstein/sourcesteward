@@ -780,7 +780,7 @@ class RaceWorkflowTests(unittest.TestCase):
         on = self.head()
         self.assertRegex(on, r'(?m)^  schedule:\n    - cron: ')
         self.assertRegex(on, r'(?m)^  workflow_dispatch:')
-        self.assertEqual(len(re.findall(r'(?m)^    - cron: ', on)), 2, 'nightly and weekly')
+        self.assertEqual(re.findall(r"(?m)^    - cron: (.+)$", on), ["'0 1 * * *'"], 'one nightly run for both lanes (issue #373)')
         for forbidden in ('pull_request', 'pull_request_target', 'push:', 'workflow_run', 'issues:', 'issue_comment'):
             self.assertNotIn(forbidden, on)
 
@@ -799,14 +799,29 @@ class RaceWorkflowTests(unittest.TestCase):
         self.assertIn('lane: ${{ matrix.lane }}', race)
         self.assertNotIn('docs_only', race)
 
-    def test_lane_is_current_nightly_and_minimum_weekly(self):
-        self.assertIn("github.event.schedule == '17 4 * * 0'", job_text('race', RACE))
-        self.assertIn("&& 'minimum' || 'current'", job_text('race', RACE))
-        self.assertIn("&& 'weekly' || 'nightly'", RACE.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0])
+    def test_nightly_runs_both_lanes_and_a_dispatch_runs_the_named_lane(self):
+        import json
+        match = re.search(r"lane: \$\{\{ fromJSON\((.+)\) \}\}", job_text('race', RACE))
+        self.assertTrue(match)
+        python = match.group(1).replace('github.event_name', 'event').replace('inputs.lane', 'lane')
+        python = re.sub(r"format\('\[\"\{0\}\"\]', lane\)", "'[\"' + lane + '\"]'", python)
+        python = python.replace('&&', ' and ').replace('||', ' or ')
+        lanes = lambda event, lane='': json.loads(eval(python, {}, {'event': event, 'lane': lane}))
+        self.assertEqual(lanes('schedule'), ['minimum', 'current'])
+        self.assertEqual(lanes('workflow_dispatch', 'current'), ['current'])
+        self.assertEqual(lanes('workflow_dispatch', 'minimum'), ['minimum'])
+        self.assertNotIn('weekly', job_text('race', RACE))
+
+    def test_the_report_names_the_lane_of_the_failed_race_job(self):
+        report = job_text('report', RACE)
+        self.assertIn("select(.conclusion == \"failure\") | .name", report)
+        self.assertIn('LANE: ${{ steps.lane.outputs.lane }}', report)
+        self.assertNotIn('weekly', report)
 
     def test_race_runs_are_never_cancelled_and_have_their_own_groups(self):
         conc = RACE.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0]
-        self.assertIn('t4-', conc)
+        self.assertIn('group: t4-nightly\n', conc)
+        self.assertNotIn('t4-weekly', RACE)
         self.assertIn('cancel-in-progress: false', conc)
 
     def test_report_runs_after_race_on_failure_or_cancel(self):
@@ -846,7 +861,8 @@ class RaceWorkflowTests(unittest.TestCase):
         report = job_text('report', RACE)
         self.assertIn('python3 -B scripts/race_report.py', report)
         self.assertIn('GH_TOKEN: ${{ github.token }}', report)
-        self.assertNotIn('${{ github.token }}', report.split('run: |', 1)[1])  # never interpolated into the script
+        for script in (s.split('\n      - ', 1)[0] for s in report.split('run: |')[1:]):
+            self.assertNotIn('${{ github.token }}', script)  # never interpolated into a script
         self.assertNotIn('toJSON(', RACE)
 
     def test_the_tier_job_is_not_part_of_race_yml(self):

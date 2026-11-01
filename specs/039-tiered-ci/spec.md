@@ -63,6 +63,10 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > A push to `main` runs lane `current` only (`ci.yml`), no longer both lanes; the `minimum` lane runs in the nightly `race.yml`. This narrows
 > clause (a) of the amendment above and row 1 of [contracts/tiers.md](contracts/tiers.md). The check names are unchanged: the ruleset
 > still requires exactly `check` and `Git/jj conformance (current) / suite`, and `Git/jj conformance (minimum) / suite` was never required.
+> **T4 after #373:** `race.yml` runs both lanes (`minimum` and `current`) every night at `0 1 * * *` (UTC; 02:00 CET, 03:00 CEST) with `-race`, in
+> the one group `t4-nightly`; the weekly run (`t4-weekly`) is gone, a manual dispatch still names one lane. This supersedes the weekly
+> `minimum` run in G3a, T4, D7, D10 and the `race.yml` rows of the plan and of [contracts/tiers.md](contracts/tiers.md). Residual risk: a failure
+> that only the `minimum` lane shows is found up to a day after the merge instead of on the push to `main`.
 
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 
