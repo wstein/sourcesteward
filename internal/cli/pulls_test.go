@@ -7,9 +7,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/conflicts"
+	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/pullscmd"
 )
 
@@ -253,5 +258,154 @@ func TestPullsStackOverTheGuardedReader(t *testing.T) {
 	}
 	if status, _, _ := pullsRun(t, pullsForge(t), "--repo", "o/r", "--stack", "--mergeable"); status != 2 {
 		t.Fatalf("exit %d", status)
+	}
+}
+
+func TestPullsHelpNamesTheConflictFlags(t *testing.T) {
+	var stdout, stderr bytes.Buffer
+	if status := Run(context.Background(), "test", []string{"pulls", "--help"}, &stdout, &stderr); status != 0 {
+		t.Fatalf("%d %q", status, stderr.String())
+	}
+	for _, want := range []string{"--conflicts", "--restack-plan", "--checkout", "--remote", "refs/stw/conflicts/", "rebases and pushes nothing"} {
+		if !strings.Contains(stdout.String(), want) {
+			t.Errorf("help lacks %q", want)
+		}
+	}
+}
+
+func TestPullsConflictsNeedsOneRepository(t *testing.T) {
+	watchEnv(t, true)
+	forge := pullsForge(t)
+	for _, args := range [][]string{
+		{"--repo", "o/r", "--repo", "o/s", "--conflicts"},
+		{"--repo", "o/r", "--owner", "wstein", "--restack-plan"},
+		{"--repo", "o/r", "--checkout", "/tmp"},
+	} {
+		status, out, errOut := pullsRun(t, forge, args...)
+		if status != 2 || out != "" || !strings.HasPrefix(errOut, "Error:") || len(forge.log) != 0 {
+			t.Errorf("%v: %d %q %q %v", args, status, out, errOut, forge.log)
+		}
+	}
+}
+
+func gitIn(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false", "-C", dir}, args...)...)
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestPullsConflictsEndToEnd probes a real temporary repository over the guarded reader: pull
+// request 1 changes a line that main changed afterwards, pull request 2 is stacked on it.
+func TestPullsConflictsEndToEnd(t *testing.T) {
+	watchEnv(t, true)
+	root := t.TempDir()
+	origin, work := filepath.Join(root, "origin.git"), filepath.Join(root, "work")
+	gitIn(t, root, "init", "-q", "--bare", "-b", "main", origin)
+	gitIn(t, root, "init", "-q", "-b", "main", work)
+	gitIn(t, work, "remote", "add", "origin", origin)
+	text := func(m map[int]string) string {
+		var b strings.Builder
+		for i := 1; i <= 8; i++ {
+			if v, ok := m[i]; ok {
+				b.WriteString(v + "\n")
+			} else {
+				b.WriteString("line\n")
+			}
+		}
+		return b.String()
+	}
+	put := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(work, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	put("rules.md", text(nil))
+	put("own.md", text(nil))
+	gitIn(t, work, "add", ".")
+	gitIn(t, work, "commit", "-q", "-m", "base")
+	gitIn(t, work, "push", "-q", "origin", "main")
+	gitIn(t, work, "checkout", "-q", "-b", "one")
+	put("rules.md", text(map[int]string{3: "PR"}))
+	gitIn(t, work, "commit", "-q", "-am", "pr one")
+	head1 := gitIn(t, work, "rev-parse", "HEAD")
+	gitIn(t, work, "push", "-q", "origin", "one", "one:refs/pull/1/head")
+	gitIn(t, work, "checkout", "-q", "-b", "two")
+	put("own.md", text(map[int]string{3: "PR two"}))
+	gitIn(t, work, "commit", "-q", "-am", "pr two")
+	head2 := gitIn(t, work, "rev-parse", "HEAD")
+	gitIn(t, work, "push", "-q", "origin", "two", "two:refs/pull/2/head")
+	gitIn(t, work, "checkout", "-q", "main")
+	put("rules.md", text(map[int]string{3: "MAIN"}))
+	gitIn(t, work, "commit", "-q", "-am", "main")
+	mainCommit := gitIn(t, work, "rev-parse", "HEAD")
+	gitIn(t, work, "push", "-q", "origin", "main")
+
+	f := &watchForge{t: t, docs: map[string]string{}}
+	item := func(n int, head, headRef, base string) string {
+		return fmt.Sprintf(`{"number":%d,"title":"PR %d","user":{"login":"alice","type":"User"},"labels":[],"draft":false,"created_at":"2026-10-20T09:00:00Z","html_url":"https://github.com/o/r/pull/%d","requested_reviewers":[],"requested_teams":[],"head":{"sha":%q,"ref":%q},"base":{"sha":%q,"ref":%q}}`,
+			n, n, n, head, headRef, strings.Repeat("b", 40), base)
+	}
+	detail := func(head string) string {
+		return `{"mergeable":true,"mergeable_state":"clean","rebaseable":true,"head":{"sha":"` + head + `","repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}`
+	}
+	f.docs["repos/o/r/pulls?state=open&per_page=25&page=1"] = "[" + item(1, head1, "one", "main") + "," + item(2, head2, "two", "one") + "]"
+	f.docs["repos/o/r/pulls/1"], f.docs["repos/o/r/pulls/2"] = detail(head1), detail(head2)
+	for _, h := range []string{head1, head2} {
+		f.docs["repos/o/r/commits/"+h+"/check-runs?per_page=100&page=1"] = `{"total_count":1,"check_runs":[{"name":"ci","status":"completed","conclusion":"success","output":{}}]}`
+		f.docs["repos/o/r/commits/"+h+"/statuses?per_page=100&page=1"] = `[]`
+	}
+	f.docs["repos/o/r"] = `{"default_branch":"main","html_url":"https://github.com/o/r"}`
+	f.docs["repos/o/r/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1"] = `[]`
+	f.docs["repos/o/r/issues/1/comments?per_page=50&page=1"], f.docs["repos/o/r/issues/2/comments?per_page=50&page=1"] = `[]`, `[]`
+
+	pullsTransport = f
+	pullsHook = func(p *pullscmd.Params) {
+		p.NewProber = func(context.Context, pullscmd.ProberRequest) (pulls.ConflictProber, func(), error) {
+			r := conflicts.NewRunner(work)
+			return conflicts.Prober{Repo: "o/r", Remote: "origin", Git: r}, r.Close, nil
+		}
+	}
+	t.Cleanup(func() { pullsTransport, pullsHook = nil, nil })
+	var stdout, stderr bytes.Buffer
+	status := Run(context.Background(), "test", []string{"pulls", "--repo", "o/r", "--conflicts", "--restack-plan", "--json"}, &stdout, &stderr)
+	if status != 0 || stderr.String() != "" {
+		t.Fatalf("%d %q %v", status, stderr.String(), f.log)
+	}
+	var doc struct {
+		Groups  map[string][]map[string]any `json:"groups"`
+		Summary map[string]any              `json:"summary"`
+		Conf    struct {
+			Plans []struct {
+				Steps []map[string]any `json:"steps"`
+				Brief string           `json:"brief"`
+			} `json:"plans"`
+		} `json:"conflicts"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if len(doc.Groups["ready"]) != 0 || len(doc.Groups["conflict"]) != 1 || len(doc.Groups["blocked"]) != 1 || doc.Summary["base_conflicts"] != 1.0 {
+		t.Fatalf("a conflicting pull request and its child must not be ready: %s", stdout.String())
+	}
+	bc := doc.Groups["conflict"][0]["base_conflict"].(map[string]any)
+	file := bc["files"].([]any)[0].(map[string]any)
+	if bc["state"] != "conflicts-with-base" || file["path"] != "rules.md" || file["base_commit"] != mainCommit || bc["base_sha"] != mainCommit {
+		t.Fatalf("%v", bc)
+	}
+	if len(doc.Conf.Plans) != 1 || len(doc.Conf.Plans[0].Steps) != 2 || !strings.Contains(doc.Conf.Plans[0].Brief, "--force-with-lease=one:"+head1) {
+		t.Fatalf("%+v", doc.Conf)
+	}
+	for _, uri := range f.log {
+		if strings.Contains(uri, "/merges") || strings.Contains(uri, "compare/") {
+			t.Errorf("a forge read was added: %s", uri)
+		}
+	}
+	if got := gitIn(t, work, "rev-parse", "refs/stw/conflicts/pull/1"); got != head1 {
+		t.Fatalf("private ref %s", got)
 	}
 }

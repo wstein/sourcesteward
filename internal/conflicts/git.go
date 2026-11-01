@@ -33,6 +33,9 @@ func ValidBranch(b string) bool {
 		!strings.HasSuffix(b, "/") && !strings.HasSuffix(b, ".") && !strings.HasSuffix(b, ".lock") && !strings.Contains(b, "/.")
 }
 
+// ValidRemote reports whether name is a plain git remote name (no leading dash).
+func ValidRemote(name string) bool { return remoteName.MatchString(name) }
+
 // ValidSHA reports whether s is a full lower-case SHA-1 object name.
 func ValidSHA(s string) bool { return shaPattern.MatchString(s) }
 

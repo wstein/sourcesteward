@@ -6,9 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/conflicts"
 	"github.com/wstein/sourcesteward/internal/prviews"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/snapcmd"
@@ -31,7 +33,9 @@ type Document struct {
 	OwnerQueue *[]DocQueueEntry `json:"owner_queue"`
 	// Stack is null without --stack (Spec 046).
 	Stack *DocStack `json:"stack"`
-	limit int       // for the human renderer; not part of the contract
+	// Spec 047 member (additive): null without --conflicts
+	Conflicts *DocConflicts `json:"conflicts"`
+	limit     int           // for the human renderer; not part of the contract
 }
 
 // DocOptions echoes the selection of the run.
@@ -49,6 +53,9 @@ type DocOptions struct {
 	Hints        []string `json:"hints"`
 	Mergeable    bool     `json:"mergeable"`
 	Stack        bool     `json:"stack"`
+	// Spec 047 members (additive)
+	Conflicts   bool `json:"conflicts"`
+	RestackPlan bool `json:"restack_plan"`
 }
 
 // DocRepo is one repository of the run.
@@ -98,6 +105,75 @@ type DocRow struct {
 	// Spec 046 members (additive): the review state is the claim of a comment, see DocReview.Basis
 	Review *DocReview `json:"review"`
 	Hints  []string   `json:"hints"`
+	// Spec 047 member (additive): null when the base conflicts were not probed
+	BaseConflict *DocBaseConflict `json:"base_conflict"`
+}
+
+// DocBaseConflict is the probe merge of a row against its base (Spec 047).
+type DocBaseConflict struct {
+	State     string    `json:"state"`
+	Reason    *string   `json:"reason"`
+	Base      string    `json:"base"`
+	BaseSHA   *string   `json:"base_sha"`
+	MergeBase *string   `json:"merge_base"`
+	Files     []DocFile `json:"files"`
+	Overlap   []string  `json:"overlap"`
+	Truncated bool      `json:"truncated"`
+	BlockedBy *int      `json:"blocked_by"`
+}
+
+// DocFile is a conflicting file and the base commit that last touched it.
+type DocFile struct {
+	Path       string  `json:"path"`
+	BaseCommit *string `json:"base_commit"`
+}
+
+// DocConflicts is the stack view and the restack plans (Spec 047).
+type DocConflicts struct {
+	Remote string             `json:"remote"`
+	Stacks []DocConflictStack `json:"stacks"`
+	Plans  []DocPlan          `json:"plans"`
+}
+
+// DocConflictStack is a tree of pull requests of one repository (Spec 047).
+type DocConflictStack struct {
+	Repo   string     `json:"repo"`
+	Root   int        `json:"root"`
+	Levels []DocLevel `json:"levels"`
+}
+
+// DocLevel is one pull request of a stack.
+type DocLevel struct {
+	Number   int     `json:"number"`
+	Depth    int     `json:"depth"`
+	Parent   *int    `json:"parent"`
+	Head     *string `json:"head"`
+	Clear    string  `json:"clear"`
+	CI       string  `json:"ci"`
+	Conflict string  `json:"conflict"`
+	Status   *string `json:"status"`
+}
+
+// DocPlan is the restack plan of one stack with its brief.
+type DocPlan struct {
+	Repo    string    `json:"repo"`
+	Remote  string    `json:"remote"`
+	Root    int       `json:"root"`
+	Steps   []DocStep `json:"steps"`
+	GhStack []string  `json:"gh_stack"`
+	Brief   string    `json:"brief"`
+}
+
+// DocStep restacks one pull request; Push is run only after the review of the new head.
+type DocStep struct {
+	Number  int      `json:"number"`
+	HeadRef string   `json:"head_ref"`
+	OldHead string   `json:"old_head"`
+	Why     string   `json:"why"`
+	Skip    *string  `json:"skip"`
+	Rebase  []string `json:"rebase"`
+	Verify  []string `json:"verify"`
+	Push    *string  `json:"push"`
 }
 
 // DocReview is the review state of a row. Basis is always "comment": the verdict is what a comment
@@ -159,6 +235,8 @@ type DocSummary struct {
 	Hints  DocHintCounts   `json:"hints"`
 	// WaitingForParent counts the non-draft rows with the hint base-not-default (0 without --mergeable).
 	WaitingForParent int `json:"waiting_for_parent"`
+	// Spec 047 member (additive)
+	BaseConflicts int `json:"base_conflicts"`
 }
 
 // DocStack is the stack view: the trees with a child (or an orphan base) and the number of single pull requests left out.
@@ -200,7 +278,8 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 	d := &Document{SchemaVersion: 1, Command: "pulls", Time: res.Time.UTC().Format(time.RFC3339), Host: snapcmd.Cut(p.Host, pulls.MaxString), limit: res.Limit}
 	d.Options = DocOptions{Scope: p.Scope, Owners: snapcmd.Strings0(p.Owners), NoBots: p.Options.NoBots, BotsOnly: p.Options.BotsOnly, Authors: snapcmd.Strings0(p.Options.Authors),
 		DetailDrafts: p.Options.DetailDrafts, Limit: res.Limit,
-		Mergeable: p.Mergeable, Stack: p.Stack, Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints)}
+		Mergeable: p.Mergeable, Stack: p.Stack, Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints),
+		Conflicts: res.ConflictsOn, RestackPlan: p.RestackPlan && res.ConflictsOn}
 	d.Repos = []DocRepo{}
 	for _, st := range res.Repos {
 		r := DocRepo{Repo: st.Repo, Source: sources[strings.ToLower(st.Repo)], Open: st.Open, Listed: st.Listed, Error: snapcmd.StrPtr(st.Error)}
@@ -232,7 +311,8 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 			ClearStale: s.Review.ClearStale, Unparsed: s.Review.Unparsed, NotRead: s.Review.NotRead},
 		Hints: DocHintCounts{ClearNotReady: s.Hints.ClearNotReady, NoFinalReview: s.Hints.NoFinalReview, BaseNotDefault: s.Hints.BaseNotDefault,
 			ParentMergedRetarget: s.Hints.ParentMergedRetarget, TruncatedReviewUnknown: s.Hints.TruncatedReviewUnknown,
-			ForeignReviewIgnored: s.Hints.ForeignReviewIgnored, ReadyMergeable: s.Hints.ReadyMergeable}}
+			ForeignReviewIgnored: s.Hints.ForeignReviewIgnored, ReadyMergeable: s.Hints.ReadyMergeable},
+		BaseConflicts: s.BaseConflicts}
 	if p.Mergeable {
 		entries, waiting := prviews.OwnerQueue(res.Rows)
 		q := make([]DocQueueEntry, len(entries))
@@ -252,6 +332,9 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 			d.Stack.Trees[i] = docStackNode(n)
 		}
 	}
+	if res.ConflictsOn {
+		d.Conflicts = docConflicts(p, res)
+	}
 	d.Errors = []snapcmd.DocError{}
 	for _, e := range res.Errors {
 		repo := e.Repo
@@ -266,6 +349,9 @@ func docRow(r pulls.Row) DocRow {
 		Base: r.Base, HeadRef: r.HeadRef, Fork: r.Fork, Labels: snapcmd.Strings0(r.Labels), Checks: r.Checks, Failing: snapcmd.Strings0(r.Failing), Mergeable: r.Mergeable,
 		MergeableState: r.MergeableState, Rebaseable: r.Rebaseable, Reviewers: snapcmd.Strings0(r.Reviewers), Group: r.Group, Reason: snapcmd.StrPtr(r.Reason), Ready: r.Ready, Detail: r.Detail,
 		Hints: snapcmd.Strings0(r.Hints)}
+	if bc := r.BaseConflict; bc != nil {
+		row.BaseConflict = docBaseConflict(bc)
+	}
 	if rv := r.Review; rv != nil {
 		d := &DocReview{Basis: "comment", State: rv.State, Verdict: snapcmd.StrPtr(rv.Verdict), PatchID: snapcmd.StrPtr(rv.PatchID), URL: snapcmd.StrPtr(rv.URL),
 			Association: snapcmd.StrPtr(rv.Association), Ignored: rv.Ignored, Carried: rv.Carried, Edited: rv.Edited, Truncated: rv.Truncated}
@@ -346,9 +432,15 @@ func writeHuman(w io.Writer, d *Document) error {
 			if len(r.Hints) > 0 {
 				fmt.Fprintf(&b, "  {%s}", strings.Join(r.Hints, ", "))
 			}
+			if r.BaseConflict != nil && r.BaseConflict.State == conflicts.StateConflicts {
+				b.WriteString("  conflicts-with-base")
+			}
 			b.WriteByte('\n')
 		}
 		b.WriteByte('\n')
+	}
+	if d.Conflicts != nil {
+		writeConflicts(&b, d)
 	}
 	s := d.Summary
 	if reviewed {
@@ -361,6 +453,13 @@ func writeHuman(w io.Writer, d *Document) error {
 		}
 	}
 	fmt.Fprintf(&b, "%s in %s, %d ready\n", snapcmd.Plural(s.Total, "open pull request", "open pull requests"), snapcmd.Plural(s.ReposRead, "repository", "repositories"), s.Ready)
+	if s.BaseConflicts > 0 {
+		if s.BaseConflicts == 1 {
+			b.WriteString("1 pull request conflicts with its base\n")
+		} else {
+			fmt.Fprintf(&b, "%d pull requests conflict with their base\n", s.BaseConflicts)
+		}
+	}
 	if s.NotRead > 0 {
 		fmt.Fprintf(&b, "%d not read (past --limit %d)\n", s.NotRead, d.limit)
 	}
@@ -413,6 +512,26 @@ func counts(in []namedCount) string {
 	return strings.Join(parts, ", ")
 }
 
+func shaPtr(s string) *string {
+	if pulls.ValidSHA(s) {
+		return &s
+	}
+	return nil
+}
+
+func docBaseConflict(f *conflicts.Finding) *DocBaseConflict {
+	d := &DocBaseConflict{State: f.State, Reason: snapcmd.StrPtr(f.Reason), Base: f.Base, BaseSHA: shaPtr(f.BaseSHA), MergeBase: shaPtr(f.MergeBase),
+		Files: []DocFile{}, Overlap: snapcmd.Strings0(f.Overlap), Truncated: f.Truncated}
+	for _, fc := range f.Files {
+		d.Files = append(d.Files, DocFile{Path: fc.Path, BaseCommit: shaPtr(fc.BaseCommit)})
+	}
+	if f.BlockedBy > 0 {
+		n := f.BlockedBy
+		d.BlockedBy = &n
+	}
+	return d
+}
+
 // writeQueue prints the owner list: the entries in merge order, each with its reason and the pull
 // requests that follow it, then a summary line. Untrusted text is escaped.
 func writeQueue(w io.Writer, d *Document) error {
@@ -456,6 +575,112 @@ func docStackNode(n *prviews.Node) *DocStackNode {
 		d.Children[i] = docStackNode(c)
 	}
 	return d
+}
+
+func docConflicts(p Params, res *pulls.Result) *DocConflicts {
+	d := &DocConflicts{Remote: p.Remote, Stacks: []DocConflictStack{}, Plans: []DocPlan{}}
+	for _, rc := range res.Conflicts {
+		for _, st := range rc.Stacks {
+			ds := DocConflictStack{Repo: rc.Repo, Root: st.Root, Levels: []DocLevel{}}
+			for _, l := range st.Levels {
+				dl := DocLevel{Number: l.Number, Depth: l.Depth, Head: shaPtr(l.Head), Clear: l.Clear, CI: l.CI, Conflict: l.Conflict, Status: snapcmd.StrPtr(l.Status)}
+				if l.Parent > 0 {
+					n := l.Parent
+					dl.Parent = &n
+				}
+				ds.Levels = append(ds.Levels, dl)
+			}
+			d.Stacks = append(d.Stacks, ds)
+		}
+		for _, pl := range rc.Plans {
+			dp := DocPlan{Repo: pl.Repo, Remote: pl.Remote, Root: pl.Root, Steps: []DocStep{}, GhStack: snapcmd.Strings0(pl.GhStack), Brief: pl.Brief}
+			for _, s := range pl.Steps {
+				dp.Steps = append(dp.Steps, DocStep{Number: s.Number, HeadRef: s.HeadRef, OldHead: s.OldHead, Why: s.Why, Skip: snapcmd.StrPtr(s.Skip),
+					Rebase: snapcmd.Strings0(s.Rebase), Verify: snapcmd.Strings0(s.Verify), Push: snapcmd.StrPtr(s.Push)})
+			}
+			d.Plans = append(d.Plans, dp)
+		}
+	}
+	return d
+}
+
+// writeConflicts prints the base conflicts, the early warnings, the stacks and the briefs of a run
+// with --conflicts. Every untrusted field goes through untrusted.Esc.
+func writeConflicts(b *strings.Builder, d *Document) {
+	var conflicting, warned []DocRow
+	for _, rows := range [][]DocRow{d.Groups.Ready, d.Groups.Checks, d.Groups.Conflict, d.Groups.Draft, d.Groups.Blocked} {
+		for _, r := range rows {
+			if r.BaseConflict == nil {
+				continue
+			}
+			switch {
+			case r.BaseConflict.State == conflicts.StateConflicts:
+				conflicting = append(conflicting, r)
+			case len(r.BaseConflict.Overlap) > 0:
+				warned = append(warned, r)
+			}
+		}
+	}
+	byNumber := func(rows []DocRow) {
+		sort.SliceStable(rows, func(i, j int) bool { return rows[i].Number < rows[j].Number })
+	}
+	byNumber(conflicting)
+	byNumber(warned)
+	if len(conflicting) > 0 {
+		fmt.Fprintf(b, "base conflicts (%d)\n", len(conflicting))
+		for _, r := range conflicting {
+			bc := r.BaseConflict
+			var files []string
+			for _, f := range bc.Files {
+				one := untrusted.Esc(f.Path)
+				if f.BaseCommit != nil {
+					one += fmt.Sprintf(" (last changed on %s by %s)", untrusted.Esc(bc.Base), (*f.BaseCommit)[:12])
+				}
+				files = append(files, one)
+			}
+			more := ""
+			if bc.Truncated {
+				more = ", more not listed"
+			}
+			fmt.Fprintf(b, "%s#%d conflicts with %s: %s%s\n", untrusted.Esc(r.Repo), r.Number, untrusted.Esc(bc.Base), strings.Join(files, ", "), more)
+		}
+		b.WriteByte('\n')
+	}
+	if len(warned) > 0 {
+		fmt.Fprintf(b, "early warning (%d)\n", len(warned))
+		for _, r := range warned {
+			names := make([]string, len(r.BaseConflict.Overlap))
+			for i, n := range r.BaseConflict.Overlap {
+				names[i] = untrusted.Esc(n)
+			}
+			fmt.Fprintf(b, "%s#%d: %s also changed %s\n", untrusted.Esc(r.Repo), r.Number, untrusted.Esc(r.BaseConflict.Base), strings.Join(names, ", "))
+		}
+		b.WriteByte('\n')
+	}
+	if c := d.Conflicts; c != nil {
+		if len(c.Stacks) > 0 {
+			b.WriteString("stacks\n")
+			for _, st := range c.Stacks {
+				fmt.Fprintf(b, "%s\n", untrusted.Esc(st.Repo))
+				for _, l := range st.Levels {
+					head := "-"
+					if l.Head != nil {
+						head = (*l.Head)[:12]
+					}
+					status := ""
+					if l.Status != nil {
+						status = "  " + *l.Status
+					}
+					fmt.Fprintf(b, "%s#%d  %s  clear %s  ci %s  %s%s\n", strings.Repeat("  ", l.Depth+1), l.Number, head, l.Clear, l.CI, l.Conflict, status)
+				}
+			}
+			b.WriteByte('\n')
+		}
+		for _, pl := range c.Plans {
+			b.WriteString(pl.Brief)
+			b.WriteByte('\n')
+		}
+	}
 }
 
 // writeStack prints the stack view: one tree per root, children drawn with "|-" and "`-", then the

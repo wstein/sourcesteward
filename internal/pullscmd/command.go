@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/conflicts"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/reviewstate"
@@ -69,6 +70,12 @@ type Flags struct {
 	Mergeable bool
 	// Stack prints the stack view instead of the groups (Spec 046).
 	Stack bool
+	// Spec 047: probe the base conflicts of one repository from a local checkout; RestackPlan adds the
+	// plan and the brief and implies Conflicts. Checkout defaults to the current directory, Remote to origin.
+	Conflicts   bool
+	RestackPlan bool
+	Checkout    string
+	Remote      string
 }
 
 // Params is a fully validated run.
@@ -92,7 +99,19 @@ type Params struct {
 	// Open replaces the hosting reader (tests). The target is the directory that bounds the gh
 	// configuration check, like the repository does for the one-shot operations.
 	Open func(ctx context.Context, target, host string) (Source, func(), error)
+
+	// Spec 047
+	Conflicts   bool
+	RestackPlan bool
+	Checkout    string
+	Remote      string
+	// NewProber replaces the checkout prober (tests); nil selects the one built on the checkout.
+	NewProber func(ctx context.Context, req ProberRequest) (pulls.ConflictProber, func(), error)
 }
+
+// ProberRequest is what the prober of a run needs: the checkout, its remote and the repository the
+// remote must point to.
+type ProberRequest struct{ Dir, Remote, Repo, Host string }
 
 // Prepare validates the flags and resolves the repositories. Every error is a usage error
 // (exit 2): nothing has been read from the forge.
@@ -123,6 +142,12 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 		return p, snapcmd.Usagef("--mergeable cannot be combined with --no-review, --review or --hint")
 	case f.NoReview && (len(f.ReviewStates) > 0 || len(f.Hints) > 0):
 		return p, snapcmd.Usagef("--no-review cannot be combined with --review or --hint")
+	case !(f.Conflicts || f.RestackPlan) && (f.Checkout != "" || f.Remote != ""):
+		return p, snapcmd.Usagef("--checkout and --remote need --conflicts or --restack-plan")
+	case f.Remote != "" && !conflicts.ValidRemote(f.Remote):
+		return p, snapcmd.Usagef("--remote %q is not a git remote name", f.Remote)
+	case (f.Conflicts || f.RestackPlan) && len(f.Owners) > 0:
+		return p, snapcmd.Usagef("--conflicts and --restack-plan work on one repository, not on --owner discovery")
 	}
 	for _, st := range f.ReviewStates {
 		if !contains(reviewstate.States, st) {
@@ -159,7 +184,11 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 	workspace := f.Workspace || (len(f.Repos) == 0 && len(owners) == 0)
 	p = Params{Host: host, Owners: owners, Sources: map[string]string{}, Out: out, Human: snapcmd.TerminalHuman(f.Human, f.JSON, out), Mergeable: f.Mergeable, Stack: f.Stack,
 		Options: pulls.Options{NoBots: f.NoBots, BotsOnly: f.BotsOnly, Authors: f.Authors, DetailDrafts: f.DetailDrafts, Limit: f.Limit,
-			Review: !f.NoReview, ReviewStates: f.ReviewStates, Hints: f.Hints}}
+			Review: !f.NoReview, ReviewStates: f.ReviewStates, Hints: f.Hints},
+		Conflicts: f.Conflicts || f.RestackPlan, RestackPlan: f.RestackPlan, Checkout: f.Checkout, Remote: f.Remote}
+	if p.Conflicts && p.Remote == "" {
+		p.Remote = "origin"
+	}
 	var repos []string
 	if workspace {
 		sel, err := watchcmd.Resolve(ctx, watchcmd.ResolveInput{Host: host, Repos: f.Repos, Workspace: true, WorkspacePath: f.WorkspacePath, Discover: discover})
@@ -180,6 +209,9 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 		return p, snapcmd.Usagef("%d repositories exceed the limit of %d per run", len(repos), watchcmd.MaxRepos)
 	}
 	p.Repos = repos
+	if p.Conflicts && len(repos) != 1 {
+		return p, snapcmd.Usagef("--conflicts and --restack-plan work on one repository; got %d", len(repos))
+	}
 	kinds := 0
 	for _, on := range []bool{workspace, len(f.Repos) > 0, len(owners) > 0} {
 		if on {
@@ -256,6 +288,22 @@ func Execute(ctx context.Context, p Params) error {
 	}
 	o := p.Options
 	o.Repos, o.Now = repos, p.Now
+	if p.Conflicts {
+		dir := p.Checkout
+		if dir == "" {
+			dir = target // the workspace root, else the current directory
+		}
+		newProber := p.NewProber
+		if newProber == nil {
+			newProber = defaultProber
+		}
+		prober, closeProber, err := newProber(ctx, ProberRequest{Dir: dir, Remote: p.Remote, Repo: repos[0], Host: p.Host})
+		if err != nil {
+			return err
+		}
+		defer closeProber()
+		o.Conflicts, o.Remote, o.RestackPlan = prober, p.Remote, p.RestackPlan
+	}
 	res, err := pulls.Run(ctx, src, o)
 	if err != nil {
 		return snapcmd.Failure(watchcmd.ExitFailure, "%v", err)
@@ -284,6 +332,23 @@ func Execute(ctx context.Context, p Params) error {
 		return snapcmd.Failure(watchcmd.ExitFailure, "%s", problemSummary(doc))
 	}
 	return nil
+}
+
+// defaultProber builds the prober on the checkout. The checkout must be a directory whose remote
+// points to the repository of the run; anything else is a usage error before any probe.
+func defaultProber(ctx context.Context, req ProberRequest) (pulls.ConflictProber, func(), error) {
+	if info, err := os.Stat(req.Dir); err != nil || !info.IsDir() {
+		return nil, func() {}, snapcmd.Usagef("the checkout %q is not a directory", untrusted.Esc(req.Dir))
+	}
+	r := conflicts.NewRunner(req.Dir)
+	got, err := r.RemoteRepo(ctx, req.Remote, req.Host)
+	if err != nil {
+		return nil, func() {}, snapcmd.Usagef("the checkout %q: %v", untrusted.Esc(req.Dir), err)
+	}
+	if !strings.EqualFold(got, req.Repo) {
+		return nil, func() {}, snapcmd.Usagef("remote %s of the checkout %q points to %q, not to %s", req.Remote, untrusted.Esc(req.Dir), untrusted.Esc(got), req.Repo)
+	}
+	return conflicts.Prober{Repo: req.Repo, Remote: req.Remote, Git: r}, r.Close, nil
 }
 
 func contains(list []string, s string) bool {

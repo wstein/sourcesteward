@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v1/pulls.schema.json",
   "title": "SourceSteward open pull request snapshot (schema 1)",
-  "description": "Result of stw pulls --json: one document with every open pull request of the selected repositories, grouped by what needs action (Spec 036). Exit statuses: 0 all repositories read (also when nothing is open), 1 at least one repository or owner discovery failed (the document is still printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. A row's url, created_at, age_days and head are null only when the forge gave no usable value. Added properties are compatible extensions.",
+  "description": "Result of stw pulls --json: one document with every open pull request of the selected repositories, grouped by what needs action (Spec 036). Exit statuses: 0 all repositories read (also when nothing is open), 1 at least one repository or owner discovery failed (the document is still printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. A row's url, created_at, age_days and head are null only when the forge gave no usable value. Added properties are compatible extensions. The conflicts member and the base_conflict row member are added by --conflicts (Spec 047).",
   "type": "object",
   "required": [
     "schema_version",
@@ -94,6 +94,12 @@
           "items": {
             "$ref": "#/$defs/hint"
           }
+        },
+        "conflicts": {
+          "type": "boolean"
+        },
+        "restack_plan": {
+          "type": "boolean"
         },
         "mergeable": {
           "type": "boolean"
@@ -407,6 +413,10 @@
             }
           }
         },
+        "base_conflicts": {
+          "type": "integer",
+          "minimum": 0
+        },
         "waiting_for_parent": {
           "type": "integer",
           "minimum": 0
@@ -488,6 +498,16 @@
           }
         ]
       }
+    },
+    "conflicts": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/conflictsDoc"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "owner_queue": {
       "anyOf": [
@@ -733,7 +753,8 @@
                 "review-or-protection",
                 "unstable",
                 "not-rebaseable",
-                "not-read"
+                "not-read",
+                "parent-conflict"
               ]
             },
             {
@@ -759,6 +780,16 @@
         },
         "hints": {
           "$ref": "#/$defs/hints"
+        },
+        "base_conflict": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/baseConflict"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "allOf": [
@@ -809,7 +840,8 @@
                   "review-or-protection",
                   "unstable",
                   "not-rebaseable",
-                  "not-read"
+                  "not-read",
+                  "parent-conflict"
                 ]
               }
             }
@@ -1130,6 +1162,374 @@
           }
         }
       ]
+    },
+    "baseConflict": {
+      "type": "object",
+      "required": [
+        "state",
+        "reason",
+        "base",
+        "base_sha",
+        "merge_base",
+        "files",
+        "overlap",
+        "truncated",
+        "blocked_by"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "clean",
+            "conflicts-with-base",
+            "unknown"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "enum": [
+                "fetch-failed",
+                "head-moved",
+                "ref-invalid",
+                "past-probe-limit",
+                "probe-failed",
+                "no-merge-base"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "base": {
+          "$ref": "#/$defs/str"
+        },
+        "base_sha": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "merge_base": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "base_commit"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/str"
+              },
+              "base_commit": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/sha"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "overlap": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/$defs/str"
+          }
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "blocked_by": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "Probe merge of a pull request against the current tip of its base (Spec 047). files lists the conflicting files with the last base commit that touched them; overlap lists, for a clean merge, the files both sides changed."
+    },
+    "stackLevel": {
+      "type": "object",
+      "required": [
+        "number",
+        "depth",
+        "parent",
+        "head",
+        "clear",
+        "ci",
+        "conflict",
+        "status"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "head": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "clear": {
+          "enum": [
+            "valid",
+            "invalid",
+            "none",
+            "unknown"
+          ]
+        },
+        "ci": {
+          "enum": [
+            "none",
+            "pending",
+            "green",
+            "red",
+            "-"
+          ]
+        },
+        "conflict": {
+          "enum": [
+            "clean",
+            "conflicts-with-base",
+            "unknown"
+          ]
+        },
+        "status": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "const": "blocked: restack needed"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^blocked by #[1-9][0-9]*$"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "restackStep": {
+      "type": "object",
+      "required": [
+        "number",
+        "head_ref",
+        "old_head",
+        "why",
+        "skip",
+        "rebase",
+        "verify",
+        "push"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "head_ref": {
+          "$ref": "#/$defs/str"
+        },
+        "old_head": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "why": {
+          "$ref": "#/$defs/str"
+        },
+        "skip": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/str"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rebase": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "verify": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "push": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 4096
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "description": "Commands as text; push runs only after the review of the new head. Nothing is executed by stw."
+    },
+    "restackPlan": {
+      "type": "object",
+      "required": [
+        "repo",
+        "remote",
+        "root",
+        "steps",
+        "gh_stack",
+        "brief"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "remote": {
+          "$ref": "#/$defs/str"
+        },
+        "root": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "steps": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/restackStep"
+          }
+        },
+        "gh_stack": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "brief": {
+          "type": "string",
+          "maxLength": 200000
+        }
+      }
+    },
+    "conflictsDoc": {
+      "type": "object",
+      "required": [
+        "remote",
+        "stacks",
+        "plans"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "remote": {
+          "$ref": "#/$defs/str"
+        },
+        "stacks": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "required": [
+              "repo",
+              "root",
+              "levels"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "repo": {
+                "$ref": "#/$defs/repo"
+              },
+              "root": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "levels": {
+                "type": "array",
+                "maxItems": 500,
+                "items": {
+                  "$ref": "#/$defs/stackLevel"
+                }
+              }
+            }
+          }
+        },
+        "plans": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/restackPlan"
+          }
+        }
+      },
+      "description": "Stack view and restack plans of the base conflicts (Spec 047); null without --conflicts."
     },
     "queueEntry": {
       "type": "object",
