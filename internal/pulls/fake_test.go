@@ -32,10 +32,18 @@ type fakeForge struct {
 	errNth  map[string][]error  // "detail/repo#n" -> errors for the 2nd, 3rd... read of that key
 	calls   []string
 	etags   []string
+	// Spec 046 review reads
+	comments    map[string][]hosting.IssueComment // repo#n
+	commentsTr  map[string]bool                   // repo#n -> truncated
+	commits     map[string]time.Time              // head sha -> committer date
+	closed      map[string]string                 // repo -> closed list body
+	defaultRef  map[string]string                 // repo -> default branch; missing means main
+	repoInfoErr map[string]error
 }
 
 func newForge() *fakeForge {
-	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}, seq: map[string][]string{}, errNth: map[string][]error{}}
+	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}, seq: map[string][]string{}, errNth: map[string][]error{},
+		comments: map[string][]hosting.IssueComment{}, commentsTr: map[string]bool{}, commits: map[string]time.Time{}, closed: map[string]string{}, defaultRef: map[string]string{}, repoInfoErr: map[string]error{}}
 }
 
 func (f *fakeForge) note(call string, etag string) error {
@@ -136,6 +144,8 @@ type pr struct {
 	rebaseable string // JSON: true|false|null
 	detailHead string // "" means the listed head
 	class      string // none|pending|green|red
+	base       string // "" means main
+	headRef    string // "" means feat
 }
 
 func okPR(repo string, n int) pr {
@@ -144,6 +154,12 @@ func okPR(repo string, n int) pr {
 
 func (f *fakeForge) add(p pr) {
 	it := hosting.PullListItem{Number: p.n, Title: fmt.Sprintf("title %d", p.n), User: p.user, UserType: p.utype, Draft: p.draft, HTMLURL: fmt.Sprintf("https://github.com/%s/pull/%d", p.repo, p.n), HeadSHA: p.head, HeadRef: "feat", BaseRef: "main"}
+	if p.base != "" {
+		it.BaseRef = p.base
+	}
+	if p.headRef != "" {
+		it.HeadRef = p.headRef
+	}
 	if !p.noTime {
 		it.CreatedAt = t0.Add(-p.age)
 	}
@@ -197,4 +213,70 @@ func (f *fakeForge) lazy(repo string, n int) {
 	p := okPR(repo, n)
 	f.add(p)
 	f.seq[fmt.Sprintf("%s#%d", repo, n)] = []string{detailBody(repo, "null", "unknown", p.head)}
+}
+
+func (f *fakeForge) ReadIssueComments(_ context.Context, repo string, n int) ([]hosting.IssueComment, bool, error) {
+	key := fmt.Sprintf("%s#%d", repo, n)
+	if err := f.note("comments/"+key, ""); err != nil {
+		return nil, false, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.comments[key], f.commentsTr[key], nil
+}
+
+func (f *fakeForge) Commit(_ context.Context, _ string, s string, etag string) (hosting.WatchResponse, error) {
+	if err := f.note("commit/"+s[:4], etag); err != nil {
+		return hosting.WatchResponse{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, ok := f.commits[s]
+	if !ok {
+		return hosting.WatchResponse{Status: 200, Body: []byte(`{}`)}, nil
+	}
+	return hosting.WatchResponse{Status: 200, Body: []byte(fmt.Sprintf(`{"commit":{"committer":{"date":%q}}}`, d.Format(time.RFC3339)))}, nil
+}
+
+func (f *fakeForge) ClosedPulls(_ context.Context, repo string) (hosting.WatchResponse, error) {
+	if err := f.note("closed/"+repo, ""); err != nil {
+		return hosting.WatchResponse{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	body := f.closed[repo]
+	if body == "" {
+		body = "[]"
+	}
+	return hosting.WatchResponse{Status: 200, Body: []byte(body)}, nil
+}
+
+func (f *fakeForge) RepoInfo(_ context.Context, repo string) (hosting.RepoInfo, error) {
+	if err := f.note("repoinfo/"+repo, ""); err != nil {
+		return hosting.RepoInfo{}, err
+	}
+	if err := f.repoInfoErr[repo]; err != nil {
+		return hosting.RepoInfo{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d := f.defaultRef[repo]
+	if d == "" {
+		d = "main"
+	}
+	return hosting.RepoInfo{DefaultBranch: d, HTMLURL: "https://github.com/" + repo}, nil
+}
+
+// plainReader hides every method but those of Reader: a reader without review support.
+type plainReader struct{ Reader }
+
+// say adds a comment (id, minute after t0) with the given body to repo#n.
+func (f *fakeForge) say(repo string, n int, id int64, min int, body string) {
+	k := fmt.Sprintf("%s#%d", repo, n)
+	at := t0.Add(time.Duration(min) * time.Minute)
+	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
+}
+
+func reviewLine(verdict, head string, n int) string {
+	return fmt.Sprintf("Review: %s head=%s patch-id=%s pr=%d\nrest", verdict, head, strings.Repeat("1", 40), n)
 }
