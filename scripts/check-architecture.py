@@ -16,7 +16,7 @@ def validate(lines):
         package, *imports = line.split()
         if package == MODULE + 'internal/cli':
             for dependency in imports:
-                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release', MODULE + 'internal/restack', MODULE + 'internal/stwsync', MODULE + 'internal/watchcmd', MODULE + 'internal/pullscmd', MODULE + 'internal/issuescmd', MODULE + 'internal/readycheck', MODULE + 'internal/lintprcmd', MODULE + 'internal/landcmd', MODULE + 'internal/untrusted', MODULE + 'internal/statuscmd', MODULE + 'internal/statusremote', MODULE + 'internal/overview', MODULE + 'internal/tidywizard', MODULE + 'internal/tidywizard/analysis', MODULE + 'internal/tidywizard/render', MODULE + 'internal/tidywizard/prompt', MODULE + 'internal/tidywizard/derive', MODULE + 'internal/tidywizard/owner', MODULE + 'internal/tidywizard/planset', MODULE + 'internal/tidywizard/plural', MODULE + 'internal/attribcmd')):
+                if dependency in ('os', 'os/exec', 'syscall') or dependency == 'net' or dependency.startswith('net/') or (dependency.startswith(MODULE) and dependency not in (MODULE + 'internal/inspection', MODULE + 'internal/workspace', MODULE + 'internal/hosting', MODULE + 'internal/release', MODULE + 'internal/restack', MODULE + 'internal/carryover', MODULE + 'internal/stwsync', MODULE + 'internal/watchcmd', MODULE + 'internal/pullscmd', MODULE + 'internal/issuescmd', MODULE + 'internal/readycheck', MODULE + 'internal/lintprcmd', MODULE + 'internal/landcmd', MODULE + 'internal/untrusted', MODULE + 'internal/statuscmd', MODULE + 'internal/statusremote', MODULE + 'internal/overview', MODULE + 'internal/tidywizard', MODULE + 'internal/tidywizard/analysis', MODULE + 'internal/tidywizard/render', MODULE + 'internal/tidywizard/prompt', MODULE + 'internal/tidywizard/derive', MODULE + 'internal/tidywizard/owner', MODULE + 'internal/tidywizard/planset', MODULE + 'internal/tidywizard/plural', MODULE + 'internal/attribcmd')):
                     raise ValueError('CLI may access only reviewed inspection/workspace/hosting operations: ' + dependency)
         if package.startswith(MODULE + 'cmd/'):
             for dependency in imports:
@@ -293,7 +293,7 @@ FOREIGN_FILE_LISTS = ('CgoFiles', 'CFiles', 'CXXFiles', 'MFiles', 'HFiles', 'FFi
 # inspection, hosting operations and its own subpackages. Extend only when actually needed.
 RELEASE_IMPORT_ALLOWLIST = (MODULE.rstrip('/'), MODULE + 'internal/inspection', MODULE + 'internal/hosting')
 RELEASE_PREFIX = MODULE + 'internal/release'
-EXEC_ALLOWED_PACKAGES = (RELEASE_PREFIX, MODULE + 'internal/inspection')
+EXEC_ALLOWED_PACKAGES = (RELEASE_PREFIX, MODULE + 'internal/inspection', MODULE + 'internal/carryover')
 
 
 def validate_release_packages(packages):
