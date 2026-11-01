@@ -69,6 +69,15 @@ type Options struct {
 	Merge bool
 	// Submodules is --submodules: detached (pinned) submodules are brought to the commit the superproject records.
 	Submodules bool
+	// Rules is --rules: fast-forward the agent-rules checkout when every guard holds (rules.go). RulesPath is
+	// --rules-path or STW_RULES_PATH (RulesPathSource flag or env). OwnerIdentities and AllowedCommitters are
+	// "Name <email>" texts (--owner-identity, --allowed-committer). Home is the user's home directory, only read.
+	Rules             bool
+	RulesPath         string
+	RulesPathSource   string
+	OwnerIdentities   []string
+	AllowedCommitters []string
+	Home              string
 }
 
 // ResultOptions echoes the requested options; null means the Git configuration decides.
@@ -78,6 +87,7 @@ type ResultOptions struct {
 	Autostash  *bool `json:"autostash"`
 	Merge      bool  `json:"merge"`
 	Submodules bool  `json:"submodules"`
+	Rules      bool  `json:"rules"`
 }
 
 // Repo is the root repository or one submodule. Branch, Remote, OldOID and NewOID are nil when unknown.
@@ -123,6 +133,8 @@ type Result struct {
 	Repos         []Repo        `json:"repos"`
 	Summary       Summary       `json:"summary"`
 	Error         *Failure      `json:"error"`
+	// Rules reports the agent-rules checkout; null when none was found or asked for, and in restore mode.
+	Rules *Rules `json:"rules"`
 }
 
 // ExitCode is 1 when the run was refused or any repository ended failed, conflict (a rebase or merge left in progress),
@@ -138,6 +150,9 @@ func (r Result) ExitCode() int {
 		case ResultFailed, ResultConflict, ResultAutostashConflict, ResultChangedSince, ResultJournalIncomplete, ResultUnreachable:
 			return 1
 		}
+	}
+	if r.Rules != nil && r.Rules.Outcome == OutcomeFailed {
+		return 1
 	}
 	return 0
 }
