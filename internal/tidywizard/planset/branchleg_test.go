@@ -405,7 +405,7 @@ func newRealLeg(t *testing.T, chosen string) *realLeg {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
 	}
-	root := t.TempDir()
+	root := realTempDir(t)
 	f := &realLeg{repo: filepath.Join(root, "repo"), state: filepath.Join(root, "state")}
 	parent := filepath.Join(root, "parent") // holds only the worktree: sibling evidence must be stable
 	f.wt = filepath.Join(parent, "wt")

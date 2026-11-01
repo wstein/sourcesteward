@@ -499,7 +499,7 @@ func TestValidateRefusesAnAuthorizedScopeThatNoItemCarries(t *testing.T) {
 }
 
 func TestStoreAndLoadRoundTrip(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "s")
+	dir := filepath.Join(realTempDir(t), "s")
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -524,7 +524,7 @@ func TestStoreAndLoadRoundTrip(t *testing.T) {
 }
 
 func TestLoadRefusesAnEditedStore(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "s")
+	dir := filepath.Join(realTempDir(t), "s")
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -575,7 +575,7 @@ func TestLoadRefusesAnEditedStore(t *testing.T) {
 }
 
 func TestStoreRefusesAnInvalidOrForgedSet(t *testing.T) {
-	dir := filepath.Join(t.TempDir(), "s")
+	dir := filepath.Join(realTempDir(t), "s")
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}

@@ -33,7 +33,7 @@ func newRealChain(t *testing.T, n int, branches bool) *realChain {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
 	}
-	root := t.TempDir()
+	root := realTempDir(t)
 	f := &realChain{repo: filepath.Join(root, "repo"), state: filepath.Join(root, "state")}
 	parent := filepath.Join(root, "parent")
 	for _, d := range []struct {
