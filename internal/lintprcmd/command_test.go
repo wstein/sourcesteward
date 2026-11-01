@@ -190,7 +190,7 @@ func TestViolationsExitOneAndAreLocated(t *testing.T) {
 	src.commits = map[int]string{1: "[" + commitJSON(sha("2"), "bad subject "+sessionURL, "Other", "o@x.y", ownerName, ownerEmail) + "]"}
 	src.comments = map[int]string{1: `[{"id":42,"body":"Review: CLEAR\nrest ` + sessionURL + `"}]`}
 	m, out, err := run(t, src)
-	if exitCode(err) != ExitFindings || out == "" {
+	if exitCode(err) != 3 || out == "" {
 		t.Fatalf("exit %d, out %q", exitCode(err), out)
 	}
 	want := map[string]bool{"session-link": false, "author-identity": false, "co-authored-by": false, "conventional-commit": false, "pr-blocker-line": false, "pr-author-agent-line": false, "review-line-format": false}
@@ -258,7 +258,7 @@ func TestNullBodyIsEmpty(t *testing.T) {
 	src := cleanSource()
 	src.detail = fmt.Sprintf(`{"number":7,"title":"t","body":null,"head":{"sha":%q}}`, sha("a"))
 	m, _, err := run(t, src)
-	if exitCode(err) != ExitFindings || len(findingRules(m)) == 0 {
+	if exitCode(err) != 3 || len(findingRules(m)) == 0 {
 		t.Fatalf("%v %v", err, m)
 	}
 }
@@ -336,6 +336,18 @@ func TestReadFailuresExitOneWithoutDocument(t *testing.T) {
 	}
 }
 
+func TestLinkNextThatIsNotTheFollowingPageIsAReadFailure(t *testing.T) {
+	for _, kind := range []string{"commits", "comments"} {
+		src := cleanSource()
+		src.links[kind+"/1"] = nextLink(5)
+		var out bytes.Buffer
+		err := Execute(context.Background(), params(src, &out))
+		if exitCode(err) != 1 || out.Len() != 0 || !strings.Contains(err.Error(), "Link next") {
+			t.Errorf("%s: exit %d out %q err %v", kind, exitCode(err), out.String(), err)
+		}
+	}
+}
+
 func TestOpenFailureExitsOne(t *testing.T) {
 	var out bytes.Buffer
 	p := params(cleanSource(), &out)
@@ -355,7 +367,7 @@ func TestHumanOutputListsEachFinding(t *testing.T) {
 	p.Human = true
 	err := Execute(context.Background(), p)
 	text := out.String()
-	if exitCode(err) != ExitFindings || !strings.Contains(text, "pr-blocker-line") || !strings.Contains(text, "error") || !strings.Contains(text, "pr-body") || !strings.Contains(text, "o/r#7") {
+	if exitCode(err) != 3 || !strings.Contains(text, "pr-blocker-line") || !strings.Contains(text, "error") || !strings.Contains(text, "pr-body") || !strings.Contains(text, "o/r#7") {
 		t.Fatalf("%v\n%s", err, text)
 	}
 }
