@@ -20,7 +20,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v1/pins.schema.json":                   "1ae773a4fa0c4d08a9948ff050600505165323865a44b213ae91b205204c055b",
 	"schemas/v1/issues.schema.json":                 "10082037cbb97bc5311e52e9738daf3f774b0f3ee9ca97eb84d3a93d6b94f6ee",
 	"schemas/v1/lint-pr.schema.json":                "547c35979eb6881a783fc84376f7ea507d481d3ca6d4ba1cafe0207efa846f1f",
-	"schemas/v1/pulls.schema.json":                  "df8d4e44b27142ce5f9f7b56b679d0780ed744654910fc68a77a2066587fabe7",
+	"schemas/v1/pulls.schema.json":                  "9bacfb3993c5da5b42fbb6b2584741914f6226c121f1fb9c8407ed273820e2b9",
 	"schemas/v1/release-build-manifest.schema.json": "ca9fc9e2087d421d7bc0be1bc341fcb76248af6668f7719b3260bd9d949a84fd",
 	"schemas/v1/release-build.schema.json":          "f0f63a7ab8b7e19ae7437855e8da62c223c8f937a1740542bc52561cc9e88f73",
 	"schemas/v1/release-check.schema.json":          "df1bf6730b4ad4e8495b2f970cc2774e6ccb03a093f9de4fc2db6f963048c5b4",
@@ -42,7 +42,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v2/hosting-pr.schema.json":             "2baef8835871144bcfeac3e3bbc15fa6ead88c9b30bce9949b19ef7f8d6c3756",
 	"schemas/v2/hosting-prs.schema.json":            "a4d2a263bc8470fe78757c639b359fe4a30a52e0a0638c67e747a6d8eb696047",
 	"schemas/v2/inspect.schema.json":                "3824dbf58ee99eaa184218c292a8eff0e7c7ee1b7f455a77d9c1977f1478f595",
-	"schemas/v2/status.schema.json":                 "0e2ebc28bc4bfef8f6ba0d8f7bc31826bb354c982a8c678d4a44b3fb1c243a08",
+	"schemas/v2/status.schema.json":                 "9ef82ce270f68d2006eb13816c07b3b27baf1a5c8803fdce7e4e55c43666034f",
 	"schemas/v2/tidy-overview.schema.json":          "106b87ef4caf39fdde2db74465ba9c4c866db813fe03c5361f5395690494ff3f",
 	"schemas/v2/tidy.schema.json":                   "c964a85de0941f41ceef84b6cc57235de984c7084ea1b4bacc8ebd799de19f2d",
 }

@@ -111,11 +111,28 @@ func (r *WatchReader) ClosedPulls(ctx context.Context, repo string) (WatchRespon
 }
 
 // IssueComment is one comment of a pull request. URL is empty unless it is an https URL; Body is
-// cut at 4096 bytes (only its first line is ever read).
+// cut at 4096 bytes (only its first line is ever read). Association is the author_association of
+// GitHub (OWNER, MEMBER, COLLABORATOR, CONTRIBUTOR, NONE, ...), empty when missing or unusable.
 type IssueComment struct {
 	ID                   int64
 	CreatedAt, UpdatedAt time.Time
 	Body, URL            string
+	Association          string
+}
+
+// cleanAssociation keeps an author_association only when it is 1 to 32 upper-case letters or
+// underscores; anything else (missing, null, another type, lower case) is empty, so it never trusts.
+func cleanAssociation(raw json.RawMessage) string {
+	var s string
+	if err := json.Unmarshal(raw, &s); err != nil || s == "" || len(s) > 32 {
+		return ""
+	}
+	for _, r := range s {
+		if (r < 'A' || r > 'Z') && r != '_' {
+			return ""
+		}
+	}
+	return s
 }
 
 // ParseIssueComments decodes one comment page. id and created_at are required.
@@ -126,6 +143,9 @@ func ParseIssueComments(body []byte) ([]IssueComment, error) {
 		CreatedAt string  `json:"created_at"`
 		UpdatedAt string  `json:"updated_at"`
 		Body      *string `json:"body"`
+		// The author association is the only author fact read; it is a claim of GitHub about the
+		// commenter, and a missing or odd value is simply empty.
+		Association json.RawMessage `json:"author_association"`
 	}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return nil, malformed("comment page is not a JSON array")
@@ -142,7 +162,7 @@ func ParseIssueComments(body []byte) ([]IssueComment, error) {
 				return nil, malformed("comment with an unusable updated_at")
 			}
 		}
-		ic := IssueComment{ID: c.ID, CreatedAt: created, UpdatedAt: updated}
+		ic := IssueComment{ID: c.ID, CreatedAt: created, UpdatedAt: updated, Association: cleanAssociation(c.Association)}
 		if c.Body != nil {
 			ic.Body = cutUTF8(*c.Body, maxCommentBody)
 		}

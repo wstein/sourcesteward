@@ -78,7 +78,7 @@ func fixtureReport() Report {
 		Issues: &statusremote.Issues{State: okSource, Open: 5, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}, Dropped: 2, Truncated: true,
 			Rows: []overview.Issue{{Number: 12}, {Number: 13}}},
 		Pulls: &statusremote.Pulls{State: okSource, Open: ptr(3), ReviewRead: true, Counts: pulls.Summary{Total: 3, Ready: 1, Draft: 1, Blocked: 1,
-			Review: pulls.ReviewCounts{Clear: 1, Findings: 1, None: 1}, Hints: pulls.HintCounts{ClearNotReady: 1, ReadyMergeable: 1}},
+			Review: pulls.ReviewCounts{Clear: 1, Findings: 1, None: 1}, Hints: pulls.HintCounts{ClearNotReady: 1, ForeignReviewIgnored: 2, TruncatedReviewUnknown: 3, ReadyMergeable: 1}},
 			PRs: []overview.PR{
 				{Number: 57, Group: overview.GroupReady}, {Number: 58, Draft: true, Group: overview.GroupDraft}, {Number: 59, Group: overview.GroupBlocked, Reason: "checks-red"},
 			}},
@@ -234,11 +234,11 @@ func TestDocumentDataOfEachSource(t *testing.T) {
 	review := PullsData["review"].(map[string]any)
 	requireKeys(t, "pulls review", review, "states", "hints")
 	requireKeys(t, "review states", review["states"].(map[string]any), "none", "findings", "clear", "clear_carried", "clear_stale", "unparsed", "not_read")
-	requireKeys(t, "review hints", review["hints"].(map[string]any), "clear_not_ready", "no_final_review", "base_not_default", "parent_merged_retarget", "ready_mergeable")
+	requireKeys(t, "review hints", review["hints"].(map[string]any), "clear_not_ready", "no_final_review", "base_not_default", "parent_merged_retarget", "truncated_review_unknown", "foreign_review_ignored", "ready_mergeable")
 	if st := review["states"].(map[string]any); st["clear"] != float64(1) || st["findings"] != float64(1) || st["none"] != float64(1) || st["not_read"] != float64(0) {
 		t.Errorf("%v", st)
 	}
-	if h := review["hints"].(map[string]any); h["clear_not_ready"] != float64(1) || h["ready_mergeable"] != float64(1) || h["no_final_review"] != float64(0) {
+	if h := review["hints"].(map[string]any); h["clear_not_ready"] != float64(1) || h["ready_mergeable"] != float64(1) || h["no_final_review"] != float64(0) || h["foreign_review_ignored"] != float64(2) || h["truncated_review_unknown"] != float64(3) {
 		t.Errorf("%v", h)
 	}
 	// a repository whose pulls were read without reviews has no review member

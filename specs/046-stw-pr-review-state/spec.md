@@ -14,9 +14,17 @@ pull requests depend on each other. `stw` reads and shows; it never writes, labe
 
 ## Trust model
 
-Every comment, including the agents' review comments, is posted by the GitHub account of the owner. A CLEAR is therefore a **claim**,
-not proof, and `stw` never says "independent", "verified" or "approved". It shows `review: clear` with the basis `comment` (human text:
-"per comment") and checks only what can be checked from GitHub data:
+A review comment is a **claim** of the account that posted it, not proof, and `stw` never says "independent", "verified" or
+"approved". Agents post their verdicts through the owner's account, but anybody who may comment can post a line of the same shape, so a
+line is counted only from an author GitHub itself associates with the repository:
+
+0. the comment's `author_association` is `OWNER`, `MEMBER` or `COLLABORATOR`. Any other value (`CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR`,
+   `FIRST_TIMER`, `MANNEQUIN`, `NONE`) and a missing or unusable value (fail closed) is **ignored**: the comment has no effect on the
+   state, the hints other than `foreign-review-ignored`, or the evidence. Ignored comments whose first line looks like a review line
+   (a strict line or an unparsed one) are counted (`ignored`) and raise the hint `foreign-review-ignored`.
+
+`stw` shows `review: clear` with the basis `comment` (human text: "per comment") and the `author_association` of the decisive comment,
+and checks only what can be checked from GitHub data:
 
 1. the head named in the comment equals the current head SHA of the pull request (otherwise `clear-stale`);
 2. the comment was created at or after the committer date of the head commit (a comment that names a SHA before that commit existed
@@ -25,8 +33,9 @@ not proof, and `stw` never says "independent", "verified" or "approved". It show
 4. the `patch-id` of a carry-over equals the `patch-id` of the CLEAR it carries, and the carry-over was posted after that CLEAR;
 5. `pr=` equals the number of the pull request that carries the comment.
 
-Comment edits are visible (`edited`) but not refused. Nothing else is inferred: the author of a comment is not interpreted, and a text
-that is not strictly parseable is never guessed (`unparsed`).
+`OWNER`, `MEMBER` and `COLLABORATOR` are claims of GitHub about the commenter, and a collaborator with write access can still post a
+line that is not an agent's. Comment edits are visible (`edited`) but not refused. Nothing else is inferred, and a text that is not
+strictly parseable is never guessed (`unparsed`).
 
 ## Comment grammar (strict)
 
@@ -59,12 +68,13 @@ Let H be the current head, T the committer date of H. Comments are ordered by `c
 The **decisive comment** for H is the latest (by `created_at`, then id) of: a `Review:` line with `head=H` created at or after T, and a
 valid carry-over with `to=H` created at or after T. A carry-over `from=F to=H` is valid when a chain exists from a `Review: CLEAR head=F`
 that was the latest `Review` for F up to the carry-over, with equal `patch-id`, created before the carry-over, and each link is created
-at or after the one before it (at most 8 links; a repeated head ends the chain). A carry-over of `FINDINGS` is not valid. A decisive comment is never overridden by an
+at or after the one before it (at most 8 links; a chain is followed backwards through earlier comments only, and a link whose target head the chain already
+visited is not followed, so the chain ends there). A carry-over of `FINDINGS` is not valid. A decisive comment is never overridden by an
 older unparsed comment. A strict comment ignored by rule 2 or 4 does not count: it can leave the state `none`.
 
 Evidence per state: the verdict, the head named in the decisive comment (for a carry-over the head of the CLEAR it carries), the
-`patch-id`, the time and `https` URL of the decisive comment, `carried`, `edited` (its `updated_at` is after `created_at`) and
-`truncated` (a long thread is read as its first page and its last five pages of 50 comments, so a comment in the middle can be missed).
+`patch-id`, the time, `https` URL and `author_association` of the decisive comment, `carried`, `edited` (its `updated_at` is after `created_at`) and
+`truncated` (a long thread is read as its first page and its last five pages of 50 comments, so a comment in the middle can be missed) and `ignored` (the number of ignored comments by other authors that look like review lines).
 
 ## Hints (derived, a pull request may have several)
 
@@ -74,7 +84,9 @@ Evidence per state: the verdict, the head named in the decisive comment (for a c
 | `no-final-review` | comments were read and the state is `none`, `clear-stale` or `unparsed` (no strict comment for H) |
 | `base-not-default` | the base branch is not the default branch of the repository |
 | `parent-merged-retarget` | `base-not-default`, and a merged pull request of the same repository had that branch as its head; the child needs a retarget or restack |
-| `ready-mergeable` | not a Draft, state `clear` or `clear-carried`, verdict group `ready` (Spec 036: head checks green, `mergeable` true, state `clean`, rebaseable), base is the default branch |
+| `truncated-review-unknown` | comments were read and the thread was truncated (first page and last five pages): a comment in the middle, for example FINDINGS after the CLEAR, may be missing, so the review is unknown (fail closed) |
+| `foreign-review-ignored` | at least one comment of an author who is not `OWNER`, `MEMBER` or `COLLABORATOR` looks like a review line and was ignored |
+| `ready-mergeable` | not a Draft, state `clear` or `clear-carried`, thread not truncated, verdict group `ready` (Spec 036: head checks green, `mergeable` true, state `clean`, rebaseable), base is the default branch |
 
 `parent-merged-retarget` looks at the 100 most recently updated closed pull requests of the repository (one read). Evidence outside that
 window is not seen, so the hint can be absent for an old parent (a documented limit, never a guess). `ready-mergeable` says: per
@@ -124,7 +136,7 @@ publication freezes the result. The owner list and the stack view add document m
 
 ## Non-goals
 
-No write of any kind, no verification of who wrote a comment, no interpretation of free-form comments, no PR review API
+No write of any kind, no verification of who stands behind a comment beyond its `author_association`, no interpretation of free-form comments, no PR review API
 (`pulls/N/reviews`), no required-check list, no Ready or merge advice beyond `ready-mergeable`, no new status action category,
 `stw ready-check` (#343) and `stw review carry-over` (#345) are separate.
 

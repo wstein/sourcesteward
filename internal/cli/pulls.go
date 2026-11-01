@@ -30,9 +30,9 @@ func pullsCommand() *cobra.Command {
 			"detail budget is spent; --limit N (default 200, 1 to 500) is the number of non-draft pull requests (drafts too with --detail-drafts)\n" +
 			"whose pulls/N and checks are read, newest first; the rest is listed as blocked, not-read and counted in summary.not_read.\n" +
 			"Review state (Spec 046): every row also shows the review state read from the first line of the pull request comments (Review: CLEAR|FINDINGS head=... patch-id=... pr=N,\n" +
-			"Carried-over: from=... to=... patch-id=... pr=N): none, findings, clear, clear-carried, clear-stale, unparsed (a free-form verdict is never guessed). All comments come from the\n" +
-			"owner's account, so a state is what a comment claims, checked only against the head, the head commit date and the carry-over chain. Hints: clear-not-ready,\n" +
-			"no-final-review, base-not-default, parent-merged-retarget, ready-mergeable. --review STATE and --hint HINT (repeatable) keep matching rows; --no-review skips the comment reads.\n" +
+			"Carried-over: from=... to=... patch-id=... pr=N): none, findings, clear, clear-carried, clear-stale, unparsed (a free-form verdict is never guessed). Only comments of an OWNER,\n" +
+			"MEMBER or COLLABORATOR count, so a state is what such a comment claims, checked only against the head, the head commit date and the carry-over chain. Hints: clear-not-ready,\n" +
+			"no-final-review, base-not-default, parent-merged-retarget, truncated-review-unknown, foreign-review-ignored, ready-mergeable. --review STATE and --hint HINT (repeatable) keep matching rows; --no-review skips the comment reads.\n" +
 			"Output is human on a terminal and one JSON document otherwise (--human, --json). Authentication is the gh token route of the hosting commands;\n" +
 			"a missing token is exit 1 before any request and no token is ever printed. Nothing is written to disk or to the forge. On rate-limit\n" +
 			"exhaustion the run stops reading, prints what it has and exits 1; it never sleeps and never loops.\n" +
@@ -70,7 +70,7 @@ func pullsCommand() *cobra.Command {
 	flags.IntVar(&f.Limit, "limit", 200, "Pull requests whose detail and checks are read (1 to 500)")
 	flags.BoolVar(&f.NoReview, "no-review", false, "Do not read the pull request comments (no review state and no hints)")
 	flags.StringArrayVar(&f.ReviewStates, "review", nil, "Show only rows in this review state: none, findings, clear, clear-carried, clear-stale, unparsed (repeatable)")
-	flags.StringArrayVar(&f.Hints, "hint", nil, "Show only rows with this hint: clear-not-ready, no-final-review, base-not-default, parent-merged-retarget, ready-mergeable (repeatable)")
+	flags.StringArrayVar(&f.Hints, "hint", nil, "Show only rows with this hint: clear-not-ready, no-final-review, base-not-default, parent-merged-retarget, truncated-review-unknown, foreign-review-ignored, ready-mergeable (repeatable)")
 	flags.BoolVar(&f.Human, "human", false, "Print the human table (default on a terminal)")
 	flags.BoolVar(&f.JSON, "json", false, "Print one JSON document (default otherwise)")
 	return command

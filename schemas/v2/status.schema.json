@@ -2247,6 +2247,8 @@
                 "no_final_review",
                 "base_not_default",
                 "parent_merged_retarget",
+                "truncated_review_unknown",
+                "foreign_review_ignored",
                 "ready_mergeable"
               ],
               "additionalProperties": false,
@@ -2264,6 +2266,14 @@
                   "minimum": 0
                 },
                 "parent_merged_retarget": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "truncated_review_unknown": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "foreign_review_ignored": {
                   "type": "integer",
                   "minimum": 0
                 },

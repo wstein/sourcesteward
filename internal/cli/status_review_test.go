@@ -27,6 +27,13 @@ func TestStatusRemoteLineNamesTheReviewStatesAndHints(t *testing.T) {
 	}
 }
 
+func TestStatusRemoteLineNamesTruncatedAndForeignHints(t *testing.T) {
+	line := statusRemoteLine(reviewRepo(true, pulls.ReviewCounts{Clear: 2, None: 1}, pulls.HintCounts{TruncatedReviewUnknown: 2, ForeignReviewIgnored: 1}))
+	if !strings.Contains(line, "reviews: 2 clear, 1 none (hints: 2 truncated-review-unknown, 1 foreign-review-ignored)") {
+		t.Fatalf("%s", line)
+	}
+}
+
 func TestStatusRemoteLineWithoutReviewReadsStaysAsItWas(t *testing.T) {
 	line := statusRemoteLine(reviewRepo(false, pulls.ReviewCounts{NotRead: 3}, pulls.HintCounts{}))
 	if strings.Contains(line, "review") || strings.Contains(line, "hints") {

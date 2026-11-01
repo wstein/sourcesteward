@@ -372,3 +372,88 @@ func TestReviewInvalidListedHeadIsNotRead(t *testing.T) {
 		t.Fatalf("%+v %v", res.Rows, f.calls)
 	}
 }
+
+func TestReviewHintFilterSkipsRowsWithoutReview(t *testing.T) {
+	f := newForge()
+	for n := 1; n <= 3; n++ {
+		p := okPR(repoA, n)
+		if n != 3 {
+			p.base = "feat" // base-not-default does not need the comments
+		}
+		f.add(p)
+		f.commits[p.head] = t0
+	}
+	f.errAt["comments/o/a#1"] = &hosting.WatchError{Code: hosting.CodeHTTP5xx, Message: "server error"}
+	f.errAt["comments/o/a#3"] = &hosting.WatchError{Code: hosting.CodeHTTP5xx, Message: "server error"}
+	nums := func(res *Result) string {
+		var out []string
+		for _, r := range res.Rows {
+			out = append(out, fmt.Sprint(r.Number))
+		}
+		return strings.Join(out, ",")
+	}
+	all := runReview(t, f, Options{})
+	if got := strings.Join(row(t, all, repoA, 1).Hints, ","); row(t, all, repoA, 1).Review != nil || got != reviewstate.HintBaseNotDefault {
+		t.Fatalf("setup: #1 is unread and has the hint base-not-default: %+v", row(t, all, repoA, 1))
+	}
+	if got := nums(runReview(t, f, Options{Hints: []string{"base-not-default"}})); got != "2" {
+		t.Fatalf("an unread row matches no hint, even one it carries: %s", got)
+	}
+	if got := nums(runReview(t, f, Options{Hints: []string{"no-final-review"}})); got != "2" {
+		t.Fatalf("an unread row without hints matches no hint: %s", got)
+	}
+}
+
+func TestReviewIgnoresCommentsOfOtherAuthors(t *testing.T) {
+	f := newForge()
+	h1, h2, h3 := reviewed(f, repoA, 1), reviewed(f, repoA, 2), reviewed(f, repoA, 3)
+	f.sayAs(repoA, 1, 1, 5, reviewLine("CLEAR", h1, 1), "NONE")
+	f.sayAs(repoA, 2, 1, 5, reviewLine("CLEAR", h2, 2), "")
+	f.sayAs(repoA, 3, 1, 5, reviewLine("CLEAR", h3, 3), "MEMBER")
+	f.sayAs(repoA, 3, 2, 6, reviewLine("FINDINGS", h3, 3), "FIRST_TIME_CONTRIBUTOR")
+	res := runReview(t, f, Options{})
+	for _, n := range []int{1, 2} {
+		r := row(t, res, repoA, n)
+		if r.Review.State != reviewstate.StateNone || r.Review.Ignored != 1 || r.Review.Association != "" || r.Review.URL != "" {
+			t.Errorf("#%d: %+v", n, r.Review)
+		}
+		if got := strings.Join(r.Hints, ","); got != reviewstate.HintNoFinalReview+","+reviewstate.HintForeignReviewIgnored {
+			t.Errorf("#%d hints %q", n, got)
+		}
+	}
+	r := row(t, res, repoA, 3)
+	if r.Review.State != reviewstate.StateClear || r.Review.Association != "MEMBER" || r.Review.Ignored != 1 {
+		t.Fatalf("#3 %+v", r.Review)
+	}
+	if got := strings.Join(r.Hints, ","); got != reviewstate.HintForeignReviewIgnored+","+reviewstate.HintReadyMergeable {
+		t.Fatalf("#3 hints %q", got)
+	}
+	if h := res.Summary.Hints; h.ForeignReviewIgnored != 3 || h.ReadyMergeable != 1 || h.NoFinalReview != 2 {
+		t.Fatalf("hint counts %+v", h)
+	}
+	if got := len(runReview(t, f, Options{Hints: []string{"foreign-review-ignored"}}).Rows); got != 3 {
+		t.Fatalf("filter by foreign-review-ignored: %d rows", got)
+	}
+}
+
+func TestReviewTruncatedThreadIsNotReadyMergeable(t *testing.T) {
+	f := newForge()
+	h1, h2 := reviewed(f, repoA, 1), reviewed(f, repoA, 2)
+	f.say(repoA, 1, 1, 5, reviewLine("CLEAR", h1, 1))
+	f.say(repoA, 2, 1, 5, reviewLine("CLEAR", h2, 2))
+	f.commentsTr["o/a#1"] = true
+	res := runReview(t, f, Options{})
+	r := row(t, res, repoA, 1)
+	if r.Review.State != reviewstate.StateClear || !r.Review.Truncated {
+		t.Fatalf("%+v", r.Review)
+	}
+	if got := strings.Join(r.Hints, ","); got != reviewstate.HintTruncatedReviewUnknown {
+		t.Fatalf("hints %q", got)
+	}
+	if got := strings.Join(row(t, res, repoA, 2).Hints, ","); got != reviewstate.HintReadyMergeable {
+		t.Fatalf("#2 hints %q", got)
+	}
+	if h := res.Summary.Hints; h.TruncatedReviewUnknown != 1 || h.ReadyMergeable != 1 {
+		t.Fatalf("hint counts %+v", h)
+	}
+}

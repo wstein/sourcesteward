@@ -26,8 +26,12 @@ var _ ReviewSource = (*hosting.WatchReader)(nil)
 // (Spec 046). The verdict is the claim of a comment, not proof; At and URL are zero/empty without one.
 type ReviewInfo struct {
 	State, Verdict, Head, PatchID, URL string
-	At                                 time.Time
-	Carried, Edited, Truncated         bool
+	// Association is the author_association of the decisive comment (OWNER, MEMBER or COLLABORATOR);
+	// Ignored counts review-like comments of other authors that were left out.
+	Association                string
+	Ignored                    int
+	At                         time.Time
+	Carried, Edited, Truncated bool
 }
 
 // ReviewCounts counts rows per review state; NotRead counts rows whose comments were not read.
@@ -35,7 +39,7 @@ type ReviewCounts struct{ None, Findings, Clear, ClearCarried, ClearStale, Unpar
 
 // HintCounts counts rows per hint.
 type HintCounts struct {
-	ClearNotReady, NoFinalReview, BaseNotDefault, ParentMergedRetarget, ReadyMergeable int
+	ClearNotReady, NoFinalReview, BaseNotDefault, ParentMergedRetarget, TruncatedReviewUnknown, ForeignReviewIgnored, ReadyMergeable int
 }
 
 // validateReview checks the review options of Run.
@@ -166,7 +170,7 @@ func (c *cycle) readReview(ctx context.Context, src ReviewSource, st *RepoStatus
 	}
 	comments := make([]reviewstate.Comment, len(got))
 	for i, g := range got {
-		comments[i] = reviewstate.Comment{ID: g.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt, Body: g.Body, URL: g.URL}
+		comments[i] = reviewstate.Comment{ID: g.ID, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt, Body: g.Body, URL: g.URL, Association: g.Association}
 	}
 	var headTime time.Time
 	if reviewstate.NeedsHeadTime(it.Number, it.HeadSHA, comments) {
@@ -181,7 +185,7 @@ func (c *cycle) readReview(ctx context.Context, src ReviewSource, st *RepoStatus
 	}
 	r := reviewstate.Evaluate(reviewstate.Input{PR: it.Number, Head: it.HeadSHA, HeadTime: headTime, Comments: comments, Truncated: truncated})
 	it.row.Review = &ReviewInfo{State: r.State, Verdict: r.Verdict, Head: r.Head, PatchID: r.PatchID, URL: clip(r.URL), At: r.At,
-		Carried: r.Carried, Edited: r.Edited, Truncated: r.Truncated}
+		Association: r.Association, Ignored: r.Ignored, Carried: r.Carried, Edited: r.Edited, Truncated: r.Truncated}
 }
 
 // hints derives the hints of a finished row.
@@ -189,6 +193,7 @@ func (c *cycle) hints(it *item) []string {
 	in := reviewstate.HintInput{Draft: it.row.Draft, Group: it.row.Group, Base: it.row.Base, DefaultBranch: it.defaultBranch, ParentMerged: it.parentMerged}
 	if it.row.Review != nil {
 		in.ReviewRead, in.State = true, it.row.Review.State
+		in.Truncated, in.Ignored = it.row.Review.Truncated, it.row.Review.Ignored
 	}
 	if h := reviewstate.Hints(in); h != nil {
 		return h
@@ -248,6 +253,10 @@ func countReview(rows []Row) (ReviewCounts, HintCounts) {
 				hc.BaseNotDefault++
 			case reviewstate.HintParentMergedRetarget:
 				hc.ParentMergedRetarget++
+			case reviewstate.HintTruncatedReviewUnknown:
+				hc.TruncatedReviewUnknown++
+			case reviewstate.HintForeignReviewIgnored:
+				hc.ForeignReviewIgnored++
 			case reviewstate.HintReadyMergeable:
 				hc.ReadyMergeable++
 			}

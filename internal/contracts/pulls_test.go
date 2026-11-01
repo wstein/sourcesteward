@@ -139,7 +139,7 @@ func reviewMembers(t *testing.T, state string, fn func(r, rv, m map[string]any))
 	t.Helper()
 	return mutatePulls(t, func(m map[string]any) {
 		r := pullRow(m)
-		rv := map[string]any{"basis": "comment", "state": state, "verdict": nil, "head": nil, "patch_id": nil, "at": nil, "url": nil, "carried": false, "edited": false, "truncated": false}
+		rv := map[string]any{"basis": "comment", "state": state, "verdict": nil, "head": nil, "patch_id": nil, "at": nil, "url": nil, "association": nil, "ignored": 0, "carried": false, "edited": false, "truncated": false}
 		switch state {
 		case "clear", "clear-carried", "clear-stale", "findings":
 			rv["verdict"] = "CLEAR"
@@ -148,13 +148,14 @@ func reviewMembers(t *testing.T, state string, fn func(r, rv, m map[string]any))
 			}
 			rv["head"], rv["patch_id"], rv["at"], rv["url"] = strings.Repeat("a", 40), strings.Repeat("1", 40), "2026-11-01T09:00:00Z", "https://github.com/o/r/pull/1#issuecomment-1"
 			rv["carried"] = state == "clear-carried"
+			rv["association"] = "COLLABORATOR"
 		}
 		r["review"], r["hints"] = rv, []any{"ready-mergeable"}
 		m["options"].(map[string]any)["review"] = true
 		m["options"].(map[string]any)["review_states"] = []any{}
 		m["options"].(map[string]any)["hints"] = []any{}
 		m["summary"].(map[string]any)["review"] = map[string]any{"none": 0, "findings": 0, "clear": 1, "clear_carried": 0, "clear_stale": 0, "unparsed": 0, "not_read": 0}
-		m["summary"].(map[string]any)["hints"] = map[string]any{"clear_not_ready": 0, "no_final_review": 0, "base_not_default": 0, "parent_merged_retarget": 0, "ready_mergeable": 1}
+		m["summary"].(map[string]any)["hints"] = map[string]any{"clear_not_ready": 0, "no_final_review": 0, "base_not_default": 0, "parent_merged_retarget": 0, "truncated_review_unknown": 0, "foreign_review_ignored": 0, "ready_mergeable": 1}
 		if fn != nil {
 			fn(r, rv, m)
 		}
@@ -172,7 +173,7 @@ func TestPullsSchemaAcceptsReviewMembers(t *testing.T) {
 	valid(t, s, []byte(reviewMembers(t, "clear", func(r, rv, m map[string]any) {
 		m["options"].(map[string]any)["review_states"] = []any{"clear", "findings"}
 		m["options"].(map[string]any)["hints"] = []any{"ready-mergeable"}
-		r["hints"] = []any{"clear-not-ready", "no-final-review", "base-not-default", "parent-merged-retarget", "ready-mergeable"}
+		r["hints"] = []any{"clear-not-ready", "no-final-review", "base-not-default", "parent-merged-retarget", "truncated-review-unknown", "foreign-review-ignored", "ready-mergeable"}
 	})))
 }
 
@@ -183,29 +184,43 @@ func TestPullsSchemaRejectsBrokenReviewMembers(t *testing.T) {
 		state string
 		fn    mod
 	}{
-		"unknown state":            {"clear", func(r, rv, m map[string]any) { rv["state"] = "approved" }},
-		"basis not comment":        {"clear", func(r, rv, m map[string]any) { rv["basis"] = "verified" }},
-		"verdict lower case":       {"clear", func(r, rv, m map[string]any) { rv["verdict"] = "clear" }},
-		"clear with FINDINGS":      {"clear", func(r, rv, m map[string]any) { rv["verdict"] = "FINDINGS" }},
-		"findings with CLEAR":      {"findings", func(r, rv, m map[string]any) { rv["verdict"] = "CLEAR" }},
-		"none with a verdict":      {"none", func(r, rv, m map[string]any) { rv["verdict"] = "CLEAR" }},
-		"unparsed with a url":      {"unparsed", func(r, rv, m map[string]any) { rv["url"] = "https://github.com/x" }},
-		"none edited":              {"none", func(r, rv, m map[string]any) { rv["edited"] = true }},
-		"clear without head":       {"clear", func(r, rv, m map[string]any) { rv["head"] = nil }},
-		"clear without time":       {"clear", func(r, rv, m map[string]any) { rv["at"] = nil }},
-		"clear carried flag":       {"clear", func(r, rv, m map[string]any) { rv["carried"] = true }},
-		"carried without the flag": {"clear-carried", func(r, rv, m map[string]any) { rv["carried"] = false }},
-		"stale with FINDINGS":      {"clear-stale", func(r, rv, m map[string]any) { rv["verdict"] = "FINDINGS" }},
-		"short head":               {"clear", func(r, rv, m map[string]any) { rv["head"] = "abc" }},
-		"patch id of 20 digits":    {"clear", func(r, rv, m map[string]any) { rv["patch_id"] = strings.Repeat("1", 20) }},
-		"http url":                 {"clear", func(r, rv, m map[string]any) { rv["url"] = "http://github.com/x" }},
-		"extra review member":      {"clear", func(r, rv, m map[string]any) { rv["extra"] = 1 }},
-		"missing review member":    {"clear", func(r, rv, m map[string]any) { delete(rv, "edited") }},
-		"unknown hint":             {"clear", func(r, rv, m map[string]any) { r["hints"] = []any{"approved"} }},
-		"duplicate hint":           {"clear", func(r, rv, m map[string]any) { r["hints"] = []any{"ready-mergeable", "ready-mergeable"} }},
-		"hints not an array":       {"clear", func(r, rv, m map[string]any) { r["hints"] = "ready-mergeable" }},
-		"unknown filter state":     {"clear", func(r, rv, m map[string]any) { m["options"].(map[string]any)["review_states"] = []any{"x"} }},
-		"unknown filter hint":      {"clear", func(r, rv, m map[string]any) { m["options"].(map[string]any)["hints"] = []any{"x"} }},
+		"unknown state":             {"clear", func(r, rv, m map[string]any) { rv["state"] = "approved" }},
+		"basis not comment":         {"clear", func(r, rv, m map[string]any) { rv["basis"] = "verified" }},
+		"verdict lower case":        {"clear", func(r, rv, m map[string]any) { rv["verdict"] = "clear" }},
+		"clear with FINDINGS":       {"clear", func(r, rv, m map[string]any) { rv["verdict"] = "FINDINGS" }},
+		"findings with CLEAR":       {"findings", func(r, rv, m map[string]any) { rv["verdict"] = "CLEAR" }},
+		"none with a verdict":       {"none", func(r, rv, m map[string]any) { rv["verdict"] = "CLEAR" }},
+		"unparsed with a url":       {"unparsed", func(r, rv, m map[string]any) { rv["url"] = "https://github.com/x" }},
+		"none edited":               {"none", func(r, rv, m map[string]any) { rv["edited"] = true }},
+		"clear without head":        {"clear", func(r, rv, m map[string]any) { rv["head"] = nil }},
+		"clear without time":        {"clear", func(r, rv, m map[string]any) { rv["at"] = nil }},
+		"clear carried flag":        {"clear", func(r, rv, m map[string]any) { rv["carried"] = true }},
+		"carried without the flag":  {"clear-carried", func(r, rv, m map[string]any) { rv["carried"] = false }},
+		"stale with FINDINGS":       {"clear-stale", func(r, rv, m map[string]any) { rv["verdict"] = "FINDINGS" }},
+		"short head":                {"clear", func(r, rv, m map[string]any) { rv["head"] = "abc" }},
+		"patch id of 20 digits":     {"clear", func(r, rv, m map[string]any) { rv["patch_id"] = strings.Repeat("1", 20) }},
+		"http url":                  {"clear", func(r, rv, m map[string]any) { rv["url"] = "http://github.com/x" }},
+		"extra review member":       {"clear", func(r, rv, m map[string]any) { rv["extra"] = 1 }},
+		"missing review member":     {"clear", func(r, rv, m map[string]any) { delete(rv, "edited") }},
+		"association NONE":          {"clear", func(r, rv, m map[string]any) { rv["association"] = "NONE" }},
+		"association CONTRIBUTOR":   {"clear", func(r, rv, m map[string]any) { rv["association"] = "CONTRIBUTOR" }},
+		"association lower case":    {"clear", func(r, rv, m map[string]any) { rv["association"] = "owner" }},
+		"clear without association": {"clear", func(r, rv, m map[string]any) { rv["association"] = nil }},
+		"stale without association": {"clear-stale", func(r, rv, m map[string]any) { rv["association"] = nil }},
+		"none with an association":  {"none", func(r, rv, m map[string]any) { rv["association"] = "OWNER" }},
+		"unparsed with association": {"unparsed", func(r, rv, m map[string]any) { rv["association"] = "OWNER" }},
+		"negative ignored":          {"clear", func(r, rv, m map[string]any) { rv["ignored"] = -1 }},
+		"ignored as string":         {"clear", func(r, rv, m map[string]any) { rv["ignored"] = "1" }},
+		"missing association":       {"clear", func(r, rv, m map[string]any) { delete(rv, "association") }},
+		"missing ignored":           {"clear", func(r, rv, m map[string]any) { delete(rv, "ignored") }},
+		"eight hints": {"clear", func(r, rv, m map[string]any) {
+			r["hints"] = []any{"clear-not-ready", "no-final-review", "base-not-default", "parent-merged-retarget", "truncated-review-unknown", "foreign-review-ignored", "ready-mergeable", "ready-mergeable"}
+		}},
+		"unknown hint":         {"clear", func(r, rv, m map[string]any) { r["hints"] = []any{"approved"} }},
+		"duplicate hint":       {"clear", func(r, rv, m map[string]any) { r["hints"] = []any{"ready-mergeable", "ready-mergeable"} }},
+		"hints not an array":   {"clear", func(r, rv, m map[string]any) { r["hints"] = "ready-mergeable" }},
+		"unknown filter state": {"clear", func(r, rv, m map[string]any) { m["options"].(map[string]any)["review_states"] = []any{"x"} }},
+		"unknown filter hint":  {"clear", func(r, rv, m map[string]any) { m["options"].(map[string]any)["hints"] = []any{"x"} }},
 		"negative review count": {"clear", func(r, rv, m map[string]any) {
 			m["summary"].(map[string]any)["review"].(map[string]any)["clear"] = -1
 		}},
@@ -214,6 +229,12 @@ func TestPullsSchemaRejectsBrokenReviewMembers(t *testing.T) {
 		}},
 		"missing hint count": {"clear", func(r, rv, m map[string]any) {
 			delete(m["summary"].(map[string]any)["hints"].(map[string]any), "ready_mergeable")
+		}},
+		"missing truncated hint count": {"clear", func(r, rv, m map[string]any) {
+			delete(m["summary"].(map[string]any)["hints"].(map[string]any), "truncated_review_unknown")
+		}},
+		"missing foreign hint count": {"clear", func(r, rv, m map[string]any) {
+			delete(m["summary"].(map[string]any)["hints"].(map[string]any), "foreign_review_ignored")
 		}},
 	} {
 		if err := s.Validate(value(t, []byte(reviewMembers(t, c.state, c.fn)))); err == nil {

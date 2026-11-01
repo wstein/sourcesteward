@@ -149,7 +149,10 @@ type DocReviewHints struct {
 	NoFinalReview        int `json:"no_final_review"`
 	BaseNotDefault       int `json:"base_not_default"`
 	ParentMergedRetarget int `json:"parent_merged_retarget"`
-	ReadyMergeable       int `json:"ready_mergeable"`
+	// TruncatedReviewUnknown and ForeignReviewIgnored count the hints of the same names.
+	TruncatedReviewUnknown int `json:"truncated_review_unknown"`
+	ForeignReviewIgnored   int `json:"foreign_review_ignored"`
+	ReadyMergeable         int `json:"ready_mergeable"`
 }
 
 // DocDraft is a release draft.
@@ -421,7 +424,8 @@ func PullsData(rr statusremote.RepoResult) DocPullsData {
 		rv, h := c.Review, c.Hints
 		d.Review = &DocPullsReview{
 			States: DocReviewStates{None: rv.None, Findings: rv.Findings, Clear: rv.Clear, ClearCarried: rv.ClearCarried, ClearStale: rv.ClearStale, Unparsed: rv.Unparsed, NotRead: rv.NotRead},
-			Hints:  DocReviewHints{ClearNotReady: h.ClearNotReady, NoFinalReview: h.NoFinalReview, BaseNotDefault: h.BaseNotDefault, ParentMergedRetarget: h.ParentMergedRetarget, ReadyMergeable: h.ReadyMergeable},
+			Hints: DocReviewHints{ClearNotReady: h.ClearNotReady, NoFinalReview: h.NoFinalReview, BaseNotDefault: h.BaseNotDefault, ParentMergedRetarget: h.ParentMergedRetarget,
+				TruncatedReviewUnknown: h.TruncatedReviewUnknown, ForeignReviewIgnored: h.ForeignReviewIgnored, ReadyMergeable: h.ReadyMergeable},
 		}
 	}
 	for _, p := range rr.Pulls.PRs {

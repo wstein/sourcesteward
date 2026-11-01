@@ -227,6 +227,12 @@ func TestOnlineStatusSchemaRejectsBrokenDocuments(t *testing.T) {
 		"pulls review hint missing": func(m map[string]any) {
 			delete(jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["hints"]), "ready_mergeable")
 		},
+		"pulls review truncated hint missing": func(m map[string]any) {
+			delete(jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["hints"]), "truncated_review_unknown")
+		},
+		"pulls review foreign hint missing": func(m map[string]any) {
+			delete(jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["hints"]), "foreign_review_ignored")
+		},
 		"pulls review null":   func(m map[string]any) { jobj(sourceOf(m, 0, "pulls")["data"])["review"] = nil },
 		"repo data http page": func(m map[string]any) { jobj(sourceOf(m, 0, "repo")["data"])["html_url"] = "http://github.com/o/r" },
 		"101 drafts": func(m map[string]any) {

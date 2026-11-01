@@ -41,7 +41,26 @@ func (r reviewing) Commit(context.Context, string, string, string) (hosting.Watc
 
 func comment(repo string, n int, body string) (string, []hosting.IssueComment) {
 	at := t0.Add(time.Hour)
-	return fmt.Sprintf("%s#%d", repo, n), []hosting.IssueComment{{ID: 1, CreatedAt: at, UpdatedAt: at, Body: body, URL: "https://github.com/x#c"}}
+	return fmt.Sprintf("%s#%d", repo, n), []hosting.IssueComment{{ID: 1, CreatedAt: at, UpdatedAt: at, Body: body, Association: "OWNER", URL: "https://github.com/x#c"}}
+}
+
+func TestReadPullsDoesNotCountCommentsOfOtherAuthors(t *testing.T) {
+	f := newForge()
+	a, b := human(repoA, 1), human(repoA, 2)
+	f.add(a)
+	f.add(b)
+	r := reviewing{forge: f, comments: map[string][]hosting.IssueComment{}}
+	for n, p := range map[int]string{1: a.head, 2: b.head} {
+		k, cs := comment(repoA, n, fmt.Sprintf("Review: CLEAR head=%s patch-id=%s pr=%d", p, strings.Repeat("1", 40), n))
+		if n == 1 {
+			cs[0].Association = "CONTRIBUTOR"
+		}
+		r.comments[k] = cs
+	}
+	got := ReadPulls(context.Background(), r, targets(repoA))[repoA]
+	if got.Counts.Review.Clear != 1 || got.Counts.Review.None != 1 || got.Counts.Hints.ForeignReviewIgnored != 1 || got.Counts.Hints.NoFinalReview != 1 || got.Counts.Hints.ReadyMergeable != 1 {
+		t.Fatalf("a stranger's CLEAR must not count: %+v", got.Counts)
+	}
 }
 
 func TestReadPullsCarriesTheReviewCountsOfTheCycle(t *testing.T) {

@@ -22,11 +22,23 @@ var States = []string{StateNone, StateFindings, StateClear, StateClearCarried, S
 // maxLinks bounds a carry-over chain.
 const maxLinks = 8
 
-// Comment is one pull request comment as the review state needs it.
+// Comment is one pull request comment as the review state needs it. Association is the
+// author_association of GitHub; only OWNER, MEMBER and COLLABORATOR count (Spec 046, Trust model).
 type Comment struct {
 	ID                   int64
 	CreatedAt, UpdatedAt time.Time
 	Body, URL            string
+	Association          string
+}
+
+// Trusted reports whether a comment of an author with this author_association may carry a review
+// line. Anything else, including an empty or unknown value, is ignored (fail closed).
+func Trusted(association string) bool {
+	switch association {
+	case "OWNER", "MEMBER", "COLLABORATOR":
+		return true
+	}
+	return false
 }
 
 // Input is everything one evaluation looks at. HeadTime is the committer date of Head; the zero
@@ -41,10 +53,13 @@ type Input struct {
 
 // Result is the review state with the evidence of its decisive comment. For a carry-over, Head and
 // PatchID are those of the CLEAR it carries, At and URL those of the last carry-over.
+// Association is that of the decisive comment (empty without one). Ignored counts the comments of
+// other authors that look like review lines (strict or unparsed) and were left out.
 type Result struct {
-	State, Verdict, Head, PatchID, URL string
-	At                                 time.Time
-	Carried, Edited, Truncated         bool
+	State, Verdict, Head, PatchID, URL, Association string
+	At                                              time.Time
+	Carried, Edited, Truncated                      bool
+	Ignored                                         int
 }
 
 type parsed struct {
@@ -59,9 +74,15 @@ func (p parsed) before(o parsed) bool {
 	return p.ID < o.ID
 }
 
-func parseAll(pr int, comments []Comment) (strict, unparsed []parsed) {
+func parseAll(pr int, comments []Comment) (strict, unparsed []parsed, ignored int) {
 	for _, c := range comments {
 		l := ParseLine(c.Body, pr)
+		if !Trusted(c.Association) {
+			if l.Kind != KindIgnored {
+				ignored++
+			}
+			continue
+		}
 		switch l.Kind {
 		case KindReview, KindCarried:
 			strict = append(strict, parsed{c, l})
@@ -70,13 +91,13 @@ func parseAll(pr int, comments []Comment) (strict, unparsed []parsed) {
 		}
 	}
 	sort.SliceStable(strict, func(i, j int) bool { return strict[i].before(strict[j]) })
-	return strict, unparsed
+	return strict, unparsed, ignored
 }
 
 // NeedsHeadTime reports whether Evaluate needs the committer date of head: only when a strict
 // comment names the head (a review of it or a carry-over to it).
 func NeedsHeadTime(pr int, head string, comments []Comment) bool {
-	strict, _ := parseAll(pr, comments)
+	strict, _, _ := parseAll(pr, comments)
 	for _, p := range strict {
 		if (p.Kind == KindReview && p.Head == head) || (p.Kind == KindCarried && p.To == head) {
 			return true
@@ -170,8 +191,8 @@ func (c *chains) carried(i int) (root, bool) {
 
 // Evaluate derives the review state of one pull request from its comments.
 func Evaluate(in Input) Result {
-	strict, unparsed := parseAll(in.PR, in.Comments)
-	res := Result{State: StateNone, Truncated: in.Truncated}
+	strict, unparsed, ignored := parseAll(in.PR, in.Comments)
+	res := Result{State: StateNone, Truncated: in.Truncated, Ignored: ignored}
 
 	// The decisive comment: the latest direct review of the head or valid carry-over to it, both
 	// created at or after the committer date of the head commit.
@@ -209,6 +230,7 @@ func Evaluate(in Input) Result {
 	case decisive != nil:
 		last = decisive.CreatedAt
 		res.At, res.URL, res.Edited = decisive.CreatedAt, decisive.URL, decisive.UpdatedAt.After(decisive.CreatedAt)
+		res.Association = decisive.Association
 		if decisive.Kind == KindCarried {
 			res.State, res.Verdict, res.Carried = StateClearCarried, "CLEAR", true
 			res.Head, res.PatchID = decisiveRoot.review.Head, decisiveRoot.review.PatchID
@@ -223,11 +245,12 @@ func Evaluate(in Input) Result {
 		if st := latestStale(strict, in.Head); st != nil {
 			res.State, res.Verdict, res.Head, res.PatchID = StateClearStale, "CLEAR", st.Head, st.PatchID
 			res.At, res.URL, res.Edited = st.CreatedAt, st.URL, st.UpdatedAt.After(st.CreatedAt)
+			res.Association = st.Association
 		}
 	}
 	for _, u := range unparsed {
 		if u.CreatedAt.After(last) {
-			return Result{State: StateUnparsed, Truncated: in.Truncated}
+			return Result{State: StateUnparsed, Truncated: in.Truncated, Ignored: ignored}
 		}
 	}
 	return res

@@ -441,6 +441,8 @@
                   "no_final_review": 0,
                   "base_not_default": 0,
                   "parent_merged_retarget": 0,
+                  "truncated_review_unknown": 3,
+                  "foreign_review_ignored": 2,
                   "ready_mergeable": 1
                 }
               }
