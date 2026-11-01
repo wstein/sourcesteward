@@ -22,8 +22,8 @@ const landMaxPages = 5
 var landRoute = regexp.MustCompile(`\A(?:user|repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*/[A-Za-z0-9_-][A-Za-z0-9_.-]*/(?:` +
 	`pulls\?state=open&per_page=100&page=([1-5])|` +
 	`pulls/[1-9][0-9]{0,8}/reviews\?per_page=100&page=1|` +
-	`issues/[1-9][0-9]{0,8}/events\?per_page=100&page=1|` +
-	`rules/branches/([^/?#]+)|` +
+	`issues/[1-9][0-9]{0,8}/events\?per_page=100&page=([1-3])|` +
+	`rules/branches/([^/?#]+)\?per_page=100&page=([1-3])|` +
 	`branches/([^/?#]+)/protection|` +
 	`rulesets/[1-9][0-9]{0,11}))\z`)
 
@@ -40,7 +40,8 @@ func landReadEndpoint(p string) bool {
 			return false
 		}
 	}
-	for _, seg := range m[2:] {
+	// m[3] is the rules branch segment, m[5] the protection segment (m[1], m[2], m[4] are page numbers).
+	for _, seg := range []string{m[3], m[5]} {
 		if seg != "" && !branchSegmentValid(seg) {
 			return false
 		}
@@ -81,24 +82,27 @@ func LandReviewsEndpoint(repo string, number int) (string, error) {
 	return base + "/pulls/" + n + "/reviews?per_page=100&page=1", nil
 }
 
-// LandEventsEndpoint is the first page of the issue events of a pull request.
-func LandEventsEndpoint(repo string, number int) (string, error) {
+// LandMaxListPages bounds the paged lists of the land reader (rules, events): 3 pages of 100.
+const LandMaxListPages = 3
+
+// LandEventsEndpoint is a page (1..3) of the issue events of a pull request.
+func LandEventsEndpoint(repo string, number, page int) (string, error) {
 	base, err := landRepo(repo)
 	n, e2 := landNumber(number)
-	if err != nil || e2 != nil {
+	if err != nil || e2 != nil || page < 1 || page > LandMaxListPages {
 		return "", fmt.Errorf("invalid land read")
 	}
-	return base + "/issues/" + n + "/events?per_page=100&page=1", nil
+	return base + "/issues/" + n + "/events?per_page=100&page=" + strconv.Itoa(page), nil
 }
 
-// LandRulesEndpoint is the rules in force for a branch.
-func LandRulesEndpoint(repo, branch string) (string, error) {
+// LandRulesEndpoint is a page (1..3) of the rules in force for a branch.
+func LandRulesEndpoint(repo, branch string, page int) (string, error) {
 	base, err := landRepo(repo)
 	seg, e2 := EncodeBranchSegment(branch)
-	if err != nil || e2 != nil {
+	if err != nil || e2 != nil || page < 1 || page > LandMaxListPages {
 		return "", fmt.Errorf("invalid land read")
 	}
-	return base + "/rules/branches/" + seg, nil
+	return base + "/rules/branches/" + seg + "?per_page=100&page=" + strconv.Itoa(page), nil
 }
 
 // LandProtectionEndpoint is the classic branch protection of a branch.
