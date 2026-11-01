@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -383,6 +384,10 @@ func TestPinsDirtyScanAllowanceIsALimitNotUnknown(t *testing.T) {
 func TestPinsDirtyDeepPathIsDecidedAndTheDeadlineIsCheckedInsideTheWalk(t *testing.T) {
 	c := newDirtyCase(t, newPinsFixture(t))
 	deep := strings.Repeat("d/", 600) + "f"
+	// The path is about 1,200 bytes; macOS limits a path to 1,024 (PATH_MAX), Linux to 4,096.
+	if err := os.MkdirAll(filepath.Dir(filepath.Join(c.wt, deep)), 0o755); errors.Is(err, syscall.ENAMETOOLONG) {
+		t.Skipf("the operating system rejects a path of this depth: %v", err)
+	}
 	writeFile(t, filepath.Join(c.wt, deep), "x")
 	git(t, c.wt, "add", "-A")
 	git(t, c.wt, "commit", "-qm", "deep")
