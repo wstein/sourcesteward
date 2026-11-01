@@ -191,7 +191,9 @@ Owner decision 2026-11-01. `stw sync` reports on the agent-rules checkout (wstei
 - **FR-A4 Disclosure.** The new commits and the changed files are listed; `claude/CLAUDE.md`, `claude/skills/**`, any `hooks` directory and `install.sh` are marked sensitive. After a change: "applies to NEW sessions; running agents keep their loaded rules", and when `~/.claude/CLAUDE.md` is not a symlink into the checkout: "run install.sh --dry-run first (owner action)".
 - **FR-A5 Limits.** `stw` never runs install.sh, never writes below `~/.claude` and never writes a Git configuration.
 - **Contract.** Additive: `rules` (object or null) and `options.rules`. A refused update exits 0 like a skipped repository; the outcome `failed` exits 1. Usage errors (path starting with `-` or containing `..`, malformed identity, any rules option with `restore`) exit 2.
-- **Known gap.** When agent-rules is itself a workspace member on a branch with an upstream, the ordinary sync of that member fast-forwards it like any other repository, before and without the identity guards of `--rules`. Excluding it is an owner decision.
+- **FR-A6 Exclusion.** The ordinary sync (and `--submodules`) leaves the agent-rules checkout alone: a repository whose remote is named `agent-rules`, or that is the path given with `--rules-path`/`STW_RULES_PATH`, has the result `skipped-rules` (exit 0, no fetch, no change). Only `--rules` updates it, after the identity check. Owner decision 2026-11-01.
+- **FR-A7 Journal.** An update by `--rules` writes the same journal entry as a branch change (`<git-common-dir>/stw/sync/RUN_ID.json`, recovery ref `refs/stw/recovery/sync/RUN_ID/N` at the old tip) before the merge, completes it afterwards, and reports `run_id`. A refusal writes none. `stw sync restore PATH` with PATH inside the rules checkout moves it back.
+- **FR-A8 Status.** `stw status --rules [--rules-path PATH]` adds the same line (text) and the optional `rules` member (JSON, schema 1 and 2). It is opt-in: without `--rules` the output and the documents are unchanged. It fetches only with `--fetch`; otherwise the state is "as of last fetch".
 
 ## Open items
 
