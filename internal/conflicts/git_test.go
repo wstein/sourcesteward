@@ -137,3 +137,19 @@ func TestValidBranch(t *testing.T) {
 		t.Error("ValidSHA")
 	}
 }
+
+// The fetch writes into the private namespace only: a tag of the remote that points into the fetched
+// history must not be followed into refs/tags.
+func TestRunnerFetchFollowsNoTags(t *testing.T) {
+	f := newRepoFixture(t)
+	git(t, f.origin, "tag", "release-1", f.head1)
+	git(t, f.origin, "tag", "-a", "-m", "annotated", "release-2", f.mainTip)
+	r := NewRunner(f.dir)
+	defer r.Close()
+	if err := r.Fetch(context.Background(), "origin", []int{1}, []string{"main"}); err != nil {
+		t.Fatal(err)
+	}
+	if tags := git(t, f.dir, "for-each-ref", "refs/tags"); tags != "" {
+		t.Fatalf("the fetch followed tags:\n%s", tags)
+	}
+}
