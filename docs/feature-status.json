@@ -272,6 +272,12 @@
       "evidence": null
     },
     {
+      "id": "047-stw-pr-base-conflicts",
+      "status": "planned",
+      "spec": "../specs/047-stw-pr-base-conflicts/spec.md",
+      "evidence": null
+    },
+    {
       "id": "050-stw-lint-pr",
       "status": "implemented",
       "spec": "../specs/050-stw-lint-pr/spec.md",

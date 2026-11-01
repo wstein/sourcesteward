@@ -185,3 +185,20 @@ unread repositories `rate-limited` and exits 1; it never sleeps and never loops,
   No review request, comment, label, merge or Ready flip exists, and no GraphQL.
 - **Bounds.** 256 repositories per run, 20 names per list, at most 4 repositories in parallel, 80 list pages per repository.
 - **Platforms.** `stw` is Unix-only today; `stw pulls` adds no restriction of its own.
+
+## Base conflicts and the restack plan
+
+A pull request that was Ready and CLEAR can start to conflict when its base changes the same file ([Spec 047](../specs/047-stw-pr-base-conflicts/spec.md)).
+`stw pulls --repo OWNER/NAME --conflicts` probes every open pull request of that repository against the current tip of its base with
+`git merge-tree --write-tree` in a local checkout (`--checkout PATH`, default the current directory; its remote `--remote`, default `origin`,
+must point to the repository, otherwise exit 2). The probe merge writes no object to the repository and does not touch HEAD, the index, the
+working tree or the configuration. The one local effect is the fetch of `refs/pull/N/head` and the base branches into `refs/stw/conflicts/`.
+
+- A pull request that no longer merges shows `conflicts-with-base` with its files and, per file, the last base commit that changed it. It moves
+  to the `conflict` group and is never `ready` nor `ready-mergeable`. Its children in a stack are `blocked` with reason `parent-conflict`.
+- A clean merge lists the files that the base changed since the merge base and the pull request changed too (early warning).
+- `unknown` (fetch failed, head moved, no merge base, past 100 pull requests) is shown as `unknown`, never as clean.
+- The stacks section shows per level head, CLEAR (`valid`, `invalid`, `none`), CI, the probe state and `blocked: restack needed` or `blocked by #n`.
+- `--restack-plan` (implies `--conflicts`) prints, per stack with a conflict, `git rebase --onto <new> <old>` commands with the old SHAs from the
+  probe, `git range-diff`, the push with `--force-with-lease=<branch>:<old head>` (to run only after the review of the new head) and a Markdown
+  brief for the agent. `stw` rebases and pushes nothing; the SHAs hold only while heads and base are unchanged.

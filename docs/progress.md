@@ -1,5 +1,13 @@
 # Progress and handoff
 
+## Active work: base conflicts of open pull requests (Spec 047, issue #355, source candidate)
+
+Stacked on the Spec 046 branch. `stw pulls --conflicts` probes each open pull request of one repository against its base (`git merge-tree`
+in a quarantine, no repository write beyond `refs/stw/conflicts/`), shows `conflicts-with-base` with files and base commits, withdraws
+Ready from the pull request and its children, lists an early warning for shared files and the stacks; `--restack-plan` prints the restack
+commands and an agent brief. Additive schema members (digest of pulls 1 updated). The stack view of Spec 046 (`--stack`) is a later pull
+request of that spec; this one carries the small tree it needs. The feature stays `planned`: no independent review or acceptance record yet.
+
 ## Active work: review state of open pull requests (Spec 046, issue #348, source candidate)
 
 First pull request of a stack of three: the strict review comment grammar, the six review states and five hints
