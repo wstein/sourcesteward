@@ -54,20 +54,47 @@ checks of the pull request), whether the label `ci-full` is set again (the revie
 
 ## Reads and effects
 
-Git only, through one guarded runner (`internal/carryover`): a fixed argument vector per call, validated object ids, a clean
-environment, no replace objects, hooks switched off (`core.hooksPath` is `/dev/null` per call, no configuration is written), the `GIT_DIR`
-family removed from the environment, and a guard that allows only fixed argument shapes (`rev-parse`, `diff`,
-`patch-id`, `rev-list`, `log`) and the one fetch, with every flag pinned (`--no-ext-diff`, `--no-textconv`, `--no-renames`,
-`--no-show-signature`, `--no-tags`). No external diff, textconv, signature program or hook starts; a `push`, `update-ref`,
-`range-diff` or a fetch into another namespace is refused by the guard.
+Git only, through one guarded runner (`internal/carryover`). The guard allows exactly the argument shapes of `rev-parse`,
+`diff`, `patch-id`, `rev-list`, `log` and the one fetch, with every flag pinned and the exact length checked. A `push`,
+`update-ref`, `range-diff` or a fetch into another namespace is refused. Nothing starts but Git itself: no external diff,
+textconv, signature program, pager or hook.
+
+What decides the output is fixed, so a user's configuration cannot change a verdict:
+
+- **Pinned by flag** (diff and log): `--no-color --no-ext-diff --no-textconv --no-renames --binary --full-index
+  --ignore-submodules=none --submodule=short --no-relative -U3 --inter-hunk-context=0 --diff-algorithm=myers
+  --indent-heuristic --src-prefix=a/ --dst-prefix=b/ --no-color-moved -O/dev/null`; log also `--no-show-signature --no-notes
+  --encoding=UTF-8`. They cover `diff.relative` (a run from a subdirectory compares the whole tree), `diff.context` and
+  `GIT_DIFF_OPTS`, `diff.algorithm`, `diff.indentHeuristic`, `diff.interHunkContext`, the prefix keys, `diff.renames`,
+  `diff.orderFile`, `diff.colorMoved`, `diff.external`, `diff.*.textconv`, attributes such as `-diff` and `binary`,
+  `diff.ignoreSubmodules`, `diff.submodule`, `submodule.<name>.ignore`, `log.showSignature`, notes and `i18n.logOutputEncoding`.
+- **Pinned per call by `-c`** (nothing is written to a configuration): `core.hooksPath=/dev/null`, `core.fsmonitor`,
+  `gc.auto`, `maintenance.auto`, `core.quotePath`, `core.bigFileThreshold`, `core.attributesFile`, `diff.suppressBlankEmpty`,
+  `diff.wsErrorHighlight`, `diff.mnemonicPrefix`, `diff.noprefix`, `log.showRoot`, `log.follow`, `log.mailmap`, `core.notesRef`,
+  `i18n.commitEncoding`, `core.abbrev`, `fetch.writeCommitGraph`.
+- **Neutralized in the environment:** every `GIT_` variable is dropped except `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`,
+  `GIT_ASKPASS`, `GIT_SSL_CAINFO`, `GIT_SSL_CAPATH` and `GIT_PROXY_COMMAND` (so `GIT_DIR` and the other repository selectors,
+  `GIT_CONFIG_COUNT`/`KEY`/`VALUE`, `GIT_CONFIG_PARAMETERS`, `GIT_DIFF_OPTS`, `GIT_EXTERNAL_DIFF`, `GIT_PAGER`, `GIT_EXEC_PATH`,
+  `GIT_TRACE*`, `GIT_ATTR_SOURCE`, `GIT_NOTES_REF` never reach Git). The global and system configuration are replaced by the null
+  device (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM=1`, so `~/.gitconfig`, `$XDG_CONFIG_HOME/git/config` and
+  `/etc/gitconfig` are not read), `GIT_ATTR_NOSYSTEM=1`, `GIT_PAGER=cat`, `--no-pager`, `--no-replace-objects`.
+- **Limits:** the repository's own configuration (`.git/config`) still applies for keys not listed above, in particular
+  `remote.<name>.url`, `url.<base>.insteadOf`, `http.*` and `core.repositoryformatversion`. The fetch does not consult a credential
+  helper or `http.*` setting from the global configuration; a remote that needs one fails with `read-failed` (the verdict is
+  then no). A checkout owned by another user can fail the `safe.directory` check, because that setting is read only from the
+  global configuration; the result is then `read-failed`. Keys that change only color or the layout of a stat are not pinned
+  because the vectors print neither. The pinned keys are covered by the hostile-configuration test; the keys without a
+  verdict effect on the scenarios of that test (for example `diff.suppressBlankEmpty`) are pinned as a precaution and not
+  proven by a mutation.
+
 The only local effect is the `--remote` fetch into `refs/stw/carry-over/pr-NUMBER` (`--no-tags --no-write-fetch-head
---no-recurse-submodules --refmap=`; a configured `remote.<name>.fetch` writes nothing);
-without `--remote` nothing is written. No forge call, no network except that fetch.
+--no-recurse-submodules --refmap=`; a configured `remote.<name>.fetch` writes nothing); without `--remote` nothing is written.
+No forge call, no network except that fetch.
 
 ## Verification
 
 Tests use temporary Git repositories and write no identity into a Git configuration. They cover: pure rebase (yes, exact
 line), identical heads, merge commit, patch-id change, whitespace-only change (equal patch-id, commit comparison `!`, also with a stripping textconv driver that must not run), added empty
 commit, reordered commits, rename with content change, rewritten parent, missing object, no repository change, argument
-injection, the guard, the private fetch, a moved pull request head, JSON against the schema, exit codes. Each condition is
+injection, the guard, the private fetch, a hostile configuration (repository, global, system, `HOME`, `XDG_CONFIG_HOME`, `GIT_CONFIG_*`, `GIT_DIFF_OPTS`, a run from a subdirectory) that leaves five verdicts unchanged, a moved pull request head, JSON against the schema, exit codes. Each condition is
 backed by a mutation that makes the test for that condition fail (recorded in the pull request).
