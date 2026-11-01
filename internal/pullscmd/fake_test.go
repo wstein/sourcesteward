@@ -124,6 +124,7 @@ type pr struct {
 	rebaseable string // JSON: true|false|null
 	detailHead string // "" means the listed head
 	class      string // none|pending|green|red
+	base       string // "" means main
 }
 
 func okPR(repo string, n int) pr {
@@ -132,6 +133,9 @@ func okPR(repo string, n int) pr {
 
 func (f *fakeForge) add(p pr) {
 	it := hosting.PullListItem{Number: p.n, Title: fmt.Sprintf("title %d", p.n), User: p.user, UserType: p.utype, Draft: p.draft, HTMLURL: fmt.Sprintf("https://github.com/%s/pull/%d", p.repo, p.n), HeadSHA: p.head, HeadRef: "feat", BaseRef: "main"}
+	if p.base != "" {
+		it.BaseRef = p.base
+	}
 	if !p.noTime {
 		it.CreatedAt = t0.Add(-p.age)
 	}

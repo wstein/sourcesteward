@@ -355,3 +355,35 @@ func TestExecuteHumanShowsTheNewHints(t *testing.T) {
 		}
 	}
 }
+
+func TestExecuteHintFilterSkipsRowsWhoseCommentsWereNotRead(t *testing.T) {
+	s := newSource()
+	for n := 1; n <= 3; n++ {
+		p := okPR("o/a", n)
+		p.age = time.Duration(n) * 24 * time.Hour
+		if n != 3 {
+			p.base = "feat" // base-not-default does not need the comments
+		}
+		s.add(p)
+		s.commits[p.head] = t0.Add(-time.Hour * 100)
+	}
+	s.errAt["comments/o/a#1"] = errors.New("boom")
+	s.errAt["comments/o/a#3"] = errors.New("boom")
+	for name, c := range map[string]struct {
+		hint string
+		want []int
+	}{"a hint the unread row carries": {"base-not-default", []int{2}}, "a hint no unread row carries": {"no-final-review", []int{2}}} {
+		f := baseFlags()
+		f.Repos, f.JSON, f.Hints = []string{"o/a"}, true, []string{c.hint}
+		out, _, _ := execReview(t, reviewForge{s}, f)
+		m := decode(t, out)
+		var got []int
+		for _, g := range []string{"ready", "checks", "conflict", "draft", "blocked"} {
+			got = append(got, groupNumbers(m, g)...)
+		}
+		sort.Ints(got)
+		if fmt.Sprint(got) != fmt.Sprint(c.want) {
+			t.Errorf("%s: rows %v want %v", name, got, c.want)
+		}
+	}
+}
