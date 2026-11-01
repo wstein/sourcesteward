@@ -257,6 +257,7 @@
             "enum": [
               "pull",
               "repo",
+              "pulls",
               "checks",
               "review"
             ]
