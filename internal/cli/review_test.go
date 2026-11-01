@@ -22,9 +22,8 @@ func (carryOverFake) PatchID(context.Context, string, string) (string, error) {
 func (f carryOverFake) Merges(context.Context, string, string) ([]string, error) {
 	return f.merges, nil
 }
-func (carryOverFake) Count(context.Context, string, string) (int, error) { return 1, nil }
-func (carryOverFake) RangeDiff(context.Context, string, string, string, string) (string, error) {
-	return "1:  abc1234 = 1:  def5678 subject\n", nil
+func (carryOverFake) Commits(context.Context, string, string) ([]carryover.CommitPatch, error) {
+	return []carryover.CommitPatch{{Message: "subject\n", Patch: "\ndiff --git a/f b/f\n"}}, nil
 }
 
 func carryOverRun(t *testing.T, g carryover.Git, args ...string) (int, string, string) {
@@ -110,13 +109,9 @@ func (f failingGit) Merges(context.Context, string, string) ([]string, error) {
 	f.t.Fatal("git was called")
 	return nil, nil
 }
-func (f failingGit) Count(context.Context, string, string) (int, error) {
+func (f failingGit) Commits(context.Context, string, string) ([]carryover.CommitPatch, error) {
 	f.t.Fatal("git was called")
-	return 0, nil
-}
-func (f failingGit) RangeDiff(context.Context, string, string, string, string) (string, error) {
-	f.t.Fatal("git was called")
-	return "", nil
+	return nil, nil
 }
 
 func TestReviewHelpNamesTheSubcommand(t *testing.T) {

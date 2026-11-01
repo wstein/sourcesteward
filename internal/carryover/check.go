@@ -5,8 +5,6 @@ package carryover
 import (
 	"context"
 	"fmt"
-	"regexp"
-	"strconv"
 	"strings"
 )
 
@@ -115,62 +113,69 @@ func checkMerges(ctx context.Context, g Git, req Request, res *Result, fail func
 	fail(ReasonMergeCommits)
 }
 
-// rowGrammar matches a range-diff header such as "1:  abc1234 = 1:  def5678 subject". Detail lines
-// are indented by four spaces and never match.
-var rowGrammar = regexp.MustCompile(`^ {0,3}(-|[0-9]+):\s+(?:-+|[0-9a-f]+) ([=!<>]) (-|[0-9]+):\s+(?:-+|[0-9a-f]+)(?: |$)`)
-
-func position(s string) *int {
-	if s == "-" {
-		return nil
+// normalize drops what a rebase may change without changing the commit: the blob ids of the index
+// lines and the line numbers of the hunk headers. Everything else, whitespace included, is compared
+// byte for byte, which is what the patch-id cannot do.
+func normalize(cp CommitPatch) string {
+	var b strings.Builder
+	b.WriteString(cp.Message)
+	b.WriteByte(0)
+	for _, line := range strings.Split(cp.Patch, "\n") {
+		switch {
+		case strings.HasPrefix(line, "index "):
+			continue
+		case strings.HasPrefix(line, "@@ "):
+			line = "@@"
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
 	}
-	n, _ := strconv.Atoi(s)
-	return &n
+	return b.String()
 }
 
+func position(i int) *int { n := i + 1; return &n }
+
+// checkRange is condition 3: the commits of the old and the new range are equal pairwise, in the
+// same order, in message and patch. It does not run git range-diff: range-diff starts the textconv
+// drivers of the repository. A rebase that only shifts line numbers or blob ids stays equal; changed
+// context, a reordering, an added, removed or edited commit do not (the rule then asks for a delta check).
 func checkRange(ctx context.Context, g Git, req Request, res *Result, fail func(string)) {
-	oldN, err1 := g.Count(ctx, req.OldBase, req.OldHead)
-	newN, err2 := g.Count(ctx, req.NewBase, req.NewHead)
+	oldC, err1 := g.Commits(ctx, req.OldBase, req.OldHead)
+	newC, err2 := g.Commits(ctx, req.NewBase, req.NewHead)
 	if err1 != nil || err2 != nil {
 		fail(ReasonReadFailed)
 		return
 	}
-	if oldN == 0 || newN == 0 {
+	if len(oldC) == 0 || len(newC) == 0 {
 		res.RangeDiff.State = StateDiffers
 		fail(ReasonRangeEmpty)
 		return
 	}
-	out, err := g.RangeDiff(ctx, req.OldBase, req.OldHead, req.NewBase, req.NewHead)
-	if err != nil {
-		fail(ReasonReadFailed)
-		return
-	}
-	for _, line := range strings.Split(out, "\n") {
-		m := rowGrammar.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		res.RangeDiff.Total++
-		o, n := position(m[1]), position(m[3])
-		if m[2] == "=" && o != nil && n != nil && *o == *n {
+	total := max(len(oldC), len(newC))
+	res.RangeDiff.Total = total
+	for i := 0; i < total; i++ {
+		var dev Deviation
+		switch {
+		case i >= len(oldC):
+			dev = Deviation{New: position(i), Mark: ">"}
+		case i >= len(newC):
+			dev = Deviation{Old: position(i), Mark: "<"}
+		case normalize(oldC[i]) != normalize(newC[i]):
+			dev = Deviation{Old: position(i), New: position(i), Mark: "!"}
+		default:
 			continue
 		}
 		res.RangeDiff.NotEqual++
 		if len(res.RangeDiff.Deviations) < MaxDeviations {
-			res.RangeDiff.Deviations = append(res.RangeDiff.Deviations, Deviation{Old: o, New: n, Mark: m[2]})
+			res.RangeDiff.Deviations = append(res.RangeDiff.Deviations, dev)
 		} else {
 			res.RangeDiff.Truncated = true
 		}
 	}
-	switch {
-	case res.RangeDiff.Total == 0:
-		fail(ReasonReadFailed)
-	case res.RangeDiff.NotEqual > 0:
+	if res.RangeDiff.NotEqual > 0 {
 		res.RangeDiff.State = StateDiffers
 		fail(ReasonRangeDiff)
-	case res.RangeDiff.Total != oldN || oldN != newN:
-		// Every commit must appear as one "=" row; a different count means the output was not read whole.
-		fail(ReasonReadFailed)
-	default:
-		res.RangeDiff.State = StateEqual
+		return
 	}
+	res.RangeDiff.State = StateEqual
 }

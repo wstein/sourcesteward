@@ -112,6 +112,13 @@ type Result struct {
 	Line          *string      `json:"line"`
 }
 
+// CommitPatch is one commit as the comparison sees it: the message and the patch, both as Git
+// printed them (the patch without external diff or textconv).
+type CommitPatch struct {
+	Message string
+	Patch   string
+}
+
 // Git is the read-only Git of the check.
 type Git interface {
 	// FetchPull fetches the head of pull request n into the private namespace and returns it.
@@ -121,9 +128,8 @@ type Git interface {
 	PatchID(ctx context.Context, base, head string) (string, error)
 	// Merges lists the merge commits of base..head.
 	Merges(ctx context.Context, base, head string) ([]string, error)
-	// Count is the number of commits of base..head.
-	Count(ctx context.Context, base, head string) (int, error)
-	RangeDiff(ctx context.Context, oldBase, oldHead, newBase, newHead string) (string, error)
+	// Commits lists the commits of base..head without merge commits, oldest first.
+	Commits(ctx context.Context, base, head string) ([]CommitPatch, error)
 }
 
 // UsageError is an invalid command line (exit 2).
