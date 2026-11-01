@@ -54,6 +54,13 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > The `changes` job of `ci.yml` no longer looks up pull requests and loses `pull-requests: read`. Cost: a pull request without the label
 > costs about 10 runner minutes (2 jobs); a label run costs both lanes (the `current` lane alone is about 68 runner minutes) once per reviewed head.
 
+> **Amendment 2026-11-01 (#373, CI audit): superseded heavy runs are canceled.** `ci-full.yml` also triggers on `synchronize` and its
+> concurrency group (`ci-full-<ref>`, `cancel-in-progress: true`) holds one pull request: a push starts a run whose jobs are all skipped,
+> and that run cancels the heavy run of the older head; a new `ci-full` label event cancels an older heavy run of the same pull request and
+> starts a fresh one. An unrelated label event uses its own group and cancels nothing. The workflow has no push trigger, so a run on
+> `main` is never canceled by it. `ci-full-reset.yml` still removes the label on every push. This replaces the sentence "Today the label
+> run lives in `ci-full-<ref>` with `cancel-in-progress: false`" in "Concurrency" below.
+
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 
 ## Problem (owner, 2026-10-22)

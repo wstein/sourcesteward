@@ -251,9 +251,10 @@ class TieringTests(unittest.TestCase):
 class CiFullWorkflowTests(unittest.TestCase):
     def test_runs_only_on_the_label_event_for_ci_full(self):
         on = FULL.split('\npermissions:', 1)[0]
-        self.assertRegex(on, r'(?m)^  pull_request:\n    types: \[labeled\]\n')
+        self.assertRegex(on, r'(?m)^  pull_request:\n    types: \[labeled, synchronize\]\n')
         self.assertNotIn('push:', on)
         self.assertIn("if: github.event.label.name == 'ci-full'", job_text('conformance', FULL))
+        self.assertIn("if: github.event.label.name == 'ci-full'", job_text('stack', FULL))
 
     def test_permissions_are_read_only_and_match_ci(self):
         for text in (FULL, CONFORMANCE, WORKFLOW):
@@ -274,9 +275,37 @@ class CiFullWorkflowTests(unittest.TestCase):
         self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', job_text('conformance'))
         self.assertNotIn('name: Git/jj conformance', FULL)
 
-    def test_a_newer_label_event_never_cancels_a_running_heavy_lane(self):
-        self.assertIn('cancel-in-progress: false', FULL.split('\njobs:', 1)[0])
-        self.assertNotIn('cancel-in-progress: true', FULL)
+    def test_a_superseded_heavy_lane_is_canceled_by_a_push_or_a_new_label_event(self):
+        # Issue #373: cancel-in-progress is true; it only ever applies to a pull_request event, because the
+        # workflow has no other trigger (a push to main is never in this group).
+        conc = FULL.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0]
+        self.assertIn('cancel-in-progress: true', conc)
+        self.assertNotIn('cancel-in-progress: false', FULL)
+        self.assertNotRegex(FULL.split('\npermissions:', 1)[0], r'(?m)^  (push|schedule|workflow_dispatch|workflow_run):')
+
+    def test_ci_full_group_is_per_pull_request_and_unrelated_labels_get_their_own_group(self):
+        import json
+        conc = FULL.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0]
+        match = re.search(r'group: ci-full-\$\{\{ (.+) \}\}\n', conc)
+        self.assertTrue(match)
+        # No `cond && '' || x`: an empty string is falsy in expressions, so the middle operand must be non-empty.
+        self.assertNotIn("&& ''", match.group(1))
+        python = match.group(1).replace('github.event.action', 'action').replace('github.event.label.name', 'label')
+        python = python.replace('github.ref', 'ref')
+        python = re.sub(r"format\('\{0\}-label-\{1\}', ref, label\)", "ref + '-label-' + label", python)
+        python = python.replace('&&', ' and ').replace('||', ' or ')
+        group = lambda action, label='': eval(python, {}, {'action': action, 'label': label, 'ref': 'refs/pull/7/merge'})
+        # a push (synchronize) and the ci-full label share one group, so each cancels the older run
+        self.assertEqual(group('synchronize'), group('labeled', 'ci-full'))
+        self.assertEqual(group('labeled', 'ci-full'), 'refs/pull/7/merge')
+        self.assertNotEqual(group('labeled', 'docs'), group('labeled', 'ci-full'))
+        self.assertNotEqual(group('labeled', 'docs'), group('labeled', 'other'))
+
+    def test_a_push_and_the_reset_workflow_do_not_depend_on_each_other(self):
+        # ci-full-reset.yml removes the label on synchronize in its own group; a label set again afterwards starts a
+        # fresh labeled run in the ci-full group.
+        self.assertIn('ci-full-reset-', RESET.split('\nconcurrency:', 1)[1].split('\njobs:', 1)[0])
+        self.assertNotIn('ci-full-${{', RESET.split('\njobs:', 1)[0])
 
     def test_calls_the_reusable_suite_for_both_lanes(self):
         text = job_text('conformance', FULL)
