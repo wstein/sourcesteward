@@ -284,7 +284,7 @@ not recorded as measured in `internal/land/shapes.json` (empty today) is `land-u
 `stw ready-check NUMBER [--repo OWNER/NAME] [--host HOST] [--human | --json]` ([Spec 048](../specs/048-stw-ready-check/spec.md)) reads one pull
 request with GET requests only and prints seven conditions, each `pass`, `fail` or `unknown` with its evidence: `open`; `review` (the review
 state of the exact head is CLEAR, or carried over, per comment); `checks` (every check run and status of the head is green); `base` (the
-default branch, or the text says `Merge #N first`); `blocker` (no `Blocker:` line names a blocker); `conflict`; `rebaseable`. It exits 0 only
+default branch, or the head branch of another open pull request, a stack child); `blocker` (no Blocker line or section names a blocker); `conflict`; `rebaseable`. It exits 0 only
 when all pass, 1 otherwise (the document is still printed), 2 on a usage error. It never marks a pull request Ready and writes nothing.
 Until the review-state parser of Spec 046 is merged, `review` is `unknown` and the command never reports ready.
 
