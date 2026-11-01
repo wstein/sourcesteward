@@ -47,7 +47,10 @@ Some tests skip locally with a reason instead of failing when a tool is missing:
 - The Pages packaging test needs the pinned Hugo (`python3 scripts/install-hugo.py`, or `HUGO`).
 - `scripts/test_release_toml.py` and the release contract tests need Python 3.11+ (`tomllib`);
   the macOS system Python is 3.9. Install a newer `python3` and put it first on PATH.
-- The hostile-branch pins test needs a file system that accepts non-UTF-8 names (APFS does not).
+- The hostile-branch pins test in `internal/contracts` needs a file system that accepts non-UTF-8 names (APFS does not).
+- Two pins audit tests in `internal/inspection` (non-UTF-8 branch names) skip on the same condition.
+- One pins publication test in `internal/inspection` (non-UTF-8 ref file name) skips on the same condition.
+- `TestPinsDirtyDeepPath...` builds a path of about 1,200 bytes and skips where the OS rejects it (macOS PATH_MAX is 1,024).
 - Tidy plan-set fixtures that need a worktree below `/tmp/whr*` skip where `/tmp` is a symlink
   (macOS: `/private/tmp`).
 
