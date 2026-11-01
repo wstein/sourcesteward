@@ -8,6 +8,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -173,7 +174,11 @@ func TestTidyApplyOutcomeToExitCodeAndEscapedText(t *testing.T) {
 }
 
 func TestTidyApplyStateDirDefaultsToTheDerivedStores(t *testing.T) {
-	env := t.TempDir()
+	// On macOS t.TempDir() is under /var, a symlink; the state directory check refuses symlinks.
+	env, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chmod(env, 0700); err != nil {
 		t.Fatal(err)
 	}
