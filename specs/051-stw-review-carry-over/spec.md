@@ -84,8 +84,10 @@ What decides the output is fixed, so a user's configuration cannot change a verd
   then no). A checkout owned by another user can fail the `safe.directory` check, because that setting is read only from the
   global configuration; the result is then `read-failed`. Keys that change only color or the layout of a stat are not pinned
   because the vectors print neither. The pinned keys are covered by the hostile-configuration test; the keys without a
-  verdict effect on the scenarios of that test (for example `diff.suppressBlankEmpty`) are pinned as a precaution and not
-  proven by a mutation.
+  verdict effect on the scenarios of that test (`--full-index`, `-O`, `--diff-algorithm`, `--inter-hunk-context`,
+  `--indent-heuristic`, `core.attributesFile`, `core.quotePath`, `core.bigFileThreshold`, `log.showRoot`) are pinned as a precaution
+  and not proven by a mutation; both sides of a comparison are read with the same settings, so they could only hide a
+  difference together with another effect.
 
 The only local effect is the `--remote` fetch into `refs/stw/carry-over/pr-NUMBER` (`--no-tags --no-write-fetch-head
 --no-recurse-submodules --refmap=`; a configured `remote.<name>.fetch` writes nothing); without `--remote` nothing is written.
