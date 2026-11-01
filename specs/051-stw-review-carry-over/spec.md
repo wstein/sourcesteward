@@ -56,8 +56,14 @@ checks of the pull request), whether the label `ci-full` is set again (the revie
 
 Git only, through one guarded runner (`internal/carryover`). The guard allows exactly the argument shapes of `rev-parse`,
 `diff`, `patch-id`, `rev-list`, `log` and the one fetch, with every flag pinned and the exact length checked. A `push`,
-`update-ref`, `range-diff` or a fetch into another namespace is refused. Nothing starts but Git itself: no external diff,
-textconv, signature program, pager or hook.
+`update-ref`, `range-diff` or a fetch into another namespace is refused. Without `--remote` nothing starts but Git itself: no
+external diff, textconv, signature program, pager or hook. With `--remote` the fetch can start the transport programs of the
+caller (see the limits).
+
+Threat model: the checkout is hostile in its content (the pull request author controls commits, `.gitattributes`,
+`.gitmodules`), but not in its `.git/config` or in the environment of the caller; whoever can write those already runs
+programs as the caller. The `GIT_` variables that pass (`GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`, `GIT_ASKPASS`,
+`GIT_SSL_*`, `GIT_PROXY_COMMAND`) run the caller's own programs.
 
 What decides the output is fixed, so a user's configuration cannot change a verdict:
 
@@ -78,15 +84,20 @@ What decides the output is fixed, so a user's configuration cannot change a verd
   `GIT_TRACE*`, `GIT_ATTR_SOURCE`, `GIT_NOTES_REF` never reach Git). The global and system configuration are replaced by the null
   device (`GIT_CONFIG_GLOBAL`, `GIT_CONFIG_SYSTEM`, `GIT_CONFIG_NOSYSTEM=1`, so `~/.gitconfig`, `$XDG_CONFIG_HOME/git/config` and
   `/etc/gitconfig` are not read), `GIT_ATTR_NOSYSTEM=1`, `GIT_PAGER=cat`, `--no-pager`, `--no-replace-objects`.
-- **Limits:** the repository's own configuration (`.git/config`) still applies for keys not listed above, in particular
+- **Limits:** with `--remote`, the fetch starts the transport programs that the caller's environment and the repository's
+  `.git/config` name: `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_PROXY_COMMAND`, `GIT_ASKPASS`, `core.sshCommand`, `core.gitProxy`,
+  `remote.<name>.uploadpack`, an `ext::` URL (with `protocol.ext.allow` or `url.<base>.insteadOf`). The verdict is not
+  affected (a failed fetch is `read-failed`), but the programs run. The repository's own configuration (`.git/config`) still applies for keys not listed above, in particular
   `remote.<name>.url`, `url.<base>.insteadOf`, `http.*` and `core.repositoryformatversion`. The fetch does not consult a credential
   helper or `http.*` setting from the global configuration; a remote that needs one fails with `read-failed` (the verdict is
   then no). A checkout owned by another user can fail the `safe.directory` check, because that setting is read only from the
   global configuration; the result is then `read-failed`. Keys that change only color or the layout of a stat are not pinned
   because the vectors print neither. The pinned keys are covered by the hostile-configuration test; the keys without a
   verdict effect on the scenarios of that test (`--full-index`, `-O`, `--diff-algorithm`, `--inter-hunk-context`,
-  `--indent-heuristic`, `core.attributesFile`, `core.quotePath`, `core.bigFileThreshold`, `log.showRoot`) are pinned as a precaution
-  and not proven by a mutation; both sides of a comparison are read with the same settings, so they could only hide a
+  `--indent-heuristic`, `core.attributesFile`, `core.quotePath`, `core.bigFileThreshold`, `log.showRoot`, `diff.noprefix`,
+  `diff.mnemonicPrefix`, `--no-color-moved`, `core.notesRef`, `log.follow`, `i18n.commitEncoding`, `core.abbrev`,
+  `fetch.writeCommitGraph`, `gc.auto`, `maintenance.auto`, `core.fsmonitor`, `diff.wsErrorHighlight`) are pinned as a
+  precaution and not proven by a mutation; both sides of a comparison are read with the same settings, so they could only hide a
   difference together with another effect.
 
 The only local effect is the `--remote` fetch into `refs/stw/carry-over/pr-NUMBER` (`--no-tags --no-write-fetch-head
