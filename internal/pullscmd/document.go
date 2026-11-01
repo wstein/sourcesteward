@@ -29,7 +29,9 @@ type Document struct {
 	Errors        []snapcmd.DocError `json:"errors"`
 	// OwnerQueue is null without --mergeable (Spec 046).
 	OwnerQueue *[]DocQueueEntry `json:"owner_queue"`
-	limit      int              // for the human renderer; not part of the contract
+	// Stack is null without --stack (Spec 046).
+	Stack *DocStack `json:"stack"`
+	limit int       // for the human renderer; not part of the contract
 }
 
 // DocOptions echoes the selection of the run.
@@ -46,6 +48,7 @@ type DocOptions struct {
 	ReviewStates []string `json:"review_states"`
 	Hints        []string `json:"hints"`
 	Mergeable    bool     `json:"mergeable"`
+	Stack        bool     `json:"stack"`
 }
 
 // DocRepo is one repository of the run.
@@ -158,6 +161,28 @@ type DocSummary struct {
 	WaitingForParent int `json:"waiting_for_parent"`
 }
 
+// DocStack is the stack view: the trees with a child (or an orphan base) and the number of single pull requests left out.
+type DocStack struct {
+	Trees   []*DocStackNode `json:"trees"`
+	Singles int             `json:"singles"`
+}
+
+// DocStackNode is one pull request of a stack; Checks and Review are null when not read.
+type DocStackNode struct {
+	Repo     string          `json:"repo"`
+	Number   int             `json:"number"`
+	Title    string          `json:"title"`
+	URL      *string         `json:"url"`
+	Draft    bool            `json:"draft"`
+	Group    string          `json:"group"`
+	Checks   *string         `json:"checks"`
+	Review   *string         `json:"review"`
+	Hints    []string        `json:"hints"`
+	Base     string          `json:"base"`
+	HeadRef  string          `json:"head_ref"`
+	Children []*DocStackNode `json:"children"`
+}
+
 // DocQueueEntry is one entry of the owner list: a pull request that can be merged now, in merge order.
 type DocQueueEntry struct {
 	Position int     `json:"position"`
@@ -175,7 +200,7 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 	d := &Document{SchemaVersion: 1, Command: "pulls", Time: res.Time.UTC().Format(time.RFC3339), Host: snapcmd.Cut(p.Host, pulls.MaxString), limit: res.Limit}
 	d.Options = DocOptions{Scope: p.Scope, Owners: snapcmd.Strings0(p.Owners), NoBots: p.Options.NoBots, BotsOnly: p.Options.BotsOnly, Authors: snapcmd.Strings0(p.Options.Authors),
 		DetailDrafts: p.Options.DetailDrafts, Limit: res.Limit,
-		Mergeable: p.Mergeable, Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints)}
+		Mergeable: p.Mergeable, Stack: p.Stack, Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints)}
 	d.Repos = []DocRepo{}
 	for _, st := range res.Repos {
 		r := DocRepo{Repo: st.Repo, Source: sources[strings.ToLower(st.Repo)], Open: st.Open, Listed: st.Listed, Error: snapcmd.StrPtr(st.Error)}
@@ -219,6 +244,13 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 			}
 		}
 		d.OwnerQueue, d.Summary.WaitingForParent = &q, waiting
+	}
+	if p.Stack {
+		f := prviews.Stacks(res.Rows)
+		d.Stack = &DocStack{Trees: make([]*DocStackNode, len(f.Trees)), Singles: f.Singles}
+		for i, n := range f.Trees {
+			d.Stack.Trees[i] = docStackNode(n)
+		}
 	}
 	d.Errors = []snapcmd.DocError{}
 	for _, e := range res.Errors {
@@ -268,6 +300,9 @@ var humanGroups = []string{pulls.GroupReady, pulls.GroupChecks, pulls.GroupConfl
 func writeHuman(w io.Writer, d *Document) error {
 	if d.OwnerQueue != nil {
 		return writeQueue(w, d)
+	}
+	if d.Stack != nil {
+		return writeStack(w, d)
 	}
 	var b strings.Builder
 	lists := map[string][]DocRow{pulls.GroupReady: d.Groups.Ready, pulls.GroupChecks: d.Groups.Checks, pulls.GroupConflict: d.Groups.Conflict, pulls.GroupDraft: d.Groups.Draft, pulls.GroupBlocked: d.Groups.Blocked}
@@ -412,4 +447,80 @@ func writeQueue(w io.Writer, d *Document) error {
 	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+func docStackNode(n *prviews.Node) *DocStackNode {
+	d := &DocStackNode{Repo: n.Repo, Number: n.Number, Title: n.Title, URL: snapcmd.StrPtr(n.URL), Draft: n.Draft, Group: n.Group, Checks: snapcmd.StrPtr(n.Checks),
+		Review: snapcmd.StrPtr(n.Review), Hints: snapcmd.Strings0(n.Hints), Base: n.Base, HeadRef: n.HeadRef, Children: make([]*DocStackNode, len(n.Children))}
+	for i, c := range n.Children {
+		d.Children[i] = docStackNode(c)
+	}
+	return d
+}
+
+// writeStack prints the stack view: one tree per root, children drawn with "|-" and "`-", then the
+// number of single pull requests left out. Untrusted text is escaped.
+func writeStack(w io.Writer, d *Document) error {
+	var b strings.Builder
+	dash := func(s *string) string {
+		if s == nil {
+			return "-"
+		}
+		return untrusted.Esc(*s)
+	}
+	var line func(n *DocStackNode, root bool)
+	line = func(n *DocStackNode, root bool) {
+		fmt.Fprintf(&b, "%s#%d  %s  checks %s  review %s  %s", untrusted.Esc(n.Repo), n.Number, n.Group, dash(n.Checks), dash(n.Review), untrusted.Esc(n.Title))
+		if root && hasString(n.Hints, "base-not-default") {
+			fmt.Fprintf(&b, "  (base %s)", untrusted.Esc(n.Base))
+		}
+		if len(n.Hints) > 0 {
+			fmt.Fprintf(&b, "  {%s}", strings.Join(n.Hints, ", "))
+		}
+		b.WriteByte('\n')
+	}
+	var children func(n *DocStackNode, prefix string)
+	children = func(n *DocStackNode, prefix string) {
+		for i, c := range n.Children {
+			last := i == len(n.Children)-1
+			branch, next := "|- ", "|  "
+			if last {
+				branch, next = "`- ", "   "
+			}
+			b.WriteString(prefix + branch)
+			line(c, false)
+			children(c, prefix+next)
+		}
+	}
+	st := d.Stack
+	if len(st.Trees) == 0 {
+		b.WriteString("no stacked pull requests\n")
+	}
+	for i, t := range st.Trees {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		line(t, true)
+		children(t, "")
+	}
+	if st.Singles > 0 {
+		fmt.Fprintf(&b, "\n%s not shown\n", snapcmd.Plural(st.Singles, "single pull request", "single pull requests"))
+	}
+	if n := d.Summary.ReposFailed; n > 0 {
+		fmt.Fprintf(&b, "%s could not be read\n", snapcmd.Plural(n, "repository", "repositories"))
+	}
+	if n := snapcmd.OwnerErrorCount(d.Errors); n > 0 {
+		fmt.Fprintf(&b, "%s with owner discovery\n", snapcmd.Plural(n, "problem", "problems"))
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func hasString(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }

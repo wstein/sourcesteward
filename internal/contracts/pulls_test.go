@@ -288,3 +288,51 @@ func TestPullsSchemaOwnerQueue(t *testing.T) {
 		}
 	}
 }
+
+func stackNode(n int, children ...any) map[string]any {
+	return map[string]any{"repo": "o/r", "number": n, "title": "t", "url": "https://github.com/o/r/pull/1", "draft": false, "group": "ready", "checks": "green",
+		"review": "clear", "hints": []any{"base-not-default"}, "base": "main", "head_ref": "b", "children": append([]any{}, children...)}
+}
+
+func withStack(t *testing.T, fn func(root, kid, m map[string]any)) string {
+	t.Helper()
+	return mutatePulls(t, func(m map[string]any) {
+		kid := stackNode(2)
+		root := stackNode(1, kid)
+		m["options"].(map[string]any)["stack"] = true
+		m["stack"] = map[string]any{"trees": []any{root}, "singles": 3}
+		if fn != nil {
+			fn(root, kid, m)
+		}
+	})
+}
+
+func TestPullsSchemaStack(t *testing.T) {
+	s := schema(t, "pulls")
+	valid(t, s, []byte(withStack(t, nil)))
+	valid(t, s, []byte(withStack(t, func(root, kid, m map[string]any) { kid["checks"], kid["review"], kid["url"] = nil, nil, nil })))
+	valid(t, s, []byte(withStack(t, func(root, kid, m map[string]any) { m["stack"] = map[string]any{"trees": []any{}, "singles": 0} })))
+	valid(t, s, []byte(withStack(t, func(root, kid, m map[string]any) { m["stack"] = nil })))
+	for name, doc := range map[string]string{
+		"grandchild with unknown review": withStack(t, func(root, kid, m map[string]any) {
+			kid["children"] = []any{stackNode(3)}
+			kid["children"].([]any)[0].(map[string]any)["review"] = "approved"
+		}),
+		"unknown group":          withStack(t, func(root, kid, m map[string]any) { root["group"] = "merged" }),
+		"unknown checks":         withStack(t, func(root, kid, m map[string]any) { kid["checks"] = "yellow" }),
+		"child extra key":        withStack(t, func(root, kid, m map[string]any) { kid["x"] = 1 }),
+		"child missing children": withStack(t, func(root, kid, m map[string]any) { delete(kid, "children") }),
+		"unknown hint":           withStack(t, func(root, kid, m map[string]any) { kid["hints"] = []any{"x"} }),
+		"http url":               withStack(t, func(root, kid, m map[string]any) { root["url"] = "http://x" }),
+		"number zero":            withStack(t, func(root, kid, m map[string]any) { root["number"] = 0 }),
+		"singles negative":       withStack(t, func(root, kid, m map[string]any) { m["stack"].(map[string]any)["singles"] = -1 }),
+		"stack missing singles":  withStack(t, func(root, kid, m map[string]any) { delete(m["stack"].(map[string]any), "singles") }),
+		"stack extra key":        withStack(t, func(root, kid, m map[string]any) { m["stack"].(map[string]any)["x"] = 1 }),
+		"trees not an array":     withStack(t, func(root, kid, m map[string]any) { m["stack"].(map[string]any)["trees"] = root }),
+		"stack option not bool":  withStack(t, func(root, kid, m map[string]any) { m["options"].(map[string]any)["stack"] = 1 }),
+	} {
+		if err := s.Validate(value(t, []byte(doc))); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}

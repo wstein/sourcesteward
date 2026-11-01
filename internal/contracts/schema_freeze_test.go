@@ -20,7 +20,7 @@ var frozenPublishedSchemas = map[string]string{
 	"schemas/v1/pins.schema.json":                   "1ae773a4fa0c4d08a9948ff050600505165323865a44b213ae91b205204c055b",
 	"schemas/v1/issues.schema.json":                 "10082037cbb97bc5311e52e9738daf3f774b0f3ee9ca97eb84d3a93d6b94f6ee",
 	"schemas/v1/lint-pr.schema.json":                "547c35979eb6881a783fc84376f7ea507d481d3ca6d4ba1cafe0207efa846f1f",
-	"schemas/v1/pulls.schema.json":                  "7fb18713bced268c9e2ba87b311b07c2bbac3af6ad98fcf65d14b667cd68e7db",
+	"schemas/v1/pulls.schema.json":                  "4446e0b63d9a4446bda59bdcf8c8a680e79dfe03ce3c7af548bd40544707553e",
 	"schemas/v1/release-build-manifest.schema.json": "ca9fc9e2087d421d7bc0be1bc341fcb76248af6668f7719b3260bd9d949a84fd",
 	"schemas/v1/release-build.schema.json":          "f0f63a7ab8b7e19ae7437855e8da62c223c8f937a1740542bc52561cc9e88f73",
 	"schemas/v1/release-check.schema.json":          "df1bf6730b4ad4e8495b2f970cc2774e6ccb03a093f9de4fc2db6f963048c5b4",
