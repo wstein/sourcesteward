@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/review-carry-over.schema.json",
+  "title": "SourceSteward review carry-over result (schema 1)",
+  "description": "The one document stw review carry-over --json prints (Spec 051). Usage errors print no JSON. Unknown properties are additive extensions.",
+  "type": "object",
+  "required": ["schema_version", "command", "pr", "from", "to", "patch_id", "merge_commits", "range_diff", "pr_head", "carry_over", "reasons", "line"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "command": { "const": "review carry-over" },
+    "pr": { "type": "integer", "minimum": 1 },
+    "from": { "$ref": "#/$defs/side" },
+    "to": { "$ref": "#/$defs/side" },
+    "patch_id": {
+      "type": "object",
+      "required": ["state", "old", "new"],
+      "properties": {
+        "state": { "enum": ["equal", "differs", "unknown"] },
+        "old": { "type": "string", "pattern": "^([0-9a-f]{40})?$" },
+        "new": { "type": "string", "pattern": "^([0-9a-f]{40})?$" }
+      }
+    },
+    "merge_commits": {
+      "type": "object",
+      "required": ["state", "count", "commits"],
+      "properties": {
+        "state": { "enum": ["none", "found", "unknown"] },
+        "count": { "type": "integer", "minimum": 0 },
+        "commits": { "type": "array", "items": { "$ref": "#/$defs/sha" } }
+      }
+    },
+    "range_diff": {
+      "type": "object",
+      "required": ["state", "total", "not_equal", "deviations", "truncated"],
+      "properties": {
+        "state": { "enum": ["equal", "differs", "unknown"] },
+        "total": { "type": "integer", "minimum": 0 },
+        "not_equal": { "type": "integer", "minimum": 0 },
+        "deviations": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "required": ["old", "new", "mark"],
+            "properties": {
+              "old": { "type": ["integer", "null"], "minimum": 1 },
+              "new": { "type": ["integer", "null"], "minimum": 1 },
+              "mark": { "enum": ["=", "!", "<", ">"] }
+            }
+          }
+        },
+        "truncated": { "type": "boolean" }
+      }
+    },
+    "pr_head": {
+      "type": "object",
+      "required": ["state"],
+      "properties": { "state": { "enum": ["not-checked", "match", "mismatch", "unknown"] } }
+    },
+    "carry_over": { "type": "boolean" },
+    "reasons": {
+      "type": "array",
+      "items": { "enum": ["object-missing", "read-failed", "patch-id-differs", "patch-id-empty", "merge-commits", "range-diff-not-equal", "range-empty", "pr-head-mismatch"] },
+      "uniqueItems": true
+    },
+    "line": {
+      "oneOf": [
+        { "type": "null" },
+        { "type": "string", "pattern": "^Carried-over: from=[0-9a-f]{40} to=[0-9a-f]{40} patch-id=[0-9a-f]{40} pr=[1-9][0-9]{0,8}$" }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "carry_over": { "const": true } } },
+      "then": {
+        "properties": {
+          "reasons": { "maxItems": 0 },
+          "line": { "type": "string" },
+          "patch_id": { "properties": { "state": { "const": "equal" } } },
+          "merge_commits": { "properties": { "state": { "const": "none" } } },
+          "range_diff": { "properties": { "state": { "const": "equal" } } }
+        }
+      },
+      "else": { "properties": { "line": { "type": "null" }, "reasons": { "minItems": 1 } } }
+    }
+  ],
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "side": {
+      "type": "object",
+      "required": ["base", "head"],
+      "properties": { "base": { "$ref": "#/$defs/sha" }, "head": { "$ref": "#/$defs/sha" } }
+    }
+  }
+}

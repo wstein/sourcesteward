@@ -262,6 +262,16 @@ adds the repositories of another user or organisation. Each row also shows the r
 owner identity, `Co-Authored-By`, Conventional Commits, the PR text structure and length, and the review comment format and length, each
 finding with a rule ID, a severity and a location (PR text, comment ID, commit SHA). Exit 3 on an error finding. See [lint](lint.md).
 
+## Check a review carry-over
+
+`stw review carry-over --pr NUMBER OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` ([Spec 051](../specs/051-stw-review-carry-over/spec.md))
+checks, read-only, whether a review may be carried over after a rebase or restack: equal `git patch-id --stable` of the diff
+against each base, no merge commit in `NEW_BASE..NEW_HEAD`, and `git range-diff` showing `=` for every commit at the same
+position. The arguments are full 40-hex commit ids; the objects must be in the checkout. The output names each condition and
+the verdict; only for a yes it ends with `Carried-over: from=<40-hex> to=<40-hex> patch-id=<hex> pr=<n>`. The command posts
+nothing. `--remote NAME` fetches the pull request head into `refs/stw/carry-over/` and requires it to equal `NEW_HEAD`;
+`--json` prints one document. Exit 0 carry-over allowed, 1 not allowed or a read failed, 2 usage error.
+
 ## List open issues
 
 `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md)) prints a read-only, stateless snapshot of every open issue (pull requests
