@@ -77,6 +77,23 @@
           "type": "integer",
           "minimum": 1,
           "maximum": 500
+        },
+        "review": {
+          "type": "boolean"
+        },
+        "review_states": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "$ref": "#/$defs/reviewState"
+          }
+        },
+        "hints": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "$ref": "#/$defs/hint"
+          }
         }
       }
     },
@@ -297,6 +314,82 @@
         "repos_failed": {
           "type": "integer",
           "minimum": 0
+        },
+        "review": {
+          "type": "object",
+          "required": [
+            "none",
+            "findings",
+            "clear",
+            "clear_carried",
+            "clear_stale",
+            "unparsed",
+            "not_read"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "none": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "findings": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "clear": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "clear_carried": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "clear_stale": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unparsed": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_read": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "hints": {
+          "type": "object",
+          "required": [
+            "clear_not_ready",
+            "no_final_review",
+            "base_not_default",
+            "parent_merged_retarget",
+            "ready_mergeable"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "clear_not_ready": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "no_final_review": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "base_not_default": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "parent_merged_retarget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "ready_mergeable": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
         }
       }
     },
@@ -593,6 +686,19 @@
         },
         "detail": {
           "type": "boolean"
+        },
+        "review": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/review"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hints": {
+          "$ref": "#/$defs/hints"
         }
       },
       "allOf": [
@@ -680,6 +786,253 @@
               },
               "rebaseable": {
                 "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "reviewState": {
+      "enum": [
+        "none",
+        "findings",
+        "clear",
+        "clear-carried",
+        "clear-stale",
+        "unparsed"
+      ]
+    },
+    "hint": {
+      "enum": [
+        "clear-not-ready",
+        "no-final-review",
+        "base-not-default",
+        "parent-merged-retarget",
+        "ready-mergeable"
+      ]
+    },
+    "hints": {
+      "type": "array",
+      "maxItems": 5,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/hint"
+      }
+    },
+    "review": {
+      "type": "object",
+      "required": [
+        "basis",
+        "state",
+        "verdict",
+        "head",
+        "patch_id",
+        "at",
+        "url",
+        "carried",
+        "edited",
+        "truncated"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "const": "comment"
+        },
+        "state": {
+          "$ref": "#/$defs/reviewState"
+        },
+        "verdict": {
+          "anyOf": [
+            {
+              "enum": [
+                "CLEAR",
+                "FINDINGS"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "head": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "patch_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "at": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "carried": {
+          "type": "boolean"
+        },
+        "edited": {
+          "type": "boolean"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "none",
+                  "unparsed"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "verdict": {
+                "type": "null"
+              },
+              "head": {
+                "type": "null"
+              },
+              "patch_id": {
+                "type": "null"
+              },
+              "at": {
+                "type": "null"
+              },
+              "url": {
+                "type": "null"
+              },
+              "carried": {
+                "const": false
+              },
+              "edited": {
+                "const": false
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "verdict": {
+                "enum": [
+                  "CLEAR",
+                  "FINDINGS"
+                ]
+              },
+              "head": {
+                "$ref": "#/$defs/sha"
+              },
+              "patch_id": {
+                "type": "string"
+              },
+              "at": {
+                "$ref": "#/$defs/time"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "clear-carried"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "carried": {
+                "const": true
+              },
+              "verdict": {
+                "const": "CLEAR"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "carried": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "clear",
+                  "clear-stale"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "verdict": {
+                "const": "CLEAR"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "findings"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "verdict": {
+                "const": "FINDINGS"
               }
             }
           }

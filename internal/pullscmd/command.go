@@ -13,6 +13,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/pulls"
+	"github.com/wstein/sourcesteward/internal/reviewstate"
 	"github.com/wstein/sourcesteward/internal/snapcmd"
 	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/untrusted"
@@ -60,6 +61,10 @@ type Flags struct {
 	Limit         int
 	Human         bool
 	JSON          bool
+	// Spec 046: NoReview skips the comment reads; ReviewStates and Hints keep matching rows.
+	NoReview     bool
+	ReviewStates []string
+	Hints        []string
 }
 
 // Params is a fully validated run.
@@ -106,6 +111,18 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 		return p, snapcmd.Usagef("--limit %d is outside 1..%d", f.Limit, pulls.MaxLimit)
 	case f.WorkspacePath != "" && !f.Workspace:
 		return p, snapcmd.Usagef("PATH is only valid with --workspace")
+	case f.NoReview && (len(f.ReviewStates) > 0 || len(f.Hints) > 0):
+		return p, snapcmd.Usagef("--no-review cannot be combined with --review or --hint")
+	}
+	for _, st := range f.ReviewStates {
+		if !contains(reviewstate.States, st) {
+			return p, snapcmd.Usagef("--review %q is not one of %s", st, strings.Join(reviewstate.States, ", "))
+		}
+	}
+	for _, h := range f.Hints {
+		if !contains(reviewstate.AllHints, h) {
+			return p, snapcmd.Usagef("--hint %q is not one of %s", h, strings.Join(reviewstate.AllHints, ", "))
+		}
 	}
 	for _, a := range f.Authors {
 		if !authorName.MatchString(a) {
@@ -131,7 +148,8 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 
 	workspace := f.Workspace || (len(f.Repos) == 0 && len(owners) == 0)
 	p = Params{Host: host, Owners: owners, Sources: map[string]string{}, Out: out, Human: snapcmd.TerminalHuman(f.Human, f.JSON, out),
-		Options: pulls.Options{NoBots: f.NoBots, BotsOnly: f.BotsOnly, Authors: f.Authors, DetailDrafts: f.DetailDrafts, Limit: f.Limit}}
+		Options: pulls.Options{NoBots: f.NoBots, BotsOnly: f.BotsOnly, Authors: f.Authors, DetailDrafts: f.DetailDrafts, Limit: f.Limit,
+			Review: !f.NoReview, ReviewStates: f.ReviewStates, Hints: f.Hints}}
 	var repos []string
 	if workspace {
 		sel, err := watchcmd.Resolve(ctx, watchcmd.ResolveInput{Host: host, Repos: f.Repos, Workspace: true, WorkspacePath: f.WorkspacePath, Discover: discover})
@@ -256,6 +274,15 @@ func Execute(ctx context.Context, p Params) error {
 		return snapcmd.Failure(watchcmd.ExitFailure, "%s", problemSummary(doc))
 	}
 	return nil
+}
+
+func contains(list []string, s string) bool {
+	for _, x := range list {
+		if x == s {
+			return true
+		}
+	}
+	return false
 }
 
 func problemSummary(d *Document) string {

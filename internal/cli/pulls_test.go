@@ -35,6 +35,15 @@ func pullsForge(t *testing.T) *watchForge {
 		f.docs["repos/"+h.repo+"/commits/"+h.head+"/check-runs?per_page=100&page=1"] = green
 		f.docs["repos/"+h.repo+"/commits/"+h.head+"/statuses?per_page=100&page=1"] = `[]`
 	}
+	// Spec 046: the default branch, the comments of every pull request and the head commit date.
+	for _, repo := range []string{"o/r", "wstein/lab"} {
+		f.docs["repos/"+repo] = `{"default_branch":"main","html_url":"https://github.com/` + repo + `"}`
+	}
+	clear1 := `[{"id":9,"html_url":"https://github.com/o/r/pull/1#issuecomment-9","created_at":"2026-10-21T09:00:00Z","updated_at":"2026-10-21T09:00:00Z","body":"Review: CLEAR head=` + head1 + ` patch-id=` + strings.Repeat("a", 40) + ` pr=1\nok"}]`
+	f.docs["repos/o/r/issues/1/comments?per_page=50&page=1"] = clear1
+	f.docs["repos/o/r/issues/2/comments?per_page=50&page=1"] = `[]`
+	f.docs["repos/wstein/lab/issues/3/comments?per_page=50&page=1"] = `[]`
+	f.docs["repos/o/r/commits/"+head1] = `{"commit":{"committer":{"date":"2026-10-20T08:00:00Z"}}}`
 	f.docs[pullsSearch] = `{"total_count":1,"incomplete_results":false,"items":[{"repository_url":"https://api.github.com/repos/wstein/lab","number":3}]}`
 	return f
 }
@@ -66,8 +75,24 @@ func TestPullsEndToEndJSONOverTheGuardedReader(t *testing.T) {
 	if doc.Groups["ready"][0]["number"] != 1.0 { // equal created_at: repository, then number
 		t.Fatalf("%v", doc.Groups["ready"])
 	}
+	first := doc.Groups["ready"][0]
+	if rv, _ := first["review"].(map[string]any); rv == nil || rv["state"] != "clear" || rv["basis"] != "comment" || len(first["hints"].([]any)) != 1 || first["hints"].([]any)[0] != "ready-mergeable" {
+		t.Fatalf("review of #1: %v", first)
+	}
+	if rv, _ := doc.Groups["ready"][1]["review"].(map[string]any); rv == nil || rv["state"] != "none" {
+		t.Fatalf("review of #2: %v", doc.Groups["ready"][1])
+	}
+	var shapes []string
 	for _, uri := range forge.log {
-		if strings.HasPrefix(uri, "search/") || strings.Contains(uri, "branches/") || uri == "rate_limit" {
+		if strings.Contains(uri, "/comments") || uri == "repos/o/r" || strings.HasPrefix(uri, "repos/o/r/commits/"+strings.Repeat("1", 40)) && !strings.Contains(uri, "check-runs") && !strings.Contains(uri, "statuses") {
+			shapes = append(shapes, uri)
+		}
+	}
+	if len(shapes) != 4 {
+		t.Fatalf("review reads over the guarded reader: %v", shapes)
+	}
+	for _, uri := range forge.log {
+		if strings.HasPrefix(uri, "search/") || strings.Contains(uri, "branches/") || uri == "rate_limit" || strings.Contains(uri, "state=closed") {
 			t.Errorf("unexpected read %s", uri)
 		}
 	}
@@ -102,7 +127,7 @@ func TestPullsEndToEndOwnerModeUsesTheSearchShape(t *testing.T) {
 func TestPullsHumanOutput(t *testing.T) {
 	watchEnv(t, true)
 	status, out, _ := pullsRun(t, pullsForge(t), "--repo", "o/r", "--human", "--no-bots")
-	if status != 0 || !strings.Contains(out, "ready (1)\n") || !strings.Contains(out, "o/r#1  ") || strings.Contains(out, "dependabot") || !strings.HasSuffix(out, "1 open pull request in 1 repository, 1 ready\n") {
+	if status != 0 || !strings.Contains(out, "ready (1)\n") || !strings.Contains(out, "o/r#1  ") || strings.Contains(out, "dependabot") || !strings.HasSuffix(out, "review: 1 clear\nhints: 1 ready-mergeable\n1 open pull request in 1 repository, 1 ready\n") {
 		t.Fatalf("%d %q", status, out)
 	}
 }
