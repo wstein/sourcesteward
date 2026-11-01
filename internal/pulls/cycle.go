@@ -41,6 +41,14 @@ type Options struct {
 	Limit        int // detail budget, 0 means 200, at most 500
 	Parallel     int // repositories read at the same time, 0 means 4
 	Now          func() time.Time
+
+	// Review reads the review state and the hints (Spec 046): the comments of the rows within Limit,
+	// the default branch and, for a base other than the default, the closed list. ReviewStates and
+	// Hints keep only matching rows after all reads (OR within a list, AND across both); they need
+	// Review and a reader that implements ReviewSource.
+	Review       bool
+	ReviewStates []string
+	Hints        []string
 }
 
 // Row is one open pull request with its verdict. Pointer fields are null in the JSON
@@ -57,7 +65,9 @@ type Row struct {
 	Mergeable                                     *bool
 	MergeableState                                *string
 	Rebaseable                                    *bool
-	Group, Reason                                 string // Reason is empty unless Group is blocked
+	Review                                        *ReviewInfo // nil when the comments were not read (Spec 046)
+	Hints                                         []string    // empty without Review; see internal/reviewstate
+	Group, Reason                                 string      // Reason is empty unless Group is blocked
 	Ready                                         bool
 	Detail                                        bool
 	Deadline                                      bool // not read because the context expired (not a failure)
@@ -87,6 +97,10 @@ type Summary struct {
 	Total, Ready, Checks, Conflict, Draft, Blocked, Bots, NotRead, ReposRead, ReposFailed int
 	// ReposDeadline counts repositories whose list was not read because the context expired.
 	ReposDeadline int
+	// Review and Hints count the review states and hints of Rows (Spec 046); Review.NotRead counts the
+	// rows without a review when reviews were requested.
+	Review ReviewCounts
+	Hints  HintCounts
 }
 
 // Result is the snapshot. Rows are newest first (created_at, then repository, then number;
@@ -101,6 +115,8 @@ type Result struct {
 	// Deadline: the context expired before every read finished; Rows and Repos hold what was read
 	// so far (Row.Deadline, RepoStatus.Deadline mark the rest).
 	Deadline bool
+	// ReviewOn is true when reviews were requested (Options.Review).
+	ReviewOn bool
 }
 
 // Run reads the snapshot. An error is returned for unusable options (nil Result) or an expired
@@ -126,7 +142,11 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if o.Now != nil {
 		now = o.Now
 	}
-	res := &Result{Time: now().UTC(), Limit: o.Limit}
+	_, supported := r.(ReviewSource)
+	if err := validateReview(o, supported); err != nil {
+		return nil, err
+	}
+	res := &Result{Time: now().UTC(), Limit: o.Limit, ReviewOn: o.Review}
 	c := &cycle{r: r, o: o, now: res.Time, res: res}
 	c.run(ctx)
 	return res, ctx.Err()
@@ -148,6 +168,9 @@ type item struct {
 	eligible bool // competes for the detail budget: not a draft, or --detail-drafts
 	budget   bool // selected for detail
 	reread   bool // detail says null/unknown mergeability on an otherwise judgeable row
+
+	defaultBranch string // of the repository; empty when unknown or reviews are off
+	parentMerged  bool   // a merged pull request of the repository had the base as its head
 }
 
 func (c *cycle) run(ctx context.Context) {
@@ -228,10 +251,21 @@ func (c *cycle) run(ctx context.Context) {
 
 	c.reread(ctx, all, read, index, status)
 
+	if src, ok := c.r.(ReviewSource); ok && c.o.Review {
+		c.review(ctx, src, all, index, status)
+	}
+
 	for _, it := range all {
 		it.row.PastBudget = it.eligible && !it.budget
 		it.row.Deadline = it.budget && !it.row.Detail && ctx.Err() != nil && statusOf(status, index, it.repo).Error == ""
 		c.finish(it)
+		if c.o.Review {
+			it.row.Hints = c.hints(it)
+		}
+		if !c.keepReview(it.row) {
+			status[index[it.repo]].Listed--
+			continue
+		}
 		c.res.Rows = append(c.res.Rows, it.row)
 	}
 	c.res.Repos = status
@@ -481,15 +515,15 @@ func (r *Result) Repo(name string) (RepoView, bool) {
 				v.Rows = append(v.Rows, row)
 			}
 		}
-		v.Summary = summarize(v.Rows, []RepoStatus{st})
+		v.Summary = summarize(v.Rows, []RepoStatus{st}, r.ReviewOn)
 		return v, true
 	}
 	return RepoView{}, false
 }
 
-func (c *cycle) summarize() { c.res.Summary = summarize(c.res.Rows, c.res.Repos) }
+func (c *cycle) summarize() { c.res.Summary = summarize(c.res.Rows, c.res.Repos, c.o.Review) }
 
-func summarize(rows []Row, repos []RepoStatus) Summary {
+func summarize(rows []Row, repos []RepoStatus, review bool) Summary {
 	var sum Summary
 	s := &sum
 	s.Total = len(rows)
@@ -512,6 +546,9 @@ func summarize(rows []Row, repos []RepoStatus) Summary {
 		if r.PastBudget && r.Reason == ReasonNotRead {
 			s.NotRead++
 		}
+	}
+	if review {
+		s.Review, s.Hints = countReview(rows)
 	}
 	for _, st := range repos {
 		switch {
