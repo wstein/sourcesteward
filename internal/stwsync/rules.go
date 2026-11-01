@@ -39,8 +39,13 @@ const (
 	OutcomeFailed           = "failed"
 )
 
+// rulesCommitLimit: more new commits than this are refused, because all of them must be checked. A variable only for the test.
+var rulesCommitLimit = 10000
+
+// rulesBeforeMerge is a test seam called after all checks and before the merge.
+var rulesBeforeMerge func(dir string)
+
 const (
-	rulesCommitLimit  = 10000 // more new commits than this are refused: all of them must be checked
 	rulesCommitsShown = 100
 	rulesFilesShown   = 500
 	rulesRepoName     = "agent-rules"
@@ -310,10 +315,15 @@ func (s *session) updateRules(ctx context.Context, root, e env, r *Rules, def, u
 		return failed("journal-failed: " + err.Error())
 	}
 	s.journaled = true
-	// the checks ran on this exact commit; merge exactly it, never a ref that could have moved
+	if rulesBeforeMerge != nil {
+		rulesBeforeMerge(e.dir)
+	}
+	// The checks ran on this exact commit; merge exactly it, never a ref that could have moved. --ff-only makes git itself
+	// refuse anything that is not a fast-forward to it, so HEAD is that commit after a success. Git's hooks run (post-merge),
+	// as for every other change of stw sync.
 	out, err := e.g(ctx, "-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", upOID)
 	newOID := e.revParse(ctx, e.dir, "HEAD")
-	if err != nil || out.Code != 0 || newOID != upOID {
+	if err != nil || out.Code != 0 || newOID == "" {
 		reason := "git merge --ff-only failed: " + firstLine(out.Diagnostic+"\n"+out.Out)
 		_ = j.finish(i, stateFailed, "", "", reason)
 		return failed(reason)

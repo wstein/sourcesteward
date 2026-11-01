@@ -99,7 +99,10 @@ func Sync(ctx context.Context, o Options) Result {
 	if err != nil {
 		return r.fail("sync-read-failed", "cannot create a run ID")
 	}
-	s := &session{opts: o, runID: runID}
+	// The ordinary sync fetches nothing in the agent-rules checkout (only --rules does); its state is as of the last fetch.
+	so := o
+	so.noFetch = !o.Rules
+	s := &session{opts: so, runID: runID}
 	if err := s.walk(ctx, root, ".", &r.Repos, nil, ""); err != nil {
 		return r.fail("sync-limit", err.Error())
 	}
@@ -152,20 +155,22 @@ func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo, par
 	if name == "." {
 		kind = "root"
 	}
-	if _, err := os.Lstat(filepath.Join(e.dir, ".git")); err == nil && isRulesCheckout(ctx, e, s.opts) {
-		// Only stw sync --rules updates the agent-rules checkout, after the identity check; no pull, no --submodules move.
-		*out = append(*out, Repo{Name: name, Path: e.dir, Kind: kind, Result: ResultSkippedRules, Reason: ptr("the agent-rules checkout is updated only by stw sync --rules")})
-		return nil
-	}
 	acting := parent != nil && s.opts.Submodules && !s.opts.Plan
-	if acting && (!validSubmodulePath(sub) || symlinkedPath(parent.dir, sub)) {
-		*out = append(*out, unreachableSubmodule(e, name, "the submodule path is not a plain directory path; stw leaves it alone"))
-		return nil
-	}
-	rp := s.repo(ctx, e, name, kind)
+	var rp Repo
 	descend := true
-	if acting {
-		rp, descend = s.submoduleStep(ctx, *parent, sub, e, rp)
+	if _, err := os.Lstat(filepath.Join(e.dir, ".git")); err == nil && isRulesCheckout(ctx, e, s.opts) {
+		// Only stw sync --rules changes the agent-rules checkout, after the identity check: no fetch, no pull, no
+		// --submodules move. Its own submodules are still listed.
+		rp = Repo{Name: name, Path: e.dir, Kind: kind, Result: ResultSkippedRules, Reason: ptr("the agent-rules checkout is updated only by stw sync --rules")}
+	} else {
+		if acting && (!validSubmodulePath(sub) || symlinkedPath(parent.dir, sub)) {
+			*out = append(*out, unreachableSubmodule(e, name, "the submodule path is not a plain directory path; stw leaves it alone"))
+			return nil
+		}
+		rp = s.repo(ctx, e, name, kind)
+		if acting {
+			rp, descend = s.submoduleStep(ctx, *parent, sub, e, rp)
+		}
 	}
 	*out = append(*out, rp)
 	if len(*out) > repoLimit {
