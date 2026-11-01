@@ -22,7 +22,7 @@ func PullRef(n int) string { return PrivateRefPrefix + "pr-" + strconv.Itoa(n) }
 // FetchArgs is the planning fetch (FR-016): objects and the private namespace only, no
 // FETCH_HEAD, no tags, no user ref.
 func FetchArgs(remote, branch string, numbers []int) []string {
-	args := []string{"fetch", "--no-write-fetch-head", "--no-tags", remote, "+refs/heads/" + branch + ":" + BaseRef()}
+	args := []string{"fetch", "--no-write-fetch-head", "--no-tags", "--no-recurse-submodules", "--refmap=", remote, "+refs/heads/" + branch + ":" + BaseRef()}
 	for _, n := range numbers {
 		args = append(args, "+refs/pull/"+strconv.Itoa(n)+"/head:"+PullRef(n))
 	}

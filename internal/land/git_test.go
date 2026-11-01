@@ -221,3 +221,67 @@ func TestPlanOverRealGitAndFakeForge(t *testing.T) {
 		t.Fatalf("moved default branch: %v", reasonCodes(r))
 	}
 }
+
+// The plan fetch must not move refs/remotes/<remote>/* through the configured refspec, and must not
+// fetch into submodules (FR-002, FR-033). The fixture here does not pre-sync origin/main.
+func TestGitFetchMovesNoTrackingRefAndFetchesNoSubmodule(t *testing.T) {
+	x := newGitFixture(t)
+	m, _ := x.chain()
+	g := newRunner(x)
+	ctx := context.Background()
+
+	// the remote default branch moves on; the local tracking ref stays at m
+	x.git(x.work, "commit", "--allow-empty", "-m", "remote moved on")
+	x.push("HEAD", "refs/heads/main")
+
+	// a submodule whose gitlink is bumped in a pull request head
+	sub := filepath.Join(x.root, "sub")
+	x.git(x.root, "init", "-b", "main", sub)
+	x.git(sub, "commit", "--allow-empty", "-m", "sub one")
+	x.git(x.work, "-c", "protocol.file.allow=always", "submodule", "add", sub, "vendor")
+	x.git(x.work, "commit", "-m", "add submodule")
+	x.push("HEAD", "refs/heads/main")
+	m2 := x.git(x.work, "rev-parse", "HEAD")
+	x.git(sub, "commit", "--allow-empty", "-m", "sub two")
+	subTwo := x.git(sub, "rev-parse", "HEAD")
+	x.git(x.work, "update-index", "--cacheinfo", "160000,"+subTwo+",vendor")
+	x.git(x.work, "commit", "-m", "bump submodule")
+	x.push("HEAD", "refs/pull/14/head")
+	x.git(x.work, "reset", "--hard", m2)
+	// the local tracking ref lags behind the remote default branch (a push moves it, so set it back)
+	x.git(x.work, "update-ref", "refs/remotes/origin/main", m)
+	os.Remove(filepath.Join(x.work, ".git", "FETCH_HEAD"))
+
+	trackingBefore := x.git(x.work, "rev-parse", "refs/remotes/origin/main")
+	subRefsBefore := x.git(x.work, "-C", "vendor", "for-each-ref", "--format=%(refname) %(objectname)")
+	if err := g.Fetch(ctx, "origin", "main", []int{14}); err != nil {
+		t.Fatal(err)
+	}
+	if after := x.git(x.work, "rev-parse", "refs/remotes/origin/main"); after != trackingBefore {
+		t.Fatalf("the fetch moved refs/remotes/origin/main: %s -> %s", trackingBefore, after)
+	}
+	if after := x.git(x.work, "-C", "vendor", "for-each-ref", "--format=%(refname) %(objectname)"); after != subRefsBefore {
+		t.Fatalf("the fetch changed the submodule:\n%s\n%s", subRefsBefore, after)
+	}
+}
+
+func TestFetchArgsAreFixed(t *testing.T) {
+	got := strings.Join(FetchArgs("origin", "main", []int{11, 12}), " ")
+	want := "fetch --no-write-fetch-head --no-tags --no-recurse-submodules --refmap= origin +refs/heads/main:refs/stw/land/base +refs/pull/11/head:refs/stw/land/pr-11 +refs/pull/12/head:refs/stw/land/pr-12"
+	if got != want {
+		t.Fatalf("%s", got)
+	}
+}
+
+func TestRefNameRefusals(t *testing.T) {
+	for _, bad := range []string{"", "-x", "/x", "a..b", "a/", "x.lock", "a b", "a:b", "a~1", "a\\b"} {
+		if RefName(bad) {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+	for _, ok := range []string{"main", "release/1.2", "feat_x-1", "origin"} {
+		if !RefName(ok) {
+			t.Errorf("%q refused", ok)
+		}
+	}
+}
