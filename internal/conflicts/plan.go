@@ -52,7 +52,7 @@ func BuildPlans(repo, remote string, nodes []Node) []Plan {
 			}
 			inPlan[l.Number] = true
 			step := Step{Number: n.Number, HeadRef: n.HeadRef, OldHead: n.Head, Why: StateConflicts}
-			onto, old := "origin/"+n.Base, n.Finding.MergeBase
+			onto, old := remote+"/"+n.Base, n.Finding.MergeBase
 			if parentIn {
 				pn := byNumber[l.Parent]
 				step.Why = fmt.Sprintf("child of #%d, restacked after it", l.Parent)
@@ -179,7 +179,7 @@ func brief(p Plan, nodes map[int]Node) string {
 	w("- Compare old and new with the `git range-diff` lines above. Only the conflict resolution may differ.")
 	w("- Run the tests and checks of the repository on the new head.")
 	w("- Put each restacked pull request back to Draft (`gh pr ready <number> --undo`) until its new head is reviewed.")
-	w("- Author and committer of every new commit are only the owner: `git log --format='%%an <%%ae> | %%cn <%%ce>' origin/<base>..HEAD`.")
+	w("- Author and committer of every new commit are only the owner: `git log --format='%%an <%%ae> | %%cn <%%ce>' %s/<base>..HEAD`.", p.Remote)
 	w("- No session link and no session trailer in commits, pull request text or comments.")
 	w("- A new head needs a new independent review before the push and before Ready; use the strong model when the change touches rule, contract or security text.")
 	w("- Push only your own branch, only with the lease from the commands, never a plain force.")
