@@ -125,6 +125,7 @@ type pr struct {
 	detailHead string // "" means the listed head
 	class      string // none|pending|green|red
 	base       string // "" means main
+	headRef    string // "" means feat
 }
 
 func okPR(repo string, n int) pr {
@@ -135,6 +136,9 @@ func (f *fakeForge) add(p pr) {
 	it := hosting.PullListItem{Number: p.n, Title: fmt.Sprintf("title %d", p.n), User: p.user, UserType: p.utype, Draft: p.draft, HTMLURL: fmt.Sprintf("https://github.com/%s/pull/%d", p.repo, p.n), HeadSHA: p.head, HeadRef: "feat", BaseRef: "main"}
 	if p.base != "" {
 		it.BaseRef = p.base
+	}
+	if p.headRef != "" {
+		it.HeadRef = p.headRef
 	}
 	if !p.noTime {
 		it.CreatedAt = t0.Add(-p.age)

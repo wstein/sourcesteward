@@ -65,6 +65,8 @@ type Flags struct {
 	NoReview     bool
 	ReviewStates []string
 	Hints        []string
+	// Mergeable prints the owner list instead of the groups (Spec 046).
+	Mergeable bool
 }
 
 // Params is a fully validated run.
@@ -78,6 +80,7 @@ type Params struct {
 	WorkspaceRoot string
 	Options       pulls.Options // filters, budget and parallelism; Repos is filled by Execute
 	Human         bool
+	Mergeable     bool
 	Out           io.Writer
 	Diag          io.Writer // one line per problem (stderr); nil discards them
 
@@ -111,6 +114,8 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 		return p, snapcmd.Usagef("--limit %d is outside 1..%d", f.Limit, pulls.MaxLimit)
 	case f.WorkspacePath != "" && !f.Workspace:
 		return p, snapcmd.Usagef("PATH is only valid with --workspace")
+	case f.Mergeable && (f.NoReview || len(f.ReviewStates) > 0 || len(f.Hints) > 0):
+		return p, snapcmd.Usagef("--mergeable cannot be combined with --no-review, --review or --hint")
 	case f.NoReview && (len(f.ReviewStates) > 0 || len(f.Hints) > 0):
 		return p, snapcmd.Usagef("--no-review cannot be combined with --review or --hint")
 	}
@@ -147,7 +152,7 @@ func prepare(ctx context.Context, f Flags, out io.Writer, discover func(context.
 	}
 
 	workspace := f.Workspace || (len(f.Repos) == 0 && len(owners) == 0)
-	p = Params{Host: host, Owners: owners, Sources: map[string]string{}, Out: out, Human: snapcmd.TerminalHuman(f.Human, f.JSON, out),
+	p = Params{Host: host, Owners: owners, Sources: map[string]string{}, Out: out, Human: snapcmd.TerminalHuman(f.Human, f.JSON, out), Mergeable: f.Mergeable,
 		Options: pulls.Options{NoBots: f.NoBots, BotsOnly: f.BotsOnly, Authors: f.Authors, DetailDrafts: f.DetailDrafts, Limit: f.Limit,
 			Review: !f.NoReview, ReviewStates: f.ReviewStates, Hints: f.Hints}}
 	var repos []string

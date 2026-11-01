@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/prviews"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/snapcmd"
 	"github.com/wstein/sourcesteward/internal/untrusted"
@@ -26,7 +27,9 @@ type Document struct {
 	Groups        DocGroups          `json:"groups"`
 	Summary       DocSummary         `json:"summary"`
 	Errors        []snapcmd.DocError `json:"errors"`
-	limit         int                // for the human renderer; not part of the contract
+	// OwnerQueue is null without --mergeable (Spec 046).
+	OwnerQueue *[]DocQueueEntry `json:"owner_queue"`
+	limit      int              // for the human renderer; not part of the contract
 }
 
 // DocOptions echoes the selection of the run.
@@ -42,6 +45,7 @@ type DocOptions struct {
 	Review       bool     `json:"review"`
 	ReviewStates []string `json:"review_states"`
 	Hints        []string `json:"hints"`
+	Mergeable    bool     `json:"mergeable"`
 }
 
 // DocRepo is one repository of the run.
@@ -150,13 +154,28 @@ type DocSummary struct {
 	// Spec 046 members (additive)
 	Review DocReviewCounts `json:"review"`
 	Hints  DocHintCounts   `json:"hints"`
+	// WaitingForParent counts the non-draft rows with the hint base-not-default (0 without --mergeable).
+	WaitingForParent int `json:"waiting_for_parent"`
+}
+
+// DocQueueEntry is one entry of the owner list: a pull request that can be merged now, in merge order.
+type DocQueueEntry struct {
+	Position int     `json:"position"`
+	Repo     string  `json:"repo"`
+	Number   int     `json:"number"`
+	Title    string  `json:"title"`
+	URL      *string `json:"url"`
+	Head     *string `json:"head"`
+	Review   string  `json:"review"`
+	Reason   string  `json:"reason"`
+	Then     []int   `json:"then"`
 }
 
 func buildDocument(p Params, res *pulls.Result, sources map[string]string, ownerErrs []snapcmd.DocError) *Document {
 	d := &Document{SchemaVersion: 1, Command: "pulls", Time: res.Time.UTC().Format(time.RFC3339), Host: snapcmd.Cut(p.Host, pulls.MaxString), limit: res.Limit}
 	d.Options = DocOptions{Scope: p.Scope, Owners: snapcmd.Strings0(p.Owners), NoBots: p.Options.NoBots, BotsOnly: p.Options.BotsOnly, Authors: snapcmd.Strings0(p.Options.Authors),
 		DetailDrafts: p.Options.DetailDrafts, Limit: res.Limit,
-		Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints)}
+		Mergeable: p.Mergeable, Review: res.ReviewOn, ReviewStates: snapcmd.Strings0(p.Options.ReviewStates), Hints: snapcmd.Strings0(p.Options.Hints)}
 	d.Repos = []DocRepo{}
 	for _, st := range res.Repos {
 		r := DocRepo{Repo: st.Repo, Source: sources[strings.ToLower(st.Repo)], Open: st.Open, Listed: st.Listed, Error: snapcmd.StrPtr(st.Error)}
@@ -189,6 +208,18 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 		Hints: DocHintCounts{ClearNotReady: s.Hints.ClearNotReady, NoFinalReview: s.Hints.NoFinalReview, BaseNotDefault: s.Hints.BaseNotDefault,
 			ParentMergedRetarget: s.Hints.ParentMergedRetarget, TruncatedReviewUnknown: s.Hints.TruncatedReviewUnknown,
 			ForeignReviewIgnored: s.Hints.ForeignReviewIgnored, ReadyMergeable: s.Hints.ReadyMergeable}}
+	if p.Mergeable {
+		entries, waiting := prviews.OwnerQueue(res.Rows)
+		q := make([]DocQueueEntry, len(entries))
+		for i, e := range entries {
+			q[i] = DocQueueEntry{Position: e.Position, Repo: e.Repo, Number: e.Number, Title: e.Title, URL: snapcmd.StrPtr(e.URL), Review: e.Review, Reason: e.Reason, Then: e.Then}
+			if pulls.ValidSHA(e.Head) {
+				head := e.Head
+				q[i].Head = &head
+			}
+		}
+		d.OwnerQueue, d.Summary.WaitingForParent = &q, waiting
+	}
 	d.Errors = []snapcmd.DocError{}
 	for _, e := range res.Errors {
 		repo := e.Repo
@@ -235,6 +266,9 @@ var humanGroups = []string{pulls.GroupReady, pulls.GroupChecks, pulls.GroupConfl
 // writeHuman prints one section per non-empty group and a final summary line. Every untrusted
 // field goes through untrusted.Esc (control characters escaped, 120 characters).
 func writeHuman(w io.Writer, d *Document) error {
+	if d.OwnerQueue != nil {
+		return writeQueue(w, d)
+	}
 	var b strings.Builder
 	lists := map[string][]DocRow{pulls.GroupReady: d.Groups.Ready, pulls.GroupChecks: d.Groups.Checks, pulls.GroupConflict: d.Groups.Conflict, pulls.GroupDraft: d.Groups.Draft, pulls.GroupBlocked: d.Groups.Blocked}
 	dash := func(s *string) string {
@@ -342,4 +376,40 @@ func counts(in []namedCount) string {
 		}
 	}
 	return strings.Join(parts, ", ")
+}
+
+// writeQueue prints the owner list: the entries in merge order, each with its reason and the pull
+// requests that follow it, then a summary line. Untrusted text is escaped.
+func writeQueue(w io.Writer, d *Document) error {
+	var b strings.Builder
+	q := *d.OwnerQueue
+	if len(q) == 0 {
+		b.WriteString("nothing can be merged now\n")
+	} else {
+		fmt.Fprintf(&b, "merge now (%d)\n", len(q))
+		for _, e := range q {
+			fmt.Fprintf(&b, "%d. %s#%d  %s\n   %s\n", e.Position, untrusted.Esc(e.Repo), e.Number, untrusted.Esc(e.Title), untrusted.Esc(e.Reason))
+			if len(e.Then) > 0 {
+				nums := make([]string, len(e.Then))
+				for i, n := range e.Then {
+					nums[i] = fmt.Sprintf("#%d", n)
+				}
+				fmt.Fprintf(&b, "   then: %s\n", strings.Join(nums, ", "))
+			}
+		}
+		b.WriteByte('\n')
+		fmt.Fprintf(&b, "%d can be merged now", len(q))
+		if n := d.Summary.WaitingForParent; n > 0 {
+			fmt.Fprintf(&b, ", %d waiting for a parent", n)
+		}
+		b.WriteByte('\n')
+	}
+	if n := d.Summary.ReposFailed; n > 0 {
+		fmt.Fprintf(&b, "%s could not be read\n", snapcmd.Plural(n, "repository", "repositories"))
+	}
+	if n := snapcmd.OwnerErrorCount(d.Errors); n > 0 {
+		fmt.Fprintf(&b, "%s with owner discovery\n", snapcmd.Plural(n, "problem", "problems"))
+	}
+	_, err := io.WriteString(w, b.String())
+	return err
 }

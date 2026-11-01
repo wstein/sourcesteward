@@ -94,6 +94,9 @@
           "items": {
             "$ref": "#/$defs/hint"
           }
+        },
+        "mergeable": {
+          "type": "boolean"
         }
       }
     },
@@ -400,6 +403,10 @@
               "minimum": 0
             }
           }
+        },
+        "waiting_for_parent": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -478,6 +485,19 @@
           }
         ]
       }
+    },
+    "owner_queue": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/queueEntry"
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
   "$defs": {
@@ -1080,6 +1100,76 @@
           }
         }
       ]
+    },
+    "queueEntry": {
+      "type": "object",
+      "required": [
+        "position",
+        "repo",
+        "number",
+        "title",
+        "url",
+        "head",
+        "review",
+        "reason",
+        "then"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "position": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "repo": {
+          "$ref": "#/$defs/repo"
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "title": {
+          "$ref": "#/$defs/str"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^https://",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "head": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/sha"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "review": {
+          "enum": [
+            "clear",
+            "clear-carried"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/str"
+        },
+        "then": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "uniqueItems": true
+        }
+      }
     }
   }
 }

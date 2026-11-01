@@ -242,3 +242,49 @@ func TestPullsSchemaRejectsBrokenReviewMembers(t *testing.T) {
 		}
 	}
 }
+
+func queueEntry() map[string]any {
+	return map[string]any{"position": 1, "repo": "o/r", "number": 4, "title": "t", "url": "https://github.com/o/r/pull/4", "head": strings.Repeat("a", 40),
+		"review": "clear", "reason": "CLEAR for head aaaaaaa per comment 2026-11-01T09:00Z, checks green, mergeable clean, base main", "then": []any{5, 6}}
+}
+
+func withQueue(t *testing.T, fn func(e, m map[string]any)) string {
+	t.Helper()
+	return mutatePulls(t, func(m map[string]any) {
+		e := queueEntry()
+		m["options"].(map[string]any)["mergeable"] = true
+		m["owner_queue"] = []any{e}
+		m["summary"].(map[string]any)["waiting_for_parent"] = 2
+		if fn != nil {
+			fn(e, m)
+		}
+	})
+}
+
+func TestPullsSchemaOwnerQueue(t *testing.T) {
+	s := schema(t, "pulls")
+	valid(t, s, []byte(withQueue(t, nil)))
+	valid(t, s, []byte(withQueue(t, func(e, m map[string]any) {
+		e["url"], e["head"], e["then"], e["review"] = nil, nil, []any{}, "clear-carried"
+	})))
+	valid(t, s, []byte(withQueue(t, func(e, m map[string]any) { m["owner_queue"] = []any{} })))
+	valid(t, s, []byte(withQueue(t, func(e, m map[string]any) { m["owner_queue"] = nil })))
+	for name, doc := range map[string]string{
+		"position zero":        withQueue(t, func(e, m map[string]any) { e["position"] = 0 }),
+		"review findings":      withQueue(t, func(e, m map[string]any) { e["review"] = "findings" }),
+		"http url":             withQueue(t, func(e, m map[string]any) { e["url"] = "http://github.com/x" }),
+		"short head":           withQueue(t, func(e, m map[string]any) { e["head"] = "abc" }),
+		"then duplicates":      withQueue(t, func(e, m map[string]any) { e["then"] = []any{5, 5} }),
+		"then zero":            withQueue(t, func(e, m map[string]any) { e["then"] = []any{0} }),
+		"then null":            withQueue(t, func(e, m map[string]any) { e["then"] = nil }),
+		"extra entry key":      withQueue(t, func(e, m map[string]any) { e["x"] = 1 }),
+		"missing reason":       withQueue(t, func(e, m map[string]any) { delete(e, "reason") }),
+		"queue not an array":   withQueue(t, func(e, m map[string]any) { m["owner_queue"] = e }),
+		"negative waiting":     withQueue(t, func(e, m map[string]any) { m["summary"].(map[string]any)["waiting_for_parent"] = -1 }),
+		"mergeable not a bool": withQueue(t, func(e, m map[string]any) { m["options"].(map[string]any)["mergeable"] = "yes" }),
+	} {
+		if err := s.Validate(value(t, []byte(doc))); err == nil {
+			t.Errorf("%s: accepted", name)
+		}
+	}
+}
