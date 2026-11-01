@@ -22,9 +22,10 @@ func gitmodulesOfSize(t *testing.T, n int, path, url string) string {
 	for pad > 0 {
 		line := "#" + strings.Repeat("p", 70) + "\n"
 		if pad < len(line) {
-			line = "#" + strings.Repeat("p", pad-2) + "\n"
 			if pad == 1 {
 				line = "\n"
+			} else {
+				line = "#" + strings.Repeat("p", pad-2) + "\n"
 			}
 		}
 		b.WriteString(line)
