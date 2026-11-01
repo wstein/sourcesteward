@@ -229,3 +229,18 @@ func TestPullsLimitDefaultsTo200(t *testing.T) {
 		t.Fatalf("%d %s", status, out)
 	}
 }
+
+func TestPullsMergeableOverTheGuardedReader(t *testing.T) {
+	watchEnv(t, true)
+	status, out, errOut := pullsRun(t, pullsForge(t), "--repo", "o/r", "--mergeable", "--human")
+	if status != 0 || errOut != "" {
+		t.Fatalf("%d %q", status, errOut)
+	}
+	if !strings.HasPrefix(out, "merge now (1)\n1. o/r#1  PR 1\n   CLEAR for head 1111111 per comment 2026-10-21T09:00Z, checks green, mergeable clean, base main\n") ||
+		!strings.HasSuffix(out, "1 can be merged now\n") {
+		t.Fatalf("%q", out)
+	}
+	if status, _, _ := pullsRun(t, pullsForge(t), "--repo", "o/r", "--mergeable", "--no-review"); status != 2 {
+		t.Fatalf("exit %d", status)
+	}
+}
