@@ -31,7 +31,7 @@ func ValidateOptions(o Options) error {
 	if o.Merge && o.Rebase != Unset {
 		return errors.New("--merge excludes --rebase and --ff-only")
 	}
-	return nil
+	return validateRulesOptions(o)
 }
 
 func newResult(o Options) Result {
@@ -41,7 +41,7 @@ func newResult(o Options) Result {
 	}
 	return Result{
 		SchemaVersion: 1, Command: "sync", Mode: mode,
-		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json(), Merge: o.Merge, Submodules: o.Submodules},
+		Options: ResultOptions{Rebase: o.Rebase.json(), Prune: o.Prune.json(), Autostash: o.Autostash.json(), Merge: o.Merge, Submodules: o.Submodules, Rules: o.Rules},
 		Repos:   []Repo{}, Summary: Summary{ByResult: map[string]int{}},
 	}
 }
@@ -103,6 +103,7 @@ func Sync(ctx context.Context, o Options) Result {
 	if err := s.walk(ctx, root, ".", &r.Repos, nil, ""); err != nil {
 		return r.fail("sync-limit", err.Error())
 	}
+	r.Rules = s.rules(ctx, root, r.Repos)
 	if s.journaled {
 		r.RunID = ptr(runID)
 		for _, j := range s.journals {
