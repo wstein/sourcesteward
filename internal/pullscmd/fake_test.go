@@ -29,10 +29,14 @@ type fakeForge struct {
 	errAt   map[string]error  // "detail/repo#n", "runs/<sha4>"
 	calls   []string
 	etags   []string
+	// Spec 046 review reads; a fake source that sets reviewOn answers them
+	reviewOn bool
+	comments map[string][]hosting.IssueComment // repo#n
+	commits  map[string]time.Time              // head sha -> committer date
 }
 
 func newForge() *fakeForge {
-	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}}
+	return &fakeForge{lists: map[string][]hosting.PullListItem{}, listErr: map[string]error{}, details: map[string]string{}, runs: map[string]string{}, stats: map[string]string{}, errAt: map[string]error{}, comments: map[string][]hosting.IssueComment{}, commits: map[string]time.Time{}}
 }
 
 func (f *fakeForge) note(call string, etag string) error {
@@ -144,4 +148,38 @@ func (f *fakeForge) add(p pr) {
 	case "green":
 		f.runs[p.head] = `{"total_count":1,"check_runs":[{"name":"ci","status":"completed","conclusion":"success","output":{}}]}`
 	}
+}
+
+// reviewForge adds the review reads of Spec 046 to a fakeSource: only a source built with it implements
+// pulls.ReviewSource, like a reader without comment support does not.
+type reviewForge struct{ *fakeSource }
+
+func (f reviewForge) ReadIssueComments(_ context.Context, repo string, n int) ([]hosting.IssueComment, bool, error) {
+	if err := f.note(fmt.Sprintf("comments/%s#%d", repo, n), ""); err != nil {
+		return nil, false, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.comments[fmt.Sprintf("%s#%d", repo, n)], false, nil
+}
+
+func (f reviewForge) Commit(_ context.Context, _ string, s string, _ string) (hosting.WatchResponse, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return hosting.WatchResponse{Status: 200, Body: []byte(fmt.Sprintf(`{"commit":{"committer":{"date":%q}}}`, f.commits[s].Format(time.RFC3339)))}, nil
+}
+
+func (f reviewForge) ClosedPulls(context.Context, string) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, nil
+}
+
+func (f reviewForge) RepoInfo(_ context.Context, repo string) (hosting.RepoInfo, error) {
+	return hosting.RepoInfo{DefaultBranch: "main", HTMLURL: "https://github.com/" + repo}, nil
+}
+
+// say adds a comment (id, minutes after t0) to repo#n.
+func (f *fakeForge) say(repo string, n int, id int64, min int, body string) {
+	k := fmt.Sprintf("%s#%d", repo, n)
+	at := t0.Add(time.Duration(min) * time.Minute)
+	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
 }
