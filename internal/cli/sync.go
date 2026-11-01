@@ -44,7 +44,7 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			"with old and new commit, not journaled and not restored); an uninitialized one or a missing commit is unreachable.\n" +
 			"The agent-rules checkout (the rules every agent session loads) is reported on one extra block when it is found as a workspace\n" +
 			"member whose remote is named agent-rules, or named by --rules-path or STW_RULES_PATH (nothing else is searched): current,\n" +
-			"behind N commits of origin/DEFAULT, ahead, diverged, dirty, not on the default branch or not found, from the same kind of fetch.\n" +
+			"behind N commits of origin/DEFAULT, ahead, diverged, dirty, not on the default branch or not found, as of the last fetch (only --rules fetches it).\n" +
 			"--rules fast-forwards it with git merge --ff-only, and only when its worktree is clean, it is on the default branch, its tip is an\n" +
 			"ancestor of origin/DEFAULT and author and committer of every new commit are owner identities (--owner-identity, repeatable, default\n" +
 			"user.name and user.email of the workspace root; --allowed-committer adds committers such as the GitHub rebase-merge committer).\n" +
@@ -85,6 +85,13 @@ func syncCommandWith(sync func(context.Context, stwsync.Options) stwsync.Result,
 			options.Rules, options.OwnerIdentities, options.AllowedCommitters = rules, owners, committers
 			options.RulesPath, options.RulesPathSource = rulesPath, "flag"
 			options = stwsync.WithRulesEnvironment(options)
+			if options.RulesPathSource == "env" && options.RulesPath != "" && !rules {
+				// a plain sync does not use the path: an invalid environment value is ignored, not a usage error
+				if err := stwsync.ValidateOptions(stwsync.Options{RulesPath: options.RulesPath, RulesPathSource: "env"}); err != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "stw sync: ignoring STW_RULES_PATH: %s\n", err)
+					options.RulesPath = ""
+				}
+			}
 			if err := stwsync.ValidateOptions(options); err != nil {
 				return err
 			}
