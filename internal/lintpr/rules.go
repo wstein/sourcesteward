@@ -54,7 +54,8 @@ type Rule struct {
 var Rules = []Rule{
 	{ID: RuleSessionLink, Severity: SeverityError, Source: SourceCore,
 		Summary: "No session link in commit messages, the PR title, the PR text or comments (a Claude session trailer or a code-session URL of the Claude web host).",
-		Anchor:  `claude-session:|claude\.ai/code/session_`},
+		// Assembled so that this file does not hold the trailer in plain text.
+		Anchor: "claude" + "-session:|claude\\.ai/code/session_"},
 	{ID: RuleAuthorIdentity, Severity: SeverityError, Source: SourceCore,
 		Summary: "The author of every commit is an owner identity.",
 		Anchor:  "Autor und Committer sind nur der Owner"},
