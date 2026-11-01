@@ -81,11 +81,30 @@ func TestSubmoduleIgnoreSettingsDoNotHideAGitlinkChange(t *testing.T) {
 	}
 }
 
-func TestIndexFileOfTheEnvironmentIsNotRead(t *testing.T) {
+func TestEnvironmentDropsTheRepositorySelectingVariables(t *testing.T) {
+	names := []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_NAMESPACE", "GIT_PREFIX"}
+	for _, n := range names {
+		t.Setenv(n, "/nonexistent/"+n)
+	}
+	t.Setenv("KEEP_ME", "1")
+	env := strings.Join(environment(), "\n")
+	for _, n := range names {
+		if strings.Contains(env, n+"=") {
+			t.Errorf("%s is passed to Git", n)
+		}
+	}
+	for _, want := range []string{"KEEP_ME=1", "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C"} {
+		if !strings.Contains(env, want) {
+			t.Errorf("%s missing", want)
+		}
+	}
+}
+
+// The GIT_INDEX_FILE filter has no further observable effect on commit-to-commit reads in this Git
+// (a corrupt index named by the variable is never opened); the variable stays filtered as a precaution.
+func TestACorruptIndexFileOfTheEnvironmentChangesNothing(t *testing.T) {
 	s := newStack(t)
 	head := s.rebased("new")
-	// Attributes come from the index when the worktree has no .gitattributes; a corrupt index named by the
-	// environment must therefore never be opened.
 	bad := filepath.Join(t.TempDir(), "index")
 	if err := os.WriteFile(bad, []byte("not an index"), 0o644); err != nil {
 		t.Fatal(err)
