@@ -34,7 +34,7 @@ skipped, with the reason named):
 
 | Source | Reads | Gives |
 | --- | --- | --- |
-| `pulls` | the open pull requests, with the cycle and the verdict of [`stw pulls`](pulls.md), and their [review state](pulls.md#review-state-and-hints) read from the comments | `pr-*` items; the counts equal `stw pulls` for the same repository; the `remote:` line adds `reviews: 1 clear, 2 none (hints: ...)` |
+| `pulls` | the open pull requests, with the cycle and the verdict of [`stw pulls`](pulls.md), and, only with `--review`, their [review state](pulls.md#review-state-and-hints) read from the comments | `pr-*` items; the counts equal `stw pulls` for the same repository; with `--review` the `remote:` line adds `reviews: 1 clear, 2 none (hints: ...)` |
 | `repo`, `releases`, `tags` | `repos/OWNER/NAME`, its releases and its tags | release drafts, tags without a release, the draft visibility |
 | `ci-main` | the head of the default branch and its checks, and whether the local clone lacks that commit (decided in the local object store, nothing is fetched) | `main-red`, `main-behind-origin` |
 | `ci-release` | the newest release workflow run of the latest tag of every release tag pattern and of at most five unreleased tags | `release-run-failed` |
@@ -48,7 +48,7 @@ ends `ci-release` with the error `contract-invalid`; the defaults do not replace
 `releases` and `tags` (page 1 each, more pages only when GitHub says there are more, at most 10), the branch and its check
 runs and commit statuses, and one workflow-run read (page 1) for the latest tag of each pattern and for each of at most five
 unreleased tags, so N+5 at most. Pull requests cost what `stw pulls` costs (one list per repository, the detail of at most 200
-pull requests, one bounded re-read of an unknown mergeability), plus the review reads of Spec 046 (one comment read per pull request within the same limit, drafts included, one commit read where a
+pull requests, one bounded re-read of an unknown mergeability), plus, only with `--review`, the review reads of Spec 046 (one comment read per pull request within the same limit, drafts included, one commit read where a
 strict comment names the head, one `repos/OWNER/NAME` read per repository and one closed-list read where a base is not the default branch). Issues cost one list read per 100 open issues and pull requests
 of a repository (at most 10) and one `user` read for the whole run; the list also returns the pull requests, which are dropped.
 Search is never used, so `stw status` knows only the repositories of the workspace (`stw issues --owner` discovers others). A run uses far fewer requests than the
@@ -130,7 +130,7 @@ unreadable repository, a usage error); the report itself, notices included, is o
 `stw status --json` prints one [schema 2](../schemas/v2/status.schema.json) document (unpublished and byte-frozen until the
 feature is accepted): `actions`, `repos` (every v1 member plus `remote`), `sources`, `notices`, `summary` and the run-level
 `error`. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the `pulls` data gains the optional member `review`
-(`states` and `hints` counts, Spec 046) when review states were read; the `issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. `pulls_dropped` is the number of pull
+(`states` and `hints` counts, Spec 046) when review states were read (`--review`); the `issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. `pulls_dropped` is the number of pull
 requests that the GitHub issues list returned (the endpoint lists pull requests with the issues) and that `stw` dropped, so
 that `open`, the counts and the rows are issues only; it counts only the pages that were read (see `truncated`). It is
 information, not an error and not lost data: a repository with open pull requests shows a non-zero value, which is normal

@@ -16,7 +16,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
 | `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune] [--submodules]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
 | `stw sync restore [PATH] [--run ID]` | Move the branches a `stw sync` run changed back to their journaled old tips | Only while the branch still points at the tip the run left and a checked-out worktree is clean (`git reset --keep`, or `update-ref` with the expected value); no fetch |
-| `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
+| `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D] [--review]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
 | `stw workspace apply` | Create the workspace described by a stored plan | Explicitly authorized local writes with stale-state checks |
 | `stw workspace handoff [PATH]` | Describe an owned task and remaining work | Observes task/store evidence; does not launch an agent |
@@ -193,6 +193,7 @@ stw status                  # needs action, every repository, notices, summary; 
 stw status --offline        # the local state alone, no request and no credential
 stw status --worktrees      # also list the linked worktrees
 stw status --fetch --json   # fetch first, then one JSON object (schema 2)
+stw status --review         # also the review state of the open pull requests (one comment read each)
 ```
 
 `stw status` ([Spec 037](../specs/037-stw-status-overview/spec.md), amending [Spec 033](../specs/033-stw-status/spec.md)) is
@@ -231,7 +232,7 @@ prints transitions as JSON Lines; see [watch](watch.md).
 
 `stw pulls` ([Spec 036](../specs/036-stw-pulls/spec.md)) prints a read-only, stateless snapshot of every open pull
 request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
-adds the repositories of another user or organisation. Each row also shows the review state read from the agents' review comments (a claim of the comment, not proof) and hints such as `clear-not-ready`, `no-final-review` and `ready-mergeable`; `--review`, `--hint` and `--no-review` select or skip them ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). See [pulls](pulls.md).
+adds the repositories of another user or organisation. Each row also shows the review state read from the review comments of an owner, member or collaborator (a claim of the comment, not proof) and hints such as `clear-not-ready`, `no-final-review` and `ready-mergeable`; `--review`, `--hint` and `--no-review` select or skip them ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). See [pulls](pulls.md).
 
 ## Check a pull request
 

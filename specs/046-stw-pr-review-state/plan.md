@@ -24,4 +24,7 @@ guard, decoders, readers), `internal/pulls` (review pass in the cycle, filters, 
 | hints | `clear-not-ready` for a non-draft; `no-final-review` for `findings`; `base-not-default` with a case-insensitive match; `parent-merged-retarget` for an unmerged closed pull request or a different head repository; `ready-mergeable` without the base rule, with a Draft, with `clear-stale` |
 | reads | read comments beyond page 6; skip the commit read; request `closed` without the fixed query; admit the shapes in the `issues` or `watch` guard |
 | filters | OR across `--review` and `--hint`; filter before the reads; match a row with `review` null |
-| status | counts differ from the `stw pulls` document of the same fixture |
+| trust | count a comment of `NONE`, `CONTRIBUTOR`, `FIRST_TIME_CONTRIBUTOR` or an empty association; skip the association of the decisive comment; count ignored plain chat |
+| chain | evaluate carry-overs without the memo; drop the repeated-head rule; let a chain look at later comments |
+| truncated | `ready-mergeable` for a truncated thread; no `truncated-review-unknown` hint |
+| status | counts differ from the `stw pulls` document of the same fixture; reviews read without `--review`; `--review` accepted with `--offline` |

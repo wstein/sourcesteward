@@ -56,8 +56,10 @@ bounded to 120 characters; JSON strings are cut at 2048 bytes. No colour is used
 
 Agents post their review verdict as a pull request comment ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). `stw pulls` reads the
 comments and shows a **review state** per row (a `REVIEW` word after the mergeable state, `review` in the JSON) plus **hints**
-(`{hint, ...}`, `hints`). **A verdict is a claim, not proof**: every comment, the agents' too, is posted by the owner's GitHub account, so
-the state is what a comment says ("per comment"). `stw` checks only what the data allows and never calls a review "independent".
+(`{hint, ...}`, `hints`). **A verdict is a claim, not proof**: only comments of an author that GitHub associates as `OWNER`, `MEMBER` or `COLLABORATOR` count (the
+agents post through such an account); a line of anybody else, with another or no `author_association`, is ignored, counted (`ignored`) and
+hinted. The state is what such a comment says ("per comment"), shown with the association of the decisive comment. `stw` checks only what
+the data allows and never calls a review "independent".
 
 The first line of a comment is read strictly:
 
@@ -80,7 +82,9 @@ Carried-over: from=<40-hex> to=<40-hex> patch-id=<hex> pr=<n>
 | `no-final-review` | no strict comment for the current head (`none`, `clear-stale`, `unparsed`) |
 | `base-not-default` | the base is not the default branch |
 | `parent-merged-retarget` | the base branch was the head of a merged pull request (among the 100 most recently updated closed ones): retarget or restack |
-| `ready-mergeable` | CLEAR or carried, group `ready` (green head, GitHub `clean`, rebaseable) and the base is the default branch |
+| `truncated-review-unknown` | the comment thread was cut (first page and last five pages): a verdict in the middle may be missing, so the review is unknown and the row is never `ready-mergeable` |
+| `foreign-review-ignored` | a comment of another author that looks like a review line was ignored |
+| `ready-mergeable` | CLEAR or carried, thread not truncated, group `ready` (green head, GitHub `clean`, rebaseable) and the base is the default branch |
 
 ```sh
 stw pulls --hint clear-not-ready                 # CLEAR, but still a Draft
