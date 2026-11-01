@@ -60,6 +60,9 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > starts a fresh one. An unrelated label event uses its own group and cancels nothing. The workflow has no push trigger, so a run on
 > `main` is never canceled by it. `ci-full-reset.yml` still removes the label on every push. This replaces the sentence "Today the label
 > run lives in `ci-full-<ref>` with `cancel-in-progress: false`" in "Concurrency" below.
+> A push to `main` runs lane `current` only (`ci.yml`), no longer both lanes; the `minimum` lane runs in the nightly `race.yml`. This narrows
+> clause (a) of the amendment above and row 1 of [contracts/tiers.md](contracts/tiers.md). The check names are unchanged: the ruleset
+> still requires exactly `check` and `Git/jj conformance (current) / suite`, and `Git/jj conformance (minimum) / suite` was never required.
 
 > **Status note (2026-10-26):** WP-1 (PR 166) and WP-3 (PR 167) are merged; WP-2 (tier routing) is not implemented, so the feature stays `planned`.
 

@@ -150,7 +150,8 @@ jobs:
           path: /tmp/sourcesteward-pages
 
   # Always called, so the required `suite` check reports on every event. The shards run for a push
-  # to main only (both lanes). A pull request runs the current lane's `suite` with skipped shards,
+  # to main only (lane current; the minimum lane runs in the nightly race.yml, issue #373). A pull request
+  # runs the current lane's `suite` with skipped shards,
   # which passes (heavy is false). The heavy lane of a pull request is started by the ci-full label
   # in ci-full.yml (owner decision 2026-11-01, Spec 039); this workflow never reads the label, so a
   # push cannot reuse a label that belonged to an earlier head (ci-full-reset.yml removes it).
@@ -159,7 +160,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lane: ${{ fromJSON(github.event_name == 'pull_request' && '["current"]' || '["minimum","current"]') }}
+        lane: [current]
     needs: [changes]
     uses: ./.github/workflows/conformance.yml
     with:
