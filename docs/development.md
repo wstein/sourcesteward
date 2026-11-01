@@ -130,7 +130,7 @@ in the post-merge run on `main`: that run is the last gate. `stw land --stack` (
 Cost: a pull request without the label runs `check` and `suite` (about 10 minutes in 2 concurrent jobs, plus the small `changes`
 job). A label run adds both lanes (the `current` lane alone is about 68 runner minutes in 6 shards; the `minimum` lane is not measured here)
 once per labeled head; a push to `main` runs the same. A newer push cancels the older `ci.yml` run of the same PR; batch fixes
-into one push. A labeled run of `ci-full.yml` for an older head is not cancelled by a push (its group does not cancel in progress).
+into one push. A labeled run of `ci-full.yml` for an older head is not canceled by a push (its group does not cancel in progress).
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
@@ -169,14 +169,18 @@ unexpanded matrix name and would stay pending. Require only checks that always r
 only for files that nothing reads; `scripts/test_ci_workflow.py` pins the classifier, the
 event rules and the `suite` truth table.
 
-Check names of the conformance jobs are prefixed by the calling job: a lane reports as
-`Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`), from `ci.yml` and from
-`ci-full.yml` alike. Classic branch protection is not used; the ruleset `main` (id 25683357)
-requires exactly `check` and `Git/jj conformance (current) / suite`. Never require
-`Git/jj conformance (minimum) / suite`: a pull request without a label run does not run the `minimum`
-lane, so the check would stay pending forever. A labeled head has two `current` suite reports with the same name
-(`ci.yml` skipped-pass, `ci-full.yml` real); how the ruleset treats duplicates is not verified here. The `minimum` lane runs on pushes to `main`, for
-the `ci-full` label and in the scheduled race runs.
+Check names of the conformance jobs are prefixed by the calling job: `ci.yml` reports a lane as
+`Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`; the `current` lane on every pull request, both on `main`),
+and the label run of `ci-full.yml` reports as `Heavy lane (<lane>) / suite`, a name `ci.yml` never uses. Classic branch
+protection is not used; the ruleset `main` (id 25683357) requires exactly `check` and `Git/jj conformance (current) / suite`.
+Never require `Git/jj conformance (minimum) / suite` or a `Heavy lane` check: a pull request without a label run does not
+report them, so they would stay pending forever.
+
+The ruleset does NOT block a red `ci-full` run: on a pull request the required `Git/jj conformance (current) / suite` is always
+green (skipped shards). The rule is therefore a process rule: Ready and merge require a green `Heavy lane (current) / suite` and
+`Heavy lane (minimum) / suite` of the `ci-full` run on the exact head of the top of the stack. The agent sets Ready only after
+that run is green; the owner checks it before the merge. The `minimum` lane also runs on pushes to `main` and in the scheduled
+race runs.
 The cache key also hashes `scripts/backend-releases.json`.
 
 The heavy `internal/workspace` package is sharded. `scripts/ci_shards.py` lists its top-level
