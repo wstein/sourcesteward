@@ -203,27 +203,41 @@ func base(f Facts) Condition {
 func noBlockerValue(v string) bool {
 	v = strings.TrimSpace(emphasis.Replace(v))
 	v = strings.TrimSpace(listMarker.ReplaceAllString(v, ""))
-	return noBlocker[strings.ToLower(strings.TrimRight(v, ". "))]
+	v = strings.Trim(v, "| \t")
+	return noBlocker[strings.ToLower(strings.TrimRight(v, ".,; "))]
 }
 
-// blockerLabel splits a line into the label before its first colon and the value after it. A line
-// is a Blocker line when its label (at most six words) contains the word "blocker", or when it is
-// a heading or a bare "Blocker" word and has no colon. Quote, list, number and heading marks and
-// emphasis are ignored: "## Blocker", "**Blocker (Draft):** x", "1. Blocker: x", "> Blocker: x",
-// "Draft. Blocker: x" and "**Draft, named blocker:** x" all match.
-func blockerLabel(line string) (value string, ok bool) {
+// blockerSep finds the word "blocker" or "blockers" followed, after an optional parenthesis, by a
+// colon, a pipe or a dash (an em or en dash, or a hyphen that is followed by a space). The value of
+// the Blocker line is the text after it. "Blocker-free" and prose that only uses the word do not match.
+var blockerSep = regexp.MustCompile(`(?i)\bblockers?\b\s*(?:\([^)]*\))?\s*(?::|\||[\x{2013}\x{2014}]|-(?:\s|$))`)
+
+// blockerValues returns the values of the Blocker labels of one line. section is true when the line
+// has a Blocker label without a value (the last label is empty, or the line is a Blocker heading or a
+// bare "Blocker" word): the lines below it then hold the value. Quote, list, number and heading
+// marks and emphasis are ignored, so "## Blocker", "**Blocker (Draft):** x", "1. Blocker: x",
+// "> Blocker: x", "Status: Draft. Blocker: x", "Blocker - x" and "| Blocker | x |" all match.
+func blockerValues(line string) (values []string, section bool, ok bool) {
 	heading := headingLine.MatchString(line)
 	l := strings.TrimSpace(emphasis.Replace(line))
-	l = strings.TrimLeft(l, " \t#>-+")
-	l = strings.TrimSpace(numberPrefix.ReplaceAllString(l, ""))
-	label, rest, colon := strings.Cut(l, ":")
-	if !blockerWord.MatchString(label) || len(strings.Fields(label)) > 6 {
-		return "", false
+	matches := blockerSep.FindAllStringIndex(l, -1)
+	for k, m := range matches {
+		stop := len(l)
+		if k+1 < len(matches) {
+			stop = matches[k+1][0]
+		}
+		v := strings.Trim(strings.TrimSpace(l[m[1]:stop]), "| \t")
+		values = append(values, v)
+		section = v == ""
 	}
-	if !colon && !heading && !strings.EqualFold(strings.TrimSpace(label), "blocker") && !strings.EqualFold(strings.TrimSpace(label), "blockers") {
-		return "", false
+	if len(matches) > 0 {
+		return values, section, true
 	}
-	return strings.TrimSpace(rest), true
+	bare := strings.TrimSpace(numberPrefix.ReplaceAllString(strings.TrimLeft(l, " \t#>-+"), ""))
+	if (heading && blockerWord.MatchString(bare)) || strings.EqualFold(bare, "blocker") || strings.EqualFold(bare, "blockers") {
+		return nil, true, true
+	}
+	return nil, false, false
 }
 
 func blocker(f Facts) Condition {
@@ -232,33 +246,37 @@ func blocker(f Facts) Condition {
 	}
 	lines := strings.Split(f.Body, "\n")
 	for i := 0; i < len(lines); i++ {
-		value, ok := blockerLabel(strings.TrimRight(lines[i], "\r"))
+		line := strings.TrimRight(lines[i], "\r")
+		values, section, ok := blockerValues(line)
 		if !ok {
 			continue
 		}
-		if value != "" {
-			if !noBlockerValue(value) {
-				return c(CondBlocker, StatusFail, "Blocker line: %s", esc(value))
+		for _, v := range values {
+			if v != "" && !noBlockerValue(v) {
+				return c(CondBlocker, StatusFail, "Blocker line: %s", esc(v))
 			}
+		}
+		if !section {
 			continue
 		}
-		// No value on the line: the section below it, up to the next blank line after the first
-		// content line or the next heading, holds the value.
-		var section []string
+		// No value on the line: the lines below it hold the value. Below a heading they run to the
+		// next heading; below any other line to the first blank line after a content line.
+		heading := headingLine.MatchString(line)
+		var below []string
 		j := i + 1
 		for ; j < len(lines); j++ {
 			l := strings.TrimRight(lines[j], "\r")
-			if headingLine.MatchString(l) || (strings.TrimSpace(l) == "" && len(section) > 0) {
+			if headingLine.MatchString(l) || (!heading && strings.TrimSpace(l) == "" && len(below) > 0) {
 				break
 			}
 			if strings.TrimSpace(l) != "" {
-				section = append(section, l)
+				below = append(below, l)
 			}
 		}
-		if len(section) == 0 {
+		if len(below) == 0 {
 			return c(CondBlocker, StatusFail, "a Blocker line has no value")
 		}
-		for _, l := range section {
+		for _, l := range below {
 			if !noBlockerValue(l) {
 				return c(CondBlocker, StatusFail, "Blocker section: %s", esc(strings.TrimSpace(l)))
 			}
