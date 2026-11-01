@@ -41,7 +41,7 @@ func lintPRCommand() *cobra.Command {
 			"Owner identities are --owner-identity (repeatable), else user.name and user.email of the Git configuration read from that directory;\n" +
 			"without any, usage error. Output is human on a terminal and one JSON document otherwise (--human, --json). Authentication is the gh token\n" +
 			"route of the hosting commands. Nothing is written to disk or to the forge.\n" +
-			"Exit statuses: 0 no finding of severity error (warnings do not fail), 3 at least one error finding (the output is printed), 1 a failed\n" +
+			"Exit statuses: 0 no finding of severity error (warnings do not fail), 3 at least one error finding or an incomplete read (a list cut at its bound; the output is printed), 1 a failed\n" +
 			"read or missing authentication (no output), 2 usage error.",
 		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {

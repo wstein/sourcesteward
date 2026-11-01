@@ -106,7 +106,7 @@ func buildDocument(p Params, in lintpr.Input, head string, tr truncation, fs []l
 			d.Summary.Warnings++
 		}
 	}
-	d.Summary.Passed = d.Summary.Errors == 0
+	d.Summary.Passed = d.Summary.Errors == 0 && !tr.Commits && !tr.Comments
 	return d
 }
 
@@ -117,7 +117,10 @@ func writeHuman(w io.Writer, d *Document) error {
 		head = (*d.Head)[:12]
 	}
 	verdict := "pass"
-	if !d.Summary.Passed {
+	switch {
+	case !d.Summary.Passed && d.Summary.Errors == 0:
+		verdict = "FAIL (incomplete)"
+	case !d.Summary.Passed:
 		verdict = "FAIL"
 	}
 	fmt.Fprintf(&b, "%s#%d head %s: %s, %d errors, %d warnings (%d commits, %d comments read)\n", d.Repo, d.PullRequest, head, verdict,
@@ -137,10 +140,10 @@ func writeHuman(w io.Writer, d *Document) error {
 		fmt.Fprintf(&b, "%-7s %-22s %s: %s\n", f.Severity, f.Rule, where, untrusted.Esc(f.Message))
 	}
 	if d.Truncated.Commits {
-		b.WriteString("note: only the first 300 commits were read\n")
+		b.WriteString("note: not all commits were read (the forge lists at most 250, the command reads at most 300)\n")
 	}
 	if d.Truncated.Comments {
-		b.WriteString("note: only the first 300 comments were read\n")
+		b.WriteString("note: not all comments were read (the command reads at most 300)\n")
 	}
 	_, err := io.WriteString(w, b.String())
 	return err

@@ -37,6 +37,7 @@ A finding has `rule`, `severity`, `location` (`kind`, `id` = comment ID or commi
 
 ## Limits and exit statuses
 
-Up to 300 commits and 300 comments are read; more is reported as `truncated` and not linted. Exit statuses: 0 no error finding (warnings do
-not fail), 3 at least one error finding (the output is printed), 1 a failed read or missing authentication (no output), 2 usage error. A
+Up to 300 commits (the forge lists at most 250; the commit count of the pull request is compared) and 300 comments are read. A list that was not
+read in full is reported as `truncated`, `summary.passed` is false and the exit status is 3: unread text is not a pass. Exit statuses: 0 no error
+finding and a complete read (warnings do not fail), 3 at least one error finding or an incomplete read (the output is printed), 1 a failed read or missing authentication (no output), 2 usage error. A
 comment that does not claim to be a review is checked for session links only.
