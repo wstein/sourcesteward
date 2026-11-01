@@ -65,7 +65,7 @@ func TestPublishedV1AndV2SchemasAreByteFrozen(t *testing.T) {
 			}
 		}
 	}
-	if len(frozenPublishedSchemas) != 31 {
-		t.Fatalf("frozen schema inventory has %d entries, want 31", len(frozenPublishedSchemas))
+	if len(frozenPublishedSchemas) != 32 {
+		t.Fatalf("frozen schema inventory has %d entries, want 32", len(frozenPublishedSchemas))
 	}
 }
