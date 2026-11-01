@@ -123,6 +123,12 @@ func TestPlanRefusals(t *testing.T) {
 		}, []want{{ReasonConflicting, 12}}},
 		{"mergeable null", func(s *scenario) { p := s.forge.pulls[12]; p.Mergeable = nil; s.forge.pulls[12] = p }, []want{{ReasonMergeabilityNone, 12}}},
 		{"not linear", func(s *scenario) { s.git.lin = []string{sha('0'), h1, h3, h2} }, []want{{ReasonChainNotLinear, 0}}},
+		{"bottom ancestry unknown", func(s *scenario) { s.git.lin = []string{h1, h2, h3} }, []want{{ReasonObjectMissing, 11}}},
+		{"equal heads are not a chain", func(s *scenario) {
+			s.opts.Chain[1].Reviewed = h1
+			s.forge.pulls[12] = pull(12, h1, "feat-2")
+			s.git.refs[12] = h1
+		}, []want{{ReasonChainNotLinear, 12}}},
 		{"object missing", func(s *scenario) { s.git.lin = []string{sha('0'), h1, h3} }, []want{{ReasonObjectMissing, 0}}},
 		{"base not in chain", func(s *scenario) { p := s.forge.pulls[12]; p.BaseRef = "other"; s.forge.pulls[12] = p }, []want{{ReasonBaseNotInChain, 12}}},
 		{"native stack shape", func(s *scenario) { p := s.forge.pulls[12]; p.BaseRef = "feat-1"; s.forge.pulls[12] = p }, []want{{ReasonLandUnmeasured, 12}}},
@@ -358,4 +364,40 @@ func TestPlanUnreadableRulesetsAreNamedUnreadable(t *testing.T) {
 		}
 	}
 	t.Fatalf("the unreadable shape must be reported as unreadable, not as an unrecorded key: %+v", r.Preconditions)
+}
+
+func TestPlanReplayMergedWithOtherSHAIsNotAlreadyLanded(t *testing.T) {
+	s := happy()
+	s.git.tip = sha('3')
+	for _, n := range []int{11, 12, 13} {
+		p := s.forge.pulls[n]
+		p.State, p.Merged, p.MergeCommit = "closed", true, p.HeadSHA
+		s.forge.pulls[n] = p
+	}
+	p := s.forge.pulls[12]
+	p.MergeCommit = sha('8')
+	s.forge.pulls[12] = p
+	r := s.plan()
+	if r.Result == ResultAlreadyLanded {
+		t.Fatal("a pull request merged with another SHA must not read as already landed")
+	}
+	if r.Chain[1].Outcome != "merged-other-sha" || r.Chain[0].Outcome != "landed" {
+		t.Fatalf("outcomes %+v", r.Chain)
+	}
+}
+
+func TestOnlyTheHumanModeIsHuman(t *testing.T) {
+	for _, m := range []string{"agent", "", "weird", "Human", "human "} {
+		if !(Mode{Mode: m}).Agent() {
+			t.Errorf("mode %q must count as agent", m)
+		}
+	}
+	if (Mode{Mode: "human"}).Agent() {
+		t.Error("human is not agent")
+	}
+	s := happy()
+	s.mode = Mode{Mode: "weird", Markers: []string{}}
+	if r := s.plan(); r.ApplyAllowed {
+		t.Fatal("apply must not be allowed for a mode that is not human")
+	}
 }
