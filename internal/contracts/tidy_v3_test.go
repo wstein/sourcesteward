@@ -165,7 +165,7 @@ func TestTidyV3CLIRealRetirementFlow(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			source, state, completed, active := filepath.Join(root, "source"), filepath.Join(t.TempDir(), "state"), filepath.Join(root, "tasks", "completed"), filepath.Join(root, "tasks", "active")
+			source, state, completed, active := filepath.Join(root, "source"), filepath.Join(canonicalTempDir(t), "state"), filepath.Join(root, "tasks", "completed"), filepath.Join(root, "tasks", "active")
 			if err := os.Mkdir(state, 0700); err != nil {
 				t.Fatal(err)
 			}
@@ -480,8 +480,11 @@ func TestTidyV3ContractFixtureGitEnvironmentIsolation(t *testing.T) {
 	}
 	for _, routing := range []bool{true, false} {
 		t.Run(fmt.Sprint(routing), func(t *testing.T) {
-			root := t.TempDir()
-			home, templates, sentinel, hooks := filepath.Join(root, "home"), filepath.Join(root, "templates"), filepath.Join(root, "sentinel"), filepath.Join(root, "hooks")
+			root := canonicalTempDir(t)
+			home, templates, hooks := filepath.Join(root, "home"), filepath.Join(root, "templates"), filepath.Join(root, "hooks")
+			// The sentinel lives below home, the child's TMPDIR: the inherited-GIT_DIR guard accepts only
+			// repositories inside a temporary directory, and /tmp is not one on macOS.
+			sentinel := filepath.Join(home, "sentinel")
 			for _, path := range []string{home, templates, hooks} {
 				if err := os.Mkdir(path, 0700); err != nil {
 					t.Fatal(err)

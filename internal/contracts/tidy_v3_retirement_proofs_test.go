@@ -38,7 +38,7 @@ func TestTidyV3RetirementWithForgeFreeProofValidatesAgainstSchema(t *testing.T) 
 			if err != nil {
 				t.Fatal(err)
 			}
-			source, state, completed, active := filepath.Join(root, "source"), filepath.Join(t.TempDir(), "state"), filepath.Join(root, "tasks", "completed"), filepath.Join(root, "tasks", "active")
+			source, state, completed, active := filepath.Join(root, "source"), filepath.Join(canonicalTempDir(t), "state"), filepath.Join(root, "tasks", "completed"), filepath.Join(root, "tasks", "active")
 			if err := os.Mkdir(state, 0700); err != nil {
 				t.Fatal(err)
 			}
