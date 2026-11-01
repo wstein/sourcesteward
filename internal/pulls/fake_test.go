@@ -272,9 +272,14 @@ type plainReader struct{ Reader }
 
 // say adds a comment (id, minute after t0) with the given body to repo#n.
 func (f *fakeForge) say(repo string, n int, id int64, min int, body string) {
+	f.sayAs(repo, n, id, min, body, "OWNER")
+}
+
+// sayAs is say by an author with the given author_association.
+func (f *fakeForge) sayAs(repo string, n int, id int64, min int, body, association string) {
 	k := fmt.Sprintf("%s#%d", repo, n)
 	at := t0.Add(time.Duration(min) * time.Minute)
-	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
+	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, Association: association, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
 }
 
 func reviewLine(verdict, head string, n int) string {

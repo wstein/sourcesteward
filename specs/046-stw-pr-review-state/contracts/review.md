@@ -8,14 +8,14 @@ Keys are never omitted; absent values are `null`.
 
 - `options.review` (bool, false with `--no-review`), `options.review_states` and `options.hints` (arrays of the filter values).
 - Row member `review`: `null` when the comments were not read (`--no-review`, past `--limit`, a failed read, a reader without
-  comment support), else `{basis, state, verdict, head, patch_id, at, url, carried, edited, truncated}`:
+  comment support), else `{basis, state, verdict, head, patch_id, at, url, association, ignored, carried, edited, truncated}`:
   `basis` const `comment` (the claim is the comment's, Trust model); `state` enum `none|findings|clear|clear-carried|clear-stale|unparsed`;
   `verdict` `CLEAR`, `FINDINGS` or null (null for `none` and `unparsed`); `head` (sha of the decisive comment, for a carry-over the CLEAR it
-  carries) and `patch_id` or null; `at` RFC 3339 and `url` (`https`) of the decisive comment or null; `carried`, `edited`, `truncated` bool.
-- Row member `hints`: array of `clear-not-ready`, `no-final-review`, `base-not-default`, `parent-merged-retarget`, `ready-mergeable`, in
+  carries) and `patch_id` or null; `association` the `author_association` of the decisive comment or null (`OWNER`, `MEMBER` or `COLLABORATOR`); `ignored` the number of ignored review-like comments of other authors (integer, 0 or more); `at` RFC 3339 and `url` (`https`) of the decisive comment or null; `carried`, `edited`, `truncated` bool.
+- Row member `hints`: array of `clear-not-ready`, `no-final-review`, `base-not-default`, `parent-merged-retarget`, `truncated-review-unknown`, `foreign-review-ignored`, `ready-mergeable`, in
   that order, without duplicates.
 - `summary.review`: `{none, findings, clear, clear_carried, clear_stale, unparsed, not_read}` (not_read counts rows with `review` null)
-  and `summary.hints`: `{clear_not_ready, no_final_review, base_not_default, parent_merged_retarget, ready_mergeable}`.
+  and `summary.hints`: `{clear_not_ready, no_final_review, base_not_default, parent_merged_retarget, truncated_review_unknown, foreign_review_ignored, ready_mergeable}`.
 
 ## `stw status` (schema 2)
 

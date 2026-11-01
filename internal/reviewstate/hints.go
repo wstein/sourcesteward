@@ -7,15 +7,22 @@ const (
 	HintNoFinalReview        = "no-final-review"
 	HintBaseNotDefault       = "base-not-default"
 	HintParentMergedRetarget = "parent-merged-retarget"
+	// HintTruncatedReviewUnknown: the comment thread was cut, so a verdict may be missing.
+	HintTruncatedReviewUnknown = "truncated-review-unknown"
+	// HintForeignReviewIgnored: a review-like comment of an author who does not count was ignored.
+	HintForeignReviewIgnored = "foreign-review-ignored"
 	HintReadyMergeable       = "ready-mergeable"
 )
 
 // AllHints lists the hints in the order of the documents.
-var AllHints = []string{HintClearNotReady, HintNoFinalReview, HintBaseNotDefault, HintParentMergedRetarget, HintReadyMergeable}
+var AllHints = []string{HintClearNotReady, HintNoFinalReview, HintBaseNotDefault, HintParentMergedRetarget, HintTruncatedReviewUnknown, HintForeignReviewIgnored, HintReadyMergeable}
 
 // HintInput is what the hints look at. State is empty and ReviewRead false when the comments were
-// not read; Group is the verdict group of Spec 036; DefaultBranch is empty when unknown.
+// not read; Group is the verdict group of Spec 036; DefaultBranch is empty when unknown; Truncated
+// and Ignored come from the Result.
 type HintInput struct {
+	Truncated     bool
+	Ignored       int
 	Draft         bool
 	ReviewRead    bool
 	State         string
@@ -43,7 +50,13 @@ func Hints(in HintInput) []string {
 			out = append(out, HintParentMergedRetarget)
 		}
 	}
-	if clear && !in.Draft && in.Group == "ready" && known && !notDefault {
+	if in.ReviewRead && in.Truncated {
+		out = append(out, HintTruncatedReviewUnknown)
+	}
+	if in.ReviewRead && in.Ignored > 0 {
+		out = append(out, HintForeignReviewIgnored)
+	}
+	if clear && !in.Truncated && !in.Draft && in.Group == "ready" && known && !notDefault {
 		out = append(out, HintReadyMergeable)
 	}
 	return out

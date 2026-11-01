@@ -96,16 +96,20 @@ type DocRow struct {
 // DocReview is the review state of a row. Basis is always "comment": the verdict is what a comment
 // says, checked only against the head and the commit date (Spec 046, Trust model).
 type DocReview struct {
-	Basis     string  `json:"basis"`
-	State     string  `json:"state"`
-	Verdict   *string `json:"verdict"`
-	Head      *string `json:"head"`
-	PatchID   *string `json:"patch_id"`
-	At        *string `json:"at"`
-	URL       *string `json:"url"`
-	Carried   bool    `json:"carried"`
-	Edited    bool    `json:"edited"`
-	Truncated bool    `json:"truncated"`
+	Basis   string  `json:"basis"`
+	State   string  `json:"state"`
+	Verdict *string `json:"verdict"`
+	Head    *string `json:"head"`
+	PatchID *string `json:"patch_id"`
+	At      *string `json:"at"`
+	URL     *string `json:"url"`
+	// Association is the author_association of the decisive comment; Ignored counts review-like
+	// comments of other authors that were left out (Spec 046, Trust model).
+	Association *string `json:"association"`
+	Ignored     int     `json:"ignored"`
+	Carried     bool    `json:"carried"`
+	Edited      bool    `json:"edited"`
+	Truncated   bool    `json:"truncated"`
 }
 
 // DocReviewCounts counts rows per review state; NotRead counts rows whose comments were not read.
@@ -125,7 +129,10 @@ type DocHintCounts struct {
 	NoFinalReview        int `json:"no_final_review"`
 	BaseNotDefault       int `json:"base_not_default"`
 	ParentMergedRetarget int `json:"parent_merged_retarget"`
-	ReadyMergeable       int `json:"ready_mergeable"`
+	// TruncatedReviewUnknown and ForeignReviewIgnored count the hints of the same names.
+	TruncatedReviewUnknown int `json:"truncated_review_unknown"`
+	ForeignReviewIgnored   int `json:"foreign_review_ignored"`
+	ReadyMergeable         int `json:"ready_mergeable"`
 }
 
 // DocSummary counts the rows and repositories.
@@ -180,7 +187,8 @@ func buildDocument(p Params, res *pulls.Result, sources map[string]string, owner
 		Review: DocReviewCounts{None: s.Review.None, Findings: s.Review.Findings, Clear: s.Review.Clear, ClearCarried: s.Review.ClearCarried,
 			ClearStale: s.Review.ClearStale, Unparsed: s.Review.Unparsed, NotRead: s.Review.NotRead},
 		Hints: DocHintCounts{ClearNotReady: s.Hints.ClearNotReady, NoFinalReview: s.Hints.NoFinalReview, BaseNotDefault: s.Hints.BaseNotDefault,
-			ParentMergedRetarget: s.Hints.ParentMergedRetarget, ReadyMergeable: s.Hints.ReadyMergeable}}
+			ParentMergedRetarget: s.Hints.ParentMergedRetarget, TruncatedReviewUnknown: s.Hints.TruncatedReviewUnknown,
+			ForeignReviewIgnored: s.Hints.ForeignReviewIgnored, ReadyMergeable: s.Hints.ReadyMergeable}}
 	d.Errors = []snapcmd.DocError{}
 	for _, e := range res.Errors {
 		repo := e.Repo
@@ -197,7 +205,7 @@ func docRow(r pulls.Row) DocRow {
 		Hints: snapcmd.Strings0(r.Hints)}
 	if rv := r.Review; rv != nil {
 		d := &DocReview{Basis: "comment", State: rv.State, Verdict: snapcmd.StrPtr(rv.Verdict), PatchID: snapcmd.StrPtr(rv.PatchID), URL: snapcmd.StrPtr(rv.URL),
-			Carried: rv.Carried, Edited: rv.Edited, Truncated: rv.Truncated}
+			Association: snapcmd.StrPtr(rv.Association), Ignored: rv.Ignored, Carried: rv.Carried, Edited: rv.Edited, Truncated: rv.Truncated}
 		if pulls.ValidSHA(rv.Head) {
 			head := rv.Head
 			d.Head = &head
@@ -279,7 +287,7 @@ func writeHuman(w io.Writer, d *Document) error {
 		if line := counts([]namedCount{{"clear", rv.Clear}, {"clear-carried", rv.ClearCarried}, {"findings", rv.Findings}, {"clear-stale", rv.ClearStale}, {"none", rv.None}, {"unparsed", rv.Unparsed}, {"not read", rv.NotRead}}); line != "" {
 			fmt.Fprintf(&b, "review: %s\n", line)
 		}
-		if line := counts([]namedCount{{"clear-not-ready", h.ClearNotReady}, {"no-final-review", h.NoFinalReview}, {"base-not-default", h.BaseNotDefault}, {"parent-merged-retarget", h.ParentMergedRetarget}, {"ready-mergeable", h.ReadyMergeable}}); line != "" {
+		if line := counts([]namedCount{{"clear-not-ready", h.ClearNotReady}, {"no-final-review", h.NoFinalReview}, {"base-not-default", h.BaseNotDefault}, {"parent-merged-retarget", h.ParentMergedRetarget}, {"truncated-review-unknown", h.TruncatedReviewUnknown}, {"foreign-review-ignored", h.ForeignReviewIgnored}, {"ready-mergeable", h.ReadyMergeable}}); line != "" {
 			fmt.Fprintf(&b, "hints: %s\n", line)
 		}
 	}

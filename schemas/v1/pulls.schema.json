@@ -365,6 +365,8 @@
             "no_final_review",
             "base_not_default",
             "parent_merged_retarget",
+            "truncated_review_unknown",
+            "foreign_review_ignored",
             "ready_mergeable"
           ],
           "additionalProperties": false,
@@ -382,6 +384,14 @@
               "minimum": 0
             },
             "parent_merged_retarget": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "truncated_review_unknown": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "foreign_review_ignored": {
               "type": "integer",
               "minimum": 0
             },
@@ -808,12 +818,14 @@
         "no-final-review",
         "base-not-default",
         "parent-merged-retarget",
+        "truncated-review-unknown",
+        "foreign-review-ignored",
         "ready-mergeable"
       ]
     },
     "hints": {
       "type": "array",
-      "maxItems": 5,
+      "maxItems": 7,
       "uniqueItems": true,
       "items": {
         "$ref": "#/$defs/hint"
@@ -829,6 +841,8 @@
         "patch_id",
         "at",
         "url",
+        "association",
+        "ignored",
         "carried",
         "edited",
         "truncated"
@@ -897,6 +911,24 @@
             }
           ]
         },
+        "association": {
+          "anyOf": [
+            {
+              "enum": [
+                "OWNER",
+                "MEMBER",
+                "COLLABORATOR"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignored": {
+          "type": "integer",
+          "minimum": 0
+        },
         "carried": {
           "type": "boolean"
         },
@@ -944,6 +976,9 @@
               },
               "edited": {
                 "const": false
+              },
+              "association": {
+                "type": "null"
               }
             }
           },
@@ -963,6 +998,13 @@
               },
               "at": {
                 "$ref": "#/$defs/time"
+              },
+              "association": {
+                "enum": [
+                  "OWNER",
+                  "MEMBER",
+                  "COLLABORATOR"
+                ]
               }
             }
           }

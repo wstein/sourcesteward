@@ -271,3 +271,87 @@ func TestExecuteHumanAndJSONShowACarriedReview(t *testing.T) {
 	}
 	t.Fatal("row 6 missing")
 }
+
+// trustSource has o/a#1 CLEAR by a MEMBER, #2 CLEAR by a stranger (NONE), #3 CLEAR by a stranger after
+// FINDINGS of the owner, #4 CLEAR with a truncated thread.
+func trustSource() reviewForge {
+	s := newSource()
+	rl := func(v, head string, n int) string {
+		return fmt.Sprintf("Review: %s head=%s patch-id=%s pr=%d\nrest", v, head, strings.Repeat("1", 40), n)
+	}
+	for n := 1; n <= 4; n++ {
+		p := okPR("o/a", n)
+		p.age = time.Duration(n) * 24 * time.Hour
+		s.add(p)
+		s.commits[p.head] = t0.Add(-time.Hour * 100)
+	}
+	h := func(n int) string { return s.lists["o/a"][n-1].HeadSHA }
+	s.sayAs("o/a", 1, 1, 5, rl("CLEAR", h(1), 1), "MEMBER")
+	s.sayAs("o/a", 2, 1, 5, rl("CLEAR", h(2), 2), "NONE")
+	s.say("o/a", 3, 1, 5, rl("FINDINGS", h(3), 3))
+	s.sayAs("o/a", 3, 2, 6, rl("CLEAR", h(3), 3), "CONTRIBUTOR")
+	s.say("o/a", 4, 1, 5, rl("CLEAR", h(4), 4))
+	s.commentsTr = map[string]bool{"o/a#4": true}
+	return reviewForge{s}
+}
+
+func TestExecuteJSONShowsAssociationIgnoredAndTheNewHints(t *testing.T) {
+	f := baseFlags()
+	f.Repos, f.JSON = []string{"o/a"}, true
+	out, diag, err := execReview(t, trustSource(), f)
+	if err != nil || diag != "" {
+		t.Fatalf("%v %q", err, diag)
+	}
+	m := decode(t, out)
+	rows := map[int]map[string]any{}
+	for _, g := range []string{"ready", "checks", "conflict", "draft", "blocked"} {
+		for _, r := range m["groups"].(map[string]any)[g].([]any) {
+			row := r.(map[string]any)
+			rows[int(row["number"].(float64))] = row
+		}
+	}
+	rv := func(n int) map[string]any { return rows[n]["review"].(map[string]any) }
+	hints := func(n int) string {
+		var out []string
+		for _, h := range rows[n]["hints"].([]any) {
+			out = append(out, h.(string))
+		}
+		return strings.Join(out, ",")
+	}
+	if rv(1)["state"] != "clear" || rv(1)["association"] != "MEMBER" || rv(1)["ignored"] != 0.0 || hints(1) != "ready-mergeable" {
+		t.Errorf("#1 %v %s", rv(1), hints(1))
+	}
+	if rv(2)["state"] != "none" || rv(2)["association"] != nil || rv(2)["ignored"] != 1.0 || rv(2)["verdict"] != nil || rv(2)["url"] != nil || hints(2) != "no-final-review,foreign-review-ignored" {
+		t.Errorf("#2 %v %s", rv(2), hints(2))
+	}
+	if rv(3)["state"] != "findings" || rv(3)["association"] != "OWNER" || rv(3)["ignored"] != 1.0 || hints(3) != "foreign-review-ignored" {
+		t.Errorf("#3 %v %s", rv(3), hints(3))
+	}
+	if rv(4)["state"] != "clear" || rv(4)["truncated"] != true || hints(4) != "truncated-review-unknown" {
+		t.Errorf("#4 %v %s", rv(4), hints(4))
+	}
+	hs := m["summary"].(map[string]any)["hints"].(map[string]any)
+	if hs["ready_mergeable"] != 1.0 || hs["foreign_review_ignored"] != 2.0 || hs["truncated_review_unknown"] != 1.0 || hs["no_final_review"] != 1.0 {
+		t.Errorf("%v", hs)
+	}
+}
+
+func TestExecuteHumanShowsTheNewHints(t *testing.T) {
+	f := baseFlags()
+	f.Repos, f.Human = []string{"o/a"}, true
+	out, _, err := execReview(t, trustSource(), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"o/a#1  1d  alice  green  clean  clear  title 1  {ready-mergeable}\n",
+		"o/a#2  2d  alice  green  clean  none  title 2  {no-final-review, foreign-review-ignored}\n",
+		"o/a#3  3d  alice  green  clean  findings  title 3  {foreign-review-ignored}\n",
+		"o/a#4  4d  alice  green  clean  clear  title 4  {truncated-review-unknown}\n",
+		"hints: 1 no-final-review, 1 truncated-review-unknown, 2 foreign-review-ignored, 1 ready-mergeable\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in\n%s", want, out)
+		}
+	}
+}

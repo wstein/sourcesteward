@@ -30,9 +30,10 @@ type fakeForge struct {
 	calls   []string
 	etags   []string
 	// Spec 046 review reads; a fake source that sets reviewOn answers them
-	reviewOn bool
-	comments map[string][]hosting.IssueComment // repo#n
-	commits  map[string]time.Time              // head sha -> committer date
+	reviewOn   bool
+	comments   map[string][]hosting.IssueComment // repo#n
+	commentsTr map[string]bool                   // repo#n whose thread is truncated
+	commits    map[string]time.Time              // head sha -> committer date
 }
 
 func newForge() *fakeForge {
@@ -160,7 +161,7 @@ func (f reviewForge) ReadIssueComments(_ context.Context, repo string, n int) ([
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return f.comments[fmt.Sprintf("%s#%d", repo, n)], false, nil
+	return f.comments[fmt.Sprintf("%s#%d", repo, n)], f.commentsTr[fmt.Sprintf("%s#%d", repo, n)], nil
 }
 
 func (f reviewForge) Commit(_ context.Context, _ string, s string, _ string) (hosting.WatchResponse, error) {
@@ -179,7 +180,12 @@ func (f reviewForge) RepoInfo(_ context.Context, repo string) (hosting.RepoInfo,
 
 // say adds a comment (id, minutes after t0) to repo#n.
 func (f *fakeForge) say(repo string, n int, id int64, min int, body string) {
+	f.sayAs(repo, n, id, min, body, "OWNER")
+}
+
+// sayAs is say by an author with the given author_association.
+func (f *fakeForge) sayAs(repo string, n int, id int64, min int, body, association string) {
 	k := fmt.Sprintf("%s#%d", repo, n)
 	at := t0.Add(time.Duration(min) * time.Minute)
-	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
+	f.comments[k] = append(f.comments[k], hosting.IssueComment{ID: id, CreatedAt: at, UpdatedAt: at, Body: body, Association: association, URL: fmt.Sprintf("https://github.com/%s/pull/%d#issuecomment-%d", repo, n, id)})
 }

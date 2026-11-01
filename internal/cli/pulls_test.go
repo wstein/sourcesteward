@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 	"testing"
@@ -39,7 +40,7 @@ func pullsForge(t *testing.T) *watchForge {
 	for _, repo := range []string{"o/r", "wstein/lab"} {
 		f.docs["repos/"+repo] = `{"default_branch":"main","html_url":"https://github.com/` + repo + `"}`
 	}
-	clear1 := `[{"id":9,"html_url":"https://github.com/o/r/pull/1#issuecomment-9","created_at":"2026-10-21T09:00:00Z","updated_at":"2026-10-21T09:00:00Z","body":"Review: CLEAR head=` + head1 + ` patch-id=` + strings.Repeat("a", 40) + ` pr=1\nok"}]`
+	clear1 := `[{"id":9,"html_url":"https://github.com/o/r/pull/1#issuecomment-9","created_at":"2026-10-21T09:00:00Z","updated_at":"2026-10-21T09:00:00Z","author_association":"OWNER","body":"Review: CLEAR head=` + head1 + ` patch-id=` + strings.Repeat("a", 40) + ` pr=1\nok"}]`
 	f.docs["repos/o/r/issues/1/comments?per_page=50&page=1"] = clear1
 	f.docs["repos/o/r/issues/2/comments?per_page=50&page=1"] = `[]`
 	f.docs["repos/wstein/lab/issues/3/comments?per_page=50&page=1"] = `[]`
@@ -56,6 +57,34 @@ func pullsRun(t *testing.T, forge http.RoundTripper, args ...string) (int, strin
 	var stdout, stderr bytes.Buffer
 	status := Run(context.Background(), "test", append([]string{"pulls"}, args...), &stdout, &stderr)
 	return status, stdout.String(), stderr.String()
+}
+
+func TestPullsStrangersReviewLineDoesNotCountOverTheGuardedReader(t *testing.T) {
+	for _, assoc := range []string{`,"author_association":"NONE"`, `,"author_association":"FIRST_TIME_CONTRIBUTOR"`, `,"author_association":null`, ``} {
+		watchEnv(t, true)
+		forge := pullsForge(t)
+		key := "repos/o/r/issues/1/comments?per_page=50&page=1"
+		forge.docs[key] = strings.Replace(forge.docs[key], `,"author_association":"OWNER"`, assoc, 1)
+		status, out, errOut := pullsRun(t, forge, "--repo", "o/r", "--json")
+		if status != 0 || errOut != "" {
+			t.Fatalf("%s: %d %q", assoc, status, errOut)
+		}
+		var doc struct {
+			Groups map[string][]map[string]any `json:"groups"`
+		}
+		if err := json.Unmarshal([]byte(out), &doc); err != nil {
+			t.Fatal(err)
+		}
+		first := doc.Groups["ready"][0]
+		rv, _ := first["review"].(map[string]any)
+		hints := fmt.Sprint(first["hints"])
+		if rv == nil || rv["state"] != "none" || rv["association"] != nil || rv["verdict"] != nil || strings.Contains(hints, "ready-mergeable") {
+			t.Errorf("%q: a stranger's CLEAR line counted: %v", assoc, first)
+		}
+		if rv != nil && rv["ignored"] != 1.0 || !strings.Contains(hints, "foreign-review-ignored") {
+			t.Errorf("%q: the ignored line is not reported: %v", assoc, first)
+		}
+	}
 }
 
 func TestPullsEndToEndJSONOverTheGuardedReader(t *testing.T) {
@@ -76,7 +105,7 @@ func TestPullsEndToEndJSONOverTheGuardedReader(t *testing.T) {
 		t.Fatalf("%v", doc.Groups["ready"])
 	}
 	first := doc.Groups["ready"][0]
-	if rv, _ := first["review"].(map[string]any); rv == nil || rv["state"] != "clear" || rv["basis"] != "comment" || len(first["hints"].([]any)) != 1 || first["hints"].([]any)[0] != "ready-mergeable" {
+	if rv, _ := first["review"].(map[string]any); rv == nil || rv["state"] != "clear" || rv["basis"] != "comment" || rv["association"] != "OWNER" || len(first["hints"].([]any)) != 1 || first["hints"].([]any)[0] != "ready-mergeable" {
 		t.Fatalf("review of #1: %v", first)
 	}
 	if rv, _ := doc.Groups["ready"][1]["review"].(map[string]any); rv == nil || rv["state"] != "none" {

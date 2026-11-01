@@ -16,16 +16,22 @@ func hex(c string) string { return strings.Repeat(c, 40) }
 
 func rev(id int64, min int, verdict, head, patch string) Comment {
 	return Comment{ID: id, CreatedAt: at(min), UpdatedAt: at(min), URL: fmt.Sprintf("https://github.com/o/r/pull/7#issuecomment-%d", id),
-		Body: fmt.Sprintf("Review: %s head=%s patch-id=%s pr=7\nbody", verdict, head, patch)}
+		Association: "OWNER", Body: fmt.Sprintf("Review: %s head=%s patch-id=%s pr=7\nbody", verdict, head, patch)}
 }
 
 func carry(id int64, min int, from, to, patch string) Comment {
 	return Comment{ID: id, CreatedAt: at(min), UpdatedAt: at(min), URL: fmt.Sprintf("https://github.com/o/r/pull/7#issuecomment-%d", id),
-		Body: fmt.Sprintf("Carried-over: from=%s to=%s patch-id=%s pr=7\n", from, to, patch)}
+		Association: "OWNER", Body: fmt.Sprintf("Carried-over: from=%s to=%s patch-id=%s pr=7\n", from, to, patch)}
 }
 
 func free(id int64, min int, body string) Comment {
-	return Comment{ID: id, CreatedAt: at(min), UpdatedAt: at(min), Body: body, URL: fmt.Sprintf("https://github.com/o/r/pull/7#issuecomment-%d", id)}
+	return Comment{ID: id, CreatedAt: at(min), UpdatedAt: at(min), Body: body, Association: "OWNER", URL: fmt.Sprintf("https://github.com/o/r/pull/7#issuecomment-%d", id)}
+}
+
+// by returns c as posted by an author with the given association.
+func by(c Comment, association string) Comment {
+	c.Association = association
+	return c
 }
 
 // in is a pull request 7 at head hex("a") whose head commit is dated at(0).
@@ -74,7 +80,7 @@ func TestEvaluateStates(t *testing.T) {
 		{"unparsed newer than decisive", in(rev(1, 5, "CLEAR", H, P), free(2, 6, "Urteil: FINDINGS")), StateUnparsed},
 		{"unparsed newer than stale clear", in(rev(1, 5, "CLEAR", O, P), free(2, 6, "Verdict: CLEAR")), StateUnparsed},
 		{"unparsed older than stale clear", in(free(1, 3, "Verdict: CLEAR"), rev(2, 5, "CLEAR", O, P)), StateClearStale},
-		{"strict line for another pr is unparsed", in(Comment{ID: 1, CreatedAt: at(5), Body: "Review: CLEAR head=" + H + " patch-id=" + P + " pr=8"}), StateUnparsed},
+		{"strict line for another pr is unparsed", in(Comment{ID: 1, CreatedAt: at(5), Association: "OWNER", Body: "Review: CLEAR head=" + H + " patch-id=" + P + " pr=8"}), StateUnparsed},
 	}
 	for _, c := range cases {
 		if got := Evaluate(c.in).State; got != c.state {
@@ -262,7 +268,7 @@ func TestChainWorkIsBounded(t *testing.T) {
 		}
 	}
 	cs = append(cs, carry(9999, 5, hs[7], hex("a"), P))
-	strict, _ := parseAll(7, cs)
+	strict, _, _ := parseAll(7, cs)
 	ch := newChains(strict)
 	done := make(chan struct{})
 	go func() { ch.carried(len(strict) - 1); close(done) }()
@@ -273,6 +279,78 @@ func TestChainWorkIsBounded(t *testing.T) {
 	}
 	if ch.calls > len(strict) {
 		t.Fatalf("%d carry-over checks for %d comments", ch.calls, len(strict))
+	}
+}
+
+func TestOnlyOwnerMemberCollaboratorCount(t *testing.T) {
+	H, P := hex("a"), hex("1")
+	for assoc, want := range map[string]string{
+		"OWNER": StateClear, "MEMBER": StateClear, "COLLABORATOR": StateClear,
+		"CONTRIBUTOR": StateNone, "FIRST_TIME_CONTRIBUTOR": StateNone, "FIRST_TIMER": StateNone, "MANNEQUIN": StateNone, "NONE": StateNone,
+		"": StateNone, "owner": StateNone, "OWNER ": StateNone, "OWNERS": StateNone,
+	} {
+		r := Evaluate(in(by(rev(1, 5, "CLEAR", H, P), assoc)))
+		if r.State != want {
+			t.Errorf("CLEAR by %q: state %q want %q", assoc, r.State, want)
+		}
+		if want == StateClear && r.Association != assoc {
+			t.Errorf("CLEAR by %q: association %q", assoc, r.Association)
+		}
+		if want == StateNone && (r.Ignored != 1 || r.Association != "" || r.URL != "" || r.Verdict != "") {
+			t.Errorf("CLEAR by %q must be counted and leave no evidence: %+v", assoc, r)
+		}
+	}
+}
+
+func TestForeignCommentsHaveNoEffect(t *testing.T) {
+	H, O, P := hex("a"), hex("b"), hex("1")
+	cases := []struct {
+		name    string
+		in      Input
+		state   string
+		ignored int
+	}{
+		{"foreign FINDINGS after an owner CLEAR", in(rev(1, 5, "CLEAR", H, P), by(rev(2, 6, "FINDINGS", H, P), "NONE")), StateClear, 1},
+		{"foreign CLEAR after owner FINDINGS", in(rev(1, 5, "FINDINGS", H, P), by(rev(2, 6, "CLEAR", H, P), "CONTRIBUTOR")), StateFindings, 1},
+		{"foreign unparsed comment after an owner CLEAR", in(rev(1, 5, "CLEAR", H, P), by(free(2, 6, "Verdict: FINDINGS"), "NONE")), StateClear, 1},
+		{"foreign unparsed comment alone", in(by(free(1, 6, "Verdict: CLEAR"), "NONE")), StateNone, 1},
+		{"foreign chat is not counted", in(by(free(1, 6, "looks good to me"), "NONE")), StateNone, 0},
+		{"foreign carry-over", in(rev(1, -10, "CLEAR", O, P), by(carry(2, 5, O, H, P), "FIRST_TIME_CONTRIBUTOR")), StateClearStale, 1},
+		{"foreign CLEAR as origin of an owner carry-over", in(by(rev(1, -10, "CLEAR", O, P), "NONE"), carry(2, 5, O, H, P)), StateNone, 1},
+		{"foreign link in the middle of a chain", in(rev(1, -30, "CLEAR", hex("c"), P), by(carry(2, -20, hex("c"), O, P), "NONE"), carry(3, 5, O, H, P)), StateClearStale, 1},
+		{"foreign CLEAR for an older head is no stale CLEAR", in(by(rev(1, 5, "CLEAR", O, P), "NONE")), StateNone, 1},
+		{"foreign strict line for another pr", in(by(Comment{ID: 1, CreatedAt: at(5), Association: "NONE", Body: "Review: CLEAR head=" + H + " patch-id=" + P + " pr=8"}, "NONE")), StateNone, 1},
+		{"foreign line and an owner unparsed comment", in(by(rev(1, 5, "CLEAR", H, P), "NONE"), free(2, 6, "Verdict: CLEAR")), StateUnparsed, 1},
+		{"many foreign lines are all counted", in(by(rev(1, 5, "CLEAR", H, P), "NONE"), by(rev(2, 6, "CLEAR", H, P), "NONE"), by(free(3, 7, "Urteil: CLEAR"), "NONE")), StateNone, 3},
+	}
+	for _, c := range cases {
+		r := Evaluate(c.in)
+		if r.State != c.state || r.Ignored != c.ignored {
+			t.Errorf("%s: state %q ignored %d, want %q and %d", c.name, r.State, r.Ignored, c.state, c.ignored)
+		}
+	}
+}
+
+func TestAssociationOfTheDecisiveComment(t *testing.T) {
+	H, O, P := hex("a"), hex("b"), hex("1")
+	if r := Evaluate(in(by(rev(1, -10, "CLEAR", O, P), "MEMBER"), by(carry(2, 5, O, H, P), "COLLABORATOR"))); r.State != StateClearCarried || r.Association != "COLLABORATOR" {
+		t.Fatalf("carried: the carry-over is the decisive comment: %+v", r)
+	}
+	if r := Evaluate(in(by(rev(1, 5, "CLEAR", O, P), "MEMBER"))); r.State != StateClearStale || r.Association != "MEMBER" {
+		t.Fatalf("stale: %+v", r)
+	}
+	if r := Evaluate(in(by(rev(1, 5, "FINDINGS", H, P), "COLLABORATOR"))); r.State != StateFindings || r.Association != "COLLABORATOR" {
+		t.Fatalf("findings: %+v", r)
+	}
+}
+
+func TestNeedsHeadTimeIgnoresForeignComments(t *testing.T) {
+	H, P := hex("a"), hex("1")
+	if NeedsHeadTime(7, H, []Comment{by(rev(1, 5, "CLEAR", H, P), "NONE")}) {
+		t.Fatal("a foreign review of the head needs no commit read")
+	}
+	if !NeedsHeadTime(7, H, []Comment{by(rev(1, 5, "CLEAR", H, P), "NONE"), by(rev(2, 5, "CLEAR", H, P), "OWNER")}) {
+		t.Fatal("an owner review of the head needs the commit date")
 	}
 }
 
@@ -341,6 +419,15 @@ func TestHints(t *testing.T) {
 		{"parent merged on default base is no hint", func(h *HintInput) { h.ParentMerged = true }, []string{HintReadyMergeable}},
 		{"default branch unknown", func(h *HintInput) { h.DefaultBranch = "" }, nil},
 		{"review not read", func(h *HintInput) { h.ReviewRead, h.State = false, "" }, nil},
+		{"truncated clear is not ready-mergeable", func(h *HintInput) { h.Truncated = true }, []string{HintTruncatedReviewUnknown}},
+		{"truncated carried is not ready-mergeable", func(h *HintInput) { h.Truncated, h.State = true, StateClearCarried }, []string{HintTruncatedReviewUnknown}},
+		{"truncated draft clear", func(h *HintInput) { h.Truncated, h.Draft, h.Group = true, true, "draft" }, []string{HintClearNotReady, HintTruncatedReviewUnknown}},
+		{"truncated none", func(h *HintInput) { h.Truncated, h.State = true, StateNone }, []string{HintNoFinalReview, HintTruncatedReviewUnknown}},
+		{"truncated but not read", func(h *HintInput) { h.Truncated, h.ReviewRead, h.State = true, false, "" }, nil},
+		{"foreign review ignored", func(h *HintInput) { h.Ignored = 2 }, []string{HintForeignReviewIgnored, HintReadyMergeable}},
+		{"foreign review ignored, no review", func(h *HintInput) { h.Ignored, h.State = 1, StateNone }, []string{HintNoFinalReview, HintForeignReviewIgnored}},
+		{"foreign review but comments not read", func(h *HintInput) { h.Ignored, h.ReviewRead, h.State = 1, false, "" }, nil},
+		{"both", func(h *HintInput) { h.Ignored, h.Truncated, h.Base, h.ParentMerged = 1, true, "p", true }, []string{HintBaseNotDefault, HintParentMergedRetarget, HintTruncatedReviewUnknown, HintForeignReviewIgnored}},
 		{"review not read, base known", func(h *HintInput) { h.ReviewRead, h.State, h.Base = false, "", "x" }, []string{HintBaseNotDefault}},
 	}
 	for _, c := range cases {

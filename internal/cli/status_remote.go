@@ -128,7 +128,7 @@ func statusReviewText(r *statuscmd.DocPullsReview) string {
 	}
 	s, h := r.States, r.Hints
 	states := join([]item{{s.Clear, "clear"}, {s.ClearCarried, "clear-carried"}, {s.Findings, "findings"}, {s.ClearStale, "clear-stale"}, {s.None, "none"}, {s.Unparsed, "unparsed"}, {s.NotRead, "not read"}})
-	hints := join([]item{{h.ClearNotReady, "clear-not-ready"}, {h.NoFinalReview, "no-final-review"}, {h.BaseNotDefault, "base-not-default"}, {h.ParentMergedRetarget, "parent-merged-retarget"}, {h.ReadyMergeable, "ready-mergeable"}})
+	hints := join([]item{{h.ClearNotReady, "clear-not-ready"}, {h.NoFinalReview, "no-final-review"}, {h.BaseNotDefault, "base-not-default"}, {h.ParentMergedRetarget, "parent-merged-retarget"}, {h.TruncatedReviewUnknown, "truncated-review-unknown"}, {h.ForeignReviewIgnored, "foreign-review-ignored"}, {h.ReadyMergeable, "ready-mergeable"}})
 	switch {
 	case states == "":
 		return ""

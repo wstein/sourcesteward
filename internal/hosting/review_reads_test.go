@@ -109,7 +109,7 @@ func TestReviewReadsAreRefusedBeforeAnyRequestInOtherModes(t *testing.T) {
 }
 
 func TestParseIssueComments(t *testing.T) {
-	body := `[{"id":11,"html_url":"https://github.com/o/r/pull/7#issuecomment-11","created_at":"2026-11-01T09:00:00Z","updated_at":"2026-11-01T09:30:00Z","body":"Review: CLEAR x","user":{"login":"werner"}},
+	body := `[{"id":11,"html_url":"https://github.com/o/r/pull/7#issuecomment-11","created_at":"2026-11-01T09:00:00Z","updated_at":"2026-11-01T09:30:00Z","body":"Review: CLEAR x","user":{"login":"werner"},"author_association":"OWNER"},
 	{"id":12,"html_url":"javascript:alert(1)","created_at":"2026-11-01T10:00:00Z","updated_at":"2026-11-01T10:00:00Z","body":null,"user":null}]`
 	got, err := ParseIssueComments([]byte(body))
 	if err != nil || len(got) != 2 {
@@ -125,6 +125,33 @@ func TestParseIssueComments(t *testing.T) {
 	for _, bad := range []string{`{}`, `[{"id":0,"created_at":"2026-11-01T09:00:00Z"}]`, `[{"id":1,"created_at":"yesterday"}]`, `[{"id":1}]`, `nope`} {
 		if _, err := ParseIssueComments([]byte(bad)); err == nil {
 			t.Errorf("%s accepted", bad)
+		}
+	}
+}
+
+func TestParseIssueCommentsAssociation(t *testing.T) {
+	page := func(assoc string) string {
+		return `[{"id":1,"created_at":"2026-11-01T09:00:00Z","body":"x"` + assoc + `}]`
+	}
+	for _, c := range []struct{ in, want string }{
+		{`,"author_association":"OWNER"`, "OWNER"},
+		{`,"author_association":"MEMBER"`, "MEMBER"},
+		{`,"author_association":"COLLABORATOR"`, "COLLABORATOR"},
+		{`,"author_association":"CONTRIBUTOR"`, "CONTRIBUTOR"},
+		{`,"author_association":"FIRST_TIME_CONTRIBUTOR"`, "FIRST_TIME_CONTRIBUTOR"},
+		{`,"author_association":"NONE"`, "NONE"},
+		{`,"author_association":"owner"`, ""},
+		{`,"author_association":"OWNER "`, ""},
+		{`,"author_association":"OWNER1"`, ""},
+		{`,"author_association":"OWN-ER"`, ""},
+		{`,"author_association":"` + strings.Repeat("A", 40) + `"`, ""},
+		{`,"author_association":null`, ""},
+		{`,"author_association":7`, ""},
+		{``, ""},
+	} {
+		got, err := ParseIssueComments([]byte(page(c.in)))
+		if err != nil || got[0].Association != c.want {
+			t.Errorf("%s: association %q (want %q), %v", c.in, got[0].Association, c.want, err)
 		}
 	}
 }
