@@ -18,30 +18,30 @@ func TestGuardLintShapes(t *testing.T) {
 	modes := []struct {
 		name string
 		mode guardMode
-	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}, {"lint", guardLint}}
+	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}, {"lint", guardLint}, {"land", guardLand}}
 	cases := []struct {
 		path string
-		want [6]bool
+		want [7]bool
 	}{
-		{lintComments(7, 1), [6]bool{false, false, false, false, false, true}},
-		{lintComments(7, 10), [6]bool{false, false, false, false, false, true}},
-		{"repos/o/r/pulls/7/commits?per_page=100&page=3", [6]bool{false, true, true, true, false, true}},
-		{"repos/o/r/pulls/7", [6]bool{true, true, true, true, true, true}},
-		{"repos/o/r/pulls/7/commits?per_page=100&page=4", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/pulls?state=open&per_page=25&page=1", [6]bool{false, true, true, true, false, false}},
-		{"rate_limit", [6]bool{false, true, true, true, false, false}},
-		{"repos/o/r/branches/main", [6]bool{false, true, true, true, false, false}},
-		{lintComments(7, 1) + "&x=1", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7/comments?per_page=30&page=0", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7/comments?per_page=30&page=11", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7/comments?per_page=100&page=1", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/07/comments?per_page=30&page=1", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7/comments?page=1&per_page=30", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7/comments", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/pulls/7/comments?per_page=30&page=1", [6]bool{false, false, false, false, false, false}},
-		{"repos/o/r/issues/7%2F8/comments?per_page=30&page=1", [6]bool{false, false, false, false, false, false}},
-		{"user", [6]bool{false, false, false, true, true, false}},
+		{lintComments(7, 1), [7]bool{false, false, false, false, false, true, false}},
+		{lintComments(7, 10), [7]bool{false, false, false, false, false, true, false}},
+		{"repos/o/r/pulls/7/commits?per_page=100&page=3", [7]bool{false, true, true, true, false, true, false}},
+		{"repos/o/r/pulls/7", [7]bool{true, true, true, true, true, true, true}},
+		{"repos/o/r/pulls/7/commits?per_page=100&page=4", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/pulls?state=open&per_page=25&page=1", [7]bool{false, true, true, true, false, false, false}},
+		{"rate_limit", [7]bool{false, true, true, true, false, false, false}},
+		{"repos/o/r/branches/main", [7]bool{false, true, true, true, false, false, false}},
+		{lintComments(7, 1) + "&x=1", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7/comments?per_page=30&page=0", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7/comments?per_page=30&page=11", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7/comments?per_page=100&page=1", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/07/comments?per_page=30&page=1", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7/comments?page=1&per_page=30", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7/comments", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/pulls/7/comments?per_page=30&page=1", [7]bool{false, false, false, false, false, false, false}},
+		{"repos/o/r/issues/7%2F8/comments?per_page=30&page=1", [7]bool{false, false, false, false, false, false, false}},
+		{"user", [7]bool{false, false, false, true, true, false, true}},
 	}
 	for _, c := range cases {
 		for i, m := range modes {
