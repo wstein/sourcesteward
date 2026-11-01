@@ -5,6 +5,7 @@ package conflicts
 import (
 	"fmt"
 	"strings"
+	"unicode"
 )
 
 // Step restacks one pull request. Rebase and Verify may run at once; Push rewrites the remote head
@@ -91,14 +92,16 @@ func finishStep(s Step, remote string, n Node, onto, old string, parentIn bool) 
 	return s
 }
 
-// code quotes untrusted text as inline code: control characters and backticks are replaced.
+// code quotes untrusted text as inline code: backticks and every control, format, line and paragraph
+// separator character (C0, DEL, C1, bidi controls, U+2028, U+2029) are replaced, because the brief is
+// printed to the terminal as it is.
 func code(s string) string {
 	var b strings.Builder
 	for _, r := range s {
 		switch {
 		case r == '`':
 			b.WriteRune('\'')
-		case r < 0x20 || r == 0x7f:
+		case unicode.In(r, unicode.Cc, unicode.Cf, unicode.Zl, unicode.Zp):
 			b.WriteRune('?')
 		default:
 			b.WriteRune(r)
