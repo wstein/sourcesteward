@@ -45,7 +45,7 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > **Ruleset and check names.** The ruleset `main` requires `check` and `Git/jj conformance (current) / suite`, which `ci.yml` reports green
 > with skipped shards on every pull request. The label run therefore reports under its own names, `Heavy lane (minimum) / suite` and
 > `Heavy lane (current) / suite` (job name in `ci-full.yml`), never under a required name. The ruleset does NOT block a red label run.
-> Rule: Ready and merge require a green label run on the exact head of the top of the stack; the agent sets Ready only then, and
+> Guideline (owner line 2026-11-01: pragmatic, tightened once the gate is stable): Ready and merge should have a green label run on the exact head of the top of the stack; the agent sets Ready after it, and
 > the owner checks it before the merge. No ruleset or branch-protection setting is changed by this amendment.
 > **Superseded by this amendment:** D5 below (now: the independent reviewer sets the label on CLEAR; `ci-full-reset.yml` removes it),
 > the sentence "The foreman applies `ci-full` ..." and "Later pushes to a labeled PR re-run T1 and T2 through `ci.yml`" in "Who

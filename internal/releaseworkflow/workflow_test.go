@@ -76,6 +76,39 @@ func TestWorkflowTriggersAreTagAndDispatchOnly(t *testing.T) {
 
 var pinned = regexp.MustCompile(`^[a-z0-9-]+/[A-Za-z0-9._-]+@[0-9a-f]{40} # v[0-9][0-9.]*$`)
 
+// noActionWorkflows lists the workflows that legitimately contain no uses: line. The zero-count rule
+// below exists so that a parser that silently finds nothing cannot make the pinning test pass; a
+// workflow here runs only `gh api` with the job token (Spec 039 amendment 2026-11-01). Any `uses:`
+// that such a workflow gains later is still checked: the allowance covers a count of zero, never an
+// unpinned line.
+var noActionWorkflows = map[string]string{
+	"ci-full-reset.yml": "removes the ci-full label with gh api only, no checkout and no action",
+}
+
+// actionProblems returns one message per violation of the pinning rule in one workflow file.
+func actionProblems(f, raw string, noAction map[string]string) []string {
+	var problems []string
+	n := 0
+	for _, line := range strings.Split(raw, "\n") {
+		s := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
+		if !strings.HasPrefix(s, "uses:") {
+			continue
+		}
+		n++
+		ref := strings.TrimSpace(strings.TrimPrefix(s, "uses:"))
+		if strings.HasPrefix(ref, "./") {
+			continue // a reusable workflow of this repository
+		}
+		if !pinned.MatchString(ref) {
+			problems = append(problems, fmt.Sprintf("%s: action not pinned to a full SHA with a version comment: %s", f, ref))
+		}
+	}
+	if _, ok := noAction[f]; n == 0 && !ok {
+		problems = append(problems, fmt.Sprintf("%s: no uses: lines found", f))
+	}
+	return problems
+}
+
 func TestEveryActionIsPinnedToACommit(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Join(repoRoot(t), ".github", "workflows"))
 	if err != nil {
@@ -83,25 +116,38 @@ func TestEveryActionIsPinnedToACommit(t *testing.T) {
 	}
 	for _, e := range entries {
 		f := e.Name()
-		raw := readRepo(t, ".github/workflows/"+f)
-		n := 0
-		for _, line := range strings.Split(raw, "\n") {
-			s := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "- "))
-			if !strings.HasPrefix(s, "uses:") {
-				continue
-			}
-			n++
-			ref := strings.TrimSpace(strings.TrimPrefix(s, "uses:"))
-			if strings.HasPrefix(ref, "./") {
-				continue // a reusable workflow of this repository
-			}
-			if !pinned.MatchString(ref) {
-				t.Errorf("%s: action not pinned to a full SHA with a version comment: %s", f, ref)
-			}
+		for _, problem := range actionProblems(f, readRepo(t, ".github/workflows/"+f), noActionWorkflows) {
+			t.Error(problem)
 		}
-		if n == 0 {
-			t.Errorf("%s: no uses: lines found", f)
+	}
+	for f := range noActionWorkflows {
+		if _, err := os.Stat(filepath.Join(repoRoot(t), ".github", "workflows", f)); err != nil {
+			t.Errorf("allowlisted workflow %s does not exist: %v", f, err)
 		}
+	}
+}
+
+func TestActionPinningAllowanceIsNarrow(t *testing.T) {
+	const sha = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1"
+	allow := map[string]string{"only.yml": "reason"}
+	cases := []struct {
+		name, file, raw string
+		want            int
+	}{
+		{"another workflow without uses stays red", "other.yml", "jobs:\n  a:\n    steps:\n      - run: x\n", 1},
+		{"the allowlisted workflow without uses passes", "only.yml", "jobs:\n  a:\n    steps:\n      - run: x\n", 0},
+		{"an unpinned uses in the allowlisted workflow is red", "only.yml", "      - uses: actions/checkout@v4\n", 1},
+		{"a pinned uses in the allowlisted workflow passes", "only.yml", "      - uses: " + sha + "\n", 0},
+		{"a pinned uses elsewhere passes", "other.yml", "      - uses: " + sha + "\n", 0},
+		{"an unpinned uses elsewhere is red", "other.yml", "      - uses: actions/checkout@v4\n", 1},
+	}
+	for _, c := range cases {
+		if got := actionProblems(c.file, c.raw, allow); len(got) != c.want {
+			t.Errorf("%s: %d problems %v, want %d", c.name, len(got), got, c.want)
+		}
+	}
+	if len(noActionWorkflows) != 1 {
+		t.Errorf("allowlist %v must name exactly ci-full-reset.yml", noActionWorkflows)
 	}
 }
 

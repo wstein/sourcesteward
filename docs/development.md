@@ -169,6 +169,11 @@ unexpanded matrix name and would stay pending. Require only checks that always r
 only for files that nothing reads; `scripts/test_ci_workflow.py` pins the classifier, the
 event rules and the `suite` truth table.
 
+Action pinning (`TestEveryActionIsPinnedToACommit` in `internal/releaseworkflow`): every `uses:` line of every workflow is pinned to a
+full commit SHA with a version comment, and a workflow without any `uses:` line fails, unless it is named in the test's
+`noActionWorkflows` allowlist. Only `ci-full-reset.yml` is listed (it runs `gh api` only); a `uses:` line it gains later is still
+checked, and any other workflow without actions stays red.
+
 Check names of the conformance jobs are prefixed by the calling job: `ci.yml` reports a lane as
 `Git/jj conformance (<lane>) / suite` (lane `minimum` or `current`; the `current` lane on every pull request, both on `main`),
 and the label run of `ci-full.yml` reports as `Heavy lane (<lane>) / suite`, a name `ci.yml` never uses. Classic branch
@@ -177,8 +182,8 @@ Never require `Git/jj conformance (minimum) / suite` or a `Heavy lane` check: a 
 report them, so they would stay pending forever.
 
 The ruleset does NOT block a red `ci-full` run: on a pull request the required `Git/jj conformance (current) / suite` is always
-green (skipped shards). The rule is therefore a process rule: Ready and merge require a green `Heavy lane (current) / suite` and
-`Heavy lane (minimum) / suite` of the `ci-full` run on the exact head of the top of the stack. The agent sets Ready only after
+green (skipped shards). The guideline is therefore a process one (owner line 2026-11-01: pragmatic, tightened once the gate is stable): Ready and merge should have a green `Heavy lane (current) / suite` and
+`Heavy lane (minimum) / suite` of the `ci-full` run on the exact head of the top of the stack. The agent sets Ready after
 that run is green; the owner checks it before the merge. The `minimum` lane also runs on pushes to `main` and in the scheduled
 race runs.
 The cache key also hashes `scripts/backend-releases.json`.
