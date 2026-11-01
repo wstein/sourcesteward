@@ -38,7 +38,7 @@
 
 - [What needs action](status.md): `stw status` online by default, the prioritised action list, sources and their cost, deadlines, notices, exit codes, icons and colour, `--offline` and the JSON contract.
 
-- [Open pull requests](pulls.md): `stw pulls` snapshot of every open pull request (bots included), groups and verdict, filters, detail budget, `--owner` discovery, exit codes and its read-only limits.
+- [Open pull requests](pulls.md): `stw pulls` snapshot of every open pull request (bots included), groups and verdict, review state and hints, filters, detail budget, `--owner` discovery, exit codes and its read-only limits.
 - [Pull request lint](lint.md): `stw lint pr` checks the commits, text and comments of a pull request against the machine-checkable working rules; rules, locations, exit codes.
 - [Open issues](issues.md): `stw issues` snapshot of every open issue (bots included), the priority rules, the authenticated user and its outcomes, filters, `--owner` discovery, exit codes and its read-only limits.
 

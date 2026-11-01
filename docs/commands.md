@@ -231,7 +231,7 @@ prints transitions as JSON Lines; see [watch](watch.md).
 
 `stw pulls` ([Spec 036](../specs/036-stw-pulls/spec.md)) prints a read-only, stateless snapshot of every open pull
 request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
-adds the repositories of another user or organisation. See [pulls](pulls.md).
+adds the repositories of another user or organisation. Each row also shows the review state read from the agents' review comments (a claim of the comment, not proof) and hints such as `clear-not-ready`, `no-final-review` and `ready-mergeable`; `--review`, `--hint` and `--no-review` select or skip them ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). See [pulls](pulls.md).
 
 ## Check a pull request
 

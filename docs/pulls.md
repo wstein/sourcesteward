@@ -52,6 +52,47 @@ and a line `N open pull requests in M repositories, K ready` closes the table; f
 `Bot`, or the login ends in `[bot]`). Untrusted text (titles, logins, reviewer names, states) has control characters escaped and is
 bounded to 120 characters; JSON strings are cut at 2048 bytes. No colour is used.
 
+## Review state and hints
+
+Agents post their review verdict as a pull request comment ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). `stw pulls` reads the
+comments and shows a **review state** per row (a `REVIEW` word after the mergeable state, `review` in the JSON) plus **hints**
+(`{hint, ...}`, `hints`). **A verdict is a claim, not proof**: every comment, the agents' too, is posted by the owner's GitHub account, so
+the state is what a comment says ("per comment"). `stw` checks only what the data allows and never calls a review "independent".
+
+The first line of a comment is read strictly:
+
+```
+Review: <CLEAR|FINDINGS> head=<40-hex> patch-id=<hex> pr=<n>
+Carried-over: from=<40-hex> to=<40-hex> patch-id=<hex> pr=<n>
+```
+
+| State | Meaning |
+| --- | --- |
+| `clear`, `findings` | the latest `Review:` comment for the current head (created at or after the committer date of the head commit) |
+| `clear-carried` | the latest decisive comment is a `Carried-over:` line whose chain of `from` to `to` heads, with equal `patch-id`, leads from a CLEAR to the current head |
+| `clear-stale` | no comment for the current head, but an older head has a CLEAR |
+| `unparsed` | a free-form verdict (`Verdict: CLEAR`, `Urteil: CLEAR`, ...) is newer than the decisive comment; it is never guessed |
+| `none` | no verdict applies |
+
+| Hint | Meaning |
+| --- | --- |
+| `clear-not-ready` | CLEAR (or carried) but the pull request is a Draft |
+| `no-final-review` | no strict comment for the current head (`none`, `clear-stale`, `unparsed`) |
+| `base-not-default` | the base is not the default branch |
+| `parent-merged-retarget` | the base branch was the head of a merged pull request (among the 100 most recently updated closed ones): retarget or restack |
+| `ready-mergeable` | CLEAR or carried, group `ready` (green head, GitHub `clean`, rebaseable) and the base is the default branch |
+
+```sh
+stw pulls --hint clear-not-ready                 # CLEAR, but still a Draft
+stw pulls --hint no-final-review                 # no final review comment for the head
+stw pulls --review findings --review unparsed    # review states, OR within a flag
+stw pulls --no-review                            # skip the comment reads
+```
+
+`--review STATE` and `--hint HINT` (each repeatable, OR within a flag, AND across both) keep the matching rows after all reads; a row
+whose comments were not read matches neither. They cannot be combined with `--no-review` (exit 2). The comments of a row cost one read
+(a long thread: up to six), the head commit one more only when a strict comment names the head; drafts are read too. Rows past `--limit` have `review` null.
+
 ## Filters and the detail budget
 
 `--no-bots` and `--bots-only` exclude each other (exit 2); `--author LOGIN` (repeatable, optional `[bot]` suffix)

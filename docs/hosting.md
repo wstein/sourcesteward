@@ -107,11 +107,17 @@ workflow runs, the tidy listings and the repository itself) are in every mode.
 | --- | --- | --- |
 | `one-shot` | `stw hosting`, `gh jj` | nothing |
 | `watch` | `stw watch` | the watch shapes (open pull request list, commits, branches, `rate_limit`) |
-| `pulls` | `stw pulls` | the watch shapes and the pull request owner search (`is:pr`) |
-| `status` | `stw status` online ([Spec 037](../specs/037-stw-status-overview/spec.md)) | the watch shapes (the open pull request list, commits, branches, `rate_limit`), the open issue list and `user` (Spec 038); no search. The default branch, release, tag, workflow run and repository reads it makes are one-shot shapes. The reader's per-request timeout is 15 s |
+| `pulls` | `stw pulls` | the watch shapes, the pull request owner search (`is:pr`) and the two review shapes ([Spec 046](../specs/046-stw-pr-review-state/spec.md)) |
+| `status` | `stw status` online ([Spec 037](../specs/037-stw-status-overview/spec.md)) | the watch shapes (the open pull request list, commits, branches, `rate_limit`), the open issue list and `user` (Spec 038); no search. The default branch, release, tag, workflow run and repository reads it makes are one-shot shapes. The reader's per-request timeout is 15 s. It also admits the two review shapes of Spec 046 |
 | `issues` | `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md), see [issues](issues.md)) | the open issue list `repos/OWNER/NAME/issues?state=open&per_page=100&sort=created&direction=asc&page=N` (N 1 to 10), `user` (no query) and the issue owner search (`is:issue`); no watch shapes and no pull request search |
 | `land` | `stw land --stack` ([Spec 043](../specs/043-stw-land/spec.md) FR-080) | the read shapes listed in the spec (open pull request pages, reviews, issue events, rules, protection, rulesets, `user`); no watch or search shape |
 | `lint` | `stw lint pr` ([Spec 050](../specs/050-stw-lint-pr/spec.md), see [lint](lint.md)) | `pulls/N/commits?per_page=100&page=N` (N 1 to 3) and `repos/OWNER/NAME/issues/N/comments?per_page=30&page=N` (N 1 to 10); no other watch shape, no search |
+
+The two review shapes (Spec 046, amendment of Spec 022 FR-005) are admitted by `pulls` and `status` only: the comments of one
+pull request, `repos/OWNER/NAME/issues/N/comments?per_page=50&page=P` (P 1 to 999; a long thread is read as the first page and the last
+five, `truncated`), and the 100 most recently updated closed pull requests, `repos/OWNER/NAME/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1`,
+read once for a repository that has a pull request whose base is not the default branch. Each is produced by one generator and matched
+exactly; `watch`, `issues` and the one-shot modes refuse them. The head commit date comes from the existing `commits/SHA` shape.
 
 The two owner searches refuse each other: `pulls` admits only the `is:pr` search and `issues` only the `is:issue`
 search. The issue owner search is read only through `IssueSearchPage` / `DiscoverIssueOwner(s)` and only to discover

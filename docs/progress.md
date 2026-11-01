@@ -1,5 +1,13 @@
 # Progress and handoff
 
+## Active work: review state of open pull requests (Spec 046, issue #348, source candidate)
+
+First pull request of a stack of three: the strict review comment grammar, the six review states and five hints
+(`internal/reviewstate`), the two review read shapes (guard modes `pulls` and `status`), `stw pulls --review/--hint/--no-review`, the
+review counts in the `stw status` pulls source, additive schema members (digests of pulls 1 and status 2 updated). A verdict is a claim of a
+comment from the owner's account, never proof. The owner list (`--mergeable`) and the stack view (`--stack`) follow in the next two pull
+requests. The feature stays `planned`: no independent review or acceptance record yet.
+
 ## Active work: workspace plan source and base review (issue #183, source candidate)
 
 `stw workspace plan` now names the source checkout, the base resolved to a full commit id and the caller directory, and
