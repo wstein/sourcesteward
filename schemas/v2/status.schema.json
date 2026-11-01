@@ -2188,6 +2188,92 @@
         "not_read": {
           "type": "integer",
           "minimum": 0
+        },
+        "review": {
+          "type": "object",
+          "required": [
+            "states",
+            "hints"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "states": {
+              "type": "object",
+              "required": [
+                "none",
+                "findings",
+                "clear",
+                "clear_carried",
+                "clear_stale",
+                "unparsed",
+                "not_read"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "none": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "findings": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "clear": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "clear_carried": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "clear_stale": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "unparsed": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "not_read": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            },
+            "hints": {
+              "type": "object",
+              "required": [
+                "clear_not_ready",
+                "no_final_review",
+                "base_not_default",
+                "parent_merged_retarget",
+                "ready_mergeable"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "clear_not_ready": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "no_final_review": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "base_not_default": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "parent_merged_retarget": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "ready_mergeable": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              }
+            }
+          }
         }
       },
       "additionalProperties": false

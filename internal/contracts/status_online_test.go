@@ -216,7 +216,19 @@ func TestOnlineStatusSchemaRejectsBrokenDocuments(t *testing.T) {
 		},
 		"pulls data with an extra key": func(m map[string]any) { jobj(sourceOf(m, 0, "pulls")["data"])["x"] = 1 },
 		"pulls data negative":          func(m map[string]any) { jobj(sourceOf(m, 0, "pulls")["data"])["open"] = -1 },
-		"repo data http page":          func(m map[string]any) { jobj(sourceOf(m, 0, "repo")["data"])["html_url"] = "http://github.com/o/r" },
+		"pulls review without hints":   func(m map[string]any) { delete(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"]), "hints") },
+		"pulls review extra key":       func(m map[string]any) { jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["x"] = 1 },
+		"pulls review state extra key": func(m map[string]any) {
+			jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["states"])["approved"] = 1
+		},
+		"pulls review state negative": func(m map[string]any) {
+			jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["states"])["clear"] = -1
+		},
+		"pulls review hint missing": func(m map[string]any) {
+			delete(jobj(jobj(jobj(sourceOf(m, 0, "pulls")["data"])["review"])["hints"]), "ready_mergeable")
+		},
+		"pulls review null":   func(m map[string]any) { jobj(sourceOf(m, 0, "pulls")["data"])["review"] = nil },
+		"repo data http page": func(m map[string]any) { jobj(sourceOf(m, 0, "repo")["data"])["html_url"] = "http://github.com/o/r" },
 		"101 drafts": func(m map[string]any) {
 			jobj(sourceOf(m, 0, "releases")["data"])["drafts"] = many(101, func(int) any {
 				return map[string]any{"name": nil, "tag": "v1", "created_at": nil, "assets": 0, "url": nil}

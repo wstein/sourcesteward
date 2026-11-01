@@ -425,7 +425,25 @@
               "blocked": 1,
               "red": 1,
               "bots": 0,
-              "not_read": 0
+              "not_read": 0,
+              "review": {
+                "states": {
+                  "none": 1,
+                  "findings": 1,
+                  "clear": 1,
+                  "clear_carried": 0,
+                  "clear_stale": 0,
+                  "unparsed": 0,
+                  "not_read": 0
+                },
+                "hints": {
+                  "clear_not_ready": 1,
+                  "no_final_review": 0,
+                  "base_not_default": 0,
+                  "parent_merged_retarget": 0,
+                  "ready_mergeable": 1
+                }
+              }
             }
           },
           "releases": {
