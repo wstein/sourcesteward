@@ -41,6 +41,9 @@ type Options struct {
 	// releases it. It is called at most once, only when some repository can be read, and never when
 	// Offline. An error that is hosting.ErrAuthentication means "no usable token".
 	Open func(ctx context.Context) (Client, func(), error)
+	// Reviews reads the review state of the open pull requests from their comments (Spec 046): one
+	// comment read per pull request. It is off by default, so a plain run adds no request.
+	Reviews bool
 }
 
 // RepoResult is what the remote sources read for one workspace repository. Remote carries the states of
@@ -106,7 +109,7 @@ func Collect(ctx context.Context, repos []Repository, o Options) Result {
 		origins[i] = r.Origin
 	}
 	targets := Select(origins)
-	c := &collector{repos: repos, targets: targets, slots: make([]slot, len(repos))}
+	c := &collector{repos: repos, targets: targets, slots: make([]slot, len(repos)), reviews: o.Reviews}
 	for i, t := range targets {
 		if t.Skip == "" {
 			c.selected = append(c.selected, i)
@@ -174,6 +177,7 @@ type collector struct {
 	selected   []int // indices of the repositories that can be read
 	slots      []slot
 	gate       *gate
+	reviews    bool
 	fallback   *overview.SourceState // the state of every source of the selected repositories when nothing was read
 	viewerRead overview.SourceState  // the outcome of the one `user` read
 }
@@ -239,7 +243,7 @@ func (c *collector) readPulls(ctx context.Context) {
 	for i, idx := range c.selected {
 		targets[i] = c.targets[idx]
 	}
-	got := ReadPulls(ctx, c.gate.pullsReader(), targets)
+	got := ReadPulls(ctx, c.gate.pullsReader(c.reviews), targets)
 	for _, idx := range c.selected {
 		c.slots[idx].pulls = got[c.targets[idx].Name]
 	}

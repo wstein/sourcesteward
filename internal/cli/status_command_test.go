@@ -170,7 +170,7 @@ func TestStatusOfflineIconsChangeOnlyTheMarkers(t *testing.T) {
 
 func TestStatusUsageErrors(t *testing.T) {
 	for _, args := range [][]string{
-		{"--offline", "--timeout", "30s"}, {"--offline", "--timeout=90s"}, {"--timeout", "0s"}, {"--timeout", "999ms"}, {"--timeout", "11m"}, {"--timeout", "-1m"},
+		{"--offline", "--timeout", "30s"}, {"--offline", "--review"}, {"--review=maybe"}, {"--offline", "--timeout=90s"}, {"--timeout", "0s"}, {"--timeout", "999ms"}, {"--timeout", "11m"}, {"--timeout", "-1m"},
 		{"--timeout", "soon"}, {"--icons", "emoji"}, {"--icons", "Unicode"}, {"--offline", "--icons", "emoji"}, {"a", "b"},
 	} {
 		forge := &statusForge{}
