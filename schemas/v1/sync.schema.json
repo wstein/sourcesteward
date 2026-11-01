@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v1/sync.schema.json",
   "title": "SourceSteward sync (schema 1)",
-  "description": "Result of stw sync: one entry per repository of the workspace (the top-level superproject and every initialized submodule, nested ones too, main worktrees only), each synced on the branch it sits on; note is set when the command ran in a linked worktree, which it did not touch. mode plan fetches the remote-tracking refs and reports what a run would do (fast-forward, rebase, merge); mode restore moves the branches a run changed back to their journaled old tips (stw sync restore); mode sync fast-forwards or rebases the current branch like git pull, or merges it only with the explicit --merge (options.merge), and reports what happened. With --submodules a detached submodule is reported as updated (old_oid, new_oid), up-to-date, skipped-dirty, diverged, unreachable (not initialised or the recorded commit is missing) or failed. Exit statuses: 0 unless the run is refused (error is set) or a repository failed, conflicted or has an autostash conflict, or a submodule is unreachable, or a restore left a branch changed-since or journal-incomplete, 1 then, 2 usage error with no JSON. stash_oid names the stash entry git kept after an autostash that could not be reapplied (null when none or not identifiable without doubt). Keys are never omitted; absent values are null. Added properties are compatible extensions.",
+  "description": "Result of stw sync: one entry per repository of the workspace (the top-level superproject and every initialized submodule, nested ones too, main worktrees only), each synced on the branch it sits on; note is set when the command ran in a linked worktree, which it did not touch. mode plan fetches the remote-tracking refs and reports what a run would do (fast-forward, rebase, merge); mode restore moves the branches a run changed back to their journaled old tips (stw sync restore); mode sync fast-forwards or rebases the current branch like git pull, or merges it only with the explicit --merge (options.merge), and reports what happened. With --submodules a detached submodule is reported as updated (old_oid, new_oid), up-to-date, skipped-dirty, diverged, unreachable (not initialised or the recorded commit is missing) or failed. Exit statuses: 0 unless the run is refused (error is set) or a repository failed, conflicted or has an autostash conflict, or a submodule is unreachable, or a restore left a branch changed-since or journal-incomplete, 1 then, 2 usage error with no JSON. stash_oid names the stash entry git kept after an autostash that could not be reapplied (null when none or not identifiable without doubt). rules is the agent-rules checkout (null when none was found or asked for, and in restore mode): state, the outcome of --rules (none, up-to-date, would-fast-forward, fast-forwarded, refused, failed), and with --rules the new commits and changed files; a refused update is exit 0 like a skipped repository, only outcome failed is exit 1. Keys are never omitted; absent values are null. Added properties are compatible extensions.",
   "type": "object",
   "required": [
     "schema_version",
@@ -72,6 +72,9 @@
           "type": "boolean"
         },
         "submodules": {
+          "type": "boolean"
+        },
+        "rules": {
           "type": "boolean"
         }
       }
@@ -161,6 +164,16 @@
         "null"
       ],
       "maxLength": 400
+    },
+    "rules": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/rules"
+        }
+      ]
     }
   },
   "allOf": [
@@ -536,6 +549,172 @@
           }
         }
       ]
+    },
+    "rules": {
+      "type": "object",
+      "required": [
+        "state",
+        "source",
+        "path",
+        "branch",
+        "default_branch",
+        "ahead",
+        "behind",
+        "as_of_last_fetch",
+        "install",
+        "outcome",
+        "old_oid",
+        "new_oid",
+        "reason",
+        "commits",
+        "files",
+        "notes"
+      ],
+      "properties": {
+        "state": {
+          "enum": [
+            "current",
+            "behind",
+            "ahead",
+            "diverged",
+            "dirty",
+            "not-on-default-branch",
+            "not-found"
+          ]
+        },
+        "source": {
+          "enum": [
+            "workspace",
+            "flag",
+            "env",
+            "none"
+          ]
+        },
+        "path": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "default_branch": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "ahead": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "behind": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "as_of_last_fetch": {
+          "type": "boolean"
+        },
+        "install": {
+          "enum": [
+            "symlink",
+            "copy",
+            "absent"
+          ]
+        },
+        "outcome": {
+          "enum": [
+            "none",
+            "up-to-date",
+            "would-fast-forward",
+            "fast-forwarded",
+            "refused",
+            "failed"
+          ]
+        },
+        "old_oid": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/oid"
+            }
+          ]
+        },
+        "new_oid": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/oid"
+            }
+          ]
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "commits": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "required": [
+              "oid",
+              "subject",
+              "author",
+              "committer"
+            ],
+            "properties": {
+              "oid": {
+                "$ref": "#/$defs/oid"
+              },
+              "subject": {
+                "type": "string"
+              },
+              "author": {
+                "type": "string"
+              },
+              "committer": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "files": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "type": "object",
+            "required": [
+              "path",
+              "sensitive"
+            ],
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "sensitive": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }
