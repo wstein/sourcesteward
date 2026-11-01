@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/lint-pr.schema.json",
+  "title": "SourceSteward pull request lint result (schema 1)",
+  "description": "Result of stw lint pr --json: the findings of the machine-checkable working rules for the commits, the text and the comments of one pull request (Spec 050). Read-only. Exit statuses: 0 no finding of severity error (warnings do not fail), 3 at least one finding of severity error (the document is printed), 1 a failed read (no document is printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. New rule IDs and added properties are compatible extensions: a consumer must accept rule IDs it does not know.",
+  "type": "object",
+  "required": ["schema_version", "command", "time", "host", "repo", "pull_request", "head", "options", "rules", "findings", "summary", "truncated"],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {"const": 1},
+    "command": {"const": "lint pr"},
+    "time": {"type": "string", "format": "date-time"},
+    "host": {"type": "string", "minLength": 1},
+    "repo": {"type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"},
+    "pull_request": {"type": "integer", "minimum": 1},
+    "head": {"type": ["string", "null"], "pattern": "^[0-9a-f]{40}$"},
+    "options": {
+      "type": "object",
+      "required": ["owner_identities", "owner_source"],
+      "additionalProperties": false,
+      "properties": {
+        "owner_identities": {"type": "array", "items": {"type": "string"}},
+        "owner_source": {"enum": ["flag", "git-config"]}
+      }
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "severity", "summary", "source"],
+        "additionalProperties": false,
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["error", "warning"]},
+          "summary": {"type": "string"},
+          "source": {"type": "string"}
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rule", "severity", "location", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {"type": "string", "minLength": 1},
+          "severity": {"enum": ["error", "warning"]},
+          "location": {
+            "type": "object",
+            "required": ["kind", "id", "line"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {"enum": ["pr-title", "pr-body", "comment", "commit"]},
+              "id": {"type": ["string", "null"]},
+              "line": {"type": ["integer", "null"], "minimum": 1}
+            }
+          },
+          "message": {"type": "string"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["commits", "comments", "errors", "warnings", "passed"],
+      "additionalProperties": false,
+      "properties": {
+        "commits": {"type": "integer", "minimum": 0},
+        "comments": {"type": "integer", "minimum": 0},
+        "errors": {"type": "integer", "minimum": 0},
+        "warnings": {"type": "integer", "minimum": 0},
+        "passed": {"type": "boolean"}
+      }
+    },
+    "truncated": {
+      "type": "object",
+      "required": ["commits", "comments"],
+      "additionalProperties": false,
+      "properties": {
+        "commits": {"type": "boolean"},
+        "comments": {"type": "boolean"}
+      }
+    }
+  }
+}
