@@ -285,7 +285,7 @@ was applied.
 `ci-full` to the top PR (Draft, with its named blocker "T2 pending") as soon as the head is frozen for the independent review, so T2
 runs while the review runs. The foreman removes the label when the PR stops being the top (D5). `ci.yml` reacts to `opened`,
 `synchronize`, `reopened` and `ready_for_review` only; the `labeled` event triggers `ci-full.yml` only (as today), so labelling never
-re-runs T1. Later pushes to a labelled PR re-run T1 and T2 through `ci.yml`. [Superseded 2026-11-01: a push removes the label.]
+re-runs T1. Later pushes to a labeled PR re-run T1 and T2 through `ci.yml`. [Superseded 2026-11-01: a push removes the label.]
 
 **Evidence for a non-top PR (the invariant, F1).** A PR with an open same-repo child is Ready **only when** a green T2 exists on a head
 that **contains its head**. The `tier` job finds the descendant tips (following open same-repo children to the PRs without a child),
