@@ -17,6 +17,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/wstein/sourcesteward/internal/conflicts"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/watch"
 	"github.com/wstein/sourcesteward/internal/watchcmd"
@@ -49,6 +50,12 @@ type Options struct {
 	Review       bool
 	ReviewStates []string
 	Hints        []string
+
+	// Conflicts probes the rows against their bases (Spec 047); nil skips the probe. Remote names the
+	// git remote of the restack commands. RestackPlan builds the plans and needs Conflicts.
+	Conflicts   ConflictProber
+	Remote      string
+	RestackPlan bool
 }
 
 // Row is one open pull request with its verdict. Pointer fields are null in the JSON
@@ -65,9 +72,10 @@ type Row struct {
 	Mergeable                                     *bool
 	MergeableState                                *string
 	Rebaseable                                    *bool
-	Review                                        *ReviewInfo // nil when the comments were not read (Spec 046)
-	Hints                                         []string    // empty without Review; see internal/reviewstate
-	Group, Reason                                 string      // Reason is empty unless Group is blocked
+	Review                                        *ReviewInfo        // nil when the comments were not read (Spec 046)
+	Hints                                         []string           // empty without Review; see internal/reviewstate
+	BaseConflict                                  *conflicts.Finding // nil when not probed (Spec 047)
+	Group, Reason                                 string             // Reason is empty unless Group is blocked
 	Ready                                         bool
 	Detail                                        bool
 	Deadline                                      bool // not read because the context expired (not a failure)
@@ -101,6 +109,8 @@ type Summary struct {
 	// rows without a review when reviews were requested.
 	Review ReviewCounts
 	Hints  HintCounts
+	// BaseConflicts counts the rows whose probe merge with the base conflicts (Spec 047).
+	BaseConflicts int
 }
 
 // Result is the snapshot. Rows are newest first (created_at, then repository, then number;
@@ -118,6 +128,10 @@ type Result struct {
 	// ReviewOn is true when reviews were requested (Options.Review); ReviewRead when, in addition,
 	// the reader can read comments (ReviewSource), so that rows may carry a review.
 	ReviewOn, ReviewRead bool
+	// ConflictsOn is true when the base conflicts were probed; Conflicts holds the stacks and plans
+	// per repository (Spec 047).
+	ConflictsOn bool
+	Conflicts   []RepoConflicts
 }
 
 // Run reads the snapshot. An error is returned for unusable options (nil Result) or an expired
@@ -147,7 +161,10 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if err := validateReview(o, supported); err != nil {
 		return nil, err
 	}
-	res := &Result{Time: now().UTC(), Limit: o.Limit, ReviewOn: o.Review, ReviewRead: o.Review && supported}
+	if o.RestackPlan && o.Conflicts == nil {
+		return nil, fmt.Errorf("a restack plan needs the conflict probe")
+	}
+	res := &Result{Time: now().UTC(), Limit: o.Limit, ReviewOn: o.Review, ReviewRead: o.Review && supported, ConflictsOn: o.Conflicts != nil}
 	c := &cycle{r: r, o: o, now: res.Time, res: res}
 	c.run(ctx)
 	return res, ctx.Err()
@@ -260,6 +277,11 @@ func (c *cycle) run(ctx context.Context) {
 		it.row.PastBudget = it.eligible && !it.budget
 		it.row.Deadline = it.budget && !it.row.Detail && ctx.Err() != nil && statusOf(status, index, it.repo).Error == ""
 		c.finish(it)
+	}
+	if c.o.Conflicts != nil {
+		c.applyConflicts(ctx, all)
+	}
+	for _, it := range all {
 		if c.o.Review {
 			it.row.Hints = c.hints(it)
 		}
@@ -547,6 +569,9 @@ func summarize(rows []Row, repos []RepoStatus, review bool) Summary {
 		}
 		if r.PastBudget && r.Reason == ReasonNotRead {
 			s.NotRead++
+		}
+		if r.BaseConflict != nil && r.BaseConflict.State == conflicts.StateConflicts {
+			s.BaseConflicts++
 		}
 	}
 	if review {
