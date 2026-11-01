@@ -31,5 +31,11 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ci-full"
+          # A label that is already gone (404) is the wanted state; any other error fails the job.
+          if ! out="$(gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ci-full" 2>&1)"; then
+            case "$out" in
+              *"HTTP 404"*) echo "The ci-full label of #$PR_NUMBER was already removed" >> "$GITHUB_STEP_SUMMARY"; exit 0 ;;
+              *) echo "$out" >&2; exit 1 ;;
+            esac
+          fi
           echo "Removed the ci-full label from #$PR_NUMBER: the new head needs a new review and label" >> "$GITHUB_STEP_SUMMARY"

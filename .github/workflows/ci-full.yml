@@ -4,7 +4,7 @@ name: CI full
 # (owner decision 2026-11-01, Spec 039): the independent reviewer sets the label on a CLEAR verdict,
 # on the exact head of the top of the stack. This is the only way a pull request runs the shards;
 # ci.yml never reads the label. A push removes the label again (ci-full-reset.yml), so a new head
-# needs a new CLEAR and a new label. Labelling never re-runs the check job of ci.yml.
+# needs a new CLEAR and a new label. Labeling never re-runs the check job of ci.yml.
 on:
   pull_request:
     types: [labeled]
@@ -57,8 +57,10 @@ jobs:
             echo "$decision: the label is on the tip of a stack or on an unstacked pull request" >> "$GITHUB_STEP_SUMMARY"
           fi
 
+  # Own check name: the ruleset requires `Git/jj conformance (current) / suite`, which ci.yml reports (green with
+  # skipped shards on a pull request). This run reports as `Heavy lane (<lane>) / suite`, never under that name.
   conformance:
-    name: Git/jj conformance (${{ matrix.lane }})
+    name: Heavy lane (${{ matrix.lane }})
     if: github.event.label.name == 'ci-full'
     strategy:
       fail-fast: false
