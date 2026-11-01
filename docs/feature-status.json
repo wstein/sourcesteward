@@ -266,6 +266,12 @@
       "evidence": null
     },
     {
+      "id": "046-stw-pr-review-state",
+      "status": "planned",
+      "spec": "../specs/046-stw-pr-review-state/spec.md",
+      "evidence": null
+    },
+    {
       "id": "050-stw-lint-pr",
       "status": "implemented",
       "spec": "../specs/050-stw-lint-pr/spec.md",
