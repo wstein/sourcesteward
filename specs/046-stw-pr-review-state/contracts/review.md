@@ -17,6 +17,13 @@ Keys are never omitted; absent values are `null`.
 - `summary.review`: `{none, findings, clear, clear_carried, clear_stale, unparsed, not_read}` (not_read counts rows with `review` null)
   and `summary.hints`: `{clear_not_ready, no_final_review, base_not_default, parent_merged_retarget, truncated_review_unknown, foreign_review_ignored, ready_mergeable}`.
 
+## Owner list (`--mergeable`, PR 2)
+
+`options.mergeable` (bool) and the top-level member `owner_queue`: `null` without `--mergeable`, else an array of entries
+`{position, repo, number, title, url, head, review, reason, then}` in merge order: `position` from 1, `head` the sha, `review` `clear` or
+`clear-carried`, `reason` the fact text of the spec, `then` the numbers of the open descendants. `summary.waiting_for_parent` counts the
+non-draft rows with `base-not-default` (always present, 0 without the view).
+
 ## `stw status` (schema 2)
 
 `pullsData` gains the optional member `review` with the same two count objects: `{states: {...}, hints: {...}}`, present exactly when the
