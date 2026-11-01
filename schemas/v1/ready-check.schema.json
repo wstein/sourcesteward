@@ -1,0 +1,310 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/ready-check.schema.json",
+  "title": "SourceSteward Ready preconditions of one pull request (schema 1)",
+  "description": "Result of stw ready-check --json (Spec 048): the read-only preconditions for marking one pull request Ready, each with pass, fail or unknown and its evidence. ready is true only when all seven conditions pass. The command never marks anything Ready and writes nothing. Exit statuses: 0 ready, 1 a condition failed or is unknown or a read failed (the document is still printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. Added properties are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "time",
+    "host",
+    "repo",
+    "number",
+    "head",
+    "draft",
+    "ready",
+    "conditions",
+    "errors"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "command": {
+      "const": "ready-check"
+    },
+    "time": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "host": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 253
+    },
+    "repo": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$",
+      "maxLength": 140
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "head": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "draft": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "ready": {
+      "type": "boolean"
+    },
+    "conditions": {
+      "type": "array",
+      "minItems": 7,
+      "maxItems": 7,
+      "prefixItems": [
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "open"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "review"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "checks"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "base"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "blocker"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "conflict"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "id",
+            "status",
+            "evidence"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "const": "rebaseable"
+            },
+            "status": {
+              "enum": [
+                "pass",
+                "fail",
+                "unknown"
+              ]
+            },
+            "evidence": {
+              "type": "string",
+              "maxLength": 400
+            }
+          }
+        }
+      ],
+      "items": false
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "code",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "enum": [
+              "pull",
+              "repo",
+              "checks",
+              "review"
+            ]
+          },
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ready": {
+            "const": true
+          }
+        },
+        "required": [
+          "ready"
+        ]
+      },
+      "then": {
+        "properties": {
+          "conditions": {
+            "items": {
+              "properties": {
+                "status": {
+                  "const": "pass"
+                }
+              }
+            }
+          },
+          "errors": {
+            "maxItems": 0
+          },
+          "head": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}
