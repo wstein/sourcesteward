@@ -161,3 +161,23 @@ func TestExecuteStackHumanSeparatesTrees(t *testing.T) {
 		t.Fatalf("trees are separated by an empty line:\n%s", out)
 	}
 }
+
+func TestExecuteStackShowsNoStrangersCommentAsAReview(t *testing.T) {
+	src := stackSource()
+	src.fakeSource.comments["o/a#1"][0].Association = "NONE" // the CLEAR of the root is a stranger's
+	f := baseFlags()
+	f.Repos, f.JSON, f.Stack = []string{"o/a"}, true, true
+	out, _, err := execReview(t, src, f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	root := decode(t, out)["stack"].(map[string]any)["trees"].([]any)[0].(map[string]any)
+	if root["number"] != 1.0 || root["review"] != "none" || fmt.Sprint(root["hints"]) != "[no-final-review foreign-review-ignored]" {
+		t.Fatalf("a stranger's CLEAR must show as none, with the ignored hint: %v", root)
+	}
+	f.JSON, f.Human = false, true
+	out, _, err = execReview(t, src, f)
+	if err != nil || !strings.Contains(out, "o/a#1") || strings.Contains(strings.SplitN(out, "o/a#2", 2)[0], "clear") {
+		t.Fatalf("%v\n%s", err, out)
+	}
+}
