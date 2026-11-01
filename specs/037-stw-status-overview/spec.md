@@ -4,6 +4,8 @@
 [plan.md](plan.md) are the whole design; no implementation yet). All former open questions are decided (section "Decisions recorded"). It **amends** [Spec 033](../033-stw-status/spec.md): the default of
 `stw status` becomes online and its output action-oriented; the old behaviour stays as `--offline`.
 
+> **Amended by [Spec 046](../046-stw-pr-review-state/spec.md) (2026-11-01):** the `pulls` source also reads the review state of each pull request and carries counts per state and hint (additive; no new action category).
+
 > **Status note (2026-10-26):** the online `stw status` is merged and visible (PRs 152, 153, 155, 156, 157, 165); there is no independent review or acceptance record yet, so the feature is `implemented`, not `verified`.
 
 `stw` is a higher-level tool; Git is its persistence layer. Nobody works offline any more and `git status` alone takes seconds, so

@@ -3,6 +3,8 @@
 **Created**: 2026-10-22 | **Status**: proposed (spec-light: this page, [contracts/pulls.md](contracts/pulls.md) and [plan.md](plan.md)
 are the whole design; no implementation yet).
 
+> **Amended by [Spec 046](../046-stw-pr-review-state/spec.md) (2026-11-01):** review state and hints per row, `--no-review`, `--review`, `--hint` and two more read shapes. The verdict table below is unchanged.
+
 > **Status note (2026-10-26):** `stw pulls` is merged and visible (PRs 143, 144, 145, 146, 149); there is no independent review or acceptance record yet, so the feature is `implemented`, not `verified`.
 
 GitHub's pull request inbox lists only PRs where the owner is requested reviewer or assignee. Bot PRs (dependabot, the
