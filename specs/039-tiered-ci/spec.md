@@ -42,6 +42,15 @@ on 2026-10-26, and the `ci-full` label) and keeps the shard design of `scripts/c
 > now as the reviewer's duty when labeling. `scripts/ci_stack.py` stays as a safeguard: when the label is applied to a pull request whose
 > head branch is the base branch of another open, non-Draft pull request, `ci-full.yml` reports it as a warning annotation and in the step
 > summary and still runs the shards (an explicit label is more reliable than a guess, and a missing run costs more than a redundant one).
+> **Ruleset and check names.** The ruleset `main` requires `check` and `Git/jj conformance (current) / suite`, which `ci.yml` reports green
+> with skipped shards on every pull request. The label run therefore reports under its own names, `Heavy lane (minimum) / suite` and
+> `Heavy lane (current) / suite` (job name in `ci-full.yml`), never under a required name. The ruleset does NOT block a red label run.
+> Rule: Ready and merge require a green label run on the exact head of the top of the stack; the agent sets Ready only then, and
+> the owner checks it before the merge. No ruleset or branch-protection setting is changed by this amendment.
+> **Superseded by this amendment:** D5 below (now: the independent reviewer sets the label on CLEAR; `ci-full-reset.yml` removes it),
+> the sentence "The foreman applies `ci-full` ..." and "Later pushes to a labeled PR re-run T1 and T2 through `ci.yml`" in "Who
+> triggers it", risk R3's label handling, and the interim `stack_tip` implementation paragraph and rows 5, 9 and 11 of
+> [contracts/tiers.md](contracts/tiers.md).
 > The `changes` job of `ci.yml` no longer looks up pull requests and loses `pull-requests: read`. Cost: a pull request without the label
 > costs about 10 runner minutes (2 jobs); a label run costs both lanes (the `current` lane alone is about 68 runner minutes) once per reviewed head.
 
@@ -272,11 +281,11 @@ before the default-branch check, so the bottom PR of a stack does not run T2 on 
 `stack-tip` or `deferred-to-tip` row (the old reason `ready` is removed). That is how T2 starts as the safety net (D4) when no label
 was applied.
 
-**Who triggers it.** "Ready means mergeable", so T2 must be **green before the flip to Ready**, not started by it. The foreman applies
+**Who triggers it.** "Ready means mergeable", so T2 must be **green before the flip to Ready**, not started by it. [Superseded 2026-11-01, see the amendment and D5: the reviewer sets the label on CLEAR.] The foreman applies
 `ci-full` to the top PR (Draft, with its named blocker "T2 pending") as soon as the head is frozen for the independent review, so T2
 runs while the review runs. The foreman removes the label when the PR stops being the top (D5). `ci.yml` reacts to `opened`,
 `synchronize`, `reopened` and `ready_for_review` only; the `labeled` event triggers `ci-full.yml` only (as today), so labelling never
-re-runs T1. Later pushes to a labelled PR re-run T1 and T2 through `ci.yml`.
+re-runs T1. Later pushes to a labelled PR re-run T1 and T2 through `ci.yml`. [Superseded 2026-11-01: a push removes the label.]
 
 **Evidence for a non-top PR (the invariant, F1).** A PR with an open same-repo child is Ready **only when** a green T2 exists on a head
 that **contains its head**. The `tier` job finds the descendant tips (following open same-repo children to the PRs without a child),
@@ -429,7 +438,7 @@ All former open questions are decided. A Draft carrying `ci-full` is the only Dr
 | D2 (Q2) | An agent may re-run a failed T2 job **once** per head when the failure is infrastructure (runner lost, network, apt or install step, cancelled by the platform), never for a test failure, and reports the re-run in the PR. | Infrastructure noise must not cost a rebase cycle; a test failure is evidence. |
 | D3 (Q3) | The T1 target stays 5 minutes as a goal. If WP-1 measures more, the target becomes the measured p90 plus 20% and this specification is amended. | No guessing before the affected-test time is measured. |
 | D4 (Q4) | A non-Draft PR reaches the `unstacked`, `stack-tip` or `deferred-to-tip` row (so `ready_for_review` starts T2 where required) when no `ci-full` label is present and no same-head evidence exists; Drafts never run T2 without the label. | A Ready PR can never be untested. |
-| D5 (Q5) | The foreman agent may add `ci-full` to its own top-of-stack PR (PR metadata, not a setting) and removes it when the PR stops being the top. | The label is the deterministic trigger; a stale label would re-run T2 on pushes that no longer need it. |
+| D5 (Q5) | Superseded 2026-11-01: the independent reviewer sets `ci-full` on a CLEAR verdict, on the exact head of the top of the stack; `ci-full-reset.yml` removes it on every push. | The label is the deterministic trigger and evidence for one head; a stale label must never carry over to a new head. |
 | D6 (Q6) | The tier decision runs the base copy of the scripts from a base-ref-only checkout (F9); the `affected` list of T1 is computed from the PR copy inside `check`, and `affected_reason=all` for `.github/` and `scripts/` comes from the trusted job (F15). | Stops a PR from classifying itself through its scripts. It is not a trust boundary: the workflow YAML comes from the PR, so the boundary is CODEOWNERS review of `.github/` plus T3 on `main` (F14). |
 | D7 (Q7) | The nightly T4 **always** runs on schedule (also on quiet days): `go test -race ./...` of all packages, `current` lane. The weekly T4 runs the `minimum` lane with `-race`. | Guards races and drift in action versions, runner images and toolchains, which a skip on quiet days would hide. |
 | D8 (Q8) | No change to the sandbox install (median 104 s, 8 to 260 s) before it is measured; see the WP-1 task below with its decision gate. An install-once artifact, if chosen, carries a sha256 recorded as a job output of the producing job and verified by every consumer job. | The cost is measured (535 steps, 869 runner min in the sample); the saving of any remedy is modelled from that distribution. |

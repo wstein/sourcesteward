@@ -31,6 +31,8 @@ Actions app, in which **all six `current` shard jobs concluded `success`** (exec
 | `affected_reason` | `docs-only`, `packages`, `all`; `all` for any changed path under `.github/` or `scripts/`, which `check` honours |
 | `tier` | `T1`, `T2`, `T3` |
 
+> **Superseded 2026-11-01** (Spec 039 amendment, label-driven heavy gate): `ci.yml` no longer computes `stack_tip` or reads the label; `conformance.yml` takes `heavy` (false for every pull request of `ci.yml`); the shards of a pull request run only from the `ci-full` label event (`ci-full.yml`, check names `Heavy lane (<lane>) / suite`). The interim paragraph and rows 5, 9 and 11 below describe the replaced 2026-10-26 state; `ci_stack.py` remains only as the non-gating report of `ci-full.yml`.
+
 Interim implementation (2026-10-26, `scripts/ci_stack.py`, no `ci_tier.py` yet): `ci.yml` passes `stack_tip` to `conformance.yml`, which skips the shards and lets `suite` pass only for a `pull_request` that is documentation-only or has `stack_tip` `false`. `stack_tip` is `false` only when the event is `pull_request`, the head repository equals the base repository, the head branch is not the default branch, the listing of open pull requests contains this pull request, and another open, non-Draft pull request whose head and base repository are this repository has the head branch as its base branch (a Draft child does not count) (rows 8 and 9; evidence is not read). Every other case, including a failed lookup, is `true` (rows 2, 5, 7, 10, 11, 1). A `ci-full` label also forces the shards.
 
 Truth table (a row applies in this order; the first match wins; the child row precedes the default-branch row):
