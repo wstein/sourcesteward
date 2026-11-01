@@ -102,12 +102,15 @@ comment CLEAR, and GitHub reports the head mergeable and green. It does not say 
    `stw status --review` reads reviews with the same cycle and shows them in the `pulls` source data (counts per state and per hint) and in the
    `remote:` line; without `--review` it reads no comment (one request per pull request is not a default), and `--review` with `--offline`
    is a usage error. It adds no action category.
-2. **Owner list (PR 2).** `stw pulls --mergeable` ("what can I merge now"): only rows with `ready-mergeable`, per repository in
-   merge order (a stack's lower pull request first; otherwise oldest `created_at`), each with a reason line built from facts ("CLEAR
-   for head 3f2a9c1 per comment 2026-11-01T09:00Z, checks green, mergeable clean, base main") and the open descendants that follow
-   after it (`then: #12, #13`). Pull requests whose parent is not merged yet are not listed; the footer counts them. `--mergeable` is
-   a view over the same reads and cannot be combined with `--stack`, `--review` or `--hint`. (`--owner` already selects another
-   GitHub owner for discovery in `stw pulls`, so the owner list has its own flag.)
+2. **Owner list (PR 2).** `stw pulls --mergeable` ("what can I merge now"). It reads like the list and prints only the rows with
+   `ready-mergeable`, per repository (sorted by name) in merge order: oldest `created_at` first, then number. `ready-mergeable` needs the
+   default branch as base, so only the bottom of a stack qualifies; each entry names the open descendants that follow it (`then: #13,
+   #14`: pull requests whose base is its head branch, transitively, non-fork, in number order). Each entry has a reason built from facts only:
+   `CLEAR for head 3f2a9c1 per comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (`CLEAR (carried)` after a carry-over).
+   The footer counts the non-draft pull requests with `base-not-default` as waiting for a parent. In the JSON the groups stay those of the
+   list and the additive top-level member `owner_queue` (null without `--mergeable`) holds the entries. `--mergeable` cannot be combined
+   with `--review`, `--hint`, `--no-review` or `--stack` (exit 2). (`--owner` already selects another GitHub owner for discovery in
+   `stw pulls`, so the owner list has its own flag.)
 3. **Stack view (PR 3).** `stw pulls --stack`: forest of open pull requests of one repository, a node `B` is the child of `A` when
    `B.base == A.head_ref`, both are non-fork pull requests of the repository. Roots are pull requests whose base has no open pull
    request. Each node shows number, group, checks, review state and hints. Only trees with a child and roots with `base-not-default`
