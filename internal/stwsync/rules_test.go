@@ -771,3 +771,41 @@ func TestRulesPathErrorsNameTheirSource(t *testing.T) {
 		}
 	}
 }
+
+// The journal entry of an update whose HEAD a hook moved is failed, names the planned commit, holds no new OID, and a
+// restore leaves the branch alone (changed-since) while the recovery ref keeps the old tip.
+func TestRulesJournalOfAMovedHeadIsFailedAndRestoreLeavesTheBranch(t *testing.T) {
+	f := newRulesFixture(t)
+	w := newWorkspace(t)
+	old := f.head(t)
+	f.publish(t, "a.md", owner, owner)
+	checked := runGit(t, f.pusher, "rev-parse", "HEAD")
+	hookScript(t, filepath.Join(f.checkout, ".git"), "post-merge", "git -c user.name=X -c user.email=x@x commit -q --allow-empty -m unchecked\n")
+	r := Sync(context.Background(), Options{Path: w.ws, Rules: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home, OwnerIdentities: []string{owner}})
+	if r.Rules == nil || r.Rules.Outcome != OutcomeFailed || r.RunID == nil || r.ExitCode() != 1 {
+		t.Fatalf("%s run=%v", dump(r.Rules), r.RunID)
+	}
+	moved := f.head(t)
+	raw, err := os.ReadFile(filepath.Join(f.checkout, ".git", "stw", "sync", *r.RunID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec journalRecord
+	if err := json.Unmarshal(raw, &rec); err != nil || len(rec.Entries) != 1 {
+		t.Fatalf("%v %s", err, raw)
+	}
+	en := rec.Entries[0]
+	if en.State != stateFailed || en.NewOID != "" || en.PlannedNewOID != checked || en.OldOID != old {
+		t.Fatalf("%+v", en)
+	}
+	res := Restore(context.Background(), RestoreOptions{Path: f.checkout, RunID: *r.RunID})
+	if res.Error != nil || len(res.Repos) != 1 || res.Repos[0].Result != ResultChangedSince {
+		t.Fatalf("%+v %+v", res.Error, res.Repos)
+	}
+	if f.head(t) != moved {
+		t.Fatal("restore moved the branch")
+	}
+	if got := runGit(t, f.checkout, "rev-parse", en.RecoveryRef); got != old {
+		t.Fatalf("recovery ref %s, want %s", got, old)
+	}
+}
