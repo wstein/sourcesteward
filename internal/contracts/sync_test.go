@@ -287,3 +287,20 @@ func TestSyncSchemaRulesBlock(t *testing.T) {
 		}
 	}
 }
+
+// skipped-rules (the agent-rules checkout) is a result of plan and run, and needs a reason.
+func TestSyncSchemaAcceptsSkippedRules(t *testing.T) {
+	s := schema(t, "sync")
+	for _, fixture := range []string{"plan", "run"} {
+		set := func(reason any) []byte {
+			return mutateSync(t, fixture, func(_ map[string]any, r []any) {
+				m := r[0].(map[string]any)
+				m["result"], m["reason"], m["new_oid"] = "skipped-rules", reason, nil
+			})
+		}
+		valid(t, s, set("the agent-rules checkout is updated only by stw sync --rules"))
+		if err := s.Validate(value(t, set(nil))); err == nil {
+			t.Errorf("%s: skipped-rules without a reason accepted", fixture)
+		}
+	}
+}
