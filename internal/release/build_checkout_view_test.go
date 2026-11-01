@@ -134,7 +134,12 @@ func TestBuildViewRenderNativeRoundTrip(t *testing.T) {
 }
 
 func TestBuildViewCaptureBindsParentAndActualFile(t *testing.T) {
-	base := t.TempDir()
+	// The capture reports the stages of the resolved path; on macOS t.TempDir() is under /var, a
+	// symlink to /private/var, so the stage for the unresolved parent never occurred.
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	parent := filepath.Join(base, "source")
 	if err := os.Mkdir(parent, 0700); err != nil {
 		t.Fatal(err)
