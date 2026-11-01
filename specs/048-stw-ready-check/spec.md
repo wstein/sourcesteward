@@ -38,12 +38,15 @@ Decisions and limits:
   branch passes only when another open pull request of the same repository has that branch as head branch (the lowest number is named,
   and "merge #N first" is stated as evidence). The list of open pull requests does not give the head repository, so a fork branch with the
   same name is not told apart. A text line "Merge #N first" is no evidence.
-- A Blocker line is a line whose label, the text before its first colon, has at most six words and contains the word "blocker" or
-  "blockers"; quote, list and number marks, heading marks and emphasis are ignored (`Blocker: x`, `**Blocker (Draft):** x`, `1. Blocker: x`,
-  `> Blocker: x`, `## Blocker: x`, `Draft. Blocker: x`, `**Draft, named blocker:** x`). A heading or a bare `Blocker` word without a colon, and
-  a Blocker line without a value, take the section below as value: the lines up to the next blank line (after the first content line) or
-  heading. Every line must be a none spelling (a list mark and emphasis are ignored), else the condition fails; no value fails. A prose
-  sentence with the word and no such label (`This is a blocker.`) is not a Blocker line. The whole body is scanned.
+- A Blocker line is any line in which the word "blocker" or "blockers" is followed, after an optional parenthesis, by a colon, a pipe
+  or a dash (an em or en dash, or a hyphen followed by a space), wherever it stands in the line. The value is the text after it; quote,
+  list, number and heading marks and emphasis are ignored. Matching forms: `Blocker: x`, `**Blocker (Draft):** x`, `1. Blocker: x`,
+  `> Blocker: x`, `## Blocker: x`, `Status: Draft. Blocker: x`, `Blocker - x`, `Blocker — x`, `| Blocker | x |`. A line with several
+  labels is checked per label. A heading with the word, a bare `Blocker` word, or a label without a value takes the lines below as value:
+  below a heading all lines up to the next heading, below any other line up to the first blank line after a content line. Every value
+  must be a none spelling (list mark, emphasis, table pipes and a trailing period or comma ignored), else the condition fails; no
+  value fails. Prose that only uses the word (`a blocker for CI was removed`, `Blocker-free`) is not a Blocker line. The whole body is
+  scanned. A Blocker line in a code block or a quote is read like any other (fail-closed).
 - Evidence is cut to 400 bytes (the schema allows 400 characters); control characters are escaped first.
 - The command reads the head once. A push between the read and the flip is not detected; `--expect-head`-style resampling is the
   trusted check of issue #64.
@@ -53,10 +56,11 @@ Decisions and limits:
 ## Reads and effects
 
 GET only, through the guarded `stw pulls` reader: `repos/OWNER/NAME/pulls/N`, `repos/OWNER/NAME`, and the check runs and statuses of
-the head (`commits/SHA/check-runs`, `commits/SHA/statuses`) and, for a base other than the default branch, the open pull request list
-(`pulls?state=open`, Spec 036), all existing allowlist shapes (Spec 022 FR-005); no new shape. Four
-requests per run (five with a stacked base: one list read of the open pull requests), plus the comment reads of Spec 046 once the parser is wired. The command writes nothing to GitHub, to disk or to
-git, has no `apply` mode and never marks, labels or merges.
+the head (`commits/SHA/check-runs`, `commits/SHA/statuses`) and, for a base other than the default branch, the list of open pull requests
+(`pulls?state=open`, Spec 036), all existing allowlist shapes (Spec 022 FR-005); no new shape. A default-branch base needs four requests.
+The open list is paginated (25 per page, 12 after a size halving, at most 80 pages for 2000 open pull requests, the bound of the watch
+reader); a larger repository gives `base` unknown. Comment reads of Spec 046 come on top once the parser is wired. The command writes
+nothing to GitHub, to disk or to git, has no `apply` mode and never marks, labels or merges.
 
 ## Exit statuses
 
