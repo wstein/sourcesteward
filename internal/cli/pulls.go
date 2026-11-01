@@ -18,7 +18,7 @@ func pullsCommand() *cobra.Command {
 	var f pullscmd.Flags
 	var noBots, botsOnly bool
 	command := &cobra.Command{
-		Use:   "pulls [PATH] [--workspace] [--repo OWNER/NAME]... [--owner OWNER]... [--no-bots | --bots-only] [--author LOGIN]... [--limit N] [--no-review] [--review STATE]... [--hint HINT]... [--mergeable | --stack] [--human | --json]",
+		Use:   "pulls [PATH] [--workspace] [--repo OWNER/NAME]... [--owner OWNER]... [--no-bots | --bots-only] [--author LOGIN]... [--limit N] [--no-review] [--review STATE]... [--hint HINT]... [--mergeable | --stack] [--conflicts] [--restack-plan] [--checkout PATH] [--remote NAME] [--human | --json]",
 		Short: "Print a read-only snapshot of every open pull request, grouped by what needs action",
 		Long: "Read-only, stateless snapshot of all open pull requests, bot pull requests included, which the GitHub inbox does not list.\n" +
 			"Every PR is placed in one group by an ordered rule: ready (GitHub reports it mergeable by rebase and the exact head has green checks),\n" +
@@ -37,6 +37,13 @@ func pullsCommand() *cobra.Command {
 			"facts) and the open pull requests that follow it (then); JSON adds owner_queue. It cannot be combined with --review, --hint or --no-review.\n" +
 			"--stack prints the stacks instead: the trees of open pull requests by base and head branch with group, checks, review state and hints per node (JSON adds stack).\n" +
 			"It cannot be combined with --mergeable, --review, --hint or --no-review.\n" +
+			"Base conflicts (Spec 047): --conflicts probes every open pull request of ONE repository (--repo OWNER/NAME) against the current tip of its base from a local\n" +
+			"checkout (--checkout PATH, default the current directory; its remote --remote, default origin, must point to that repository) with git merge-tree. A pull request\n" +
+			"that no longer merges shows conflicts-with-base with its files and the last base commit that touched each, moves to the conflict group and is never ready; the pull\n" +
+			"requests above it in a stack are blocked (parent-conflict). A clean merge lists the files the base and the pull request both changed as an early warning. The stacks\n" +
+			"show head, CLEAR, CI and conflict per level. --restack-plan (implies --conflicts) prints the restack commands (git rebase --onto with old SHAs, range-diff, push with\n" +
+			"--force-with-lease) and a Markdown brief for the agent; it rebases and pushes nothing. The probe merge writes no object to the repository; the one local effect is the\n" +
+			"fetch of refs/pull/N/head and the base branches into refs/stw/conflicts/ (no tags, no FETCH_HEAD). No forge read is added.\n" +
 			"Output is human on a terminal and one JSON document otherwise (--human, --json). Authentication is the gh token route of the hosting commands;\n" +
 			"a missing token is exit 1 before any request and no token is ever printed. Nothing is written to disk or to the forge. On rate-limit\n" +
 			"exhaustion the run stops reading, prints what it has and exits 1; it never sleeps and never loops.\n" +
@@ -77,6 +84,10 @@ func pullsCommand() *cobra.Command {
 	flags.StringArrayVar(&f.Hints, "hint", nil, "Show only rows with this hint: clear-not-ready, no-final-review, base-not-default, parent-merged-retarget, truncated-review-unknown, foreign-review-ignored, ready-mergeable (repeatable)")
 	flags.BoolVar(&f.Mergeable, "mergeable", false, "Print the owner list: what can be merged now, oldest first, with the reason and the pull requests that follow")
 	flags.BoolVar(&f.Stack, "stack", false, "Print the stacks: trees of pull requests by base and head branch with review state and hints")
+	flags.BoolVar(&f.Conflicts, "conflicts", false, "Probe each pull request against its base in a local checkout (one repository): conflicts-with-base, early warning, stacks")
+	flags.BoolVar(&f.RestackPlan, "restack-plan", false, "Also print the restack commands and the agent brief for conflicting stacks (implies --conflicts; writes nothing)")
+	flags.StringVar(&f.Checkout, "checkout", "", "Local checkout for --conflicts (default: the current directory)")
+	flags.StringVar(&f.Remote, "remote", "", "Git remote of the checkout that points to the repository (default origin)")
 	flags.BoolVar(&f.Human, "human", false, "Print the human table (default on a terminal)")
 	flags.BoolVar(&f.JSON, "json", false, "Print one JSON document (default otherwise)")
 	return command
