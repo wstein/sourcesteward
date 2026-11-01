@@ -121,6 +121,35 @@ type DocPullsData struct {
 	Red      int `json:"red"`
 	Bots     int `json:"bots"`
 	NotRead  int `json:"not_read"`
+	// Review is present exactly when the pulls source was read with review states (Spec 046); the
+	// counts equal those of `stw pulls` for the same repository.
+	Review *DocPullsReview `json:"review,omitempty"`
+}
+
+// DocPullsReview holds the counts of the review states and of the hints.
+type DocPullsReview struct {
+	States DocReviewStates `json:"states"`
+	Hints  DocReviewHints  `json:"hints"`
+}
+
+// DocReviewStates counts the pull requests per review state; NotRead those whose comments were not read.
+type DocReviewStates struct {
+	None         int `json:"none"`
+	Findings     int `json:"findings"`
+	Clear        int `json:"clear"`
+	ClearCarried int `json:"clear_carried"`
+	ClearStale   int `json:"clear_stale"`
+	Unparsed     int `json:"unparsed"`
+	NotRead      int `json:"not_read"`
+}
+
+// DocReviewHints counts the pull requests per hint.
+type DocReviewHints struct {
+	ClearNotReady        int `json:"clear_not_ready"`
+	NoFinalReview        int `json:"no_final_review"`
+	BaseNotDefault       int `json:"base_not_default"`
+	ParentMergedRetarget int `json:"parent_merged_retarget"`
+	ReadyMergeable       int `json:"ready_mergeable"`
 }
 
 // DocDraft is a release draft.
@@ -387,6 +416,13 @@ func PullsData(rr statusremote.RepoResult) DocPullsData {
 	d := DocPullsData{Open: c.Total, Ready: c.Ready, Checks: c.Checks, Conflict: c.Conflict, Draft: c.Draft, Blocked: c.Blocked, Bots: c.Bots, NotRead: c.NotRead}
 	if rr.Pulls.Open != nil {
 		d.Open = *rr.Pulls.Open
+	}
+	if rr.Pulls.ReviewRead {
+		rv, h := c.Review, c.Hints
+		d.Review = &DocPullsReview{
+			States: DocReviewStates{None: rv.None, Findings: rv.Findings, Clear: rv.Clear, ClearCarried: rv.ClearCarried, ClearStale: rv.ClearStale, Unparsed: rv.Unparsed, NotRead: rv.NotRead},
+			Hints:  DocReviewHints{ClearNotReady: h.ClearNotReady, NoFinalReview: h.NoFinalReview, BaseNotDefault: h.BaseNotDefault, ParentMergedRetarget: h.ParentMergedRetarget, ReadyMergeable: h.ReadyMergeable},
+		}
 	}
 	for _, p := range rr.Pulls.PRs {
 		if p.Group == overview.GroupBlocked && p.Reason == "checks-red" {

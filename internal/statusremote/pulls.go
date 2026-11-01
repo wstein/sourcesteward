@@ -73,6 +73,8 @@ type Pulls struct {
 	Open   *int
 	PRs    []overview.PR
 	Counts pulls.Summary
+	// ReviewRead is true when the cycle read review states (Spec 046): Counts.Review and Counts.Hints are then meaningful.
+	ReviewRead bool
 }
 
 // ReadPulls reads the open pull requests of every target that was not skipped with one pulls cycle
@@ -94,7 +96,7 @@ func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) map[string
 	}
 	// Run returns no result only for a limit outside 1..500; the defaults never are, and with a result
 	// its error is only the context's: the deadline marks of the result already carry it.
-	res, _ := pulls.Run(ctx, r, pulls.Options{Repos: slugs})
+	res, _ := pulls.Run(ctx, r, pulls.Options{Repos: slugs, Review: true})
 	for _, t := range targets {
 		if t.Skip != "" {
 			continue
@@ -108,12 +110,15 @@ func ReadPulls(ctx context.Context, r pulls.Reader, targets []Target) map[string
 // fromView maps one repository of the cycle's result. A failure of the repository wins over a
 // deadline mark: it was attempted and failed before the deadline.
 func fromView(v pulls.RepoView) Pulls {
-	p := Pulls{State: overview.SourceState{Outcome: overview.OutcomeOK}, Open: v.Status.Open, Counts: v.Summary}
+	p := Pulls{State: overview.SourceState{Outcome: overview.OutcomeOK}, Open: v.Status.Open, Counts: v.Summary, ReviewRead: v.ReviewRead}
 	switch {
 	case v.Status.Error != "":
 		p.State = overview.SourceState{Outcome: overview.OutcomeError, Code: v.Status.Error}
 	case v.Status.Deadline:
 		p.State = overview.SourceState{Outcome: overview.OutcomeSkipped, Reason: overview.ReasonDeadline}
+	}
+	if !v.ReviewRead { // no review source: the counts of unread reviews are no data of this source
+		p.Counts.Review, p.Counts.Hints = pulls.ReviewCounts{}, pulls.HintCounts{}
 	}
 	for _, row := range v.Rows {
 		p.PRs = append(p.PRs, overview.PR{

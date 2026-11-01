@@ -145,3 +145,37 @@ func (g *gate) Viewer(ctx context.Context) (string, error) {
 }
 
 var _ Client = (*gate)(nil)
+
+// pullsReader is what the pulls cycle reads through: the gate, and, when the client can read the
+// comments of a pull request (Spec 046), the gate's review reads too. A client without them gives
+// a reader that is no pulls.ReviewSource, so the cycle reads no review state at all.
+func (g *gate) pullsReader() pulls.Reader {
+	if rs, ok := g.c.(pulls.ReviewSource); ok {
+		return reviewGate{gate: g, rs: rs}
+	}
+	return g
+}
+
+// reviewGate adds the two review reads to the gate; RepoInfo is the gate's own.
+type reviewGate struct {
+	*gate
+	rs pulls.ReviewSource
+}
+
+func (g reviewGate) ReadIssueComments(ctx context.Context, repo string, number int) ([]hosting.IssueComment, bool, error) {
+	type result struct {
+		c  []hosting.IssueComment
+		tr bool
+	}
+	v, err := through(ctx, g.gate, func() (result, error) {
+		c, tr, err := g.rs.ReadIssueComments(ctx, repo, number)
+		return result{c, tr}, err
+	})
+	return v.c, v.tr, err
+}
+
+func (g reviewGate) ClosedPulls(ctx context.Context, repo string) (hosting.WatchResponse, error) {
+	return through(ctx, g.gate, func() (hosting.WatchResponse, error) { return g.rs.ClosedPulls(ctx, repo) })
+}
+
+var _ pulls.ReviewSource = reviewGate{}

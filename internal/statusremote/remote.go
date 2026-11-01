@@ -239,7 +239,7 @@ func (c *collector) readPulls(ctx context.Context) {
 	for i, idx := range c.selected {
 		targets[i] = c.targets[idx]
 	}
-	got := ReadPulls(ctx, c.gate, targets)
+	got := ReadPulls(ctx, c.gate.pullsReader(), targets)
 	for _, idx := range c.selected {
 		c.slots[idx].pulls = got[c.targets[idx].Name]
 	}

@@ -41,7 +41,12 @@ func statusRemoteLine(rr statusremote.RepoResult) string {
 		return true
 	}
 	if !missing(overview.SourcePulls, "pull requests") {
-		parts = append(parts, statusPullsText(statuscmd.PullsData(rr)))
+		data := statuscmd.PullsData(rr)
+		text := statusPullsText(data)
+		if r := statusReviewText(data.Review); r != "" {
+			text += ", " + r
+		}
+		parts = append(parts, text)
 	}
 	if !missing(overview.SourceCIMain, "main CI") {
 		parts = append(parts, "main CI "+untrusted.Esc(rr.Remote.Main.Class))
@@ -97,6 +102,40 @@ func statusWhy(st overview.SourceState) string {
 		return untrusted.Esc(st.Code)
 	}
 	return untrusted.Esc(st.Reason)
+}
+
+// statusReviewText names the non-zero review states and hints of the open pull requests (Spec 046), empty
+// when the reviews were not read or there is nothing to name. It says what comments claim.
+func statusReviewText(r *statuscmd.DocPullsReview) string {
+	if r == nil {
+		return ""
+	}
+	join := func(items []struct {
+		n    int
+		text string
+	}) string {
+		var out []string
+		for _, it := range items {
+			if it.n > 0 {
+				out = append(out, fmt.Sprintf("%d %s", it.n, it.text))
+			}
+		}
+		return strings.Join(out, ", ")
+	}
+	type item = struct {
+		n    int
+		text string
+	}
+	s, h := r.States, r.Hints
+	states := join([]item{{s.Clear, "clear"}, {s.ClearCarried, "clear-carried"}, {s.Findings, "findings"}, {s.ClearStale, "clear-stale"}, {s.None, "none"}, {s.Unparsed, "unparsed"}, {s.NotRead, "not read"}})
+	hints := join([]item{{h.ClearNotReady, "clear-not-ready"}, {h.NoFinalReview, "no-final-review"}, {h.BaseNotDefault, "base-not-default"}, {h.ParentMergedRetarget, "parent-merged-retarget"}, {h.ReadyMergeable, "ready-mergeable"}})
+	switch {
+	case states == "":
+		return ""
+	case hints == "":
+		return "reviews: " + states
+	}
+	return "reviews: " + states + " (hints: " + hints + ")"
 }
 
 // statusPullsText names the non-zero groups of the open pull requests.

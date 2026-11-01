@@ -115,8 +115,9 @@ type Result struct {
 	// Deadline: the context expired before every read finished; Rows and Repos hold what was read
 	// so far (Row.Deadline, RepoStatus.Deadline mark the rest).
 	Deadline bool
-	// ReviewOn is true when reviews were requested (Options.Review).
-	ReviewOn bool
+	// ReviewOn is true when reviews were requested (Options.Review); ReviewRead when, in addition,
+	// the reader can read comments (ReviewSource), so that rows may carry a review.
+	ReviewOn, ReviewRead bool
 }
 
 // Run reads the snapshot. An error is returned for unusable options (nil Result) or an expired
@@ -146,7 +147,7 @@ func Run(ctx context.Context, r Reader, o Options) (*Result, error) {
 	if err := validateReview(o, supported); err != nil {
 		return nil, err
 	}
-	res := &Result{Time: now().UTC(), Limit: o.Limit, ReviewOn: o.Review}
+	res := &Result{Time: now().UTC(), Limit: o.Limit, ReviewOn: o.Review, ReviewRead: o.Review && supported}
 	c := &cycle{r: r, o: o, now: res.Time, res: res}
 	c.run(ctx)
 	return res, ctx.Err()
@@ -498,9 +499,10 @@ func (c *cycle) finish(it *item) {
 // RepoView is everything one repository contributed: its status line, its rows in document
 // order and the counts of those rows.
 type RepoView struct {
-	Status  RepoStatus
-	Rows    []Row
-	Summary Summary // Total..NotRead of Rows; the Repos* fields describe this one repository
+	ReviewRead bool // the rows carry reviews (Result.ReviewRead)
+	Status     RepoStatus
+	Rows       []Row
+	Summary    Summary // Total..NotRead of Rows; the Repos* fields describe this one repository
 }
 
 // Repo returns the view of one repository (case-insensitive); false when it was not requested.
@@ -509,7 +511,7 @@ func (r *Result) Repo(name string) (RepoView, bool) {
 		if !strings.EqualFold(st.Repo, name) {
 			continue
 		}
-		v := RepoView{Status: st}
+		v := RepoView{Status: st, ReviewRead: r.ReviewRead}
 		for _, row := range r.Rows {
 			if strings.EqualFold(row.Repo, st.Repo) {
 				v.Rows = append(v.Rows, row)
