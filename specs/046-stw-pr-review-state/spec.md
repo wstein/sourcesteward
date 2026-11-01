@@ -106,7 +106,7 @@ comment CLEAR, and GitHub reports the head mergeable and green. It does not say 
    `ready-mergeable`, per repository (sorted by name) in merge order: oldest `created_at` first, then number. `ready-mergeable` needs the
    default branch as base, so only the bottom of a stack qualifies; each entry names the open descendants that follow it (`then: #13,
    #14`: pull requests whose base is its head branch, transitively, non-fork, in number order). Each entry has a reason built from facts only:
-   `CLEAR for head 3f2a9c1 per MEMBER comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (`CLEAR (carried)` after a carry-over; the association is that of the decisive comment, so a stranger's comment never makes a pull request listed).
+   `CLEAR for head 3f2a9c1 per MEMBER comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (`CLEAR (carried from 3f2a9c1)` after a carry-over, naming the head of the carried verdict; the association is that of the decisive comment, so a stranger's comment never makes a pull request listed).
    The footer counts the non-draft pull requests with `base-not-default` as waiting for a parent. In the JSON the groups stay those of the
    list and the additive top-level member `owner_queue` (null without `--mergeable`) holds the entries. `--mergeable` cannot be combined
    with `--review`, `--hint`, `--no-review` or `--stack` (exit 2). (`--owner` already selects another GitHub owner for discovery in
