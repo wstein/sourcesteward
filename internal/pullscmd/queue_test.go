@@ -196,3 +196,22 @@ func TestExecuteMergeableReasonNamesTheAssociation(t *testing.T) {
 		t.Fatalf("the reason names the association of the decisive comment:\n%s", out)
 	}
 }
+
+// The reason of an entry carries the base branch and the mergeable state read from GitHub; a ref name may
+// hold C0 and C1 control characters, so the human text escapes the reason like every other untrusted field.
+func TestWriteQueueEscapesTheReason(t *testing.T) {
+	q := []DocQueueEntry{{Position: 1, Repo: "o/a", Number: 4, Title: "t", Review: "clear",
+		Reason: "CLEAR for head 2222222 per OWNER comment 2026-11-01T09:00Z, checks green, mergeable clean\u009b31m, base ma\x1b[31min\u202e", Then: []int{}}}
+	d := &Document{OwnerQueue: &q}
+	var b bytes.Buffer
+	if err := writeQueue(&b, d); err != nil {
+		t.Fatal(err)
+	}
+	out := b.String()
+	if strings.ContainsAny(out, "\x1b\u009b\u202e") {
+		t.Fatalf("a control character reached the terminal: %q", out)
+	}
+	if !strings.Contains(out, `mergeable clean\u009b31m, base ma\x1b[31min\u202e`) {
+		t.Fatalf("the escaped reason is missing: %q", out)
+	}
+}
