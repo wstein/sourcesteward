@@ -485,3 +485,110 @@ func TestSyncReportsRulesInTheResult(t *testing.T) {
 		t.Fatalf("%s", dump(none.Rules))
 	}
 }
+
+func memberWorkspace(t *testing.T, f *rulesFixture) *workspace {
+	t.Helper()
+	w := newWorkspace(t)
+	runGit(t, w.ws, "submodule", "add", "-q", f.bare, "agent-rules")
+	runGit(t, w.ws, "commit", "-q", "-m", "add agent-rules")
+	f.publish(t, "claude/CLAUDE.md", stranger, stranger) // a commit the identity guard would refuse
+	return w
+}
+
+// A normal sync never moves the agent-rules checkout: only --rules does, and only after the identity check.
+func TestOrdinarySyncLeavesTheAgentRulesMemberAlone(t *testing.T) {
+	for name, tc := range map[string]struct {
+		opts func(f *rulesFixture, w *workspace) Options
+		path func(f *rulesFixture, w *workspace) string
+	}{
+		"member": {func(f *rulesFixture, w *workspace) Options { return Options{Path: w.ws, Home: f.home} },
+			func(f *rulesFixture, w *workspace) string { return filepath.Join(w.ws, "agent-rules") }},
+		"member with --submodules": {func(f *rulesFixture, w *workspace) Options {
+			return Options{Path: w.ws, Home: f.home, Submodules: true}
+		},
+			func(f *rulesFixture, w *workspace) string { return filepath.Join(w.ws, "agent-rules") }},
+	} {
+		t.Run(name, func(t *testing.T) {
+			f := newRulesFixture(t)
+			w := memberWorkspace(t, f)
+			o := tc.opts(f, w)
+			path := tc.path(f, w)
+			before := runGit(t, path, "rev-parse", "HEAD")
+			r := Sync(context.Background(), o)
+			if r.Error != nil {
+				t.Fatal(r.Error.Message)
+			}
+			if got := runGit(t, path, "rev-parse", "HEAD"); got != before {
+				t.Fatalf("an ordinary sync moved the rules checkout to %s", got)
+			}
+			if rp := repoByName(t, r)["agent-rules"]; rp.Result != ResultSkippedRules {
+				t.Fatalf("result %q", rp.Result)
+			}
+		})
+	}
+}
+
+func TestRulesUpdateIsJournaled(t *testing.T) {
+	f := newRulesFixture(t)
+	w := newWorkspace(t)
+	old := f.head(t)
+	f.publish(t, "a.md", owner, owner)
+	want := runGit(t, f.pusher, "rev-parse", "HEAD")
+	r := Sync(context.Background(), Options{Path: w.ws, Rules: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home, OwnerIdentities: []string{owner}})
+	if r.Rules == nil || r.Rules.Outcome != OutcomeFastForwarded || r.RunID == nil {
+		t.Fatalf("%s run=%v", dump(r.Rules), r.RunID)
+	}
+	raw, err := os.ReadFile(filepath.Join(f.checkout, ".git", "stw", "sync", *r.RunID+".json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rec journalRecord
+	if err := json.Unmarshal(raw, &rec); err != nil || len(rec.Entries) != 1 {
+		t.Fatalf("%v %s", err, raw)
+	}
+	en := rec.Entries[0]
+	if en.State != stateCompleted || en.OldOID != old || en.NewOID != want || en.Ref != "refs/heads/main" {
+		t.Fatalf("%+v", en)
+	}
+	if got := runGit(t, f.checkout, "rev-parse", en.RecoveryRef); got != old {
+		t.Fatalf("recovery ref %s", got)
+	}
+	// a refusal leaves no journal
+	f.publish(t, "b.md", stranger, stranger)
+	r = Sync(context.Background(), Options{Path: w.ws, Rules: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home, OwnerIdentities: []string{owner}})
+	if r.Rules.Outcome != OutcomeRefused || r.RunID != nil {
+		t.Fatalf("%s run=%v", dump(r.Rules), r.RunID)
+	}
+}
+
+func TestStatusReportsRulesOnRequestOnly(t *testing.T) {
+	f := newRulesFixture(t)
+	w := newWorkspace(t)
+	f.publish(t, "a.md", owner, owner)
+	before := f.head(t)
+	off := Status(context.Background(), StatusOptions{Path: w.ws})
+	if off.Rules != nil {
+		t.Fatalf("unrequested: %s", dump(off.Rules))
+	}
+	if raw, _ := json.Marshal(off); strings.Contains(string(raw), `"rules"`) {
+		t.Fatal("the unrequested status document changed")
+	}
+	// requested without --fetch: the local origin state only, nothing fetched, nothing changed
+	r := Status(context.Background(), StatusOptions{Path: w.ws, Rules: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home})
+	if r.Rules == nil || r.Rules.State != RulesCurrent || !r.Rules.AsOfLastFetch {
+		t.Fatalf("%s", dump(r.Rules))
+	}
+	// requested with --fetch: sees the new commit and still changes nothing
+	r = Status(context.Background(), StatusOptions{Path: w.ws, Fetch: true, Rules: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home})
+	if r.Rules == nil || r.Rules.State != RulesBehind || r.Rules.Behind != 1 || r.Rules.Outcome != OutcomeNone {
+		t.Fatalf("%s", dump(r.Rules))
+	}
+	if f.head(t) != before {
+		t.Fatal("status changed the rules checkout")
+	}
+	// requested but not found
+	r = Status(context.Background(), StatusOptions{Path: w.ws, Rules: true, Home: f.home})
+	if r.Rules == nil || r.Rules.State != RulesNotFound {
+		t.Fatalf("%s", dump(r.Rules))
+	}
+}

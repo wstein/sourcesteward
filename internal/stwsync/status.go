@@ -22,6 +22,12 @@ type StatusOptions struct {
 	Path      string
 	Fetch     bool
 	Worktrees bool
+	// Rules adds the read-only agent-rules line (rules.go). RulesPath/RulesPathSource/Home are as for Options.
+	// Nothing is fetched for it unless Fetch is set.
+	Rules           bool
+	RulesPath       string
+	RulesPathSource string
+	Home            string
 }
 
 // StatusEcho echoes the options of the run.
@@ -121,6 +127,8 @@ type StatusResult struct {
 	Repos         []RepoStatus  `json:"repos"`
 	Summary       StatusSummary `json:"summary"`
 	Error         *Failure      `json:"error"`
+	// Rules is the agent-rules checkout; present only with --rules, so that the document stays as it was without.
+	Rules *Rules `json:"rules,omitempty"`
 }
 
 // ExitCode is 1 when the run failed or a repository could not be read, else 0: attention is not a failure.
@@ -181,6 +189,21 @@ func Status(ctx context.Context, o StatusOptions) StatusResult {
 		}()
 	}
 	wg.Wait()
+	if o.Rules {
+		var members []Repo
+		for _, rp := range r.Repos {
+			members = append(members, Repo{Name: rp.Name, Path: rp.Path, Kind: rp.Kind, Result: map[bool]string{true: ResultSkippedUninitialized}[rp.State == "uninitialized"]})
+		}
+		so := Options{RulesPath: o.RulesPath, RulesPathSource: o.RulesPathSource, Home: o.Home, noFetch: !o.Fetch}
+		if validateRulesOptions(so) == nil {
+			sess := &session{opts: so}
+			rules := sess.rules(ctx, root, members)
+			if rules == nil {
+				rules = &Rules{State: RulesNotFound, Source: "none", Install: "absent", Outcome: OutcomeNone, Reason: ptr("no checkout found"), Commits: []RulesCommit{}, Files: []RulesFile{}, Notes: []string{}}
+			}
+			r.Rules = rules
+		}
+	}
 	for _, rp := range r.Repos {
 		r.Summary.Total++
 		if rp.Error != nil {

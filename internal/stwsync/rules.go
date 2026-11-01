@@ -196,7 +196,7 @@ func (s *session) rules(ctx context.Context, root env, repos []Repo) *Rules {
 	}
 	r.DefaultBranch = ptr(def)
 	upRef := "refs/remotes/origin/" + def
-	r.AsOfLastFetch = !rulesFetch(ctx, e)
+	r.AsOfLastFetch = o.noFetch || !rulesFetch(ctx, e)
 	if r.AsOfLastFetch {
 		r.Notes = append(r.Notes, "the fetch of origin did not run or failed; state as of last fetch")
 	}
@@ -289,12 +289,37 @@ func (s *session) updateRules(ctx context.Context, root, e env, r *Rules, def, u
 		r.Outcome, r.NewOID = OutcomeWouldFastForward, ptr(upOID)
 		return r
 	}
+	failed := func(reason string) *Rules {
+		r.Outcome, r.Reason = OutcomeFailed, ptr(oneLine(reason))
+		return r
+	}
+	// journal entry with a recovery ref at the old tip, written before the change (as for a branch of the ordinary sync)
+	if s.runID == "" {
+		id, err := newRunID()
+		if err != nil {
+			return failed("cannot create a run ID")
+		}
+		s.runID = id
+	}
+	j, err := s.journal(ctx, e)
+	if err != nil {
+		return failed("journal-failed: " + err.Error())
+	}
+	i, err := j.prepare(ctx, "refs/heads/"+def, e.dir, headOID, upOID)
+	if err != nil {
+		return failed("journal-failed: " + err.Error())
+	}
+	s.journaled = true
 	// the checks ran on this exact commit; merge exactly it, never a ref that could have moved
 	out, err := e.g(ctx, "-c", "submodule.recurse=false", "merge", "--ff-only", "--no-autostash", upOID)
 	newOID := e.revParse(ctx, e.dir, "HEAD")
 	if err != nil || out.Code != 0 || newOID != upOID {
-		r.Outcome, r.Reason = OutcomeFailed, ptr(oneLine("git merge --ff-only failed: "+firstLine(out.Diagnostic+"\n"+out.Out)))
-		return r
+		reason := "git merge --ff-only failed: " + firstLine(out.Diagnostic+"\n"+out.Out)
+		_ = j.finish(i, stateFailed, "", "", reason)
+		return failed(reason)
+	}
+	if err := j.finish(i, stateCompleted, newOID, e.revParse(ctx, e.dir, "ORIG_HEAD"), ""); err != nil {
+		r.Notes = append(r.Notes, "the journal record stays incomplete: "+oneLine(err.Error()))
 	}
 	r.Outcome, r.NewOID, r.State = OutcomeFastForwarded, ptr(newOID), RulesCurrent
 	r.Ahead, r.Behind = 0, 0
@@ -411,6 +436,17 @@ func rulesFetch(ctx context.Context, e env) bool {
 	}
 	out, err := e.g(ctx, "fetch", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin")
 	return err == nil && out.Code == 0
+}
+
+// isRulesCheckout reports whether the repository at e is the agent-rules checkout: its remote is named agent-rules or
+// it is the path given with --rules-path or STW_RULES_PATH. The ordinary sync leaves such a repository alone.
+func isRulesCheckout(ctx context.Context, e env, o Options) bool {
+	if o.RulesPath != "" {
+		if abs, err := filepath.Abs(o.RulesPath); err == nil && samePath(abs, e.dir) {
+			return true
+		}
+	}
+	return repoNameOf(remoteURL(ctx, e)) == rulesRepoName
 }
 
 // rulesChangedFiles lists the files that differ between the two commits, sensitive ones first.
