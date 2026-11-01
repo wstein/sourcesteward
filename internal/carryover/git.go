@@ -170,12 +170,12 @@ func (r *Runner) HasCommit(ctx context.Context, sha string) (bool, error) {
 }
 
 // PatchID implements Git. The diff is pinned against configuration: no external diff, no textconv,
-// no rename detection, binary content included.
+// no rename detection.
 func (r *Runner) PatchID(ctx context.Context, base, head string) (string, error) {
 	if err := needSHA(base, head); err != nil {
 		return "", err
 	}
-	diff, err := r.ok(ctx, nil, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", base+"..."+head, "--")
+	diff, err := r.ok(ctx, nil, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", base+"..."+head, "--")
 	if err != nil {
 		return "", err
 	}
