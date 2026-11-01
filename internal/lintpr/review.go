@@ -31,8 +31,10 @@ var (
 	reviewLine  = regexp.MustCompile(`\AReview: (CLEAR|FINDINGS) head=(` + hexSHA + `) patch-id=(` + hexSHA + `) pr=` + number + `\z`)
 	carriedLine = regexp.MustCompile(`\ACarried-over: from=(` + hexSHA + `) to=(` + hexSHA + `) patch-id=(` + hexSHA + `) pr=` + number + `\z`)
 	// reviewish marks a comment that claims to be a review: its first non-blank line starts with the key
-	// and a colon, ignoring case, blanks and markdown marks.
-	reviewish = regexp.MustCompile("(?i)\\A[\\s*_#>`-]*(?:review|carried-over)\\s*:")
+	// (review or carried-over), ignoring case, blanks and markdown marks before and after it, and then has
+	// a colon, ends, or names a verdict (`**Review**: CLEAR`, `Review CLEAR`, `## Review`). Prose such as
+	// "Review of the approach" does not claim to be one.
+	reviewish = regexp.MustCompile("(?i)\\A[\\s*_#>`-]*(?:review|carried-over)[\\s*_`]*(?::|\\z|(?:clear|findings)\\b)")
 )
 
 // ParseReviewLine parses one line (without line break) against the strict grammar.
