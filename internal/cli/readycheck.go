@@ -2,6 +2,8 @@
 package cli
 
 import (
+	"strings"
+
 	"github.com/spf13/cobra"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/readycheck"
@@ -23,8 +25,9 @@ func readyCheckCommand() *cobra.Command {
 		Long: "Read-only check of the Ready preconditions of one pull request; it never marks anything Ready and writes nothing to GitHub.\n" +
 			"Conditions, each with pass, fail or unknown and its evidence: open (the pull request is open), review (the review state of the exact head is\n" +
 			"clear, or clear-carried by a carry-over chain; Spec 046), checks (all check runs and commit statuses at the exact head are green; the list of\n" +
-			"required checks is not read, so this is at least as strict), base (the base is the default branch, or the text says \"Merge #N first\"),\n" +
-			"blocker (no \"Blocker:\" line in the text names a blocker; none, keiner, n/a and - mean no blocker), conflict (GitHub reports no conflict with\n" +
+			"required checks is not read, so this is at least as strict), base (the base is the default branch, or the head branch of another open pull request of the\n" +
+			"repository, a stack child that needs that parent merged first), blocker (no Blocker line or Blocker section in the text names a blocker; the\n" +
+			"spellings " + strings.Join(readycheck.NoneSpellings(), ", ") + " mean no blocker), conflict (GitHub reports no conflict with\n" +
 			"the base) and rebaseable (GitHub reports the pull request rebaseable). A value GitHub has not computed yet, or a read that failed, is unknown\n" +
 			"and does not pass. Being a Draft is reported but is not a condition. Without --repo the workspace of the current directory must have exactly\n" +
 			"one GitHub repository.\n" +

@@ -24,7 +24,14 @@ type fakeForge struct {
 	runs    string
 	repoErr error
 	branch  string
+	open    []hosting.PullListItem
+	openErr error
 	calls   []string
+}
+
+func (f *fakeForge) ListOpenPullItems(_ context.Context, repo string, _ int) ([]hosting.PullListItem, error) {
+	f.calls = append(f.calls, "list/"+repo)
+	return f.open, f.openErr
 }
 
 func (f *fakeForge) PullDetail(_ context.Context, repo string, n int, etag string) (hosting.WatchResponse, error) {
@@ -165,6 +172,71 @@ func TestRunReadFailuresAreUnknownNotPass(t *testing.T) {
 	d = doRun(f, nil)
 	if status(d, CondReview) != StatusUnknown || d.Ready || d.Errors[0].Source != "review" {
 		t.Fatalf("a missing review source never passes: %+v", d)
+	}
+}
+
+func TestRunDerivesTheStackParentFromOpenPullRequests(t *testing.T) {
+	f := newForge()
+	f.pull = pullBody(true, "codex/parent", "Blocker: none", head)
+	f.open = []hosting.PullListItem{{Number: 7, HeadRef: "codex/parent"}, {Number: 9, HeadRef: "codex/other"}, {Number: 12, HeadRef: "codex/parent"}, {Number: 11, HeadRef: "codex/parent"}}
+	d := doRun(f, clearFor(head))
+	var base DocCondition
+	for _, c := range d.Conditions {
+		if c.ID == CondBase {
+			base = c
+		}
+	}
+	if !d.Ready || base.Status != StatusPass || !strings.Contains(base.Evidence, "#11") {
+		t.Fatalf("the lowest other open pull request with that head branch is the parent, not this one: %+v", d)
+	}
+	if got := strings.Join(f.calls, " "); !strings.Contains(got, "list/o/r") {
+		t.Errorf("calls = %q", got)
+	}
+
+	f.open = []hosting.PullListItem{{Number: 7, HeadRef: "codex/parent"}, {Number: 9, HeadRef: "codex/other"}}
+	if d := doRun(f, clearFor(head)); d.Ready || status(d, CondBase) != StatusFail {
+		t.Fatalf("this pull request is not its own parent: %+v", d)
+	}
+	f.open = nil
+	f.pull = pullBody(true, "codex/parent", "Blocker: none\nMerge #12 first", head)
+	if d := doRun(f, clearFor(head)); status(d, CondBase) != StatusFail {
+		t.Fatalf("a text line is not evidence: %+v", d)
+	}
+
+	f.openErr = errors.New("list unreadable")
+	d = doRun(f, clearFor(head))
+	if status(d, CondBase) != StatusUnknown || d.Ready || len(d.Errors) != 1 || d.Errors[0].Source != "pulls" {
+		t.Fatalf("%+v", d)
+	}
+}
+
+func TestRunReadsTheOpenListOnlyForAnotherBase(t *testing.T) {
+	f := newForge()
+	doRun(f, clearFor(head))
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "list/") {
+			t.Fatalf("a default-branch base needs no list: %v", f.calls)
+		}
+	}
+	f = newForge()
+	f.repoErr = errors.New("repo unreadable")
+	f.pull = pullBody(true, "codex/parent", "Blocker: none", head)
+	doRun(f, clearFor(head))
+	for _, c := range f.calls {
+		if strings.HasPrefix(c, "list/") {
+			t.Fatalf("without a default branch nothing is compared: %v", f.calls)
+		}
+	}
+}
+
+// GitHub limits a body to 65536 characters (not bytes): a Blocker line behind 40000 two-byte
+// characters is read.
+func TestRunScansTheWholeBody(t *testing.T) {
+	f := newForge()
+	f.pull = pullBody(true, "main", strings.Repeat("\u00e4", 40000)+"\nBlocker: Independent review pending\n", head)
+	d := doRun(f, clearFor(head))
+	if d.Ready || status(d, CondBlocker) != StatusFail {
+		t.Fatalf("%s", status(d, CondBlocker))
 	}
 }
 

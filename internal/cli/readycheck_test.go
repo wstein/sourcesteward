@@ -83,3 +83,26 @@ func TestReadyCheckUsageErrorsExitTwo(t *testing.T) {
 		}
 	}
 }
+
+func TestReadyCheckHelpNamesEveryNoneSpelling(t *testing.T) {
+	long := readyCheckCommand().Long
+	want := "spellings -, keine, keiner, n/a, no, none mean no blocker"
+	if !strings.Contains(long, want) {
+		t.Errorf("help lacks %q", want)
+	}
+	if strings.Contains(long, "Merge #N first") {
+		t.Error("the text line is no longer evidence for the base")
+	}
+}
+
+func TestReadyCheckStackChildIsDerivedFromTheOpenList(t *testing.T) {
+	watchEnv(t, true)
+	f := readyForge(t, "Blocker: none\n", "codex/parent")
+	f.docs["repos/o/r/pulls?state=open&per_page=25&page=1"] = `[` +
+		`{"number":7,"title":"t","user":{"login":"a","type":"User"},"labels":[],"draft":true,"created_at":"2026-10-20T09:00:00Z","html_url":"https://github.com/o/r/pull/7","requested_reviewers":[],"requested_teams":[],"head":{"sha":"` + strings.Repeat("3", 40) + `","ref":"codex/child"},"base":{"ref":"codex/parent"}},` +
+		`{"number":5,"title":"p","user":{"login":"a","type":"User"},"labels":[],"draft":false,"created_at":"2026-10-19T09:00:00Z","html_url":"https://github.com/o/r/pull/5","requested_reviewers":[],"requested_teams":[],"head":{"sha":"` + strings.Repeat("4", 40) + `","ref":"codex/parent"},"base":{"ref":"main"}}]`
+	status, out, errOut := readyRun(t, f, true, "7", "--repo", "o/r", "--json")
+	if status != 0 || errOut != "" || !strings.Contains(out, "head branch of open #5") {
+		t.Fatalf("%d %q %s", status, errOut, out)
+	}
+}

@@ -17,6 +17,7 @@ import (
 type Source interface {
 	watchcmd.Reader
 	RepoInfo(ctx context.Context, repo string) (hosting.RepoInfo, error)
+	ListOpenPullItems(ctx context.Context, repo string, maxOpen int) ([]hosting.PullListItem, error)
 }
 
 var _ Source = (*hosting.WatchReader)(nil)
@@ -54,14 +55,12 @@ type DocCondition struct {
 	Evidence string `json:"evidence"`
 }
 
-// DocReadError is one read that failed; source is pull, repo, checks or review.
+// DocReadError is one read that failed; source is pull, repo, pulls, checks or review.
 type DocReadError struct {
 	Source  string `json:"source"`
 	Code    string `json:"code"`
 	Message string `json:"message"`
 }
-
-const maxBody = 65536
 
 func readError(source string, err error) DocReadError {
 	code := "read-failed"
@@ -137,7 +136,7 @@ func Run(ctx context.Context, src Source, review ReviewFunc, in Input, now func(
 		if p.Merged {
 			f.State = "merged"
 		}
-		f.Body, f.Mergeable, f.MergeableState, f.Rebaseable = snapcmd.Cut(p.Body, maxBody), p.Mergeable, p.MergeableState, p.Rebaseable
+		f.Body, f.Mergeable, f.MergeableState, f.Rebaseable = p.Body, p.Mergeable, p.MergeableState, p.Rebaseable
 		head, draft := f.Head, f.Draft
 		d.Head, d.Draft = &head, &draft
 	}
@@ -146,6 +145,19 @@ func Run(ctx context.Context, src Source, review ReviewFunc, in Input, now func(
 		f.RepoErr = fail("repo", err)
 	} else {
 		f.DefaultBranch = info.DefaultBranch
+	}
+
+	if f.PullErr == "" && f.RepoErr == "" && f.DefaultBranch != "" && f.BaseRef != f.DefaultBranch {
+		// A stack child: its parent is another open pull request whose head branch is the base.
+		items, err := src.ListOpenPullItems(ctx, in.Repo, hosting.WatchMaxOpenPRs)
+		if err != nil {
+			f.ParentErr = fail("pulls", err)
+		}
+		for _, it := range items {
+			if it.HeadRef == f.BaseRef && it.Number != in.Number && (f.ParentPR == 0 || it.Number < f.ParentPR) {
+				f.ParentPR = it.Number
+			}
+		}
 	}
 
 	if f.PullErr == "" {
