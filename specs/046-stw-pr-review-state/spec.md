@@ -64,7 +64,7 @@ older unparsed comment. A strict comment ignored by rule 2 or 4 does not count: 
 
 Evidence per state: the verdict, the head named in the decisive comment (for a carry-over the head of the CLEAR it carries), the
 `patch-id`, the time and `https` URL of the decisive comment, `carried`, `edited` (its `updated_at` is after `created_at`) and
-`truncated` (not every comment page was read: at most 6 pages of 50 comments, so a state may then miss a later comment).
+`truncated` (a long thread is read as its first page and its last five pages of 50 comments, so a comment in the middle can be missed).
 
 ## Hints (derived, a pull request may have several)
 
@@ -105,12 +105,12 @@ comment CLEAR, and GitHub reports the head mergeable and green. It does not say 
 Added GET shapes, each produced by one generator and matched exactly (Spec 022 FR-005, admitted in the guard modes `pulls` and
 `status` only; `watch`, `issues` and the one-shot modes refuse them):
 
-- `repos/OWNER/NAME/issues/N/comments?per_page=50&page=P`, N a positive integer, P 1 to 6;
+- `repos/OWNER/NAME/issues/N/comments?per_page=50&page=P`, N a positive integer, P 1 to 999;
 - `repos/OWNER/NAME/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1`.
 
 Existing shapes are reused: `repos/OWNER/NAME` (default branch) and `commits/SHA` (committer date of H). Cost per run: for each row
 within `--limit` (drafts included; newest first, the budget of Spec 036 counted separately for reviews) one comment page (more only when
-GitHub says there are more, at most 6), one `commits/SHA` read only when a strict comment names H, one `repos/OWNER/NAME` read per
+GitHub says there are more, at most 6 reads), one `commits/SHA` read only when a strict comment names H, one `repos/OWNER/NAME` read per
 repository with an open pull request, one closed-list read per repository with a pull request whose base is not the default branch.
 A failed read leaves the row's `review` null and is reported like any read failure (`repos[].error`, exit 1); a rate limit stops
 further reads. No search, no GraphQL, no write.
