@@ -293,6 +293,16 @@ byte-frozen but excluded from Pages packaging until the feature is accepted. Top
 (`rule`, `severity`, `location` with `kind`, `id` and `line`, `message`), `summary` and `truncated`; no key is omitted and absent values are
 null. New rule IDs are compatible extensions. Tests validate real output of the command against the schema. See [lint](lint.md).
 
+## Review carry-over schema v1 (unpublished)
+
+[Review carry-over schema](../schemas/v1/review-carry-over.schema.json) describes the one document `stw review carry-over --json`
+prints (Spec 051). It is checked in and byte-frozen but excluded from Pages packaging until the feature is accepted. Top-level keys
+are `schema_version` 1, `command` `review carry-over`, `pr`, `from` and `to` (`base`, `head`), `patch_id` (`state`, `old`, `new`),
+`merge_commits` (`state`, `count`, `commits`), `range_diff` (`state`, `total`, `not_equal`, `deviations` of `{old, new, mark}` with at
+most 200 rows, `truncated`), `pr_head` (`state`), `carry_over`, `reasons` and `line`. `line` is the `Carried-over:` line when
+`carry_over` is true and null otherwise; a yes has no reason and three passing checks, a no has at least one reason. Unknown
+properties are additive extensions. Tests validate a yes and a no document and reject broken variants.
+
 ## Issues schema v1 (unpublished)
 
 [Issues schema](../schemas/v1/issues.schema.json) describes the one document `stw issues --json` prints (Spec 038). It is checked in and
