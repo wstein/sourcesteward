@@ -208,9 +208,10 @@ func noBlockerValue(v string) bool {
 }
 
 // blockerSep finds the word "blocker" or "blockers" followed, after an optional parenthesis, by a
-// colon, a pipe or a dash (an em or en dash, or a hyphen that is followed by a space). The value of
-// the Blocker line is the text after it. "Blocker-free" and prose that only uses the word do not match.
-var blockerSep = regexp.MustCompile(`(?i)\bblockers?\s*(?:\([^)]*\))?\s*(?::|\||[\x{2013}\x{2014}]|-(?:\s|$))`)
+// colon (also the fullwidth colon), a pipe or a dash (any Unicode dash or the minus sign, two or more
+// hyphens, or a hyphen followed by a space; spaces include Unicode spaces). The value of the Blocker
+// line is the text after it. "Blocker-free" and prose that only uses the word do not match.
+var blockerSep = regexp.MustCompile(`(?i)\bblockers?[\s\p{Z}]*(?:\([^)]*\))?[\s\p{Z}]*(?:[:\x{FF1A}]|\||-{2,}|-(?:[\s\p{Z}]|$)|[^\P{Pd}-]|\x{2212})`)
 
 // blockerValues returns the values of the Blocker labels of one line. section is true when the line
 // has a Blocker label without a value (the last label is empty, or the line is a Blocker heading or a
