@@ -53,7 +53,7 @@ Let H be the current head, T the committer date of H. Comments are ordered by `c
 | `findings` | the decisive comment for H is `Review: FINDINGS` |
 | `clear` | the decisive comment for H is `Review: CLEAR` |
 | `clear-carried` | the decisive comment for H is a valid `Carried-over` chain from a CLEAR |
-| `clear-stale` | no decisive comment for H, but a CLEAR for an older head exists (carried or not) |
+| `clear-stale` | no decisive comment for H, but an older head X has `Review: CLEAR` as its latest `Review` verdict (carried to a head other than H or not carried) |
 | `unparsed` | an unparsed comment is newer than the decisive comment (or than the latest strict one when there is none); it is not read, so the state is unknown |
 
 The **decisive comment** for H is the latest (by `created_at`, then id) of: a `Review:` line with `head=H` created at or after T, and a
