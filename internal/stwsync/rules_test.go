@@ -470,7 +470,7 @@ func TestSyncReportsRulesInTheResult(t *testing.T) {
 	w := newWorkspace(t)
 	f.publish(t, "a.md", owner, owner)
 	r := Sync(context.Background(), Options{Path: w.ws, Plan: true, RulesPath: f.checkout, RulesPathSource: "flag", Home: f.home})
-	if r.Error != nil || r.Rules == nil || r.Rules.State != RulesBehind {
+	if r.Error != nil || r.Rules == nil || r.Rules.State != RulesCurrent || !r.Rules.AsOfLastFetch {
 		t.Fatalf("%+v %s", r.Error, dump(r.Rules))
 	}
 	if r.ExitCode() != 0 {
@@ -590,5 +590,147 @@ func TestStatusReportsRulesOnRequestOnly(t *testing.T) {
 	r = Status(context.Background(), StatusOptions{Path: w.ws, Rules: true, Home: f.home})
 	if r.Rules == nil || r.Rules.State != RulesNotFound {
 		t.Fatalf("%s", dump(r.Rules))
+	}
+}
+
+// otherMember adds the submodule "docs" (a remote not named agent-rules), advances its remote and returns its path.
+func otherMember(t *testing.T, f *rulesFixture, w *workspace) string {
+	t.Helper()
+	other := filepath.Join(f.root, "other.git")
+	runGit(t, f.root, "clone", "-q", "--bare", f.bare, other)
+	runGit(t, w.ws, "submodule", "add", "-q", other, "docs")
+	runGit(t, w.ws, "commit", "-q", "-m", "add docs")
+	adv := filepath.Join(f.root, "adv-other")
+	runGit(t, f.root, "clone", "-q", other, adv)
+	commitAs(t, adv, "docs.md", "x\n", owner, owner)
+	runGit(t, adv, "push", "-q", "origin", "main")
+	return filepath.Join(w.ws, "docs")
+}
+
+// The checkout named by --rules-path or STW_RULES_PATH is left alone by the ordinary sync even when its remote has another name.
+func TestOrdinarySyncLeavesTheNamedRulesPathAlone(t *testing.T) {
+	for _, mode := range []string{"flag", "env", "symlink", "flag with --submodules"} {
+		t.Run(mode, func(t *testing.T) {
+			f := newRulesFixture(t)
+			w := newWorkspace(t)
+			path := otherMember(t, f, w)
+			before := runGit(t, path, "rev-parse", "HEAD")
+			o := Options{Path: w.ws, Home: f.home, RulesPath: path, RulesPathSource: "flag"}
+			switch mode {
+			case "env":
+				t.Setenv("STW_RULES_PATH", path)
+				o = WithRulesEnvironment(Options{Path: w.ws, Home: f.home})
+			case "symlink":
+				link := filepath.Join(f.root, "link")
+				if err := os.Symlink(path, link); err != nil {
+					t.Fatal(err)
+				}
+				o.RulesPath = link
+			case "flag with --submodules":
+				o.Submodules = true
+			}
+			r := Sync(context.Background(), o)
+			if r.Error != nil {
+				t.Fatal(r.Error.Message)
+			}
+			if got := runGit(t, path, "rev-parse", "HEAD"); got != before {
+				t.Fatalf("moved to %s", got)
+			}
+			if rp := repoByName(t, r)["docs"]; rp.Result != ResultSkippedRules {
+				t.Fatalf("result %q", rp.Result)
+			}
+		})
+	}
+}
+
+// An ordinary sync (and --plan) fetches nothing in the agent-rules checkout; only --rules does.
+func TestOrdinarySyncDoesNotFetchTheAgentRulesCheckout(t *testing.T) {
+	f := newRulesFixture(t)
+	w := memberWorkspace(t, f)
+	member := filepath.Join(w.ws, "agent-rules")
+	ref := func() string { return runGit(t, member, "rev-parse", "refs/remotes/origin/main") }
+	before := ref()
+	for name, o := range map[string]Options{"run": {Path: w.ws, Home: f.home}, "plan": {Path: w.ws, Home: f.home, Plan: true}, "submodules": {Path: w.ws, Home: f.home, Submodules: true}} {
+		r := Sync(context.Background(), o)
+		if r.Error != nil || r.Rules == nil || r.Rules.State != RulesCurrent || !r.Rules.AsOfLastFetch {
+			t.Fatalf("%s: %v %s", name, r.Error, dump(r.Rules))
+		}
+		if got := ref(); got != before {
+			t.Fatalf("%s: the remote-tracking ref moved to %s", name, got)
+		}
+	}
+	r := Sync(context.Background(), Options{Path: w.ws, Home: f.home, Rules: true, OwnerIdentities: []string{owner}})
+	if r.Rules == nil || r.Rules.AsOfLastFetch || ref() == before {
+		t.Fatalf("--rules fetches: %s", dump(r.Rules))
+	}
+}
+
+func TestOrdinarySyncStillListsTheSubmodulesOfTheSkippedRulesRepository(t *testing.T) {
+	f := newRulesFixture(t)
+	w := newWorkspace(t)
+	plain := Sync(context.Background(), Options{Path: w.ws, Plan: true, Home: f.home})
+	r := Sync(context.Background(), Options{Path: w.ws, Plan: true, Home: f.home, RulesPath: w.ws, RulesPathSource: "flag"})
+	if r.Error != nil || len(r.Repos) != len(plain.Repos) || len(r.Repos) < 5 {
+		t.Fatalf("%v %d repositories, plain %d", r.Error, len(r.Repos), len(plain.Repos))
+	}
+	by := repoByName(t, r)
+	if by["."].Result != ResultSkippedRules || by["a"].Result == ResultSkippedRules {
+		t.Fatalf("%+v %+v", by["."], by["a"])
+	}
+}
+
+func TestRulesFetchHonorsTheRefspecCheck(t *testing.T) {
+	f := newRulesFixture(t)
+	runGit(t, f.checkout, "config", "remote.origin.fetch", "+refs/heads/*:refs/mirror/*")
+	f.publish(t, "a.md", owner, owner)
+	r := f.report(t, f.options(nil))
+	if !r.AsOfLastFetch {
+		t.Fatalf("fetched through an unsafe refspec: %s", dump(r))
+	}
+	if out, err := exec.Command("git", "-C", f.checkout, "rev-parse", "--verify", "-q", "refs/mirror/main").Output(); err == nil {
+		t.Fatalf("a local ref was written: %s", out)
+	}
+}
+
+func TestRulesRefusesWhileAnOperationIsInProgress(t *testing.T) {
+	f := newRulesFixture(t)
+	f.publish(t, "a.md", owner, owner)
+	if err := os.MkdirAll(filepath.Join(f.checkout, ".git", "rebase-merge"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := f.head(t)
+	r := f.report(t, f.options(func(o *Options) { o.Rules = true }))
+	if r.Outcome != OutcomeRefused || r.State != RulesDirty || r.Reason == nil || !strings.Contains(*r.Reason, "rebase is in progress") || f.head(t) != old {
+		t.Fatalf("%s", dump(r))
+	}
+}
+
+func TestRulesRefusesMoreNewCommitsThanItCanCheck(t *testing.T) {
+	old := rulesCommitLimit
+	rulesCommitLimit = 2
+	t.Cleanup(func() { rulesCommitLimit = old })
+	f := newRulesFixture(t)
+	for _, name := range []string{"a.md", "b.md", "c.md"} {
+		f.publish(t, name, owner, owner)
+	}
+	before := f.head(t)
+	r := f.report(t, f.options(func(o *Options) { o.Rules = true }))
+	if r.Outcome != OutcomeRefused || r.Reason == nil || !strings.Contains(*r.Reason, "more than 2 new commits") || f.head(t) != before {
+		t.Fatalf("%s", dump(r))
+	}
+}
+
+// If the checkout moves between the checks and the merge, merge --ff-only fails and makes no merge commit.
+func TestRulesMergeIsFastForwardOnly(t *testing.T) {
+	f := newRulesFixture(t)
+	f.publish(t, "a.md", owner, owner)
+	rulesBeforeMerge = func(dir string) { commitAs(t, dir, "raced.md", "x\n", owner, owner) }
+	t.Cleanup(func() { rulesBeforeMerge = nil })
+	r := f.report(t, f.options(func(o *Options) { o.Rules = true }))
+	if r.Outcome != OutcomeFailed {
+		t.Fatalf("%s", dump(r))
+	}
+	if parents := strings.Fields(runGit(t, f.checkout, "rev-list", "--parents", "-n1", "HEAD")); len(parents) != 2 {
+		t.Fatalf("a merge commit was made: %v", parents)
 	}
 }
