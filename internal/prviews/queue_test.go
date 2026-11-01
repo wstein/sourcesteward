@@ -22,7 +22,7 @@ func ready(repo string, n int, age time.Duration, headRef string) pulls.Row {
 		Repo: repo, Number: n, Title: fmt.Sprintf("title %d", n), URL: fmt.Sprintf("https://github.com/%s/pull/%d", repo, n),
 		Base: "main", HeadRef: headRef, Head: sha(fmt.Sprintf("%x", n%15+1)), CreatedAt: t0.Add(-age), Group: pulls.GroupReady, Ready: true, Detail: true,
 		Checks: &checks, MergeableState: &state,
-		Review: &pulls.ReviewInfo{State: reviewstate.StateClear, Verdict: "CLEAR", Head: sha(fmt.Sprintf("%x", n%15+1)), At: t0.Add(-time.Hour)},
+		Review: &pulls.ReviewInfo{State: reviewstate.StateClear, Verdict: "CLEAR", Head: sha(fmt.Sprintf("%x", n%15+1)), Association: "MEMBER", At: t0.Add(-time.Hour)},
 		Hints:  []string{reviewstate.HintReadyMergeable},
 	}
 }
@@ -130,11 +130,17 @@ func TestOwnerQueueReasonIsBuiltFromFacts(t *testing.T) {
 	r := ready("o/a", 1, time.Hour, "b")
 	r.Review.At = time.Date(2026, 11, 1, 11, 5, 59, 0, time.FixedZone("CEST", 2*3600))
 	es, _ := OwnerQueue([]pulls.Row{r})
-	want := "CLEAR for head 2222222 per comment 2026-11-01T09:05Z, checks green, mergeable clean, base main"
+	want := "CLEAR for head 2222222 per MEMBER comment 2026-11-01T09:05Z, checks green, mergeable clean, base main"
 	if es[0].Reason != want {
 		t.Fatalf("%q\nwant %q", es[0].Reason, want)
 	}
-	r.Review = &pulls.ReviewInfo{State: reviewstate.StateClearCarried, Verdict: "CLEAR", Head: sha("e"), Carried: true, At: r.Review.At}
+	r.Review = &pulls.ReviewInfo{State: reviewstate.StateClearCarried, Verdict: "CLEAR", Head: sha("e"), Carried: true, Association: "COLLABORATOR", At: r.Review.At}
+	es, _ = OwnerQueue([]pulls.Row{r})
+	want = "CLEAR (carried from eeeeeee) for head 2222222 per COLLABORATOR comment 2026-11-01T09:05Z, checks green, mergeable clean, base main"
+	if es[0].Reason != want || es[0].Review != "clear-carried" {
+		t.Fatalf("%q", es[0].Reason)
+	}
+	r.Review.Association = ""
 	es, _ = OwnerQueue([]pulls.Row{r})
 	want = "CLEAR (carried from eeeeeee) for head 2222222 per comment 2026-11-01T09:05Z, checks green, mergeable clean, base main"
 	if es[0].Reason != want || es[0].Review != "clear-carried" {

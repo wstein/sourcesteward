@@ -236,7 +236,7 @@ func TestPullsMergeableOverTheGuardedReader(t *testing.T) {
 	if status != 0 || errOut != "" {
 		t.Fatalf("%d %q", status, errOut)
 	}
-	if !strings.HasPrefix(out, "merge now (1)\n1. o/r#1  PR 1\n   CLEAR for head 1111111 per comment 2026-10-21T09:00Z, checks green, mergeable clean, base main\n") ||
+	if !strings.HasPrefix(out, "merge now (1)\n1. o/r#1  PR 1\n   CLEAR for head 1111111 per OWNER comment 2026-10-21T09:00Z, checks green, mergeable clean, base main\n") ||
 		!strings.HasSuffix(out, "1 can be merged now\n") {
 		t.Fatalf("%q", out)
 	}
