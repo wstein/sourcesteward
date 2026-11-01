@@ -147,6 +147,7 @@ func TestPinsPublicationNamesAtMostSixteenRefsAndFlagsTruncation(t *testing.T) {
 }
 
 func TestPinsPublicationNonUTF8RefIsEscapedPerFieldNotRefused(t *testing.T) {
+	requireNonUTF8Names(t)
 	c := newPublishCase(t)
 	// Git accepts non-UTF-8 bytes in a ref name; the result must carry an escaped form, never fail whole.
 	bad := filepath.Join(c.repo.GitDir, "refs", "remotes", "origin", "caf\xe9")
