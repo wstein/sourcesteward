@@ -30,6 +30,8 @@ func PullRef(n int) string { return NamespaceRoot + "pr-" + strconv.Itoa(n) }
 type Runner struct {
 	Bin string
 	Dir string
+	// MaxCommits bounds the commits per side; zero means the default.
+	MaxCommits int
 }
 
 // NewRunner returns a runner for the checkout or worktree at dir.
@@ -76,12 +78,24 @@ const (
 // FETCH_HEAD, no submodules, and an empty refmap so that a configured remote.<name>.fetch writes nothing.
 var fetchFlags = []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--refmap=", "--"}
 
-func equalPrefix(args []string, prefix ...string) bool {
-	if len(args) < len(prefix) {
+// diffFlags and logFlags are the exact leading flags of the diff and the log vector.
+var (
+	diffFlags = []string{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--ignore-submodules=none", "--submodule=short"}
+	logFlags  = []string{"log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "--binary", "--ignore-submodules=none", "--submodule=short", "-p", logFormat, "--end-of-options"}
+)
+
+// shape reports whether args is exactly fixed followed by one argument per validator.
+func shape(args, fixed []string, tail ...func(string) bool) bool {
+	if len(args) != len(fixed)+len(tail) {
 		return false
 	}
-	for i, p := range prefix {
-		if args[i] != p {
+	for i, f := range fixed {
+		if args[i] != f {
+			return false
+		}
+	}
+	for i, ok := range tail {
+		if !ok(args[len(fixed)+i]) {
 			return false
 		}
 	}
@@ -90,7 +104,7 @@ func equalPrefix(args []string, prefix ...string) bool {
 
 func rangeArg(s string) bool {
 	a, b, ok := strings.Cut(s, "..")
-	return ok && ValidSHA(a) && ValidSHA(b)
+	return ok && ValidSHA(a) && ValidSHA(b) && !strings.HasPrefix(b, ".")
 }
 
 func tripleArg(s string) bool {
@@ -98,17 +112,26 @@ func tripleArg(s string) bool {
 	return ok && ValidSHA(a) && ValidSHA(b)
 }
 
+func isDashDash(s string) bool { return s == "--" }
+
+func commitArg(s string) bool {
+	return strings.HasSuffix(s, shaSuffix) && ValidSHA(strings.TrimSuffix(s, shaSuffix))
+}
+
+func pullRefArg(s string) bool { return strings.HasPrefix(s, NamespaceRoot+"pr-") }
+
 // guard refuses every vector that is not exactly one of the reviewed commands. The flags are pinned
-// (no external diff, no textconv, no signature program, no tags), so a changed flag fails here.
+// (no external diff, no textconv, binary content in full, no submodule hiding, no signature program,
+// no tags), so a changed flag, a missing flag or an extra argument fails here.
 func guard(args []string) error {
 	switch {
-	case len(args) == 4 && equalPrefix(args, "rev-parse", "--verify", "--quiet") && strings.HasSuffix(args[3], shaSuffix) && ValidSHA(strings.TrimSuffix(args[3], shaSuffix)):
-	case len(args) == 7 && equalPrefix(args, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames") && tripleArg(args[5]) && args[6] == "--":
-	case len(args) == 2 && equalPrefix(args, "patch-id", "--stable"):
-	case len(args) == 4 && equalPrefix(args, "rev-list", "--merges", "--end-of-options") && rangeArg(args[3]):
-	case len(args) == 4 && equalPrefix(args, "rev-list", "--no-walk", "--end-of-options") && strings.HasPrefix(args[3], NamespaceRoot+"pr-"):
-	case len(args) == 12 && equalPrefix(args, "log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", logFormat, "--end-of-options") && rangeArg(args[11]):
-	case len(args) == len(fetchFlags)+2 && equalPrefix(args, fetchFlags...):
+	case shape(args, []string{"rev-parse", "--verify", "--quiet"}, commitArg):
+	case shape(args, diffFlags, tripleArg, isDashDash):
+	case shape(args, []string{"patch-id", "--stable"}):
+	case shape(args, []string{"rev-list", "--merges", "--end-of-options"}, rangeArg):
+	case shape(args, []string{"rev-list", "--no-walk", "--end-of-options"}, pullRefArg):
+	case shape(args, logFlags, rangeArg):
+	case len(args) == len(fetchFlags)+2 && shape(args[:len(fetchFlags)], fetchFlags):
 		return guardFetch(args[len(fetchFlags)], args[len(fetchFlags)+1])
 	default:
 		return fmt.Errorf("git %v is not one of the reviewed read-only commands of the carry-over check", args)
@@ -213,7 +236,7 @@ func (r *Runner) PatchID(ctx context.Context, base, head string) (string, error)
 	if err := needSHA(base, head); err != nil {
 		return "", err
 	}
-	diff, err := r.ok(ctx, nil, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", base+"..."+head, "--")
+	diff, err := r.ok(ctx, nil, append(append([]string{}, diffFlags...), base+"..."+head, "--")...)
 	if err != nil {
 		return "", err
 	}
@@ -250,8 +273,27 @@ func (r *Runner) Merges(ctx context.Context, base, head string) ([]string, error
 	return shas, nil
 }
 
-// MaxCommits bounds the commits compared per side.
+// MaxCommits is the default bound of the commits compared per side.
 const MaxCommits = 500
+
+// parseLog splits the output of the log vector: NUL, message, NUL, patch, per commit.
+func parseLog(out string, max int) ([]CommitPatch, error) {
+	if out == "" {
+		return nil, nil
+	}
+	parts := strings.Split(out, "\x00")
+	if parts[0] != "" || len(parts)%2 != 1 {
+		return nil, errors.New("unexpected git log output")
+	}
+	var commits []CommitPatch
+	for i := 1; i+1 < len(parts); i += 2 {
+		commits = append(commits, CommitPatch{Message: parts[i], Patch: parts[i+1]})
+	}
+	if len(commits) > max {
+		return nil, fmt.Errorf("more than %d commits", max)
+	}
+	return commits, nil
+}
 
 // Commits implements Git: the commits of base..head without merge commits, oldest first, each with
 // its message and its patch. No external diff, textconv, signature program or hook can start.
@@ -259,20 +301,13 @@ func (r *Runner) Commits(ctx context.Context, base, head string) ([]CommitPatch,
 	if err := needSHA(base, head); err != nil {
 		return nil, err
 	}
-	out, err := r.ok(ctx, nil, "log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", logFormat, "--end-of-options", base+".."+head)
+	out, err := r.ok(ctx, nil, append(append([]string{}, logFlags...), base+".."+head)...)
 	if err != nil {
 		return nil, err
 	}
-	parts := strings.Split(string(out), "\x00")
-	if len(parts) == 0 || strings.TrimSpace(parts[0]) != "" || len(parts)%2 != 1 {
-		return nil, errors.New("unexpected git log output")
+	max := r.MaxCommits
+	if max == 0 {
+		max = MaxCommits
 	}
-	var commits []CommitPatch
-	for i := 1; i+1 < len(parts); i += 2 {
-		commits = append(commits, CommitPatch{Message: parts[i], Patch: parts[i+1]})
-	}
-	if len(commits) > MaxCommits {
-		return nil, fmt.Errorf("more than %d commits", MaxCommits)
-	}
-	return commits, nil
+	return parseLog(string(out), max)
 }

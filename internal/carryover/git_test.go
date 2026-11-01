@@ -11,10 +11,11 @@ import (
 
 func TestGuardAllowsOnlyTheReviewedVectors(t *testing.T) {
 	fetch := append(append([]string{}, fetchFlags...), "origin", "+refs/pull/7/head:refs/stw/carry-over/pr-7")
-	logv := []string{"log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", "--format=%x00%B%x00", "--end-of-options", sha("1") + ".." + sha("2")}
+	logv := append(append([]string{}, logFlags...), sha("1")+".."+sha("2"))
+	diffv := append(append([]string{}, diffFlags...), sha("1")+"..."+sha("2"), "--")
 	for _, args := range [][]string{
 		{"rev-parse", "--verify", "--quiet", sha("1") + "^{commit}"},
-		{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", sha("1") + "..." + sha("2"), "--"},
+		diffv,
 		{"patch-id", "--stable"},
 		{"rev-list", "--merges", "--end-of-options", sha("1") + ".." + sha("2")},
 		{"rev-list", "--no-walk", "--end-of-options", PullRef(7)},
@@ -56,9 +57,9 @@ func TestGuardAllowsOnlyTheReviewedVectors(t *testing.T) {
 		"log without ext diff":  without(logv, "--no-ext-diff"),
 		"log without signature": without(logv, "--no-show-signature"),
 		"log with a ref":        replace(logv, sha("1")+".."+sha("2"), "main..feature"),
-		"diff without textconv": {"diff", "--no-color", "--no-ext-diff", "--no-renames", sha("1") + "..." + sha("2"), "--"},
-		"diff without ext":      {"diff", "--no-color", "--no-textconv", "--no-renames", sha("1") + "..." + sha("2"), "--"},
-		"diff with a ref":       {"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "main...feature", "--"},
+		"diff without textconv": without(diffv, "--no-textconv"),
+		"diff without ext":      without(diffv, "--no-ext-diff"),
+		"diff with a ref":       replace(diffv, sha("1")+"..."+sha("2"), "main...feature"),
 		"patch-id unstable":     {"patch-id"},
 		"rev-list outside":      {"rev-list", "--no-walk", "--end-of-options", "refs/heads/main"},
 	} {

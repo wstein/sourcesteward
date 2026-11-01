@@ -30,7 +30,7 @@ rebase-merge of the parent) is checked like any other rebase.
 2. **merge commits**: `git rev-list --merges NEW_BASE..NEW_HEAD` is empty. range-diff does not show merge commits.
 3. **range-diff equivalent**: the commits of `OLD_BASE..OLD_HEAD` and `NEW_BASE..NEW_HEAD` (merge commits excluded, oldest
    first) are equal pairwise at the same position, in message and in patch. The patch is compared byte for byte except the
-   `index` lines (blob ids) and the line numbers of the hunk headers, which a rebase changes. This is the `=` of
+   `index` lines (blob ids) and the hunk headers (`@@` line numbers and the function context after them), which a rebase changes. Binary content and gitlinks are included in full: `--binary`, `--ignore-submodules=none` and `--submodule=short` are pinned, so a `-diff`/`binary` attribute or a `submodule.<name>.ignore` or `diff.ignoreSubmodules` setting cannot hide a change. This is the `=` of
    `git range-diff` without running it: range-diff starts the `textconv` drivers of the repository (`.gitattributes`,
    `info/attributes`) and a driver that strips whitespace would give a false yes. A differing pair is `!`, an extra new
    commit `>`, a missing one `<`; a reordering fails at both positions. An empty range fails (`range-empty`). Changed context

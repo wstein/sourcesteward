@@ -114,8 +114,8 @@ func checkMerges(ctx context.Context, g Git, req Request, res *Result, fail func
 }
 
 // normalize drops what a rebase may change without changing the commit: the blob ids of the index
-// lines and the line numbers of the hunk headers. Everything else, whitespace included, is compared
-// byte for byte, which is what the patch-id cannot do.
+// lines and the hunk headers (the line numbers and the function context after them). Everything
+// else, whitespace included, is compared byte for byte, which is what the patch-id cannot do.
 func normalize(cp CommitPatch) string {
 	var b strings.Builder
 	b.WriteString(cp.Message)
