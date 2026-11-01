@@ -457,11 +457,14 @@ func TestSyncIgnoresAnInvalidRulesPathFromTheEnvironmentWithoutRules(t *testing.
 	if err != nil || calls != 1 || got.RulesPath != "" || strings.Count(notice, "\n") != 1 || !strings.Contains(notice, "STW_RULES_PATH") {
 		t.Fatalf("%v calls=%d path=%q notice=%q", err, calls, got.RulesPath, notice)
 	}
+	if strings.Contains(notice, "--rules-path") {
+		t.Fatalf("the notice names the flag: %q", notice)
+	}
 	var failure runtimeFailure
-	if calls, _, err = run("--rules"); err == nil || errors.As(err, &failure) || calls != 0 {
+	if calls, _, err = run("--rules"); err == nil || errors.As(err, &failure) || calls != 0 || !strings.HasPrefix(err.Error(), "STW_RULES_PATH") {
 		t.Fatalf("--rules with an invalid environment path: %v calls=%d", err, calls)
 	}
-	if calls, _, err = run("--rules-path", "../x"); err == nil || calls != 0 {
-		t.Fatalf("an invalid --rules-path stays a usage error: %v", err)
+	if calls, _, err = run("--rules-path", "../x"); err == nil || calls != 0 || !strings.HasPrefix(err.Error(), "--rules-path") {
+		t.Fatalf("an invalid --rules-path stays a usage error naming the flag: %v", err)
 	}
 }
