@@ -66,11 +66,29 @@ func TestEachConditionFailsForItsOwnReasonOnly(t *testing.T) {
 		{"checks pending", CondChecks, StatusFail, func(f *Facts) { f.ChecksClass = "pending" }, "pending"},
 		{"checks none", CondChecks, StatusFail, func(f *Facts) { f.ChecksClass = "none" }, "no checks"},
 		{"checks read failed", CondChecks, StatusUnknown, func(f *Facts) { f.ChecksErr = "rate limited" }, "rate limited"},
-		{"base is a branch", CondBase, StatusFail, func(f *Facts) { f.BaseRef = "codex/parent" }, "codex/parent"},
+		{"base is a branch without a parent", CondBase, StatusFail, func(f *Facts) { f.BaseRef = "codex/parent" }, "codex/parent"},
 		{"base unknown default", CondBase, StatusUnknown, func(f *Facts) { f.DefaultBranch = ""; f.RepoErr = "repo unreadable" }, "repo unreadable"},
+		{"base empty default without a read error", CondBase, StatusUnknown, func(f *Facts) { f.DefaultBranch = "" }, "default branch"},
+		{"base parents not read", CondBase, StatusUnknown, func(f *Facts) { f.BaseRef = "codex/parent"; f.ParentErr = "list unreadable" }, "list unreadable"},
 		{"blocker named", CondBlocker, StatusFail, func(f *Facts) { f.Body = "Blocker: Independent review pending\n" }, "Independent review pending"},
 		{"blocker bullet bold", CondBlocker, StatusFail, func(f *Facts) { f.Body = "- **Blocker:** waits for #12\n" }, "waits for #12"},
 		{"blocker empty value", CondBlocker, StatusFail, func(f *Facts) { f.Body = "Blocker:\n" }, "no value"},
+		{"blocker heading", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Blocker\nIndependent review pending\n" }, "Independent review pending"},
+		{"blocker heading after blank line", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Blocker\n\nwaits for #5\n\n## Tests\nx\n" }, "waits for #5"},
+		{"blocker heading without a section", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Blocker\n\n## Tests\nx\n" }, "no value"},
+		{"blocker heading with a list", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Blocker\n- none\n- also waits for #6\n" }, "waits for #6"},
+		{"blocker with a qualifier", CondBlocker, StatusFail, func(f *Facts) { f.Body = "**Blocker (Draft):** review pending\n" }, "review pending"},
+		{"blocker numbered", CondBlocker, StatusFail, func(f *Facts) { f.Body = "1. Blocker: review pending\n" }, "review pending"},
+		{"blocker named in bold", CondBlocker, StatusFail, func(f *Facts) { f.Body = "**Draft, named blocker:** review pending\n" }, "review pending"},
+		{"blocker after a sentence", CondBlocker, StatusFail, func(f *Facts) { f.Body = "Draft. Blocker: review pending\n" }, "review pending"},
+		{"blocker heading with a colon", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Blocker: review pending\n" }, "review pending"},
+		{"blocker in a quote", CondBlocker, StatusFail, func(f *Facts) { f.Body = "> Blocker: review pending\n" }, "review pending"},
+		{"blocker bare in a quote", CondBlocker, StatusFail, func(f *Facts) { f.Body = "> Blocker\nreview pending\n" }, "review pending"},
+		{"blocker bare in a list", CondBlocker, StatusFail, func(f *Facts) { f.Body = "- Blocker\nreview pending\n" }, "review pending"},
+		{"blocker bare numbered", CondBlocker, StatusFail, func(f *Facts) { f.Body = "1. Blocker\nreview pending\n" }, "review pending"},
+		{"blocker bare in bold", CondBlocker, StatusFail, func(f *Facts) { f.Body = "**Blocker**\nreview pending\n" }, "review pending"},
+		{"blocker heading with more words", CondBlocker, StatusFail, func(f *Facts) { f.Body = "## Known blocker\nreview pending\n" }, "review pending"},
+		{"blocker plural", CondBlocker, StatusFail, func(f *Facts) { f.Body = "Blockers: review pending\n" }, "review pending"},
 		{"conflict dirty", CondConflict, StatusFail, func(f *Facts) { f.Mergeable = no(); f.MergeableState = "dirty" }, "conflict"},
 		{"conflict state dirty only", CondConflict, StatusFail, func(f *Facts) { f.MergeableState = "dirty" }, "conflict"},
 		{"conflict not computed", CondConflict, StatusUnknown, func(f *Facts) { f.Mergeable = nil }, "not computed"},
@@ -104,7 +122,9 @@ func TestEachConditionFailsForItsOwnReasonOnly(t *testing.T) {
 }
 
 func TestBlockerAcceptsNoneSpellingsAndIgnoresOtherText(t *testing.T) {
-	for _, body := range []string{"", "Blocker: none", "Blocker: None.", "blocker: keiner", "* Blocker: -", "Mentions a blocker in prose: not a line.", "Unblocker: x"} {
+	for _, body := range []string{"", "Blocker: none", "Blocker: None.", "blocker: keiner", "Blocker: keine", "Blocker: no", "Blocker: n/a", "* Blocker: -", "- **Blocker:** none",
+		"**Blocker (Draft):** none", "1. Blocker: none", "## Blocker\nnone\n\n## Tests\nBlocker-free text\n", "## Blocker\n\n- none\n", "## Blocker: none",
+		"Blocker:\nnone\n\nPurpose text follows the section.", "Known blocker\nreview pending\n", "Mentions a blocker in prose.", "Unblocker: x", "The blocker list is short and has one entry: none of them"} {
 		f := good()
 		f.Body = body
 		if c := cond(t, f, CondBlocker); c.Status != StatusPass {
@@ -118,17 +138,23 @@ func TestBlockerAcceptsNoneSpellingsAndIgnoresOtherText(t *testing.T) {
 	}
 }
 
-func TestStackChildPassesOnlyWithTheParentNote(t *testing.T) {
+func TestStackChildPassesOnlyWithAnOpenParentPullRequest(t *testing.T) {
 	f := good()
 	f.BaseRef = "codex/parent"
-	f.Body = "Blocker: none\nMerge #12 first.\n"
+	f.ParentPR = 12
 	c := cond(t, f, CondBase)
-	if c.Status != StatusPass || !strings.Contains(c.Evidence, "#12") {
+	if c.Status != StatusPass || !strings.Contains(c.Evidence, "#12") || !strings.Contains(c.Evidence, "codex/parent") {
 		t.Fatalf("%+v", c)
 	}
-	f.Body = "Blocker: none\nmerge #0 first\n"
+	f.ParentPR = 0
+	f.Body = "Blocker: none\nMerge #12 first.\n"
 	if c := cond(t, f, CondBase); c.Status != StatusFail {
-		t.Fatalf("#0 is no parent: %+v", c)
+		t.Fatalf("the text line no longer counts: %+v", c)
+	}
+	f = good()
+	f.ParentPR = 12 // a parent does not matter when the base is the default branch
+	if c := cond(t, f, CondBase); c.Status != StatusPass || strings.Contains(c.Evidence, "#12") {
+		t.Fatalf("%+v", c)
 	}
 }
 
@@ -154,6 +180,29 @@ func TestEvidenceIsEscapedAndBounded(t *testing.T) {
 	c := cond(t, f, CondBlocker)
 	if strings.ContainsRune(c.Evidence, 0x1b) || len(c.Evidence) > 400 {
 		t.Fatalf("evidence not escaped or bounded: %q", c.Evidence)
+	}
+}
+
+// Every field that reaches the evidence is hostile and long; the schema allows 400 characters.
+func TestEveryEvidenceStaysWithinTheSchemaLimit(t *testing.T) {
+	hostile := strings.Repeat("\x1b\x00\u00e4", 600)
+	f := Facts{State: hostile, Head: head, BaseRef: hostile, DefaultBranch: hostile, Body: "Blocker: " + hostile, Mergeable: no(), MergeableState: hostile,
+		Rebaseable: no(), ChecksClass: hostile, Review: Review{State: hostile, Head: hostile}, PullErr: hostile}
+	for _, mut := range []func(*Facts){func(*Facts) {}, func(f *Facts) {
+		f.PullErr = ""
+		f.RepoErr = hostile
+		f.ChecksErr = hostile
+		f.ReviewErr = hostile
+		f.ParentErr = hostile
+	},
+		func(f *Facts) { f.PullErr = ""; f.Review.State = "clear" }} {
+		g := f
+		mut(&g)
+		for _, c := range Evaluate(g) {
+			if n := len([]rune(c.Evidence)); n > 400 || len(c.Evidence) > 400 {
+				t.Errorf("%s evidence has %d characters, %d bytes", c.ID, n, len(c.Evidence))
+			}
+		}
 	}
 }
 

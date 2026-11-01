@@ -7,8 +7,10 @@ package readycheck
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
+	"github.com/wstein/sourcesteward/internal/snapcmd"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
@@ -56,6 +58,12 @@ type Facts struct {
 	DefaultBranch string
 	ChecksClass   string // none|pending|green|red at the exact head
 	Review        Review
+
+	// ParentPR is the lowest number of another open pull request in the repository whose head
+	// branch is this pull request's base branch, 0 if none. It is read only when the base is not
+	// the default branch; ParentErr says that read failed.
+	ParentPR  int
+	ParentErr string
 }
 
 // Condition is one precondition with its evidence.
@@ -66,11 +74,26 @@ type Condition struct {
 }
 
 var (
-	// blockerLine matches "Blocker: x", "- **Blocker:** x" and "> Blocker: x" at the start of a line.
-	blockerLine = regexp.MustCompile(`(?i)^[\s>*-]*(?:\*\*|__)?blockers?(?:\*\*|__)?\s*:\s*(?:\*\*|__)?\s*(.*)$`)
-	parentNote  = regexp.MustCompile(`(?im)^[\s>*-]*merge #([1-9][0-9]*) first\b`)
-	noBlocker   = map[string]bool{"none": true, "keiner": true, "keine": true, "n/a": true, "-": true, "no": true}
+	headingLine  = regexp.MustCompile(`^\s*#{1,6}(\s|$)`)
+	numberPrefix = regexp.MustCompile(`^[0-9]+[.)]\s+`)
+	listMarker   = regexp.MustCompile(`^(?:[-*+]|[0-9]+[.)])\s+`)
+	blockerWord  = regexp.MustCompile(`(?i)\bblockers?\b`)
+	noBlocker    = map[string]bool{"none": true, "keiner": true, "keine": true, "n/a": true, "-": true, "no": true}
+	emphasis     = strings.NewReplacer("*", "", "_", "", "`", "")
 )
+
+// NoneSpellings lists the values that mean "no blocker", sorted; the command help names them all.
+func NoneSpellings() []string {
+	out := make([]string, 0, len(noBlocker))
+	for k := range noBlocker {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// maxEvidence is the schema limit of an evidence string (characters; bytes here, which is stricter).
+const maxEvidence = 400
 
 func esc(s string) string { return untrusted.Esc(s) }
 
@@ -97,7 +120,7 @@ func Ready(cs []Condition) bool {
 }
 
 func c(id, status, format string, args ...any) Condition {
-	return Condition{ID: id, Status: status, Evidence: fmt.Sprintf(format, args...)}
+	return Condition{ID: id, Status: status, Evidence: snapcmd.Cut(fmt.Sprintf(format, args...), maxEvidence)}
 }
 
 func open(f Facts) Condition {
@@ -161,34 +184,86 @@ func base(f Facts) Condition {
 	switch {
 	case f.PullErr != "":
 		return c(CondBase, StatusUnknown, "base not read: %s", esc(f.PullErr))
-	case f.RepoErr != "" || f.DefaultBranch == "":
+	case f.RepoErr != "":
 		return c(CondBase, StatusUnknown, "default branch not read: %s", esc(f.RepoErr))
+	case f.DefaultBranch == "":
+		return c(CondBase, StatusUnknown, "default branch unknown")
 	case f.BaseRef == f.DefaultBranch:
 		return c(CondBase, StatusPass, "base %s is the default branch", esc(f.BaseRef))
+	case f.ParentErr != "":
+		return c(CondBase, StatusUnknown, "open pull requests not read: %s", esc(f.ParentErr))
+	case f.ParentPR > 0:
+		return c(CondBase, StatusPass, "stack child: base %s is the head branch of open #%d, merge #%d first", esc(f.BaseRef), f.ParentPR, f.ParentPR)
 	}
-	if m := parentNote.FindStringSubmatch(f.Body); m != nil {
-		return c(CondBase, StatusPass, "stack child on %s, text says merge #%s first (parent not checked)", esc(f.BaseRef), m[1])
+	return c(CondBase, StatusFail, "base %s is not the default branch %s and no other open pull request has it as head branch", esc(f.BaseRef), esc(f.DefaultBranch))
+}
+
+// noBlockerValue reports whether v, a value of a Blocker line or one line of a Blocker section,
+// is one of the none spellings (list marker, emphasis and a trailing period ignored).
+func noBlockerValue(v string) bool {
+	v = strings.TrimSpace(emphasis.Replace(v))
+	v = strings.TrimSpace(listMarker.ReplaceAllString(v, ""))
+	return noBlocker[strings.ToLower(strings.TrimRight(v, ". "))]
+}
+
+// blockerLabel splits a line into the label before its first colon and the value after it. A line
+// is a Blocker line when its label (at most six words) contains the word "blocker", or when it is
+// a heading or a bare "Blocker" word and has no colon. Quote, list, number and heading marks and
+// emphasis are ignored: "## Blocker", "**Blocker (Draft):** x", "1. Blocker: x", "> Blocker: x",
+// "Draft. Blocker: x" and "**Draft, named blocker:** x" all match.
+func blockerLabel(line string) (value string, ok bool) {
+	heading := headingLine.MatchString(line)
+	l := strings.TrimSpace(emphasis.Replace(line))
+	l = strings.TrimLeft(l, " \t#>-+")
+	l = strings.TrimSpace(numberPrefix.ReplaceAllString(l, ""))
+	label, rest, colon := strings.Cut(l, ":")
+	if !blockerWord.MatchString(label) || len(strings.Fields(label)) > 6 {
+		return "", false
 	}
-	return c(CondBase, StatusFail, "base %s is not the default branch %s and the text has no \"Merge #N first\" line", esc(f.BaseRef), esc(f.DefaultBranch))
+	if !colon && !heading && !strings.EqualFold(strings.TrimSpace(label), "blocker") && !strings.EqualFold(strings.TrimSpace(label), "blockers") {
+		return "", false
+	}
+	return strings.TrimSpace(rest), true
 }
 
 func blocker(f Facts) Condition {
 	if f.PullErr != "" {
 		return c(CondBlocker, StatusUnknown, "text not read: %s", esc(f.PullErr))
 	}
-	for _, line := range strings.Split(f.Body, "\n") {
-		m := blockerLine.FindStringSubmatch(strings.TrimRight(line, "\r"))
-		if m == nil {
+	lines := strings.Split(f.Body, "\n")
+	for i := 0; i < len(lines); i++ {
+		value, ok := blockerLabel(strings.TrimRight(lines[i], "\r"))
+		if !ok {
 			continue
 		}
-		v := strings.Trim(strings.ToLower(strings.TrimSpace(m[1])), ".*_ ")
-		if noBlocker[v] {
+		if value != "" {
+			if !noBlockerValue(value) {
+				return c(CondBlocker, StatusFail, "Blocker line: %s", esc(value))
+			}
 			continue
 		}
-		if strings.TrimSpace(m[1]) == "" {
+		// No value on the line: the section below it, up to the next blank line after the first
+		// content line or the next heading, holds the value.
+		var section []string
+		j := i + 1
+		for ; j < len(lines); j++ {
+			l := strings.TrimRight(lines[j], "\r")
+			if headingLine.MatchString(l) || (strings.TrimSpace(l) == "" && len(section) > 0) {
+				break
+			}
+			if strings.TrimSpace(l) != "" {
+				section = append(section, l)
+			}
+		}
+		if len(section) == 0 {
 			return c(CondBlocker, StatusFail, "a Blocker line has no value")
 		}
-		return c(CondBlocker, StatusFail, "Blocker line: %s", esc(strings.TrimSpace(m[1])))
+		for _, l := range section {
+			if !noBlockerValue(l) {
+				return c(CondBlocker, StatusFail, "Blocker section: %s", esc(strings.TrimSpace(l)))
+			}
+		}
+		i = j - 1
 	}
 	return c(CondBlocker, StatusPass, "no Blocker line names a blocker")
 }
