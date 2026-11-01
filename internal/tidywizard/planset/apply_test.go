@@ -40,7 +40,7 @@ func refusedWith(code string) workspace.V3Result {
 
 func stateDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "s")
+	dir := filepath.Join(realTempDir(t), "s")
 	if err := os.Mkdir(dir, 0700); err != nil {
 		t.Fatal(err)
 	}
@@ -407,7 +407,7 @@ func TestApplyOnARealRepositoryDeletesTheMergedBranchAndReplaysAsANoOp(t *testin
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
 	}
-	root := t.TempDir()
+	root := realTempDir(t)
 	repo := filepath.Join(root, "repo")
 	state := filepath.Join(root, "state")
 	if err := os.Mkdir(state, 0700); err != nil {

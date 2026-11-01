@@ -251,7 +251,7 @@ func TestV3PlannerOnARealRepository(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
 	}
-	root := t.TempDir()
+	root := realTempDir(t)
 	repo := filepath.Join(root, "repo")
 	state := filepath.Join(root, "state")
 	if err := os.Mkdir(state, 0700); err != nil {

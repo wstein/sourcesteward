@@ -5,6 +5,7 @@ package planset
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -41,7 +42,7 @@ func newOfferedFixture(t *testing.T) *offeredFixture {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is required")
 	}
-	root := t.TempDir()
+	root := realTempDir(t)
 	f := &offeredFixture{t: t, root: root, repo: filepath.Join(root, "repo"), state: filepath.Join(root, "state")}
 	for _, d := range []struct {
 		path string
@@ -129,9 +130,9 @@ func (f *offeredFixture) staleUnlockedWorktree(name, branch string) {
 // user whose name starts with whr (owner codex, scope other, so choosable in human mode).
 func (f *offeredFixture) controlWorktree(branch string) string {
 	f.t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "whr-control-")
+	dir, err := tmpSubdir("whr-control-")
 	if err != nil {
-		f.t.Skipf("cannot make a directory under /tmp: %v", err)
+		f.t.Skipf("no usable directory under /tmp: %v", err)
 	}
 	f.t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	path := filepath.Join(dir, "wt")
@@ -218,6 +219,23 @@ func rowOf(t *testing.T, res tidywizard.Result, id string) tidywizard.Candidate 
 	return tidywizard.Candidate{}
 }
 
+// tmpSubdir makes a directory directly under /tmp. The owner convention matches the path
+// prefix /tmp/whr and the planners reject paths with symlink components. Where /tmp is a symlink
+// (macOS: /private/tmp) no directory satisfies both, so the caller skips; matching the physical
+// /private/tmp prefix would change the owner convention and is not done here.
+func tmpSubdir(prefix string) (string, error) {
+	dir, err := os.MkdirTemp("/tmp", prefix)
+	if err != nil {
+		return "", err
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil || real != dir {
+		_ = os.RemoveAll(dir)
+		return "", fmt.Errorf("/tmp is a symlink here (%s); the /tmp/whr owner convention cannot match a canonical path", real)
+	}
+	return dir, nil
+}
+
 // sharedParent makes a directory directly under /tmp, which another user owns (root), and
 // skips the test where the user owns /tmp. The name starts with whr, which the owner
 // convention labels codex (scope other), so the row is choosable in human mode.
@@ -227,9 +245,9 @@ func sharedParent(t *testing.T) string {
 	if err := syscall.Stat("/tmp", &st); err != nil || int(st.Uid) == os.Geteuid() {
 		t.Skip("/tmp is owned by the current user here; the condition needs a directory of another owner")
 	}
-	dir, err := os.MkdirTemp("/tmp", "whr-offered-")
+	dir, err := tmpSubdir("whr-offered-")
 	if err != nil {
-		t.Skipf("cannot make a directory under /tmp: %v", err)
+		t.Skipf("no usable directory under /tmp: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	return dir
