@@ -9,24 +9,61 @@ import (
 	"testing"
 )
 
-func TestGuardAllowsOnlyReadOnlyCommandsAndTheOneFetch(t *testing.T) {
+func TestGuardAllowsOnlyTheReviewedVectors(t *testing.T) {
+	fetch := append(append([]string{}, fetchFlags...), "origin", "+refs/pull/7/head:refs/stw/carry-over/pr-7")
+	logv := []string{"log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", "--format=%x00%B%x00", "--end-of-options", sha("1") + ".." + sha("2")}
 	for _, args := range [][]string{
-		{"cat-file", "-e", "x"}, {"diff", "a...b"}, {"patch-id", "--stable"}, {"rev-list", "--count", "a..b"}, {"range-diff", "a..b", "c..d"},
-		{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin", "+refs/pull/7/head:refs/stw/carry-over/pr-7"},
+		{"rev-parse", "--verify", "--quiet", sha("1") + "^{commit}"},
+		{"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", sha("1") + "..." + sha("2"), "--"},
+		{"patch-id", "--stable"},
+		{"rev-list", "--merges", "--end-of-options", sha("1") + ".." + sha("2")},
+		{"rev-list", "--no-walk", "--end-of-options", PullRef(7)},
+		logv, fetch,
 	} {
 		if err := guard(args); err != nil {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
-	for _, args := range [][]string{
-		nil, {"push", "origin", "main"}, {"update-ref", "refs/heads/main", "x"}, {"reset", "--hard"}, {"checkout", "main"}, {"gc"}, {"config", "user.name", "x"},
-		{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin", "+refs/pull/7/head:refs/heads/main"},
-		{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "origin", "+refs/heads/main:refs/stw/carry-over/pr-7"},
-		{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", "--upload-pack=evil", "+refs/pull/7/head:refs/stw/carry-over/pr-7"},
-		{"fetch", "origin"},
+	without := func(v []string, drop string) []string {
+		var out []string
+		for _, a := range v {
+			if a != drop {
+				out = append(out, a)
+			}
+		}
+		return out
+	}
+	replace := func(v []string, from, to string) []string {
+		out := append([]string{}, v...)
+		for i, a := range out {
+			if a == from {
+				out[i] = to
+			}
+		}
+		return out
+	}
+	for name, args := range map[string][]string{
+		"empty": nil, "push": {"push", "origin", "main"}, "update-ref": {"update-ref", "refs/heads/main", "x"}, "reset": {"reset", "--hard"},
+		"checkout": {"checkout", "main"}, "gc": {"gc"}, "config": {"config", "user.name", "x"}, "range-diff": {"range-diff", sha("1") + ".." + sha("2"), sha("3") + ".." + sha("4")},
+		"fetch with tags":       replace(fetch, "--no-tags", "--tags"),
+		"fetch without refmap":  without(fetch, "--refmap="),
+		"fetch without no-tags": without(fetch, "--no-tags"),
+		"fetch into a branch":   replace(fetch, "+refs/pull/7/head:refs/stw/carry-over/pr-7", "+refs/pull/7/head:refs/heads/main"),
+		"fetch of a branch":     replace(fetch, "+refs/pull/7/head:refs/stw/carry-over/pr-7", "+refs/heads/main:refs/stw/carry-over/pr-7"),
+		"fetch option remote":   replace(fetch, "origin", "--upload-pack=evil"),
+		"fetch short":           {"fetch", "origin"},
+		"log without textconv":  without(logv, "--no-textconv"),
+		"log without ext diff":  without(logv, "--no-ext-diff"),
+		"log without signature": without(logv, "--no-show-signature"),
+		"log with a ref":        replace(logv, sha("1")+".."+sha("2"), "main..feature"),
+		"diff without textconv": {"diff", "--no-color", "--no-ext-diff", "--no-renames", sha("1") + "..." + sha("2"), "--"},
+		"diff without ext":      {"diff", "--no-color", "--no-textconv", "--no-renames", sha("1") + "..." + sha("2"), "--"},
+		"diff with a ref":       {"diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "main...feature", "--"},
+		"patch-id unstable":     {"patch-id"},
+		"rev-list outside":      {"rev-list", "--no-walk", "--end-of-options", "refs/heads/main"},
 	} {
 		if err := guard(args); err == nil {
-			t.Errorf("%v: allowed", args)
+			t.Errorf("%s: allowed %v", name, args)
 		}
 	}
 }
@@ -44,11 +81,8 @@ func TestRunnerRefusesInvalidIDsBeforeRunningGit(t *testing.T) {
 		if _, err := r.Merges(ctx, sha("1"), bad); err == nil {
 			t.Errorf("Merges %q", bad)
 		}
-		if _, err := r.Count(ctx, bad, sha("1")); err == nil {
-			t.Errorf("Count %q", bad)
-		}
-		if _, err := r.RangeDiff(ctx, sha("1"), sha("2"), sha("3"), bad); err == nil {
-			t.Errorf("RangeDiff %q", bad)
+		if _, err := r.Commits(ctx, bad, sha("1")); err == nil {
+			t.Errorf("Commits %q", bad)
 		}
 	}
 	for _, remote := range []string{"-u", "a b", "x..y", ""} {
@@ -69,6 +103,9 @@ func remoteWithPull(t *testing.T, s *stack, tip string) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	s.r.git("push", "-q", bare, tip+":refs/pull/7/head")
+	s.r.git("tag", "-f", "v-remote", tip)
+	s.r.git("push", "-q", "-f", bare, "refs/tags/v-remote")
+	s.r.git("tag", "-d", "v-remote")
 	s.r.git("remote", "add", "origin", bare)
 }
 
@@ -164,5 +201,115 @@ func TestPatchIDSeesBinaryContent(t *testing.T) {
 	res := Check(t.Context(), NewRunner(r.dir), Request{PR: 1, OldBase: base, OldHead: one, NewBase: base, NewHead: r.head()})
 	if res.PatchID.State != StateDiffers {
 		t.Fatalf("different binary content must change the patch-id: %+v", res)
+	}
+}
+
+// marker returns an executable script that appends a line to a marker file, plus the file's path.
+func marker(t *testing.T, body string) (script, log string) {
+	t.Helper()
+	dir := t.TempDir()
+	log = filepath.Join(dir, "ran")
+	script = filepath.Join(dir, "driver.sh")
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho ran >> '"+log+"'\n"+body+"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return script, log
+}
+
+func ran(t *testing.T, log string) int {
+	t.Helper()
+	b, err := os.ReadFile(log)
+	if err != nil {
+		return 0
+	}
+	return strings.Count(string(b), "ran")
+}
+
+func TestNoDiffDriverRunsAndAWhitespaceChangeStaysNo(t *testing.T) {
+	s := newStack(t)
+	script, log := marker(t, `tr -d ' ' < "$1"`)
+	s.r.git("config", "diff.strip.textconv", script)
+	s.r.git("config", "diff.external", script)
+	// info/attributes is not covered by an attribute source; the flags must keep the driver away.
+	if err := os.WriteFile(filepath.Join(s.r.dir, ".git", "info", "attributes"), []byte("*.txt diff=strip\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s.r.git("checkout", "-q", "-b", "new", "main")
+	s.r.git("cherry-pick", s.c1)
+	s.r.write("a.txt", strings.Replace(c1File, "TWO", "TWO ", 1))
+	s.r.git("commit", "-q", "-a", "--amend", "--no-edit")
+	s.r.git("cherry-pick", s.c2)
+	res := s.check(t, s.m2, s.r.head())
+	wantReasons(t, res, ReasonRangeDiff)
+	if res.PatchID.State != StateEqual {
+		t.Fatalf("the patch-id ignores whitespace: %+v", res.PatchID)
+	}
+	if n := ran(t, log); n != 0 {
+		t.Fatalf("a diff driver ran %d times", n)
+	}
+	// Sanity: the driver is wired, so a plain git diff does start it.
+	s.r.git("diff", s.m1, s.c2)
+	if ran(t, log) == 0 {
+		t.Fatal("the marker driver is not wired; the test proves nothing")
+	}
+}
+
+func TestFetchWritesNoConfiguredRefmapRef(t *testing.T) {
+	s := newStack(t)
+	head := s.rebased("new")
+	remoteWithPull(t, s, head)
+	s.r.git("config", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*")
+	s.r.git("config", "--add", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*")
+	if _, err := NewRunner(s.r.dir).FetchPull(t.Context(), "origin", 7); err != nil {
+		t.Fatal(err)
+	}
+	if refs := s.r.git("for-each-ref", "--format=%(refname)", "refs/remotes"); refs != "" {
+		t.Fatalf("the configured refmap wrote refs:\n%s", refs)
+	}
+	if got := s.r.git("rev-parse", PullRef(7)); got != head {
+		t.Fatalf("private ref %s, want %s", got, head)
+	}
+}
+
+func TestNoHookRunsDuringTheFetch(t *testing.T) {
+	s := newStack(t)
+	head := s.rebased("new")
+	remoteWithPull(t, s, head)
+	script, log := marker(t, "exit 0")
+	hook := filepath.Join(s.r.dir, ".git", "hooks", "reference-transaction")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(script, hook); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewRunner(s.r.dir).FetchPull(t.Context(), "origin", 7); err != nil {
+		t.Fatal(err)
+	}
+	if n := ran(t, log); n != 0 {
+		t.Fatalf("the reference-transaction hook ran %d times", n)
+	}
+	// Sanity: the hook fires for an ordinary ref update.
+	s.r.git("update-ref", "refs/heads/probe", head)
+	if ran(t, log) == 0 {
+		t.Fatal("the hook is not wired; the test proves nothing")
+	}
+}
+
+func TestInheritedGitDirDoesNotRedirectTheRunner(t *testing.T) {
+	s := newStack(t)
+	head := s.rebased("new")
+	other := newRepo(t)
+	other.commit("x.txt", "x\n", "other")
+	t.Setenv("GIT_DIR", filepath.Join(other.dir, ".git"))
+	t.Setenv("GIT_INDEX_FILE", filepath.Join(other.dir, "index-elsewhere"))
+	wantReasons(t, s.check(t, s.m2, head))
+}
+
+func TestCheckoutOutsideARepositoryIsAReadFailure(t *testing.T) {
+	res := Check(t.Context(), NewRunner(t.TempDir()), req)
+	wantReasons(t, res, ReasonReadFailed)
+	if res.CarryOver {
+		t.Fatal("carry-over without a repository")
 	}
 }

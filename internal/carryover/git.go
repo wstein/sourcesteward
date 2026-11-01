@@ -67,27 +67,58 @@ func environment() []string {
 	return append(env, "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "LC_ALL=C")
 }
 
-// readOnly are the subcommands that never write; fetch is checked separately.
-var readOnly = map[string]bool{"cat-file": true, "diff": true, "patch-id": true, "rev-list": true, "range-diff": true}
+const (
+	logFormat = "--format=%x00%B%x00"
+	shaSuffix = "^{commit}"
+)
 
-// guard refuses any vector that is not one of the reviewed read-only commands or the one fetch.
+// fetchFlags are the exact flags of the one fetch: objects and the private ref only, no tags, no
+// FETCH_HEAD, no submodules, and an empty refmap so that a configured remote.<name>.fetch writes nothing.
+var fetchFlags = []string{"fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--refmap=", "--"}
+
+func equalPrefix(args []string, prefix ...string) bool {
+	if len(args) < len(prefix) {
+		return false
+	}
+	for i, p := range prefix {
+		if args[i] != p {
+			return false
+		}
+	}
+	return true
+}
+
+func rangeArg(s string) bool {
+	a, b, ok := strings.Cut(s, "..")
+	return ok && ValidSHA(a) && ValidSHA(b)
+}
+
+func tripleArg(s string) bool {
+	a, b, ok := strings.Cut(s, "...")
+	return ok && ValidSHA(a) && ValidSHA(b)
+}
+
+// guard refuses every vector that is not exactly one of the reviewed commands. The flags are pinned
+// (no external diff, no textconv, no signature program, no tags), so a changed flag fails here.
 func guard(args []string) error {
-	if len(args) == 0 {
-		return errors.New("empty git command")
+	switch {
+	case len(args) == 4 && equalPrefix(args, "rev-parse", "--verify", "--quiet") && strings.HasSuffix(args[3], shaSuffix) && ValidSHA(strings.TrimSuffix(args[3], shaSuffix)):
+	case len(args) == 7 && equalPrefix(args, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames") && tripleArg(args[5]) && args[6] == "--":
+	case len(args) == 2 && equalPrefix(args, "patch-id", "--stable"):
+	case len(args) == 4 && equalPrefix(args, "rev-list", "--merges", "--end-of-options") && rangeArg(args[3]):
+	case len(args) == 4 && equalPrefix(args, "rev-list", "--no-walk", "--end-of-options") && strings.HasPrefix(args[3], NamespaceRoot+"pr-"):
+	case len(args) == 12 && equalPrefix(args, "log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", logFormat, "--end-of-options") && rangeArg(args[11]):
+	case len(args) == len(fetchFlags)+2 && equalPrefix(args, fetchFlags...):
+		return guardFetch(args[len(fetchFlags)], args[len(fetchFlags)+1])
+	default:
+		return fmt.Errorf("git %v is not one of the reviewed read-only commands of the carry-over check", args)
 	}
-	if readOnly[args[0]] {
-		return nil
-	}
-	if args[0] != "fetch" {
-		return fmt.Errorf("git %s is not a read-only command of the carry-over check", args[0])
-	}
-	// fetch --quiet --no-tags --no-write-fetch-head --no-recurse-submodules -- REMOTE REFSPEC
-	if len(args) != 8 || args[6] == "" || !ValidRemote(args[6]) {
-		return errors.New("unexpected fetch vector")
-	}
-	spec := args[7]
+	return nil
+}
+
+func guardFetch(remote, spec string) error {
 	src, dst, ok := strings.Cut(strings.TrimPrefix(spec, "+"), ":")
-	if !ok || !strings.HasPrefix(spec, "+refs/pull/") || !strings.HasSuffix(src, "/head") || !strings.HasPrefix(dst, NamespaceRoot) {
+	if !ValidRemote(remote) || !ok || !strings.HasPrefix(spec, "+refs/pull/") || !strings.HasSuffix(src, "/head") || !strings.HasPrefix(dst, NamespaceRoot) {
 		return errors.New("fetch outside the private namespace")
 	}
 	return nil
@@ -99,7 +130,7 @@ func (r *Runner) run(ctx context.Context, stdin []byte, args ...string) (result,
 	}
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
-	full := append([]string{"--no-replace-objects", "--literal-pathspecs", "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", r.Dir}, args...)
+	full := append([]string{"--no-replace-objects", "--literal-pathspecs", "-c", "core.hooksPath=" + os.DevNull, "-c", "core.fsmonitor=false", "-c", "gc.auto=0", "-c", "maintenance.auto=false", "-C", r.Dir}, args...)
 	cmd := exec.CommandContext(ctx, r.Bin, full...)
 	cmd.Env = environment()
 	if stdin != nil {
@@ -143,7 +174,7 @@ func (r *Runner) FetchPull(ctx context.Context, remote string, n int) (string, e
 		return "", errors.New("invalid remote or pull request number")
 	}
 	spec := fmt.Sprintf("+refs/pull/%d/head:%s", n, PullRef(n))
-	if _, err := r.ok(ctx, nil, "fetch", "--quiet", "--no-tags", "--no-write-fetch-head", "--no-recurse-submodules", "--", remote, spec); err != nil {
+	if _, err := r.ok(ctx, nil, append(append([]string{}, fetchFlags...), remote, spec)...); err != nil {
 		return "", err
 	}
 	out, err := r.ok(ctx, nil, "rev-list", "--no-walk", "--end-of-options", PullRef(n))
@@ -157,16 +188,23 @@ func (r *Runner) FetchPull(ctx context.Context, remote string, n int) (string, e
 	return tip, nil
 }
 
-// HasCommit implements Git.
+// HasCommit implements Git: exit 1 of the quiet verify is a missing object; any other failure
+// (no repository, a broken object store) is an error.
 func (r *Runner) HasCommit(ctx context.Context, sha string) (bool, error) {
 	if err := needSHA(sha); err != nil {
 		return false, err
 	}
-	res, err := r.run(ctx, nil, "cat-file", "-e", sha+"^{commit}")
+	res, err := r.run(ctx, nil, "rev-parse", "--verify", "--quiet", sha+shaSuffix)
 	if err != nil {
 		return false, err
 	}
-	return res.code == 0, nil
+	switch res.code {
+	case 0:
+		return true, nil
+	case 1:
+		return false, nil
+	}
+	return false, fmt.Errorf("git rev-parse failed (exit %d)", res.code)
 }
 
 // PatchID implements Git. The diff is pinned against configuration: no external diff, no textconv,
@@ -212,30 +250,29 @@ func (r *Runner) Merges(ctx context.Context, base, head string) ([]string, error
 	return shas, nil
 }
 
-// Count implements Git: the commits of base..head without merge commits, the ones range-diff pairs.
-func (r *Runner) Count(ctx context.Context, base, head string) (int, error) {
-	if err := needSHA(base, head); err != nil {
-		return 0, err
-	}
-	out, err := r.ok(ctx, nil, "rev-list", "--count", "--no-merges", "--end-of-options", base+".."+head)
-	if err != nil {
-		return 0, err
-	}
-	n, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	if err != nil || n < 0 {
-		return 0, errors.New("unexpected rev-list output")
-	}
-	return n, nil
-}
+// MaxCommits bounds the commits compared per side.
+const MaxCommits = 500
 
-// RangeDiff implements Git.
-func (r *Runner) RangeDiff(ctx context.Context, oldBase, oldHead, newBase, newHead string) (string, error) {
-	if err := needSHA(oldBase, oldHead, newBase, newHead); err != nil {
-		return "", err
+// Commits implements Git: the commits of base..head without merge commits, oldest first, each with
+// its message and its patch. No external diff, textconv, signature program or hook can start.
+func (r *Runner) Commits(ctx context.Context, base, head string) ([]CommitPatch, error) {
+	if err := needSHA(base, head); err != nil {
+		return nil, err
 	}
-	out, err := r.ok(ctx, nil, "range-diff", "--no-color", "--no-patch", "--no-notes", oldBase+".."+oldHead, newBase+".."+newHead)
+	out, err := r.ok(ctx, nil, "log", "--reverse", "--no-merges", "--no-color", "--no-show-signature", "--no-ext-diff", "--no-textconv", "--no-renames", "-p", logFormat, "--end-of-options", base+".."+head)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(out), nil
+	parts := strings.Split(string(out), "\x00")
+	if len(parts) == 0 || strings.TrimSpace(parts[0]) != "" || len(parts)%2 != 1 {
+		return nil, errors.New("unexpected git log output")
+	}
+	var commits []CommitPatch
+	for i := 1; i+1 < len(parts); i += 2 {
+		commits = append(commits, CommitPatch{Message: parts[i], Patch: parts[i+1]})
+	}
+	if len(commits) > MaxCommits {
+		return nil, fmt.Errorf("more than %d commits", MaxCommits)
+	}
+	return commits, nil
 }

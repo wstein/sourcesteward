@@ -116,8 +116,8 @@ func TestReorderedCommitsRefuseByPosition(t *testing.T) {
 		t.Fatalf("the combined diff is the same: %+v", res.PatchID)
 	}
 	wantReasons(t, res, ReasonRangeDiff)
-	if res.RangeDiff.NotEqual != 2 || res.RangeDiff.Deviations[0].Mark != "=" {
-		t.Fatalf("both rows show = at another position: %+v", res.RangeDiff)
+	if res.RangeDiff.NotEqual != 2 || res.RangeDiff.Deviations[0].Mark != "!" {
+		t.Fatalf("both positions differ: %+v", res.RangeDiff)
 	}
 }
 
@@ -180,15 +180,14 @@ func TestCheckWritesNothing(t *testing.T) {
 	}
 }
 
-// fakeGit scripts every answer of the Git interface.
+// fakeGit scripts every answer of the Git interface; commits are keyed by the head.
 type fakeGit struct {
 	has                bool
 	patch              map[string]string
 	merges             []string
-	count              int
-	rangeOut           string
+	commits            map[string][]CommitPatch
 	errPatch, errMerge error
-	errCount, errRange error
+	errCommits         error
 	pullTip            string
 	errFetch           error
 }
@@ -203,9 +202,8 @@ func (f *fakeGit) PatchID(_ context.Context, _, head string) (string, error) {
 func (f *fakeGit) Merges(context.Context, string, string) ([]string, error) {
 	return f.merges, f.errMerge
 }
-func (f *fakeGit) Count(context.Context, string, string) (int, error) { return f.count, f.errCount }
-func (f *fakeGit) RangeDiff(context.Context, string, string, string, string) (string, error) {
-	return f.rangeOut, f.errRange
+func (f *fakeGit) Commits(_ context.Context, _, head string) ([]CommitPatch, error) {
+	return f.commits[head], f.errCommits
 }
 
 var (
@@ -213,9 +211,14 @@ var (
 	req = Request{PR: 3, OldBase: sha("1"), OldHead: sha("2"), NewBase: sha("3"), NewHead: sha("4")}
 )
 
+func cp(msg, body string) CommitPatch {
+	return CommitPatch{Message: msg, Patch: "\ndiff --git a/f b/f\nindex 111..222 100644\n--- a/f\n+++ b/f\n@@ -1,2 +1,3 @@ func\n" + body}
+}
+
 func okFake() *fakeGit {
-	return &fakeGit{has: true, patch: map[string]string{sha("2"): sha("9"), sha("4"): sha("9")}, count: 1,
-		rangeOut: "1:  abc1234 = 1:  def5678 subject\n    @@ file\n    +x\n"}
+	c := []CommitPatch{cp("one\n", " ctx\n+x\n")}
+	return &fakeGit{has: true, patch: map[string]string{sha("2"): sha("9"), sha("4"): sha("9")},
+		commits: map[string][]CommitPatch{sha("2"): c, sha("4"): c}}
 }
 
 func TestReadFailuresNeverBecomeAYes(t *testing.T) {
@@ -223,12 +226,9 @@ func TestReadFailuresNeverBecomeAYes(t *testing.T) {
 		t.Fatalf("baseline must be a yes: %+v", res)
 	}
 	for name, mutate := range map[string]func(f *fakeGit){
-		"patch-id":   func(f *fakeGit) { f.errPatch = errors.New("boom") },
-		"merges":     func(f *fakeGit) { f.errMerge = errors.New("boom") },
-		"count":      func(f *fakeGit) { f.errCount = errors.New("boom") },
-		"range-diff": func(f *fakeGit) { f.errRange = errors.New("boom") },
-		"no rows":    func(f *fakeGit) { f.rangeOut = "unexpected\n" },
-		"row count":  func(f *fakeGit) { f.count = 2 },
+		"patch-id": func(f *fakeGit) { f.errPatch = errors.New("boom") },
+		"merges":   func(f *fakeGit) { f.errMerge = errors.New("boom") },
+		"commits":  func(f *fakeGit) { f.errCommits = errors.New("boom") },
 	} {
 		f := okFake()
 		mutate(f)
@@ -244,24 +244,49 @@ func TestEmptyPatchIDAndEmptyRangeRefuse(t *testing.T) {
 	f.patch = map[string]string{}
 	wantReasons(t, Check(t.Context(), f, req), ReasonPatchIDEmpty)
 	f = okFake()
-	f.count = 0
+	f.commits = map[string][]CommitPatch{}
 	wantReasons(t, Check(t.Context(), f, req), ReasonRangeEmpty)
 }
 
-func TestRangeDiffRowParsing(t *testing.T) {
+func TestCommitComparisonIgnoresOnlyBlobIDsAndLineNumbers(t *testing.T) {
 	f := okFake()
-	f.count = 3
-	f.rangeOut = "1:  aaaaaaa = 1:  bbbbbbb one\n" +
-		"    @@ x\n     context\n" +
-		"2:  ccccccc ! 2:  ddddddd two\n" +
-		"-:  ------- > 3:  eeeeeee three\n"
+	shifted := cp("one\n", " ctx\n+x\n")
+	shifted.Patch = strings.Replace(strings.Replace(shifted.Patch, "index 111..222", "index 333..444", 1), "@@ -1,2 +1,3 @@ func", "@@ -40,2 +41,3 @@ other", 1)
+	f.commits[sha("4")] = []CommitPatch{shifted}
+	if res := Check(t.Context(), f, req); !res.CarryOver || res.RangeDiff.Total != 1 {
+		t.Fatalf("a shifted hunk and other blob ids stay equal: %+v", res)
+	}
+	for name, changed := range map[string]CommitPatch{
+		"whitespace":      cp("one\n", " ctx\n+x \n"),
+		"message":         cp("one changed\n", " ctx\n+x\n"),
+		"changed context": cp("one\n", " other\n+x\n"),
+	} {
+		f := okFake()
+		f.commits[sha("4")] = []CommitPatch{changed}
+		res := Check(t.Context(), f, req)
+		wantReasons(t, res, ReasonRangeDiff)
+		if d := res.RangeDiff.Deviations; res.RangeDiff.NotEqual != 1 || d[0].Mark != "!" || *d[0].Old != 1 || *d[0].New != 1 {
+			t.Errorf("%s: %+v", name, res.RangeDiff)
+		}
+	}
+}
+
+func TestCommitComparisonAddedRemovedAndReordered(t *testing.T) {
+	a, b := cp("a\n", "+a\n"), cp("b\n", "+b\n")
+	f := okFake()
+	f.commits[sha("2")] = []CommitPatch{a}
+	f.commits[sha("4")] = []CommitPatch{a, b}
 	res := Check(t.Context(), f, req)
-	if res.RangeDiff.Total != 3 || res.RangeDiff.NotEqual != 2 || res.CarryOver {
+	if d := res.RangeDiff.Deviations; res.CarryOver || len(d) != 1 || d[0].Mark != ">" || d[0].Old != nil || *d[0].New != 2 || res.RangeDiff.Total != 2 {
 		t.Fatalf("%+v", res.RangeDiff)
 	}
-	d := res.RangeDiff.Deviations
-	if len(d) != 2 || d[0].Mark != "!" || *d[0].Old != 2 || d[1].Mark != ">" || d[1].Old != nil || *d[1].New != 3 {
+	f.commits[sha("2")], f.commits[sha("4")] = []CommitPatch{a, b}, []CommitPatch{a}
+	if d := Check(t.Context(), f, req).RangeDiff.Deviations; len(d) != 1 || d[0].Mark != "<" || d[0].New != nil {
 		t.Fatalf("%+v", d)
+	}
+	f.commits[sha("2")], f.commits[sha("4")] = []CommitPatch{a, b}, []CommitPatch{b, a}
+	if res := Check(t.Context(), f, req); res.CarryOver || res.RangeDiff.NotEqual != 2 {
+		t.Fatalf("%+v", res.RangeDiff)
 	}
 }
 

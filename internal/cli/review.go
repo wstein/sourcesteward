@@ -29,7 +29,7 @@ func reviewCarryOverCommand() *cobra.Command {
 		Short: "Check whether a review may be carried over to a rebased or restacked head",
 		Long: "Read-only check of the carry-over rule after a rebase or restack. The four arguments are full 40-hex commit ids (a ref name, a leading dash, \"..\" or a space is a usage error).\n" +
 			"All three conditions must hold: (1) the patch-id of `git diff BASE...HEAD` (git patch-id --stable) is equal for the old and the new head, each against its own base;\n" +
-			"(2) there is no merge commit in NEW_BASE..NEW_HEAD; (3) git range-diff shows \"=\" for every commit, at the same position.\n" +
+			"(2) there is no merge commit in NEW_BASE..NEW_HEAD; (3) the commits of both ranges are equal pairwise, at the same position, in message and patch (blob ids and hunk line numbers ignored; this is the \"=\" of git range-diff, computed without running it because range-diff starts textconv drivers).\n" +
 			"The output names each condition and the verdict. Only for a yes it ends with the line `Carried-over: from=<40-hex> to=<40-hex> patch-id=<hex> pr=<n>`.\n" +
 			"The command posts nothing: a reviewer who is not the author posts the line after reading the result. The objects must exist in the checkout (the default is the current directory).\n" +
 			"--remote NAME fetches refs/pull/NUMBER/head into refs/stw/carry-over/ (objects and that private ref only; no FETCH_HEAD, no tags, no user ref) and refuses unless it equals NEW_HEAD.\n" +
