@@ -298,6 +298,19 @@ blue rows (`none`) and violet rows (`bot`) have neither. `summary.counts` covers
 An error has both `repo` and `owner` keys, at most one non-null; a run-level failure (`viewer-unknown`, a failed viewer read) has both
 null. Tests validate the contract example, reject broken variants and validate the real output of the command. See [issues](issues.md).
 
+## Land schema v1 (unpublished)
+
+[Land schema](../schemas/v1/land.schema.json) describes the one document `stw land --stack ... --json` prints (Spec 043). It is
+checked in and byte-frozen but excluded from Pages packaging until the feature is accepted. Top-level keys are
+`schema_version` 1, `command` `land`, `operation` (`plan` or `apply`), `mode` (`human` or `agent` with the terminal facts and the
+agent marker names, never values), `repository`, `inputs`, `preconditions` (`id`, optional `number`, `ok`, `value`, and a typed
+`reason` when not ok), `chain` (bottom first: `number`, `head`, `base_ref`, `review_evidence` `found`, `none` or `unknown`,
+`checks`, `state`, `outcome`), `landable`, `apply_allowed` (false in agent mode and while any precondition fails),
+`effects` (the exact argument vectors), `children` (side children that block the chain), `result`, `reasons`, `notes` and
+`truncated`. `default_tip` and `plan_digest` (SHA-256 over the repository, the default branch tip, the tip and every number
+with its head; the typed approval of a later apply binds it) are absent while the remote tip is unknown. `review_evidence` is
+information and never a precondition. Tests validate the real output of the command and reject broken variants.
+
 ## Release source schemas (unpublished)
 
 Spec 026 remains planned/unreleased. The following checked-in schema v1 files
