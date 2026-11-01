@@ -214,6 +214,8 @@ func syncText(rp stwsync.Repo, plan bool) (text, class string) {
 		return skipped("busy")
 	case stwsync.ResultSkippedUninitialized:
 		return "skipped: " + reason, "yellow"
+	case stwsync.ResultSkippedRules:
+		return "skipped: " + reason, "dim"
 	case stwsync.ResultUpdated:
 		return "submodule updated to the recorded commit " + moved, "green"
 	case stwsync.ResultUnreachable:
@@ -284,7 +286,7 @@ func renderSyncText(w io.Writer, r stwsync.Result, color bool) error {
 	}
 	renderRules(line, r.Rules)
 	var counts []string
-	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultUpdated, stwsync.ResultUnreachable, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
+	order := []string{stwsync.ResultFastForwarded, stwsync.ResultFastForward, stwsync.ResultRebased, stwsync.ResultRebase, stwsync.ResultMerged, stwsync.ResultMerge, stwsync.ResultUpToDate, stwsync.ResultAhead, stwsync.ResultDiverged, stwsync.ResultSkippedDirty, stwsync.ResultSkippedDetached, stwsync.ResultSkippedNoUpstream, stwsync.ResultSkippedBusy, stwsync.ResultSkippedUninitialized, stwsync.ResultSkippedRules, stwsync.ResultConflict, stwsync.ResultAutostashConflict, stwsync.ResultUpdated, stwsync.ResultUnreachable, stwsync.ResultRestored, stwsync.ResultAlreadyRestored, stwsync.ResultChangedSince, stwsync.ResultJournalIncomplete, stwsync.ResultFailed}
 	for _, name := range order {
 		if n := r.Summary.ByResult[name]; n > 0 {
 			counts = append(counts, fmt.Sprintf("%d %s", n, strings.ReplaceAll(name, "-", " ")))

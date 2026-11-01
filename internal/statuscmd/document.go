@@ -33,6 +33,8 @@ type Document struct {
 	Notices       []DocNotice      `json:"notices"`
 	Summary       DocSummary       `json:"summary"`
 	Error         *stwsync.Failure `json:"error"`
+	// Rules is the agent-rules checkout; present only with --rules.
+	Rules *stwsync.Rules `json:"rules,omitempty"`
 }
 
 // DocOptions echoes the options of the run; the JSON carries no icons.
@@ -282,7 +284,7 @@ func (r Report) Document() Document {
 		Root:    cutPtr(r.Local.Root), Note: cutPtr(r.Local.Note),
 		Actions: make([]DocAction, len(r.Overview.Items)), Repos: make([]DocRepo, len(r.Local.Repos)),
 		Notices: make([]DocNotice, len(r.Overview.Notices)), Error: r.Local.Error,
-		Sources: r.sources(), Summary: summary(r.Overview.Summary),
+		Sources: r.sources(), Summary: summary(r.Overview.Summary), Rules: r.Local.Rules,
 	}
 	for i, it := range r.Overview.Items {
 		d.Actions[i] = action(it)

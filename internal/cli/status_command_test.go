@@ -481,3 +481,44 @@ func TestStatusWithoutATokenColoursLikeTheOfflineOutput(t *testing.T) {
 		t.Errorf("%q", coloured.String())
 	}
 }
+
+func TestStatusRulesOptInShowsTheAgentRulesLine(t *testing.T) {
+	t.Setenv("STW_RULES_PATH", "")
+	var got stwsync.StatusOptions
+	run := func(args ...string) (string, error) {
+		cmd := workspaceStatusCommandWith(statuscmd.Params{Local: func(_ context.Context, o stwsync.StatusOptions) stwsync.StatusResult {
+			got = o
+			r := rootOnly()
+			if o.Rules {
+				main := "main"
+				r.Rules = &stwsync.Rules{State: "behind", Behind: 2, DefaultBranch: &main, Outcome: "none", AsOfLastFetch: true}
+			}
+			return r
+		}})
+		var out bytes.Buffer
+		cmd.SetOut(&out)
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(args)
+		err := cmd.ExecuteContext(context.Background())
+		return out.String(), err
+	}
+	out, err := run("--offline")
+	if err != nil || got.Rules || strings.Contains(out, "agent-rules") {
+		t.Fatalf("%v rules=%v %s", err, got.Rules, out)
+	}
+	out, err = run("--offline", "--rules", "--rules-path", "/x/agent-rules")
+	if err != nil || !got.Rules || got.RulesPath != "/x/agent-rules" || got.RulesPathSource != "flag" || !strings.Contains(out, "agent-rules: behind 2 commits of origin/main (as of last fetch)") {
+		t.Fatalf("%v %+v %s", err, got, out)
+	}
+	if out, err = run("--offline", "--rules", "--json"); err != nil || !strings.Contains(out, `"rules":{"state":"behind"`) {
+		t.Fatalf("%v %s", err, out)
+	}
+	if out, err = run("--offline", "--json"); err != nil || strings.Contains(out, `"rules"`) {
+		t.Fatalf("%v %s", err, out)
+	}
+	for _, args := range [][]string{{"--offline", "--rules-path", "/x"}, {"--offline", "--rules", "--rules-path", "-x"}, {"--offline", "--rules", "--rules-path", "a/../b"}} {
+		if _, err = run(args...); err == nil || isRuntimeFailure(err) {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+}

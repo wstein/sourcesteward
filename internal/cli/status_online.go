@@ -76,6 +76,7 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 			line("  " + n.Message)
 		}
 	}
+	renderRules(func(s string) { line(escapeReposLine(s)) }, rep.Local.Rules)
 	line("")
 	line(statusSummaryLine(rep.Overview.Summary))
 	_, err := io.WriteString(w, b.String())
