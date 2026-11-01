@@ -15,4 +15,4 @@ Tests are mandatory: failing test first. A box is ticked by the pull request tha
 - [x] T008 `--mergeable`: order, reason, `then`, footer, document member, docs (PR 2).
 
 ## PR 3 (stack view)
-- [ ] T009 `--stack`: forest, rendering, footer, document member, docs.
+- [x] T009 `--stack`: forest, rendering, footer, document member, docs (PR 3).
