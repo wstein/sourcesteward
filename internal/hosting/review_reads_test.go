@@ -48,7 +48,7 @@ func TestGuardAdmitsReviewShapesInPullsAndStatusOnly(t *testing.T) {
 	modes := []struct {
 		name string
 		mode guardMode
-	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}}
+	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}, {"land", guardLand}}
 	for _, c := range cases {
 		for _, m := range modes {
 			want := (m.mode == guardPulls && c.pulls) || (m.mode == guardStatus && c.stat)
