@@ -20,12 +20,12 @@ func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith
 // workspaceStatusCommandWith builds the command over base: its function fields replace the production
 // readers (local status, discovery, forge reader) and are nil in production.
 func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
-	var jsonOutput, offline bool
+	var jsonOutput, offline, reviews bool
 	var icons string
 	var timeout time.Duration
 	var options stwsync.StatusOptions
 	command := &cobra.Command{
-		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--json]",
+		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--json]",
 		Short: "Show what needs action in the workspace and the state of every repository",
 		Long: "Read-only overview of the whole workspace, from any directory inside it. It starts with what needs action, ordered by\n" +
 			"priority (red, yellow, green, blue, violet), each item with its link and a command you can run yourself; then one block\n" +
@@ -39,7 +39,8 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			"their stw pulls verdict, the release drafts, the tags without a release, and the CI of the default branch and of the\n" +
 			"release workflow runs, for every repository whose origin is a GitHub repository on github.com. A missing token or a source\n" +
 			"that failed never hides the rest: the notices name what is missing. --timeout (default 90s, 1s to 10m) is the overall\n" +
-			"deadline of the remote half; one request takes at most 15 s.\n" +
+			"deadline of the remote half; one request takes at most 15 s. --review also reads the review state of each open pull request\n" +
+			"from its comments (one more request per pull request; comments of an OWNER, MEMBER or COLLABORATOR only) and adds counts per state and hint.\n" +
 			"--offline sends no request and reads no credential: it prints the local half alone, exactly as before the online default.\n" +
 			"Nothing is changed and nothing is fetched unless --fetch asks for it (one git fetch per repository, remote-tracking\n" +
 			"refs only). --worktrees lists the linked worktrees. Colour only on a terminal (NO_COLOR turns it off). --icons picks the\n" +
@@ -59,6 +60,8 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			switch {
 			case offline && flags.Changed("timeout"):
 				return errors.New("--timeout cannot be used with --offline: nothing is read from the forge")
+			case offline && flags.Changed("review"):
+				return errors.New("--review cannot be used with --offline: nothing is read from the forge")
 			case timeout < statuscmd.MinTimeout || timeout > statuscmd.MaxTimeout:
 				return fmt.Errorf("--timeout %s is outside %s to %s", timeout, statuscmd.MinTimeout, statuscmd.MaxTimeout)
 			}
@@ -76,7 +79,7 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			if offline {
 				return runStatusOffline(cmd, base, options, jsonOutput, marks)
 			}
-			base.Status, base.Timeout = options, timeout
+			base.Status, base.Timeout, base.Reviews = options, timeout, reviews
 			if term.Stderr {
 				base.Progress = cmd.ErrOrStderr()
 			}
@@ -89,6 +92,7 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 	flags.BoolVar(&options.Worktrees, "worktrees", false, "List the linked worktrees of each repository")
 	flags.StringVar(&icons, "icons", "", "Glyph set of the text: unicode, nerd or ascii (default: unicode on a UTF-8 terminal, else ascii)")
 	flags.DurationVar(&timeout, "timeout", statusremote.DefaultTimeout, "Overall deadline of the remote half, 1s to 10m (not with --offline)")
+	flags.BoolVar(&reviews, "review", false, "Also read the review state of the open pull requests from their comments (one comment read per pull request; not with --offline)")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	return command
 }

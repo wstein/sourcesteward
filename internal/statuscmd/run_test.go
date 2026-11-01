@@ -191,6 +191,38 @@ func TestRunReadsTheGitHubRepositoryOnly(t *testing.T) {
 	}
 }
 
+// reviewFake adds the review reads (Spec 046) to a forgeFake.
+type reviewFake struct{ *forgeFake }
+
+func (f reviewFake) ReadIssueComments(_ context.Context, repo string, n int) ([]hosting.IssueComment, bool, error) {
+	return nil, false, f.enter(fmt.Sprintf("comments %s#%d", repo, n))
+}
+
+func (f reviewFake) ClosedPulls(_ context.Context, repo string) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.enter("closed " + repo)
+}
+
+func TestRunReadsReviewsOnlyOnRequest(t *testing.T) {
+	for _, reviews := range []bool{false, true} {
+		forge := &forgeFake{}
+		p := Params{
+			Status: stwsync.StatusOptions{Path: "."}, Timeout: time.Minute, Now: func() time.Time { return runTime }, Reviews: reviews,
+			Local:    func(context.Context, stwsync.StatusOptions) stwsync.StatusResult { return workspaceLocal() },
+			Discover: func(context.Context, string) (stwsync.Workspace, error) { return workspaceMembers(t.TempDir()), nil },
+			Open: func(context.Context, string, string) (statusremote.Client, func(), error) {
+				return reviewFake{forge}, func() {}, nil
+			},
+		}
+		rep, err := Run(t.Context(), p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := rep.Remote.Repos[0].Pulls; got == nil || got.ReviewRead != reviews {
+			t.Errorf("Reviews %v: pulls %+v", reviews, got)
+		}
+	}
+}
+
 func TestRunReadsTheIssuesAndTheViewer(t *testing.T) {
 	forge := &forgeFake{issue: true}
 	rep, _ := runWith(t, forge, nil, nil)

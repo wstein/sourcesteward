@@ -24,6 +24,9 @@ const (
 type Params struct {
 	Status  stwsync.StatusOptions
 	Timeout time.Duration
+	// Reviews reads the review state of the open pull requests from their comments (Spec 046, `--review`);
+	// off by default, because it adds one request per pull request.
+	Reviews bool
 	// Progress receives the single rewritten progress line; nil prints none. The caller sets it only
 	// when stderr is a terminal.
 	Progress io.Writer
@@ -107,6 +110,7 @@ func Run(ctx context.Context, p Params) (Report, error) {
 	}
 	rep.Remote = statusremote.Collect(ctx, repositories(rep.Local.Repos, ws.Members), statusremote.Options{
 		Timeout: p.Timeout,
+		Reviews: p.Reviews,
 		Open:    p.opener(root),
 	})
 	rep.Overview = overview.Build(rep.Remote.Input(root, rep.Local.Repos))

@@ -2,9 +2,13 @@
 package cli
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
+	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/pulls"
 	"github.com/wstein/sourcesteward/internal/statusremote"
@@ -46,5 +50,58 @@ func TestStatusRemoteLineWithoutReviewReadsStaysAsItWas(t *testing.T) {
 	// only unread reviews: say so
 	if line := statusRemoteLine(reviewRepo(true, pulls.ReviewCounts{NotRead: 2}, pulls.HintCounts{})); !strings.Contains(line, "reviews: 2 not read") {
 		t.Fatalf("%s", line)
+	}
+}
+
+// reviewStatusForge adds the review reads (Spec 046) to a healthy, empty statusForge.
+type reviewStatusForge struct{ *statusForge }
+
+func (f reviewStatusForge) ReadIssueComments(context.Context, string, int) ([]hosting.IssueComment, bool, error) {
+	return nil, false, f.read()
+}
+
+func (f reviewStatusForge) ClosedPulls(context.Context, string) (hosting.WatchResponse, error) {
+	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, f.read()
+}
+
+func TestStatusReadsReviewsOnlyWithTheReviewFlag(t *testing.T) {
+	hasReview := func(args ...string) bool {
+		t.Helper()
+		run := runOnline(t, rootOnly(), reviewStatusForge{&statusForge{}}, nil, append([]string{"--json"}, args...)...)
+		if run.err != nil {
+			t.Fatalf("%v: %v", args, run.err)
+		}
+		var doc struct {
+			Repos []struct {
+				Remote struct {
+					Sources struct {
+						Pulls struct {
+							Data map[string]any `json:"data"`
+						} `json:"pulls"`
+					} `json:"sources"`
+				} `json:"remote"`
+			} `json:"repos"`
+		}
+		if err := json.Unmarshal([]byte(run.out), &doc); err != nil || len(doc.Repos) == 0 {
+			t.Fatalf("%v: %v %s", args, err, run.out)
+		}
+		_, ok := doc.Repos[0].Remote.Sources.Pulls.Data["review"]
+		return ok
+	}
+	if hasReview() {
+		t.Error("a plain run reads no review state")
+	}
+	if !hasReview("--review") {
+		t.Error("--review reads the review state")
+	}
+}
+
+func TestStatusReviewFlagIsRefusedOffline(t *testing.T) {
+	run := runOnline(t, rootOnly(), &statusForge{err: errors.New("no request may be sent")}, nil, "--offline", "--review")
+	if run.err == nil || !strings.Contains(run.err.Error(), "--review cannot be used with --offline") || run.opened != 0 || run.out != "" {
+		t.Fatalf("%v %+v", run.err, run)
+	}
+	if isRuntimeFailure(run.err) {
+		t.Fatalf("a usage error, not a runtime failure: %v", run.err)
 	}
 }

@@ -146,11 +146,11 @@ func (g *gate) Viewer(ctx context.Context) (string, error) {
 
 var _ Client = (*gate)(nil)
 
-// pullsReader is what the pulls cycle reads through: the gate, and, when the client can read the
-// comments of a pull request (Spec 046), the gate's review reads too. A client without them gives
-// a reader that is no pulls.ReviewSource, so the cycle reads no review state at all.
-func (g *gate) pullsReader() pulls.Reader {
-	if rs, ok := g.c.(pulls.ReviewSource); ok {
+// pullsReader is what the pulls cycle reads through: the gate, and, when the review state was asked
+// for and the client can read the comments of a pull request (Spec 046), the gate's review reads too.
+// Otherwise the reader is no pulls.ReviewSource, so the cycle reads no review state at all.
+func (g *gate) pullsReader(reviews bool) pulls.Reader {
+	if rs, ok := g.c.(pulls.ReviewSource); ok && reviews {
 		return reviewGate{gate: g, rs: rs}
 	}
 	return g

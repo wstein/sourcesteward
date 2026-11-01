@@ -93,11 +93,14 @@ func TestReadPullsWithoutReviewSupportReadsNoReviews(t *testing.T) {
 
 func TestGateGivesThePullsCycleReviewReadsOnlyWhenTheClientHasThem(t *testing.T) {
 	plain := &gate{c: newWorld()}
-	if _, ok := plain.pullsReader().(pulls.ReviewSource); ok {
+	if _, ok := plain.pullsReader(true).(pulls.ReviewSource); ok {
 		t.Fatal("a client without review reads must not get a review source")
 	}
 	g := &gate{c: reviewWorld{newWorld()}}
-	rs, ok := g.pullsReader().(pulls.ReviewSource)
+	if _, ok := g.pullsReader(false).(pulls.ReviewSource); ok {
+		t.Fatal("the review reads are given on request only")
+	}
+	rs, ok := g.pullsReader(true).(pulls.ReviewSource)
 	if !ok {
 		t.Fatal("review source missing")
 	}
@@ -129,16 +132,21 @@ var _ = overview.GroupReady
 func TestCollectReadsReviewsWhenTheClientCanAndNotOtherwise(t *testing.T) {
 	for name, tc := range map[string]struct {
 		client   func(w *world) Client
+		reviews  bool
 		reviewed bool
 	}{
-		"client with review reads": {func(w *world) Client { return reviewWorld{w} }, true},
-		"client without":           {func(w *world) Client { return w }, false},
+		"client with review reads, asked":     {func(w *world) Client { return reviewWorld{w} }, true, true},
+		"client with review reads, not asked": {func(w *world) Client { return reviewWorld{w} }, false, false},
+		"client without, asked":               {func(w *world) Client { return w }, true, false},
+		"client without, not asked":           {func(w *world) Client { return w }, false, false},
 	} {
 		w := newWorld()
 		w.addRepo("o/a", false)
 		w.pulls.add(human("o/a", 1))
 		op := &opener{client: tc.client(w)}
-		res := Collect(context.Background(), []Repository{repository("o/a")}, op.options())
+		o := op.options()
+		o.Reviews = tc.reviews
+		res := Collect(context.Background(), []Repository{repository("o/a")}, o)
 		p := res.Repos[0].Pulls
 		if p == nil || p.ReviewRead != tc.reviewed {
 			t.Fatalf("%s: %+v", name, p)
