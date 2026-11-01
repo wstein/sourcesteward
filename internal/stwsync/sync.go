@@ -152,6 +152,11 @@ func (s *session) walk(ctx context.Context, e env, name string, out *[]Repo, par
 	if name == "." {
 		kind = "root"
 	}
+	if _, err := os.Lstat(filepath.Join(e.dir, ".git")); err == nil && isRulesCheckout(ctx, e, s.opts) {
+		// Only stw sync --rules updates the agent-rules checkout, after the identity check; no pull, no --submodules move.
+		*out = append(*out, Repo{Name: name, Path: e.dir, Kind: kind, Result: ResultSkippedRules, Reason: ptr("the agent-rules checkout is updated only by stw sync --rules")})
+		return nil
+	}
 	acting := parent != nil && s.opts.Submodules && !s.opts.Plan
 	if acting && (!validSubmodulePath(sub) || symlinkedPath(parent.dir, sub)) {
 		*out = append(*out, unreachableSubmodule(e, name, "the submodule path is not a plain directory path; stw leaves it alone"))

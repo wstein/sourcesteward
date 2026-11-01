@@ -25,6 +25,7 @@ const (
 	ResultSkippedNoUpstream    = "skipped-no-upstream"
 	ResultSkippedBusy          = "skipped-busy"
 	ResultSkippedUninitialized = "skipped-uninitialized"
+	ResultSkippedRules         = "skipped-rules" // the agent-rules checkout: only stw sync --rules updates it
 	ResultConflict             = "conflict"
 	ResultAutostashConflict    = "autostash-conflict"
 	ResultFailed               = "failed"
@@ -78,6 +79,7 @@ type Options struct {
 	OwnerIdentities   []string
 	AllowedCommitters []string
 	Home              string
+	noFetch           bool // status: no fetch unless --fetch
 }
 
 // ResultOptions echoes the requested options; null means the Git configuration decides.
