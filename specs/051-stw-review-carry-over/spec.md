@@ -28,10 +28,14 @@ rebase-merge of the parent) is checked like any other rebase.
 1. **patch-id**: `git diff --no-renames OLD_BASE...OLD_HEAD` and `NEW_BASE...NEW_HEAD`, each through
    `git patch-id --stable`, give the same id. An empty diff is `patch-id-empty` (no carry-over).
 2. **merge commits**: `git rev-list --merges NEW_BASE..NEW_HEAD` is empty. range-diff does not show merge commits.
-3. **range-diff**: `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit and each pair stands at
-   the same position (a reordering shows `=` at other positions and fails). `<`, `>` and `!` fail. An empty range fails
-   (`range-empty`). Every commit (merge commits excluded) must appear as exactly one row; a different row count is
-   `read-failed`. Condition 3 exists because the patch-id ignores whitespace.
+3. **range-diff equivalent**: the commits of `OLD_BASE..OLD_HEAD` and `NEW_BASE..NEW_HEAD` (merge commits excluded, oldest
+   first) are equal pairwise at the same position, in message and in patch. The patch is compared byte for byte except the
+   `index` lines (blob ids) and the line numbers of the hunk headers, which a rebase changes. This is the `=` of
+   `git range-diff` without running it: range-diff starts the `textconv` drivers of the repository (`.gitattributes`,
+   `info/attributes`) and a driver that strips whitespace would give a false yes. A differing pair is `!`, an extra new
+   commit `>`, a missing one `<`; a reordering fails at both positions. An empty range fails (`range-empty`). Changed context
+   after a restack also fails (the rule then asks for a delta check). Condition 3 exists because the patch-id ignores
+   whitespace.
 
 A check that could not run is `unknown` and never a yes. With `--remote NAME` the command also fetches
 `refs/pull/NUMBER/head` and refuses (`pr-head-mismatch`) unless it equals `NEW_HEAD`.
@@ -51,15 +55,19 @@ checks of the pull request), whether the label `ci-full` is set again (the revie
 ## Reads and effects
 
 Git only, through one guarded runner (`internal/carryover`): a fixed argument vector per call, validated object ids, a clean
-environment, no replace objects, a table of allowed subcommands (`cat-file`, `diff`, `patch-id`, `rev-list`, `range-diff`)
-and the one fetch. Nothing else is started; a `push`, `update-ref` or a fetch into another namespace is refused by the guard.
-The only local effect is the `--remote` fetch into `refs/stw/carry-over/pr-NUMBER` (`--no-tags --no-write-fetch-head`);
+environment, no replace objects, hooks switched off (`core.hooksPath` is `/dev/null` per call, no configuration is written), the `GIT_DIR`
+family removed from the environment, and a guard that allows only fixed argument shapes (`rev-parse`, `diff`,
+`patch-id`, `rev-list`, `log`) and the one fetch, with every flag pinned (`--no-ext-diff`, `--no-textconv`, `--no-renames`,
+`--no-show-signature`, `--no-tags`). No external diff, textconv, signature program or hook starts; a `push`, `update-ref`,
+`range-diff` or a fetch into another namespace is refused by the guard.
+The only local effect is the `--remote` fetch into `refs/stw/carry-over/pr-NUMBER` (`--no-tags --no-write-fetch-head
+--no-recurse-submodules --refmap=`; a configured `remote.<name>.fetch` writes nothing);
 without `--remote` nothing is written. No forge call, no network except that fetch.
 
 ## Verification
 
 Tests use temporary Git repositories and write no identity into a Git configuration. They cover: pure rebase (yes, exact
-line), identical heads, merge commit, patch-id change, whitespace-only change (equal patch-id, range-diff `!`), added empty
+line), identical heads, merge commit, patch-id change, whitespace-only change (equal patch-id, commit comparison `!`, also with a stripping textconv driver that must not run), added empty
 commit, reordered commits, rename with content change, rewritten parent, missing object, no repository change, argument
 injection, the guard, the private fetch, a moved pull request head, JSON against the schema, exit codes. Each condition is
 backed by a mutation that makes the test for that condition fail (recorded in the pull request).
