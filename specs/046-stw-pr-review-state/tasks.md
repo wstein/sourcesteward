@@ -12,7 +12,7 @@ Tests are mandatory: failing test first. A box is ticked by the pull request tha
 - [ ] T007 Docs: commands, pulls, status, json-contracts, hosting, README, progress, feature status.
 
 ## PR 2 (owner list)
-- [ ] T008 `--mergeable`: order, reason, `then`, footer, document member, docs.
+- [x] T008 `--mergeable`: order, reason, `then`, footer, document member, docs (PR 2).
 
 ## PR 3 (stack view)
 - [ ] T009 `--stack`: forest, rendering, footer, document member, docs.
