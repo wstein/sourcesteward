@@ -312,6 +312,9 @@ const (
 	// FR-080): open pull request pages, reviews, issue events, rules, protection, rulesets and
 	// `user`. It admits no write and no watch or search shape.
 	guardLand
+	// guardLint admits the one-shot set, the commit pages and the comment pages of one pull request for the
+	// stateless `stw lint pr` (Spec 050). It admits no other watch shape.
+	guardLint
 )
 
 func (t guardedTransport) effectiveMode() guardMode {
@@ -362,7 +365,8 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	mode := t.effectiveMode()
 	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(mode) && searchReadEndpoint(endpoint)) ||
 		(mode.admitsIssueReads() && issueReadEndpoint(endpoint)) || (admitsIssueSearch(mode) && issueSearchReadEndpoint(endpoint)) ||
-		(admitsLand(mode) && landReadEndpoint(endpoint))
+		(admitsLand(mode) && landReadEndpoint(endpoint)) ||
+		(mode.admitsLintReads() && lintReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {
