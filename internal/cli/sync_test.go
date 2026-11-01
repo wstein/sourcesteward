@@ -67,6 +67,12 @@ func TestSyncUsageErrorsExitTwoBeforeTheOperation(t *testing.T) {
 		{"restore", "--plan"}, // restore takes no sync option
 		{"restore", "--rebase"},
 		{"restore", "a", "b"},
+		{"restore", "--rules"}, // the rules update is no restore option
+		{"restore", "--rules-path", "x"},
+		{"--rules-path", "-x"},     // would read as an option
+		{"--rules-path", "a/../b"}, // no climbing
+		{"--owner-identity", "nope"},
+		{"--allowed-committer", "nope"},
 		{"--run", "20260101T000000Z-00000000"}, // --run belongs to restore
 	} {
 		_, calls, out, err := runSync(syncCLIResult(), args...)
@@ -349,5 +355,77 @@ func TestSyncHelpStatesTheExitStatusesAndRestoreRefusals(t *testing.T) {
 		if !strings.Contains(strings.Join(strings.Fields(out.String()), " "), want) {
 			t.Errorf("help lacks %q", want)
 		}
+	}
+}
+
+func TestSyncRulesFlagsMapToOptions(t *testing.T) {
+	t.Setenv("STW_RULES_PATH", "/from/env")
+	got, _, _, err := runSync(syncCLIResult(), "--rules", "--owner-identity", "A B <a@b.c>", "--owner-identity", "C <c@d.e>", "--allowed-committer", "A B <1+a@users.noreply.github.com>")
+	if err != nil || !got.Rules || len(got.OwnerIdentities) != 2 || len(got.AllowedCommitters) != 1 || got.RulesPath != "/from/env" || got.RulesPathSource != "env" {
+		t.Fatalf("%v %+v", err, got)
+	}
+	got, _, _, err = runSync(syncCLIResult(), "--rules-path", "/flag/path")
+	if err != nil || got.Rules || got.RulesPath != "/flag/path" || got.RulesPathSource != "flag" {
+		t.Fatalf("%v %+v", err, got)
+	}
+}
+
+func syncRulesResult(rules *stwsync.Rules) stwsync.Result {
+	r := syncCLIResult(syncRepo(".", "root", "up-to-date"))
+	r.Rules = rules
+	return r
+}
+
+func TestSyncRendersTheRulesBlock(t *testing.T) {
+	main := "main"
+	path := "/w/agent-rules"
+	oid := oidNew
+	for name, tc := range map[string]struct {
+		rules *stwsync.Rules
+		want  []string
+	}{
+		"current":  {&stwsync.Rules{State: "current", Outcome: "none", Path: &path}, []string{"agent-rules: current [/w/agent-rules]"}},
+		"behind":   {&stwsync.Rules{State: "behind", Behind: 3, DefaultBranch: &main, Outcome: "none"}, []string{"agent-rules: behind 3 commits of origin/main"}},
+		"as of":    {&stwsync.Rules{State: "behind", Behind: 1, DefaultBranch: &main, Outcome: "none", AsOfLastFetch: true}, []string{"behind 1 commit of origin/main (as of last fetch)"}},
+		"diverged": {&stwsync.Rules{State: "diverged", Ahead: 1, Behind: 2, DefaultBranch: &main, Outcome: "none"}, []string{"agent-rules: diverged (1 ahead, 2 behind origin/main)"}},
+		"dirty":    {&stwsync.Rules{State: "dirty", Outcome: "none"}, []string{"agent-rules: dirty"}},
+		"branch":   {&stwsync.Rules{State: "not-on-default-branch", Outcome: "none"}, []string{"agent-rules: not on default branch"}},
+		"missing":  {&stwsync.Rules{State: "not-found", Outcome: "none", Reason: syncStr("no workspace member")}, []string{"agent-rules: not found: no workspace member"}},
+		"refused":  {&stwsync.Rules{State: "behind", Behind: 1, DefaultBranch: &main, Outcome: "refused", Reason: syncStr("not by an owner identity: 1234567 author X <x@y.z>")}, []string{"--rules refused, nothing changed: not by an owner identity"}},
+		"applied": {&stwsync.Rules{State: "current", Behind: 1, Outcome: "fast-forwarded", OldOID: &oid, NewOID: &oid,
+			Commits: []stwsync.RulesCommit{{OID: oidOld, Subject: "edit rules", Author: "A <a@b.c>", Committer: "A <a@b.c>"}},
+			Files:   []stwsync.RulesFile{{Path: "claude/CLAUDE.md", Sensitive: true}, {Path: "README.md"}},
+			Notes:   []string{"applies to NEW sessions; running agents keep their loaded rules"}},
+			[]string{"applied commits:", "1111111 edit rules", "    * claude/CLAUDE.md", "      README.md", "note: applies to NEW sessions; running agents keep their loaded rules", "fast-forwarded"}},
+	} {
+		_, _, out, err := runSync(syncRulesResult(tc.rules))
+		if err != nil {
+			t.Errorf("%s: %v", name, err)
+		}
+		for _, w := range tc.want {
+			if !strings.Contains(out, w) {
+				t.Errorf("%s: missing %q in\n%s", name, w, out)
+			}
+		}
+	}
+	if _, _, out, _ := runSync(syncRulesResult(nil)); strings.Contains(out, "agent-rules") {
+		t.Errorf("no rules, no line: %s", out)
+	}
+}
+
+func TestSyncRulesJSONAndExit(t *testing.T) {
+	_, _, out, err := runSync(syncRulesResult(&stwsync.Rules{State: "current", Outcome: "none", Commits: []stwsync.RulesCommit{}, Files: []stwsync.RulesFile{}, Notes: []string{}}), "--json")
+	if err != nil || !strings.Contains(out, `"rules":{"state":"current"`) || !strings.Contains(out, `"options":{`) || !strings.Contains(out, `"rules":false`) {
+		t.Fatalf("%v %s", err, out)
+	}
+	if _, _, out, _ = runSync(syncRulesResult(nil), "--json"); !strings.Contains(out, `"rules":null`) {
+		t.Fatalf("%s", out)
+	}
+	var failure runtimeFailure
+	if _, _, _, err = runSync(syncRulesResult(&stwsync.Rules{State: "behind", Outcome: "refused"})); err != nil {
+		t.Fatalf("a refusal is no failure, as a skipped repository is none: %v", err)
+	}
+	if _, _, _, err = runSync(syncRulesResult(&stwsync.Rules{State: "behind", Outcome: "failed", Reason: syncStr("x")})); !errors.As(err, &failure) {
+		t.Fatalf("a failed update exits 1: %v", err)
 	}
 }
