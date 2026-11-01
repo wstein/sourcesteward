@@ -14,7 +14,7 @@ Every data command supports human output and `--json`; help is available at each
 | `stw inspect [PATH]` | Native repository and workspace identity | Read-only local observation |
 | `stw inventory [PATH]` | Workspaces, references, base candidates, file scopes and true/false/unknown queries | Read-only local observation; no fetch or snapshot |
 | `stw repos PATH... [--submodules]` | Inventory up to 16 repositories (Git and jj) in one bounded run with a cross-repository summary; optionally their direct Git submodules | Read-only local observation; no fetch or snapshot |
-| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune] [--submodules]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only |
+| `stw sync [PATH] [--plan] [--rebase\|--ff-only\|--merge] [--autostash\|--no-autostash] [--prune\|--no-prune] [--submodules] [--rules]` | Do what `git pull` does in every repository of the workspace (root and nested submodules, main worktrees, any branch with an upstream), from any directory inside it; Git only | One `git fetch` per repository, then a journaled change of the current branch ref only. `--plan` (alias `--dry-run`) changes remote-tracking refs only. `--rules` also fast-forwards the agent-rules checkout |
 | `stw sync restore [PATH] [--run ID]` | Move the branches a `stw sync` run changed back to their journaled old tips | Only while the branch still points at the tip the run left and a checked-out worktree is clean (`git reset --keep`, or `update-ref` with the expected value); no fetch |
 | `stw status [PATH] [--offline] [--fetch] [--worktrees] [--icons SET] [--timeout D] [--review]` | What needs action in the workspace, ordered by priority with a command to run for each item, then every repository (branch, upstream, changes, conflicts, operation, stashes, unmerged branches, worktrees, gitlink drift) and the pull requests, release drafts, unreleased tags and CI of its GitHub repository; Git only locally | Read-only. Online by default with `GET` requests through the `gh` token of the hosting commands; `--offline` reads no credential and sends nothing; `--fetch` adds one `git fetch` per repository (remote-tracking refs only) |
 | `stw workspace plan [PATH]` | Store an isolated Git worktree/jj workspace creation plan | Writes private plan state; does not create the workspace |
@@ -95,6 +95,7 @@ the limits of single-repository inventory apply to each member). See [multi-repo
 stw sync                      # root repository and submodules on a branch, like git pull
 stw sync --plan ~/work/ws     # fetch only, say what a run would do
 stw sync --rebase --autostash # override the configuration for one run
+stw sync --rules --plan       # what an update of the agent-rules checkout would do
 ```
 
 `stw sync` is a manual, Git-only command ([Spec 032](../specs/032-stw-sync/spec.md)) that does what `git pull`
@@ -185,6 +186,26 @@ incomplete fast-forward record is restored when the branch is at the planned new
 tip and `changed-since` anywhere else, and a restore that dealt with it marks it done. A restore never undoes pruned
 remote-tracking refs, a stash reapply or a submodule HEAD moved by the superproject, and any sync option given to it (`--submodules`, `--plan` and the others) is a usage error, exit 2.
 The default run is the highest run ID, never a file time, so restoring an older run does not change it. A run ID is a UTC time stamp and a random suffix; IDs made before microseconds were added count as microsecond zero, so old and new IDs order by time, and two old IDs of one second are ordered by their random suffix and can be mistaken for each other, in which case pass `--run`. Retention orders runs the same way. A branch an operation works on in any worktree (rebase, merge, cherry-pick, revert, bisect, also from a linked worktree with a detached HEAD), a symbolic ref and a branch the run's journal does not describe are `changed-since`; a missing old object is `failed`.
+
+### The agent-rules checkout
+
+`stw sync` adds one block for the agent-rules checkout (wstein/agent-rules, the rules every agent session loads) when it
+finds one: `--rules-path PATH`, else `STW_RULES_PATH`, else the one workspace member whose remote is named `agent-rules`.
+Nothing else is searched, and without a checkout and without a request nothing is printed. The line reads `agent-rules:
+current`, `behind N commits of origin/main`, `ahead`, `diverged`, `dirty`, `not on default branch` or `not found`, with
+"as of last fetch" when the fetch of `origin` did not run or failed. This part only reads.
+
+`stw sync --rules` fast-forwards that checkout with `git merge --ff-only` to the commit it checked, and only when the
+worktree is clean (no tracked change, no colliding untracked file), the branch is the default branch, the local tip is an ancestor
+of `origin/DEFAULT`, and author and committer of every new commit are owner identities. Owner identities are
+`--owner-identity "Name <email>"` (repeatable; default `user.name` and `user.email` of the workspace root);
+`--allowed-committer "Name <email>"` adds allowed committers, such as the GitHub rebase-merge committer
+`<login>@users.noreply.github.com`. Anything else is refused with the reason and nothing changes. Before a change the
+new commits and the changed files are listed, with `claude/CLAUDE.md`, `claude/skills/**`, hooks and `install.sh`
+marked `*`; `--plan` stops there. After a change `stw` says that the rules apply to new sessions only and, when
+`~/.claude/CLAUDE.md` is not a symlink into the checkout, to run `install.sh --dry-run` first (owner action). `stw` never
+runs `install.sh`, never writes below `~/.claude` and never writes a Git configuration. A refusal exits 0 like a skipped
+repository; a failed update exits 1.
 
 ## Show what needs action in the workspace
 
