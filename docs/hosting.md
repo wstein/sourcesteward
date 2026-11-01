@@ -118,6 +118,8 @@ pull request, `repos/OWNER/NAME/issues/N/comments?per_page=50&page=P` (P 1 to 99
 five, `truncated`), and the 100 most recently updated closed pull requests, `repos/OWNER/NAME/pulls?state=closed&sort=updated&direction=desc&per_page=100&page=1`,
 read once for a repository that has a pull request whose base is not the default branch. Each is produced by one generator and matched
 exactly; `watch`, `issues` and the one-shot modes refuse them. The head commit date comes from the existing `commits/SHA` shape.
+Of a comment the reader keeps `id`, `html_url` (https only), the times, the first 4096 bytes of the body and `author_association`
+(1 to 32 upper-case letters or underscores, else empty); the review state counts a comment only for `OWNER`, `MEMBER` or `COLLABORATOR`.
 
 The two owner searches refuse each other: `pulls` admits only the `is:pr` search and `issues` only the `is:issue`
 search. The issue owner search is read only through `IssueSearchPage` / `DiscoverIssueOwner(s)` and only to discover

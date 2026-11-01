@@ -99,8 +99,9 @@ comment CLEAR, and GitHub reports the head mergeable and green. It does not say 
    JSON: see the contract) and the counts in `summary`. `--no-review` skips the comment reads. `--review STATE` (repeatable) and
    `--hint HINT` (repeatable) keep the matching rows (OR within a flag, AND across both); they are applied after all reads, before the
    summary, and a row whose comments were not read matches neither flag. Both flags with `--no-review` are a usage error (exit 2).
-   `stw status` reads reviews with the same cycle and shows them in the `pulls` source data (counts per state and per hint) and in the
-   `remote:` line; it adds no action category.
+   `stw status --review` reads reviews with the same cycle and shows them in the `pulls` source data (counts per state and per hint) and in the
+   `remote:` line; without `--review` it reads no comment (one request per pull request is not a default), and `--review` with `--offline`
+   is a usage error. It adds no action category.
 2. **Owner list (PR 2).** `stw pulls --mergeable` ("what can I merge now"): only rows with `ready-mergeable`, per repository in
    merge order (a stack's lower pull request first; otherwise oldest `created_at`), each with a reason line built from facts ("CLEAR
    for head 3f2a9c1 per comment 2026-11-01T09:00Z, checks green, mergeable clean, base main") and the open descendants that follow

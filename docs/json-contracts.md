@@ -258,7 +258,7 @@ omitted, absent values are null and `additionalProperties` is false everywhere; 
 - `notices` (`code`, `source`, `repos`, `message`, one per missing source), `summary` (`repos`, `attention`, `errors`,
   `priorities`, `degraded`, `failed`, `notices`) and `error` (`status-` code and message of a failed run, with no repositories).
 
-The `pulls` source data gains the optional `review` member (`states` and `hints` counts, Spec 046), present when review states were read; the schema digest changes with it, `schema_version` stays 2.
+The `pulls` source data gains the optional `review` member (`states` and `hints` counts, Spec 046), present when review states were read (`stw status --review`); the schema digest changes with it, `schema_version` stays 2.
 
 Exit 0 also with items, offline, without a token, after a deadline skip or a missing release workflow; 1 when an attempted
 request failed, a repository cannot be read or the run fails; 2 for usage errors with no JSON. Tests validate the documents of
@@ -283,7 +283,7 @@ checked in and byte-frozen but excluded from Pages packaging until the feature i
 are null. A row carries the verdict (`group`, `reason`, `ready`) and `detail`, which is false for a draft without detail
 or a row past `--limit`; its `checks`, `mergeable`, `mergeable_state` and `rebaseable` are then null. `url`,
 `created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error always has both `repo` and `owner` keys, exactly one non-null. `--owner` alone reports scope `repos`. Tests validate the contract example, reject broken variants and validate the real output of
-the command for every flag combination. [Spec 046](../specs/046-stw-pr-review-state/spec.md) adds, in the same schema version and as optional members (the schema digest changes with them, the producer always prints them): `options.review`, `options.review_states`, `options.hints`; per row `review` (`null` when the comments were not read, else `basis` `comment`, `state`, `verdict`, `head`, `patch_id`, `at`, `url`, `carried`, `edited`, `truncated`) and `hints`; `summary.review` and `summary.hints` counts. Consumers ignore unknown members. See [pulls](pulls.md).
+the command for every flag combination. [Spec 046](../specs/046-stw-pr-review-state/spec.md) adds, in the same schema version and as optional members (the schema digest changes with them, the producer always prints them): `options.review`, `options.review_states`, `options.hints`; per row `review` (`null` when the comments were not read, else `basis` `comment`, `state`, `verdict`, `head`, `patch_id`, `at`, `url`, `association` (`OWNER`, `MEMBER`, `COLLABORATOR` or null), `ignored`, `carried`, `edited`, `truncated`) and `hints`; `summary.review` and `summary.hints` counts. Consumers ignore unknown members. See [pulls](pulls.md).
 
 ## Lint PR schema v1 (unpublished)
 
