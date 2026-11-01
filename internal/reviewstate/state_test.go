@@ -136,6 +136,146 @@ func TestEvaluateCycleTerminates(t *testing.T) {
 	}
 }
 
+// evaluateWithin fails the test when Evaluate does not return in time: the chain check must be
+// polynomial, because every commenter of a public repository can post carry-over lines.
+func evaluateWithin(t *testing.T, in Input) Result {
+	t.Helper()
+	done := make(chan Result, 1)
+	go func() { done <- Evaluate(in) }()
+	select {
+	case r := <-done:
+		return r
+	case <-time.After(5 * time.Second):
+		t.Fatal("Evaluate did not finish within 5s: the chain check is not polynomial")
+		return Result{}
+	}
+}
+
+func TestEvaluateManySelfCarryOvers(t *testing.T) {
+	H, A, P := hex("a"), hex("b"), hex("1")
+	var cs []Comment
+	for i := 0; i < 40; i++ {
+		cs = append(cs, carry(int64(10+i), -50+i, A, A, P))
+	}
+	cs = append(cs, carry(99, 5, A, H, P))
+	if got := evaluateWithin(t, in(cs...)).State; got != StateNone {
+		t.Fatalf("self carry-overs without a CLEAR: %q", got)
+	}
+	cs = append([]Comment{rev(1, -100, "CLEAR", A, P)}, cs...)
+	if r := evaluateWithin(t, in(cs...)); r.State != StateClearCarried || r.Head != A {
+		t.Fatalf("self carry-overs are skipped, the CLEAR still carries: %+v", r)
+	}
+}
+
+func TestEvaluateManyHeadsManyLinks(t *testing.T) {
+	// Eight heads, every ordered pair carried at distinct times: the number of chains is exponential,
+	// the number of (head, position) states is not.
+	P := hex("1")
+	hs := []string{}
+	for i := 0; i < 8; i++ {
+		hs = append(hs, strings.Repeat(string("cdef0123"[i]), 40))
+	}
+	cs := []Comment{rev(1, -1000, "FINDINGS", hs[0], P)}
+	id := int64(10)
+	min := -900
+	for round := 0; round < 6; round++ {
+		for i := range hs {
+			for j := range hs {
+				if i != j {
+					cs = append(cs, carry(id, min, hs[i], hs[j], P))
+					id++
+					min++
+				}
+			}
+		}
+	}
+	cs = append(cs, carry(9999, 5, hs[7], hex("a"), P))
+	if got := evaluateWithin(t, in(cs...)).State; got != StateNone {
+		t.Fatalf("no CLEAR anywhere: %q", got)
+	}
+	cs[0] = rev(1, -1000, "CLEAR", hs[0], P)
+	if got := evaluateWithin(t, in(cs...)).State; got != StateClearCarried {
+		t.Fatalf("a CLEAR at the start of a dense graph: %q", got)
+	}
+}
+
+func TestEvaluateRepeatedHeadEndsTheChain(t *testing.T) {
+	H, A, B, P := hex("a"), hex("b"), hex("c"), hex("1")
+	// A is carried to B and back to A; the back link repeats A and is not followed, so the carry from
+	// A to H rests on the direct CLEAR of A. It is superseded by FINDINGS on A in between.
+	cs := []Comment{rev(1, -30, "CLEAR", A, P), carry(2, -20, A, B, P), carry(3, -10, B, A, P),
+		rev(4, -5, "FINDINGS", A, P), carry(5, 5, A, H, P)}
+	if got := Evaluate(in(cs...)).State; got != StateNone {
+		t.Fatalf("a repeated head must not revive a superseded CLEAR: %q", got)
+	}
+	cs = []Comment{carry(2, -20, A, B, P), carry(3, -10, B, A, P), carry(5, 5, A, H, P)}
+	if got := Evaluate(in(cs...)).State; got != StateNone {
+		t.Fatalf("a loop is no origin: %q", got)
+	}
+}
+
+func TestEvaluateLoopBackToARepeatedHead(t *testing.T) {
+	// A is carried to B and back to A. The link back repeats A and ends the chain, so the newer direct
+	// CLEAR of A with another patch-id stays the latest verdict of A and the carry-over of P fails.
+	H, A, B, P, P2 := hex("a"), hex("b"), hex("c"), hex("1"), hex("2")
+	cs := []Comment{rev(1, -30, "CLEAR", A, P), carry(2, -20, A, B, P), rev(3, -15, "CLEAR", A, P2),
+		carry(4, -10, B, A, P), carry(5, 5, A, H, P)}
+	if r := Evaluate(in(cs...)); r.State != StateClearStale || r.PatchID != P2 {
+		t.Fatalf("loop back to A: %+v", r)
+	}
+	// The loop closes later in the chain: A to B to C, then back to B.
+	C := hex("d")
+	cs = []Comment{rev(1, -30, "CLEAR", A, P), carry(2, -25, A, B, P), carry(3, -20, B, C, P), rev(4, -15, "CLEAR", B, P2),
+		carry(5, -10, C, B, P), carry(6, 5, B, H, P)}
+	if r := Evaluate(in(cs...)); r.State != StateClearStale || r.PatchID != P2 {
+		t.Fatalf("loop back to B: %+v", r)
+	}
+}
+
+func TestCarryOverAfterFindingsDoesNotReuseAnEarlierCheck(t *testing.T) {
+	// X is carried to H twice, FINDINGS for X lie between. The first carry-over is valid, the second is not.
+	H, X, P := hex("a"), hex("b"), hex("1")
+	cs := []Comment{rev(1, -30, "CLEAR", X, P), carry(2, 1, X, H, P), rev(3, 3, "FINDINGS", X, P), carry(4, 5, X, H, P)}
+	r := Evaluate(in(cs...))
+	if r.State != StateClearCarried || !strings.HasSuffix(r.URL, "-2") {
+		t.Fatalf("the carry-over after FINDINGS is not valid: %+v", r)
+	}
+}
+
+func TestChainWorkIsBounded(t *testing.T) {
+	P := hex("1")
+	hs := []string{}
+	for i := 0; i < 8; i++ {
+		hs = append(hs, strings.Repeat(string("cdef0123"[i]), 40))
+	}
+	cs := []Comment{rev(1, -1000, "CLEAR", hs[0], P)}
+	id, min := int64(10), -900
+	for round := 0; round < 4; round++ {
+		for i := range hs {
+			for j := range hs {
+				if i != j {
+					cs = append(cs, carry(id, min, hs[i], hs[j], P))
+					id++
+					min++
+				}
+			}
+		}
+	}
+	cs = append(cs, carry(9999, 5, hs[7], hex("a"), P))
+	strict, _ := parseAll(7, cs)
+	ch := newChains(strict)
+	done := make(chan struct{})
+	go func() { ch.carried(len(strict) - 1); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("chain evaluation did not finish within 5s")
+	}
+	if ch.calls > len(strict) {
+		t.Fatalf("%d carry-over checks for %d comments", ch.calls, len(strict))
+	}
+}
+
 func TestEvaluateEvidence(t *testing.T) {
 	H, O, P := hex("a"), hex("b"), hex("1")
 	r := Evaluate(in(rev(1, 5, "CLEAR", H, P)))

@@ -85,32 +85,60 @@ func NeedsHeadTime(pr int, head string, comments []Comment) bool {
 	return false
 }
 
-// root is a CLEAR review reached directly or through a chain of carry-overs.
+// root is a CLEAR review reached directly or through a chain of carry-overs. heads lists the heads
+// of the chain from the CLEAR to the end of the last link.
 type root struct {
 	review parsed
 	links  int
+	heads  []string
 }
 
-// origin finds the valid CLEAR for head F as it stood at time limit (inclusive): the latest of the
-// direct reviews of F and the valid carry-overs to F, which must be a CLEAR (or a chain from one).
-func origin(strict []parsed, f string, limit time.Time, used map[int64]bool, links int) (root, parsed, bool) {
+func (r root) has(head string) bool {
+	for _, h := range r.heads {
+		if h == head {
+			return true
+		}
+	}
+	return false
+}
+
+type memoVal struct {
+	root root
+	ok   bool
+}
+
+// chains evaluates carry-over chains over the strict comments in their order. A chain is followed
+// strictly backwards in that order, so it cannot loop, and the check of each carry-over is done once
+// (its origin depends on nothing but its position), so the work is polynomial however many
+// carry-overs a thread holds.
+type chains struct {
+	strict []parsed
+	memo   map[int]memoVal // by position of the carry-over
+	calls  int             // carry-over checks that were not served from the memo
+}
+
+func newChains(strict []parsed) *chains {
+	return &chains{strict: strict, memo: map[int]memoVal{}}
+}
+
+// origin finds the valid CLEAR for head f among the comments before position end: the latest of the
+// direct reviews of f and the valid carry-overs to f, which must be a CLEAR (or a chain from one).
+func (c *chains) origin(f string, end int) (root, bool) {
 	var best parsed
 	var bestRoot root
 	found := false
-	for _, p := range strict {
-		if p.CreatedAt.After(limit) || used[p.ID] {
-			continue
-		}
+	for i := 0; i < end; i++ {
+		p := c.strict[i]
 		switch {
 		case p.Kind == KindReview && p.Head == f:
 			if !found || best.before(p) {
-				best, bestRoot, found = p, root{review: p}, true
-				if p.Verdict != "CLEAR" {
-					bestRoot = root{}
+				best, bestRoot, found = p, root{}, true
+				if p.Verdict == "CLEAR" {
+					bestRoot = root{review: p, heads: []string{f}}
 				}
 			}
-		case p.Kind == KindCarried && p.To == f && links < maxLinks:
-			r, ok := carried(strict, p, used, links)
+		case p.Kind == KindCarried && p.To == f:
+			r, ok := c.carried(i)
 			if !ok {
 				continue
 			}
@@ -119,19 +147,25 @@ func origin(strict []parsed, f string, limit time.Time, used map[int64]bool, lin
 			}
 		}
 	}
-	return bestRoot, best, found && bestRoot.review.Kind == KindReview
+	return bestRoot, found && bestRoot.review.Kind == KindReview
 }
 
-// carried checks one carry-over: its origin is a CLEAR with the same patch-id, posted not after it.
-func carried(strict []parsed, c parsed, used map[int64]bool, links int) (root, bool) {
-	used[c.ID] = true
-	defer delete(used, c.ID)
-	r, _, ok := origin(strict, c.From, c.CreatedAt, used, links+1)
-	if !ok || r.review.PatchID != c.PatchID {
-		return root{}, false
+// carried checks the carry-over at position i: its origin is a CLEAR with the same patch-id posted
+// before it, the chain has at most maxLinks links, and its target is a head the chain has not been at
+// yet (a repeated head ends the chain).
+func (c *chains) carried(i int) (root, bool) {
+	if v, ok := c.memo[i]; ok {
+		return v.root, v.ok
 	}
-	r.links++
-	return r, true
+	c.calls++
+	p := c.strict[i]
+	out, ok := root{}, false
+	if r, found := c.origin(p.From, i); found && r.links < maxLinks && r.review.PatchID == p.PatchID && !r.has(p.To) {
+		out = root{review: r.review, links: r.links + 1, heads: append(append([]string(nil), r.heads...), p.To)}
+		ok = true
+	}
+	c.memo[i] = memoVal{out, ok}
+	return out, ok
 }
 
 // Evaluate derives the review state of one pull request from its comments.
@@ -143,6 +177,7 @@ func Evaluate(in Input) Result {
 	// created at or after the committer date of the head commit.
 	var decisive *parsed
 	var decisiveRoot root
+	ch := newChains(strict)
 	if !in.HeadTime.IsZero() {
 		for i := range strict {
 			p := strict[i]
@@ -155,7 +190,7 @@ func Evaluate(in Input) Result {
 				r = root{review: p}
 			case p.Kind == KindCarried && p.To == in.Head:
 				var ok bool
-				if r, ok = carried(strict, p, map[int64]bool{}, 0); !ok {
+				if r, ok = ch.carried(i); !ok {
 					continue
 				}
 			default:
