@@ -254,30 +254,36 @@ func (g *GitHubForge) Reviews(ctx context.Context, n int) ([]land.Review, error)
 	return out, nil
 }
 
-// Events reads the first page of issue events.
+// Events reads up to three pages of issue events; three full pages are an error (the list may
+// continue, and a late head change would be missed).
 func (g *GitHubForge) Events(ctx context.Context, n int) ([]land.Event, error) {
-	ep, err := hosting.LandEventsEndpoint(g.repo, n)
-	if err != nil {
-		return nil, err
-	}
-	var doc []struct {
-		Event string `json:"event"`
-		Actor *struct {
-			Login string `json:"login"`
-		} `json:"actor"`
-	}
-	if err := g.get(ctx, ep, &doc); err != nil {
-		return nil, err
-	}
-	out := make([]land.Event, 0, len(doc))
-	for _, d := range doc {
-		e := land.Event{Name: d.Event}
-		if d.Actor != nil {
-			e.Actor = d.Actor.Login
+	var out []land.Event
+	for page := 1; page <= hosting.LandMaxListPages; page++ {
+		ep, err := hosting.LandEventsEndpoint(g.repo, n, page)
+		if err != nil {
+			return nil, err
 		}
-		out = append(out, e)
+		var doc []struct {
+			Event string `json:"event"`
+			Actor *struct {
+				Login string `json:"login"`
+			} `json:"actor"`
+		}
+		if err := g.get(ctx, ep, &doc); err != nil {
+			return nil, err
+		}
+		for _, d := range doc {
+			e := land.Event{Name: d.Event}
+			if d.Actor != nil {
+				e.Actor = d.Actor.Login
+			}
+			out = append(out, e)
+		}
+		if len(doc) < 100 {
+			return out, nil
+		}
 	}
-	return out, nil
+	return nil, fmt.Errorf("more than %d issue events; the list is truncated", hosting.LandMaxListPages*100)
 }
 
 // Viewer reads the login of the authenticated user.
@@ -301,13 +307,24 @@ type ruleDoc struct {
 	} `json:"parameters"`
 }
 
+// rules reads up to three pages; three full pages are an error (a truncated list is not complete).
 func (g *GitHubForge) rules(ctx context.Context, branch string) ([]ruleDoc, error) {
-	ep, err := hosting.LandRulesEndpoint(g.repo, branch)
-	if err != nil {
-		return nil, err
+	var all []ruleDoc
+	for page := 1; page <= hosting.LandMaxListPages; page++ {
+		ep, err := hosting.LandRulesEndpoint(g.repo, branch, page)
+		if err != nil {
+			return nil, err
+		}
+		var doc []ruleDoc
+		if err := g.get(ctx, ep, &doc); err != nil {
+			return nil, err
+		}
+		all = append(all, doc...)
+		if len(doc) < 100 {
+			return all, nil
+		}
 	}
-	var doc []ruleDoc
-	return doc, g.get(ctx, ep, &doc)
+	return nil, fmt.Errorf("more than %d rules; the list is truncated", hosting.LandMaxListPages*100)
 }
 
 // protection reads the classic branch protection: contexts, and "none", "present" or "unreadable".
@@ -400,14 +417,15 @@ func (g *GitHubForge) Rulesets(ctx context.Context, branch string) (land.Ruleset
 			return land.RulesetFacts{Protection: state}, nil
 		}
 		var doc struct {
-			Bypass []struct {
+			// A pointer: an absent key (a read without admin rights) is not an empty list.
+			Bypass *[]struct {
 				Mode string `json:"bypass_mode"`
 			} `json:"bypass_actors"`
 		}
-		if err := g.get(ctx, ep, &doc); err != nil {
+		if err := g.get(ctx, ep, &doc); err != nil || doc.Bypass == nil {
 			return land.RulesetFacts{Protection: state}, nil
 		}
-		for _, b := range doc.Bypass {
+		for _, b := range *doc.Bypass {
 			modes = append(modes, b.Mode)
 		}
 	}

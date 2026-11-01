@@ -145,7 +145,7 @@ func TestReviewsAndEvents(t *testing.T) {
 }
 
 func TestRequiredUnionAndReadability(t *testing.T) {
-	rules := "repos/o/r/rules/branches/main"
+	rules := "repos/o/r/rules/branches/main?per_page=100&page=1"
 	prot := "repos/o/r/branches/main/protection"
 	f := &fakeReader{
 		bodies: map[string]string{
@@ -179,7 +179,7 @@ func TestRequiredUnionAndReadability(t *testing.T) {
 }
 
 func TestRulesetsShape(t *testing.T) {
-	rules := "repos/o/r/rules/branches/main"
+	rules := "repos/o/r/rules/branches/main?per_page=100&page=1"
 	prot := "repos/o/r/branches/main/protection"
 	f := &fakeReader{
 		bodies: map[string]string{
@@ -231,5 +231,74 @@ func TestAdapterIsReadOnly(t *testing.T) {
 		if !hosting.LandEndpointAllowed(e) {
 			t.Errorf("endpoint %q is outside the land guard", e)
 		}
+	}
+}
+
+func fullRulesPage(n int) string {
+	var parts []string
+	for i := 0; i < n; i++ {
+		parts = append(parts, `{"type":"deletion","ruleset_id":1}`)
+	}
+	return "[" + strings.Join(parts, ",") + "]"
+}
+
+func TestRulesPaginationAndTruncationFailClosed(t *testing.T) {
+	r1 := "repos/o/r/rules/branches/main?per_page=100&page=1"
+	r2 := "repos/o/r/rules/branches/main?per_page=100&page=2"
+	r3 := "repos/o/r/rules/branches/main?per_page=100&page=3"
+	prot := "repos/o/r/branches/main/protection"
+	// the required_status_checks rule sits on page 2: it must be found
+	f := &fakeReader{bodies: map[string]string{
+		r1: fullRulesPage(100),
+		r2: `[{"type":"required_status_checks","ruleset_id":2,"parameters":{"required_status_checks":[{"context":"late"}]}}]`,
+	}, status: map[string]int{prot: 404}}
+	got, err := newForge(f).Required(context.Background(), "main")
+	if err != nil || !got.Readable || strings.Join(got.Contexts, ",") != "late" {
+		t.Fatalf("page 2 rule lost: %+v %v", got, err)
+	}
+	// three full pages: the list may continue, so it is unreadable, not complete
+	f.bodies = map[string]string{r1: fullRulesPage(100), r2: fullRulesPage(100), r3: fullRulesPage(100)}
+	if got, _ = newForge(f).Required(context.Background(), "main"); got.Readable {
+		t.Fatal("a truncated rule list must make the required checks unreadable")
+	}
+	if rs, _ := newForge(f).Rulesets(context.Background(), "main"); rs.Readable {
+		t.Fatal("a truncated rule list must make the shape unreadable")
+	}
+}
+
+func TestBypassActorsAbsentIsUnreadableNotEmpty(t *testing.T) {
+	rules := "repos/o/r/rules/branches/main?per_page=100&page=1"
+	prot := "repos/o/r/branches/main/protection"
+	f := &fakeReader{bodies: map[string]string{
+		rules:                  `[{"type":"pull_request","ruleset_id":7}]`,
+		"repos/o/r/rulesets/7": `{"id":7,"name":"main"}`, // no bypass_actors key: a read without admin rights
+	}, status: map[string]int{prot: 404}}
+	if rs, _ := newForge(f).Rulesets(context.Background(), "main"); rs.Readable {
+		t.Fatalf("an absent bypass_actors must not read as an empty list: %+v", rs)
+	}
+	f.bodies["repos/o/r/rulesets/7"] = `{"id":7,"bypass_actors":[]}`
+	rs, _ := newForge(f).Rulesets(context.Background(), "main")
+	if !rs.Readable || len(rs.BypassModes) != 0 {
+		t.Fatalf("an empty list is readable and empty: %+v", rs)
+	}
+}
+
+func TestEventsPaginationAndTruncation(t *testing.T) {
+	ev := func(page int, n int, name string) string {
+		var parts []string
+		for i := 0; i < n; i++ {
+			parts = append(parts, `{"event":"`+name+`","actor":{"login":"a"}}`)
+		}
+		return "[" + strings.Join(parts, ",") + "]"
+	}
+	e := func(p int) string { return fmt.Sprintf("repos/o/r/issues/12/events?per_page=100&page=%d", p) }
+	f := &fakeReader{bodies: map[string]string{e(1): ev(1, 100, "labeled"), e(2): ev(2, 1, "head_ref_force_pushed")}}
+	got, err := newForge(f).Events(context.Background(), 12)
+	if err != nil || len(got) != 101 || got[100].Name != "head_ref_force_pushed" {
+		t.Fatalf("a late event on page 2 must be read: %d %v", len(got), err)
+	}
+	f.bodies = map[string]string{e(1): ev(1, 100, "labeled"), e(2): ev(2, 100, "labeled"), e(3): ev(3, 100, "labeled")}
+	if _, err := newForge(f).Events(context.Background(), 12); err == nil {
+		t.Fatal("a truncated event list must be an error, not a complete list")
 	}
 }

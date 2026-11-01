@@ -45,9 +45,9 @@ func landForge(t *testing.T) *watchForge {
 	f := &watchForge{t: t, docs: map[string]string{
 		"repos/o/r": `{"default_branch":"main","delete_branch_on_merge":true}`,
 		"user":      `{"login":"wstein"}`,
-		"repos/o/r/pulls?state=open&per_page=100&page=1": `[]`,
-		"repos/o/r/rules/branches/main":                  `[{"type":"required_status_checks","ruleset_id":7,"parameters":{"required_status_checks":[{"context":"ci"}]}},{"type":"pull_request","ruleset_id":7}]`,
-		"repos/o/r/rulesets/7":                           `{"bypass_actors":[{"bypass_mode":"always"}]}`,
+		"repos/o/r/pulls?state=open&per_page=100&page=1":    `[]`,
+		"repos/o/r/rules/branches/main?per_page=100&page=1": `[{"type":"required_status_checks","ruleset_id":7,"parameters":{"required_status_checks":[{"context":"ci"}]}},{"type":"pull_request","ruleset_id":7}]`,
+		"repos/o/r/rulesets/7":                              `{"bypass_actors":[{"bypass_mode":"always"}]}`,
 	}}
 	for n := 11; n <= 13; n++ {
 		head := landSHA(n - 10)
