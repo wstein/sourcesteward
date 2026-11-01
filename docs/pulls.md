@@ -113,6 +113,21 @@ the repository). The last line counts the non-draft pull requests with `base-not
 list and adds `owner_queue` (null without the flag) and `summary.waiting_for_parent`. `--mergeable` cannot be combined with `--review`,
 `--hint` or `--no-review` (exit 2). It is a CLEAR per comment and a green head, not an approval: nothing here merges, labels or marks Ready.
 
+## Stacks: `--stack`
+
+```sh
+stw pulls --stack              # trees of pull requests by base and head branch, with review state and hints
+stw pulls --stack --json | jq '.stack.trees[] | .repo + "#" + (.number|tostring)'
+```
+
+A pull request is the child of another one of the same repository when its base is the head branch of the other and the other is not a fork
+pull request; with several candidates the lowest number is the parent. Each node shows the group, the checks class, the review state (a
+claim of a comment) and the hints; a root whose base is not the default branch also shows `(base BRANCH)`. Only trees with a child and roots with
+`base-not-default` are printed (an open parent that is gone, for example because it was merged, shows as `parent-merged-retarget` when it is among the
+100 most recently updated closed pull requests); the last line counts the single pull requests left out. Children are drawn with `|-` and
+`` `- ``. The JSON keeps the groups and adds `stack` (null without the flag) with `{trees, singles}`. `--stack` cannot be combined with
+`--mergeable`, `--review`, `--hint` or `--no-review` (exit 2).
+
 ## Filters and the detail budget
 
 `--no-bots` and `--bots-only` exclude each other (exit 2); `--author LOGIN` (repeatable, optional `[bot]` suffix)
