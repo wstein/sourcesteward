@@ -148,6 +148,10 @@ func TestPinsBoundedResultsValidateAgainstSchema(t *testing.T) {
 }
 
 func TestPinsHostileBranchAndRemoteValidateAgainstSchema(t *testing.T) {
+	// APFS refuses file names that are not valid UTF-8, and Git stores a ref as a file.
+	if err := os.WriteFile(filepath.Join(t.TempDir(), "br\xff"), nil, 0o600); err != nil {
+		t.Skipf("the file system rejects non-UTF-8 file names, so the hostile branch name cannot exist: %v", err)
+	}
 	w := newPinsWorld(t)
 	super, _ := w.super()
 	member := filepath.Join(super, "member")
