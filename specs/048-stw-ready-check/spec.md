@@ -21,8 +21,8 @@ fixed order. Each is `pass`, `fail` or `unknown` and carries its evidence. `read
 | `open` | the pull request is open (not closed, not merged) | `pulls/N` could not be read |
 | `review` | the Spec 046 state is `clear` and names the current head, or `clear-carried` through a valid carry-over chain | the review state could not be read, or is `unparsed` |
 | `checks` | the check class of all check runs and commit statuses at the exact head is `green` | the checks could not be read |
-| `base` | the base is the default branch, or the text has a line `Merge #N first` (a stack child; the parent is not checked) | the default branch could not be read |
-| `blocker` | no line of the text starts with `Blocker:` and a value other than `none`, `keiner`, `keine`, `n/a`, `-`, `no` | the text could not be read |
+| `base` | the base is the default branch, or the head branch of another open pull request of the repository (a stack child; the parent is named in the evidence) | the default branch or, for another base, the open pull requests could not be read |
+| `blocker` | no Blocker line or Blocker section of the text names a blocker (see below); the none spellings are `none`, `keiner`, `keine`, `n/a`, `no`, `-` | the text could not be read |
 | `conflict` | GitHub reports `mergeable` true and a state other than `dirty` | GitHub has not computed `mergeable` yet |
 | `rebaseable` | GitHub reports `rebaseable` true | GitHub has not computed `rebaseable` yet |
 
@@ -34,7 +34,17 @@ Decisions and limits:
 - `checks` looks at every check run and commit status of the head, not at the list of required checks (not read; Spec 046 lists it as a
   non-goal). It is at least as strict as "required checks green". The check class is the one of `stw pulls` (Spec 036).
 - `review` is a claim of the comment, not proof (Spec 046, Trust model); the output says "per comment" and never "independent".
-- `Merge #N first` is a text convention for a stack child (workspace rule); `stw` does not verify that #N is the parent.
+- `base` is derived from GitHub data, not from the text (owner decision 2026-11-01, review of PR 359): a base other than the default
+  branch passes only when another open pull request of the same repository has that branch as head branch (the lowest number is named,
+  and "merge #N first" is stated as evidence). The list of open pull requests does not give the head repository, so a fork branch with the
+  same name is not told apart. A text line "Merge #N first" is no evidence.
+- A Blocker line is a line whose label, the text before its first colon, has at most six words and contains the word "blocker" or
+  "blockers"; quote, list and number marks, heading marks and emphasis are ignored (`Blocker: x`, `**Blocker (Draft):** x`, `1. Blocker: x`,
+  `> Blocker: x`, `## Blocker: x`, `Draft. Blocker: x`, `**Draft, named blocker:** x`). A heading or a bare `Blocker` word without a colon, and
+  a Blocker line without a value, take the section below as value: the lines up to the next blank line (after the first content line) or
+  heading. Every line must be a none spelling (a list mark and emphasis are ignored), else the condition fails; no value fails. A prose
+  sentence with the word and no such label (`This is a blocker.`) is not a Blocker line. The whole body is scanned.
+- Evidence is cut to 400 bytes (the schema allows 400 characters); control characters are escaped first.
 - The command reads the head once. A push between the read and the flip is not detected; `--expect-head`-style resampling is the
   trusted check of issue #64.
 - Until the Spec 046 parser is merged, the review source of the command is a placeholder that fails, so `review` is `unknown` and the
@@ -43,8 +53,9 @@ Decisions and limits:
 ## Reads and effects
 
 GET only, through the guarded `stw pulls` reader: `repos/OWNER/NAME/pulls/N`, `repos/OWNER/NAME`, and the check runs and statuses of
-the head (`commits/SHA/check-runs`, `commits/SHA/statuses`), all existing allowlist shapes (Spec 022 FR-005); no new shape. Four
-requests per run, plus the comment reads of Spec 046 once the parser is wired. The command writes nothing to GitHub, to disk or to
+the head (`commits/SHA/check-runs`, `commits/SHA/statuses`) and, for a base other than the default branch, the open pull request list
+(`pulls?state=open`, Spec 036), all existing allowlist shapes (Spec 022 FR-005); no new shape. Four
+requests per run (five with a stacked base: one list read of the open pull requests), plus the comment reads of Spec 046 once the parser is wired. The command writes nothing to GitHub, to disk or to
 git, has no `apply` mode and never marks, labels or merges.
 
 ## Exit statuses

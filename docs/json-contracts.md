@@ -328,7 +328,7 @@ checked in and byte-frozen but excluded from Pages packaging until the feature i
 `ready-check`, `time`, `host`, `repo`, `number`, `head` and `draft` (null when `pulls/N` could not be read), `ready`, `conditions` and
 `errors`; no key is omitted. `conditions` has exactly seven entries `{id, status, evidence}` in the order `open`, `review`, `checks`, `base`,
 `blocker`, `conflict`, `rebaseable`, with the status `pass`, `fail` or `unknown`. `ready` is true only when all seven pass, a head is known and
-no read failed. An error is `{source, code, message}` with the source `pull`, `repo`, `checks` or `review`. Tests validate the contract
+no read failed. An error is `{source, code, message}` with the source `pull`, `repo`, `pulls`, `checks` or `review`. Tests validate the contract
 example, reject broken variants and validate the output of the command.
 
 ## Release source schemas (unpublished)

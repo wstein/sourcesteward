@@ -7,7 +7,7 @@ absent values are `null`.
 Members: `schema_version` 1, `command` `ready-check`, `time` (RFC 3339 UTC), `host`, `repo`, `number`, `head` (40 hex, or null when
 `pulls/N` could not be read), `draft` (bool or null), `ready` (bool), `conditions` (exactly seven objects `{id, status, evidence}` in the
 order `open`, `review`, `checks`, `base`, `blocker`, `conflict`, `rebaseable`; `status` `pass|fail|unknown`; `evidence` at most 400
-characters, control characters escaped) and `errors` (`{source, code, message}` per failed read; `source` `pull|repo|checks|review`).
+characters, control characters escaped) and `errors` (`{source, code, message}` per failed read; `source` `pull|repo|pulls|checks|review`).
 `ready` true implies all conditions `pass`, a head and no error.
 
 ```json
