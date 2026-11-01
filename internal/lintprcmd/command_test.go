@@ -85,7 +85,11 @@ func goodCommitJSON(sh string) string {
 const goodBody = "Purpose.\n\nBlocker: Independent review pending\nCloses #1\n\nAuthor agent: Claude"
 
 func detailJSON(title, body string) string {
-	return fmt.Sprintf(`{"number":7,"title":%s,"body":%s,"head":{"sha":%q}}`, jsonString(title), jsonString(body), sha("a"))
+	return detailWithCommits(title, body, 1)
+}
+
+func detailWithCommits(title, body string, commits int) string {
+	return fmt.Sprintf(`{"number":7,"title":%s,"body":%s,"commits":%d,"head":{"sha":%q}}`, jsonString(title), jsonString(body), commits, sha("a"))
 }
 
 func cleanSource() *fakeSource {
@@ -265,6 +269,7 @@ func TestNullBodyIsEmpty(t *testing.T) {
 
 func TestPagingCommitsAndComments(t *testing.T) {
 	src := cleanSource()
+	src.detail = detailWithCommits("feat: y", goodBody, 2)
 	src.commits = map[int]string{1: "[" + goodCommitJSON(sha("1")) + "]", 2: "[" + goodCommitJSON(sha("3")) + "]"}
 	src.links["commits/1"] = nextLink(2)
 	src.comments = map[int]string{1: `[{"id":1,"body":"a"}]`, 2: `[{"id":2,"body":"b"}]`, 3: `[{"id":3,"body":"c"}]`}
@@ -294,8 +299,11 @@ func TestTruncationAtThePageBounds(t *testing.T) {
 		}
 	}
 	m, _, err := run(t, src)
-	if err != nil {
-		t.Fatal(err)
+	if exitCode(err) != 3 || !strings.Contains(err.Error(), "truncated") {
+		t.Fatalf("a truncated read must fail closed: %v", err)
+	}
+	if sm := m["summary"].(map[string]any); sm["passed"] != false || sm["errors"] != 0.0 {
+		t.Fatalf("%v", sm)
 	}
 	tr := m["truncated"].(map[string]any)
 	if tr["commits"] != true || tr["comments"] != true || m["summary"].(map[string]any)["comments"] != 10.0 {
@@ -305,6 +313,52 @@ func TestTruncationAtThePageBounds(t *testing.T) {
 		if c == "commits/4" || c == "comments/11" {
 			t.Fatalf("read past the bound: %v", src.calls)
 		}
+	}
+}
+
+func TestEachTruncationAloneFailsClosed(t *testing.T) {
+	// Comments only: ten full pages.
+	src := cleanSource()
+	src.comments = map[int]string{}
+	for p := 1; p <= 10; p++ {
+		src.comments[p] = fmt.Sprintf(`[{"id":%d,"body":"x"}]`, p)
+		src.links[fmt.Sprintf("comments/%d", p)] = nextLink(p + 1)
+	}
+	m, _, err := run(t, src)
+	if exitCode(err) != 3 || m["summary"].(map[string]any)["passed"] != false || m["truncated"].(map[string]any)["commits"] != false {
+		t.Errorf("comments: %v %v", err, m)
+	}
+	// Commits only: GitHub lists at most 250 commits, the pull request says 300.
+	src = cleanSource()
+	src.detail = detailWithCommits("feat: y", goodBody, 300)
+	m, _, err = run(t, src)
+	if exitCode(err) != 3 || m["summary"].(map[string]any)["passed"] != false || m["truncated"].(map[string]any)["commits"] != true || m["truncated"].(map[string]any)["comments"] != false {
+		t.Errorf("commit count: %v %v", err, m)
+	}
+	// A pull request without a commits field is not judged by it.
+	src = cleanSource()
+	src.detail = fmt.Sprintf(`{"number":7,"title":"t","body":%s,"head":{"sha":%q}}`, jsonString(goodBody), sha("a"))
+	if _, _, err = run(t, src); err != nil {
+		t.Errorf("no commits field: %v", err)
+	}
+	// Human output says so.
+	src = cleanSource()
+	src.detail = detailWithCommits("feat: y", goodBody, 300)
+	var out bytes.Buffer
+	p := params(src, &out)
+	p.Human = true
+	_ = Execute(context.Background(), p)
+	if !strings.Contains(out.String(), "incomplete") {
+		t.Errorf("human output: %s", out.String())
+	}
+}
+
+func TestExactlyOneErrorExitsThree(t *testing.T) {
+	src := cleanSource()
+	src.detail = detailJSON("feat: y", "Purpose.\nAuthor agent: Claude")
+	m, _, err := run(t, src)
+	if exitCode(err) != 3 || m["summary"].(map[string]any)["errors"] != 1.0 {
+		t.Fatalf("%v %v", err, m["summary"])
 	}
 }
 
@@ -374,7 +428,7 @@ func TestHumanOutputListsEachFinding(t *testing.T) {
 
 func TestHumanOutputEscapesControlCharacters(t *testing.T) {
 	src := cleanSource()
-	src.commits = map[int]string{1: "[" + commitJSON(sha("1"), "feat: y\n\nCo-Authored-By: C <c@d.e>", "Bad\u001b[31mName", ownerEmail, ownerName, ownerEmail) + "]"}
+	src.commits = map[int]string{1: "[" + commitJSON(sha("1"), "feat: y\n\nCo-Authored-By: C <c@d.e>", ownerName, "bad\u001b[31m@x.y", ownerName, ownerEmail) + "]"}
 	var out bytes.Buffer
 	p := params(src, &out)
 	p.Human = true
@@ -405,6 +459,9 @@ func TestPrepare(t *testing.T) {
 		"identity email": func(f *Flags) { f.Owners = []string{"N <not-an-email>"} },
 		"identity empty": func(f *Flags) { f.Owners = []string{" <a@b.c>"} },
 		"both outputs":   func(f *Flags) { f.Human, f.JSON = true, true },
+		"junk before":    func(f *Flags) { f.Owners = []string{"x <y Name <a@b.c>"} },
+		"junk after":     func(f *Flags) { f.Owners = []string{"Name <a@b.c> tail"} },
+		"path and repo":  func(f *Flags) { f.WorkspacePath = "/w" },
 	}
 	for name, mod := range bad {
 		f := flags()

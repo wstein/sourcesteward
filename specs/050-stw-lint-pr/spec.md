@@ -26,8 +26,7 @@ limits. The engine only interprets the table. Rule IDs are part of the JSON cont
 | `review-line-format` | error | the first line of a review comment is `Review: <CLEAR\|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n>` or the `Carried-over` form, with `pr` equal to this pull request |
 | `review-comment-length` | error | a review comment has at most 15 lines |
 
-A comment is a **review comment** when its first non-blank line starts with `Review` or `Carried-over` followed by a colon (case-insensitive,
-blanks and markdown marks ignored). A comment that does not claim to be a review is not checked beyond the session-link rule. The
+A comment is a **review comment** when its first non-blank line starts with `Review` or `Carried-over` (case-insensitive, blanks and markdown marks ignored) followed by a colon, the end of the line or a verdict word (`**Review**: CLEAR`, `Review CLEAR`, `## Review`); prose such as "Review of the approach" is not one. A comment that does not claim to be a review is not checked beyond the session-link rule. The
 identity rules run only with at least one owner identity; the command refuses to run without one.
 
 Not checked (no machine-checkable form): the list of at most 6 changes, "Tests with numbers", the "Not verified" line, atomicity of
@@ -45,8 +44,10 @@ change of the table in the same step: run the test after every change of the cor
 `stw lint pr PR [PATH] [--repo OWNER/NAME] [--host HOST] [--owner-identity "Name <email>"]... [--human | --json]`. The repository is
 `--repo` or the single GitHub repository of the workspace of PATH (the current directory). Owner identities are `--owner-identity`
 (repeatable) or `user.name` and `user.email` read from the Git configuration of that directory (two `git config --get` calls, never a write).
-Reads: `pulls/N`, `pulls/N/commits` (pages 1 to 3, 100 per page), `issues/N/comments` (pages 1 to 10, 30 per page); more is reported as
-`truncated`. Exit statuses: 0 no error finding (warnings do not fail), 3 at least one error finding (the output is printed), 1 a failed read
+Reads: `pulls/N`, `pulls/N/commits` (pages 1 to 3, 100 per page; the forge lists at most 250 commits), `issues/N/comments` (pages 1 to 10, 30 per page).
+**An incomplete read fails closed:** the commits are `truncated` when the last page still has a next page or when fewer commits were read than the `commits`
+field of `pulls/N` reports; the comments when page 10 still has a next page. Then `summary.passed` is false and the exit status is 3 even without a finding,
+because unread text is not a pass. Exit statuses: 0 no error finding and a complete read (warnings do not fail), 3 at least one error finding or an incomplete read (the output is printed), 1 a failed read
 (no output), 2 usage error. JSON: [lint-pr.schema.json](../../schemas/v1/lint-pr.schema.json), a finding has `rule`, `severity`,
 `location` (`kind` `pr-title`, `pr-body`, `comment` or `commit`; `id` the comment ID or commit SHA; `line`) and `message`.
 

@@ -142,7 +142,7 @@ func prepare(ctx context.Context, f Flags, out io.Writer, d Deps) (Params, error
 }
 
 // Execute reads the pull request, prints the document and returns nil for exit 0, a *watchcmd.Failure
-// with code 3 for a finding of severity error and code 1 for a failed read (no document is printed then).
+// with code 3 for a finding of severity error or an incomplete read (a list cut at its bound) and code 1 for a failed read (no document is printed then).
 func Execute(ctx context.Context, p Params) error {
 	open := p.Open
 	if open == nil {
@@ -186,10 +186,23 @@ func Execute(ctx context.Context, p Params) error {
 	if werr != nil {
 		return snapcmd.Failure(watchcmd.ExitFailure, "cannot write the output")
 	}
+	if doc.Summary.Errors == 0 && !doc.Summary.Passed {
+		return snapcmd.Failure(ExitFindings, "incomplete read: %s not read in full (see truncated); the result is not a pass", incompleteLists(doc.Truncated))
+	}
 	if doc.Summary.Errors > 0 {
 		return snapcmd.Failure(ExitFindings, "%s, %s", snapcmd.Plural(doc.Summary.Errors, "error", "errors"), snapcmd.Plural(doc.Summary.Warnings, "warning", "warnings"))
 	}
 	return nil
+}
+
+func incompleteLists(t DocTruncated) string {
+	switch {
+	case t.Commits && t.Comments:
+		return "commits and comments were"
+	case t.Commits:
+		return "commits were"
+	}
+	return "comments were"
 }
 
 func readError(err error) string {
@@ -209,7 +222,7 @@ func read(ctx context.Context, src Source, p Params) (lintpr.Input, string, trun
 	if err != nil {
 		return in, "", tr, err
 	}
-	title, body, head, err := decodeDetail(res.Body)
+	title, body, head, commitCount, err := decodeDetail(res.Body)
 	if err != nil {
 		return in, "", tr, err
 	}
@@ -234,6 +247,11 @@ func read(ctx context.Context, src Source, p Params) (lintpr.Input, string, trun
 		if page == maxCommitPages {
 			tr.Commits = true
 		}
+	}
+	// The commits endpoint lists at most 250 commits whatever the page bound: a count below the one the pull
+	// request reports means commits were not read.
+	if commitCount > len(in.Commits) {
+		tr.Commits = true
 	}
 	for page := 1; page <= maxCommentPages; page++ {
 		res, err := src.LintComments(ctx, p.Repo, p.PR, page)

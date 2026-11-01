@@ -13,17 +13,18 @@ var errShape = errors.New("malformed-response: unexpected document shape")
 
 var sha40 = regexp.MustCompile(`\A[0-9a-f]{40}\z`)
 
-// decodeDetail reads title, body and head SHA of pulls/N. A null body is the empty text.
-func decodeDetail(raw []byte) (title, body, head string, err error) {
+// decodeDetail reads title, body, head SHA and the commit count of pulls/N (-1 when absent). A null body is the empty text.
+func decodeDetail(raw []byte) (title, body, head string, commits int, err error) {
 	var d struct {
-		Title *string `json:"title"`
-		Body  *string `json:"body"`
-		Head  struct {
+		Title   *string `json:"title"`
+		Commits *int    `json:"commits"`
+		Body    *string `json:"body"`
+		Head    struct {
 			SHA string `json:"sha"`
 		} `json:"head"`
 	}
 	if json.Unmarshal(raw, &d) != nil || !sha40.MatchString(d.Head.SHA) {
-		return "", "", "", errShape
+		return "", "", "", -1, errShape
 	}
 	if d.Title != nil {
 		title = *d.Title
@@ -31,7 +32,11 @@ func decodeDetail(raw []byte) (title, body, head string, err error) {
 	if d.Body != nil {
 		body = *d.Body
 	}
-	return title, body, d.Head.SHA, nil
+	commits = -1 // unknown: the pull request did not say
+	if d.Commits != nil && *d.Commits >= 0 {
+		commits = *d.Commits
+	}
+	return title, body, d.Head.SHA, commits, nil
 }
 
 type person struct {

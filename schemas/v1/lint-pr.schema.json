@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v1/lint-pr.schema.json",
   "title": "SourceSteward pull request lint result (schema 1)",
-  "description": "Result of stw lint pr --json: the findings of the machine-checkable working rules for the commits, the text and the comments of one pull request (Spec 050). Read-only. Exit statuses: 0 no finding of severity error (warnings do not fail), 3 at least one finding of severity error (the document is printed), 1 a failed read (no document is printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. New rule IDs and added properties are compatible extensions: a consumer must accept rule IDs it does not know.",
+  "description": "Result of stw lint pr --json: the findings of the machine-checkable working rules for the commits, the text and the comments of one pull request (Spec 050). Read-only. Exit statuses: 0 no finding of severity error (warnings do not fail), 3 at least one finding of severity error or an incomplete read, that is `truncated.commits` or `truncated.comments` true, in which case `summary.passed` is false (the document is printed), 1 a failed read (no document is printed), 2 usage error with no JSON. Keys are never omitted; absent values are null. New rule IDs and added properties are compatible extensions: a consumer must accept rule IDs it does not know.",
   "type": "object",
   "required": ["schema_version", "command", "time", "host", "repo", "pull_request", "head", "options", "rules", "findings", "summary", "truncated"],
   "additionalProperties": false,
