@@ -222,7 +222,7 @@ class TieringTests(unittest.TestCase):
              "&& '[\"current\"]' || '[\"minimum\",\"current\"]') }}")
 
     def test_pull_requests_of_ci_yml_run_only_the_current_lane_whatever_the_label(self):
-        # The minimum lane gates main after merge, labelled PRs (ci-full.yml) and the race schedule.
+        # The minimum lane gates main after merge, labeled PRs (ci-full.yml) and the race schedule.
         import json
         match = re.search(r"lane: \$\{\{ fromJSON\((.+)\) \}\}", job_text('conformance'))
         self.assertTrue(match)
@@ -259,6 +259,24 @@ class CiFullWorkflowTests(unittest.TestCase):
         for text in (FULL, CONFORMANCE, WORKFLOW):
             head = text.split('\njobs:', 1)[0]
             self.assertRegex(head, r'(?m)^permissions:\n  contents: read\n(?!  )')
+
+    def test_the_label_run_passes_only_the_lane_so_the_shards_cannot_be_switched_off(self):
+        text = job_text('conformance', FULL)
+        with_block = text.split('    with:\n', 1)[1]
+        self.assertEqual(re.findall(r'(?m)^      ([a-z_]+):', with_block), ['lane'])
+        self.assertNotIn('heavy', text)
+        self.assertNotIn('docs_only', text)
+
+    def test_the_label_run_has_its_own_check_name_that_never_collides_with_ci_yml(self):
+        # Spec 039 amendment 2026-11-01: the ruleset requires `Git/jj conformance (current) / suite`, which the
+        # always-green ci.yml run reports. The label run reports as `Heavy lane (<lane>) / suite`.
+        self.assertIn('name: Heavy lane (${{ matrix.lane }})', job_text('conformance', FULL))
+        self.assertIn('name: Git/jj conformance (${{ matrix.lane }})', job_text('conformance'))
+        self.assertNotIn('name: Git/jj conformance', FULL)
+
+    def test_a_newer_label_event_never_cancels_a_running_heavy_lane(self):
+        self.assertIn('cancel-in-progress: false', FULL.split('\njobs:', 1)[0])
+        self.assertNotIn('cancel-in-progress: true', FULL)
 
     def test_calls_the_reusable_suite_for_both_lanes(self):
         text = job_text('conformance', FULL)
@@ -576,6 +594,54 @@ class HeavyGateWorkflowTests(unittest.TestCase):
         self.assertNotIn('pull-requests', FULL.split('\njobs:', 1)[0])
 
 
+def run_step(text_job, step_name, env_extra, bin_files):
+    """Runs the shell of one step with stub executables in a PATH directory; returns (code, stdout, stderr, summary)."""
+    step = text_job.split('- name: ' + step_name + '\n', 1)[1]
+    script = step.split('        run: |\n', 1)[1]
+    script = '\n'.join(line[10:] for line in script.splitlines() if line.startswith('          ') or not line.strip())
+    with tempfile.TemporaryDirectory() as tmp:
+        bindir = Path(tmp) / 'bin'
+        bindir.mkdir()
+        for name, body in bin_files.items():
+            (bindir / name).write_text('#!/bin/bash\n' + body)
+            (bindir / name).chmod(0o755)
+        summary = Path(tmp) / 'summary.md'
+        env = dict(os.environ, PATH=str(bindir) + os.pathsep + os.environ['PATH'], RUNNER_TEMP=tmp,
+                   GITHUB_STEP_SUMMARY=str(summary), **env_extra)
+        done = subprocess.run(['bash', '-e', '-c', script], env=env, cwd=ROOT, capture_output=True, text=True)
+        return done.returncode, done.stdout, done.stderr, summary.read_text() if summary.exists() else ''
+
+
+class CiFullStackReportTests(unittest.TestCase):
+    ENV = dict(REPO='o/r', EVENT_NAME='pull_request', PR_NUMBER='5', HEAD_REF='feat/a', HEAD_REPO='o/r', BASE_REPO='o/r',
+               DEFAULT_BRANCH='main', GH_TOKEN='x')
+
+    def report(self, listing):
+        gh = "cat <<'EOF'\n" + listing + "\nEOF\n"
+        return run_step(job_text('stack', FULL), 'Report a label below the tip of a stack', self.ENV, {'gh': gh})
+
+    SELF = '{"number":5,"draft":false,"base_ref":"main","base_repo":"o/r","head_repo":"o/r"}'
+    CHILD = '{"number":6,"draft":false,"base_ref":"feat/a","base_repo":"o/r","head_repo":"o/r"}'
+
+    def test_a_label_below_the_tip_gives_a_warning_annotation_and_a_summary_line(self):
+        code, out, _, summary = self.report(self.SELF + '\n' + self.CHILD)
+        self.assertEqual(code, 0)
+        self.assertIn('::warning title=ci-full below the tip of a stack::', out)
+        self.assertIn('below the tip of a stack', summary)
+
+    def test_a_label_on_a_tip_or_an_unstacked_pull_request_gives_no_warning(self):
+        code, out, _, summary = self.report(self.SELF)
+        self.assertEqual(code, 0)
+        self.assertNotIn('::warning', out)
+        self.assertIn('is_stack_tip=true', summary)
+
+    def test_a_failed_lookup_counts_as_a_tip_and_does_not_fail_the_job(self):
+        code, out, _, _ = run_step(job_text('stack', FULL), 'Report a label below the tip of a stack', self.ENV,
+                                   {'gh': 'exit 1\n'})
+        self.assertEqual(code, 0)
+        self.assertNotIn('::warning', out)
+
+
 class CiFullResetWorkflowTests(unittest.TestCase):
     def test_runs_only_on_synchronize_and_never_on_pull_request_target(self):
         on = RESET.split('\npermissions:', 1)[0]
@@ -596,16 +662,43 @@ class CiFullResetWorkflowTests(unittest.TestCase):
 
     def test_it_removes_exactly_the_ci_full_label_with_data_from_the_environment(self):
         text = job_text('reset', RESET)
-        self.assertIn("contains(github.event.pull_request.labels.*.name, 'ci-full')", text)
-        self.assertIn('head.repo.full_name == github.repository', text)
         step = text.split('- name: Remove the ci-full label\n', 1)[1]
         env, run = step.split('        run: |\n', 1)
         self.assertIn('PR_NUMBER: ${{ github.event.pull_request.number }}', env)
         self.assertNotIn('${{', run)
         self.assertIn('gh api --method DELETE "repos/$REPO/issues/$PR_NUMBER/labels/ci-full"', run)
 
-    def test_runs_of_one_pull_request_do_not_cancel_each_other_unsafely(self):
+    def test_the_job_condition_for_every_case(self):
+        text = job_text('reset', RESET)
+        expr = re.search(r'(?m)^    if: (.*)$', text).group(1)
+        python = (expr.replace("contains(github.event.pull_request.labels.*.name, 'ci-full')", "('ci-full' in labels)")
+                  .replace('github.event.pull_request.head.repo.full_name', 'head_repo')
+                  .replace('github.repository', 'repo').replace('&&', ' and ').replace('||', ' or '))
+        runs = lambda labels, head_repo: eval(python, {}, {'labels': labels, 'head_repo': head_repo, 'repo': 'o/r'})
+        self.assertTrue(runs(['ci-full'], 'o/r'))
+        self.assertFalse(runs([], 'o/r'))
+        self.assertFalse(runs(['other'], 'o/r'))
+        self.assertFalse(runs(['ci-full'], 'fork/r'))  # a fork token is read-only
+        self.assertFalse(runs([], 'fork/r'))
+
+    def removal(self, gh):
+        return run_step(job_text('reset', RESET), 'Remove the ci-full label',
+                        dict(REPO='o/r', PR_NUMBER='5', GH_TOKEN='x'), {'gh': gh})
+
+    def test_a_label_that_is_already_gone_is_not_an_error_but_other_errors_are(self):
+        code, _, _, _ = self.removal('echo "gh: Label does not exist (HTTP 404)" >&2; exit 1\n')
+        self.assertEqual(code, 0)
+        code, _, err, _ = self.removal('echo "gh: Resource not accessible by integration (HTTP 403)" >&2; exit 1\n')
+        self.assertNotEqual(code, 0)
+        self.assertIn('HTTP 403', err)
+        code, _, _, summary = self.removal('exit 0\n')
+        self.assertEqual(code, 0)
+        self.assertIn('Removed the ci-full label', summary)
+
+    def test_runs_of_one_pull_request_do_not_cancel_each_other(self):
         self.assertIn('group: ci-full-reset-${{ github.event.pull_request.number }}', RESET)
+        self.assertIn('cancel-in-progress: false', RESET.split('\njobs:', 1)[0])
+        self.assertNotIn('cancel-in-progress: true', RESET)
 
 
 class SuiteAggregateTests(unittest.TestCase):
@@ -651,7 +744,7 @@ class SuiteAggregateTests(unittest.TestCase):
                 self.assertFalse(self.passes('skipped', 'true', event, heavy), event)
                 self.assertFalse(self.passes('skipped', 'false', event, heavy), event)
 
-    def test_failed_or_cancelled_shards_fail_without_the_heavy_gate_too(self):
+    def test_failed_or_canceled_shards_fail_without_the_heavy_gate_too(self):
         for result in ('failure', 'cancelled', ''):
             self.assertFalse(self.passes(result, 'false', 'pull_request', 'false'), result)
 
