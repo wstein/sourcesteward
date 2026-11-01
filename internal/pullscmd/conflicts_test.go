@@ -350,6 +350,28 @@ func TestExecuteEscapesUntrustedPaths(t *testing.T) {
 	}
 }
 
+// The brief of the restack plan is Markdown that goes to the terminal in the human output, so no
+// control character may survive in it: C0, C1 (U+009B is a CSI), format characters such as the bidi
+// controls, and the line and paragraph separators.
+func TestExecuteEscapesUntrustedPathsInTheRestackBrief(t *testing.T) {
+	fs := conflictFindings()
+	f1 := fs[1]
+	f1.Files = []conflicts.FileConflict{{Path: "c1\u009b31m bidi\u202e line\u2028sep para\u2029sep esc\x1b[31m rules.md"}}
+	fs[1] = f1
+	f := conflictFlags()
+	f.JSON, f.Human, f.RestackPlan = false, true, true
+	out, _, err := execConflicts(t, conflictSource(), f, &stubProber{findings: fs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "# Restack brief") {
+		t.Fatalf("the brief is missing:\n%s", out)
+	}
+	if strings.ContainsAny(out, "\x1b\u009b\u202e\u2028\u2029") {
+		t.Fatalf("a control character reached the terminal: %q", out)
+	}
+}
+
 func TestDefaultProberChecksTheCheckoutsRemote(t *testing.T) {
 	dir := t.TempDir()
 	run := func(args ...string) {
