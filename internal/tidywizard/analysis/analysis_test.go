@@ -249,7 +249,11 @@ func TestPrepareReportsUnreadableAndUninitializedMembers(t *testing.T) {
 
 func TestPrepareOnlineAndStateDirectories(t *testing.T) {
 	w := world()
-	dir := t.TempDir()
+	// On macOS t.TempDir() is under /var, a symlink; the state directory check refuses symlinks.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Chmod(dir, 0o700); err != nil {
 		t.Fatal(err)
 	}
