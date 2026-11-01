@@ -21,11 +21,11 @@ func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith
 // readers (local status, discovery, forge reader) and are nil in production.
 func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 	var jsonOutput, offline, reviews bool
-	var icons string
+	var icons, rulesPath string
 	var timeout time.Duration
 	var options stwsync.StatusOptions
 	command := &cobra.Command{
-		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--json]",
+		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--rules [--rules-path PATH]] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--json]",
 		Short: "Show what needs action in the workspace and the state of every repository",
 		Long: "Read-only overview of the whole workspace, from any directory inside it. It starts with what needs action, ordered by\n" +
 			"priority (red, yellow, green, blue, violet), each item with its link and a command you can run yourself; then one block\n" +
@@ -55,6 +55,16 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			options.Path = workspacePath(args)
 			if err := stwsync.ValidateOptions(stwsync.Options{Path: options.Path}); err != nil {
 				return err
+			}
+			options.RulesPath, options.RulesPathSource = rulesPath, "flag"
+			if options.Rules {
+				withEnv := stwsync.WithRulesEnvironment(stwsync.Options{RulesPath: rulesPath, RulesPathSource: "flag"})
+				options.RulesPath, options.RulesPathSource, options.Home = withEnv.RulesPath, withEnv.RulesPathSource, withEnv.Home
+				if err := stwsync.ValidateOptions(withEnv); err != nil {
+					return err
+				}
+			} else if rulesPath != "" {
+				return errors.New("--rules-path applies with --rules only")
 			}
 			flags := cmd.Flags()
 			switch {
@@ -90,6 +100,8 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 	flags.BoolVar(&offline, "offline", false, "Local only: send no request, read no credential and print the output of the local status")
 	flags.BoolVar(&options.Fetch, "fetch", false, "Fetch every repository first (remote-tracking refs only; the one thing that is not read-only)")
 	flags.BoolVar(&options.Worktrees, "worktrees", false, "List the linked worktrees of each repository")
+	flags.BoolVar(&options.Rules, "rules", false, "Also show the state of the agent-rules checkout (workspace member named agent-rules, --rules-path or STW_RULES_PATH); read-only, fetched only with --fetch")
+	flags.StringVar(&rulesPath, "rules-path", "", "The agent-rules checkout for --rules (default: STW_RULES_PATH, else the workspace member whose remote is named agent-rules)")
 	flags.StringVar(&icons, "icons", "", "Glyph set of the text: unicode, nerd or ascii (default: unicode on a UTF-8 terminal, else ascii)")
 	flags.DurationVar(&timeout, "timeout", statusremote.DefaultTimeout, "Overall deadline of the remote half, 1s to 10m (not with --offline)")
 	flags.BoolVar(&reviews, "review", false, "Also read the review state of the open pull requests from their comments (one comment read per pull request; not with --offline)")
@@ -282,6 +294,7 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 		line("note: " + esc(*r.Note))
 	}
 	writeStatusRepos(line, r, worktrees, paint, marks, nil)
+	renderRules(func(s string) { line(esc(s)) }, r.Rules)
 	switch {
 	case r.Summary.Attention == 0 && r.Summary.Errors == 0:
 		line(paint("summary: "+plural(r.Summary.Total, "repository", "repositories")+", nothing needs attention", "32"))

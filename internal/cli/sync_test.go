@@ -429,3 +429,12 @@ func TestSyncRulesJSONAndExit(t *testing.T) {
 		t.Fatalf("a failed update exits 1: %v", err)
 	}
 }
+
+func TestSyncRendersTheSkippedRulesCheckout(t *testing.T) {
+	rp := syncRepo("agent-rules", "submodule", "skipped-rules")
+	rp.Reason = syncStr("the agent-rules checkout is updated only by stw sync --rules")
+	_, _, out, err := runSync(syncCLIResult(rp))
+	if err != nil || !strings.Contains(out, "skipped: the agent-rules checkout is updated only by stw sync --rules") || !strings.Contains(out, "1 skipped rules") {
+		t.Fatalf("%v %s", err, out)
+	}
+}
