@@ -627,3 +627,11 @@ specification decide the rest with the first CI figures.
 ## Spec 042 agent attribution (Draft, 2026-10-24)
 
 [The specification](../specs/042-agent-attribution/spec.md) and [tasks](../specs/042-agent-attribution/tasks.md) record the session that created a task (stw state only) and provide a remote-write gate (`attribution-mismatch`, `attribution-unknown`) that has no caller yet (T004), so nothing is enforced; attribution, not a security boundary. Status 2026-10-26: T001 to T003 are merged (PR #203) and the feature stays `planned` (T004 to T006 open). Test-first code is in the same pull request; independent review of the exact head pending. No build, release, tag or push of the default branch was run.
+
+## Spec 050 stw lint pr (implemented in source, review and acceptance pending, 2026-11-01)
+
+[The specification](../specs/050-stw-lint-pr/spec.md) describes `stw lint pr PR`, a read-only check of the commits, the text and the comments of
+a pull request against the machine-checkable working rules (issue #344). The rule table is data in `internal/lintpr`; the lint guard mode
+admits the commit and comment pages of one pull request. `schemas/v1/lint-pr.schema.json` is frozen and unpublished, and the command has a
+guide ([lint](lint.md)). The tests use a fake forge only (no network, no build); independent review of the exact head and the owner's
+acceptance are pending.

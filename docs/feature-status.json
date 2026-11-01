@@ -264,6 +264,12 @@
       "status": "planned",
       "spec": "../specs/044-tidy-janitor-wizard/spec.md",
       "evidence": null
+    },
+    {
+      "id": "050-stw-lint-pr",
+      "status": "implemented",
+      "spec": "../specs/050-stw-lint-pr/spec.md",
+      "evidence": "../docs/progress.md#spec-050-stw-lint-pr-implemented-in-source-review-and-acceptance-pending-2026-11-01"
     }
   ]
 }

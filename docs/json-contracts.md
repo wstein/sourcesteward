@@ -283,6 +283,14 @@ or a row past `--limit`; its `checks`, `mergeable`, `mergeable_state` and `rebas
 `created_at`, `age_days` and `head` are null only when the forge gave no usable value. An error always has both `repo` and `owner` keys, exactly one non-null. `--owner` alone reports scope `repos`. Tests validate the contract example, reject broken variants and validate the real output of
 the command for every flag combination. See [pulls](pulls.md).
 
+## Lint PR schema v1 (unpublished)
+
+[Lint PR schema](../schemas/v1/lint-pr.schema.json) describes the one document `stw lint pr --json` prints (Spec 050). It is checked in and
+byte-frozen but excluded from Pages packaging until the feature is accepted. Top-level keys are `schema_version` 1, `command` `lint pr`,
+`time`, `host`, `repo`, `pull_request`, `head`, `options` (`owner_identities`, `owner_source`), `rules` (the rule table), `findings`
+(`rule`, `severity`, `location` with `kind`, `id` and `line`, `message`), `summary` and `truncated`; no key is omitted and absent values are
+null. New rule IDs are compatible extensions. Tests validate real output of the command against the schema. See [lint](lint.md).
+
 ## Issues schema v1 (unpublished)
 
 [Issues schema](../schemas/v1/issues.schema.json) describes the one document `stw issues --json` prints (Spec 038). It is checked in and
