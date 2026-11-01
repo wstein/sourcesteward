@@ -491,6 +491,7 @@ func TestPinsAuditEffectSentinelsLeaveTheRepositoryUntouched(t *testing.T) {
 }
 
 func TestPinsAuditNonUTF8BranchIsEscapedPerFieldNotRefusedWhole(t *testing.T) {
+	requireNonUTF8Names(t)
 	f := newPinsFixture(t)
 	member := filepath.Join(f.Super, "member")
 	git(t, member, "checkout", "-q", "-b", "br\xff")
@@ -710,6 +711,7 @@ func TestPinsAuditFindingMessagesAreAccurate(t *testing.T) {
 
 // Recorded exception (spec.md edge cases): the shared identity rejects a non-UTF-8 superproject branch.
 func TestPinsAuditSuperprojectNonUTF8BranchIsAWholeResultFailureWithoutIdentity(t *testing.T) {
+	requireNonUTF8Names(t)
 	f := newPinsFixture(t)
 	git(t, f.Super, "checkout", "-q", "-b", "br\xff")
 	r := auditOf(t, f.Super)
