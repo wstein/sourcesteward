@@ -233,6 +233,12 @@ prints transitions as JSON Lines; see [watch](watch.md).
 request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
 adds the repositories of another user or organisation. See [pulls](pulls.md).
 
+## Check a pull request
+
+`stw lint pr PR` ([Spec 050](../specs/050-stw-lint-pr/spec.md)) reads one pull request (GET only) and reports session links,
+owner identity, `Co-Authored-By`, Conventional Commits, the PR text structure and length, and the review comment format and length, each
+finding with a rule ID, a severity and a location (PR text, comment ID, commit SHA). Exit 3 on an error finding. See [lint](lint.md).
+
 ## List open issues
 
 `stw issues` ([Spec 038](../specs/038-stw-issues/spec.md)) prints a read-only, stateless snapshot of every open issue (pull requests
