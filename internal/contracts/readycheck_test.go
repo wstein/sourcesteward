@@ -47,7 +47,7 @@ func TestReadyCheckSchemaAcceptsTheContractExampleAndItsVariants(t *testing.T) {
 		for i := range m["conditions"].([]any) {
 			readyCond(m, i)["status"] = "unknown"
 		}
-		m["errors"] = []any{map[string]any{"source": "pull", "code": "rate-limited", "message": "m"}, map[string]any{"source": "repo", "code": "x", "message": "m"}}
+		m["errors"] = []any{map[string]any{"source": "pull", "code": "rate-limited", "message": "m"}, map[string]any{"source": "repo", "code": "x", "message": "m"}, map[string]any{"source": "pulls", "code": "x", "message": "m"}}
 	})))
 }
 
@@ -109,6 +109,9 @@ func (f rcSource) CheckRuns(context.Context, string, string, int, string) (hosti
 }
 func (f rcSource) Statuses(context.Context, string, string, int, string) (hosting.WatchResponse, error) {
 	return hosting.WatchResponse{Status: 200, Body: []byte(`[]`)}, nil
+}
+func (f rcSource) ListOpenPullItems(context.Context, string, int) ([]hosting.PullListItem, error) {
+	return nil, nil
 }
 func (f rcSource) RepoInfo(context.Context, string) (hosting.RepoInfo, error) {
 	return hosting.RepoInfo{DefaultBranch: "main", HTMLURL: "https://github.com/o/r"}, nil
