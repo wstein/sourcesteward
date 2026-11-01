@@ -231,11 +231,11 @@ non-race seconds from a timed `go test -json` run; refresh them after the heavy 
 
 Race coverage is the scheduled tier T4 in `.github/workflows/race.yml` (Spec 039); pull requests
 run no `-race`. It triggers only on `schedule` and `workflow_dispatch` and both jobs are guarded
-by `if: github.ref == 'refs/heads/main'`, because a dispatch can name any ref. Nightly (03:17 UTC)
-job `race` calls `conformance.yml` with `race: true` for the `current` lane (all packages and the
-four `internal/workspace` shards under `-race`); weekly (Sunday 04:17 UTC) it does the same for the
-`minimum` lane. A manual dispatch takes a `lane` input. The runs always happen, also on quiet days,
-and are never cancelled (groups `t4-nightly` and `t4-weekly`). When `race` fails or is cancelled,
+by `if: github.ref == 'refs/heads/main'`, because a dispatch can name any ref. Nightly (cron `0 1 * * *`, UTC: 02:00 CET
+or 03:00 CEST in Berlin) job `race` calls `conformance.yml` with `race: true` for both lanes, `minimum` and `current` (all
+packages and the four `internal/workspace` shards under `-race`); there is no separate weekly run. The `minimum` lane left the push
+to `main` (issue #373) and runs only here. A manual dispatch takes a `lane` input and runs that lane. The runs always happen,
+also on quiet days, and are never cancelled (group `t4-nightly`). When `race` fails or is cancelled,
 job `report` (the only job in the repository with `issues: write`; it checks out `main` only)
 runs `scripts/race_report.py`: it comments on the open issue labelled `race-failure` (option
 `--label`, default `race-failure`), or creates it if none is open, so at most one is open. The
@@ -245,14 +245,14 @@ the lane, the reason (failed or timed out: a timed-out job normally reports as f
 are not told apart, and its log may be missing; or cancelled) and at most 20 test
 names matched from the failed job logs by `^--- FAIL: (Test\w+)`; no other log text is ever
 copied. If the logs cannot be fetched or hold no match, the report still files with "No test name
-matched, see the run." The `report` jobs of both schedules share the concurrency group
-`race-report`, so a Sunday's nightly and weekly reports cannot both create an issue. Close the
+matched, see the run." The lane of the issue is the lane of a failed `race` job (`current` when both failed). The
+`report` job has the concurrency group `race-report`, so a dispatch next to the nightly run cannot create two issues. Close the
 issue after the fix lands; the fix is a normal pull request with a reproducing test.
 
 Cost and residual risk of T4 (modelled from the conformance medians, not measured): about 54
-runner minutes per `-race` lane run, so seven nightly runs plus one weekly run are about 430
-runner minutes a week, off the pull request path. A data race is found after the merge, up to a
-day later (a week for a race only the `minimum` lane shows), and only as an issue; Ready does not
+runner minutes per `-race` lane run, so seven nightly runs of two lanes are about 760
+runner minutes a week, off the pull request path. A data race, and a failure that only the `minimum` lane shows, is found
+after the merge, up to a day later, and only as an issue; Ready does not
 imply a race-clean head. A race that no test exercises is found by neither run.
 
 Its check job builds and

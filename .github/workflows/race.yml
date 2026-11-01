@@ -1,14 +1,14 @@
 name: Race (T4)
 
-# Scheduled race runs (Spec 039 T4): nightly `go test -race` of all packages on the current lane,
-# weekly the minimum lane. They always run, also on quiet days, and never on a pull request. A failed
+# Scheduled race runs (Spec 039 T4): nightly `go test -race` of all packages on both lanes (current and
+# minimum; issue #373). They always run, also on quiet days, and never on a pull request. A failed
 # or cancelled run is reported as the one open `race-failure` issue by the `report` job, the only
 # place in the repository with `issues: write`. Both jobs run on the default branch only because a
 # workflow_dispatch can name any ref.
 on:
+  # The cron is UTC: 02:00 CET (winter) or 03:00 CEST (summer) in Berlin, never before 02:00.
   schedule:
-    - cron: '17 3 * * *'
-    - cron: '17 4 * * 0'
+    - cron: '0 1 * * *'
   workflow_dispatch:
     inputs:
       lane:
@@ -21,9 +21,9 @@ on:
 permissions:
   contents: read
 
-# Own groups per tier; a run is never cancelled by a newer one, nor by a push.
+# One group for the nightly tier; a run is never cancelled by a newer one, nor by a push.
 concurrency:
-  group: t4-${{ (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'weekly' || 'nightly' }}
+  group: t4-nightly
   cancel-in-progress: false
 
 jobs:
@@ -33,7 +33,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        lane: ${{ fromJSON(format('["{0}"]', (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'minimum' || 'current')) }}
+        # The schedule runs both lanes; a manual dispatch runs the lane it names.
+        lane: ${{ fromJSON(github.event_name == 'workflow_dispatch' && format('["{0}"]', inputs.lane) || '["minimum","current"]') }}
     uses: ./.github/workflows/conformance.yml
     with:
       lane: ${{ matrix.lane }}
@@ -45,8 +46,8 @@ jobs:
     if: github.ref == 'refs/heads/main' && (failure() || cancelled())
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    # One group for both schedules: on a Sunday the nightly and weekly reports must not race in
-    # the find-or-create step and file two issues.
+    # A group of its own, so that a dispatch next to the nightly run cannot race in the find-or-create
+    # step and file two issues.
     concurrency:
       group: race-report
       cancel-in-progress: false
@@ -60,17 +61,31 @@ jobs:
         with:
           ref: main
           persist-credentials: false
+      # Both lanes run in one workflow run: the lane of the issue is the lane of a failed race job
+      # (current when both failed; the failing test names of every failed job are collected anyway).
+      - name: Select the failed lane
+        id: lane
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          DISPATCH_LANE: ${{ inputs.lane }}
+        run: |
+          failed="$(gh api --paginate "repos/$REPO/actions/runs/$RUN_ID/jobs" --jq '.jobs[] | select(.conclusion == "failure") | .name' || true)"
+          lane="${DISPATCH_LANE:-current}"
+          case "$failed" in *"(minimum)"*) lane=minimum ;; esac
+          case "$failed" in *"(current)"*) lane=current ;; esac
+          echo "lane=$lane" >> "$GITHUB_OUTPUT"
       - name: Open or update the race-failure issue
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           RUN_ID: ${{ github.run_id }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          LANE: ${{ (github.event.schedule == '17 4 * * 0' || inputs.lane == 'minimum') && 'minimum' || 'current' }}
+          LANE: ${{ steps.lane.outputs.lane }}
           RACE_RESULT: ${{ needs.race.result }}
         run: |
           tier=nightly
-          if [ "$LANE" = minimum ]; then tier=weekly; fi
           reason=failed
           if [ "$RACE_RESULT" = cancelled ]; then reason=cancelled; fi
           python3 -B scripts/race_report.py --repo "$REPO" --run-id "$RUN_ID" --run-url "$RUN_URL" \
