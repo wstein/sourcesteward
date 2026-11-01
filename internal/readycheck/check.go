@@ -210,7 +210,7 @@ func noBlockerValue(v string) bool {
 // blockerSep finds the word "blocker" or "blockers" followed, after an optional parenthesis, by a
 // colon, a pipe or a dash (an em or en dash, or a hyphen that is followed by a space). The value of
 // the Blocker line is the text after it. "Blocker-free" and prose that only uses the word do not match.
-var blockerSep = regexp.MustCompile(`(?i)\bblockers?\b\s*(?:\([^)]*\))?\s*(?::|\||[\x{2013}\x{2014}]|-(?:\s|$))`)
+var blockerSep = regexp.MustCompile(`(?i)\bblockers?\s*(?:\([^)]*\))?\s*(?::|\||[\x{2013}\x{2014}]|-(?:\s|$))`)
 
 // blockerValues returns the values of the Blocker labels of one line. section is true when the line
 // has a Blocker label without a value (the last label is empty, or the line is a Blocker heading or a
@@ -226,7 +226,7 @@ func blockerValues(line string) (values []string, section bool, ok bool) {
 		if k+1 < len(matches) {
 			stop = matches[k+1][0]
 		}
-		v := strings.Trim(strings.TrimSpace(l[m[1]:stop]), "| \t")
+		v := strings.TrimSpace(l[m[1]:stop])
 		values = append(values, v)
 		section = v == ""
 	}
