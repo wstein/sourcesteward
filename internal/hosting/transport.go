@@ -308,6 +308,10 @@ const (
 	// (Spec 038): the per-repository open issue list, `user` and the issue owner search. It
 	// refuses the watch set and the PR owner search, which the pulls guard keeps to itself.
 	guardIssues
+	// guardLand admits the one-shot set and exactly the read shapes of `stw land --stack` (Spec 043
+	// FR-080): open pull request pages, reviews, issue events, rules, protection, rulesets and
+	// `user`. It admits no write and no watch or search shape.
+	guardLand
 )
 
 func (t guardedTransport) effectiveMode() guardMode {
@@ -340,7 +344,7 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	if req.URL.RawPath != "" {
 		// Only the watch reader may carry an escaped path, and only one that decodes to
 		// the same Path; the branch segment itself is validated against its encoder.
-		if !watchShapes {
+		if !watchShapes && t.effectiveMode() != guardLand {
 			return false
 		}
 		if decoded, err := url.PathUnescape(req.URL.RawPath); err != nil || decoded != req.URL.Path {
@@ -357,7 +361,8 @@ func (t guardedTransport) allowed(req *http.Request) bool {
 	}
 	mode := t.effectiveMode()
 	return transportReadEndpoint(endpoint) || (watchShapes && watchReadEndpoint(endpoint)) || (admitsSearch(mode) && searchReadEndpoint(endpoint)) ||
-		(mode.admitsIssueReads() && issueReadEndpoint(endpoint)) || (admitsIssueSearch(mode) && issueSearchReadEndpoint(endpoint))
+		(mode.admitsIssueReads() && issueReadEndpoint(endpoint)) || (admitsIssueSearch(mode) && issueSearchReadEndpoint(endpoint)) ||
+		(admitsLand(mode) && landReadEndpoint(endpoint))
 }
 func (t guardedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	if !t.allowed(req) {
