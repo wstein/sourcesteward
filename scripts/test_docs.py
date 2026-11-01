@@ -6,6 +6,7 @@ import shutil
 import struct
 import hashlib
 import xml.etree.ElementTree as ET
+import os
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -14,6 +15,11 @@ def load(name, filename):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+def hugo_missing():
+    # CI installs the pinned Hugo first (scripts/install-hugo.py), so a missing binary fails there.
+    if os.environ.get('GITHUB_ACTIONS'): return False
+    return not Path(os.environ.get('HUGO') or ROOT / '.tools/hugo').is_file()
 
 class DocumentationTests(unittest.TestCase):
     def test_theme_script_is_the_only_runtime_script(self):
@@ -161,6 +167,7 @@ class DocumentationTests(unittest.TestCase):
             source.write_text('[Unrelated](https://example.org/missing.md)')
             checker.check_links(root, source)
 
+    @unittest.skipIf(hugo_missing(), 'needs the pinned Hugo: run python3 scripts/install-hugo.py or set HUGO')
     def test_packaging_excludes_source_and_binds_revision(self):
         package = load('package', 'package-pages.py')
         with tempfile.TemporaryDirectory() as directory:

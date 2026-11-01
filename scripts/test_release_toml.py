@@ -12,9 +12,16 @@ import os
 import random
 import subprocess
 import tempfile
-import tomllib
 import unittest
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    # tomllib is in the standard library from Python 3.11; macOS system Python 3.9 lacks it.
+    # CI runs a newer Python, so a missing module fails there instead of skipping.
+    if os.environ.get('GITHUB_ACTIONS'): raise
+    raise unittest.SkipTest('needs Python 3.11+ (tomllib); install a newer python3 and put it first on PATH')
 
 ROOT = Path(__file__).resolve().parents[1]
 EXAMPLES = sorted((ROOT / 'specs' / '026-release-process' / 'examples').glob('*.release.toml'))
