@@ -111,10 +111,17 @@ comment CLEAR, and GitHub reports the head mergeable and green. It does not say 
    list and the additive top-level member `owner_queue` (null without `--mergeable`) holds the entries. `--mergeable` cannot be combined
    with `--review`, `--hint`, `--no-review` or `--stack` (exit 2). (`--owner` already selects another GitHub owner for discovery in
    `stw pulls`, so the owner list has its own flag.)
-3. **Stack view (PR 3).** `stw pulls --stack`: forest of open pull requests of one repository, a node `B` is the child of `A` when
-   `B.base == A.head_ref`, both are non-fork pull requests of the repository. Roots are pull requests whose base has no open pull
-   request. Each node shows number, group, checks, review state and hints. Only trees with a child and roots with `base-not-default`
-   are printed; the footer counts the single pull requests left out. A cycle (not possible on GitHub) is cut at the repeated node.
+3. **Stack view (PR 3).** `stw pulls --stack`: the forest of open pull requests by base and head branch, read like the list. Within one
+   repository (compared case-insensitively) a pull request `B` is a child of `A` when `B.base == A.head_ref` and `A` is not a fork
+   pull request (its head branch is then not a branch of the repository; a row without detail counts as not a fork). When several `A`
+   match, the lowest number is the parent. A root has no parent. A cycle (not possible on GitHub) is cut: its lowest number becomes a root.
+   Each node shows `REPO#N`, the verdict group, the checks class (`-` when not read), the review state (`-` when not read), the title and the
+   hints; a root whose base is not the default branch also shows `(base BRANCH)`. Only trees with at least one child and roots with
+   `base-not-default` are printed, sorted by repository, then the root's `created_at` (unknown last), then number; children by number. The
+   last line counts the single pull requests left out. In the JSON the groups stay those of the list and the additive top-level member
+   `stack` (null without `--stack`) holds `{trees, singles}`, each tree a recursive node
+   `{repo, number, title, url, draft, group, checks, review, hints, base, head_ref, children}`. `--stack` cannot be combined with
+   `--mergeable`, `--review`, `--hint` or `--no-review` (exit 2): a filter would cut the trees.
 
 ## Reads, cost and the allowlist amendment
 

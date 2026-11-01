@@ -24,6 +24,12 @@ Keys are never omitted; absent values are `null`.
 `clear-carried`, `reason` the fact text of the spec, `then` the numbers of the open descendants. `summary.waiting_for_parent` counts the
 non-draft rows with `base-not-default` (always present, 0 without the view).
 
+## Stack view (`--stack`, PR 3)
+
+`options.stack` (bool) and the top-level member `stack`: `null` without `--stack`, else `{trees, singles}` with `singles` the count of
+single pull requests left out and `trees` an array of recursive nodes `{repo, number, title, url, draft, group, checks, review, hints, base,
+head_ref, children}` (`checks` and `review` null when not read, `review` the state string).
+
 ## `stw status` (schema 2)
 
 `pullsData` gains the optional member `review` with the same two count objects: `{states: {...}, hints: {...}}`, present exactly when the
