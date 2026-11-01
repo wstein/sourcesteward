@@ -2,7 +2,7 @@
 
 Additive optional members of the unpublished `schemas/v1/pulls.schema.json`; no key is removed or retyped, `schema_version` stays 1, the
 digest in `internal/contracts/schema_freeze_test.go` changes in the commit that edits the schema. Without `--conflicts` the new members
-are `false`, `0`, `null` or absent as stated.
+are `false`, `0` or `null`.
 
 - `options.conflicts`, `options.restack_plan` (bool).
 - `summary.base_conflicts` (int): rows whose `base_conflict.state` is `conflicts-with-base`.
@@ -12,7 +12,7 @@ are `false`, `0`, `null` or absent as stated.
   `{path, base_commit}` (`base_commit` sha or null); `overlap` array of paths; `truncated` bool; `blocked_by` the number of the lowest
   conflicting ancestor or null.
 - Row `reason` gains `parent-conflict` (group `blocked`).
-- Document member `conflicts` (present with `--conflicts`): `{remote, stacks, plans}`. `stacks`: array of `{repo, root, levels}`, a level
+- Document member `conflicts` (`null` without `--conflicts`): `{remote, stacks, plans}`. `stacks`: array of `{repo, root, levels}`, a level
   is `{number, depth, parent, head, clear, ci, conflict, status}` (`parent` null for a root; `clear` `valid|invalid|none|unknown`;
   `ci` `none|pending|green|red|-`; `conflict` as `state`; `status` null, `blocked: restack needed` or `blocked by #n`). `plans`
   (filled with `--restack-plan`, else `[]`): array of `{repo, remote, root, steps, gh_stack, brief}`, a step is `{number, head_ref,

@@ -232,7 +232,7 @@ prints transitions as JSON Lines; see [watch](watch.md).
 
 `stw pulls` ([Spec 036](../specs/036-stw-pulls/spec.md)) prints a read-only, stateless snapshot of every open pull
 request (bots included) of the workspace, grouped into `ready`, `checks`, `conflict`, `draft` and `blocked`; `--owner`
-adds the repositories of another user or organisation. Each row also shows the review state read from the review comments of an owner, member or collaborator (a claim of the comment, not proof) and hints such as `clear-not-ready`, `no-final-review` and `ready-mergeable`; `--review`, `--hint` and `--no-review` select or skip them, `--mergeable` prints what the owner can merge now and `--stack` the trees of stacked pull requests ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). See [pulls](pulls.md).
+adds the repositories of another user or organisation. Each row also shows the review state read from the review comments of an owner, member or collaborator (a claim of the comment, not proof) and hints such as `clear-not-ready`, `no-final-review` and `ready-mergeable`; `--review`, `--hint` and `--no-review` select or skip them, `--mergeable` prints what the owner can merge now and `--stack` the trees of stacked pull requests ([Spec 046](../specs/046-stw-pr-review-state/spec.md)). `--conflicts` probes the pull requests of one repository against their base in a local checkout and `--restack-plan` prints the restack commands and an agent brief, without changing anything ([Spec 047](../specs/047-stw-pr-base-conflicts/spec.md)). See [pulls](pulls.md).
 
 ## Check a pull request
 
