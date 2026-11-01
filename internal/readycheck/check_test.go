@@ -214,3 +214,48 @@ func TestNothingEvaluatedIsNeverReady(t *testing.T) {
 		t.Error("unknown must not be ready")
 	}
 }
+
+// Every spelling of a Blocker line seen in the pull requests of this repository, and prose that is
+// not one. A line is a Blocker line when "blocker" or "blockers" is followed (after an optional
+// parenthesis) by a colon, a pipe or a dash, wherever it stands in the line.
+func TestBlockerLineForms(t *testing.T) {
+	fail := map[string]string{
+		"Blocker (Draft): pending re-review of this head.":                                       "pending re-review",
+		"The stuck-terminal behavior (F9) stays documented. Blocker (Draft): pending re-review.": "pending re-review",
+		"Status: Draft. Blocker: x":                                                              "x",
+		"Blocker - x":                                                                            "x",
+		"Blocker — x":                                                                            "x",
+		"Blocker – x":                                                                            "x",
+		"Blocker—x":                                                                              "x",
+		"| Blocker | x |":                                                                        "x",
+		"| Status | Draft | Blocker: x |":                                                        "x",
+		"- **Blocker** - x":                                                                      "x",
+		"**Blocker (Draft):** x":                                                                 "x",
+		"1. Blocker: x":                                                                          "x",
+		"> Blocker: x":                                                                           "x",
+		"Blockers: x":                                                                            "x",
+		"## Blocker: x":                                                                          "x",
+		"Blocker: none, Blocker: x":                                                              "x",
+		"## Blocker\nx":                                                                          "x",
+		"## Blocker\nkeiner\n\nReview pending.":                                                  "Review pending.",
+		"## Blocker\n\nnone\n\n- also x\n\n## Tests\ny":                                          "also x",
+	}
+	for body, want := range fail {
+		f := good()
+		f.Body = body
+		if c := cond(t, f, CondBlocker); c.Status != StatusFail || !strings.Contains(c.Evidence, want) {
+			t.Errorf("%q = %+v, want fail containing %q", body, c, want)
+		}
+	}
+	for _, body := range []string{
+		"a blocker for CI was removed", "Blocker-free text", "Unblocker: x", "The blocker list: none of them", "Known blocker\nreview pending",
+		"| Blocker | none |", "Blocker — none", "Blocker - n/a", "Blocker (Draft): keiner", "## Blocker\nkeiner\n\n## Tests\nReview pending.",
+		"## Blocker\n- none\n- keiner\n\n## Next\nx", "Blocker:\nnone\n\nPurpose text follows the section.",
+	} {
+		f := good()
+		f.Body = body
+		if c := cond(t, f, CondBlocker); c.Status != StatusPass {
+			t.Errorf("%q = %+v, want pass", body, c)
+		}
+	}
+}
