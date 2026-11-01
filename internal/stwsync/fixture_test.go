@@ -42,12 +42,27 @@ type workspace struct {
 	bare     map[string]string // "ws", "a", "b", "c"
 }
 
-func newWorkspace(t *testing.T) *workspace {
+// shortTempRoot returns a temporary directory without symlink components and with a short path.
+// Reports of URL rewrites are clipped to 300 bytes and name two URLs; on macOS t.TempDir() is
+// under /private/var/folders/..., which makes a URL pair longer than the clip.
+func shortTempRoot(t *testing.T) string {
 	t.Helper()
-	root, err := filepath.EvalSymlinks(t.TempDir())
+	dir, err := os.MkdirTemp("/tmp", "stw")
+	if err != nil {
+		dir = t.TempDir()
+	} else {
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	}
+	root, err := filepath.EvalSymlinks(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return root
+}
+
+func newWorkspace(t *testing.T) *workspace {
+	t.Helper()
+	root := shortTempRoot(t)
 	w := &workspace{root: root, ws: filepath.Join(root, "ws"), bare: map[string]string{}}
 	for _, name := range []string{"ws", "a", "b", "c", "n", "dev"} {
 		w.bare[name] = filepath.Join(root, name+".git")
