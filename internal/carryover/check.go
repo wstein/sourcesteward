@@ -64,11 +64,17 @@ func Check(ctx context.Context, g Git, req Request) Result {
 	return finish(res)
 }
 
+// Line formats the Carried-over line. It is the only place that knows the format; switch to
+// internal/reviewstate once it is on main (PR #349), which owns the one parser of these lines.
+func Line(from, to, patchID string, pr int) string {
+	return fmt.Sprintf("Carried-over: from=%s to=%s patch-id=%s pr=%d", from, to, patchID, pr)
+}
+
 func finish(res Result) Result {
 	res.CarryOver = len(res.Reasons) == 0 && res.PatchID.State == StateEqual && res.MergeCommits.State == StateNone &&
 		res.RangeDiff.State == StateEqual && res.PRHead.State != StateMismatch && res.PRHead.State != StateUnknown
 	if res.CarryOver {
-		line := fmt.Sprintf("Carried-over: from=%s to=%s patch-id=%s pr=%d", res.From.Head, res.To.Head, res.PatchID.New, res.PR)
+		line := Line(res.From.Head, res.To.Head, res.PatchID.New, res.PR)
 		res.Line = &line
 	}
 	return res

@@ -61,3 +61,10 @@ func TestJSONHasTheContractKeys(t *testing.T) {
 		t.Fatalf("%v", m)
 	}
 }
+
+func TestLineFormat(t *testing.T) {
+	got := Line(sha("a"), sha("b"), sha("c"), 7)
+	if want := "Carried-over: from=" + sha("a") + " to=" + sha("b") + " patch-id=" + sha("c") + " pr=7"; got != want {
+		t.Fatalf("%q", got)
+	}
+}
