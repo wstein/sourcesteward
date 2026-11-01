@@ -48,7 +48,7 @@ func TestGuardAdmitsReviewShapesInPullsAndStatusOnly(t *testing.T) {
 	modes := []struct {
 		name string
 		mode guardMode
-	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}, {"land", guardLand}}
+	}{{"oneShot", guardOneShot}, {"watch", guardWatch}, {"pulls", guardPulls}, {"status", guardStatus}, {"issues", guardIssues}, {"lint", guardLint}, {"land", guardLand}}
 	for _, c := range cases {
 		for _, m := range modes {
 			want := (m.mode == guardPulls && c.pulls) || (m.mode == guardStatus && c.stat)
@@ -85,7 +85,7 @@ func TestReviewReadsAreRefusedBeforeAnyRequestInOtherModes(t *testing.T) {
 	f := newFakeForge(t)
 	f.handlers[commentsURI(7, 1)] = func(*http.Request) *http.Response { return response(200, `[]`) }
 	f.handlers[closedList] = func(*http.Request) *http.Response { return response(200, `[]`) }
-	for _, mode := range []guardMode{guardWatch, guardIssues, guardOneShot} {
+	for _, mode := range []guardMode{guardWatch, guardIssues, guardOneShot, guardLint, guardLand} {
 		r := readerForMode(f, mode)
 		if _, err := r.IssueComments(context.Background(), "o/r", 7, 1); err == nil {
 			t.Errorf("mode %d read comments", mode)
