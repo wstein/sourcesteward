@@ -250,3 +250,40 @@ func TestSyncRealOutputValidates(t *testing.T) {
 	run(2, "restore", "--submodules", ws)
 	run(2, "--bogus", ws)
 }
+
+// The agent-rules block is an additive optional member: the plain fixtures stay valid, a complete block validates and a
+// broken one does not.
+func TestSyncSchemaRulesBlock(t *testing.T) {
+	s := schema(t, "sync")
+	oid := "1111111111111111111111111111111111111111"
+	block := func() map[string]any {
+		return map[string]any{
+			"state": "behind", "source": "flag", "path": "/w/agent-rules", "branch": "main", "default_branch": "main", "ahead": 0, "behind": 1,
+			"as_of_last_fetch": false, "install": "copy", "outcome": "fast-forwarded", "old_oid": oid, "new_oid": oid, "reason": nil,
+			"commits": []any{map[string]any{"oid": oid, "subject": "s", "author": "A <a@b.c>", "committer": "A <a@b.c>"}},
+			"files":   []any{map[string]any{"path": "claude/CLAUDE.md", "sensitive": true}},
+			"notes":   []any{"applies to NEW sessions; running agents keep their loaded rules"},
+		}
+	}
+	with := func(fn func(b map[string]any)) []byte {
+		return mutateSync(t, "run", func(m map[string]any, _ []any) {
+			b := block()
+			fn(b)
+			m["rules"] = b
+		})
+	}
+	valid(t, s, with(func(map[string]any) {}))
+	valid(t, s, mutateSync(t, "run", func(m map[string]any, _ []any) { m["rules"] = nil }))
+	for name, fn := range map[string]func(map[string]any){
+		"unknown state":   func(b map[string]any) { b["state"] = "stale" },
+		"unknown outcome": func(b map[string]any) { b["outcome"] = "merged" },
+		"unknown install": func(b map[string]any) { b["install"] = "link" },
+		"short oid":       func(b map[string]any) { b["old_oid"] = "abc" },
+		"missing key":     func(b map[string]any) { delete(b, "notes") },
+		"negative behind": func(b map[string]any) { b["behind"] = -1 },
+	} {
+		if err := s.Validate(value(t, with(fn))); err == nil {
+			t.Errorf("%s accepted", name)
+		}
+	}
+}
