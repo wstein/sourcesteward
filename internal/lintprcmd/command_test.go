@@ -353,6 +353,27 @@ func TestEachTruncationAloneFailsClosed(t *testing.T) {
 	}
 }
 
+// The boundary of the commit count: only a count above the number of commits read is an incomplete read.
+func TestCommitCountBoundary(t *testing.T) {
+	for _, c := range []struct {
+		count     int
+		truncated bool
+	}{{0, false}, {1, false}, {2, true}, {3, true}} {
+		src := cleanSource() // one commit is served
+		src.detail = detailWithCommits("feat: y", goodBody, c.count)
+		m, _, err := run(t, src)
+		got := m["truncated"].(map[string]any)["commits"]
+		if got != c.truncated || (exitCode(err) == 3) != c.truncated {
+			t.Errorf("count %d: truncated=%v exit=%d", c.count, got, exitCode(err))
+		}
+	}
+	src := cleanSource()
+	src.detail = fmt.Sprintf(`{"number":7,"title":"t","body":%s,"head":{"sha":%q}}`, jsonString(goodBody), sha("a"))
+	if m, _, err := run(t, src); err != nil || m["truncated"].(map[string]any)["commits"] != false {
+		t.Errorf("absent field: %v", err)
+	}
+}
+
 func TestExactlyOneErrorExitsThree(t *testing.T) {
 	src := cleanSource()
 	src.detail = detailJSON("feat: y", "Purpose.\nAuthor agent: Claude")

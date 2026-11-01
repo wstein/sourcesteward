@@ -274,7 +274,8 @@ func TestReviewLineFormat(t *testing.T) {
 	}
 	// A comment that is not a review is not checked.
 	in := goodInput()
-	in.Comments = []Comment{{ID: 2, Body: "Thanks, looks fine\nReview: later"}, {ID: 3, Body: "Review of the approach is below."}}
+	in.Comments = []Comment{{ID: 2, Body: "Thanks, looks fine\nReview: later"}, {ID: 3, Body: "Review of the approach is below."},
+		{ID: 4, Body: "Review clearly shows the gap\n" + lines(30)}, {ID: 5, Body: "Review findingsheet attached\n" + lines(30)}}
 	if fs := Lint(in, cfg()); len(fs) != 0 {
 		t.Errorf("non-review comments: %+v", fs)
 	}
