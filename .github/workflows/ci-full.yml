@@ -5,16 +5,20 @@ name: CI full
 # on the exact head of the top of the stack. This is the only way a pull request runs the shards;
 # ci.yml never reads the label. A push removes the label again (ci-full-reset.yml), so a new head
 # needs a new CLEAR and a new label. Labeling never re-runs the check job of ci.yml.
+# A run for an older head is canceled as soon as it is superseded: by the next push (the synchronize
+# event starts a run whose jobs are all skipped, and that run takes over the group) or by a new
+# ci-full label event. The group holds one pull request, so no push to main is ever involved.
 on:
   pull_request:
-    types: [labeled]
+    types: [labeled, synchronize]
 
 permissions:
   contents: read
 
+# Any other label event gets its own group, so adding an unrelated label never cancels a running heavy lane.
 concurrency:
-  group: ci-full-${{ github.ref }}
-  cancel-in-progress: false
+  group: ci-full-${{ (github.event.action == 'synchronize' || github.event.label.name == 'ci-full') && github.ref || format('{0}-label-{1}', github.ref, github.event.label.name) }}
+  cancel-in-progress: true
 
 jobs:
   # Safeguard (scripts/ci_stack.py): the label belongs on the top of a stack. When this pull request's head

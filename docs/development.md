@@ -151,7 +151,10 @@ in the post-merge run on `main`: that run is the last gate. `stw land --stack` (
 Cost: a pull request without the label runs `check` and `suite` (about 10 minutes in 2 concurrent jobs, plus the small `changes`
 job). A label run adds both lanes (the `current` lane alone is about 68 runner minutes in 6 shards; the `minimum` lane is not measured here)
 once per labeled head; a push to `main` runs the same. A newer push cancels the older `ci.yml` run of the same PR; batch fixes
-into one push. A labeled run of `ci-full.yml` for an older head is not canceled by a push (its group does not cancel in progress).
+into one push. A labeled run of `ci-full.yml` for an older head is canceled by the next push: `ci-full.yml` also
+triggers on `synchronize` (all its jobs are skipped there) and its group `ci-full-<ref>` cancels in progress, and so does a new `ci-full`
+label event for the same pull request. An unrelated label gets its own group and cancels nothing. The workflow has no `push` trigger, so
+`main` is never involved. After a push, `ci-full-reset.yml` removes the label; a label set again starts a fresh run.
 
 Documentation-only pull requests skip the conformance shards. The `changes` job of `ci.yml`
 runs `scripts/ci_changes.py` on the pull request's merge commit and outputs `docs_only=true`
