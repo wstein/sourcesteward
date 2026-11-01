@@ -97,6 +97,22 @@ stw pulls --no-review                            # skip the comment reads
 whose comments were not read matches neither. They cannot be combined with `--no-review` (exit 2). The comments of a row cost one read
 (a long thread: up to six), the head commit one more only when a strict comment names the head; drafts are read too. Rows past `--limit` have `review` null.
 
+## What can I merge now: `--mergeable`
+
+```sh
+stw pulls --mergeable          # only the rows with the hint ready-mergeable, oldest first, each with its reason
+stw pulls --mergeable --json | jq '.owner_queue[] | .repo + "#" + (.number|tostring)'
+```
+
+The owner list answers "what can I merge now" for the owner, who decides and merges. It reads like the list and prints the rows with
+`ready-mergeable` per repository (sorted by name), oldest `created_at` first, then by number. Because `ready-mergeable` needs the default
+branch as base, only the bottom of a stack qualifies. Each entry has a reason built from facts, for example `CLEAR for head 3f2a9c1 per
+comment 2026-11-01T09:00Z, checks green, mergeable clean, base main` (`CLEAR (carried from <sha>)` after a carry-over), and `then: #13, #14`,
+the open pull requests that follow it (those based on its head branch, transitively; the head branch of a fork pull request is not a branch of
+the repository). The last line counts the non-draft pull requests with `base-not-default` as waiting for a parent. The JSON keeps the groups of the
+list and adds `owner_queue` (null without the flag) and `summary.waiting_for_parent`. `--mergeable` cannot be combined with `--review`,
+`--hint` or `--no-review` (exit 2). It is a CLEAR per comment and a green head, not an approval: nothing here merges, labels or marks Ready.
+
 ## Filters and the detail budget
 
 `--no-bots` and `--bots-only` exclude each other (exit 2); `--author LOGIN` (repeatable, optional `[bot]` suffix)
