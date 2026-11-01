@@ -25,7 +25,7 @@ rebase-merge of the parent) is checked like any other rebase.
 
 ## Conditions
 
-1. **patch-id**: `git diff --no-renames --binary OLD_BASE...OLD_HEAD` and `NEW_BASE...NEW_HEAD`, each through
+1. **patch-id**: `git diff --no-renames OLD_BASE...OLD_HEAD` and `NEW_BASE...NEW_HEAD`, each through
    `git patch-id --stable`, give the same id. An empty diff is `patch-id-empty` (no carry-over).
 2. **merge commits**: `git rev-list --merges NEW_BASE..NEW_HEAD` is empty. range-diff does not show merge commits.
 3. **range-diff**: `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit and each pair stands at

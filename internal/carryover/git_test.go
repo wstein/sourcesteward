@@ -114,3 +114,55 @@ func TestUnreachableRemoteIsUnknown(t *testing.T) {
 		t.Fatalf("%+v", res)
 	}
 }
+
+// pinnedPatchID is the patch-id of the diff as the rule defines it, computed by the test with the same flags.
+func pinnedPatchID(t *testing.T, r *repo, base, head string) string {
+	t.Helper()
+	diff := exec.Command("git", "-C", r.dir, "diff", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", base+"..."+head, "--")
+	raw, err := diff.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid := exec.Command("git", "-C", r.dir, "patch-id", "--stable")
+	pid.Stdin = strings.NewReader(string(raw))
+	out, err := pid.Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _, _ := strings.Cut(strings.TrimSpace(string(out)), " ")
+	return id
+}
+
+func TestPatchIDIgnoresRenameDetection(t *testing.T) {
+	s := newStack(t)
+	s.r.git("checkout", "-q", "-b", "renamed", "main")
+	s.r.git("mv", "b.txt", "d.txt")
+	s.r.git("commit", "-q", "-m", "rename")
+	head := s.r.head()
+	got, err := NewRunner(s.r.dir).PatchID(t.Context(), s.m2, head)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := pinnedPatchID(t, s.r, s.m2, head); got != want {
+		t.Fatalf("patch-id %s, want %s (the diff is taken without rename detection)", got, want)
+	}
+}
+
+func TestPatchIDSeesBinaryContent(t *testing.T) {
+	r := newRepo(t)
+	r.commit("a.txt", "a\n", "base")
+	base := r.head()
+	r.git("checkout", "-q", "-b", "one")
+	r.write("blob.bin", "\x00\x01\x02")
+	r.git("add", "-A")
+	r.git("commit", "-q", "-m", "bin one")
+	one := r.head()
+	r.git("checkout", "-q", "-b", "two", base)
+	r.write("blob.bin", "\x00\x01\x03")
+	r.git("add", "-A")
+	r.git("commit", "-q", "-m", "bin two")
+	res := Check(t.Context(), NewRunner(r.dir), Request{PR: 1, OldBase: base, OldHead: one, NewBase: base, NewHead: r.head()})
+	if res.PatchID.State != StateDiffers {
+		t.Fatalf("different binary content must change the patch-id: %+v", res)
+	}
+}
