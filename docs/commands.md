@@ -240,6 +240,16 @@ excluded, bots included) of the workspace, each with one priority (`red` for a `
 `bug`, `violet` for bots, `blue` otherwise) and a suggested `gh issue view` for red and yellow rows. `--label`, `--assignee` (also `@me` and
 `@none`) and `--author` filter locally; `--owner` adds the repositories of another user or organisation. See [issues](issues.md).
 
+## Plan the landing of a chain of pull requests
+
+`stw land --stack 12,13,14 --reviewed 12:SHA --reviewed 13:SHA --reviewed 14:SHA --plan` ([Spec 043](../specs/043-stw-land/spec.md))
+is the read-only plan of the owner's chain landing: one fast-forward push of the tip, after which GitHub marks every pull
+request whose head is in the default branch as merged. The plan lists every failing precondition with a typed reason and
+the exact commands (`git fetch` into `refs/stw/land/`, `git push --porcelain`). **Owner only:** an agent may run only
+`--plan`; the apply is refused in agent mode before any read, `--yes` is never accepted, and a repository shape that is
+not recorded as measured in `internal/land/shapes.json` (empty today) is `land-unmeasured`. Landing one pull request
+(`--pr`) is not implemented. This build has no apply.
+
 ## Create an isolated task workspace
 
 Choose an existing source, an unused absolute destination and a private mode0700

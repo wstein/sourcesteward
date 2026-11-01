@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wstein.github.io/sourcesteward/schemas/v1/land.schema.json",
+  "title": "SourceSteward stack landing plan (schema 1)",
+  "description": "Result of stw land --stack ... --json (Spec 043, stack landing). One document: the chain table, every precondition with its typed reason, the exact commands a landing would run and the plan digest the typed approval binds. Exit statuses: 0 the plan is landable or the chain is already landed, 1 at least one precondition fails or a read failed, 2 usage error with no JSON. Keys are never omitted except default_tip and plan_digest, which are absent while the remote default branch tip is unknown, and number on a precondition that concerns the chain. A reason code is a lowercase hyphenated word of the list in docs/commands.md. Added properties are compatible extensions.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "command",
+    "operation",
+    "mode",
+    "repository",
+    "inputs",
+    "preconditions",
+    "chain",
+    "landable",
+    "apply_allowed",
+    "effects",
+    "children",
+    "result",
+    "reasons",
+    "notes",
+    "truncated"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": { "const": 1 },
+    "command": { "const": "land" },
+    "operation": { "enum": ["plan", "apply"] },
+    "mode": {
+      "type": "object",
+      "required": ["mode", "stdin_tty", "stdout_tty", "markers"],
+      "additionalProperties": false,
+      "properties": {
+        "mode": { "enum": ["human", "agent"] },
+        "stdin_tty": { "type": "boolean" },
+        "stdout_tty": { "type": "boolean" },
+        "markers": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "repository": { "type": "string", "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$" },
+    "inputs": {
+      "type": "object",
+      "required": ["stack", "reviewed", "ack_draft", "remote", "delete_branch", "plan", "range_bound"],
+      "additionalProperties": false,
+      "properties": {
+        "stack": { "type": "array", "minItems": 2, "maxItems": 8, "items": { "type": "integer", "minimum": 1 } },
+        "reviewed": { "type": "object", "additionalProperties": { "$ref": "#/$defs/sha" } },
+        "ack_draft": { "type": "boolean" },
+        "remote": { "type": "string" },
+        "delete_branch": { "type": "boolean" },
+        "plan": { "type": "boolean" },
+        "range_bound": { "type": "integer", "minimum": 1 },
+        "wait": { "type": "string" }
+      }
+    },
+    "preconditions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "ok", "value"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "number": { "type": "integer", "minimum": 1 },
+          "ok": { "type": "boolean" },
+          "value": { "type": "string" },
+          "reason": { "$ref": "#/$defs/code" }
+        },
+        "if": { "properties": { "ok": { "const": false } } },
+        "then": { "required": ["reason"] }
+      }
+    },
+    "chain": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["number", "head", "base_ref", "review_evidence", "checks", "state", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "number": { "type": "integer", "minimum": 1 },
+          "head": { "type": "string" },
+          "base_ref": { "type": "string" },
+          "review_evidence": { "enum": ["found", "none", "unknown"] },
+          "checks": { "enum": ["green", "pending", "failing", "missing", "unknown", "not-read"] },
+          "state": { "type": "string" },
+          "outcome": { "type": "string" }
+        }
+      }
+    },
+    "default_tip": { "$ref": "#/$defs/sha" },
+    "plan_digest": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "landable": { "type": "boolean" },
+    "apply_allowed": { "type": "boolean" },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "argv", "outcome"],
+        "additionalProperties": false,
+        "properties": {
+          "id": { "type": "string" },
+          "kind": { "enum": ["fetch", "push", "delete-branch"] },
+          "argv": { "type": "array", "minItems": 2, "items": { "type": "string" } },
+          "outcome": { "type": "string" },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "children": { "type": "array", "items": { "type": "integer", "minimum": 1 } },
+    "result": { "enum": ["landable", "refused", "already-landed", "landed-not-marked", "landed", "failed"] },
+    "reasons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["code"],
+        "additionalProperties": false,
+        "properties": {
+          "code": { "$ref": "#/$defs/code" },
+          "number": { "type": "integer", "minimum": 1 },
+          "detail": { "type": "string" }
+        }
+      }
+    },
+    "notes": { "type": "array", "items": { "type": "string" } },
+    "truncated": { "type": "boolean" }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "code": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+  }
+}
