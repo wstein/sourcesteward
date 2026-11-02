@@ -20,12 +20,12 @@ func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith
 // workspaceStatusCommandWith builds the command over base: its function fields replace the production
 // readers (local status, discovery, forge reader) and are nil in production.
 func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
-	var jsonOutput, offline, reviews bool
+	var jsonOutput, offline, reviews, stats, verbose bool
 	var icons, rulesPath string
 	var timeout time.Duration
 	var options stwsync.StatusOptions
 	command := &cobra.Command{
-		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--rules [--rules-path PATH]] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--json]",
+		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--rules [--rules-path PATH]] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--stats] [--verbose] [--json]",
 		Short: "Show what needs action in the workspace and the state of every repository",
 		Long: "Read-only overview of the whole workspace, from any directory inside it. It starts with what needs action, ordered by\n" +
 			"priority (red, yellow, green, blue, violet), each item with its link and a command you can run yourself; then one block\n" +
@@ -72,6 +72,10 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 				return errors.New("--timeout cannot be used with --offline: nothing is read from the forge")
 			case offline && flags.Changed("review"):
 				return errors.New("--review cannot be used with --offline: nothing is read from the forge")
+			case offline && flags.Changed("stats"):
+				return errors.New("--stats cannot be used with --offline: nothing is read from the forge")
+			case offline && flags.Changed("verbose"):
+				return errors.New("--verbose cannot be used with --offline: nothing is read from the forge")
 			case timeout < statuscmd.MinTimeout || timeout > statuscmd.MaxTimeout:
 				return fmt.Errorf("--timeout %s is outside %s to %s", timeout, statuscmd.MinTimeout, statuscmd.MaxTimeout)
 			}
@@ -90,6 +94,8 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 				return runStatusOffline(cmd, base, options, jsonOutput, marks)
 			}
 			base.Status, base.Timeout, base.Reviews = options, timeout, reviews
+			base.Stats = stats || verbose
+			base.Verbose = verbose
 			if term.Stderr {
 				base.Progress = cmd.ErrOrStderr()
 			}
@@ -105,6 +111,8 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 	flags.StringVar(&icons, "icons", "", "Glyph set of the text: unicode, nerd or ascii (default: unicode on a UTF-8 terminal, else ascii)")
 	flags.DurationVar(&timeout, "timeout", statusremote.DefaultTimeout, "Overall deadline of the remote half, 1s to 10m (not with --offline)")
 	flags.BoolVar(&reviews, "review", false, "Also read the review state of the open pull requests from their comments (one comment read per pull request; not with --offline)")
+	flags.BoolVar(&stats, "stats", false, "Print diagnostic timing and API usage summary")
+	flags.BoolVar(&verbose, "verbose", false, "Print per-source diagnostic breakdown and timings")
 	flags.BoolVar(&jsonOutput, "json", false, "Output one versioned JSON object")
 	return command
 }
@@ -154,6 +162,9 @@ func runStatusOnline(cmd *cobra.Command, p statuscmd.Params, icons statuscmd.Ico
 	switch {
 	case jsonOutput:
 		err = json.NewEncoder(cmd.OutOrStdout()).Encode(rep.Document())
+		if err == nil && p.Verbose {
+			renderStatusVerbose(cmd.ErrOrStderr(), rep)
+		}
 	case rep.NoToken():
 		err = renderStatusNoToken(cmd.OutOrStdout(), rep, p.Status.Worktrees, color, localMarks)
 	default:

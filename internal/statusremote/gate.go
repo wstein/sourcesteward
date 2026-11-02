@@ -5,11 +5,13 @@ package statusremote
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/issues"
+	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/pulls"
 )
 
@@ -34,6 +36,13 @@ type gate struct {
 	mu      sync.Mutex
 	limited bool
 	reset   time.Time
+
+	trackStats bool
+	requests   int
+	cached304s int
+	rateLimit  hosting.RateInfo
+	sources    map[sourceKey]*SourceStats
+	order      []sourceKey
 }
 
 // admit refuses a request that must not be sent.
@@ -74,74 +83,164 @@ func (g *gate) resetAt() time.Time {
 	return g.reset
 }
 
-func through[T any](ctx context.Context, g *gate, read func() (T, error)) (T, error) {
+func (g *gate) record(ctx context.Context, defaultRepo, defaultSource string, v any, err error, took time.Duration) {
+	if !g.trackStats {
+		return
+	}
+	repo, src := sourceFromContext(ctx)
+	if repo == "" {
+		repo = defaultRepo
+	}
+	if src == "" {
+		src = defaultSource
+	}
+	if src == "" {
+		src = "api"
+	}
+	var notModified bool
+	switch res := v.(type) {
+	case hosting.WatchResponse:
+		notModified = res.NotModified
+		if res.RateLimit.Known {
+			g.updateRateLimit(res.RateLimit)
+		}
+	case hosting.PullListResult:
+		notModified = res.Unchanged
+	}
+	var we *hosting.WatchError
+	if errors.As(err, &we) && we.RateLimit.Known {
+		g.updateRateLimit(we.RateLimit)
+	}
+	if rl, ok := g.c.(interface{ LastRateLimit() hosting.RateInfo }); ok {
+		info := rl.LastRateLimit()
+		if info.Known {
+			g.updateRateLimit(info)
+		}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.requests++
+	if notModified {
+		g.cached304s++
+	}
+	if g.sources == nil {
+		g.sources = make(map[sourceKey]*SourceStats)
+	}
+	k := sourceKey{repo: repo, source: src}
+	st := g.sources[k]
+	if st == nil {
+		st = &SourceStats{Repo: repo, Source: src}
+		g.sources[k] = st
+		g.order = append(g.order, k)
+	}
+	st.Requests++
+	if notModified {
+		st.Cached304s++
+	}
+	st.Latency += took
+	st.Consumed = st.Requests - st.Cached304s
+}
+
+func (g *gate) updateRateLimit(info hosting.RateInfo) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	g.rateLimit = info
+}
+
+func (g *gate) stats() RemoteStats {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	out := RemoteStats{
+		Requests:   g.requests,
+		Cached304s: g.cached304s,
+		RateLimit:  g.rateLimit,
+		Sources:    make([]SourceStats, 0, len(g.order)),
+	}
+	for _, k := range g.order {
+		if st := g.sources[k]; st != nil {
+			out.Sources = append(out.Sources, *st)
+		}
+	}
+	sort.Slice(out.Sources, func(i, j int) bool {
+		if out.Sources[i].Repo != out.Sources[j].Repo {
+			return out.Sources[i].Repo < out.Sources[j].Repo
+		}
+		return out.Sources[i].Source < out.Sources[j].Source
+	})
+	return out
+}
+
+func through[T any](ctx context.Context, g *gate, repo, src string, read func() (T, error)) (T, error) {
 	if err := g.admit(ctx); err != nil {
 		var zero T
 		return zero, err
 	}
+	start := time.Now()
 	v, err := read()
+	took := time.Since(start)
 	g.observe(ctx, err)
+	g.record(ctx, repo, src, v, err, took)
 	return v, err
 }
 
 func (g *gate) ListOpenPulls(ctx context.Context, repo string, prior hosting.PullListState, maxOpen int) (hosting.PullListResult, error) {
-	return through(ctx, g, func() (hosting.PullListResult, error) { return g.c.ListOpenPulls(ctx, repo, prior, maxOpen) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.PullListResult, error) { return g.c.ListOpenPulls(ctx, repo, prior, maxOpen) })
 }
 
 func (g *gate) PullDetail(ctx context.Context, repo string, number int, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.PullDetail(ctx, repo, number, etag) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.c.PullDetail(ctx, repo, number, etag) })
 }
 
 func (g *gate) Branch(ctx context.Context, repo, name, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.Branch(ctx, repo, name, etag) })
+	return through(ctx, g, repo, string(overview.SourceCIMain), func() (hosting.WatchResponse, error) { return g.c.Branch(ctx, repo, name, etag) })
 }
 
 func (g *gate) Commit(ctx context.Context, repo, sha, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.Commit(ctx, repo, sha, etag) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.c.Commit(ctx, repo, sha, etag) })
 }
 
 func (g *gate) PullCommits(ctx context.Context, repo string, number, page int, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.PullCommits(ctx, repo, number, page, etag) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.c.PullCommits(ctx, repo, number, page, etag) })
 }
 
 func (g *gate) CheckRuns(ctx context.Context, repo, sha string, page int, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.CheckRuns(ctx, repo, sha, page, etag) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.c.CheckRuns(ctx, repo, sha, page, etag) })
 }
 
 func (g *gate) Statuses(ctx context.Context, repo, sha string, page int, etag string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.Statuses(ctx, repo, sha, page, etag) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.c.Statuses(ctx, repo, sha, page, etag) })
 }
 
 func (g *gate) RateLimit(ctx context.Context) (hosting.RateInfo, error) {
-	return through(ctx, g, func() (hosting.RateInfo, error) { return g.c.RateLimit(ctx) })
+	return through(ctx, g, "", "rate-limit", func() (hosting.RateInfo, error) { return g.c.RateLimit(ctx) })
 }
 
 func (g *gate) ListOpenPullItems(ctx context.Context, repo string, maxOpen int) ([]hosting.PullListItem, error) {
-	return through(ctx, g, func() ([]hosting.PullListItem, error) { return g.c.ListOpenPullItems(ctx, repo, maxOpen) })
+	return through(ctx, g, repo, string(overview.SourcePulls), func() ([]hosting.PullListItem, error) { return g.c.ListOpenPullItems(ctx, repo, maxOpen) })
 }
 
 func (g *gate) WorkflowRuns(ctx context.Context, repo, workflow, sha string) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.WorkflowRuns(ctx, repo, workflow, sha) })
+	return through(ctx, g, repo, string(overview.SourceCIRelease), func() (hosting.WatchResponse, error) { return g.c.WorkflowRuns(ctx, repo, workflow, sha) })
 }
 
 func (g *gate) RepoInfo(ctx context.Context, repo string) (hosting.RepoInfo, error) {
-	return through(ctx, g, func() (hosting.RepoInfo, error) { return g.c.RepoInfo(ctx, repo) })
+	return through(ctx, g, repo, string(overview.SourceRepo), func() (hosting.RepoInfo, error) { return g.c.RepoInfo(ctx, repo) })
 }
 
 func (g *gate) ReleaseList(ctx context.Context, repo string) ([]hosting.StatusRelease, error) {
-	return through(ctx, g, func() ([]hosting.StatusRelease, error) { return g.c.ReleaseList(ctx, repo) })
+	return through(ctx, g, repo, string(overview.SourceReleases), func() ([]hosting.StatusRelease, error) { return g.c.ReleaseList(ctx, repo) })
 }
 
 func (g *gate) TagList(ctx context.Context, repo string) ([]hosting.StatusTag, error) {
-	return through(ctx, g, func() ([]hosting.StatusTag, error) { return g.c.TagList(ctx, repo) })
+	return through(ctx, g, repo, string(overview.SourceTags), func() ([]hosting.StatusTag, error) { return g.c.TagList(ctx, repo) })
 }
 
 func (g *gate) IssuesPage(ctx context.Context, repo string, page int) (hosting.WatchResponse, error) {
-	return through(ctx, g, func() (hosting.WatchResponse, error) { return g.c.IssuesPage(ctx, repo, page) })
+	return through(ctx, g, repo, string(overview.SourceIssues), func() (hosting.WatchResponse, error) { return g.c.IssuesPage(ctx, repo, page) })
 }
 
 func (g *gate) Viewer(ctx context.Context) (string, error) {
-	return through(ctx, g, func() (string, error) { return g.c.Viewer(ctx) })
+	return through(ctx, g, "", "viewer", func() (string, error) { return g.c.Viewer(ctx) })
 }
 
 var _ Client = (*gate)(nil)
@@ -167,7 +266,7 @@ func (g reviewGate) ReadIssueComments(ctx context.Context, repo string, number i
 		c  []hosting.IssueComment
 		tr bool
 	}
-	v, err := through(ctx, g.gate, func() (result, error) {
+	v, err := through(ctx, g.gate, repo, string(overview.SourcePulls), func() (result, error) {
 		c, tr, err := g.rs.ReadIssueComments(ctx, repo, number)
 		return result{c, tr}, err
 	})
@@ -175,7 +274,7 @@ func (g reviewGate) ReadIssueComments(ctx context.Context, repo string, number i
 }
 
 func (g reviewGate) ClosedPulls(ctx context.Context, repo string) (hosting.WatchResponse, error) {
-	return through(ctx, g.gate, func() (hosting.WatchResponse, error) { return g.rs.ClosedPulls(ctx, repo) })
+	return through(ctx, g.gate, repo, string(overview.SourcePulls), func() (hosting.WatchResponse, error) { return g.rs.ClosedPulls(ctx, repo) })
 }
 
 var _ pulls.ReviewSource = reviewGate{}

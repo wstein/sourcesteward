@@ -14,6 +14,8 @@ stw status --offline            # local state only, no request and no credential
 stw status --timeout 2m         # a longer overall deadline for the remote half
 stw status --icons nerd         # glyphs of the text: unicode, nerd or ascii
 stw status --worktrees --fetch  # as before: list linked worktrees, fetch first
+stw status --stats              # diagnostic timing and API usage summary at the end
+stw status --verbose            # per-source breakdown for deep troubleshooting
 stw status --json | jq '.actions[] | select(.priority == "red") | .id'
 ```
 
@@ -26,6 +28,7 @@ stw status --json | jq '.actions[] | select(.priority == "red") | .id'
 | Text | Needs action, Repositories, Notices, summary | the Spec 033 screen, byte for byte |
 | `--json` | [schema 2](json-contracts.md#status-schema-v2-unpublished) | [schema 1](json-contracts.md#status-schema-v1-unpublished), unchanged |
 | `--timeout` | overall deadline of the remote half | a usage error (exit 2) |
+| `--stats`, `--verbose` | diagnostic timing, API usage, and per-source breakdown | a usage error (exit 2) |
 
 ## What is read
 
@@ -136,3 +139,16 @@ that `open`, the counts and the rows are issues only; it counts only the pages t
 information, not an error and not lost data: a repository with open pull requests shows a non-zero value, which is normal
 (the pull requests themselves are the `pulls` source). The document-level `sources` list ends with
 `issues` and `viewer`. See [JSON contracts](json-contracts.md#status-schema-v2-unpublished).
+
+## Diagnostics: `--stats` and `--verbose`
+
+`--stats` adds a 1-line diagnostic summary at the very end of terminal output:
+```text
+stats: API: 18 reqs (4,892/5,000 left, reset 22:00 UTC) | 1.4s elapsed (local 110ms, remote 1.3s)
+```
+With `--json`, `--stats` includes an optional additive member `"stats"` in the schema 2 document:
+`requests`, `rate_limit_limit`, `rate_limit_remaining`, `rate_limit_reset`, and `duration_ms`.
+
+`--verbose` is reserved for deep troubleshooting: it prints a per-source diagnostic breakdown (requests, cached 304s, latencies, and rate-limit consumption per repository source), followed by the stats line. When combined with `--json`, the breakdown goes to stderr so that standard output remains valid JSON.
+
+There are strictly no `-v` or `-vv` aliases for these flags.

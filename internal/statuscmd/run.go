@@ -27,6 +27,10 @@ type Params struct {
 	// Reviews reads the review state of the open pull requests from their comments (Spec 046, `--review`);
 	// off by default, because it adds one request per pull request.
 	Reviews bool
+	// Stats records diagnostic timing and API usage; present in JSON with `--stats`.
+	Stats bool
+	// Verbose records per-source diagnostic breakdown and timings (`--verbose`).
+	Verbose bool
 	// Progress receives the single rewritten progress line; nil prints none. The caller sets it only
 	// when stderr is a terminal.
 	Progress io.Writer
@@ -43,10 +47,15 @@ type Params struct {
 // Report is everything one online run found: the local status, what the remote sources read (one result
 // per local repository, in the same order) and the action model over both.
 type Report struct {
-	Time     time.Time
-	Local    stwsync.StatusResult
-	Remote   statusremote.Result
-	Overview overview.Overview
+	Time             time.Time
+	Local            stwsync.StatusResult
+	Remote           statusremote.Result
+	Overview         overview.Overview
+	LocalDuration    time.Duration
+	RemoteDuration   time.Duration
+	TotalDuration    time.Duration
+	StatsRequested   bool
+	VerboseRequested bool
 }
 
 // Failure is nil when the run succeeded and the reason of exit status 1 otherwise: the run failed, a
@@ -86,13 +95,20 @@ func Run(ctx context.Context, p Params) (Report, error) {
 	if now == nil {
 		now = time.Now
 	}
-	rep := Report{Time: now().UTC()}
+	start := now()
+	rep := Report{
+		Time:             start.UTC(),
+		StatsRequested:   p.Stats,
+		VerboseRequested: p.Verbose,
+	}
 	local := p.Local
 	if local == nil {
 		local = stwsync.Status
 	}
 	rep.Local = local(ctx, p.Status)
+	rep.LocalDuration = now().Sub(start)
 	if rep.Local.Error != nil {
+		rep.TotalDuration = now().Sub(start)
 		rep.Overview = overview.Build(overview.Input{})
 		return rep, nil
 	}
@@ -102,17 +118,22 @@ func Run(ctx context.Context, p Params) (Report, error) {
 	}
 	ws, err := discover(ctx, p.Status.Path)
 	if err != nil {
+		rep.TotalDuration = now().Sub(start)
 		return rep, fmt.Errorf("status: the remotes of the workspace cannot be read: %w", err)
 	}
 	root := ws.Root
 	if rep.Local.Root != nil {
 		root = *rep.Local.Root
 	}
+	remoteStart := now()
 	rep.Remote = statusremote.Collect(ctx, repositories(rep.Local.Repos, ws.Members), statusremote.Options{
 		Timeout: p.Timeout,
 		Reviews: p.Reviews,
+		Stats:   p.Stats || p.Verbose,
 		Open:    p.opener(root),
 	})
+	rep.RemoteDuration = now().Sub(remoteStart)
+	rep.TotalDuration = now().Sub(start)
 	rep.Overview = overview.Build(rep.Remote.Input(root, rep.Local.Repos))
 	return rep, nil
 }
