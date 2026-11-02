@@ -3,8 +3,6 @@
 import hashlib
 import importlib.util
 import io
-import json
-import re
 from pathlib import Path
 import tarfile
 import tempfile
@@ -101,17 +99,14 @@ class BackendInstallerTests(unittest.TestCase):
 
     def test_ci_requires_both_lanes_and_exact_artifact_gate(self):
         ci = (ROOT / '.github/workflows/ci.yml').read_text()
+        ci_full = (ROOT / '.github/workflows/ci-full.yml').read_text()
+        race = (ROOT / '.github/workflows/race.yml').read_text()
         workflow = (ROOT / '.github/workflows/conformance.yml').read_text()
         self.assertIn('needs: [check, conformance]', ci)
-        # Both lanes on push (and for the ci-full label run of ci-full.yml); ci.yml runs only current for a PR.
-        match = re.search(r'(?m)^        lane: \$\{\{ fromJSON\((.+)\) \}\}$', ci)
-        self.assertIsNotNone(match)
-        python = match.group(1).replace('github.event_name', 'event')
-        python = python.replace('&&', ' and ').replace('||', ' or ')
-        lanes = lambda event, labels=(): json.loads(eval(python, {}, {'event': event, 'labels': list(labels)}))
-        self.assertEqual(lanes('push'), ['minimum', 'current'])
-        self.assertEqual(lanes('pull_request', ['ci-full']), ['current'])  # the label run is ci-full.yml
-        self.assertEqual(lanes('pull_request'), ['current'])
+        # Issue #373: lane current runs on ci.yml; both lanes run on the ci-full label run and nightly race.
+        self.assertIn('lane: [current]', ci)
+        self.assertIn('lane: [minimum, current]', ci_full)
+        self.assertIn('["minimum","current"]', race)
         for required in ('STW_REQUIRE_JJ:', 'scripts/smoke-jj-inspection.py'):
             self.assertIn(required, workflow)
         for forbidden in ('--privileged', 'apparmor_restrict_unprivileged_userns=0', 'chmod u+s'):
