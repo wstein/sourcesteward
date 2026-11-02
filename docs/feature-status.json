@@ -261,9 +261,9 @@
     },
     {
       "id": "044-tidy-janitor-wizard",
-      "status": "planned",
+      "status": "implemented",
       "spec": "../specs/044-tidy-janitor-wizard/spec.md",
-      "evidence": null
+      "evidence": "../specs/044-tidy-janitor-wizard/evidence/T016-dogfood.md"
     },
     {
       "id": "046-stw-pr-review-state",
