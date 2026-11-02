@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://wstein.github.io/sourcesteward/schemas/v2/status.schema.json",
   "title": "SourceSteward workspace status, online and action-oriented (schema 2)",
-  "description": "Result of stw status (online, the default): the action items, every workspace repository with the v1 local status plus the remote half read from GitHub, one entry per source, the notices about sources that were not read and the summary. stw status --offline prints the schema 1 document instead. Exit statuses: 0 also when items exist, when the run is offline, without a usable token, after a deadline skip or a missing release workflow; 1 when an attempted remote request failed, a repository cannot be read or the run failed (error is set); 2 usage error with no JSON. rules (the agent-rules checkout, read-only, as in the sync schema) is present only with --rules. Keys are never omitted; absent values are null. A source that is not ok has data null. Strings are at most 2048 bytes (notice messages 512). Added optional keys keep schema_version 2.",
+  "description": "Result of stw status (online, the default): the action items, every workspace repository with the v1 local status plus the remote half read from GitHub, one entry per source, the notices about sources that were not read and the summary. stw status --offline prints the schema 1 document instead. Exit statuses: 0 also when items exist, when the run is offline, without a usable token, after a deadline skip or a missing release workflow; 1 when an attempted remote request failed, a repository cannot be read or the run failed (error is set); 2 usage error with no JSON. rules (the agent-rules checkout, read-only, as in the sync schema) is present only with --rules. stats is present only with --stats. Keys are never omitted; absent values are null. A source that is not ok has data null. Strings are at most 2048 bytes (notice messages 512). Added optional keys keep schema_version 2.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -319,6 +319,48 @@
     },
     "rules": {
       "$ref": "#/$defs/rules"
+    },
+    "stats": {
+      "type": "object",
+      "required": [
+        "requests",
+        "rate_limit_limit",
+        "rate_limit_remaining",
+        "rate_limit_reset",
+        "duration_ms"
+      ],
+      "properties": {
+        "requests": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rate_limit_limit": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rate_limit_remaining": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "rate_limit_reset": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "duration_ms": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     }
   },
   "$defs": {

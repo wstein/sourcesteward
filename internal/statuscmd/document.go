@@ -35,6 +35,17 @@ type Document struct {
 	Error         *stwsync.Failure `json:"error"`
 	// Rules is the agent-rules checkout; present only with --rules.
 	Rules *stwsync.Rules `json:"rules,omitempty"`
+	// Stats is the diagnostic timing and API usage; present only with --stats.
+	Stats *DocStats `json:"stats,omitempty"`
+}
+
+// DocStats holds diagnostic timing and API usage stats of the run.
+type DocStats struct {
+	Requests           int     `json:"requests"`
+	RateLimitLimit     *int    `json:"rate_limit_limit"`
+	RateLimitRemaining *int    `json:"rate_limit_remaining"`
+	RateLimitReset     *string `json:"rate_limit_reset"`
+	DurationMS         int     `json:"duration_ms"`
 }
 
 // DocOptions echoes the options of the run; the JSON carries no icons.
@@ -298,7 +309,37 @@ func (r Report) Document() Document {
 			d.Notices[i].Repos = []string{}
 		}
 	}
+	if r.StatsRequested {
+		d.Stats = r.DocStats()
+	}
 	return d
+}
+
+// DocStats extracts the diagnostic timing and API usage stats for JSON serialization.
+func (r Report) DocStats() *DocStats {
+	var limit, remaining *int
+	var resetStr *string
+	if r.Remote.Stats.RateLimit.Known {
+		lim := r.Remote.Stats.RateLimit.Limit
+		rem := r.Remote.Stats.RateLimit.Remaining
+		limit = &lim
+		remaining = &rem
+		if !r.Remote.Stats.RateLimit.Reset.IsZero() {
+			res := r.Remote.Stats.RateLimit.Reset.UTC().Format("2006-01-02T15:04:05Z")
+			resetStr = &res
+		}
+	}
+	dur := r.TotalDuration.Milliseconds()
+	if dur < 0 {
+		dur = 0
+	}
+	return &DocStats{
+		Requests:           r.Remote.Stats.Requests,
+		RateLimitLimit:     limit,
+		RateLimitRemaining: remaining,
+		RateLimitReset:     resetStr,
+		DurationMS:         int(dur),
+	}
 }
 
 func summary(s overview.Summary) DocSummary {

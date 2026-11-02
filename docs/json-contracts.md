@@ -258,7 +258,7 @@ omitted, absent values are null and `additionalProperties` is false everywhere; 
 - `notices` (`code`, `source`, `repos`, `message`, one per missing source), `summary` (`repos`, `attention`, `errors`,
   `priorities`, `degraded`, `failed`, `notices`) and `error` (`status-` code and message of a failed run, with no repositories).
 
-The `pulls` source data gains the optional `review` member (`states` and `hints` counts, Spec 046), present when review states were read (`stw status --review`); the schema digest changes with it, `schema_version` stays 2.
+The `pulls` source data gains the optional `review` member (`states` and `hints` counts, Spec 046), present when review states were read (`stw status --review`); the schema 2 document gains the optional `stats` member (`requests`, `rate_limit_limit`, `rate_limit_remaining`, `rate_limit_reset`, `duration_ms`), present when `--stats` was passed; the schema digest changes with it, `schema_version` stays 2.
 
 Exit 0 also with items, offline, without a token, after a deadline skip or a missing release workflow; 1 when an attempted
 request failed, a repository cannot be read or the run fails; 2 for usage errors with no JSON. Tests validate the documents of

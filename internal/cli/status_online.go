@@ -9,6 +9,7 @@ import (
 
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/statuscmd"
+	"github.com/wstein/sourcesteward/internal/statusremote"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
 
@@ -45,6 +46,12 @@ func renderStatusNoToken(w io.Writer, rep statuscmd.Report, worktrees, color boo
 	for _, n := range rep.Overview.Notices {
 		b.WriteString("  " + n.Message + "\n")
 	}
+	if rep.VerboseRequested {
+		writeStatusVerbose(func(s string) { b.WriteString(s + "\n") }, rep)
+	}
+	if rep.StatsRequested || rep.VerboseRequested {
+		b.WriteString(statusStatsLine(rep) + "\n")
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
 }
@@ -79,8 +86,86 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 	renderRules(func(s string) { line(escapeReposLine(s)) }, rep.Local.Rules)
 	line("")
 	line(statusSummaryLine(rep.Overview.Summary))
+	if rep.VerboseRequested {
+		writeStatusVerbose(line, rep)
+	}
+	if rep.StatsRequested || rep.VerboseRequested {
+		line(statusStatsLine(rep))
+	}
 	_, err := io.WriteString(w, b.String())
 	return err
+}
+
+func renderStatusVerbose(w io.Writer, rep statuscmd.Report) {
+	var b strings.Builder
+	writeStatusVerbose(func(s string) { b.WriteString(s + "\n") }, rep)
+	b.WriteString(statusStatsLine(rep) + "\n")
+	_, _ = io.WriteString(w, b.String())
+}
+
+func writeStatusVerbose(line func(string), rep statuscmd.Report) {
+	line("")
+	line("Diagnostic breakdown:")
+	byRepo := make(map[string][]statusremote.SourceStats)
+	var repoOrder []string
+	var viewerStats *statusremote.SourceStats
+	for _, st := range rep.Remote.Stats.Sources {
+		if st.Source == "viewer" || st.Repo == "" {
+			copySt := st
+			viewerStats = &copySt
+			continue
+		}
+		if _, ok := byRepo[st.Repo]; !ok {
+			repoOrder = append(repoOrder, st.Repo)
+		}
+		byRepo[st.Repo] = append(byRepo[st.Repo], st)
+	}
+	for _, repo := range repoOrder {
+		line(fmt.Sprintf("  %s:", repo))
+		for _, st := range byRepo[repo] {
+			line(fmt.Sprintf("    %-11s %s (%s, %d consumed) in %s",
+				st.Source+":",
+				plural(st.Requests, "req", "reqs"),
+				pluralCached(st.Cached304s),
+				st.Consumed,
+				shortDuration(st.Latency),
+			))
+		}
+	}
+	if viewerStats != nil {
+		line(fmt.Sprintf("  viewer:     %s (%s, %d consumed) in %s",
+			plural(viewerStats.Requests, "req", "reqs"),
+			pluralCached(viewerStats.Cached304s),
+			viewerStats.Consumed,
+			shortDuration(viewerStats.Latency),
+		))
+	}
+}
+
+func pluralCached(n int) string {
+	if n == 1 {
+		return "1 cached 304"
+	}
+	return fmt.Sprintf("%d cached 304s", n)
+}
+
+func statusStatsLine(rep statuscmd.Report) string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("stats: API: %d reqs", rep.Remote.Stats.Requests))
+	rate := rep.Remote.Stats.RateLimit
+	if rate.Known {
+		b.WriteString(fmt.Sprintf(" (%s/%s left, reset %s)",
+			groupDigits(rate.Remaining),
+			groupDigits(rate.Limit),
+			rate.Reset.UTC().Format("15:04 UTC"),
+		))
+	}
+	b.WriteString(fmt.Sprintf(" | %s elapsed (local %s, remote %s)",
+		shortDuration(rep.TotalDuration),
+		shortDuration(rep.LocalDuration),
+		shortDuration(rep.RemoteDuration),
+	))
+	return b.String()
 }
 
 func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd.IconSet, paint func(s, code string) string) {

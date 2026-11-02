@@ -56,6 +56,14 @@ func (f *statusForge) Viewer(context.Context) (string, error) { return "wstein",
 func (f *statusForge) Branch(context.Context, string, string, string) (hosting.WatchResponse, error) {
 	return hosting.WatchResponse{Status: 200, Body: []byte(`{"name":"main","commit":{"sha":"` + strings.Repeat("a", 40) + `"}}`)}, f.read()
 }
+func (f *statusForge) LastRateLimit() hosting.RateInfo {
+	return hosting.RateInfo{
+		Known:     true,
+		Limit:     5000,
+		Remaining: 4892,
+		Reset:     time.Date(2026, 10, 22, 10, 0, 0, 0, time.UTC),
+	}
+}
 func (f *statusForge) CheckRuns(context.Context, string, string, int, string) (hosting.WatchResponse, error) {
 	return hosting.WatchResponse{Status: 200, Body: []byte(`{"total_count":1,"check_runs":[{"name":"ci","status":"completed","conclusion":"success","output":{}}]}`)}, f.read()
 }
@@ -520,5 +528,116 @@ func TestStatusRulesOptInShowsTheAgentRulesLine(t *testing.T) {
 		if _, err = run(args...); err == nil || isRuntimeFailure(err) {
 			t.Errorf("%v: %v", args, err)
 		}
+	}
+}
+
+func TestStatusStatsFlagTerminalText(t *testing.T) {
+	forge := &statusForge{}
+	run := runOnline(t, rootOnly(), forge, nil, "--stats")
+	if run.err != nil {
+		t.Fatalf("unexpected error: %v", run.err)
+	}
+	lines := strings.Split(strings.TrimSpace(run.out), "\n")
+	lastLine := lines[len(lines)-1]
+	if !strings.HasPrefix(lastLine, "stats: API: ") {
+		t.Fatalf("expected last line to start with 'stats: API: ', got %q", lastLine)
+	}
+	if !strings.Contains(lastLine, "4,892/5,000 left, reset 10:00 UTC") {
+		t.Errorf("expected rate limit in stats line, got %q", lastLine)
+	}
+	if !strings.Contains(lastLine, "elapsed (local ") {
+		t.Errorf("expected elapsed timings in stats line, got %q", lastLine)
+	}
+}
+
+func TestStatusStatsFlagJSON(t *testing.T) {
+	forge := &statusForge{}
+	run := runOnline(t, rootOnly(), forge, nil, "--stats", "--json")
+	if run.err != nil {
+		t.Fatalf("unexpected error: %v", run.err)
+	}
+	var doc statuscmd.Document
+	if err := json.Unmarshal([]byte(run.out), &doc); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if doc.Stats == nil {
+		t.Fatal("expected doc.Stats to be present with --stats")
+	}
+	if doc.Stats.Requests == 0 {
+		t.Errorf("expected Requests > 0, got %d", doc.Stats.Requests)
+	}
+	if doc.Stats.RateLimitLimit == nil || *doc.Stats.RateLimitLimit != 5000 {
+		t.Errorf("expected RateLimitLimit 5000, got %v", doc.Stats.RateLimitLimit)
+	}
+	if doc.Stats.RateLimitRemaining == nil || *doc.Stats.RateLimitRemaining != 4892 {
+		t.Errorf("expected RateLimitRemaining 4892, got %v", doc.Stats.RateLimitRemaining)
+	}
+	if doc.Stats.RateLimitReset == nil || *doc.Stats.RateLimitReset != "2026-10-22T10:00:00Z" {
+		t.Errorf("expected RateLimitReset 2026-10-22T10:00:00Z, got %v", doc.Stats.RateLimitReset)
+	}
+	if doc.Stats.DurationMS < 0 {
+		t.Errorf("expected DurationMS >= 0, got %d", doc.Stats.DurationMS)
+	}
+}
+
+func TestStatusNoStatsFlagJSON(t *testing.T) {
+	forge := &statusForge{}
+	run := runOnline(t, rootOnly(), forge, nil, "--json")
+	if run.err != nil {
+		t.Fatalf("unexpected error: %v", run.err)
+	}
+	var doc statuscmd.Document
+	if err := json.Unmarshal([]byte(run.out), &doc); err != nil {
+		t.Fatalf("failed to unmarshal JSON: %v", err)
+	}
+	if doc.Stats != nil {
+		t.Errorf("expected doc.Stats to be nil without --stats, got %+v", doc.Stats)
+	}
+	if strings.Contains(run.out, `"stats"`) {
+		t.Errorf("expected JSON not to contain 'stats' key, got %s", run.out)
+	}
+}
+
+func TestStatusVerboseFlag(t *testing.T) {
+	forge := &statusForge{}
+	run := runOnline(t, rootOnly(), forge, nil, "--verbose")
+	if run.err != nil {
+		t.Fatalf("unexpected error: %v", run.err)
+	}
+	if !strings.Contains(run.out, "Diagnostic breakdown:") {
+		t.Errorf("expected verbose breakdown header in output, got %s", run.out)
+	}
+	if !strings.Contains(run.out, "repo:") || !strings.Contains(run.out, "cached 304") {
+		t.Errorf("expected per-source breakdown with cached 304s, got %s", run.out)
+	}
+	lines := strings.Split(strings.TrimSpace(run.out), "\n")
+	lastLine := lines[len(lines)-1]
+	if !strings.HasPrefix(lastLine, "stats: API: ") {
+		t.Errorf("expected last line to be stats summary, got %q", lastLine)
+	}
+}
+
+func TestStatusNoShorthandFlags(t *testing.T) {
+	forge := &statusForge{}
+	for _, arg := range []string{"-v", "-vv"} {
+		run := runOnline(t, rootOnly(), forge, nil, arg)
+		if run.err == nil {
+			t.Errorf("expected error for shorthand flag %q, got nil", arg)
+		}
+		if !strings.Contains(run.err.Error(), "unknown shorthand flag") {
+			t.Errorf("expected unknown shorthand flag error for %q, got %v", arg, run.err)
+		}
+	}
+}
+
+func TestStatusStatsAndVerboseWithOffline(t *testing.T) {
+	forge := &statusForge{}
+	runStats := runOnline(t, rootOnly(), forge, nil, "--offline", "--stats")
+	if runStats.err == nil || !strings.Contains(runStats.err.Error(), "--stats cannot be used with --offline") {
+		t.Errorf("expected --stats with --offline to be rejected, got err: %v", runStats.err)
+	}
+	runVerbose := runOnline(t, rootOnly(), forge, nil, "--offline", "--verbose")
+	if runVerbose.err == nil || !strings.Contains(runVerbose.err.Error(), "--verbose cannot be used with --offline") {
+		t.Errorf("expected --verbose with --offline to be rejected, got err: %v", runVerbose.err)
 	}
 }

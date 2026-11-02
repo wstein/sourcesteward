@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/wstein/sourcesteward/internal/hosting"
@@ -105,4 +106,28 @@ func TestADocumentWithAnErrorSourceOfEveryCodeValidates(t *testing.T) {
 		rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 		requireValid(t, "skip reason "+reason, rep.Document())
 	}
+}
+
+func TestDocumentWithStatsValidatesAgainstTheSchema(t *testing.T) {
+	rep := fixtureReport()
+	rep.StatsRequested = true
+	rep.TotalDuration = 1400 * time.Millisecond
+	rep.Remote.Stats = statusremote.RemoteStats{
+		Requests: 18,
+		RateLimit: hosting.RateInfo{
+			Known:     true,
+			Limit:     5000,
+			Remaining: 4892,
+			Reset:     time.Date(2026, 10, 22, 22, 0, 0, 0, time.UTC),
+		},
+	}
+	requireValid(t, "document with stats", rep.Document())
+
+	repNulls := fixtureReport()
+	repNulls.StatsRequested = true
+	repNulls.TotalDuration = 110 * time.Millisecond
+	repNulls.Remote.Stats = statusremote.RemoteStats{
+		Requests: 0,
+	}
+	requireValid(t, "document with stats null rate limit", repNulls.Document())
 }

@@ -44,6 +44,8 @@ type Options struct {
 	// Reviews reads the review state of the open pull requests from their comments (Spec 046): one
 	// comment read per pull request. It is off by default, so a plain run adds no request.
 	Reviews bool
+	// Stats records diagnostic timing and API usage stats.
+	Stats bool
 }
 
 // RepoResult is what the remote sources read for one workspace repository. Remote carries the states of
@@ -69,6 +71,7 @@ type Result struct {
 	Viewer         overview.SourceState
 	Timeout        time.Duration
 	RateLimitReset time.Time
+	Stats          RemoteStats
 }
 
 // Input is the input of overview.Build: the local status of each repository, in the order given, next
@@ -109,7 +112,7 @@ func Collect(ctx context.Context, repos []Repository, o Options) Result {
 		origins[i] = r.Origin
 	}
 	targets := Select(origins)
-	c := &collector{repos: repos, targets: targets, slots: make([]slot, len(repos)), reviews: o.Reviews}
+	c := &collector{repos: repos, targets: targets, slots: make([]slot, len(repos)), reviews: o.Reviews, stats: o.Stats}
 	for i, t := range targets {
 		if t.Skip == "" {
 			c.selected = append(c.selected, i)
@@ -125,6 +128,12 @@ func Collect(ctx context.Context, repos []Repository, o Options) Result {
 	res := Result{Repos: c.results(), Viewer: c.viewer(), Timeout: timeout}
 	if c.gate != nil {
 		res.RateLimitReset = c.gate.resetAt()
+		if o.Stats {
+			res.Stats = c.gate.stats()
+			if res.RateLimitReset.IsZero() && res.Stats.RateLimit.Known {
+				res.RateLimitReset = res.Stats.RateLimit.Reset
+			}
+		}
 	}
 	return res
 }
@@ -141,7 +150,7 @@ func (c *collector) run(ctx context.Context, o Options) {
 		return
 	}
 	defer closeClient()
-	c.gate = &gate{c: client}
+	c.gate = &gate{c: client, trackStats: c.stats}
 	c.read(ctx)
 }
 
@@ -178,6 +187,7 @@ type collector struct {
 	slots      []slot
 	gate       *gate
 	reviews    bool
+	stats      bool
 	fallback   *overview.SourceState // the state of every source of the selected repositories when nothing was read
 	viewerRead overview.SourceState  // the outcome of the one `user` read
 }
