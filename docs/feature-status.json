@@ -294,6 +294,12 @@
       "status": "implemented",
       "spec": "../specs/051-stw-review-carry-over/spec.md",
       "evidence": null
+    },
+    {
+      "id": "052-stw-status-compact",
+      "status": "implemented",
+      "spec": "../specs/052-stw-status-compact/spec.md",
+      "evidence": null
     }
   ]
 }

@@ -62,14 +62,14 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 	var b strings.Builder
 	paint := statusPainter(color)
 	line := func(s string) { b.WriteString(s + "\n") }
-	writeStatusActions(line, rep.Overview, icons, paint)
+	writeStatusActions(line, rep.Overview, icons, paint, rep.LongRequested)
 	line("")
 	line("Repositories")
 	if rep.Local.Note != nil {
 		line("note: " + escapeReposLine(*rep.Local.Note))
 	}
 	marks := statusMarks{attention: icons.Attention(), failed: icons.Failure()}
-	writeStatusRepos(line, rep.Local, worktrees, paint, marks, func(i int) []string {
+	writeStatusRepos(line, rep.Local, worktrees, rep.LongRequested, paint, marks, func(i int) []string {
 		rr := rep.Remote.Repos[i]
 		if issues := statusIssuesLine(rr); issues != "" {
 			return []string{statusRemoteLine(rr), issues}
@@ -168,7 +168,7 @@ func statusStatsLine(rep statuscmd.Report) string {
 	return b.String()
 }
 
-func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd.IconSet, paint func(s, code string) string) {
+func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd.IconSet, paint func(s, code string) string, long bool) {
 	if len(ov.Items) == 0 {
 		line("Needs action: nothing")
 		return
@@ -190,16 +190,18 @@ func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd
 				text += "  " + l.URL
 			}
 			line(fmt.Sprintf(" %s %s%s  %-*s  %s", paint(icons.Icon(s.Priority), code), paint(level, code), strings.Repeat(" ", 6-len(level)), width, untrusted.Esc(l.Repo), text))
-			switch {
-			case l.Command != "":
-				line("     run: " + l.Command)
-			case l.Count == 1 && l.Item.Hint != "":
-				line("     hint: " + l.Item.Hint)
+			if long || (s.Priority != overview.Blue && s.Priority != overview.Violet) {
+				switch {
+				case l.Command != "":
+					line("     run: " + l.Command)
+				case l.Count == 1 && l.Item.Hint != "":
+					line("     hint: " + l.Item.Hint)
+				}
 			}
 		}
 		if s.MoreLines > 0 {
 			line(fmt.Sprintf("     and %d more %s %s", s.MoreItems, level, pluralNoun(s.MoreItems, "item", "items")))
-			if s.MoreCommand != "" {
+			if s.MoreCommand != "" && (long || (s.Priority != overview.Blue && s.Priority != overview.Violet)) {
 				line("     run: " + s.MoreCommand)
 			}
 		}

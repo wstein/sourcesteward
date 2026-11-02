@@ -31,6 +31,8 @@ type Params struct {
 	Stats bool
 	// Verbose records per-source diagnostic breakdown and timings (`--verbose`).
 	Verbose bool
+	// Long requests detailed multi-line repository cards and full instructions (`--long`).
+	Long bool
 	// Progress receives the single rewritten progress line; nil prints none. The caller sets it only
 	// when stderr is a terminal.
 	Progress io.Writer
@@ -56,6 +58,7 @@ type Report struct {
 	TotalDuration    time.Duration
 	StatsRequested   bool
 	VerboseRequested bool
+	LongRequested    bool
 }
 
 // Failure is nil when the run succeeded and the reason of exit status 1 otherwise: the run failed, a
@@ -100,6 +103,7 @@ func Run(ctx context.Context, p Params) (Report, error) {
 		Time:             start.UTC(),
 		StatsRequested:   p.Stats,
 		VerboseRequested: p.Verbose,
+		LongRequested:    p.Long,
 	}
 	local := p.Local
 	if local == nil {

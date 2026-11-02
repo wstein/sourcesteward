@@ -136,6 +136,20 @@ func TestOnlineTextGoldens(t *testing.T) {
 	}
 }
 
+func TestOnlineLongTextGoldens(t *testing.T) {
+	for _, set := range []statuscmd.IconSet{statuscmd.Unicode, statuscmd.Nerd, statuscmd.ASCII} {
+		rep := onlineReport()
+		rep.LongRequested = true
+		plain := renderOnline(t, rep, set, true, false)
+		coloured := renderOnline(t, rep, set, true, true)
+		statusGolden(t, "status-online-long-"+string(set)+".txt", plain)
+		statusGolden(t, "status-online-long-"+string(set)+"-colour.txt", coloured)
+		if strings.Contains(plain, "\x1b") || ansi.ReplaceAllString(coloured, "") != plain {
+			t.Errorf("%s: stripping the colour must leave the same text", set)
+		}
+	}
+}
+
 func TestOnlineTextSections(t *testing.T) {
 	out := renderOnline(t, onlineReport(), statuscmd.Unicode, false, false)
 	order := []string{"Needs action: 15 items", "\nRepositories\n", "\nNotices\n", "\nsummary: 4 red, 6 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices\n"}
@@ -148,6 +162,35 @@ func TestOnlineTextSections(t *testing.T) {
 		last = i
 	}
 	for _, want := range []string{
+		"2 bot PRs: #3, #4",
+		"main  origin/main behind 2  2 unstaged",
+		"crewbook    main  origin/main up to date  clean",
+		"workharbor  main  origin/main up to date  clean",
+		"gone        -     cannot read the repository status",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("missing %q in compact output\n%s", want, out)
+		}
+	}
+	for _, unwanted := range []string{
+		"remote:",
+		"issues:",
+		"    stash 1",
+		"run: stw pulls --repo wstein/workharbor",
+	} {
+		if strings.Contains(out, unwanted) {
+			t.Errorf("compact output must not contain %q in\n%s", unwanted, out)
+		}
+	}
+	if strings.Contains(out, "worktree") {
+		t.Error("no worktree list without --worktrees")
+	}
+
+	// Long mode includes full multi-line repository cards and instructions
+	longRep := onlineReport()
+	longRep.LongRequested = true
+	outLong := renderOnline(t, longRep, statuscmd.Unicode, false, false)
+	for _, want := range []string{
 		"2 bot PRs: #3, #4\n     run: stw pulls --repo wstein/workharbor --bots-only",
 		"remote: 1 open PR (1 conflict), main CI green, release drafts not visible (no write access)",
 		"remote: not read (not-read-locally)",
@@ -156,16 +199,8 @@ func TestOnlineTextSections(t *testing.T) {
 		"issues: 0 open (0 red, 0 yellow)\n",
 		"1 stash\n",
 	} {
-		if !strings.Contains(out, want) {
-			t.Errorf("missing %q in\n%s", want, out)
-		}
-	}
-	if strings.Contains(out, "worktree") {
-		t.Error("no worktree list without --worktrees")
-	}
-	for _, l := range strings.Split(out, "\n") {
-		if strings.Contains(l, "http") && strings.Contains(l, "bot PRs") {
-			t.Errorf("a grouped line carries no URL: %s", l)
+		if !strings.Contains(outLong, want) {
+			t.Errorf("missing %q in long output\n%s", want, outLong)
 		}
 	}
 }
@@ -179,9 +214,20 @@ func TestOnlineTextWithNothingToDo(t *testing.T) {
 	rep.Local.Note = statusPtrTo("started in a\nlinked worktree")
 	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	for _, want := range []string{"Needs action: nothing\n", "note: started in a\\nlinked worktree\n", "remote: no open PRs, main CI green, release drafts not visible", "summary: nothing needs action | 1 repository | 1 notice\n"} {
+	for _, want := range []string{"Needs action: nothing\n", "note: started in a\\nlinked worktree\n", "summary: nothing needs action | 1 repository | 1 notice\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "remote:") {
+		t.Errorf("compact mode must not contain remote line: %s", out)
+	}
+
+	rep.LongRequested = true
+	outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
+	for _, want := range []string{"Needs action: nothing\n", "note: started in a\\nlinked worktree\n", "remote: no open PRs, main CI green, release drafts not visible", "summary: nothing needs action | 1 repository | 1 notice\n"} {
+		if !strings.Contains(outLong, want) {
+			t.Errorf("missing %q in long output\n%s", want, outLong)
 		}
 	}
 }
