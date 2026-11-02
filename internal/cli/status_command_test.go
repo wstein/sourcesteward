@@ -132,16 +132,31 @@ func TestStatusIsOnlineByDefault(t *testing.T) {
 	if run.err != nil || run.opened != 1 || run.locals != 1 || run.discovered != 1 || forge.reads == 0 {
 		t.Fatalf("%+v %d reads", run, forge.reads)
 	}
-	for _, want := range []string{"Needs action: nothing\n", "Repositories\n", "remote: no open PRs, main CI green, no release drafts", "issues: 0 open (0 red, 0 yellow)\n", "summary: nothing needs action | 1 repository | 0 notices\n"} {
+	for _, want := range []string{"Needs action: nothing\n", "Repositories\n", "summary: nothing needs action | 1 repository | 0 notices\n"} {
 		if !strings.Contains(run.out, want) {
 			t.Errorf("missing %q in\n%s", want, run.out)
 		}
+	}
+	if strings.Contains(run.out, "remote:") || strings.Contains(run.out, "issues:") {
+		t.Errorf("compact output must not contain remote lines: %s", run.out)
 	}
 	if run.errOut != "" || strings.Contains(run.out, "\x1b") {
 		t.Errorf("nothing on stderr, no colour or progress off a terminal: %q", run.errOut)
 	}
 	if !strings.Contains(run.out, "main  origin/main up to date  clean") {
 		t.Errorf("the Spec 033 block: %s", run.out)
+	}
+
+	for _, flag := range []string{"--long", "-l"} {
+		runLong := runOnline(t, rootOnly(), forge, nil, flag)
+		if runLong.err != nil {
+			t.Fatalf("%s failed: %v", flag, runLong.err)
+		}
+		for _, want := range []string{"remote: no open PRs, main CI green, no release drafts", "issues: 0 open (0 red, 0 yellow)\n"} {
+			if !strings.Contains(runLong.out, want) {
+				t.Errorf("%s missing %q in\n%s", flag, want, runLong.out)
+			}
+		}
 	}
 }
 
@@ -595,6 +610,23 @@ func TestStatusNoStatsFlagJSON(t *testing.T) {
 	}
 	if strings.Contains(run.out, `"stats"`) {
 		t.Errorf("expected JSON not to contain 'stats' key, got %s", run.out)
+	}
+}
+
+func TestStatusJSONIdenticalWithLongFlag(t *testing.T) {
+	forge := &statusForge{}
+	defaultJSON := runOnline(t, rootOnly(), forge, nil, "--json")
+	if defaultJSON.err != nil {
+		t.Fatalf("unexpected error: %v", defaultJSON.err)
+	}
+	for _, flag := range []string{"--long", "-l"} {
+		longJSON := runOnline(t, rootOnly(), forge, nil, "--json", flag)
+		if longJSON.err != nil {
+			t.Fatalf("%s failed: %v", flag, longJSON.err)
+		}
+		if defaultJSON.out != longJSON.out {
+			t.Errorf("%s produced different JSON output than default:\n--- default\n%s\n--- %s\n%s", flag, defaultJSON.out, flag, longJSON.out)
+		}
 	}
 }
 

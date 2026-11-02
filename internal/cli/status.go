@@ -20,14 +20,16 @@ func workspaceStatusCommand() *cobra.Command { return workspaceStatusCommandWith
 // workspaceStatusCommandWith builds the command over base: its function fields replace the production
 // readers (local status, discovery, forge reader) and are nil in production.
 func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
-	var jsonOutput, offline, reviews, stats, verbose bool
+	var jsonOutput, offline, reviews, stats, verbose, long bool
 	var icons, rulesPath string
 	var timeout time.Duration
 	var options stwsync.StatusOptions
 	command := &cobra.Command{
-		Use:   "status [PATH] [--offline] [--fetch] [--worktrees] [--rules [--rules-path PATH]] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--stats] [--verbose] [--json]",
+		Use:   "status [PATH] [--long|-l] [--offline] [--fetch] [--worktrees] [--rules [--rules-path PATH]] [--icons unicode|nerd|ascii] [--timeout DURATION] [--review] [--stats] [--verbose] [--json]",
 		Short: "Show what needs action in the workspace and the state of every repository",
-		Long: "Read-only overview of the whole workspace, from any directory inside it. It starts with what needs action, ordered by\n" +
+		Long: "Read-only overview of the whole workspace, from any directory inside it. By default it prints a compact overview\n" +
+			"with concise action items and a single line per repository. Pass --long (-l) for full multi-line repository cards\n" +
+			"and complete action instructions. It starts with what needs action, ordered by\n" +
 			"priority (red, yellow, green, blue, violet), each item with its link and a command you can run yourself; then one block\n" +
 			"per repository, the notices about anything that could not be read, and a summary line. stw never runs a suggested command.\n" +
 			"Per repository the local half is what git status, git worktree list and git branch -vv tell for the top-level superproject\n" +
@@ -96,6 +98,7 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			base.Status, base.Timeout, base.Reviews = options, timeout, reviews
 			base.Stats = stats || verbose
 			base.Verbose = verbose
+			base.Long = long
 			if term.Stderr {
 				base.Progress = cmd.ErrOrStderr()
 			}
@@ -103,6 +106,7 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 		},
 	}
 	flags := command.Flags()
+	flags.BoolVarP(&long, "long", "l", false, "Detailed multi-line cards and full instructions (default: compact)")
 	flags.BoolVar(&offline, "offline", false, "Local only: send no request, read no credential and print the output of the local status")
 	flags.BoolVar(&options.Fetch, "fetch", false, "Fetch every repository first (remote-tracking refs only; the one thing that is not read-only)")
 	flags.BoolVar(&options.Worktrees, "worktrees", false, "List the linked worktrees of each repository")
@@ -304,7 +308,7 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 	if r.Note != nil {
 		line("note: " + esc(*r.Note))
 	}
-	writeStatusRepos(line, r, worktrees, paint, marks, nil)
+	writeStatusRepos(line, r, worktrees, true, paint, marks, nil)
 	renderRules(func(s string) { line(esc(s)) }, r.Rules)
 	switch {
 	case r.Summary.Attention == 0 && r.Summary.Errors == 0:
@@ -318,7 +322,8 @@ func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool
 
 // writeStatusRepos writes the block of every repository: one line, the extra facts and, with worktrees,
 // the linked worktrees. remote, when set, gives the line that goes right under the line of repository i.
-func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool, paint func(s, code string) string, marks statusMarks, remote func(i int) []string) {
+// When long is false, only the top repository line is printed.
+func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees, long bool, paint func(s, code string) string, marks statusMarks, remote func(i int) []string) {
 	esc := escapeReposLine
 	nameWidth, branchWidth := 1, 1
 	branchOf := func(rp stwsync.RepoStatus) string {
@@ -346,6 +351,9 @@ func writeStatusRepos(line func(string), r stwsync.StatusResult, worktrees bool,
 			changes = "  " + statusChangesText(rp.Changes)
 		}
 		line(fmt.Sprintf("%s%-*s  %-*s  %s%s", paint(marker, code), nameWidth, esc(rp.Name), branchWidth, branchOf(rp), sync, changes))
+		if !long {
+			continue
+		}
 		if remote != nil {
 			for _, l := range remote(i) {
 				line("    " + l)
