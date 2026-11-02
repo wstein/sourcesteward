@@ -17,8 +17,11 @@ implementation of Spec 016 (v0.3.0). `whr` is released separately.
 | [#330](https://github.com/wstein/sourcesteward/pull/330) the end of input counts as no at every terminal prompt (fixes #326) | Merged 2026-10-28 (head `6aeb4a76`) | Done |
 | [#327](https://github.com/wstein/sourcesteward/pull/327), [#328](https://github.com/wstein/sourcesteward/pull/328) release protocol, notes draft, readiness checklist, owner decisions of 2026-10-27 | Merged 2026-10-27 | Done; the notes draft and the protocol still describe #323 as an open Draft and need the owner review in section 5 |
 | [#331](https://github.com/wstein/sourcesteward/pull/331) T016 dogfood evidence, [#332](https://github.com/wstein/sourcesteward/pull/332) fix of D1 to D4, [#333](https://github.com/wstein/sourcesteward/pull/333) T016 rerun | Merged 2026-10-28 (#331, #332) and 2026-10-29 (#333) | Done |
-| [#334](https://github.com/wstein/sourcesteward/pull/334) feat(tidy): annotate read-only registration prune risk (Draft, head `ec5f105e`; its body names pending review and incomplete verification; the `check` and `suite` checks read FAILURE at this snapshot) | Open Draft | Whether it is part of v0.2.0: not decided here, gate decision: pending owner |
-| This documentation pull request | Draft (named blocker: independent review pending) | Reviewed and merged before the tag, so the protocol is in the tagged tree |
+| [#334](https://github.com/wstein/sourcesteward/pull/334) feat(tidy): annotate read-only registration prune risk | Merged 2026-10-30 | Done |
+| [#359](https://github.com/wstein/sourcesteward/pull/359) feat(cli): add stw ready-check, read-only Ready preconditions | Merged 2026-11-02 | Done |
+| [#361](https://github.com/wstein/sourcesteward/pull/361) feat(review): stw review carry-over checks a review carry-over after rebase or restack | Merged 2026-11-02 | Done |
+| [#376](https://github.com/wstein/sourcesteward/pull/376) feat(cli): add --stats and --verbose to stw status | Merged 2026-11-02 | Done |
+| This documentation pull request | In review | Merged before the tag |
 
 No other pull request is open (`gh pr list --state open`).
 
@@ -62,7 +65,7 @@ Closed since the tracker was written: #217, #196, #241, #252, #253, #255, #95 (`
 | Release notes | draft: [release-notes/v0.2.0.md](release-notes/v0.2.0.md); the v0.1.0 body read "First release" | Owner review; edit the known-limits paragraph to the state at the tag |
 | Release protocol | merged in #327 and #328: [releasing-v0.2.0.md](releasing-v0.2.0.md) | Owner review; fill it while running; T029 asks for the filled copy under `specs/045-release-wizard/protocol/` |
 | User documentation of the janitor | merged: #322, #325 (`docs/tidy.md`, `docs/commands.md`, roadmap pointers) | After #323: the apply text must match its behavior |
-| `docs/feature-status.json` | 044 reads `planned`; 032, 034, 035, 041 read `implemented`; 026 reads `planned` | Update 044 in the final documentation pull request, only with evidence (T016) |
+| `docs/feature-status.json` | 044 reads `implemented` with T016 evidence; 032, 034, 035, 041, 051 read `implemented`; 026 reads `planned` | Done |
 | Task ticks and `docs/progress.md` | Spec 044 tasks are all unticked (T016 included, `specs/044-tidy-janitor-wizard/tasks.md:62`); specs/041 T012b, T012b1 to T012b4 unticked although the prune merged (#287 to #298); Spec 011 has open boxes | Ticked by the last pull request of the wave (`AGENTS.md` rules), not by this one |
 | Tracker #263 body | (read 2026-10-29) still lists T009, T016, T018, T014 of Spec 032, #217, #196, #241 as open although they are done or closed | Refreshed together with the final documentation pull request |
 | `tidy-overview` schema | frozen and unpublished (`docs/json-contracts.md:9`); owner decision 2026-10-25: not published with v0.2.0 | Nothing |

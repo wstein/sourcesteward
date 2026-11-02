@@ -19,16 +19,12 @@ SourceSteward is a pre-release Go/Cobra toolkit inspired by the convenience of
 evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
-**Implemented:** native Git/jj inspection and inventory (also across several repositories with `stw repos`, which is merged but whose feature entry stays `planned` until an independent re-review of its fixes), a read-only, action-first workspace overview with `stw status` (local state plus open pull requests, release drafts, unreleased tags and CI from GitHub), a read-only pull request watcher with `stw watch`, a read-only snapshot of all open pull requests with `stw pulls`, a read-only snapshot of all open issues with `stw issues`, isolated task workspace creation,
-owned-workspace handoff/retirement, evidence-based local branch/bookmark tidy, and
-read-only GitHub repository/PR/CI inspection. Git and jj are Tier 1 peers; colocated
-repositories use native jj. All data commands have human and versioned JSON output.
+**Implemented:** native Git/jj inspection and inventory (also across several repositories with `stw repos`), a read-only, action-first workspace overview with `stw status` (local state plus open pull requests, release drafts, unreleased tags and CI from GitHub, with optional `--stats` and `--verbose`), workspace synchronization with undo (`stw sync` and `stw sync restore`), submodule alignment (`stw sync --submodules`), an interactive terminal cleanup wizard and narrow registration pruning (`stw tidy`), a live pull request watcher with `stw watch`, pull request snapshots with `stw pulls`, issue snapshots with `stw issues`, PR Ready precondition evaluation with `stw ready-check`, review carry-over validation with `stw review carry-over`, isolated task workspace creation and owned-workspace handoff/retirement (`stw workspace`), and read-only GitHub repository/PR/CI inspection (`stw hosting`). Git and jj are Tier 1 peers; colocated repositories use native jj. All data commands have human and versioned JSON output.
 
 **Planned:** a read-only Git submodule pin audit (`stw pins`,
 [Spec 021](specs/021-submodule-pin-audit/spec.md), [guide](docs/pins.md); merged but hidden
 until its conformance work item), stack inspection/plan, checkpoint/resume, conflict
-diagnosis, restacking, stacked PR writes, work transfer, change editing, upstream
-synchronization and native GitButler integration. Bounded recovery evidence is not automatic restoration.
+diagnosis, restacking, stacked PR writes, work transfer, change editing, and native GitButler integration. Bounded recovery evidence is not automatic restoration.
 
 **Release source work:** hidden `stw release check|plan|verify|record|build|dispatch`
 commands, bounded online evidence and pinned attestation verification have source
@@ -41,24 +37,42 @@ See the [current matrix](docs/release.md) and [owner preparation](docs/releasing
 
 ## Install a release
 
-The first release, `v0.1.0`, followed the
-[bootstrap release plan](specs/034-bootstrap-release/spec.md). Archives for linux and macOS
-(amd64 and arm64; Windows and the BSDs are not shipped) are published on the
-[releases page](https://github.com/wstein/sourcesteward/releases). From the directory holding a download
-and `SHA256SUMS`:
+### Homebrew (macOS and Linux)
+
+```sh
+brew install wstein/tap/stw
+```
+
+Or in a Homebrew `Brewfile`:
+```ruby
+tap "wstein/tap"
+brew "stw"
+```
+
+### Direct download and verification
+
+Archives for Linux and macOS (amd64 and arm64; Windows and the BSDs are not shipped) are published on the [releases page](https://github.com/wstein/sourcesteward/releases). From the directory holding a download and `SHA256SUMS`:
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS                  # Linux
-grep ' stw_0.1.0_darwin_arm64.tar.gz$' SHA256SUMS | shasum -a 256 --check   # macOS
-gh attestation verify stw_0.1.0_linux_amd64.tar.gz --repo wstein/sourcesteward
-tar -xzf stw_0.1.0_linux_amd64.tar.gz && ./stw_0.1.0_linux_amd64/stw version
+grep ' stw_0.2.0_darwin_arm64.tar.gz$' SHA256SUMS | shasum -a 256 --check   # macOS
+gh attestation verify stw_0.2.0_linux_amd64.tar.gz --repo wstein/sourcesteward
+tar -xzf stw_0.2.0_linux_amd64.tar.gz && ./stw_0.2.0_linux_amd64/stw version
 ```
 
 The binaries are not signed or notarized. Files fetched with `gh` or `curl` run directly; a browser
 download on macOS carries a quarantine flag that Gatekeeper blocks until you run
 `xattr -d com.apple.quarantine stw`. The attestation shows that GitHub Actions built the archive from
-this repository. With Go 1.27.2 or later, `go install github.com/wstein/sourcesteward/cmd/stw@v0.1.0`
-builds from source; that binary reports version `dev` because only the release workflow stamps it.
+this repository.
+
+### Build from source
+
+With Go 1.27.2 or later:
+```sh
+go install github.com/wstein/sourcesteward/cmd/stw@v0.2.0
+```
+(Or install an earlier release: `go install github.com/wstein/sourcesteward/cmd/stw@v0.1.0`).
+This binary reports version `dev` because only the release workflow stamps the official release version.
 
 ## Try SourceSteward
 
@@ -79,12 +93,19 @@ Or run any command from source with `go run ./cmd/stw`, for example
 
 | Implemented commands | Purpose and guide |
 | --- | --- |
-| `help`, `version` | Help at every command level; human/JSON version |
+| `help`, `version` | Help at every command level; human and versioned JSON version |
+| `status` | [Action-first workspace overview: branches, worktrees, PRs, CI, unreleased tags; with `--stats` and `--verbose`](docs/status.md) |
+| `sync`, `sync restore` | [Bring branches and submodules up to date with undo recovery](docs/commands.md#bring-the-workspace-and-its-submodules-up-to-date) |
+| `tidy`, `tidy plan`, `tidy apply` | [Interactive cleanup wizard, risk classification, and worktree registration pruning](docs/tidy.md) |
+| `watch` | [Read-only live terminal watcher for pull requests, reviews, and CI events](docs/commands.md#watch-pull-requests) |
+| `pulls` | [Snapshot and query open pull requests across workspace repositories](docs/commands.md#list-open-pull-requests) |
+| `issues` | [Snapshot and query open issues across workspace repositories](docs/commands.md#list-open-issues) |
+| `ready-check` | [Evaluate Ready preconditions of a pull request (reviews, checks, blockers, mergeability)](docs/commands.md#check-the-ready-preconditions-of-a-pull-request) |
+| `review carry-over` | [Validate whether an independent review carries over across rebase or restack](docs/commands.md#check-a-review-carry-over) |
 | `inspect`, `inventory` | [Native identity, workspaces, references, file scopes and state queries](docs/inventory.md) |
 | `repos` | [Inventory up to 16 Git/jj repositories and direct submodules in one bounded read-only run](docs/repos.md) |
 | `workspace plan`, `workspace apply` | [Review and create isolated Git worktrees/jj workspaces](docs/workspaces.md) |
 | `workspace handoff`, `workspace retire-plan` | [Describe owned work and prepare retirement without deleting it](docs/workspaces.md) |
-| `tidy plan`, `tidy apply` | [Review/apply local reference cleanup or separately selected owned-workspace retirement](docs/tidy.md) |
 | `hosting repo`, `hosting pr`, `hosting ci` | [Resolve locally; read an explicitly numbered GitHub PR and exact-head CI](docs/hosting.md) |
 | `gh jj repo`, `gh jj pr`, `gh jj ci` | [Optional jj-only gh extension sharing hosting operations](docs/hosting.md) |
 
