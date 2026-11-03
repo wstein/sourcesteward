@@ -2,10 +2,12 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -89,6 +91,69 @@ func TestNativeGitMissingIsFatal(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			if got := nativeGitMissingIsFatal(func(k string) string { return c.env[k] }); got != c.want {
 				t.Fatalf("nativeGitMissingIsFatal = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+type fakeNativeGitT struct {
+	fatal, skip string
+	setenv      map[string]string
+}
+
+func (f *fakeNativeGitT) Helper()                  {}
+func (f *fakeNativeGitT) Fatal(args ...any)        { f.fatal = fmt.Sprint(args...) }
+func (f *fakeNativeGitT) Skip(args ...any)         { f.skip = fmt.Sprint(args...) }
+func (f *fakeNativeGitT) Setenv(key, value string) { f.setenv = map[string]string{key: value} }
+
+// requireNativeGit itself, with its dependencies replaced: a missing native Git skips with
+// "native Git required", fails when a CI variable is 1, and prepends a found directory.
+func TestRequireNativeGitDecisions(t *testing.T) {
+	gitDir := func() string {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, "git"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return dir
+	}
+	apple, native := gitDir(), gitDir()
+	oldGOOS, oldGetenv, oldNative, oldFallbacks := nativeGitGOOS, nativeGitGetenv, nativeGitIsNative, nativeGitFallbacks
+	t.Cleanup(func() {
+		nativeGitGOOS, nativeGitGetenv, nativeGitIsNative, nativeGitFallbacks = oldGOOS, oldGetenv, oldNative, oldFallbacks
+	})
+	nativeGitGOOS, nativeGitFallbacks = "darwin", nil
+	nativeGitIsNative = func(p string) bool { return filepath.Dir(p) != apple }
+	cases := []struct {
+		name    string
+		env     map[string]string
+		wantErr bool
+		wantMsg string
+		wantDir string
+	}{
+		{"missing, unset skips", map[string]string{"PATH": apple}, false, "native Git required", ""},
+		{"missing, sandbox 1 fails", map[string]string{"PATH": apple, "STW_REQUIRE_NATIVE_SANDBOX": "1"}, true, "native Git required", ""},
+		{"missing, jj 1 fails", map[string]string{"PATH": apple, "STW_REQUIRE_JJ": "1"}, true, "native Git required", ""},
+		{"missing, 0 skips", map[string]string{"PATH": apple, "STW_REQUIRE_NATIVE_SANDBOX": "0", "STW_REQUIRE_JJ": ""}, false, "native Git required", ""},
+		{"native later on PATH is prepended", map[string]string{"PATH": apple + ":" + native, "STW_REQUIRE_JJ": "1"}, false, "", native},
+		{"native first changes nothing", map[string]string{"PATH": native + ":" + apple}, false, "", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			nativeGitGetenv = func(k string) string { return c.env[k] }
+			f := &fakeNativeGitT{}
+			requireNativeGit(f)
+			gotMsg, other := f.skip, f.fatal
+			if c.wantErr {
+				gotMsg, other = f.fatal, f.skip
+			}
+			if other != "" || !strings.Contains(gotMsg, c.wantMsg) || (c.wantMsg == "" && gotMsg != "") {
+				t.Fatalf("fatal=%q skip=%q, want message %q (fatal=%v)", f.fatal, f.skip, c.wantMsg, c.wantErr)
+			}
+			if c.wantDir == "" && f.setenv != nil {
+				t.Fatalf("unexpected PATH change %v", f.setenv)
+			}
+			if c.wantDir != "" && f.setenv["PATH"] != c.wantDir+string(os.PathListSeparator)+c.env["PATH"] {
+				t.Fatalf("PATH change %v, want %q first", f.setenv, c.wantDir)
 			}
 		})
 	}

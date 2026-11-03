@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"testing"
 )
 
 // appleLauncher is the one path production refuses (workspace.gitExecutable): the
@@ -72,20 +71,38 @@ func nativeGitMissingIsFatal(getenv func(string) string) bool {
 	return getenv("STW_REQUIRE_NATIVE_SANDBOX") == "1" || getenv("STW_REQUIRE_JJ") == "1"
 }
 
+// Dependencies of requireNativeGit; only its own test replaces them.
+var (
+	nativeGitGOOS     = runtime.GOOS
+	nativeGitGetenv   = os.Getenv
+	nativeGitIsNative = isNativeGit
+)
+
+// nativeGitT is the part of *testing.T that requireNativeGit uses.
+type nativeGitT interface {
+	Helper()
+	Fatal(args ...any)
+	Skip(args ...any)
+	Setenv(key, value string)
+}
+
 // requireNativeGit makes "git" resolve to a native executable for the test, or skips
 // it with the reason "native Git required" on macOS when only the Apple launcher
 // exists. STW_REQUIRE_NATIVE_SANDBOX=1 or STW_REQUIRE_JJ=1 turn the skip into a failure.
-func requireNativeGit(t *testing.T) {
+func requireNativeGit(t nativeGitT) {
 	t.Helper()
-	dir, ok := selectNativeGit(runtime.GOOS, filepath.SplitList(os.Getenv("PATH")), nativeGitFallbacks, isNativeGit)
+	path := nativeGitGetenv("PATH")
+	dir, ok := selectNativeGit(nativeGitGOOS, filepath.SplitList(path), nativeGitFallbacks, nativeGitIsNative)
 	if !ok {
 		msg := "native Git required: only the Apple /usr/bin/git launcher was found; install one (for example `brew install git`) and put it first on PATH"
-		if nativeGitMissingIsFatal(os.Getenv) {
+		if nativeGitMissingIsFatal(nativeGitGetenv) {
 			t.Fatal(msg)
+			return
 		}
 		t.Skip(msg)
+		return
 	}
 	if dir != "" {
-		t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+		t.Setenv("PATH", dir+string(os.PathListSeparator)+path)
 	}
 }
