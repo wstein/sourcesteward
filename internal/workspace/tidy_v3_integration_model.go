@@ -75,7 +75,16 @@ type V3ProofPolicy struct {
 	Version                     int      `json:"version"`
 	Kinds                       []string `json:"kinds"`
 	AcceptWhitespaceDifferences bool     `json:"accept_whitespace_differences"`
+	// PRProof says whether the merged pull request head proof (github-merged-head) could be used:
+	// "available" for an online plan, "unavailable-offline" for an offline one, which keeps the
+	// forge-free proofs (Spec 053, issue 387). Absent in plans that predate it.
+	PRProof string `json:"pr_proof,omitempty"`
 }
+
+const (
+	v3PRProofAvailable   = "available"
+	v3PRProofUnavailable = "unavailable-offline"
+)
 
 // V3IntegrationEvidence is the ProofEvidence of one distinct tip. Class and
 // strength are present only for a proven tip; reasons are non-empty exactly for

@@ -83,6 +83,10 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	if err != nil {
 		return failTidyV3(r, err)
 	}
+	policy.PRProof = v3PRProofUnavailable
+	if o.Online {
+		policy.PRProof = v3PRProofAvailable
+	}
 	var decisions *V3DecisionFile
 	if o.DecisionsFile != "" {
 		file, e := ReadV3DecisionFile(o.DecisionsFile)
