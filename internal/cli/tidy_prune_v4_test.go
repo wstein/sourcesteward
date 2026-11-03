@@ -31,6 +31,7 @@ func pruneCLIGit(t *testing.T, dir string, args ...string) string {
 
 func pruneCLIRepository(t *testing.T) pruneCLIRepo {
 	t.Helper()
+	requireNativeGit(t)
 	physical := func() string {
 		p, e := filepath.EvalSymlinks(t.TempDir())
 		if e != nil {

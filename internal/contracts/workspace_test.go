@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -119,16 +118,9 @@ func TestWorkspaceNativePlanAndTaskSchema(t *testing.T) {
 }
 
 func TestRealGitWorkspaceLifecycleSchema(t *testing.T) {
-	// Production refuses Apple's developer-tool shim. Tests may select the actual
-	// installed native executable; mandatory CI supplies pinned Git through PATH.
-	if executable, err := exec.LookPath("git"); err == nil && runtime.GOOS == "darwin" && executable == "/usr/bin/git" {
-		for _, candidate := range []string{"/Applications/Xcode.app/Contents/Developer/usr/bin/git", "/Library/Developer/CommandLineTools/usr/bin/git"} {
-			if info, err := os.Stat(candidate); err == nil && info.Mode().IsRegular() {
-				t.Setenv("PATH", filepath.Dir(candidate)+string(os.PathListSeparator)+os.Getenv("PATH"))
-				break
-			}
-		}
-	}
+	// Production refuses Apple's developer-tool shim; the helper selects a native
+	// executable or skips. Mandatory CI supplies pinned Git through PATH.
+	requireNativeGit(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
@@ -287,6 +279,7 @@ func TestRealJJWorkspaceLifecycleSchema(t *testing.T) {
 }
 
 func TestGitCompleteMetadataKeepsWorkspaceV1Schema(t *testing.T) {
+	requireNativeGit(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)
