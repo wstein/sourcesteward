@@ -327,13 +327,15 @@ func TestD3LockedMissingWorktreeKeepsTheRepositoryWithOneNotice(t *testing.T) {
 	requireOfferedRowsBuild(t, f, res)
 }
 
-func TestD3BranchCheckedOutInAPrunableRegistrationIsAttachedElsewhere(t *testing.T) {
+// Issue 386: a registration whose directory is gone protects no branch. The branch is offered and
+// its deletion plan builds with the registration still listed.
+func TestD3BranchCheckedOutInAPrunableRegistrationIsNotAttached(t *testing.T) {
 	f := newOfferedFixture(t)
 	f.mergedBranch("plain")
 	f.staleUnlockedWorktree("gone2", "held")
 	res := f.classify()
-	if c := rowOf(t, res, "branch:r:held"); c.Verdict != tidywizard.VerdictRetain || c.Reason != "branch-attached-elsewhere" {
-		t.Errorf("branch held by a stale registration: verdict %s reason %q, want retain branch-attached-elsewhere", c.Verdict, c.Reason)
+	if c := rowOf(t, res, "branch:r:held"); c.Verdict != tidywizard.VerdictSafe || c.Reason == "branch-attached-elsewhere" {
+		t.Errorf("branch of a stale registration: verdict %s reason %q, want safe", c.Verdict, c.Reason)
 	}
 	if c := rowOf(t, res, "branch:r:plain"); c.Verdict != tidywizard.VerdictSafe {
 		t.Errorf("an unrelated branch stays offered, got %s %q", c.Verdict, c.Reason)

@@ -96,7 +96,8 @@ func TestAdapterBlocksARepositoryWithOneNotice(t *testing.T) {
 }
 
 // A branch that planning keeps as the base or as workspace-used is kept: at the commit of the base,
-// or at the commit of any registration (HEAD of a detached or stale one) and not only by name.
+// or at the commit of any registration with a directory (HEAD of a detached one) and not only by
+// name. A registration whose directory is gone protects nothing (issue 386).
 func TestBranchAtTheBaseOrAtARegistrationTipIsKept(t *testing.T) {
 	detached := stwTree("d")
 	detached.Branch, detached.Tip = "", "t-detached"
@@ -116,8 +117,8 @@ func TestBranchAtTheBaseOrAtARegistrationTipIsKept(t *testing.T) {
 		got[c.ID] = c
 	}
 	for id, reason := range map[string]string{
-		"branch:r:at-base": "selected-base", "branch:r:at-detached": "branch-attached-elsewhere", "branch:r:feat/gone": "branch-attached-elsewhere",
-		"branch:r:at-gone-tip": "branch-attached-elsewhere", "branch:r:free": "", "branch:r:unknown-tip": "",
+		"branch:r:at-base": "selected-base", "branch:r:at-detached": "branch-attached-elsewhere", "branch:r:feat/gone": "",
+		"branch:r:at-gone-tip": "", "branch:r:free": "", "branch:r:unknown-tip": "",
 	} {
 		c := got[id]
 		if reason == "" && c.Verdict != VerdictSafe || reason != "" && (c.Verdict != VerdictRetain || c.Reason != reason) {

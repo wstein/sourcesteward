@@ -342,11 +342,32 @@ func TestBranches(t *testing.T) {
 			t.Fatalf("%+v", got)
 		}
 	})
-	t.Run("a stale registration counts as attached: planning keeps the branch as workspace-used", func(t *testing.T) {
+	t.Run("a stale registration does not attach the branch (issue 386): the live worktree deletes it", func(t *testing.T) {
 		live, gone := stwTree("a"), stwTree("gone")
 		live.Branch, gone.Branch, gone.DirMissing, gone.Prunable = "feat/x", "feat/x", true, true
 		got := classifyRepo(repo([]Worktree{live, gone}, []Branch{br("feat/x", ProofAncestor)}), cfg())
-		if !reflect.DeepEqual(byID(got, "worktree:r:/ws/wt/a").Effects, []string{"remove-registration", "remove-files"}) || byKind(got, KindBranch).Reason != "branch-attached-elsewhere" {
+		if !reflect.DeepEqual(byID(got, "worktree:r:/ws/wt/a").Effects, []string{"remove-registration", "remove-files", "delete-branch:feat/x"}) {
+			t.Fatalf("%+v", got)
+		}
+	})
+	t.Run("a stale registration alone does not keep its branch: it is judged by its proof", func(t *testing.T) {
+		gone := stwTree("gone")
+		gone.Branch, gone.DirMissing, gone.Prunable = "feat/x", true, true
+		got := classifyRepo(repo([]Worktree{gone}, []Branch{br("feat/x", ProofAncestor), br("feat/y", ProofNone)}), cfg())
+		for _, c := range got {
+			if c.Reason == "branch-attached-elsewhere" {
+				t.Fatalf("a stale registration attached a branch: %+v", c)
+			}
+		}
+		if b := byKind(got, KindBranch); b.Verdict == VerdictRetain && b.Branch == "feat/x" {
+			t.Fatalf("proven branch of a stale registration retained: %+v", b)
+		}
+	})
+	t.Run("a missing directory that is not prunable still attaches the branch", func(t *testing.T) {
+		gone := stwTree("gone")
+		gone.Branch, gone.DirMissing = "feat/x", true
+		got := classifyRepo(repo([]Worktree{gone}, []Branch{br("feat/x", ProofAncestor)}), cfg())
+		if byKind(got, KindBranch).Reason != "branch-attached-elsewhere" {
 			t.Fatalf("%+v", got)
 		}
 	})

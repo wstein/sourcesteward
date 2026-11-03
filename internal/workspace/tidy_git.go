@@ -4,6 +4,7 @@ package workspace
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -14,7 +15,12 @@ import (
 )
 
 type gitTidyAdapter struct{}
-type gitTidyWorktree struct{ path, head, branch string }
+type gitTidyWorktree struct {
+	path, head, branch string
+	// stale: Git reports the registration prunable (its directory is gone) and not locked. It
+	// does not protect its branch or commit (Spec 053).
+	stale bool
+}
 
 func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObservation, error) {
 	ctx, cancel := context.WithTimeout(ctx, planObservationTimeout)
@@ -50,13 +56,14 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 	}
 	sort.Strings(out.WorkspacePaths)
 	out.WorkspacePathsComplete = true
+	out.Limitations = append(out.Limitations, gitTidyStaleLimitations(works)...)
 	if len(refs)+len(works) > observationLimit {
 		return out, failure("tidy-observation-limit", "Combined branch and worktree evidence exceeds 1024 records")
 	}
 	for _, ref := range refs {
 		c := ref.candidate
 		for _, w := range works {
-			if w.branch == c.Name || w.head == c.CommitID {
+			if !w.stale && (w.branch == c.Name || w.head == c.CommitID) {
 				c.WorkspacePaths = append(c.WorkspacePaths, w.path)
 			}
 		}
@@ -103,6 +110,29 @@ func (gitTidyAdapter) Observe(ctx context.Context, path, base string) (TidyObser
 	}
 	out.Expected = expected
 	return out, nil
+}
+
+// gitTidyStaleLimitations names the registrations whose directory is gone (reason
+// workspace-missing) and proposes git worktree prune as a separate step. At most
+// maxStaleLimitationLines are named; a final line counts the rest.
+func gitTidyStaleLimitations(works []gitTidyWorktree) []string {
+	const maxStaleLimitationLines = 16
+	var out []string
+	more := 0
+	for _, w := range works {
+		if !w.stale {
+			continue
+		}
+		if len(out) == maxStaleLimitationLines {
+			more++
+			continue
+		}
+		out = append(out, v3WorkspaceMissing+": the registration "+w.path+" has no directory and does not protect its branch; run `"+v3PruneCommand+"` as a separate step.")
+	}
+	if more > 0 {
+		out = append(out, fmt.Sprintf("%s: %d more registrations have no directory; run `%s` as a separate step.", v3WorkspaceMissing, more, v3PruneCommand))
+	}
+	return out
 }
 
 type gitTidyRef struct {
@@ -191,7 +221,7 @@ func (p *gitTidyWorktreeParser) add(record []byte) error {
 	}
 	w := gitTidyWorktree{}
 	seen := map[string]bool{}
-	detached, bare := false, false
+	detached, bare, locked, prunable := false, false, false, false
 	for _, field := range strings.Split(text, "\x00") {
 		key, value, hasValue := strings.Cut(field, " ")
 		if seen[key] {
@@ -205,7 +235,9 @@ func (p *gitTidyWorktreeParser) add(record []byte) error {
 			}
 			w.path = value
 		case "HEAD":
-			if !hasValue || !fullGitOID(value, p.format) || strings.Trim(value, "0") == "" {
+			// An all-zero head is only valid for a stale registration, whose branch was deleted
+			// while the directory stays gone; that is checked below.
+			if !hasValue || !fullGitOID(value, p.format) {
 				return bad
 			}
 			w.head = value
@@ -224,12 +256,16 @@ func (p *gitTidyWorktreeParser) add(record []byte) error {
 				return bad
 			}
 			bare = true
-		case "locked", "prunable": // Native reasons are untrusted text and only qualify retention.
+		case "locked":
+			locked = true
+		case "prunable":
+			prunable = true // Native reasons are untrusted text and only qualify retention.
 		default:
 			return bad
 		}
 	}
-	if w.path == "" || p.paths[w.path] || bare || w.head == "" || detached == (w.branch != "") {
+	w.stale = prunable && !locked
+	if w.path == "" || p.paths[w.path] || bare || w.head == "" || detached == (w.branch != "") || strings.Trim(w.head, "0") == "" && !w.stale {
 		return bad
 	}
 	p.paths[w.path] = true

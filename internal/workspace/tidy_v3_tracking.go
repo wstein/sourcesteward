@@ -163,7 +163,7 @@ func selectTidyV3Tracking(o tidyV3NativeObservation, remote, override string, se
 		target := tidyV3TrackingRef{Reference: ref, SourceRef: source, WorkspacePaths: []string{}}
 		paths := map[string]bool{}
 		for _, workspace := range o.Native.Registrations {
-			if workspace.HeadRef == ref.Name || workspace.HeadOID == ref.OID {
+			if workspace.uses(ref.Name, ref.OID) {
 				paths[workspace.Path] = true
 			}
 		}
@@ -340,7 +340,7 @@ func (c tidyV3TrackingCoordinator) trackingCandidates(ctx context.Context, o V3P
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p = V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observed.ConfigNotes}
+	p = V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "tracking-refs", SourcePath: source, StateDir: o.StateDir, Expected: observed.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observed.ConfigNotes, StaleRegistrations: v3StaleRegistrations(observed.Native)}
 	if !validV3NativeState(observed.Native, p, p.Expected) {
 		return p, nil, advertisement, failure("incomplete-evidence", "Complete native tracking, symbolic and registered workspace protections are required before online evidence.")
 	}

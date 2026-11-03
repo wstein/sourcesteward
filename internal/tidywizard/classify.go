@@ -360,11 +360,15 @@ func classifyRepo(f RepoFacts, cfg Config) []Candidate {
 	for _, b := range f.Branches {
 		branches[b.Name] = b
 	}
-	// A branch is attached to any registration that names it or stands at its tip, a registration
-	// whose directory is gone included: planning keeps such a branch as workspace-used.
+	// A branch is attached to any registration that names it or stands at its tip. A registration
+	// whose directory is gone (workspace-missing, Spec 053) protects nothing: the branch is judged
+	// by its proof, and the registration is pruned as a separate step.
 	attached := map[string]int{}
 	attachedTips := map[string]bool{}
 	for _, w := range f.Worktrees {
+		if w.DirMissing && w.Prunable {
+			continue
+		}
 		if w.Branch != "" {
 			attached[w.Branch]++
 		}
@@ -533,7 +537,7 @@ func classifyBranch(repo string, b Branch, attached, atBase bool, cfg Config) Ca
 	case atBase:
 		return c.retain("selected-base", "at the commit of the base")
 	case attached:
-		return c.retain("branch-attached-elsewhere", "checked out in, or at the commit of, a registered worktree that is retained, kept or gone")
+		return c.retain("branch-attached-elsewhere", "checked out in, or at the commit of, a registered worktree that is retained or kept")
 	}
 	c.Verdict = VerdictSafe
 	c.Effects = []string{"delete-branch:" + b.Name}
