@@ -60,10 +60,16 @@ func TestTidyV3StaleRegistrationDoesNotBlockReferencePlan(t *testing.T) {
 	if r.Status != "ok" || r.Plan == nil {
 		t.Fatalf("stale registration blocked the reference plan: status=%s diagnostics=%+v", r.Status, r.Diagnostics)
 	}
+	// Issue 386 changed this: the branch stands at the base commit here, so it is retained as the
+	// selected base, and the missing directory no longer protects it (see
+	// TestTidyV3MissingWorkspaceDoesNotProtectBranch). The registration is listed for pruning.
 	for _, v := range r.Plan.Candidates {
-		if v.Name == "refs/heads/stale-gone" && (v.Decision != "retain" || !containsString(v.WorkspacePaths, stale)) {
-			t.Fatalf("branch of the stale registration is not retained: %+v", v)
+		if v.Name == "refs/heads/stale-gone" && (v.Decision != "retain" || v.Reason != "selected-base" || containsString(v.WorkspacePaths, stale)) {
+			t.Fatalf("branch of the stale registration: %+v", v)
 		}
+	}
+	if len(r.Plan.StaleRegistrations) != 1 || r.Plan.StaleRegistrations[0].Path != stale {
+		t.Fatalf("stale registration not listed: %+v", r.Plan.StaleRegistrations)
 	}
 }
 

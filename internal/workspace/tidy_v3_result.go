@@ -66,6 +66,9 @@ type V3Plan struct {
 	// Planning configuration notes (Spec 031 FR-020); absent when empty so plans
 	// of repositories without noted configuration keep their exact bytes.
 	ConfigNotes []V3ConfigNote `json:"config_notes,omitempty"`
+	// StaleRegistrations are the registrations whose directory is gone (Spec 053, issue 386);
+	// they do not protect a branch. Absent when there is none.
+	StaleRegistrations []V3StaleRegistration `json:"stale_registrations,omitempty"`
 	// Proof policy of a local-reference plan (Spec 031 FR-011); absent in plans
 	// that predate it, which are evaluated by ancestry alone.
 	ProofPolicy *V3ProofPolicy `json:"proof_policy,omitempty"`
@@ -393,6 +396,22 @@ func v3Snapshot(s Snapshot, source string) bool {
 	n := s.Identity
 	return validSnapshot(s) && n.Backend == "git" && n.WorkspaceRoot == source && v3CanonicalPath(n.RepositoryDir) && v3CanonicalPath(n.GitDir) && n.ChangeID == "" && n.OperationID == "" && v3OID(n.CommitID, n.ObjectFormat) && v3OID(s.BaseCommit, n.ObjectFormat) && s.BaseChange == "" && s.BaseSelector != "" && validText(s.BaseSelector) && v3Hash(s.ReferenceDigest) && v3Hash(s.RegistrationDigest) && v3Hash(s.SafetyDigest)
 }
+
+// validV3StaleRegistrationList checks the shape of the stale registrations of a plan: only
+// reference plans carry them, canonical sorted paths, closed reason and command.
+func validV3StaleRegistrationList(p V3Plan) bool {
+	if len(p.StaleRegistrations) > v3NativeFactsLimit || len(p.StaleRegistrations) > 0 && p.Mode != "local-refs" && p.Mode != "tracking-refs" {
+		return false
+	}
+	last := ""
+	for _, s := range p.StaleRegistrations {
+		if s.Path <= last || !v3CanonicalPath(s.Path) || !v3OID(s.HeadOID, p.Expected.Identity.ObjectFormat) || s.HeadRef != "" && !v3Ref(s.HeadRef) || s.Reason != v3WorkspaceMissing || s.NextCommand != v3PruneCommand {
+			return false
+		}
+		last = s.Path
+	}
+	return true
+}
 func validateV3Plan(p V3Plan, state, id string) error {
 	bad := func() error {
 		return failure("invalid-plan", "V3 plan is incompatible, modified or does not bind exact policy, identities and effects.")
@@ -401,7 +420,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || p.ProofPolicy != nil && (p.Mode != "local-refs" && p.Mode != "owned-retirement" && p.Mode != "legacy-retirement" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || !validV3StaleRegistrationList(p) || p.ProofPolicy != nil && (p.Mode != "local-refs" && p.Mode != "owned-retirement" && p.Mode != "legacy-retirement" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
 		return bad()
 	}
 	if state == "" {

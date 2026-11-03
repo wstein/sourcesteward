@@ -74,6 +74,15 @@ func TestRevalidateReviewedDecisionChecksTheTipAndProtectionsItself(t *testing.T
 			t.Errorf("%s: accepted", name)
 		}
 	}
+	// Issue 386: a registration whose directory is gone (prunable) protects nothing.
+	for name, reg := range map[string]V3Registration{
+		"a stale registration names the branch": {Path: "/gone", HeadRef: target.Name, HeadOID: target.OID, Prunable: true},
+		"a stale registration is at the tip":    {Path: "/gone", HeadOID: target.OID, Prunable: true},
+	} {
+		if err := check(func(o *tidyV3NativeObservation) { o.Native.Registrations = append(o.Native.Registrations, reg) }); err != nil {
+			t.Errorf("%s: refused: %v", name, err)
+		}
+	}
 	// The record must bind the exact tip and base.
 	bad := target
 	ev := *bad.Evidence.Integration

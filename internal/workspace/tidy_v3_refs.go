@@ -112,7 +112,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 	}
 	selected := append([]string{}, o.Refs...)
 	sort.Strings(selected)
-	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy}
+	p := V3Plan{SchemaVersion: 3, Policy: "tidy-git-v3", Mode: "local-refs", SourcePath: source, StateDir: o.StateDir, Expected: observation.Expected, SelectedRefs: selected, Candidates: []V3Candidate{}, Effects: []string{}, RecoveryLimits: v3RecoveryLimits(), ConfigNotes: observation.ConfigNotes, ProofPolicy: &policy, StaleRegistrations: v3StaleRegistrations(observation.Native)}
 	run, closeRun, err := c.integration.begin(ctx, observation.Expected.Identity, observation.ConfigNotes)
 	if err != nil {
 		return failTidyV3(r, err)
@@ -149,7 +149,7 @@ func (c tidyV3RefsCoordinator) planRefs(ctx context.Context, o V3PlanOptions) (r
 		found[ref.Name], selectedOIDs[ref.OID] = true, true
 		candidate := V3Candidate{ActionID: "ref-" + gitDigest(ref.Name)[:32], Kind: "branch", Name: ref.Name, OID: ref.OID, Decision: "retain", Reason: "integration-not-proven", Proof: "none", WorkspacePaths: []string{}}
 		for _, w := range observation.Native.Registrations {
-			if w.HeadRef == ref.Name || w.HeadOID == ref.OID {
+			if w.uses(ref.Name, ref.OID) {
 				candidate.WorkspacePaths = append(candidate.WorkspacePaths, w.Path)
 			}
 		}

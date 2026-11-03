@@ -186,7 +186,7 @@ func (c tidyV3RefsApplyCoordinator) revalidateReviewedDecision(ctx context.Conte
 		return changed()
 	}
 	for _, w := range n.Registrations {
-		if w.HeadRef == target.Name || w.HeadOID == target.OID {
+		if w.uses(target.Name, target.OID) {
 			return changed()
 		}
 	}

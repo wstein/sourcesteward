@@ -27,6 +27,43 @@ type V3Registration struct {
 	HeadRef    string `json:"head_ref"`
 	LockReason string `json:"lock_reason"`
 }
+
+// Stale reports a registration whose directory is gone: Git marks it prunable (it never does so
+// for a locked one). Such a registration does not protect a branch or a commit (Spec 053).
+func (r V3Registration) Stale() bool { return r.Prunable && !r.Locked }
+
+// uses reports whether an existing worktree is checked out on the reference or at its commit.
+func (r V3Registration) uses(ref, oid string) bool {
+	return !r.Stale() && (r.HeadRef == ref || r.HeadOID == oid)
+}
+
+// V3StaleRegistration names one registration whose directory is gone. Pruning is a separate
+// step the owner runs; planning proposes it and never runs it.
+type V3StaleRegistration struct {
+	Path        string `json:"path"`
+	HeadRef     string `json:"head_ref"`
+	HeadOID     string `json:"head_oid"`
+	Reason      string `json:"reason"`
+	NextCommand string `json:"next_command"`
+}
+
+const (
+	v3WorkspaceMissing = "workspace-missing"
+	v3PruneCommand     = "git worktree prune"
+)
+
+// v3StaleRegistrations lists the stale registrations of the native state, sorted by path as the
+// registrations are; nil when there is none, so a plan without one keeps its exact bytes.
+func v3StaleRegistrations(n V3NativeState) []V3StaleRegistration {
+	var out []V3StaleRegistration
+	for _, r := range n.Registrations {
+		if r.Stale() {
+			out = append(out, V3StaleRegistration{Path: r.Path, HeadRef: r.HeadRef, HeadOID: r.HeadOID, Reason: v3WorkspaceMissing, NextCommand: v3PruneCommand})
+		}
+	}
+	return out
+}
+
 type V3NativeState struct {
 	ProtectedRoots []string         `json:"protected_roots"`
 	References     []V3Reference    `json:"references"`
@@ -273,6 +310,15 @@ func v3SnapshotWithState(snapshot Snapshot, state V3NativeState) Snapshot {
 	snapshot.RegistrationDigest, _ = v3RecordDigest(state.Registrations)
 	return snapshot
 }
+func containsV3Stale(list []V3StaleRegistration, s V3StaleRegistration) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
 func validV3NativeState(state V3NativeState, p V3Plan, snapshot Snapshot) bool {
 	if state.References == nil || state.Registrations == nil || !v3Paths(state.ProtectedRoots) || !reflect.DeepEqual(snapshot, v3SnapshotWithState(snapshot, state)) {
 		return false
@@ -306,7 +352,8 @@ func validV3NativeState(state V3NativeState, p V3Plan, snapshot Snapshot) bool {
 		if r.Path == p.SourcePath && (r.HeadOID != p.Expected.Identity.CommitID || r.HeadRef != p.Expected.Identity.HeadRef) {
 			return false
 		}
-		if r.HeadRef != "" {
+		// A stale registration may name a branch that is gone (deleted while its directory is gone).
+		if r.HeadRef != "" && !r.Stale() {
 			ref, ok := refs[r.HeadRef]
 			if !ok || ref.OID != r.HeadOID {
 				return false
@@ -349,6 +396,12 @@ func validV3NativeState(state V3NativeState, p V3Plan, snapshot Snapshot) bool {
 			}
 		}
 	}
+	// Every listed stale registration is one the native state reports as stale.
+	for _, s := range p.StaleRegistrations {
+		if !containsV3Stale(v3StaleRegistrations(state), s) {
+			return false
+		}
+	}
 	for _, c := range p.Candidates {
 		r, ok := refs[c.Name]
 		if !ok || r.OID != c.OID {
@@ -364,7 +417,7 @@ func validV3NativeState(state V3NativeState, p V3Plan, snapshot Snapshot) bool {
 				}
 			}
 			for _, registration := range state.Registrations {
-				if registration.HeadOID == c.OID || registration.HeadRef == c.Name {
+				if registration.uses(c.Name, c.OID) {
 					return false
 				}
 			}
@@ -454,6 +507,13 @@ func v3ApplyStateDelta(p V3Plan, s V3NativeState, kind, id string) V3NativeState
 			}
 		}
 		n.References = out
+		// A stale registration that named the deleted branch now has an unborn HEAD, which
+		// Git lists with the all-zero object id until the registration is pruned.
+		for i, r := range n.Registrations {
+			if r.Stale() && r.HeadRef == target.Name {
+				n.Registrations[i].HeadOID = strings.Repeat("0", len(r.HeadOID))
+			}
+		}
 	case "registration-removed":
 		out := []V3Registration{}
 		for _, r := range n.Registrations {
