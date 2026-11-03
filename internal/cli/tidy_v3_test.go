@@ -541,3 +541,26 @@ func TestTidyV3QuoteBoundsOnRuneAndEscapeBoundaries(t *testing.T) {
 		t.Fatal(q)
 	}
 }
+
+// Issue 386: the text output names every registration whose directory is gone and the next
+// command, escaped like the other path facts; a plan without one prints no such line.
+func TestTidyV3TextNamesStaleRegistrations(t *testing.T) {
+	unsafe := "/fixture/gone\n\x1b[31m"
+	oid := strings.Repeat("a", 40)
+	r := workspace.V3Result{SchemaVersion: 3, Command: "tidy-plan", Status: "ok", Backend: "git", Plan: &workspace.V3Plan{StaleRegistrations: []workspace.V3StaleRegistration{{Path: unsafe, HeadRef: "refs/heads/topic", HeadOID: oid, Reason: "workspace-missing", NextCommand: "git worktree prune"}}}}
+	var human bytes.Buffer
+	if err := renderTidyV3Text(&human, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(human.String(), `Stale registration: "/fixture/gone\n\x1b[31m" head_ref="refs/heads/topic"`) || !strings.Contains(human.String(), `reason="workspace-missing" next="git worktree prune"`) || strings.Contains(human.String(), "\x1b") {
+		t.Fatalf("stale registration missing or unescaped:\n%q", human.String())
+	}
+	r.Plan.StaleRegistrations = nil
+	human.Reset()
+	if err := renderTidyV3Text(&human, r); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(human.String(), "Stale registration") {
+		t.Fatalf("line without a stale registration:\n%s", human.String())
+	}
+}
