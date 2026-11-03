@@ -93,6 +93,7 @@ func TestRealTidyCLIErrorSchema(t *testing.T) {
 	valid(t, s, out.Bytes())
 }
 func TestRealGitTidyPlanSchema(t *testing.T) {
+	requireNativeGit(t)
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("XDG_CONFIG_HOME", home)

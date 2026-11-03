@@ -422,6 +422,7 @@ func TestTidyV3CLIRealRetirementFlow(t *testing.T) {
 
 func tidyV3FixtureGitBinary(t *testing.T) string {
 	t.Helper()
+	requireNativeGit(t)
 	binary, err := exec.LookPath("git")
 	if err != nil {
 		if os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") == "1" || os.Getenv("STW_REQUIRE_JJ") == "1" {

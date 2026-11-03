@@ -23,6 +23,7 @@ import (
 // linked worktrees and three branches, with the progress clock moving one second per report.
 func realWorld(t *testing.T) (repo string) {
 	t.Helper()
+	requireNativeGit(t)
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	t.Setenv("GIT_CONFIG_SYSTEM", os.DevNull)
