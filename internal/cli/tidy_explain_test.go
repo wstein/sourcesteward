@@ -5,6 +5,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -53,7 +56,7 @@ func TestTidyPlanExplainAppendsToTheUnchangedText(t *testing.T) {
 	if strings.Count(extra, "Explain:") != 2 || strings.Contains(extra, "refs/heads/done") {
 		t.Fatalf("explanations for the retained candidates only:\n%s", extra)
 	}
-	for _, want := range []string{`Explain: "refs/heads/open" reason="integration-not-proven"`, `Why: "It stays because it is not an ancestor of the base`, `Next: "stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online"`, `Explain: "refs/heads/used" reason="workspace-used"`, `at /ws/used`} {
+	for _, want := range []string{`Explain: "refs/heads/open" reason="integration-not-proven"`, `Why: "It stays because it is not an ancestor of the base`, `Next: "stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online --remote origin"`, `Explain: "refs/heads/used" reason="workspace-used"`, `at /ws/used`} {
 		if !strings.Contains(extra, want) {
 			t.Errorf("missing %q in:\n%s", want, extra)
 		}
@@ -106,7 +109,7 @@ func TestTidyPlanExplainContract3JSONHasASeparateField(t *testing.T) {
 		t.Fatalf("explanations: %v", got["explanations"])
 	}
 	e := list[0].(map[string]any)
-	if e["name"] != "refs/heads/open" || e["reason"] != "integration-not-proven" || !strings.Contains(e["text"].(string), "offline") || e["next_command"] != "stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online" {
+	if e["name"] != "refs/heads/open" || e["reason"] != "integration-not-proven" || !strings.Contains(e["text"].(string), "offline") || e["next_command"] != "stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online --remote origin" {
 		t.Fatalf("explanation: %v", e)
 	}
 	delete(got, "explanations")
@@ -118,5 +121,77 @@ func TestTidyPlanExplainContract3JSONHasASeparateField(t *testing.T) {
 	text, err := runExplainV3(t, "--explain")
 	if err != nil || !strings.Contains(text, "Explain: \"refs/heads/open\" reason=\"integration-not-proven\"\n  Why: ") || !strings.Contains(text, "\n  Next: \"stw tidy plan /repo") {
 		t.Fatalf("err=%v text=\n%s", err, text)
+	}
+}
+
+// shellArgs runs a next command in dir with stw replaced by a shell function that prints its
+// arguments, and returns the arguments stw would have received.
+func shellStwArgs(t *testing.T, dir, command string) []string {
+	t.Helper()
+	cmd := exec.Command("sh", "-c", `stw() { for a in "$@"; do printf '%s\0' "$a"; done; }; `+command)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("the next command does not run in a shell: %q: %v", command, err)
+	}
+	return strings.Split(strings.TrimSuffix(string(out), "\x00"), "\x00")
+}
+
+// Issue 388: a next command that starts stw is accepted by the real flag parsing and validators, and
+// every other next command runs against a real repository. Prefix checks would not catch a missing
+// --remote or a relative --report-dir.
+func TestExplainNextCommandsAreExecutable(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(root, "repo")
+	if err := os.Mkdir(repo, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	git := func(args ...string) {
+		t.Helper()
+		c := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=t", "-c", "user.email=t@e.x", "-c", "init.defaultBranch=main"}, args...)...)
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	git("init", "-q")
+	git("commit", "--allow-empty", "-qm", "base")
+	git("branch", "topic")
+	git("remote", "add", "origin", repo)
+	oid := strings.Repeat("a", 40)
+	var stwSeen, otherSeen int
+	for _, reason := range workspace.ExplainedReasons {
+		for _, contract3 := range []bool{true, false} {
+			e := workspace.ExplainRetention(workspace.ExplainContext{Source: repo, Base: "refs/heads/main", Remote: "origin", Contract3: contract3, PRProof: "unavailable-offline"}, "refs/heads/topic", oid, reason, []string{"/ws/topic"}, []string{"partial-match"})
+			work := filepath.Join(root, "work")
+			if err := os.MkdirAll(work, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(e.NextCommand, "stw tidy plan") {
+				stwSeen++
+				args := shellStwArgs(t, work, e.NextCommand)
+				cmd := tidyCommandWithV3Operations(nil, nil, func(context.Context, workspace.V3PlanOptions) workspace.V3Result { return explainV3Result() }, nil)
+				cmd.SetOut(&bytes.Buffer{})
+				cmd.SetErr(&bytes.Buffer{})
+				cmd.SetArgs(args[1:])
+				if err := cmd.Execute(); err != nil {
+					t.Errorf("%s: the real command rejects %q: %v", reason, e.NextCommand, err)
+				}
+				continue
+			}
+			if strings.HasPrefix(e.NextCommand, "git ") {
+				otherSeen++
+				c := exec.Command("sh", "-c", e.NextCommand)
+				c.Dir = work
+				if out, err := c.CombinedOutput(); err != nil {
+					t.Errorf("%s: %q fails: %v\n%s", reason, e.NextCommand, err, out)
+				}
+			}
+		}
+	}
+	if stwSeen == 0 || otherSeen == 0 {
+		t.Fatalf("vacuous: %d stw commands and %d git commands checked", stwSeen, otherSeen)
 	}
 }
