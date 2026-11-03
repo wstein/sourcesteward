@@ -667,3 +667,6 @@ The default plan (frozen v1/v2) keeps native ancestry only.
 
 Section 3 (#388): `stw tidy plan --explain` appends one sentence per retained candidate that names the missing proof and the next command;
 contract 3 carries them in the additive `explanations` field outside the plan digest. Output without the flag is unchanged.
+
+Section 4 (#389): `stw tidy plan` without `--base` uses the branch behind `refs/remotes/origin/HEAD`; if it is unset the error names
+`git remote set-head origin -a` and `--base`. An explicit `--base` is unchanged.
