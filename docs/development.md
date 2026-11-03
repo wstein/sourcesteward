@@ -37,11 +37,18 @@ files, stale workspaces, divergent operation heads, configuration helpers and at
 index/type-file repairs; source checks alone do not establish those guarantees.
 
 ## Local runs on macOS
-The Apple `/usr/bin/git` launcher cannot run inside the required executable sandbox, so native
-Git operations fail with `git-sandbox-unavailable` and the tests that use them fail. Install a
-current Git yourself (for example `brew install git`) and put its directory first on PATH
-before `go test ./...`, for example `PATH=/opt/homebrew/bin:$PATH go test ./...`. Nothing in the
-repository installs it.
+The Apple `/usr/bin/git` launcher cannot run inside the required executable sandbox. `stw` and
+the tests find a native Git themselves; PATH needs no change. The lookup order is:
+
+1. Git entries on PATH, in order, except the Apple launcher.
+2. `$(xcode-select -p)/usr/bin/git` (the Command Line Tools Git).
+3. `/opt/homebrew/bin/git`.
+4. `/usr/local/bin/git`.
+
+Each candidate must pass `git --version` inside the same sandbox as native operations; the first
+that passes is used. If none does, the error (`git-sandbox-unavailable`, or `git-unavailable`
+when no candidate exists) lists every candidate with its reason and the fix `brew install git`.
+Nothing in the repository installs Git.
 
 Some tests skip locally with a reason instead of failing when a tool is missing:
 - Tests that run native Git (the real-Git fixtures of `internal/contracts` and `internal/cli`) need a native Git on
