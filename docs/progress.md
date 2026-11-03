@@ -651,3 +651,12 @@ a pull request against the machine-checkable working rules (issue #344). The rul
 admits the commit and comment pages of one pull request. `schemas/v1/lint-pr.schema.json` is frozen and unpublished, and the command has a
 guide ([lint](lint.md)). The tests use a fake forge only (no network, no build); independent review of the exact head and the owner's
 acceptance are pending.
+
+## Spec 053 tidy plan clarity (source candidate, review and acceptance pending, 2026-11-03)
+
+[The specification](../specs/053-tidy-plan-clarity/spec.md) covers issues #386 to #389 as a stack of four pull requests. Section 1 (#386): a
+registration whose directory is gone (Git `prunable`, not locked) protects no branch in the default plan, the contract 3 plan, the tracking
+plan and the wizard classifier; the plan names it (`stale_registrations`, reason `workspace-missing`) and proposes `git worktree prune`.
+Three tests that encoded the old rule were changed on purpose. `schemas/v3/tidy.schema.json` gains an optional field; `schemas/v1` and
+`schemas/v2` are unchanged. Tests use temporary repositories only; no `stw` was built or run on a real repository. Independent review of
+the exact head and the owner's acceptance are pending.
