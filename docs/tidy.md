@@ -24,6 +24,10 @@ with `path`, `head_ref`, `head_oid`, `reason` and `next_command`, and one `Stale
 proposes `git worktree prune` as a separate step that planning never runs.
 The default plan shows this limitation only without `--state-dir`: with `--state-dir` it still refuses with `unknown-workspace-path` while a gone path exists, because state-store disjointness cannot be proven. After apply deletes the branch of a gone registration, Git lists the registration with an unborn head (all-zero object id) until `git worktree prune`; contract 3 plans accept that and report the all-zero `head_oid`.
 
+A contract 3 plan records in `proof_policy.pr_proof` whether the merged pull request proof (`github-merged-head`, the head of a merged
+pull request equals the branch tip) could be used: `available` with `--online`, `unavailable-offline` without it, where the
+forge-free proofs (`patch-id` among them) still apply. The default plan proves integration by native ancestry only.
+
 ## The tidy wizard
 
 `stw tidy` cleans up a whole workspace instead of one repository. It is for the person at a terminal; agents use `stw tidy plan`
