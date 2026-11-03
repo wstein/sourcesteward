@@ -34,6 +34,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	var contract string
 	var hints []string
 	var proofKinds string
+	var explain bool
 	var wizard tidyWizardOptions
 	var pruneV4 pruneV4Flags
 	plan := &cobra.Command{Use: "plan [PATH]", Short: "Review native references or exactly owned task retirement actions", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
@@ -72,7 +73,14 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 			if err := validateTidyV3PlanCLI(args, &v3, hints); err != nil {
 				return err
 			}
-			return writeTidyV3Result(cmd, planV3(cmd.Context(), v3), structured)
+			result := planV3(cmd.Context(), v3)
+			if explain && result.Plan != nil {
+				result.Explanations = workspace.ExplainV3(*result.Plan)
+			}
+			return writeTidyV3Result(cmd, result, structured)
+		}
+		if explain && structured {
+			return fmt.Errorf("--explain with --json needs --contract 3: the default JSON contract is frozen and has no field for it")
 		}
 		if err := rejectTidyV3Flags(cmd, tidyV3PlanFlags); err != nil {
 			return err
@@ -85,7 +93,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 		}
 		options.Path = workspacePath(args)
 		result := run(cmd.Context(), options)
-		return writeTidyResult(cmd, result, structured)
+		return writeTidyResultExplained(cmd, result, structured, explain)
 	}}
 	plan.Flags().StringVar(&options.Base, "base", "", "Required literal native integration base; no inferred trunk")
 	plan.Flags().StringArrayVar(&options.Refs, "ref", nil, "Select a literal local branch/bookmark name (repeatable; otherwise all bounded local references)")
@@ -95,6 +103,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	plan.Flags().BoolVar(&options.RemoveRegistration, "remove-registration", false, "Plan exact native registration removal; required for task retirement")
 	plan.Flags().StringVar(&options.RemoveFiles, "remove-files", "", "Separately select the exact owned absolute destination for filesystem removal")
 	plan.Flags().BoolVar(&structured, "json", false, "Output one versioned tidy result, including operational refusals")
+	plan.Flags().BoolVar(&explain, "explain", false, "Add one sentence per retained candidate: why it stays, which proof is missing and the command that would provide it (expert layer; --json needs --contract 3)")
 	addTidyV3PlanFlags(plan, &contract, &v3, &hints, &proofKinds)
 	addPruneV4Flags(plan, &pruneV4)
 	addTidyWizardPlanFlags(plan, &wizard)
@@ -155,11 +164,20 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 	return family
 }
 func writeTidyResult(cmd *cobra.Command, result workspace.TidyResult, structured bool) error {
+	return writeTidyResultExplained(cmd, result, structured, false)
+}
+
+// writeTidyResultExplained is writeTidyResult with the explanations of `plan --explain` appended
+// to the text; without explain the output is byte for byte that of writeTidyResult.
+func writeTidyResultExplained(cmd *cobra.Command, result workspace.TidyResult, structured, explain bool) error {
 	var err error
 	if structured {
 		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 	} else {
 		err = renderTidyText(cmd.OutOrStdout(), result)
+		if err == nil && explain && result.Plan != nil {
+			err = renderTidyExplanations(cmd.OutOrStdout(), workspace.ExplainTidyPlan(*result.Plan))
+		}
 	}
 	if err != nil {
 		return runtimeFailure{err}
@@ -209,6 +227,17 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 		}
 	}
 	return nil
+}
+
+// renderTidyExplanations prints the explanations of `tidy plan --explain`, every value quoted like the
+// other plan facts.
+func renderTidyExplanations(writer io.Writer, list []workspace.V3Explanation) error {
+	var text strings.Builder
+	for _, e := range list {
+		fmt.Fprintf(&text, "Explain: %q reason=%q\n  Why: %q\n  Next: %q\n", e.Name, e.Reason, e.Text, e.NextCommand)
+	}
+	_, err := io.WriteString(writer, text.String())
+	return err
 }
 func renderTidyText(writer io.Writer, result workspace.TidyResult) error {
 	var text strings.Builder

@@ -37,7 +37,7 @@ var tidyFlagClasses = map[string]flagClass{
 	"base": flagExpert, "ref": flagExpert, "task": flagExpert, "owner": flagExpert, "remove-registration": flagExpert,
 	"remove-files": flagExpert, "completed-worktree": flagExpert, "protect-worktree": flagExpert, "contract": flagExpert,
 	"remote": flagExpert, "tracking-remote": flagExpert, "repo": flagExpert, "host": flagExpert, "pr": flagExpert,
-	"integration-proof": flagExpert, "accept-whitespace-differences": flagExpert, "decisions": flagExpert,
+	"integration-proof": flagExpert, "explain": flagExpert, "accept-whitespace-differences": flagExpert, "decisions": flagExpert,
 	"consolidation-range": flagExpert, "report-dir": flagExpert, "report-max-entries": flagExpert,
 	"report-max-bytes": flagExpert, "report-max-diff-bytes": flagExpert, "report-max-files": flagExpert,
 	"report-max-lines": flagExpert, "report-max-commits": flagExpert, "plan": flagExpert, "authorize": flagExpert,
