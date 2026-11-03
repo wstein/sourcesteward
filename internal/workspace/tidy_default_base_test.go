@@ -72,3 +72,22 @@ func TestDefaultTidyBaseAcceptsARelativePath(t *testing.T) {
 		t.Fatalf("got %q, %v", got, err)
 	}
 }
+
+// A jj repository keeps requiring --base, also a colocated one whose Git side has origin/HEAD (Spec 053).
+func TestDefaultTidyBaseIsNotUsedForJJRepositories(t *testing.T) {
+	for _, colocate := range []bool{true, false} {
+		repo := observeJJRepoWith(t, colocate)
+		if colocate {
+			gitFixture(t, repo, "remote", "add", "origin", "https://github.com/owner/repo.git")
+			gitFixture(t, repo, "update-ref", "refs/remotes/origin/trunk", "HEAD")
+			gitFixture(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+			if gitFixture(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD") != "refs/remotes/origin/trunk" {
+				t.Fatal("fixture: origin/HEAD is not set, the test would be vacuous")
+			}
+		}
+		got, err := DefaultTidyBase(context.Background(), repo)
+		if err == nil || got != "" || !strings.Contains(err.Error(), "--base is required") || strings.Contains(err.Error(), "set-head") {
+			t.Errorf("colocated=%v: jj repository got %q, %v", colocate, got, err)
+		}
+	}
+}
