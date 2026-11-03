@@ -660,3 +660,7 @@ plan and the wizard classifier; the plan names it (`stale_registrations`, reason
 Three tests that encoded the old rule were changed on purpose. `schemas/v3/tidy.schema.json` gains an optional field; `schemas/v1` and
 `schemas/v2` are unchanged. Tests use temporary repositories only; no `stw` was built or run on a real repository. Independent review of
 the exact head and the owner's acceptance are pending.
+
+Section 2 (#387): contract 3 already proves integration by a merged pull request head (`github-merged-head`, `--online`) and by patch-id
+(Specs 029 and 031); the plan now records `proof_policy.pr_proof` (`available` or `unavailable-offline`) and tests pin the exact-tip rule.
+The default plan (frozen v1/v2) keeps native ancestry only.
