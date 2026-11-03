@@ -66,6 +66,12 @@ func selectNativeGit(goos string, path, fallbacks []string, native func(string) 
 	return "", false
 }
 
+// nativeGitMissingIsFatal reports whether a missing native Git fails the test instead of
+// skipping it: mandatory CI sets STW_REQUIRE_NATIVE_SANDBOX=1 or STW_REQUIRE_JJ=1.
+func nativeGitMissingIsFatal(getenv func(string) string) bool {
+	return getenv("STW_REQUIRE_NATIVE_SANDBOX") == "1" || getenv("STW_REQUIRE_JJ") == "1"
+}
+
 // requireNativeGit makes "git" resolve to a native executable for the test, or skips
 // it with the reason "native Git required" on macOS when only the Apple launcher
 // exists. STW_REQUIRE_NATIVE_SANDBOX=1 or STW_REQUIRE_JJ=1 turn the skip into a failure.
@@ -74,7 +80,7 @@ func requireNativeGit(t *testing.T) {
 	dir, ok := selectNativeGit(runtime.GOOS, filepath.SplitList(os.Getenv("PATH")), nativeGitFallbacks, isNativeGit)
 	if !ok {
 		msg := "native Git required: only the Apple /usr/bin/git launcher was found; install one (for example `brew install git`) and put it first on PATH"
-		if os.Getenv("STW_REQUIRE_NATIVE_SANDBOX") == "1" || os.Getenv("STW_REQUIRE_JJ") == "1" {
+		if nativeGitMissingIsFatal(os.Getenv) {
 			t.Fatal(msg)
 		}
 		t.Skip(msg)
