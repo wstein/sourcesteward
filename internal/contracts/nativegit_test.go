@@ -70,3 +70,26 @@ func TestRequireNativeGitLeavesAUsableGitAlone(t *testing.T) {
 		t.Fatalf("git on PATH after requireNativeGit is %q (%v)", resolved, err)
 	}
 }
+
+func TestNativeGitMissingIsFatal(t *testing.T) {
+	cases := []struct {
+		name string
+		env  map[string]string
+		want bool
+	}{
+		{"neither set", nil, false},
+		{"sandbox empty", map[string]string{"STW_REQUIRE_NATIVE_SANDBOX": ""}, false},
+		{"jj empty", map[string]string{"STW_REQUIRE_JJ": ""}, false},
+		{"sandbox 0", map[string]string{"STW_REQUIRE_NATIVE_SANDBOX": "0"}, false},
+		{"sandbox 1", map[string]string{"STW_REQUIRE_NATIVE_SANDBOX": "1"}, true},
+		{"jj 1", map[string]string{"STW_REQUIRE_JJ": "1"}, true},
+		{"both 1", map[string]string{"STW_REQUIRE_NATIVE_SANDBOX": "1", "STW_REQUIRE_JJ": "1"}, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := nativeGitMissingIsFatal(func(k string) string { return c.env[k] }); got != c.want {
+				t.Fatalf("nativeGitMissingIsFatal = %v, want %v", got, c.want)
+			}
+		})
+	}
+}

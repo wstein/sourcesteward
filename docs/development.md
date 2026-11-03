@@ -47,7 +47,7 @@ Some tests skip locally with a reason instead of failing when a tool is missing:
 - Tests that run native Git (the real-Git fixtures of `internal/contracts` and `internal/cli`) need a native Git on
   macOS. They look for one after the Apple `/usr/bin/git` on PATH, then in `/opt/homebrew/bin`, `/usr/local/bin`
   and the Xcode and Command Line Tools directories, and skip with `native Git required` when only the Apple
-  launcher exists (`brew install git`). `STW_REQUIRE_NATIVE_SANDBOX=1` turns the skip into a failure.
+  launcher exists (`brew install git`). `STW_REQUIRE_NATIVE_SANDBOX=1` or `STW_REQUIRE_JJ=1` turns the skip into a failure.
 - The Pages packaging test needs the pinned Hugo (`python3 scripts/install-hugo.py`, or `HUGO`).
 - `scripts/test_release_toml.py` and the release contract tests need Python 3.11+ (`tomllib`);
   the macOS system Python is 3.9. Install a newer `python3` and put it first on PATH.
