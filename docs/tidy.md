@@ -28,6 +28,14 @@ A contract 3 plan records in `proof_policy.pr_proof` whether the merged pull req
 pull request equals the branch tip) could be used: `available` with `--online`, `unavailable-offline` without it, where the
 forge-free proofs (`patch-id` among them) still apply. The default plan proves integration by native ancestry only.
 
+`stw tidy plan --explain` (expert layer, [Spec 053](../specs/053-tidy-plan-clarity/spec.md)) adds one explanation per retained candidate:
+why it stays, which proof is missing and the command that would provide it. Without `--explain` the output is unchanged. The default
+text appends `Explain:`, `Why:` and `Next:` lines after the plan; `--contract 3 --json` adds the separate result field `explanations`
+(`name`, `reason`, `text`, `next_command`; it is not part of the plan identity). The default JSON contract is frozen, so `--explain
+--json` without `--contract 3` exits 2. Every reason has a text and a command (`integration-not-proven`, `needs-review`,
+`pr-head-mismatch`, `pr-target-mismatch`, `hosting-proof-unsupported`, `pr-ambiguous`, `history-override`, `unsupported-metadata`,
+`selected-base`, `symbolic-reference`, `workspace-used`, `remote-source-present`); any other reason gets a generic one.
+
 ## The tidy wizard
 
 `stw tidy` cleans up a whole workspace instead of one repository. It is for the person at a terminal; agents use `stw tidy plan`
