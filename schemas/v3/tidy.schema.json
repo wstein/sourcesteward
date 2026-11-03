@@ -2513,6 +2513,13 @@
           "pattern": "^/",
           "type": "string"
         },
+        "stale_registrations": {
+          "items": {
+            "$ref": "#/$defs/V3StaleRegistration"
+          },
+          "maxItems": 16384,
+          "type": "array"
+        },
         "state_dir": {
           "maxLength": 4096,
           "type": "string"
@@ -3373,6 +3380,41 @@
         "report_written",
         "entries",
         "omitted"
+      ],
+      "type": "object"
+    },
+    "V3StaleRegistration": {
+      "additionalProperties": false,
+      "properties": {
+        "head_oid": {
+          "maxLength": 64,
+          "pattern": "^([0-9a-f]{40}|[0-9a-f]{64})$",
+          "type": "string"
+        },
+        "head_ref": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "next_command": {
+          "const": "git worktree prune",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 4096,
+          "pattern": "^/",
+          "type": "string"
+        },
+        "reason": {
+          "const": "workspace-missing",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "head_ref",
+        "head_oid",
+        "reason",
+        "next_command"
       ],
       "type": "object"
     }

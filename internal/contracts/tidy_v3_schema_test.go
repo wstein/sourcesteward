@@ -307,3 +307,32 @@ func TestTidyV3SchemaPositiveModesAndExclusiveProvenance(t *testing.T) {
 		t.Fatal("owned provenance accepted under legacy mode")
 	}
 }
+
+// Issue 386: stale_registrations is an additive, optional, closed field of a reference plan.
+func TestTidyV3SchemaStaleRegistrationsAreAdditiveAndClosed(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy")
+	r := tidyV3SchemaPlan()
+	raw, _ := json.Marshal(r)
+	valid(t, s, raw)
+	if strings.Contains(string(raw), "stale_registrations") {
+		t.Fatalf("an absent list changed the plan bytes: %s", raw)
+	}
+	r.Plan.StaleRegistrations = []workspace.V3StaleRegistration{{Path: "/gone", HeadRef: "refs/heads/topic", HeadOID: strings.Repeat("0", 40), Reason: "workspace-missing", NextCommand: "git worktree prune"}}
+	raw, _ = json.Marshal(r)
+	valid(t, s, raw)
+	for name, mutate := range map[string]func(map[string]any){
+		"unknown-reason":  func(n map[string]any) { n["reason"] = "gone" },
+		"unknown-command": func(n map[string]any) { n["next_command"] = "git worktree remove --force" },
+		"relative-path":   func(n map[string]any) { n["path"] = "gone" },
+		"extra-field":     func(n map[string]any) { n["prune"] = true },
+		"missing-field":   func(n map[string]any) { delete(n, "head_oid") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			v := value(t, raw).(map[string]any)
+			mutate(v["plan"].(map[string]any)["stale_registrations"].([]any)[0].(map[string]any))
+			if s.Validate(v) == nil {
+				t.Fatal("invalid stale registration admitted")
+			}
+		})
+	}
+}
