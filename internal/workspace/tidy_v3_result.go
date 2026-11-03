@@ -410,6 +410,21 @@ func v3Snapshot(s Snapshot, source string) bool {
 	return validSnapshot(s) && n.Backend == "git" && n.WorkspaceRoot == source && v3CanonicalPath(n.RepositoryDir) && v3CanonicalPath(n.GitDir) && n.ChangeID == "" && n.OperationID == "" && v3OID(n.CommitID, n.ObjectFormat) && v3OID(s.BaseCommit, n.ObjectFormat) && s.BaseChange == "" && s.BaseSelector != "" && validText(s.BaseSelector) && v3Hash(s.ReferenceDigest) && v3Hash(s.RegistrationDigest) && v3Hash(s.SafetyDigest)
 }
 
+// validV3PRProof checks the recorded pull request proof availability against the plan: only a
+// reference plan has one, and it agrees with the online selection.
+func validV3PRProof(p V3Plan) bool {
+	if p.ProofPolicy == nil || p.ProofPolicy.PRProof == "" {
+		return true
+	}
+	switch p.ProofPolicy.PRProof {
+	case v3PRProofAvailable:
+		return p.Mode == "local-refs" && p.Online != nil
+	case v3PRProofUnavailable:
+		return p.Mode == "local-refs" && p.Online == nil
+	}
+	return false
+}
+
 // validV3StaleRegistrationList checks the shape of the stale registrations of a plan: only
 // reference plans carry them, canonical sorted paths, closed reason and command.
 func validV3StaleRegistrationList(p V3Plan) bool {
@@ -433,7 +448,7 @@ func validateV3Plan(p V3Plan, state, id string) error {
 	if e != nil {
 		return e
 	}
-	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || !validV3StaleRegistrationList(p) || p.ProofPolicy != nil && (p.Mode != "local-refs" && p.Mode != "owned-retirement" && p.Mode != "legacy-retirement" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
+	if p.SchemaVersion != 3 || p.Policy != "tidy-git-v3" || !v3Mode(p.Mode) || p.StateDir != state || p.PlanID != id || p.Digest != digest || !v3Hash(p.Digest) || !v3CanonicalPath(p.SourcePath) || !v3Snapshot(p.Expected, p.SourcePath) || p.SelectedRefs == nil || p.Candidates == nil || !validStrings(p.Effects) || p.Effects == nil || !reflect.DeepEqual(p.RecoveryLimits, v3RecoveryLimits()) || !reflect.DeepEqual(p.Effects, v3PlanEffects(p)) || !validV3ConfigNotes(p.ConfigNotes) || !validV3PRProof(p) || !validV3StaleRegistrationList(p) || p.ProofPolicy != nil && (p.Mode != "local-refs" && p.Mode != "owned-retirement" && p.Mode != "legacy-retirement" || !validV3ProofPolicy(*p.ProofPolicy)) || p.Review != nil && (p.Mode != "local-refs" || !validV3ReviewBinding(*p.Review, p)) {
 		return bad()
 	}
 	if state == "" {
