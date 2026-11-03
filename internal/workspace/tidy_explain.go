@@ -24,15 +24,17 @@ type ExplainContext struct {
 	PRProof string
 	// Contract3 is true when the plan is a contract 3 plan, which already tried the forge-free proofs.
 	Contract3 bool
+	// Backend is "jj" for a jj plan; its next commands are jj commands, not git commands.
+	Backend string
 }
 
-// ExplainedReasons lists every reason a retained candidate can carry. Each has an explanation text
-// and a next command; any other reason gets the generic explanation. A test keeps the list and the
-// explanations equal.
+// ExplainedReasons lists every reason a retained candidate can carry (Git and jj). Each has an
+// explanation text and a next command; any other reason gets the generic explanation. Tests keep the
+// list equal to the explanations and to the reasons the planners produce.
 var ExplainedReasons = []string{
-	"integration-not-proven", "needs-review", "pr-head-mismatch", "pr-target-mismatch", "hosting-proof-unsupported",
+	"integration-not-proven", "needs-review", "reviewed-keep", "pr-head-mismatch", "pr-target-mismatch", "hosting-proof-unsupported",
 	"pr-ambiguous", "history-override", "unsupported-metadata", "selected-base", "symbolic-reference", "workspace-used",
-	"remote-source-present",
+	"remote-source-present", "not-integrated", "remote-counterpart", "recovery-reference", "ambiguous-target",
 }
 
 // ExplainV3 returns one explanation per retained candidate of a contract 3 plan, in plan order.
@@ -60,7 +62,7 @@ func ExplainV3(p V3Plan) []V3Explanation {
 
 // ExplainTidyPlan returns one explanation per retained candidate of a default (contract 1/2) plan.
 func ExplainTidyPlan(p TidyPlanRecord) []V3Explanation {
-	ctx := ExplainContext{Source: p.SourcePath, Base: p.Expected.BaseSelector}
+	ctx := ExplainContext{Source: p.SourcePath, Base: p.Expected.BaseSelector, Backend: p.Backend}
 	out := []V3Explanation{}
 	for _, c := range p.Candidates {
 		if c.Decision == "retain" {
@@ -80,35 +82,41 @@ func ExplainRetention(ctx ExplainContext, name, oid, reason string, paths, revie
 	if remote == "" {
 		remote = "origin"
 	}
+	online := plan + " --online --remote " + shellWord(remote)
+	// A report directory must be an absolute, existing, canonical path: create it under the working
+	// directory and pass its physical path.
+	reportDir := `"$(pwd -P)/tidy-review"`
+	jj := "jj -R " + src + " "
+	isJJ := ctx.Backend == "jj"
 	e := V3Explanation{Name: name, Reason: reason}
 	switch reason {
 	case "integration-not-proven":
 		switch {
 		case !ctx.Contract3:
 			e.Text = "It stays because it is not an ancestor of the base, and this plan proves integration by ancestry only; patch-id and merged pull request proofs are missing."
-			e.NextCommand = plan + " --online"
+			e.NextCommand = online
 		case ctx.PRProof == v3PRProofUnavailable:
 			e.Text = "It stays because no ancestry, patch-id or merge proof holds, and the merged pull request proof was not tried because the plan is offline."
-			e.NextCommand = plan + " --online"
+			e.NextCommand = online
 		default:
 			e.Text = "It stays because no ancestry, patch-id, merge or merged pull request head proof shows that all of its commits are in the base."
 			e.NextCommand = "git -C " + src + " log --oneline " + base + ".." + ref
 		}
 	case "needs-review":
 		e.Text = "It stays because a proof matched only in part" + reasonsSuffix(reviewReasons) + "; a reviewer decision or a narrower proof is missing."
-		e.NextCommand = plan + " --report-dir ./tidy-review"
+		e.NextCommand = "mkdir -p " + reportDir + " && " + plan + " --report-dir " + reportDir
 	case "pr-head-mismatch":
 		e.Text = "It stays because the merged pull request of this branch has another head, so the tip changed after the merge."
 		e.NextCommand = "git -C " + src + " log --oneline " + base + ".." + ref
 	case "pr-target-mismatch":
 		e.Text = "It stays because the merged pull request result is not in the selected base."
-		e.NextCommand = plan + " --online"
+		e.NextCommand = online
 	case "hosting-proof-unsupported":
 		e.Text = "It stays because the merged pull request proof is unsupported for this remote (not one canonical GitHub URL, or a fork pull request)."
 		e.NextCommand = "git -C " + src + " remote -v"
 	case "pr-ambiguous":
-		e.Text = "It stays because several merged pull requests match its head and none is selected."
-		e.NextCommand = plan + " --online --pr " + shellWord(oid+"=NUMBER")
+		e.Text = "It stays because several merged pull requests match its head and none is selected; the exact pull request number is missing."
+		e.NextCommand = "gh pr list --state merged --search " + shellWord(oid) + " --json number,headRefOid"
 	case "history-override":
 		e.Text = "It stays because grafts or a shallow history make every ancestry proof untrustworthy."
 		e.NextCommand = "git -C " + src + " rev-parse --is-shallow-repository"
@@ -118,15 +126,36 @@ func ExplainRetention(ctx ExplainContext, name, oid, reason string, paths, revie
 	case "selected-base":
 		e.Text = "It stays because it is the selected base or stands at the base commit; there is nothing to prove."
 		e.NextCommand = "git -C " + src + " for-each-ref --format='%(refname)' refs/remotes"
+		if isJJ {
+			e.NextCommand = jj + "log -r " + base
+		}
 	case "symbolic-reference":
 		e.Text = "It stays because it is a symbolic reference or the target of one, not a branch of its own."
 		e.NextCommand = "git -C " + src + " for-each-ref --format='%(refname) %(symref)' refs/heads"
 	case "workspace-used":
 		e.Text = "It stays because a worktree with an existing directory uses it" + pathSuffix(paths) + "."
 		e.NextCommand = "git -C " + src + " worktree list"
+		if isJJ {
+			e.NextCommand = jj + "workspace list"
+		}
 	case "remote-source-present":
 		e.Text = "It stays because the branch still exists on the remote."
 		e.NextCommand = "git -C " + src + " ls-remote --heads " + shellWord(remote)
+	case "reviewed-keep":
+		e.Text = "It stays because a reviewer decided to keep it; a later decision record that marks its tip integrated or dropped is missing."
+		e.NextCommand = "git -C " + src + " log --oneline " + base + ".." + ref
+	case "not-integrated":
+		e.Text = "It stays because it is not an ancestor of the base, and a jj plan proves integration by ancestry only."
+		e.NextCommand = jj + "log -r " + shellWord(ctx.Base+".."+name)
+	case "remote-counterpart":
+		e.Text = "It stays because a remote bookmark of the same name exists, so the work may live only there."
+		e.NextCommand = jj + "bookmark list --all-remotes " + ref
+	case "recovery-reference":
+		e.Text = "It stays because it is a stw recovery bookmark, which is kept until it is restored or removed by hand."
+		e.NextCommand = jj + "bookmark list " + shellWord("glob:stw-recovery-*")
+	case "ambiguous-target":
+		e.Text = "It stays because the bookmark does not point at exactly one commit and change, so no proof can be tied to it."
+		e.NextCommand = jj + "bookmark list " + ref
 	default:
 		e.Text = "It stays for the reason " + shellWord(reason) + "; no recorded proof allows its deletion."
 		e.NextCommand = plan
