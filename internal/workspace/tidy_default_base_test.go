@@ -54,7 +54,21 @@ func TestDefaultTidyBaseRefusesATargetOutsideOrigin(t *testing.T) {
 }
 
 func TestDefaultTidyBaseOutsideARepository(t *testing.T) {
-	if got, err := DefaultTidyBase(context.Background(), gitTempDir(t)); err == nil || !strings.Contains(err.Error(), "--base is required") {
+	dir := gitTempDir(t)
+	for name, path := range map[string]string{"a directory without a repository": dir, "a missing directory": dir + "/missing"} {
+		if got, err := DefaultTidyBase(context.Background(), path); err == nil || !strings.Contains(err.Error(), "--base is required") {
+			t.Errorf("%s: got %q, %v", name, got, err)
+		}
+	}
+}
+
+// The command passes the path as typed, which is "." without a PATH.
+func TestDefaultTidyBaseAcceptsARelativePath(t *testing.T) {
+	dir := originHeadFixture(t)
+	gitFixture(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/trunk")
+	t.Chdir(dir)
+	got, err := DefaultTidyBase(context.Background(), ".")
+	if err != nil || got != "refs/remotes/origin/trunk" {
 		t.Fatalf("got %q, %v", got, err)
 	}
 }
