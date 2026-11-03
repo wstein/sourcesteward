@@ -27,11 +27,37 @@ var tidyPlanTimeout = planObservationTimeout
 func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
 	ctx, cancel := context.WithTimeout(ctx, tidyPlanTimeout)
 	defer cancel()
+	// Planning reads core.hooksPath, submodule.* and gitlinks read-only (Spec
+	// 031): the session neutralizes them on every command and records notes.
+	ctx, session, closeSession, err := withPlanningSession(ctx)
+	if err != nil {
+		return boundedTidy(failTidy(newTidyResult("tidy-plan"), err))
+	}
+	defer closeSession()
 	if o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
-		return boundedTidy(defaultRetirementCoordinator().plan(ctx, o))
+		return boundedTidy(withNeutralizedConfigLimit(defaultRetirementCoordinator().plan(ctx, o), session))
 	}
 	c := tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}
-	return boundedTidy(c.plan(ctx, o))
+	return boundedTidy(withNeutralizedConfigLimit(c.plan(ctx, o), session))
+}
+
+// withNeutralizedConfigLimit warns, instead of refusing, that a successful plan
+// read a repository whose hooks or submodule configuration it neutralized.
+func withNeutralizedConfigLimit(r TidyResult, session *planningSession) TidyResult {
+	if r.Status != "ok" {
+		return r
+	}
+	var classes []string
+	for _, n := range session.configNotes() {
+		switch n.KeyClass {
+		case "core.hooksPath", "default-hooks", "core.fsmonitor", "submodule.*", "gitlinks":
+			classes = append(classes, n.KeyClass)
+		}
+	}
+	if len(classes) > 0 {
+		r.Limitations = append(r.Limitations, "Read-only plan: "+strings.Join(classes, ", ")+" neutralized; no hook, helper or submodule command ran.")
+	}
+	return r
 }
 func selectTidyAdapter(backend string) (tidyAdapter, error) {
 	switch backend {
