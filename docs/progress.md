@@ -664,3 +664,6 @@ the exact head and the owner's acceptance are pending.
 Section 2 (#387): contract 3 already proves integration by a merged pull request head (`github-merged-head`, `--online`) and by patch-id
 (Specs 029 and 031); the plan now records `proof_policy.pr_proof` (`available` or `unavailable-offline`) and tests pin the exact-tip rule.
 The default plan (frozen v1/v2) keeps native ancestry only.
+
+Section 3 (#388): `stw tidy plan --explain` appends one sentence per retained candidate that names the missing proof and the next command;
+contract 3 carries them in the additive `explanations` field outside the plan digest. Output without the flag is unchanged.
