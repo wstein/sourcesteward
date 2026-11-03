@@ -75,7 +75,7 @@ The default plan (`stw tidy plan --base`, contract 1/2) proves integration by na
   never replaced and never triggers the read.
 - The target must be below `refs/remotes/origin/` and name a commit. Otherwise the command exits 2 and the message names
   `git remote set-head origin -a` and `--base REF`. Outside a Git repository the old `--base is required` message remains.
-- No other remote, `main`, `master` or `HEAD` is guessed. jj repositories and the wizard layer (its own derivation) are unchanged.
+- No other remote, `main`, `master` or `HEAD` is guessed. jj repositories (also colocated ones, decided by the ownership inspection) and the wizard layer (its own derivation) are unchanged: a jj repository without `--base` still gets `--base is required`.
 - The plan output carries the used base as `Base selector`, so the choice is visible and bound into the plan.
 
 ## Limits
