@@ -14,8 +14,11 @@ PATH defaults to the current directory. `--ref` is repeatable and literal; omitt
 all bounded local references. Git selections use full names such as `refs/heads/finished-task`;
 jj selections use bookmark names such as `finished-task`. Names are not shell commands, globs or arbitrary revsets.
 An unknown or duplicate selected reference refuses the plan. Git base selectors also require a full reference name or full commit ID.
-The base is required; SourceSteward
-does not infer `main`, `master` or `origin`.
+Without `--base` the base is the remote default branch: the target of the symbolic reference
+`refs/remotes/origin/HEAD` (for example `refs/remotes/origin/main`), read locally without network access
+([Spec 053](../specs/053-tidy-plan-clarity/spec.md)). When `origin/HEAD` is not set, points at a branch that does not exist or leaves
+the origin namespace, the command exits 2 with a message that names `git remote set-head origin -a`; SourceSteward still
+does not guess `main`, `master` or another remote. The plan output shows the base that was used (`Base selector`).
 
 A registered worktree whose directory is gone protects no branch (reason `workspace-missing`, [Spec 053](../specs/053-tidy-plan-clarity/spec.md)):
 the branch is judged by the other rules, and a worktree with an existing directory still gives `workspace-used`. Only a registration
