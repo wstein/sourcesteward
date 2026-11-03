@@ -50,7 +50,9 @@ func TestGitTidyNativeAncestryAndNonProofs(t *testing.T) {
 	}
 }
 
-func TestGitTidyProtectsDetachedAndPrunableWorktrees(t *testing.T) {
+// A detached worktree with an existing directory protects the commit's branch. Once its directory
+// is gone (prunable) it protects nothing (issue 386).
+func TestGitTidyProtectsDetachedWorktreesUntilTheirDirectoryIsGone(t *testing.T) {
 	d := fixtureGit(t)
 	root := gitFixture(t, d, "rev-parse", "HEAD")
 	gitFixture(t, d, "branch", "integrated", root)
@@ -68,8 +70,14 @@ func TestGitTidyProtectsDetachedAndPrunableWorktrees(t *testing.T) {
 			t.Fatal(e)
 		}
 		for _, c := range o.Candidates {
-			if c.Name == "refs/heads/integrated" && (c.Decision != "retain" || len(c.WorkspacePaths) != 1 || c.WorkspacePaths[0] != linked) {
+			if c.Name != "refs/heads/integrated" {
+				continue
+			}
+			if !missing && (c.Decision != "retain" || len(c.WorkspacePaths) != 1 || c.WorkspacePaths[0] != linked) {
 				t.Fatalf("registered detached target unprotected: %+v", c)
+			}
+			if missing && (c.Decision != "delete" || len(c.WorkspacePaths) != 0) {
+				t.Fatalf("a registration whose directory is gone still protects: %+v", c)
 			}
 		}
 	}
