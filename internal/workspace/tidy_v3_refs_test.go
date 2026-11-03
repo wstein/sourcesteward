@@ -333,8 +333,9 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 			t.Fatal("provider discovery attempted for a workspace-protected head")
 		}
 	}
-	// A registration whose directory went missing (prunable, unlocked, real parent) no longer blocks
-	// the plan (issue 284): its native registration keeps protecting its head and ref.
+	// A registration whose directory went missing (prunable, unlocked) no longer blocks the plan
+	// (issue 284) and protects nothing (issue 386): its detached head is judged by the other
+	// rules and listed as a stale registration; the locked registration keeps protecting.
 	if err := os.RemoveAll(detached); err != nil {
 		t.Fatal(err)
 	}
@@ -349,18 +350,24 @@ func TestTidyV3AllRegisteredWorkspacesProtectBeforeProviderLookup(t *testing.T) 
 	}
 	protectedHeads := 0
 	for _, candidate := range r.Plan.Candidates {
-		if candidate.OID == rows[0].HeadOID || candidate.OID == rows[1].HeadOID {
+		if candidate.OID == rows[0].HeadOID && candidate.Reason == "workspace-used" {
+			t.Fatalf("a missing workspace still protects %+v", candidate)
+		}
+		if candidate.OID == rows[1].HeadOID {
 			protectedHeads++
 			if candidate.Decision != "retain" || candidate.Reason != "workspace-used" || len(candidate.WorkspacePaths) != 1 {
-				t.Fatalf("stale registration lost its protection %+v", candidate)
+				t.Fatalf("the locked registration lost its protection %+v", candidate)
 			}
 		}
 	}
 	if protectedHeads == 0 {
 		t.Fatal("vacuous: no workspace-protected candidate")
 	}
+	if len(r.Plan.StaleRegistrations) != 1 || r.Plan.StaleRegistrations[0].Path != detached {
+		t.Fatalf("stale registrations: %+v", r.Plan.StaleRegistrations)
+	}
 	for _, target := range s.targets[len(s.targets)-1] {
-		if target == rows[0].HeadOID || target == rows[1].HeadOID {
+		if target == rows[1].HeadOID {
 			t.Fatal("provider discovery attempted for a workspace-protected head")
 		}
 	}
