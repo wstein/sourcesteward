@@ -67,6 +67,17 @@ The default plan (`stw tidy plan --base`, contract 1/2) proves integration by na
   command as typed, not Go-quoted, so it can be copied; every non-printable character (control, bidirectional and zero-width
   format characters, U+2028/2029, invalid UTF-8 bytes) is escaped as `\x{HEX}`, so the line never reads differently from what it runs; a test parses the printed line with a shell and compares the arguments.
 
+## Section 4: default base from origin/HEAD (#389)
+
+- Without `--base`, the expert layer of `stw tidy plan` (default and `--contract 3`, retirement included) uses the target of the
+  symbolic reference `refs/remotes/origin/HEAD`, resolved by `workspace.DefaultTidyBase`: two sandboxed native Git reads
+  (`symbolic-ref --quiet`, `rev-parse --verify`) through the hardened runner, no network, no write. An explicit `--base` is
+  never replaced and never triggers the read.
+- The target must be below `refs/remotes/origin/` and name a commit. Otherwise the command exits 2 and the message names
+  `git remote set-head origin -a` and `--base REF`. Outside a Git repository the old `--base is required` message remains.
+- No other remote, `main`, `master` or `HEAD` is guessed. jj repositories and the wizard layer (its own derivation) are unchanged.
+- The plan output carries the used base as `Base selector`, so the choice is visible and bound into the plan.
+
 ## Limits
 
 A gone registration of a directory on an unmounted volume looks like a deleted one to Git; lock the worktree (`git worktree lock`)
