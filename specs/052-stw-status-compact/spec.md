@@ -30,10 +30,8 @@ stw status [PATH] [--long|-l] [--offline] [--fetch] [--worktrees] [--rules [--ru
 
 ### 1. Needs Action Block
 - **Priority ordering**: preserves red, yellow, green, blue, violet order.
-- **Red, Yellow & Green (High/Medium Priority)**: printed with the action description and its accompanying `run:` command or `hint:`.
-- **Blue & Violet (Low/Info Priority)**:
-  - Printed with the icon, level, repository, and descriptive text.
-  - Individual `run:` lines for `blue` and `violet` items are omitted in compact mode to preserve vertical space; full commands are available via `--long`.
+- **Single-line findings**: each item is rendered on a single line: `[icon] [level] [repo] [text] [URL]`.
+- **No `run:` or `hint:` commands**: individual remedy instructions and `run:` lines are omitted across all priority levels in compact mode to fit the complete status output within a standard terminal without scrolling. All remedy commands and hints are available via `--long` (`-l`).
 
 ### 2. Repositories Block
 In default compact mode, each repository is rendered as a **single line**:

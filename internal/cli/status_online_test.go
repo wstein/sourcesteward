@@ -176,7 +176,8 @@ func TestOnlineTextSections(t *testing.T) {
 		"remote:",
 		"issues:",
 		"    stash 1",
-		"run: stw pulls --repo wstein/workharbor",
+		"     run:",
+		"     hint:",
 	} {
 		if strings.Contains(out, unwanted) {
 			t.Errorf("compact output must not contain %q in\n%s", unwanted, out)
@@ -251,8 +252,13 @@ func TestOnlineTextCapsALongSectionAndKeepsTheCount(t *testing.T) {
 		if got := strings.Count(out, "PR #"); got != 10 {
 			t.Errorf("%d lines of the section, want the cap of 10\n%s", got, out)
 		}
-		if !strings.Contains(out, more+"     run: stw pulls --repo acme/repok\n") || !strings.Contains(out, fmt.Sprintf("Needs action: %d items", repos)) {
-			t.Errorf("the omitted lines are counted and drilled down\n%s", out)
+		if !strings.Contains(out, more) || strings.Contains(out, "run: stw pulls --repo acme/repok") || !strings.Contains(out, fmt.Sprintf("Needs action: %d items", repos)) {
+			t.Errorf("the omitted lines are counted in compact output\n%s", out)
+		}
+		rep.LongRequested = true
+		outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
+		if !strings.Contains(outLong, more+"     run: stw pulls --repo acme/repok\n") {
+			t.Errorf("the omitted lines have drill down in long output\n%s", outLong)
 		}
 	}
 }
@@ -263,8 +269,13 @@ func TestOnlineTextHintOfAnItemWithoutACommand(t *testing.T) {
 	rep.Remote.Repos[0].CIRelease = nil
 	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	if !strings.Contains(out, "tag v9.9.9 has no release\n     hint: see the repository's docs/releasing.md") {
-		t.Errorf("%s", out)
+	if !strings.Contains(out, "tag v9.9.9 has no release") || strings.Contains(out, "hint:") {
+		t.Errorf("compact output must show item without hint:\n%s", out)
+	}
+	rep.LongRequested = true
+	outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
+	if !strings.Contains(outLong, "tag v9.9.9 has no release\n     hint: see the repository's docs/releasing.md") {
+		t.Errorf("long output must show hint:\n%s", outLong)
 	}
 }
 
@@ -367,8 +378,13 @@ func TestOnlineTextGroupsAndNamesThreeIdentifiers(t *testing.T) {
 	}
 	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	if !strings.Contains(out, "5 PRs have conflicts: #1, #2, #3, +2 more\n     run: stw pulls --repo wstein/crewbook\n") {
-		t.Errorf("%s", out)
+	if !strings.Contains(out, "5 PRs have conflicts: #1, #2, #3, +2 more") || strings.Contains(out, "run: stw pulls --repo wstein/crewbook") {
+		t.Errorf("compact output must show group without run:\n%s", out)
+	}
+	rep.LongRequested = true
+	outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
+	if !strings.Contains(outLong, "5 PRs have conflicts: #1, #2, #3, +2 more\n     run: stw pulls --repo wstein/crewbook\n") {
+		t.Errorf("long output must show run command:\n%s", outLong)
 	}
 }
 
@@ -421,8 +437,13 @@ func TestOnlineTextGroupsIssuesOfOneKind(t *testing.T) {
 	}
 	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	if !strings.Contains(out, "3 security issues: #12, #15, #19\n     run: stw issues --repo wstein/sourcesteward\n") {
-		t.Errorf("%s", out)
+	if !strings.Contains(out, "3 security issues: #12, #15, #19") || strings.Contains(out, "run: stw issues --repo wstein/sourcesteward") {
+		t.Errorf("compact output must show group without run:\n%s", out)
+	}
+	rep.LongRequested = true
+	outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
+	if !strings.Contains(outLong, "3 security issues: #12, #15, #19\n     run: stw issues --repo wstein/sourcesteward\n") {
+		t.Errorf("long output must show run command:\n%s", outLong)
 	}
 }
 
