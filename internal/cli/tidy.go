@@ -15,6 +15,11 @@ import (
 )
 
 func tidyCommand() *cobra.Command { return tidyCommandWith(workspace.PlanTidy) }
+
+// tidyDefaultBase resolves the base of an expert `tidy plan` without --base (Spec 053); a variable so
+// a test can replace the Git read.
+var tidyDefaultBase = workspace.DefaultTidyBase
+
 func tidyCommandWith(run func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult) *cobra.Command {
 	return tidyCommandWithOperations(run, workspace.ApplyTidy)
 }
@@ -51,6 +56,13 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 		}
 		if layer == tidyWizard {
 			return runTidyWizardPlan(cmd, &wizard, structured, v3.Timeout)
+		}
+		if options.Base == "" && !cmd.Flags().Changed("base") {
+			base, err := tidyDefaultBase(cmd.Context(), workspacePath(args))
+			if err != nil {
+				return err
+			}
+			options.Base = base
 		}
 		if cmd.Flags().Changed("contract") {
 			if contract != "3" {
@@ -96,7 +108,7 @@ func tidyCommandWithRestoreOperations(run func(context.Context, workspace.TidyPl
 		result := run(cmd.Context(), options)
 		return writeTidyResultExplained(cmd, result, structured, explain)
 	}}
-	plan.Flags().StringVar(&options.Base, "base", "", "Required literal native integration base; no inferred trunk")
+	plan.Flags().StringVar(&options.Base, "base", "", "Literal native integration base; without it the target of refs/remotes/origin/HEAD, or an error naming `git remote set-head origin -a`")
 	plan.Flags().StringArrayVar(&options.Refs, "ref", nil, "Select a literal local branch/bookmark name (repeatable; otherwise all bounded local references)")
 	plan.Flags().StringVar(&options.StateDir, "state-dir", "", "Existing private mode0700 state directory; optional for reference planning (omission makes it stateless), required for retirement")
 	plan.Flags().StringVar(&options.Task, "task", "", "Select an exactly owned completed task for retirement")
