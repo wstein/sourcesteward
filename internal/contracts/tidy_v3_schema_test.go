@@ -336,3 +336,25 @@ func TestTidyV3SchemaStaleRegistrationsAreAdditiveAndClosed(t *testing.T) {
 		})
 	}
 }
+
+// Issue 387: proof_policy.pr_proof is additive, optional and closed.
+func TestTidyV3SchemaPullRequestProofAvailabilityIsClosed(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy")
+	r := tidyV3SchemaPlan()
+	r.Plan.ProofPolicy = &workspace.V3ProofPolicy{Version: 1, Kinds: []string{"ancestor", "patch-id"}}
+	raw, _ := json.Marshal(r)
+	valid(t, s, raw)
+	if strings.Contains(string(raw), "pr_proof") {
+		t.Fatalf("an absent availability changed the plan bytes: %s", raw)
+	}
+	for _, word := range []string{"available", "unavailable-offline"} {
+		r.Plan.ProofPolicy.PRProof = word
+		raw, _ = json.Marshal(r)
+		valid(t, s, raw)
+	}
+	r.Plan.ProofPolicy.PRProof = "maybe"
+	raw, _ = json.Marshal(r)
+	if s.Validate(value(t, raw)) == nil {
+		t.Fatal("unknown availability accepted")
+	}
+}
