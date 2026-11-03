@@ -30,12 +30,18 @@ func DefaultTidyBase(ctx context.Context, path string) (string, error) {
 		return "", err
 	}
 	defer closeSession()
+	notARepository := errors.New("--base is required: the default base needs a Git repository whose " + originHeadRef + " is set")
+	source, err := canonicalSource(path)
+	if err != nil {
+		return "", notARepository
+	}
+	path = source
 	out, code, err := runSandboxed(ctx, bin, []string{"--no-replace-objects", "rev-parse", "--git-dir"}, path, nil, nil)
 	if err != nil {
 		return "", err
 	}
 	if code != 0 || strings.TrimSpace(out) == "" {
-		return "", errors.New("--base is required: the default base needs a Git repository whose " + originHeadRef + " is set")
+		return "", notARepository
 	}
 	out, code, err = runSandboxed(ctx, bin, []string{"--no-replace-objects", "symbolic-ref", "--quiet", originHeadRef}, path, nil, nil)
 	if err != nil {
