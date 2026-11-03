@@ -300,6 +300,12 @@
       "status": "implemented",
       "spec": "../specs/052-stw-status-compact/spec.md",
       "evidence": null
+    },
+    {
+      "id": "053-tidy-plan-clarity",
+      "status": "implemented",
+      "spec": "../specs/053-tidy-plan-clarity/spec.md",
+      "evidence": "../docs/progress.md#spec-053-tidy-plan-clarity-source-candidate-review-and-acceptance-pending-2026-11-03"
     }
   ]
 }
