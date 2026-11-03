@@ -29,7 +29,7 @@ pull request equals the branch tip) could be used: `available` with `--online`, 
 forge-free proofs (`patch-id` among them) still apply. The default plan proves integration by native ancestry only.
 
 `stw tidy plan --explain` (expert layer, [Spec 053](../specs/053-tidy-plan-clarity/spec.md)) adds one explanation per retained candidate:
-why it stays, which proof is missing and the command that would provide it. Without `--explain` the output is unchanged. The default
+why it stays, which proof is missing and the command that would provide it (Git and jj reasons, jj plans get `jj` commands). Without `--explain` the output is unchanged. The default
 text appends `Explain:`, `Why:` and `Next:` lines after the plan; `--contract 3 --json` adds the separate result field `explanations`
 (`name`, `reason`, `text`, `next_command`; it is not part of the plan identity). The default JSON contract is frozen, so `--explain
 --json` without `--contract 3` exits 2. Every reason has a text and a command (`integration-not-proven`, `needs-review`,
