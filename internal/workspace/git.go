@@ -24,7 +24,12 @@ import (
 
 type gitAdapter struct{}
 
+// gitExecutable returns the native Git for sandboxed commands. On macOS it searches
+// itself (git_discovery.go) so PATH needs no change; elsewhere it is the first Git on PATH.
 func gitExecutable() (string, error) {
+	if runtime.GOOS == "darwin" {
+		return discoverNativeGit()
+	}
 	p, err := exec.LookPath("git")
 	if err == nil {
 		p, err = filepath.Abs(p)
@@ -34,9 +39,6 @@ func gitExecutable() (string, error) {
 	}
 	if err != nil {
 		return "", failure("git-unavailable", "cannot resolve the supported Git executable")
-	}
-	if runtime.GOOS == "darwin" && p == "/usr/bin/git" {
-		return "", failure("git-sandbox-unavailable", "select a native Git executable on PATH; the Apple /usr/bin/git launcher cannot run inside the required executable sandbox")
 	}
 	return p, nil
 }
@@ -73,7 +75,7 @@ func gitRead(ctx context.Context, bin, dir string, args ...string) (string, erro
 
 func gitExecutionError(err error) error {
 	if errors.Is(err, errNativeSandboxUnavailable) {
-		return failure("git-sandbox-unavailable", "native Git workspace operations require an available filesystem and network sandbox; select a native Git executable on PATH")
+		return failure("git-sandbox-unavailable", "native Git workspace operations require an available filesystem and network sandbox")
 	}
 	if errors.Is(err, errNativeOutputLimit) {
 		return failure("git-output-limit", "native Git workspace evidence exceeded the 64 KiB command output bound")
