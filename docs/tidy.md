@@ -20,7 +20,7 @@ does not infer `main`, `master` or `origin`.
 A registered worktree whose directory is gone protects no branch (reason `workspace-missing`, [Spec 053](../specs/053-tidy-plan-clarity/spec.md)):
 the branch is judged by the other rules, and a worktree with an existing directory still gives `workspace-used`. Only a registration
 that Git marks `prunable` and that is not locked counts as gone. The plan names such registrations (contract 3: `plan.stale_registrations`
-with `path`, `head_ref`, `head_oid`, `reason` and `next_command`; the default plan: one limitation line each, at most 16 and a count) and
+with `path`, `head_ref`, `head_oid`, `reason` and `next_command`, and one `Stale registration:` line each in its text; the default plan: one limitation line each, at most 16 and a count) and
 proposes `git worktree prune` as a separate step that planning never runs.
 
 ## The tidy wizard

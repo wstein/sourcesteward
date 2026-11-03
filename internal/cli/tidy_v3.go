@@ -404,6 +404,9 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 		if p.Online != nil {
 			fmt.Fprintf(&text, "Online repository: host=%q name=%q id=%d node_id=%q remote=%q\n", p.Online.Repository.Host, p.Online.Repository.Name, p.Online.Repository.ID, p.Online.Repository.NodeID, p.Online.Remote)
 		}
+		for _, s := range p.StaleRegistrations {
+			fmt.Fprintf(&text, "Stale registration: %q head_ref=%q head_oid=%q reason=%q next=%q\n", s.Path, s.HeadRef, s.HeadOID, s.Reason, s.NextCommand)
+		}
 		for _, c := range p.Candidates {
 			fmt.Fprintf(&text, "Candidate: %q kind=%q oid=%q decision=%q reason=%q proof=%q\n", c.Name, c.Kind, c.OID, c.Decision, c.Reason, c.Proof)
 			for _, path := range c.WorkspacePaths {
