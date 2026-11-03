@@ -385,6 +385,9 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 		fmt.Fprintf(&text, "Plan: %q\nDigest: %q\nMode: %q\nSource: %q\nState directory: %q\nBase selector: %q\nBase commit: %q\n", p.PlanID, p.Digest, p.Mode, p.SourcePath, p.StateDir, p.Expected.BaseSelector, p.Expected.BaseCommit)
 		if pol := p.ProofPolicy; pol != nil {
 			fmt.Fprintf(&text, "Proof policy: version=%d kinds=%q accept_whitespace_differences=%t\n", pol.Version, pol.Kinds, pol.AcceptWhitespaceDifferences)
+			if pol.PRProof != "" {
+				fmt.Fprintf(&text, "Pull request proof: %q\n", pol.PRProof)
+			}
 		}
 		if rv := p.Review; rv != nil {
 			fmt.Fprintf(&text, "Review bounds: max_entries=%d max_bytes=%d max_diff_bytes=%d\n", rv.MaxEntries, rv.MaxBytes, rv.MaxDiffBytes)

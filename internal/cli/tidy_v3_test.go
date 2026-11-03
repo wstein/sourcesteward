@@ -564,3 +564,22 @@ func TestTidyV3TextNamesStaleRegistrations(t *testing.T) {
 		t.Fatalf("line without a stale registration:\n%s", human.String())
 	}
 }
+
+func TestTidyV3TextNamesThePullRequestProofAvailability(t *testing.T) {
+	r := workspace.V3Result{SchemaVersion: 3, Command: "tidy-plan", Status: "ok", Backend: "git", Plan: &workspace.V3Plan{ProofPolicy: &workspace.V3ProofPolicy{Version: 1, Kinds: []string{"patch-id"}, PRProof: "unavailable-offline"}}}
+	var human bytes.Buffer
+	if err := renderTidyV3Text(&human, r); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(human.String(), "Pull request proof: \"unavailable-offline\"\n") {
+		t.Fatalf("availability missing:\n%s", human.String())
+	}
+	r.Plan.ProofPolicy.PRProof = ""
+	human.Reset()
+	if err := renderTidyV3Text(&human, r); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(human.String(), "Pull request proof") {
+		t.Fatalf("line for a plan without availability:\n%s", human.String())
+	}
+}

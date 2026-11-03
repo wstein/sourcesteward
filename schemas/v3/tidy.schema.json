@@ -2462,6 +2462,13 @@
               "type": "array",
               "uniqueItems": true
             },
+            "pr_proof": {
+              "enum": [
+                "available",
+                "unavailable-offline"
+              ],
+              "type": "string"
+            },
             "version": {
               "const": 1
             }
