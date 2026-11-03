@@ -84,8 +84,15 @@ func traceCommand(ctx context.Context, cmd *exec.Cmd) func() {
 		return func() {}
 	}
 	args := cmd.Args
-	// Under the Linux sandbox the Git command follows the "--" of the sandbox arguments.
-	if filepath.Base(cmd.Path) != "git" {
+	// Under the Linux sandbox the Git command follows the "--" of the sandbox arguments; under
+	// the macOS sandbox it follows `-p <profile>`.
+	switch filepath.Base(cmd.Path) {
+	case "git":
+	case "sandbox-exec":
+		if len(args) >= 3 && args[1] == "-p" {
+			args = args[3:]
+		}
+	default:
 		for i, a := range args {
 			if a == "--" {
 				args = args[i+1:]
