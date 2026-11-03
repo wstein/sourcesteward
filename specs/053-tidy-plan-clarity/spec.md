@@ -48,6 +48,19 @@ documented name of `github-merged-head`. This section adds only what was missing
 The default plan (`stw tidy plan --base`, contract 1/2) proves integration by native ancestry only and cannot gain proof words:
 `schemas/v1` and `schemas/v2` are byte-frozen. Use `--contract 3` (optionally `--online`) for the other proofs.
 
+## Section 3: `stw tidy plan --explain` (#388)
+
+- `--explain` is an expert-layer flag (it selects the expert layer like `--base`). For every retained candidate it prints one sentence
+  (`It stays because ...`) naming the missing proof, and one next command. The closed reason list is `ExplainedReasons`
+  (`internal/workspace/tidy_explain.go`); a test keeps the list and the explanations equal and checks that a real plan only produces
+  explained reasons. Another reason gets a generic text and command.
+- Without `--explain` the output is unchanged: the default text only gets lines appended, and the contract 3 result has no
+  `explanations` key.
+- Default (contract 1/2) text: `Explain:`, `Why:`, `Next:` lines after the plan. `--explain --json` without `--contract 3` exits 2,
+  because `schemas/v1` and `schemas/v2` are frozen. Contract 3 JSON: the optional, closed result field `explanations`
+  (`name`, `reason`, `text`, `next_command`), outside the plan and its digest.
+- The commands quote untrusted names and paths for a POSIX shell; they are suggestions that planning never runs.
+
 ## Limits
 
 A gone registration of a directory on an unmounted volume looks like a deleted one to Git; lock the worktree (`git worktree lock`)
