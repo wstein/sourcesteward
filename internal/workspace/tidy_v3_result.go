@@ -29,6 +29,9 @@ type V3Result struct {
 	Limitations   []string        `json:"limitations"`
 	// ReviewSummary is present on a local-reference plan result.
 	ReviewSummary *V3ReviewSummary `json:"review_summary,omitempty"`
+	// Explanations are present only when `tidy plan --explain` asked for them: one per retained
+	// candidate (Spec 053, issue 388). They are not part of the plan identity.
+	Explanations []V3Explanation `json:"explanations,omitempty"`
 }
 type V3Boundary struct {
 	Complete         bool             `json:"complete"`

@@ -1291,6 +1291,37 @@
       ],
       "type": "object"
     },
+    "V3Explanation": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 4096,
+          "type": "string"
+        },
+        "next_command": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 8192,
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "reason",
+        "text",
+        "next_command"
+      ],
+      "type": "object"
+    },
     "V3IntegrationEvidence": {
       "additionalProperties": false,
       "allOf": [
@@ -2855,6 +2886,13 @@
         "diagnostics": {
           "items": {
             "$ref": "#/$defs/Diagnostic"
+          },
+          "maxItems": 16384,
+          "type": "array"
+        },
+        "explanations": {
+          "items": {
+            "$ref": "#/$defs/V3Explanation"
           },
           "maxItems": 16384,
           "type": "array"

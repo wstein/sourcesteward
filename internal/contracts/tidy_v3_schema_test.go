@@ -358,3 +358,31 @@ func TestTidyV3SchemaPullRequestProofAvailabilityIsClosed(t *testing.T) {
 		t.Fatal("unknown availability accepted")
 	}
 }
+
+// Issue 388: explanations are an optional, closed field of the result, outside the plan.
+func TestTidyV3SchemaExplanationsAreAdditiveAndClosed(t *testing.T) {
+	s := schemaAt(t, "v3", "tidy")
+	r := tidyV3SchemaPlan()
+	raw, _ := json.Marshal(r)
+	valid(t, s, raw)
+	if strings.Contains(string(raw), "explanations") {
+		t.Fatalf("an absent list changed the result bytes: %s", raw)
+	}
+	r.Explanations = []workspace.V3Explanation{{Name: "refs/heads/topic", Reason: "integration-not-proven", Text: "It stays because nothing proves it.", NextCommand: "git -C /repo log --oneline main..topic"}}
+	raw, _ = json.Marshal(r)
+	valid(t, s, raw)
+	for name, mutate := range map[string]func(map[string]any){
+		"empty-text":    func(e map[string]any) { e["text"] = "" },
+		"empty-command": func(e map[string]any) { e["next_command"] = "" },
+		"extra-field":   func(e map[string]any) { e["severity"] = "high" },
+		"missing-field": func(e map[string]any) { delete(e, "reason") },
+	} {
+		t.Run(name, func(t *testing.T) {
+			v := value(t, raw).(map[string]any)
+			mutate(v["explanations"].([]any)[0].(map[string]any))
+			if s.Validate(v) == nil {
+				t.Fatal("invalid explanation admitted")
+			}
+		})
+	}
+}
