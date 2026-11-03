@@ -9,7 +9,8 @@ release workflow. Everything is read-only. The command **suggests** and the owne
 runs, and it says whether running it only reads (`read`) or changes something (`owner`).
 
 ```sh
-stw status                      # the whole picture: needs action, repositories, notices, summary
+stw status                      # compact overview: single-line items and repositories
+stw status --long               # expanded multi-line repository cards and run: instructions
 stw status --offline            # local state only, no request and no credential read
 stw status --timeout 2m         # a longer overall deadline for the remote half
 stw status --icons nerd         # glyphs of the text: unicode, nerd or ascii

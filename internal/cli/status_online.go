@@ -190,7 +190,7 @@ func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd
 				text += "  " + l.URL
 			}
 			line(fmt.Sprintf(" %s %s%s  %-*s  %s", paint(icons.Icon(s.Priority), code), paint(level, code), strings.Repeat(" ", 6-len(level)), width, untrusted.Esc(l.Repo), text))
-			if long || (s.Priority != overview.Blue && s.Priority != overview.Violet) {
+			if long {
 				switch {
 				case l.Command != "":
 					line("     run: " + l.Command)
@@ -201,7 +201,7 @@ func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd
 		}
 		if s.MoreLines > 0 {
 			line(fmt.Sprintf("     and %d more %s %s", s.MoreItems, level, pluralNoun(s.MoreItems, "item", "items")))
-			if s.MoreCommand != "" && (long || (s.Priority != overview.Blue && s.Priority != overview.Violet)) {
+			if s.MoreCommand != "" && long {
 				line("     run: " + s.MoreCommand)
 			}
 		}
