@@ -100,3 +100,28 @@ func tidyLimitMentions(r TidyResult, class string) bool {
 	}
 	return false
 }
+
+// A plan stored with --state must be applicable: the legacy apply observes
+// without a planning session and refuses hooksPath, so planning refuses it.
+func TestTidyPlanWithStateRefusesHooksPathInsteadOfUnappliablePlan(t *testing.T) {
+	dir, base := planTidyConfigFixture(t)
+	gitFixture(t, dir, "config", "core.hooksPath", filepath.Join(gitTempDir(t), "hooks"))
+	state := filepath.Join(gitTempDir(t), "state")
+	if err := os.MkdirAll(state, 0700); err != nil {
+		t.Fatal(err)
+	}
+	r := PlanTidy(context.Background(), TidyPlanOptions{Path: dir, Base: base, StateDir: state})
+	if r.Plan != nil || r.Status == "ok" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "git-unsafe-configuration" || !strings.Contains(r.Diagnostics[0].Message, "core.hooksPath") {
+		t.Fatalf("expected plan-time refusal naming core.hooksPath: %s %+v", r.Status, r.Diagnostics)
+	}
+}
+
+func TestTidyPlanIgnoresDisabledFsmonitorAndSubmoduleRecurse(t *testing.T) {
+	dir, base := planTidyConfigFixture(t)
+	gitFixture(t, dir, "config", "core.fsmonitor", "false")
+	gitFixture(t, dir, "config", "submodule.recurse", "false")
+	r := planTidyOnce(dir, base)
+	if r.Status != "ok" || tidyLimitMentions(r, "core.fsmonitor") || tidyLimitMentions(r, "submodule.*") {
+		t.Fatalf("false warning: %s %+v", r.Status, r.Limitations)
+	}
+}
