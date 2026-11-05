@@ -440,7 +440,7 @@ type tidyApplyRefusal struct{ Code, Class string }
 // the keys planning neutralizes: it returns the class of a key that admission
 // refuses outside creation and the tidy apply policy, or "". Admission refuses
 // every submodule.* key whatever its value, and core.fsmonitor unless the raw
-// value is a Git false spelling.
+// value is exactly false, no, off or 0 (lowercase).
 func legacyApplyUnsafeClass(key, value string) string {
 	switch {
 	case key == "core.hookspath":

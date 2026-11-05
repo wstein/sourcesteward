@@ -245,3 +245,18 @@ func TestTidyPlanNamesExecutableDefaultHookInTheStatelessLimitation(t *testing.T
 		t.Fatalf("no default-hooks warning: %s %+v", r.Status, r.Limitations)
 	}
 }
+
+// Several classes at once report the first in legacy admission order: configuration,
+// then default hooks, then the tree.
+func TestTidyPlanWithStateReportsTheFirstRefusalInLegacyOrder(t *testing.T) {
+	dir, base := planTidyConfigFixture(t)
+	gitFixture(t, dir, "config", "core.hooksPath", filepath.Join(gitTempDir(t), "hooks"))
+	gitFixture(t, dir, "update-index", "--add", "--cacheinfo", "160000,"+gitFixture(t, dir, "rev-parse", "HEAD")+",member")
+	gitFixture(t, dir, "commit", "-qm", "add a gitlink")
+	state := privateDir(t)
+	r := PlanTidy(context.Background(), TidyPlanOptions{Path: dir, Base: base, StateDir: state})
+	if r.Status == "ok" || len(r.Diagnostics) == 0 || r.Diagnostics[0].Code != "git-unsafe-configuration" || !strings.Contains(r.Diagnostics[0].Message, "core.hooksPath, gitlinks") {
+		t.Fatalf("expected git-unsafe-configuration naming both classes: %s %+v", r.Status, r.Diagnostics)
+	}
+	requireNoStoredPlan(t, state, r)
+}
