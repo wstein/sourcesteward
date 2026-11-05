@@ -70,8 +70,9 @@ The default plan (`stw tidy plan --base`, contract 1/2) proves integration by na
 ## Section 4: default base from origin/HEAD (#389)
 
 - Without `--base`, the expert layer of `stw tidy plan` (default and `--contract 3`, retirement included) uses the target of the
-  symbolic reference `refs/remotes/origin/HEAD`, resolved by `workspace.DefaultTidyBase`: two sandboxed native Git reads
-  (`symbolic-ref --quiet`, `rev-parse --verify`) through the hardened runner, no network, no write. An explicit `--base` is
+  symbolic reference `refs/remotes/origin/HEAD`, resolved by `workspace.DefaultTidyBase`: the ownership inspection of the
+  path (Git backend only) and three sandboxed native Git reads (`rev-parse --git-dir`, `symbolic-ref --quiet`,
+  `rev-parse --verify`) through the hardened runner, no network, no write. An explicit `--base` is
   never replaced and never triggers the read.
 - The target must be below `refs/remotes/origin/` and name a commit. Otherwise the command exits 2 and the message names
   `git remote set-head origin -a` and `--base REF`. Outside a Git repository the old `--base is required` message remains.
