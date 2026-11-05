@@ -158,7 +158,30 @@ func TestTidyV3MissingWorkspaceStoredPlanValidation(t *testing.T) {
 	}
 }
 
+// After apply deleted the branch of a gone registration, git lists it with an all-zero head
+// until prune; a later contract 3 plan stays ok and names it with the all-zero head_oid.
+func TestTidyV3MissingWorkspaceUnbornHeadAfterBranchDelete(t *testing.T) {
+	dir, stale, _, base := missingWorkspaceFixture(t)
+	gitFixture(t, dir, "update-ref", "-d", "refs/heads/stale-gone")
+	r := defaultTidyV3RefsCoordinator().plan(context.Background(), V3PlanOptions{Path: dir, Base: base, StateDir: privateDir(t), ProtectWorktrees: []string{}})
+	if r.Status != "ok" || r.Plan == nil || validateV3Result(r) != nil {
+		t.Fatalf("plan failed: status=%s diagnostics=%+v", r.Status, r.Diagnostics)
+	}
+	if len(r.Plan.StaleRegistrations) != 1 {
+		t.Fatalf("stale registrations: %+v", r.Plan.StaleRegistrations)
+	}
+	s := r.Plan.StaleRegistrations[0]
+	if s.Path != stale || s.HeadOID != strings.Repeat("0", 40) || s.NextCommand != "git worktree prune" {
+		t.Fatalf("stale registration record: %+v", s)
+	}
+	if err := validateV3Plan(*r.Plan, r.Plan.StateDir, r.Plan.PlanID); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // The v1/v2 plan (stw tidy plan --base) follows the same rule and names the registration in its limitations.
+// It calls the adapter directly: with --state-dir the default plan still refuses with
+// unknown-workspace-path while a gone path exists (qualifyTidyWorkspaceRoots).
 func TestTidyLegacyMissingWorkspaceDoesNotProtectBranch(t *testing.T) {
 	dir, stale, live, _ := missingWorkspaceFixture(t)
 	o, err := (gitTidyAdapter{}).Observe(context.Background(), dir, "HEAD")

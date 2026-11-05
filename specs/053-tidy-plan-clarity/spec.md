@@ -26,7 +26,9 @@ its branch and commit, so a missing directory hid every branch it named.
 - The default (contract 1/2) plan keeps its schema: each gone registration is named in `limitations` (`workspace-missing: ... run
   git worktree prune as a separate step`), at most 16 lines and a count of the rest.
 - Planning deletes and prunes nothing. Apply deletes the branch as before; the gone registration stays and is then listed with an
-  unborn head (all-zero object id) until the owner runs `git worktree prune`.
+  unborn head (all-zero object id) until the owner runs `git worktree prune`. Contract 3 accepts the all-zero head only for a stale registration.
+- The default plan (contract 1/2) shows the `workspace-missing` limitation only without `--state-dir`; with `--state-dir` it still refuses with
+  `unknown-workspace-path` while a gone path exists, since state-store disjointness is unproven.
 - The wizard's classifier no longer treats a gone registration (`DirMissing` and `Prunable`) as attaching its branch.
 
 ## Limits
