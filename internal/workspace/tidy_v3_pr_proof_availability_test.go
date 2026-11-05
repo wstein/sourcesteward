@@ -3,7 +3,10 @@ package workspace
 
 import (
 	"context"
+	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/hosting"
 )
 
 // Issue 387: the plan says whether the merged-pull-request proof (wire word github-merged-head)
@@ -83,6 +86,13 @@ func TestTidyV3PullRequestProofAvailabilityIsValidated(t *testing.T) {
 		if validV3PRProof(q) {
 			t.Errorf("%s: a retirement plan with a pull request proof availability was accepted", mode)
 		}
+		q.Online = &V3OnlineSelection{}
+		qpol.PRProof = "available"
+		q.ProofPolicy = &qpol
+		if validV3PRProof(q) {
+			t.Errorf("%s: a retirement plan with an online selection and an available pull request proof was accepted", mode)
+		}
+		qpol.PRProof = "unavailable-offline"
 	}
 	p := *r.Plan
 	pol := *p.ProofPolicy
@@ -133,5 +143,33 @@ func TestTidyV3MergedPullRequestHeadProvesOnlyTheExactTip(t *testing.T) {
 	}
 	if other.Reason != "pr-head-mismatch" {
 		t.Fatalf("moved tip with the evidence of the original head: %+v", other)
+	}
+}
+
+// The evidence must bind the exact native target: a row answered for another commit is refused even
+// when its pull request names the target, and a pull request with another head only retains.
+// plan() cannot reach these checks (its fixture answers by head OID, and the later tuple validation
+// backs up the pull request comparison), so the proof function is called directly.
+func TestTidyV3ProofBindsTheEvidenceToTheExactTarget(t *testing.T) {
+	_, bin, expected, repo, rows := fixtureTidyV3Merged(t)
+	dir := expected.Identity.WorkspaceRoot
+	target, other := rows[0], rows[1]
+	prove := func(e hosting.TidyHeadEvidence) (V3CommitProof, error) {
+		return proveTidyV3Commit(context.Background(), expected, target.HeadOID, []string{}, &repo, &e, tidyV3AncestryAt(bin, dir))
+	}
+	if proof, err := prove(target); err != nil || proof.Proof != "github-merged-head" {
+		t.Fatalf("control: %+v %v", proof, err)
+	}
+	wrongRow := target
+	wrongRow.HeadOID = other.HeadOID
+	if proof, err := prove(wrongRow); err == nil || !strings.Contains(err.Error(), "does not bind") || proof.Decision == "delete" {
+		t.Errorf("evidence of another commit was accepted: %+v %v", proof, err)
+	}
+	wrongPR := target
+	pr := *target.PullRequest
+	pr.HeadOID = other.HeadOID
+	wrongPR.PullRequest = &pr
+	if proof, err := prove(wrongPR); err != nil || proof.Decision != "retain" || proof.Reason != "pr-head-mismatch" {
+		t.Errorf("a pull request with another head: %+v %v", proof, err)
 	}
 }
