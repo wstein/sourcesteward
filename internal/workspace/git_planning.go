@@ -252,6 +252,10 @@ func planningConfigNotes(config, effective, hooks string, hasExecutableHook bool
 		key = strings.ToLower(key)
 		// merge-driver is decided by the configuration that is in effect under
 		// the planning environment (below), never by host-wide configuration.
+		lowered := strings.ToLower(strings.TrimSpace(value))
+		if (key == "core.fsmonitor" || key == "submodule.recurse") && gitFalse(lowered) {
+			continue // disabled: nothing was neutralized
+		}
 		if class := planningConfigClass(key); class != "" && class != "merge-driver" {
 			records[class] = append(records[class], key+"\n"+value)
 		}
