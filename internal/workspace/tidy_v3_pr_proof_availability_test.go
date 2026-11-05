@@ -62,7 +62,7 @@ func TestTidyV3PullRequestProofAvailabilityIsValidated(t *testing.T) {
 	if r.Plan == nil {
 		t.Fatal(r.Diagnostics)
 	}
-	for name, value := range map[string]string{"online claimed offline": "available", "unknown word": "maybe"} {
+	for name, value := range map[string]string{"offline claimed available": "available", "unknown word": "maybe"} {
 		p := *r.Plan
 		pol := *p.ProofPolicy
 		pol.PRProof = value
@@ -70,6 +70,18 @@ func TestTidyV3PullRequestProofAvailabilityIsValidated(t *testing.T) {
 		p.Digest, _ = v3PlanDigest(p)
 		if validateV3Plan(p, p.StateDir, p.PlanID) == nil {
 			t.Errorf("%s: accepted", name)
+		}
+	}
+	// Only a reference plan has an availability: a retirement plan that records one is rejected.
+	for _, mode := range []string{"owned-retirement", "legacy-retirement"} {
+		q := *r.Plan
+		q.Mode = mode
+		q.Online = nil
+		qpol := *q.ProofPolicy
+		qpol.PRProof = "unavailable-offline"
+		q.ProofPolicy = &qpol
+		if validV3PRProof(q) {
+			t.Errorf("%s: a retirement plan with a pull request proof availability was accepted", mode)
 		}
 	}
 	p := *r.Plan
@@ -90,6 +102,22 @@ func TestTidyV3MergedPullRequestHeadProvesOnlyTheExactTip(t *testing.T) {
 	root := gitFixture(t, dir, "rev-parse", "refs/heads/topic-x^")
 	moved := gitFixture(t, dir, "commit-tree", tree, "-p", root, "-m", "amended after the merge")
 	gitFixture(t, dir, "update-ref", "refs/heads/topic-xx", moved)
+	// The hosting side answers for the moved tip with the merged pull request of topic-x, whose head
+	// is the original tip: only the exact head comparison keeps that evidence from proving the branch.
+	original := gitFixture(t, dir, "rev-parse", "refs/heads/topic-x")
+	found := false
+	for _, row := range rows {
+		if row.HeadOID == original && row.PullRequest != nil {
+			stale := row
+			stale.HeadOID = moved
+			rows = append(rows, stale)
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("no merged pull request row for topic-x")
+	}
 	c, _ := fixtureTidyV3Online(t, dir, repo, rows)
 	r := c.plan(context.Background(), V3PlanOptions{Path: dir, Base: expected.BaseSelector, Online: true, Remote: "origin", IntegrationProofs: []string{"ancestor"}, ProtectWorktrees: []string{}})
 	if r.Status != "ok" || r.Plan == nil {
@@ -102,5 +130,8 @@ func TestTidyV3MergedPullRequestHeadProvesOnlyTheExactTip(t *testing.T) {
 	other := candidateNamed(t, r.Plan.Candidates, "refs/heads/topic-xx")
 	if other.Decision != "retain" || other.Proof == "github-merged-head" {
 		t.Fatalf("same name, different tip than the merged head: %+v", other)
+	}
+	if other.Reason != "pr-head-mismatch" {
+		t.Fatalf("moved tip with the evidence of the original head: %+v", other)
 	}
 }
