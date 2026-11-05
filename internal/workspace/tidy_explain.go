@@ -29,8 +29,8 @@ type ExplainContext struct {
 }
 
 // ExplainedReasons lists every reason a retained candidate can carry (Git and jj). Each has an
-// explanation text and a next command; any other reason gets the generic explanation. Tests keep the
-// list equal to the explanations and to the reasons the planners produce.
+// explanation text and a next command; any other reason gets the generic explanation. Tests check that
+// every listed reason has a specific text and that every reason the planners produce is listed.
 var ExplainedReasons = []string{
 	"integration-not-proven", "needs-review", "reviewed-keep", "pr-head-mismatch", "pr-target-mismatch", "hosting-proof-unsupported",
 	"pr-ambiguous", "history-override", "unsupported-metadata", "selected-base", "symbolic-reference", "workspace-used",
@@ -116,7 +116,7 @@ func ExplainRetention(ctx ExplainContext, name, oid, reason string, paths, revie
 		e.NextCommand = "git -C " + src + " remote -v"
 	case "pr-ambiguous":
 		e.Text = "It stays because several merged pull requests match its head and none is selected; the exact pull request number is missing."
-		e.NextCommand = "gh pr list --state merged --search " + shellWord(oid) + " --json number,headRefOid"
+		e.NextCommand = "cd " + src + " && gh pr list --state merged --search " + shellWord(oid) + " --json number,headRefOid"
 	case "history-override":
 		e.Text = "It stays because grafts or a shallow history make every ancestry proof untrustworthy."
 		e.NextCommand = "git -C " + src + " rev-parse --is-shallow-repository"
@@ -125,7 +125,7 @@ func ExplainRetention(ctx ExplainContext, name, oid, reason string, paths, revie
 		e.NextCommand = "git -C " + src + " rev-parse --git-path objects/info/alternates"
 	case "selected-base":
 		e.Text = "It stays because it is the selected base or stands at the base commit; there is nothing to prove."
-		e.NextCommand = "git -C " + src + " for-each-ref --format='%(refname)' refs/remotes"
+		e.NextCommand = "git -C " + src + " rev-parse --verify " + base
 		if isJJ {
 			e.NextCommand = jj + "log -r " + base
 		}

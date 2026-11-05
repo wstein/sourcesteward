@@ -23,7 +23,7 @@ func TestEveryExplainedReasonHasATextAndANextCommand(t *testing.T) {
 		if !strings.HasPrefix(e.Text, "It stays ") || !strings.HasSuffix(e.Text, ".") || strings.Count(e.Text, ". ") != 0 || strings.Contains(e.Text, "for the reason") {
 			t.Errorf("%s: text is not one specific sentence: %q", reason, e.Text)
 		}
-		if !strings.Contains(e.NextCommand, "stw tidy plan ") && !strings.HasPrefix(e.NextCommand, "git ") && !strings.HasPrefix(e.NextCommand, "jj ") && !strings.HasPrefix(e.NextCommand, "gh ") {
+		if !strings.Contains(e.NextCommand, "stw tidy plan ") && !strings.HasPrefix(e.NextCommand, "git ") && !strings.HasPrefix(e.NextCommand, "jj ") && !strings.HasPrefix(e.NextCommand, "cd ") {
 			t.Errorf("%s: next command %q", reason, e.NextCommand)
 		}
 	}

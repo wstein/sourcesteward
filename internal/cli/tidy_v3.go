@@ -448,7 +448,7 @@ func renderTidyV3Text(w io.Writer, r workspace.V3Result) error {
 		}
 	}
 	for _, e := range r.Explanations {
-		fmt.Fprintf(&text, "Explain: %q reason=%q\n  Why: %q\n  Next: %q\n", e.Name, e.Reason, e.Text, e.NextCommand)
+		fmt.Fprintf(&text, "Explain: %q reason=%q\n  Why: %q\n  Next: %s\n", e.Name, e.Reason, e.Text, rawCommand(e.NextCommand))
 	}
 	for _, a := range r.Actions {
 		fmt.Fprintf(&text, "Action: %q status=%q detail=%q\n", a.Name, a.Status, a.Detail)
