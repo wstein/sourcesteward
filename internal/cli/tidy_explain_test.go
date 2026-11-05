@@ -226,8 +226,47 @@ func TestRenderedNextLineRoundTripsThroughTheShell(t *testing.T) {
 		}
 	}
 	var out bytes.Buffer
-	_ = renderTidyExplanations(&out, []workspace.V3Explanation{{Name: "n", Reason: "r", Text: "t", NextCommand: "git log\x1b[2J\n"}})
-	if strings.ContainsAny(out.String(), "\x1b") || strings.Count(out.String(), "\n") != 3 {
-		t.Errorf("control characters reach the terminal: %q", out.String())
+	_ = renderTidyExplanations(&out, []workspace.V3Explanation{{Name: "n", Reason: "r", Text: "t", NextCommand: "git log\x1b[2J\n\u202e\u2066\u200b\u2028\u2029\xff ok é"}})
+	if strings.ContainsAny(out.String(), "\x1b\u202e\u2066\u200b\u2028\u2029\xff") || strings.Count(out.String(), "\n") != 3 || !strings.Contains(out.String(), "ok é") {
+		t.Errorf("non-printable characters reach the terminal: %q", out.String())
+	}
+	for _, want := range []string{`\x{1b}`, `\x{202e}`, `\x{2066}`, `\x{200b}`, `\x{2028}`, `\x{2029}`, `\x{ff}`} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("%s is not escaped visibly in %q", want, out.String())
+		}
+	}
+}
+
+// The pr-ambiguous command runs gh in the repository from a subshell, with the path quoted: a path
+// with a space and quotes reaches gh as the working directory and the caller's shell stays where it is.
+func TestPRAmbiguousNextCommandQuotesTheSourceAndLeavesTheShell(t *testing.T) {
+	root, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(root, `my "dir's`)
+	if err := os.Mkdir(src, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	e := workspace.ExplainRetention(workspace.ExplainContext{Source: src, Base: "refs/heads/main", Contract3: true}, "refs/heads/t", strings.Repeat("a", 40), "pr-ambiguous", nil, nil)
+	var out bytes.Buffer
+	if err := renderTidyExplanations(&out, []workspace.V3Explanation{e}); err != nil {
+		t.Fatal(err)
+	}
+	var next string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if rest, ok := strings.CutPrefix(line, "  Next: "); ok {
+			next = rest
+		}
+	}
+	cmd := exec.Command("sh", "-c", `gh() { printf '%s\0' "$PWD" "$@"; }; `+next+`; printf '%s\0' "$PWD"`)
+	cmd.Dir = root
+	raw, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("%q: %v", next, err)
+	}
+	got := strings.Split(strings.TrimSuffix(string(raw), "\x00"), "\x00")
+	if len(got) < 4 || got[0] != src || got[1] != "pr" || got[2] != "list" || got[len(got)-1] != root {
+		t.Errorf("gh ran in %q; the shell ended in %q: %q", got[0], got[len(got)-1], got)
 	}
 }
