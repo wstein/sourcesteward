@@ -231,16 +231,23 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 }
 
 // rawCommand returns a next command as typed, so it can be copied into a shell: quotes and backslashes
-// stay as they are (untrusted names are already single-quoted inside the command) and only control
-// characters, which could act on the terminal, are escaped.
+// stay as they are (untrusted names are already single-quoted inside the command) and every
+// character that is not printable is escaped as \x{HEX}: control characters, bidirectional and
+// zero-width format characters and line or paragraph separators could make the line read differently
+// from what it runs, and an invalid UTF-8 byte is escaped as the byte it is.
 func rawCommand(command string) string {
 	var out strings.Builder
-	for _, r := range command {
-		if unicode.IsControl(r) {
+	for i := 0; i < len(command); {
+		r, size := utf8.DecodeRuneInString(command[i:])
+		switch {
+		case r == utf8.RuneError && size == 1:
+			fmt.Fprintf(&out, "\\x{%x}", command[i])
+		case !unicode.IsPrint(r):
 			fmt.Fprintf(&out, "\\x{%x}", r)
-			continue
+		default:
+			out.WriteRune(r)
 		}
-		out.WriteRune(r)
+		i += size
 	}
 	return out.String()
 }

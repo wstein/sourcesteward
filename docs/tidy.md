@@ -34,7 +34,7 @@ text appends `Explain:`, `Why:` and `Next:` lines after the plan; `--contract 3 
 (`name`, `reason`, `text`, `next_command`; it is not part of the plan identity). The default JSON contract is frozen, so `--explain
 --json` without `--contract 3` exits 2. Every reason a plan can retain a candidate for has its own text and command (the closed list `ExplainedReasons` in
 `internal/workspace/tidy_explain.go`, see Spec 053 section 3); any other reason gets a generic one. The `Next:` line shows the command as
-typed, so it can be copied into a shell: untrusted names inside it are single-quoted, and only control characters are escaped.
+typed, so it can be copied into a shell: untrusted names inside it are single-quoted, and every character that is not printable (control, bidirectional and zero-width format characters, line separators, invalid UTF-8 bytes) is escaped as `\x{HEX}`.
 
 ## The tidy wizard
 

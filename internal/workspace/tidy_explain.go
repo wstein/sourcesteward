@@ -116,7 +116,7 @@ func ExplainRetention(ctx ExplainContext, name, oid, reason string, paths, revie
 		e.NextCommand = "git -C " + src + " remote -v"
 	case "pr-ambiguous":
 		e.Text = "It stays because several merged pull requests match its head and none is selected; the exact pull request number is missing."
-		e.NextCommand = "cd " + src + " && gh pr list --state merged --search " + shellWord(oid) + " --json number,headRefOid"
+		e.NextCommand = "(cd " + src + " && gh pr list --state merged --search " + shellWord(oid) + " --json number,headRefOid)"
 	case "history-override":
 		e.Text = "It stays because grafts or a shallow history make every ancestry proof untrustworthy."
 		e.NextCommand = "git -C " + src + " rev-parse --is-shallow-repository"

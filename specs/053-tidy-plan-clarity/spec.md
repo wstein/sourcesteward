@@ -64,7 +64,8 @@ The default plan (`stw tidy plan --base`, contract 1/2) proves integration by na
   starts `stw` is checked against the real flag parsing and validators (online proof needs `--remote`; `--report-dir` is created
   and passed as an absolute physical path, `"$(pwd -P)/tidy-review"`); the Git commands run against a real repository (the `gh` and `jj`
   commands are not run by the tests). jj plans get `jj -R PATH ...` commands, not `git -C` commands. The text output prints the `Next:`
-  command as typed, not Go-quoted, so it can be copied; a test parses the printed line with a shell and compares the arguments.
+  command as typed, not Go-quoted, so it can be copied; every non-printable character (control, bidirectional and zero-width
+  format characters, U+2028/2029, invalid UTF-8 bytes) is escaped as `\x{HEX}`, so the line never reads differently from what it runs; a test parses the printed line with a shell and compares the arguments.
 
 ## Limits
 
