@@ -25,7 +25,7 @@ var defaultTidyInspect = inspection.Inspect
 // origin namespace, the error names the command that sets it. A path outside a Git repository,
 // or in a jj repository, keeps the old requirement of an explicit --base.
 func DefaultTidyBase(ctx context.Context, path string) (string, error) {
-	missing := errors.New("no --base given and " + originHeadRef + " is not set to a branch that exists; run `" + setOriginHeadHint + "` (needs the remote origin) or pass --base REF")
+	missing := errors.New("no --base given and origin/HEAD is not set to an existing branch below " + originNamespace + "; run `" + setOriginHeadHint + "` (needs the remote origin) or pass --base REF")
 	bin, err := gitExecutable()
 	if err != nil {
 		return "", err

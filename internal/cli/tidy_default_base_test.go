@@ -83,3 +83,22 @@ func TestTidyPlanWithoutBaseFailsWithTheCommandThatSetsOriginHead(t *testing.T) 
 		t.Fatalf("err=%v ran=%t", err, ran)
 	}
 }
+
+// An empty --base is given, so it is not replaced by the default: the usual usage error stays and
+// the repository is not asked.
+func TestTidyPlanWithAnEmptyBaseIsNotReplacedByTheDefault(t *testing.T) {
+	asked := withDefaultBase(t, func(context.Context, string) (string, error) { return "refs/remotes/origin/trunk", nil })
+	ran := false
+	cmd := tidyCommandWith(func(context.Context, workspace.TidyPlanOptions) workspace.TidyResult {
+		ran = true
+		return workspace.TidyResult{}
+	})
+	cmd.SetOut(&bytes.Buffer{})
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"plan", "/repo", "--base", ""})
+	err := cmd.Execute()
+	var runtime runtimeFailure
+	if err == nil || errors.As(err, &runtime) || !strings.Contains(err.Error(), "--base is required") || len(*asked) != 0 || ran {
+		t.Fatalf("err=%v asked=%v ran=%v", err, *asked, ran)
+	}
+}
