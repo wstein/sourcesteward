@@ -186,6 +186,41 @@ func TestGitDiscoveryRejectsRelativeDeveloperDir(t *testing.T) {
 	}
 }
 
+func TestGitDiscoveryRejectsDeveloperDirWithControlCharacters(t *testing.T) {
+	f := newDiscoveryFixture(t)
+	f.git(t, "a/usr/bin")
+	d := gitDiscovery{Apple: "/nonexistent/git", Developer: developerDir(f.dir("a") + "\n" + f.dir("b")),
+		Probe: func(string) error { return nil }}
+	got, attempts := d.find()
+	if got != "" || len(attempts) != 1 || !strings.Contains(attempts[0].Reason, "control characters") {
+		t.Fatalf("chose %q, attempts %+v", got, attempts)
+	}
+}
+
+func TestGitDiscoveryErrorPutsFixHintBeforeCandidates(t *testing.T) {
+	const fix = "fix: brew install git"
+	for code, prefix := range map[string]string{
+		"git-unavailable":         "no native Git executable found; ",
+		"git-sandbox-unavailable": "no native Git executable can run in the executable sandbox; ",
+	} {
+		reason := "not found"
+		if code == "git-sandbox-unavailable" {
+			reason = "probe failed: exit status 71"
+		}
+		err := gitDiscoveryError([]gitAttempt{{"/x/git", "PATH", reason}})
+		var oe operationError
+		if !errors.As(err, &oe) || oe.Code != code {
+			t.Fatalf("%s: error %v", code, err)
+		}
+		if !strings.HasPrefix(oe.Message, prefix+fix) {
+			t.Errorf("%s: message does not start with hint: %s", code, oe.Message)
+		}
+		if strings.Index(oe.Message, "candidates tried:") < strings.Index(oe.Message, fix) {
+			t.Errorf("%s: candidates before fix: %s", code, oe.Message)
+		}
+	}
+}
+
 func TestGitDiscoveryRefusesSymlinkToAppleLauncher(t *testing.T) {
 	f := newDiscoveryFixture(t)
 	apple := f.git(t, "usr-bin")
