@@ -22,6 +22,7 @@ the branch is judged by the other rules, and a worktree with an existing directo
 that Git marks `prunable` and that is not locked counts as gone. The plan names such registrations (contract 3: `plan.stale_registrations`
 with `path`, `head_ref`, `head_oid`, `reason` and `next_command`, and one `Stale registration:` line each in its text; the default plan: one limitation line each, at most 16 and a count) and
 proposes `git worktree prune` as a separate step that planning never runs.
+The default plan shows this limitation only without `--state-dir`: with `--state-dir` it still refuses with `unknown-workspace-path` while a gone path exists, because state-store disjointness cannot be proven. After apply deletes the branch of a gone registration, Git lists the registration with an unborn head (all-zero object id) until `git worktree prune`; contract 3 plans accept that and report the all-zero `head_oid`.
 
 ## The tidy wizard
 

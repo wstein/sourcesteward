@@ -359,6 +359,19 @@ func v3OID(s, format string) bool {
 	}
 	return validAlphabet(s, n, "0123456789abcdef") && strings.Trim(s, "0") != ""
 }
+
+// v3OIDOrUnborn also accepts the all-zero object id: git lists a registration whose branch was
+// deleted with an unborn head until the owner runs git worktree prune (Spec 053).
+func v3OIDOrUnborn(s, format string) bool {
+	if v3OID(s, format) {
+		return true
+	}
+	n := 40
+	if format == "sha256" {
+		n = 64
+	}
+	return (format == "sha1" || format == "sha256") && s == strings.Repeat("0", n)
+}
 func v3Hash(s string) bool { return validAlphabet(s, 64, "0123456789abcdef") }
 func v3Paths(paths []string) bool {
 	if paths == nil {
@@ -405,7 +418,7 @@ func validV3StaleRegistrationList(p V3Plan) bool {
 	}
 	last := ""
 	for _, s := range p.StaleRegistrations {
-		if s.Path <= last || !v3CanonicalPath(s.Path) || !v3OID(s.HeadOID, p.Expected.Identity.ObjectFormat) || s.HeadRef != "" && !v3Ref(s.HeadRef) || s.Reason != v3WorkspaceMissing || s.NextCommand != v3PruneCommand {
+		if s.Path <= last || !v3CanonicalPath(s.Path) || !v3OIDOrUnborn(s.HeadOID, p.Expected.Identity.ObjectFormat) || s.HeadRef != "" && !v3Ref(s.HeadRef) || s.Reason != v3WorkspaceMissing || s.NextCommand != v3PruneCommand {
 			return false
 		}
 		last = s.Path
