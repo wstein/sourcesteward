@@ -96,6 +96,10 @@ type planningSession struct {
 	mu        sync.Mutex
 	notes     []V3ConfigNote
 	gitlinks  []string
+	// limitClasses and refusals describe what the legacy tidy apply would do with
+	// the same repository (see tidyApplyFacts); both are replaced on every read.
+	limitClasses []string
+	refusals     []tidyApplyRefusal
 }
 type planningSessionKey struct{}
 
@@ -142,6 +146,11 @@ func (s *planningSession) noteGitlink(path string) {
 	s.mu.Lock()
 	s.gitlinks = append(s.gitlinks, path)
 	s.mu.Unlock()
+}
+func (s *planningSession) peekGitlinks() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.gitlinks...)
 }
 func (s *planningSession) takeGitlinks() []string {
 	s.mu.Lock()
@@ -252,10 +261,6 @@ func planningConfigNotes(config, effective, hooks string, hasExecutableHook bool
 		key = strings.ToLower(key)
 		// merge-driver is decided by the configuration that is in effect under
 		// the planning environment (below), never by host-wide configuration.
-		lowered := strings.ToLower(strings.TrimSpace(value))
-		if (key == "core.fsmonitor" || key == "submodule.recurse") && gitFalse(lowered) {
-			continue // disabled: nothing was neutralized
-		}
 		if class := planningConfigClass(key); class != "" && class != "merge-driver" {
 			records[class] = append(records[class], key+"\n"+value)
 		}
@@ -425,4 +430,84 @@ func withCreationPolicy(ctx context.Context) context.Context {
 func creationPolicyFrom(ctx context.Context) bool {
 	v, _ := ctx.Value(creationPolicyKey{}).(bool)
 	return v
+}
+
+// tidyApplyRefusal is one class that the legacy tidy apply admission (no
+// planning session, no apply policy) refuses although planning neutralizes it.
+type tidyApplyRefusal struct{ Code, Class string }
+
+// legacyApplyUnsafeClass is the one predicate of the legacy apply admission for
+// the keys planning neutralizes: it returns the class of a key that admission
+// refuses outside creation and the tidy apply policy, or "". Admission refuses
+// every submodule.* key whatever its value, and core.fsmonitor unless the raw
+// value is a Git false spelling.
+func legacyApplyUnsafeClass(key, value string) string {
+	switch {
+	case key == "core.hookspath":
+		return "core.hooksPath"
+	case key == "core.fsmonitor" && !gitFalse(value):
+		return "core.fsmonitor"
+	case strings.HasPrefix(key, "submodule."):
+		return "submodule.*"
+	}
+	return ""
+}
+
+// tidyApplyFacts derives, from the admission read of a planning session, the
+// classes the read-only limitation names (a disabled core.fsmonitor and a false
+// submodule.recurse neutralized nothing) and the classes a stored plan could
+// never be applied with, because the legacy apply refuses them.
+func tidyApplyFacts(config string, executableHook bool, gitlinks []string) (limit []string, refusals []tidyApplyRefusal) {
+	seenLimit, seenRefusal := map[string]bool{}, map[string]bool{}
+	add := func(class string) {
+		if !seenLimit[class] {
+			seenLimit[class] = true
+			limit = append(limit, class)
+		}
+	}
+	refuse := func(code, class string) {
+		if !seenRefusal[class] {
+			seenRefusal[class] = true
+			refusals = append(refusals, tidyApplyRefusal{code, class})
+		}
+	}
+	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
+		key, value, _ := strings.Cut(entry, "\n")
+		key = strings.ToLower(key)
+		class := planningConfigClass(key)
+		switch class {
+		case "core.hooksPath", "core.fsmonitor", "submodule.*":
+			lowered := strings.ToLower(strings.TrimSpace(value))
+			if !(key == "core.fsmonitor" || key == "submodule.recurse") || !gitFalse(lowered) {
+				add(class)
+			}
+		}
+		if c := legacyApplyUnsafeClass(key, value); c != "" {
+			refuse("git-unsafe-configuration", c)
+		}
+	}
+	if executableHook {
+		add("default-hooks")
+		refuse("git-hooks-refused", "default-hooks")
+	}
+	if len(gitlinks) > 0 {
+		add("gitlinks")
+		refuse("git-tree-refused", "gitlinks")
+	}
+	sort.Strings(limit)
+	return limit, refusals
+}
+
+func (s *planningSession) setApplyFacts(limit []string, refusals []tidyApplyRefusal) {
+	s.mu.Lock()
+	s.limitClasses, s.refusals = limit, refusals
+	s.mu.Unlock()
+}
+func (s *planningSession) applyFacts() ([]string, []tidyApplyRefusal) {
+	if s == nil {
+		return nil, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string{}, s.limitClasses...), append([]tidyApplyRefusal{}, s.refusals...)
 }

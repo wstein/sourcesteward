@@ -34,37 +34,33 @@ func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
 		return boundedTidy(failTidy(newTidyResult("tidy-plan"), err))
 	}
 	defer closeSession()
-	var r TidyResult
 	if o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
-		r = defaultRetirementCoordinator().plan(ctx, o)
-	} else {
-		c := tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}
-		r = c.plan(ctx, o)
+		return boundedTidy(withNeutralizedConfigLimit(defaultRetirementCoordinator().plan(ctx, o), session))
 	}
-	if o.StateDir != "" && r.Status == "ok" {
-		// A stored plan is applied by the legacy apply, whose observation runs
-		// without a planning session and refuses these classes. Refuse now
-		// instead of producing a plan that can never be applied.
-		if classes := neutralizedClasses(session); len(classes) > 0 {
-			code := "git-unsafe-configuration"
-			if len(classes) == 1 && classes[0] == "default-hooks" {
-				code = "git-hooks-refused"
-			}
-			return boundedTidy(refuseTidy(r, code, "Cannot store an apply plan: "+strings.Join(classes, ", ")+" would be refused when applying; remove it or plan without --state for a read-only plan."))
-		}
-	}
-	return boundedTidy(withNeutralizedConfigLimit(r, session))
+	c := tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}
+	return boundedTidy(withNeutralizedConfigLimit(c.plan(ctx, o), session))
 }
 
-func neutralizedClasses(session *planningSession) []string {
-	var classes []string
-	for _, n := range session.configNotes() {
-		switch n.KeyClass {
-		case "core.hooksPath", "default-hooks", "core.fsmonitor", "submodule.*", "gitlinks":
-			classes = append(classes, n.KeyClass)
-		}
+// refuseUnappliableTidyPlan refuses, after the first observation and before any
+// store write, a plan whose repository the legacy apply would refuse: the apply
+// observes without a planning session, so such a plan could never be applied.
+func refuseUnappliableTidyPlan(ctx context.Context, r TidyResult, stateDir string, retirement bool) (TidyResult, bool) {
+	if stateDir == "" {
+		return r, false
 	}
-	return classes
+	_, refusals := planningSessionFrom(ctx).applyFacts()
+	if len(refusals) == 0 {
+		return r, false
+	}
+	classes := make([]string, len(refusals))
+	for i, f := range refusals {
+		classes[i] = f.Class
+	}
+	advice := "remove it from the repository or plan without --state-dir for a read-only plan"
+	if retirement {
+		advice = "remove it from the repository, then plan again"
+	}
+	return refuseTidy(r, refusals[0].Code, "Cannot store an apply plan: "+strings.Join(classes, ", ")+" would be refused when applying; "+advice+"."), true
 }
 
 // withNeutralizedConfigLimit warns, instead of refusing, that a successful plan
@@ -73,8 +69,7 @@ func withNeutralizedConfigLimit(r TidyResult, session *planningSession) TidyResu
 	if r.Status != "ok" {
 		return r
 	}
-	classes := neutralizedClasses(session)
-	if len(classes) > 0 {
+	if classes, _ := session.applyFacts(); len(classes) > 0 {
 		r.Limitations = append(r.Limitations, "Read-only plan: "+strings.Join(classes, ", ")+" neutralized; no hook, helper or submodule command ran.")
 	}
 	return r
@@ -132,6 +127,9 @@ func (c tidyCoordinator) plan(ctx context.Context, o TidyPlanOptions) TidyResult
 	observation, err := adapter.Observe(ctx, source, o.Base)
 	if err != nil {
 		return failTidy(r, err)
+	}
+	if refused, ok := refuseUnappliableTidyPlan(ctx, r, o.StateDir, false); ok {
+		return refused
 	}
 	if err = validateTidyObservation(observation, identity.Backend, source, o.Base); err != nil {
 		return failTidy(r, err)
