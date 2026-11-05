@@ -10,6 +10,8 @@ stw tidy plan /path/to/repository --base refs/heads/main --json
 stw tidy plan /path/to/repository --base refs/heads/main --ref refs/heads/finished-task --json
 ```
 
+A repository with `core.hooksPath`, a default hook, `core.fsmonitor`, `submodule.*` or gitlinks is read read-only, and the plan adds the limitation `Read-only plan: <classes> neutralized` (a disabled `core.fsmonitor` and `submodule.recurse=false` neutralize nothing and are not named). With `--state-dir` the plan is stored for `apply`, which refuses these classes, so such a plan is refused before anything is stored: `git-unsafe-configuration` for `core.hooksPath`, `core.fsmonitor` (unless a Git false spelling) and every `submodule.*` key whatever its value, `git-hooks-refused` for an executable default hook and `git-tree-refused` for a gitlink. Plan without `--state-dir` for the read-only plan.
+
 PATH defaults to the current directory. `--ref` is repeatable and literal; omitting it selects
 all bounded local references. Git selections use full names such as `refs/heads/finished-task`;
 jj selections use bookmark names such as `finished-task`. Names are not shell commands, globs or arbitrary revsets.
@@ -875,7 +877,8 @@ Retirement uses the same sixty-second planning deadline and an apply deadline th
 bound (a retirement plan records every file and directory) and aggregate 1024-entry bound for references; each stored/disk raw file in the default v2 contract
 is bounded to 64 KiB; the retirement blob sample and the manifest are 8,192 entries and user content
 64 MiB in total, while the shared 16,384-leaf tree limit only bounds cost. Hooks, fsmonitor and submodule
-policy stay strict for retirement. Oversized or
+policy stay strict for retirement: a retirement plan is refused at planning, before anything is stored, when the repository holds `core.hooksPath`, an
+executable default hook, `core.fsmonitor` (other than a Git false spelling), any `submodule.*` key or a gitlink, because applying the plan would refuse it. Oversized or
 incomplete evidence never authorizes a truncated removal target. Remote deletion, garbage collection,
 jj change abandonment and arbitrary forced cleanup remain excluded.
 

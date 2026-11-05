@@ -104,6 +104,9 @@ func (c retirementCoordinator) plan(ctx context.Context, o TidyPlanOptions) Tidy
 	if err != nil {
 		return failTidy(r, err)
 	}
+	if refused, ok := refuseUnappliableTidyPlan(ctx, r, o.StateDir, true); ok {
+		return refused
+	}
 	if err = validateRetirementObservation(observation, source, o.Base, task); err != nil {
 		return failTidy(r, err)
 	}

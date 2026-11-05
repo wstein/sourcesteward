@@ -167,12 +167,15 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 	for _, entry := range strings.Split(strings.TrimSuffix(config, "\x00"), "\x00") {
 		key, value, _ := strings.Cut(entry, "\n")
 		key = strings.ToLower(key)
-		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.hookspath" && !creation && !pinned || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
+		unsafe := strings.HasPrefix(key, "hook.") || strings.HasPrefix(key, "includeif.") || key == "core.attributesfile" || key == "core.alternaterefscommand" || key == "extensions.worktreeconfig" || key == "extensions.partialclone" || key == "core.sparsecheckout" || key == "core.sparsecheckoutcone"
 		// check-attr's textual sentinel values can also be literal driver names.
 		// Refuse those definitions rather than mistake an executable literal for
 		// absent/unset attributes. Case-insensitive refusal is conservative.
 		unsafe = unsafe || strings.HasPrefix(key, "filter.unspecified.") || strings.HasPrefix(key, "filter.unset.") || strings.HasPrefix(key, "filter.set.")
-		unsafe = unsafe || key == "core.fsmonitor" && !gitFalse(value) && !pinned || !creation && !pinned && strings.HasPrefix(key, "submodule.") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
+		// hooksPath, fsmonitor and submodule.*: the predicate shared with planning,
+		// which refuses a stored plan that this admission would refuse.
+		applyClass := legacyApplyUnsafeClass(key, value)
+		unsafe = unsafe || applyClass != "" && !pinned && (!creation || applyClass == "core.fsmonitor") || strings.HasPrefix(key, "remote.") && strings.HasSuffix(key, ".promisor") && !gitFalse(value)
 		if session != nil {
 			// Planning (Spec 031 FR-020/FR-021): only hooksPath, fsmonitor and
 			// submodule.* leave the refusal list; they are neutralized by the
@@ -213,6 +216,8 @@ func gitSafetyWithPrimary(ctx context.Context, bin string, id NativeIdentity, co
 		if err != nil {
 			return "", err
 		}
+		limit, refusals := tidyApplyFacts(config, executableHook, session.peekGitlinks())
+		session.setApplyFacts(limit, refusals)
 		session.setNotes(planningConfigNotes(config, effective, hooks, executableHook, session.policy.scanInfoAttributes && infoAttributesActive(id.RepositoryDir), session.takeGitlinks()))
 	}
 	if err = gitFilterEvidence(ctx, bin, id.WorkspaceRoot, commit, paths, digest); err != nil {
