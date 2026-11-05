@@ -284,4 +284,14 @@ func TestValidV3NativeStateStaleRegistrationRules(t *testing.T) {
 	if check(func(r *V3Registration) { r.Bare = true }) {
 		t.Error("bare accepted")
 	}
+	// The all-zero head belongs to a stale registration only: the same registration with its directory
+	// present (not prunable, no branch to compare) keeps its real head and must not take the zero one.
+	if !check(func(r *V3Registration) { r.Prunable, r.HeadRef = false, "" }) {
+		t.Error("control: a registration with a directory and a real head was rejected")
+	}
+	if check(func(r *V3Registration) {
+		r.Prunable, r.HeadRef, r.HeadOID = false, "", strings.Repeat("0", len(r.HeadOID))
+	}) {
+		t.Error("a registration whose directory exists was accepted with an all-zero head")
+	}
 }
