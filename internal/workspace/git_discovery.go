@@ -80,7 +80,7 @@ func (d gitDiscovery) find() (string, []gitAttempt) {
 	if d.Developer != nil {
 		dev, err := d.Developer()
 		if err == nil && dev != "" && (!filepath.IsAbs(dev) || strings.ContainsFunc(dev, unicode.IsControl)) {
-			attempts = append(attempts, gitAttempt{"$(xcode-select -p)/usr/bin/git", "xcode-select", "xcode-select -p output is not absolute"})
+			attempts = append(attempts, gitAttempt{"$(xcode-select -p)/usr/bin/git", "xcode-select", "xcode-select -p output is not absolute or contains control characters"})
 		} else if err == nil && dev != "" {
 			if p := try(filepath.Join(dev, "usr", "bin", "git"), "xcode-select", true); p != "" {
 				return p, attempts
