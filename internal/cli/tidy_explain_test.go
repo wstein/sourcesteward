@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -56,7 +57,7 @@ func TestTidyPlanExplainAppendsToTheUnchangedText(t *testing.T) {
 	if strings.Count(extra, "Explain:") != 2 || strings.Contains(extra, "refs/heads/done") {
 		t.Fatalf("explanations for the retained candidates only:\n%s", extra)
 	}
-	for _, want := range []string{`Explain: "refs/heads/open" reason="integration-not-proven"`, `Why: "It stays because it is not an ancestor of the base`, `Next: "stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online --remote origin"`, `Explain: "refs/heads/used" reason="workspace-used"`, `at /ws/used`} {
+	for _, want := range []string{`Explain: "refs/heads/open" reason="integration-not-proven"`, `Why: "It stays because it is not an ancestor of the base`, `Next: stw tidy plan /repo --contract 3 --base refs/heads/main --ref refs/heads/open --online --remote origin`, `Explain: "refs/heads/used" reason="workspace-used"`, `at /ws/used`} {
 		if !strings.Contains(extra, want) {
 			t.Errorf("missing %q in:\n%s", want, extra)
 		}
@@ -119,7 +120,7 @@ func TestTidyPlanExplainContract3JSONHasASeparateField(t *testing.T) {
 		t.Fatalf("--explain changed the rest of the JSON:\n%s\n%s", a, b)
 	}
 	text, err := runExplainV3(t, "--explain")
-	if err != nil || !strings.Contains(text, "Explain: \"refs/heads/open\" reason=\"integration-not-proven\"\n  Why: ") || !strings.Contains(text, "\n  Next: \"stw tidy plan /repo") {
+	if err != nil || !strings.Contains(text, "Explain: \"refs/heads/open\" reason=\"integration-not-proven\"\n  Why: ") || !strings.Contains(text, "\n  Next: stw tidy plan /repo") {
 		t.Fatalf("err=%v text=\n%s", err, text)
 	}
 }
@@ -193,5 +194,40 @@ func TestExplainNextCommandsAreExecutable(t *testing.T) {
 	}
 	if stwSeen == 0 || otherSeen == 0 {
 		t.Fatalf("vacuous: %d stw commands and %d git commands checked", stwSeen, otherSeen)
+	}
+}
+
+// The printed Next: line is the command as typed: parsed by a shell it gives the arguments the
+// unrendered command gives, also for a name that holds quotes and backslashes and for the report
+// directory of needs-review, which holds double quotes.
+func TestRenderedNextLineRoundTripsThroughTheShell(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"refs/heads/topic", `refs/heads/we"ird\back'q`} {
+		for _, reason := range []string{"needs-review", "integration-not-proven"} {
+			e := workspace.ExplainRetention(workspace.ExplainContext{Source: "/repo", Base: "refs/heads/main", Contract3: true, PRProof: "unavailable-offline"}, name, strings.Repeat("a", 40), reason, nil, []string{"partial-match"})
+			var out bytes.Buffer
+			if err := renderTidyExplanations(&out, []workspace.V3Explanation{e}); err != nil {
+				t.Fatal(err)
+			}
+			var next string
+			for _, line := range strings.Split(out.String(), "\n") {
+				if rest, ok := strings.CutPrefix(line, "  Next: "); ok {
+					next = rest
+				}
+			}
+			if next != e.NextCommand {
+				t.Errorf("%s %q: printed %q, command %q", reason, name, next, e.NextCommand)
+			}
+			want := shellStwArgs(t, dir, e.NextCommand)
+			got := shellStwArgs(t, dir, next)
+			if !reflect.DeepEqual(got, want) || !strings.Contains(strings.Join(got, " "), name) {
+				t.Errorf("%s %q: printed command parses to %q, want %q", reason, name, got, want)
+			}
+		}
+	}
+	var out bytes.Buffer
+	_ = renderTidyExplanations(&out, []workspace.V3Explanation{{Name: "n", Reason: "r", Text: "t", NextCommand: "git log\x1b[2J\n"}})
+	if strings.ContainsAny(out.String(), "\x1b") || strings.Count(out.String(), "\n") != 3 {
+		t.Errorf("control characters reach the terminal: %q", out.String())
 	}
 }

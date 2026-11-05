@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -229,12 +230,27 @@ func validateTidyPlanCLI(args []string, options workspace.TidyPlanOptions) error
 	return nil
 }
 
+// rawCommand returns a next command as typed, so it can be copied into a shell: quotes and backslashes
+// stay as they are (untrusted names are already single-quoted inside the command) and only control
+// characters, which could act on the terminal, are escaped.
+func rawCommand(command string) string {
+	var out strings.Builder
+	for _, r := range command {
+		if unicode.IsControl(r) {
+			fmt.Fprintf(&out, "\\x{%x}", r)
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
 // renderTidyExplanations prints the explanations of `tidy plan --explain`, every value quoted like the
 // other plan facts.
 func renderTidyExplanations(writer io.Writer, list []workspace.V3Explanation) error {
 	var text strings.Builder
 	for _, e := range list {
-		fmt.Fprintf(&text, "Explain: %q reason=%q\n  Why: %q\n  Next: %q\n", e.Name, e.Reason, e.Text, e.NextCommand)
+		fmt.Fprintf(&text, "Explain: %q reason=%q\n  Why: %q\n  Next: %s\n", e.Name, e.Reason, e.Text, rawCommand(e.NextCommand))
 	}
 	_, err := io.WriteString(writer, text.String())
 	return err
