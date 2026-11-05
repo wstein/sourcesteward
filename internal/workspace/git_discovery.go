@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 )
 
 // appleGitLauncher is the macOS /usr/bin/git shim. It cannot run inside the required
@@ -77,7 +78,10 @@ func (d gitDiscovery) find() (string, []gitAttempt) {
 		}
 	}
 	if d.Developer != nil {
-		if dev, err := d.Developer(); err == nil && dev != "" {
+		dev, err := d.Developer()
+		if err == nil && dev != "" && (!filepath.IsAbs(dev) || strings.ContainsFunc(dev, unicode.IsControl)) {
+			attempts = append(attempts, gitAttempt{"$(xcode-select -p)/usr/bin/git", "xcode-select", "xcode-select -p output is not absolute"})
+		} else if err == nil && dev != "" {
 			if p := try(filepath.Join(dev, "usr", "bin", "git"), "xcode-select", true); p != "" {
 				return p, attempts
 			}
@@ -96,6 +100,7 @@ func (d gitDiscovery) find() (string, []gitAttempt) {
 // gitDiscoveryError names every candidate with its reason and one fix command.
 func gitDiscoveryError(attempts []gitAttempt) error {
 	const fix = "fix: brew install git (or xcode-select --install), then run stw again; PATH needs no change"
+	// The wizard cuts messages at 120 chars: hint first, candidate list last.
 	var parts []string
 	onlyMissing := true
 	for _, a := range attempts {
@@ -106,9 +111,9 @@ func gitDiscoveryError(attempts []gitAttempt) error {
 	}
 	list := strings.Join(parts, "; ")
 	if onlyMissing {
-		return failure("git-unavailable", "no native Git executable found; candidates tried: "+list+"; "+fix)
+		return failure("git-unavailable", "no native Git executable found; "+fix+"; candidates tried: "+list)
 	}
-	return failure("git-sandbox-unavailable", "no native Git executable can run inside the required executable sandbox; candidates tried: "+list+"; "+fix)
+	return failure("git-sandbox-unavailable", "no native Git executable can run in the executable sandbox; "+fix+"; candidates tried: "+list)
 }
 
 func xcodeDeveloperDir() (string, error) {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -162,10 +163,52 @@ func TestGitDiscoveryNothingFoundAnywhereIsGitUnavailable(t *testing.T) {
 func TestGitDiscoveryIgnoresRelativePathEntries(t *testing.T) {
 	f := newDiscoveryFixture(t)
 	f.git(t, "rel")
+	t.Chdir(f.root)
 	d := gitDiscovery{PathDirs: []string{"", ".", "rel"}, Apple: "/nonexistent/git",
 		Developer: developerDir(f.dir("none")), Probe: func(string) error { return nil }}
 	if got, _ := d.find(); got != "" {
 		t.Fatalf("chose relative candidate %q", got)
+	}
+}
+
+func TestGitDiscoveryRejectsRelativeDeveloperDir(t *testing.T) {
+	f := newDiscoveryFixture(t)
+	f.git(t, "rel/usr/bin")
+	t.Chdir(f.root)
+	d := gitDiscovery{PathDirs: nil, Apple: "/nonexistent/git", Developer: developerDir("rel"),
+		Probe: func(string) error { return nil }}
+	got, attempts := d.find()
+	if got != "" {
+		t.Fatalf("chose %q from a relative developer dir", got)
+	}
+	if len(attempts) != 1 || !strings.Contains(attempts[0].Reason, "not absolute") {
+		t.Fatalf("attempts %+v", attempts)
+	}
+}
+
+func TestGitDiscoveryRefusesSymlinkToAppleLauncher(t *testing.T) {
+	f := newDiscoveryFixture(t)
+	apple := f.git(t, "usr-bin")
+	if err := os.MkdirAll(f.dir("link"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(apple, filepath.Join(f.dir("link"), "git")); err != nil {
+		t.Fatal(err)
+	}
+	d := gitDiscovery{PathDirs: []string{f.dir("link")}, Apple: apple, Probe: func(string) error { return nil }}
+	got, attempts := d.find()
+	if got != "" || len(attempts) != 1 || !strings.Contains(attempts[0].Reason, "Apple launcher") {
+		t.Fatalf("chose %q, attempts %+v", got, attempts)
+	}
+}
+
+func TestGitDiscoveryAppleLauncherFailsRealProbe(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS only")
+	}
+	err := probeGitInSandbox("/usr/bin/git")
+	if err == nil || !strings.Contains(err.Error(), "exit status") {
+		t.Fatalf("probe of the Apple launcher: %v", err)
 	}
 }
 
