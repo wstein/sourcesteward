@@ -326,7 +326,7 @@ checked in and byte-frozen but excluded from Pages packaging until the feature i
 agent marker names, never values), `repository`, `inputs`, `preconditions` (`id`, optional `number`, `ok`, `value`, and a typed
 `reason` when not ok), `chain` (bottom first: `number`, `head`, `base_ref`, `review_evidence` `found`, `none` or `unknown`,
 `checks`, `state`, `outcome`), `landable`, `apply_allowed` (false in agent mode and while any precondition fails),
-`effects` (the exact argument vectors), `children` (side children that block the chain), `result`, `reasons`, `notes` and
+`effects` (the exact argument vectors; `kind` is `fetch`, `push`, `retarget` or `delete-branch`), `children` (side children that block the chain), `result`, `reasons`, `notes` and
 `truncated`. `default_tip` and `plan_digest` (SHA-256 over the repository, the default branch tip, the tip and every number
 with its head; the typed approval of a later apply binds it) are absent while the remote tip is unknown. `review_evidence` is
 information and never a precondition. Tests validate the real output of the command and reject broken variants.

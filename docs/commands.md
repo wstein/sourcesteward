@@ -289,6 +289,15 @@ the exact commands (`git fetch` into `refs/stw/land/`, `git push --porcelain`). 
 not recorded as measured in `internal/land/shapes.json` (empty today) is `land-unmeasured`. Landing one pull request
 (`--pr`) is not implemented. This build has no apply.
 
+A native stack (each base is the head branch of the previous pull request, as `gh stack` creates it) is planned as: retarget every
+pull request above the bottom to the default branch (`gh pr edit N --base DEFAULT`, bottom first; the plan lists these as
+`retarget` effects), re-read everything, then the one push. It stays `land-unmeasured` (`native-stack-shape`) until the allowlist
+entry of the repository shape carries `"native": true` with the evidence of `scripts/measure-native-stack.sh`, an owner-run
+script that writes to a sandbox repository. The reads work with a token without administration rights: the rules of the branch,
+the ruleset bypass list and, when the classic protection answers 403, `GET /repos/{o}/{r}/branches/{branch}`; an unknown
+`delete_branch_on_merge` does not make the shape unreadable. A wrong checkout (`remote-repo-mismatch`) is fixed by running in the
+checkout of the repository, passing its absolute path as the positional `PATH` or using `--remote NAME`.
+
 ## Check the Ready preconditions of a pull request
 
 `stw ready-check NUMBER [--repo OWNER/NAME] [--host HOST] [--human | --json]` ([Spec 048](../specs/048-stw-ready-check/spec.md)) reads one pull
