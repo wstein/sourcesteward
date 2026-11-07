@@ -4,14 +4,12 @@ Implementation scope, feature decisions, dependencies, and acceptance gates: [Ru
 
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
-**Today stw itself starts no other program**: no `git`, no `gh`, no `ssh`. GitHub is reached over its REST API.
-It works with stock macOS tooling and an empty `PATH`. (For ssh and local-path remotes gix starts `ssh` or
-`git-upload-pack` itself during `sync --apply`, see "Remote kinds".)
-
-Decided 2026-11-07, not implemented yet (milestone M0): `status`, `tidy` and `sync` over https start no program. `sync` for ssh and local-path remotes,
-`push`, `range-diff` and conflict resolution in a worktree will run the installed `git`, through one runner with a fixed
-argument vector and a scrubbed environment, each such step marked `"via":"git"` in the JSON output; without `git` the
-step reports `unsupported`. See `chartroom/notes/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
+stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/no_binaries.rs` allows a process
+nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` over https
+start no program, there is no `gh`, no `ssh` of stw's own, and an empty `PATH` still serves every gix read. Later `push`,
+`range-diff` and conflict resolution in a worktree use the same runner. Each step that ran through it carries `"via": "git"`
+in the JSON output; without a usable `git` (missing, older than the step needs, unknown option) the step reports
+`unsupported` (exit 1, typed). See `chartroom/notes/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
 
 ```
 stw status    [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
@@ -187,15 +185,53 @@ creates). The token is never printed or logged. Without a token everything works
 Only `github.com` remotes are used for REST; the fetch offers the token to `github.com` over https only, as user
 `x-access-token`. `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
 
-## Remote kinds
+## Remote kinds and the git runner
 
-`sync --apply` tries the fetch for every remote kind and reports what gix says. `https://` needs no other
-program. For ssh remotes (`ssh://`, `user@host:path`) gix runs the system `ssh`, and for local paths and `file://` it
-runs `git-upload-pack` (observed with fake programs on `PATH`; `tests/remote_kinds.rs`). When the fetch of a
-non-https remote fails, the result is typed: `fetch: unsupported-remote`, `result: error`, exit 1, and the message
-ends with `use git directly for it`. Until M0 this stays so; then these remotes are fetched via git. A failed https fetch is
-`fetch: failed`. Credentials in a remote URL are never printed. `status`, `tidy plan` and dry-run `sync` never
-fetch. `git://` was not exercised against a server (UNKNOWN beyond the error path).
+`sync --apply` fetches `origin` by remote kind:
+
+| Remote | Fetched by | `via` | On failure |
+| --- | --- | --- | --- |
+| `ssh://`, `user@host:path`, local path, `file://` | installed `git fetch` through the runner | `git` | `fetch: failed`; `fetch: unsupported` when git is missing, too old or lacks an option |
+| `https://` | gix, no program | `gix` | `fetch: failed` |
+| `http://`, `git://` | gix, no program | `gix` | `fetch: unsupported-remote` (message ends with `use git directly for it`) |
+| other transports (`ext::`, `fd::`) | nobody | none | `fetch: unsupported-remote` |
+
+gix would start `ssh` or `git-upload-pack` itself for the first row; stw never hands such a URL to gix
+(`tests/remote_kinds.rs` puts fake `ssh`, `git-upload-pack` and `git` first on `PATH` and checks that only the runner
+starts `git`). `via`, and `git_error` (`not-found`, `version`, `unknown-option`, `timeout`, `output-limit`, `exit`,
+`spawn`) appear in the repository entry of `sync` and in `agent_rules` only when a fetch ran. Credentials in a remote URL
+and GitHub tokens are never printed. `status`, `tidy plan` and dry-run `sync` never fetch. `git://` was not exercised
+against a server (UNKNOWN beyond the error path).
+
+Runner rules (`src/git_runner.rs`):
+
+- Fixed argument vector per operation (`Op`), never composed from free text: `git -C <absolute repo> -c core.fsmonitor=false
+  -c submodule.recurse=false -c fetch.recurseSubmodules=false -c gc.auto=0 -c maintenance.auto=false
+  -c protocol.ext.allow=never fetch --quiet --no-tags --no-recurse-submodules origin`. No shell. An empty, relative or
+  missing repository path is refused; the process working directory is never used.
+- Environment allowlist: `PATH`, `HOME`, `USER`, `LOGNAME`, `XDG_CONFIG_HOME`, `TMPDIR`, `SSH_AUTH_SOCK`, `SSH_AGENT_PID`,
+  `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`, `GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `DISPLAY`, the proxy
+  variables and `SSL_CERT_FILE`/`SSL_CERT_DIR`. Everything else is dropped: all other `GIT_*` (`GIT_DIR`, `GIT_WORK_TREE`,
+  `GIT_INDEX_FILE`, `GIT_CONFIG_*`, `GIT_EXEC_PATH`, `GIT_TRACE*`, author and committer variables), `EDITOR`, `VISUAL`,
+  `PAGER`, `LANG*`, `LC_*`, `GH_TOKEN`, `GITHUB_TOKEN`. Fixed: `LC_ALL=C`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`,
+  `GIT_PAGER=cat`, `GIT_EDITOR=true`, `GIT_ALLOW_PROTOCOL=file:ssh:git:http:https`, `GIT_CEILING_DIRECTORIES` = parent of
+  the repository. The user's Git configuration and identity stay in effect; stw sets no author or committer.
+- Time (120 s) and output (1 MiB per stream) are bounded; the child is killed on either limit. `git --version` is read once
+  per run; the fetch needs 2.30.0 (UNKNOWN below 2.47.3: only that version was run). A spawn that fails with ETXTBSY is retried.
+- Errors are typed (`GitError`) and redacted: URL user info, GitHub token shapes, `Authorization:` values and the values of
+  `GH_TOKEN`/`GITHUB_TOKEN` never reach output.
+- Not done: Windows (executable lookup, path form), `range-diff` minimum version, push.
+
+## GitHub reads for review and readiness (internal API)
+
+`stw::github::reads` (no command uses it yet): `Client::issue_comments`, `pr_reviews`, `check_runs`, `commit_statuses`.
+REST GET, 100 per page, under a `Budget` (10 pages, 500 items, 16 KiB text per body, 60 s). A list that hit a bound, lost a
+page or had a malformed entry is `Observed` with `incomplete: Some(reason)`; `Read::is_complete()` is true only for a fully
+read list, so partial or unreadable evidence cannot make a pull request Ready. 401, 403 (no permission, for example Checks)
+and 429/exhausted rate limit are `Read::Denied`, 404 is `NotFound`, other failures `Failed`; none is a crash. GitHub text is
+untrusted: cut, then escaped reversibly (`\\`, `\n`, `\r`, `\t`, `\u{hex}` for control, zero-width and direction
+characters). Slug and SHA are validated before they enter a path. Tests: `tests/github_reads.rs` with the fixtures in
+`tests/fixtures/github/` (see its README for which are recorded and which are hand-written).
 
 ## Build and test
 
