@@ -43,6 +43,31 @@ fn spaced(words: &[String], seps: &[String], lead: &str, trail: &str) -> String 
     s
 }
 
+/// Fixed boundary case: the change is the first one with a full 3 lines of context above it. One line added on
+/// top must not become context (a context of 4 would hash it).
+#[test]
+fn a_change_at_line_3_keeps_its_id_when_a_line_is_added_on_top() {
+    let (n, at) = (10, 3);
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("f.txt", Some(&file(n)))], "base");
+    let a = fx.commit(
+        Some(base),
+        &[("f.txt", Some(&edited(n, at, "new", 0)))],
+        "edit",
+    );
+    let shifted_base = fx.commit(
+        None,
+        &[("f.txt", Some(&edited(n, n, "", 1)))],
+        "shifted base",
+    );
+    let c = fx.commit(
+        Some(shifted_base),
+        &[("f.txt", Some(&edited(n, at, "new", 1)))],
+        "shifted edit",
+    );
+    assert_eq!(pid(&fx, a), pid(&fx, c));
+}
+
 proptest! {
     #![proptest_config(ProptestConfig { cases: 12, failure_persistence: None, ..ProptestConfig::default() })]
 
