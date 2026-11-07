@@ -191,7 +191,7 @@ Only `github.com` remotes are used for REST; the fetch offers the token to `gith
 program. For ssh remotes (`ssh://`, `user@host:path`) gix runs the system `ssh`, and for local paths and `file://` it
 runs `git-upload-pack` (observed with fake programs on `PATH`; `tests/remote_kinds.rs`). When the fetch of a
 non-https remote fails, the result is typed: `fetch: unsupported-remote`, `result: error`, exit 1, and the message
-ends with `use git directly for it`. gix tries to fetch such remotes (it starts `ssh` or `git-upload-pack`) and stw reports `unsupported-remote` when that fails. Until M0 this stays so; then these remotes are fetched via git. A failed https fetch is
+ends with `use git directly for it`. Until M0 this stays so; then these remotes are fetched via git. A failed https fetch is
 `fetch: failed`. Credentials in a remote URL are never printed. `status`, `tidy plan` and dry-run `sync` never
 fetch. `git://` was not exercised against a server (UNKNOWN beyond the error path).
 
