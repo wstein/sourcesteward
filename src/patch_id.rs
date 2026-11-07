@@ -289,7 +289,9 @@ fn quote_path(prefix: &[u8], path: &BStr) -> Vec<u8> {
             b'\r' => out.extend_from_slice(b"\\r"),
             b'"' => out.extend_from_slice(b"\\\""),
             b'\\' => out.extend_from_slice(b"\\\\"),
-            b if b < 0x20 || b >= 0x7f => out.extend_from_slice(format!("\\{b:03o}").as_bytes()),
+            b if !(0x20..0x7f).contains(&b) => {
+                out.extend_from_slice(format!("\\{b:03o}").as_bytes())
+            }
             b => out.push(b),
         }
     }
