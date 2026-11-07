@@ -1,0 +1,74 @@
+---
+source: tests/snapshots_symlink.rs
+expression: pretty
+---
+{
+  "schema_version": 2,
+  "command": "status",
+  "root": "[ROOT]",
+  "engine": "[ENGINE]",
+  "github": false,
+  "github_auth": null,
+  "github_note": "pull requests not read: --offline",
+  "repos": [
+    {
+      "name": "repo",
+      "path": "[ROOT]",
+      "state": "ok",
+      "branch": "main",
+      "detached": false,
+      "head": "58e57596bca3",
+      "upstream": "origin/main",
+      "upstream_gone": false,
+      "ahead": 0,
+      "behind": 0,
+      "changes": {
+        "staged": 0,
+        "unstaged": 0,
+        "untracked": 0,
+        "conflicts": 0
+      },
+      "stash": 0,
+      "operation": null,
+      "gitlink": {
+        "recorded": null,
+        "state": null
+      },
+      "slug": "test/fixture",
+      "attention": false,
+      "reasons": [],
+      "pull_requests": {
+        "read": false,
+        "error": null,
+        "open": []
+      },
+      "error": null
+    }
+  ],
+  "summary": {
+    "total": 1,
+    "attention": 0
+  },
+  "agent_rules": {
+    "path": null,
+    "state": "not-found",
+    "branch": null,
+    "default_ref": null,
+    "ahead": null,
+    "behind": null,
+    "dirty_files": 0,
+    "fetch": "not-run",
+    "last_fetch_seconds_ago": null,
+    "requested": false,
+    "head": null,
+    "detached": false,
+    "submodule": false,
+    "foreign_authors": [],
+    "action": "none",
+    "reason": "",
+    "commits": [],
+    "files": [],
+    "flagged_files": [],
+    "updated": false
+  }
+}

@@ -11,11 +11,10 @@ fn status_json_with_the_temp_dir_behind_a_symlink() {
     let link = real.path().join("link");
     std::fs::create_dir(real.path().join("target")).unwrap();
     std::os::unix::fs::symlink(real.path().join("target"), &link).unwrap();
-    // an environment as the fixtures support it: CLAUDE_JOB_DIR with a tmp/ is preferred over TMPDIR
-    let job = scratch();
-    std::fs::create_dir(job.path().join("tmp")).unwrap();
+    // CLAUDE_JOB_DIR (with a tmp/) is preferred over TMPDIR by the fixtures: point it at the link as well
+    std::fs::create_dir(link.join("tmp")).unwrap();
     let old_job = std::env::var_os("CLAUDE_JOB_DIR");
-    std::env::set_var("CLAUDE_JOB_DIR", job.path());
+    std::env::set_var("CLAUDE_JOB_DIR", &link);
     let old = std::env::var_os("TMPDIR");
     std::env::set_var("TMPDIR", &link);
     let fx = status_fixture();
