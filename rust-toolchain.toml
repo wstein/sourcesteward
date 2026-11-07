@@ -1,3 +1,4 @@
+# Keep in step with the rustc of the whr base image (WHR_H_BASE in projects/workharbor/whr-harbor.sh), else rustup downloads this toolchain on every container recreate.
 [toolchain]
 channel = "1.99.1"
 components = ["rustfmt", "clippy"]
