@@ -2,9 +2,14 @@
 
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
-**stw itself starts no other program**: no `git`, no `gh`, no `ssh`. GitHub is reached over its REST API.
+**Today stw itself starts no other program**: no `git`, no `gh`, no `ssh`. GitHub is reached over its REST API.
 It works with stock macOS tooling and an empty `PATH`. (For ssh and local-path remotes gix starts `ssh` or
 `git-upload-pack` itself during `sync --apply`, see "Remote kinds".)
+
+Decided 2026-11-07, not implemented yet (milestone M0): the core (`status`, `tidy`, `sync`) keeps starting no program. Only
+`push`, `range-diff` and conflict resolution in a worktree will run the installed `git`, through one runner with a fixed
+argument vector and a scrubbed environment, each such step marked `"via":"git"` in the JSON output; without `git` the
+step reports `unsupported`. See `chartroom/notes/stw runs git only for push, range-diff and resolve.md`.
 
 ```
 stw status    [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
