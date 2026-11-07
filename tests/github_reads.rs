@@ -286,6 +286,26 @@ fn a_malformed_entry_makes_the_list_partial() {
 }
 
 #[test]
+fn commit_ids_that_are_not_full_lower_case_hex_are_dropped() {
+    let body = serde_json::json!([
+        {"id": 1, "state": "APPROVED", "commit_id": SHA, "user": {"login": "a"}},
+        {"id": 2, "state": "APPROVED", "commit_id": SHA.to_uppercase(), "user": {"login": "a"}},
+        {"id": 3, "state": "APPROVED", "commit_id": "abc123", "user": {"login": "a"}},
+        {"id": 4, "state": "APPROVED", "commit_id": "../etc", "user": {"login": "a"}},
+        {"id": 5, "state": "APPROVED", "commit_id": null, "user": {"login": "a"}}
+    ])
+    .to_string();
+    let api = status_server(200, vec![], body);
+    let o = observed(
+        client(&api)
+            .pr_reviews(SLUG, 1, &Budget::default())
+            .unwrap(),
+    );
+    let ids: Vec<Option<&str>> = o.items.iter().map(|r| r.commit_id.as_deref()).collect();
+    assert_eq!(ids, [Some(SHA), None, None, None, None]);
+}
+
+#[test]
 fn denied_missing_and_broken_answers_are_typed_never_a_crash() {
     let forbidden = fixture("forbidden_checks.json").to_string();
     type Case = (u16, Vec<(String, String)>, String, &'static str);
