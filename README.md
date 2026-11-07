@@ -7,7 +7,7 @@ It works with stock macOS tooling and an empty `PATH`. (For ssh and local-path r
 `git-upload-pack` itself during `sync --apply`, see "Remote kinds".)
 
 Decided 2026-11-07, not implemented yet (milestone M0): the core (`status`, `tidy`, `sync`) keeps starting no program. Only
-`push`, `range-diff` and conflict resolution in a worktree will run the installed `git`, through one runner with a fixed
+`push`, `range-diff`, conflict resolution in a worktree and fetch for ssh and local-path remotes will run the installed `git`, through one runner with a fixed
 argument vector and a scrubbed environment, each such step marked `"via":"git"` in the JSON output; without `git` the
 step reports `unsupported`. See `chartroom/notes/stw runs git only for push, range-diff and resolve.md`.
 
@@ -191,7 +191,7 @@ Only `github.com` remotes are used for REST; the fetch offers the token to `gith
 program. For ssh remotes (`ssh://`, `user@host:path`) gix runs the system `ssh`, and for local paths and `file://` it
 runs `git-upload-pack` (observed with fake programs on `PATH`; `tests/remote_kinds.rs`). When the fetch of a
 non-https remote fails, the result is typed: `fetch: unsupported-remote`, `result: error`, exit 1, and the message
-ends with `use git directly for it`. A failed https fetch is
+ends with `use git directly for it`. Until M0 this stays `unsupported-remote`; then these remotes are fetched via git. A failed https fetch is
 `fetch: failed`. Credentials in a remote URL are never printed. `status`, `tidy plan` and dry-run `sync` never
 fetch. `git://` was not exercised against a server (UNKNOWN beyond the error path).
 
