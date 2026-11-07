@@ -1,0 +1,408 @@
+//! Command line (clap): `stw status | tidy plan | tidy apply | tidy restore | sync`, the shared options, workspace selection and
+//! the exit code of a run.
+use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+
+use clap::{Args, Parser, Subcommand};
+use serde_json::Value;
+
+use crate::error::{exit, Error, Kind, Result};
+use crate::github::GithubState;
+use crate::output::print_json;
+use crate::repo::{self, RepoRef};
+use crate::{dev, status, sync, tidy, tidy_apply};
+
+const EXIT_CODES: &str = "\
+Exit codes:
+  0  everything asked for worked
+  1  the command ran, but a repository could not be read, `sync --apply` failed in one, `tidy apply`
+     failed a step (a branch, worktree, registration or the exclude file), or `tidy restore` left an
+     entry not restored
+  2  usage error or unusable workspace (nothing was done)
+
+--json prints one JSON object with \"schema_version\" (see README.md).";
+
+#[derive(Parser)]
+#[command(
+    name = "stw",
+    version,
+    about = "SourceSteward: where am I, what can go, what is behind, across every repository of a workspace",
+    after_help = EXIT_CODES,
+    subcommand_required = true,
+    arg_required_else_help = true
+)]
+struct Cli {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand)]
+enum Command {
+    /// Where am I in every repository (read-only)
+    #[command(after_help = EXIT_CODES)]
+    Status(StatusArgs),
+    /// Branch cleanup: `plan` shows it, `apply` carries it out, `restore` undoes it
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
+    Tidy {
+        #[command(subcommand)]
+        command: TidyCommand,
+    },
+    /// Fast-forward every repository to its upstream (dry run unless --apply)
+    #[command(after_help = EXIT_CODES)]
+    Sync(SyncArgs),
+    #[command(hide = true)]
+    Dev {
+        #[command(subcommand)]
+        command: DevCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum TidyCommand {
+    /// Which local branches and worktree registrations can be cleaned up (read-only, deletes nothing)
+    #[command(after_help = EXIT_CODES)]
+    Plan(TidyArgs),
+    /// Carry out the plan: delete the local branches it marks `delete`, manifest first; undo with `restore`
+    #[command(after_help = EXIT_CODES)]
+    Apply(ApplyArgs),
+    /// Re-create branches deleted by `apply` from the manifest (never overwrites)
+    #[command(after_help = EXIT_CODES)]
+    Restore(RestoreArgs),
+}
+
+#[derive(Subcommand)]
+enum DevCommand {
+    PatchId { repo: PathBuf, revs: Vec<String> },
+}
+
+/// Options every command shares.
+#[derive(Args)]
+struct Common {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Do not talk to GitHub (no pull request data, no fetch)
+    #[arg(long)]
+    offline: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Only this repository of the workspace (name as printed by stw); repeatable
+    #[arg(long = "repo", value_name = "NAME")]
+    repos: Vec<String>,
+}
+
+#[derive(Args)]
+struct TidyArgs {
+    #[command(flatten)]
+    common: Common,
+    /// Also list the branches that are kept
+    #[arg(long)]
+    all: bool,
+    /// Backup branches (r9-*, r10-*, pre-restack*, archive/*, backup/*) whose tip commit is at least N days old are `delete`
+    #[arg(long, value_name = "N", default_value_t = tidy::DEFAULT_BACKUP_DAYS)]
+    backup_days: u64,
+}
+
+#[derive(Args)]
+struct ApplyArgs {
+    #[command(flatten)]
+    common: Common,
+    /// Act on this `stw tidy plan --json` output (each entry is verified again first) [default: a fresh plan]
+    #[arg(long, value_name = "FILE")]
+    plan: Option<PathBuf>,
+    /// Where the manifest goes [default: the user's data directory, stw/manifests]
+    #[arg(long, value_name = "DIR")]
+    manifest_dir: Option<PathBuf>,
+    /// Backup branches whose tip commit is at least N days old are `delete`
+    #[arg(long, value_name = "N", default_value_t = tidy::DEFAULT_BACKUP_DAYS)]
+    backup_days: u64,
+}
+
+#[derive(Args)]
+struct RestoreArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Run ID printed by `apply` [default: the newest run]
+    #[arg(long, value_name = "ID")]
+    run: Option<String>,
+    /// Only this branch
+    #[arg(long, value_name = "NAME")]
+    branch: Option<String>,
+    /// Where the manifests are [default: the user's data directory, stw/manifests]
+    #[arg(long, value_name = "DIR")]
+    manifest_dir: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct SyncArgs {
+    #[command(flatten)]
+    common: Common,
+    /// Fetch origin and fast-forward; never merges, rebases, stashes, resets or pushes
+    #[arg(long)]
+    apply: bool,
+    /// Also handle the agent-rules checkout (the submodule .agents of a whr workspace): with --apply fetch it and
+    /// fast-forward HEAD to origin's default branch; without --apply only report. Refuses only to protect local
+    /// changes or local commits. Never runs install.sh
+    #[arg(long)]
+    rules: bool,
+    /// agent-rules checkout [default: <workspace>/.agents]
+    #[arg(long, value_name = "PATH")]
+    rules_path: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct StatusArgs {
+    #[command(flatten)]
+    common: Common,
+    /// agent-rules checkout [default: <workspace>/.agents]
+    #[arg(long, value_name = "PATH")]
+    rules_path: Option<PathBuf>,
+}
+
+struct Workspace {
+    root: String,
+    repos: Vec<RepoRef>,
+    github: GithubState,
+}
+
+fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = c
+        .root
+        .clone()
+        .or_else(|| repo::default_root(&cwd))
+        .ok_or_else(|| {
+            Error::usage(
+                "no workspace root: pass --root PATH, run inside the workspace, or set STW_ROOT",
+            )
+        })?;
+    if !root.is_dir() {
+        return Err(Error::usage(format!(
+            "workspace root is not a directory: {}",
+            root.display()
+        )));
+    }
+    let root = std::fs::canonicalize(&root).unwrap_or(root);
+    let mut repos = repo::list_repos(&root);
+    // the rules checkout is handled only by the agent-rules logic, never by the generic loop
+    let rules = sync::rules::checkout_path(&root, rules_path);
+    repos.retain(|r| std::fs::canonicalize(&r.path).unwrap_or(r.path.clone()) != rules);
+    if !c.repos.is_empty() {
+        let known: Vec<String> = repos.iter().map(|r| r.name.clone()).collect();
+        if let Some(bad) = c.repos.iter().find(|n| !known.contains(n)) {
+            return Err(Error::usage(format!(
+                "unknown repository {bad:?}; the workspace has: {}",
+                known.join(", ")
+            )));
+        }
+        repos.retain(|r| c.repos.contains(&r.name));
+    }
+    Ok(Workspace {
+        root: root.to_string_lossy().into_owned(),
+        repos,
+        github: GithubState::discover(c.offline),
+    })
+}
+
+/// Parse the arguments, run, and return the process exit code.
+pub fn main() -> ExitCode {
+    let cli = match Cli::try_parse() {
+        Ok(c) => c,
+        Err(e) => {
+            let _ = e.print();
+            return ExitCode::from(if e.use_stderr() {
+                exit::USAGE
+            } else {
+                exit::OK
+            });
+        }
+    };
+    match run(cli.command) {
+        Ok(code) => ExitCode::from(code),
+        Err(e) => {
+            eprintln!("stw: {e}");
+            ExitCode::from(if e.kind() == Kind::Usage {
+                exit::USAGE
+            } else {
+                exit::FAILED
+            })
+        }
+    }
+}
+
+fn manifest_dir(given: Option<PathBuf>) -> Result<PathBuf> {
+    given
+        .or_else(tidy_apply::default_manifest_dir)
+        .ok_or_else(|| {
+            Error::usage("no manifest directory: pass --manifest-dir DIR (HOME is not set)")
+        })
+}
+
+fn run_apply(a: ApplyArgs) -> Result<u8> {
+    let ws = workspace(&a.common, None)?;
+    let dir = manifest_dir(a.manifest_dir.clone())?;
+    let wanted = match &a.plan {
+        Some(f) => Some(tidy_apply::read_plan_file(f)?),
+        None => None,
+    };
+    let now = tidy::now_secs();
+    let popts = tidy::PlanOpts {
+        backup_days: a.backup_days,
+        now,
+    };
+    let aopts = tidy_apply::ApplyOpts {
+        manifest_dir: dir,
+        run_id: tidy_apply::new_run_id(),
+        now,
+    };
+    let plans = repo::for_each(&ws.repos, |r| {
+        tidy::plan_repo(r, ws.github.client(), a.common.offline, &popts)
+    });
+    let mut list = Vec::new();
+    for (r, plan) in ws.repos.iter().zip(&plans) {
+        let w: Option<&[tidy_apply::Planned]> = match &wanted {
+            None => None,
+            Some(all) => Some(
+                all.iter()
+                    .find(|(p, _)| same_path(p, &r.path))
+                    .map(|(_, l)| l.as_slice())
+                    .unwrap_or(&[]),
+            ),
+        };
+        list.push(tidy_apply::apply_repo(r, plan, w, &aopts));
+    }
+    if let Some(all) = &wanted {
+        for (p, _) in all {
+            if !ws.repos.iter().any(|r| same_path(p, &r.path)) {
+                list.push(tidy_apply::ApplyRepo {
+                    name: p.clone(),
+                    path: p.clone(),
+                    error: Some("the plan names a repository that is not in this workspace".into()),
+                    ..Default::default()
+                });
+            }
+        }
+    }
+    if a.common.json {
+        print_json(&tidy_apply::apply_to_json(&ws.root, &aopts.run_id, &list));
+    } else {
+        print!("{}", tidy_apply::apply_render_human(&aopts.run_id, &list));
+    }
+    Ok(if list.iter().any(|r| r.failed()) {
+        exit::FAILED
+    } else {
+        exit::OK
+    })
+}
+
+fn same_path(a: &str, b: &std::path::Path) -> bool {
+    let (a, b) = (std::path::Path::new(a), b);
+    a == b
+        || matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
+}
+
+fn run(command: Command) -> Result<u8> {
+    let failed = |any: bool| if any { exit::FAILED } else { exit::OK };
+    match command {
+        Command::Status(a) => {
+            let c = a.common;
+            let ws = workspace(&c, a.rules_path.as_deref())?;
+            let root = PathBuf::from(&ws.root);
+            let list = repo::for_each(&ws.repos, |r| {
+                status::collect_one(r, &root, ws.github.client())
+            });
+            let rules = sync::rules::agent_rules(
+                &root,
+                None,
+                &sync::rules::RulesOpts {
+                    path: a.rules_path.clone(),
+                    ..Default::default()
+                },
+            );
+            if c.json {
+                let mut v = status::to_json(&ws.root, &ws.github, &list);
+                if let Value::Object(m) = &mut v {
+                    m.insert("agent_rules".into(), sync::rules::to_json(&rules));
+                }
+                print_json(&v);
+            } else {
+                print!("{}", status::render_human(ws.github.note.clone(), &list));
+                print!("{}", sync::rules::render_human(&rules));
+            }
+            Ok(failed(list.iter().any(|s| s.error.is_some())))
+        }
+        Command::Tidy {
+            command: TidyCommand::Plan(a),
+        } => {
+            let ws = workspace(&a.common, None)?;
+            let opts = tidy::PlanOpts {
+                backup_days: a.backup_days,
+                now: tidy::now_secs(),
+            };
+            let plans = repo::for_each(&ws.repos, |r| {
+                tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)
+            });
+            if a.common.json {
+                print_json(&tidy::to_json(&ws.root, &ws.github, &plans));
+            } else {
+                print!("{}", tidy::render_human(&plans, a.all));
+                if let Some(n) = &ws.github.note {
+                    println!("({n})");
+                }
+            }
+            Ok(failed(plans.iter().any(|p| p.error.is_some())))
+        }
+        Command::Tidy {
+            command: TidyCommand::Apply(a),
+        } => run_apply(a),
+        Command::Tidy {
+            command: TidyCommand::Restore(a),
+        } => {
+            let dir = manifest_dir(a.manifest_dir.clone())?;
+            let r = tidy_apply::restore(&dir, a.run.as_deref(), a.branch.as_deref())?;
+            if a.json {
+                print_json(&tidy_apply::restore_to_json(&r));
+            } else {
+                print!("{}", tidy_apply::restore_render_human(&r));
+            }
+            Ok(failed(!r.complete()))
+        }
+        Command::Sync(a) => {
+            let ws = workspace(&a.common, a.rules_path.as_deref())?;
+            let opts = sync::Opts {
+                apply: a.apply,
+                offline: a.common.offline,
+            };
+            let list = repo::for_each(&ws.repos, |r| sync::sync_repo(r, ws.github.client(), &opts));
+            let ropts = sync::rules::RulesOpts {
+                path: a.rules_path.clone(),
+                update: a.rules,
+                apply: a.apply,
+                offline: a.common.offline,
+            };
+            let rules =
+                sync::rules::agent_rules(&PathBuf::from(&ws.root), ws.github.client(), &ropts);
+            if a.common.json {
+                let mut v = sync::to_json(&ws.root, a.apply, &list);
+                if let Value::Object(m) = &mut v {
+                    m.insert("agent_rules".into(), sync::rules::to_json(&rules));
+                }
+                print_json(&v);
+            } else {
+                print!("{}", sync::render_human(a.apply, &list));
+                print!("{}", sync::rules::render_human(&rules));
+            }
+            Ok(failed(
+                list.iter().any(|s| s.result == "error") || rules.action == "refused",
+            ))
+        }
+        Command::Dev {
+            command: DevCommand::PatchId { repo, revs },
+        } => {
+            dev::patch_ids(&repo, &revs)?;
+            Ok(exit::OK)
+        }
+    }
+}

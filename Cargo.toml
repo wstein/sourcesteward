@@ -1,0 +1,37 @@
+[package]
+name = "stw"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.88"
+description = "SourceSteward: everyday git and GitHub workflows for agents, on gitoxide, without git or gh binaries"
+license = "EUPL-1.2"
+publish = false
+
+[[bin]]
+name = "stw"
+path = "src/main.rs"
+
+[dependencies]
+# derive only; no color, no env/unicode/wrap_help extras (binary size)
+clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
+# Pinned exactly: gix has no API stability promise before 1.0.
+gix = { version = "=0.90.0", default-features = false, features = [
+    "sha1", "parallel", "blob-diff", "revision", "index", "status", "dirwalk",
+    "worktree-mutation", "attributes", "excludes",
+    "blocking-network-client", "blocking-http-transport-reqwest-rust-tls",
+] }
+serde_json = { version = "1", features = ["preserve_order"] }
+# Blocking, no async runtime; GitHub needs five GET endpoints only.
+ureq = { version = "3", features = ["json"] }
+base64 = "0.22"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+security-framework = "3"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+
+[dev-dependencies]
+tempfile = "3"

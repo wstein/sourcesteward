@@ -1,0 +1,177 @@
+#!/bin/bash
+# stw-tidy-plan - which local branches and worktree registrations can be cleaned up. Read-only.
+# Purpose: for every repo, compare each local branch with the base (refs/remotes/origin/HEAD) and
+#          name the proof: merged (ancestor), equal patches in base (squash/rebase merge), merged
+#          pull request with exactly this head, or why it stays. Deletes nothing: the plan prints
+#          the commands (and the command that restores each branch).
+# Usage:   stw-tidy-plan [--json] [--offline] [--root PATH] [--repo NAME]... [--all]
+#          --offline: no GitHub calls (no pull request proof). --all: also list kept branches in
+#          the human output (JSON always lists every branch).
+# Exit:    0 done, 2 usage error or no git.
+# Decisions: delete (proof found), review (evidence is mixed, you decide), keep (in use, open
+#          pull request or unmerged work).
+# SPDX-License-Identifier: EUPL-1.2
+DIR=$(cd "$(dirname "$0")" && pwd)
+. "$DIR/stw-lib.sh"
+
+JSON=0 OFFLINE=0 ROOT= ONLY= ALL=0
+while [ $# -gt 0 ]; do
+  case $1 in
+    --json) JSON=1 ;;
+    --offline) OFFLINE=1 ;;
+    --all) ALL=1 ;;
+    --root) ROOT=${2:-}; shift ;;
+    --repo) ONLY="$ONLY|${2:-}|"; shift ;;
+    -h|--help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "stw-tidy-plan: unknown argument $1 (see --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+[ -n "$ROOT" ] || ROOT=$(stw_root_default) || exit 2
+[ -d "$ROOT" ] || { echo "stw-tidy-plan: no such directory: $ROOT" >&2; exit 2; }
+ROOT=$(cd "$ROOT" && pwd -P)
+stw_tmp
+GH_OK=0
+if [ $OFFLINE = 0 ] && stw_have_gh; then GH_OK=1; fi
+
+# Records: one line per branch, fields separated by STW_SEP:
+# repo path branch tip decision proof reason_detail commands(<SEP2>-joined) unique upstream track
+OUT=$STW_TMP/out WT=$STW_TMP/wt REPOS=$STW_TMP/repos
+: > "$OUT"; : > "$WT"; : > "$REPOS"
+SEP2=$'\036'
+
+plan_repo() {
+  local name=$1 path=$2 i=$3
+  OUT=$STW_TMP/out.$i WT=$STW_TMP/wt.$i REPOS=$STW_TMP/repos.$i
+  : > "$OUT"; : > "$WT"; : > "$REPOS"
+  base=$(stw_base "$path")
+  slug=$(stw_slug "$path")
+  p=$(stw_shq "$path")
+  if [ -z "$base" ]; then
+    printf '%s\n' "$name$STW_SEP$path$STW_SEP$STW_SEP$STW_SEP$slug$STW_SEP""no base: refs/remotes/origin/HEAD, origin/main and origin/master are all missing" >> "$REPOS"
+    return
+  fi
+  basetip=$(g "$path" rev-parse "$base" 2>/dev/null)
+  basebranch=${base#refs/remotes/origin/}
+  prsrc=
+  if [ $GH_OK = 1 ] && [ -n "$slug" ]; then
+    if "$STW_GH" pr list --repo "$slug" --state all --limit 500 --json number,state,headRefName,headRefOid \
+        --jq '.[] | [.headRefName,.headRefOid,.number,.state] | map(tostring) | join("\u001f")' > "$STW_TMP/pr.$i" 2>/dev/null; then
+      prsrc=$STW_TMP/pr.$i
+    fi
+  fi
+  printf '%s\n' "$name$STW_SEP$path$STW_SEP$base$STW_SEP${basetip:0:12}$STW_SEP$slug$STW_SEP$(if [ -n "$prsrc" ]; then echo pr-proof-available; elif [ $OFFLINE = 1 ]; then echo "pull request proof off (--offline)"; elif [ -z "$slug" ]; then echo "no GitHub origin: no pull request proof"; else echo "pull request proof unavailable (gh missing or not logged in)"; fi)" >> "$REPOS"
+
+  # worktrees: a registered branch is in use only while its directory exists
+  g "$path" worktree list --porcelain 2>/dev/null | { wtp= br=; while IFS= read -r l; do
+      case $l in
+        'worktree '*) wtp=${l#worktree }; br= ;;
+        'branch '*) br=${l#branch refs/heads/}; [ -d "$wtp" ] && printf '%s\t%s\n' "$br" "$wtp" ;;
+        prunable*) printf '%s%s%s%s%s\n' "$name" "$STW_SEP" "$wtp" "$STW_SEP" "git -C $p worktree prune" >> "$WT" ;;
+      esac
+    done; } > "$STW_TMP/inuse.$i"
+  # note a registration whose directory is gone (prunable lines are printed once per worktree)
+
+  g "$path" for-each-ref --format="%(refname:short)%1f%(objectname)%1f%(upstream:short)%1f%(upstream:track)" refs/heads |
+  while IFS=$STW_SEP read -r br tip up track; do
+    [ "$br" = "$basebranch" ] && continue
+    uniq=$(g "$path" rev-list --count "$base..$br" 2>/dev/null)
+    decision= proof= detail= cmds=
+    inuse=$(awk -F'\t' -v b="$br" '$1==b{print $2; exit}' "$STW_TMP/inuse.$i")
+    pr_same= pr_other= pr_open=
+    if [ -n "$prsrc" ]; then
+      while IFS=$STW_SEP read -r hb ho num st; do
+        [ "$hb" = "$br" ] || continue
+        case $st in
+          OPEN) pr_open=$num ;;
+          MERGED) if [ "$ho" = "$tip" ]; then pr_same=$num; else pr_other=$num; fi ;;
+        esac
+      done < "$prsrc"
+    fi
+    restore="git -C $p branch $(stw_shq "$br") $tip"
+    if [ -n "$inuse" ]; then
+      decision=keep; proof=in-worktree; detail="checked out in $inuse"
+    elif [ -n "$pr_open" ]; then
+      decision=keep; proof=open-pull-request; detail="open pull request #$pr_open"
+    elif g "$path" merge-base --is-ancestor "$tip" "$base" 2>/dev/null; then
+      decision=delete; proof=merged-ancestor; detail="tip is an ancestor of $base"
+      cmds="git -C $p branch -d $(stw_shq "$br")$SEP2$restore"
+    elif [ "$uniq" -gt 0 ] && ! g "$path" cherry "$base" "$tip" 2>/dev/null | grep -q '^+'; then
+      decision=delete; proof=equal-patches; detail="all $uniq commit(s) have an equal patch in $base (squash or rebase merge)"
+      cmds="git -C $p branch -D $(stw_shq "$br")$SEP2$restore"
+    elif [ -n "$pr_same" ]; then
+      decision=delete; proof=merged-pull-request-head; detail="pull request #$pr_same merged with exactly this head"
+      cmds="git -C $p branch -D $(stw_shq "$br")$SEP2$restore"
+    elif [ -n "$pr_other" ]; then
+      decision=review; proof=pull-request-merged-branch-moved; detail="pull request #$pr_other merged, but the branch has $uniq commit(s) not in $base"
+      cmds="git -C $p log --oneline $(stw_shq "$base")..$(stw_shq "$br")"
+    elif [ "$track" = "[gone]" ]; then
+      decision=review; proof=upstream-gone; detail="upstream $up is gone, $uniq commit(s) not in $base, no merged pull request found"
+      cmds="git -C $p log --oneline $(stw_shq "$base")..$(stw_shq "$br")"
+    else
+      decision=keep; proof=unmerged; detail="$uniq commit(s) not in $base, no merged pull request found"
+    fi
+    printf '%s\n' "$name$STW_SEP$path$STW_SEP$br$STW_SEP$tip$STW_SEP$decision$STW_SEP$proof$STW_SEP$detail$STW_SEP$cmds$STW_SEP$uniq$STW_SEP$up$STW_SEP$track" >> "$OUT"
+  done
+}
+
+idx=0
+while IFS=$STW_SEP read -r name path; do
+  if [ -n "$ONLY" ]; then case $ONLY in *"|$name|"*) ;; *) continue ;; esac; fi
+  idx=$((idx+1))
+  plan_repo "$name" "$path" $idx &
+done < <(stw_repos "$ROOT")
+wait
+for i in $(seq 1 $idx); do cat "$STW_TMP/out.$i" >> "$STW_TMP/out"; cat "$STW_TMP/wt.$i" >> "$STW_TMP/wt"; cat "$STW_TMP/repos.$i" >> "$STW_TMP/repos"; done
+
+nd=$(awk -F"$STW_SEP" '$5=="delete"' "$OUT" | wc -l | tr -d ' ')
+nr=$(awk -F"$STW_SEP" '$5=="review"' "$OUT" | wc -l | tr -d ' ')
+nk=$(awk -F"$STW_SEP" '$5=="keep"' "$OUT" | wc -l | tr -d ' ')
+
+if [ $JSON = 1 ]; then
+  printf '{"schema_version":1,"command":"tidy-plan","read_only":true,"root":%s,"git":%s,"gh":%s,"github":%s,"repos":[' "$(js "$ROOT")" "$(js "$STW_GIT")" "$(jsn "$STW_GH")" "$(jb $GH_OK)"
+  f=1
+  while IFS=$STW_SEP read -r name path base basetip slug note; do
+    [ $f = 1 ] || printf ','; f=0
+    printf '{"name":%s,"path":%s,"base":%s,"base_commit":%s,"slug":%s,"note":%s,"branches":[' "$(js "$name")" "$(js "$path")" "$(jsn "$base")" "$(jsn "$basetip")" "$(jsn "$slug")" "$(jsn "$note")"
+    f2=1
+    while IFS=$STW_SEP read -r rn rp br tip dec proof detail cmds uniq up track; do
+      [ "$rn" = "$name" ] || continue
+      [ $f2 = 1 ] || printf ','; f2=0
+      printf '{"branch":%s,"commit":%s,"decision":%s,"proof":%s,"detail":%s,"unique_commits":%s,"upstream":%s,"upstream_track":%s,"next_steps":[' \
+        "$(js "$br")" "$(js "$tip")" "$(js "$dec")" "$(js "$proof")" "$(js "$detail")" "$(jn "$uniq")" "$(jsn "$up")" "$(jsn "$track")"
+      f3=1; oldifs=$IFS; IFS=$SEP2; for c in $cmds; do [ $f3 = 1 ] || printf ','; f3=0; js "$c"; done; IFS=$oldifs
+      printf ']}'
+    done < "$OUT"
+    printf '],"stale_worktree_registrations":['
+    f4=1
+    while IFS=$STW_SEP read -r wn wp wc; do
+      [ "$wn" = "$name" ] || continue
+      [ $f4 = 1 ] || printf ','; f4=0
+      printf '{"path":%s,"next_steps":[%s]}' "$(js "$wp")" "$(js "$wc")"
+    done < "$WT"
+    printf ']}'
+  done < "$REPOS"
+  printf '],"summary":{"delete":%s,"review":%s,"keep":%s}}\n' "$nd" "$nr" "$nk"
+else
+  while IFS=$STW_SEP read -r name path base basetip slug note; do
+    printf '%s  base %s %s  (%s)\n' "$name" "${base:-none}" "$basetip" "$note"
+    [ -n "$base" ] || continue
+    any=0
+    while IFS=$STW_SEP read -r rn rp br tip dec proof detail cmds uniq up track; do
+      [ "$rn" = "$name" ] || continue
+      if [ "$dec" = keep ] && [ $ALL = 0 ]; then continue; fi
+      any=1
+      printf '  %-7s %s  [%s] %s\n' "$dec" "$br" "$proof" "$detail"
+      k=0; oldifs=$IFS; IFS=$SEP2; for c in $cmds; do k=$((k+1)); if [ "$dec" = delete ] && [ $k = 2 ]; then printf '          undo: %s\n' "$c"; else printf '          next: %s\n' "$c"; fi; done; IFS=$oldifs
+    done < "$OUT"
+    while IFS=$STW_SEP read -r wn wp wc; do
+      [ "$wn" = "$name" ] || continue
+      printf '  worktree registration without directory: %s\n          next: %s\n' "$wp" "$wc"
+    done < "$WT"
+    [ $any = 0 ] && echo "  nothing to clean"
+  done < "$REPOS"
+  echo "$nd to delete, $nr to review, $nk kept (read-only: nothing was changed)"
+  [ $ALL = 0 ] && [ "$nk" -gt 0 ] && echo "(--all lists the kept branches)"
+fi
+exit 0

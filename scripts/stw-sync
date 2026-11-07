@@ -1,0 +1,168 @@
+#!/bin/bash
+# stw-sync - bring every repository of the workspace up to date, like git pull --ff-only.
+# Purpose: per repo fetch origin and fast-forward the checked-out branch to its upstream.
+#          Never merges, rebases, stashes, resets or pushes; diverged or dirty-and-conflicting
+#          repos are left as they are with the command to look at them.
+# Usage:   stw-sync [--apply] [--json] [--offline] [--root PATH] [--repo NAME]...
+#          Default is a dry run: nothing is written (no fetch, no ref update). The dry run asks
+#          the remote with git ls-remote (read-only) whether a fetch would bring news.
+#          --apply: fetch and fast-forward. --offline: no network at all (dry run: local refs only).
+# Exit:    0 done (also when repos were skipped), 1 --apply and a fetch or fast-forward failed,
+#          2 usage error or no git.
+# Root:    --root, else the repo/superproject of the current directory, else $STW_ROOT,
+#          else the git top level; otherwise exit 2.
+# SPDX-License-Identifier: EUPL-1.2
+DIR=$(cd "$(dirname "$0")" && pwd)
+. "$DIR/stw-lib.sh"
+
+JSON=0 OFFLINE=0 APPLY=0 ROOT= ONLY=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --json) JSON=1 ;;
+    --offline) OFFLINE=1 ;;
+    --apply) APPLY=1 ;;
+    --dry-run) APPLY=0 ;;
+    --root) ROOT=${2:-}; shift ;;
+    --repo) ONLY="$ONLY|${2:-}|"; shift ;;
+    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "stw-sync: unknown argument $1 (see --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+[ -n "$ROOT" ] || ROOT=$(stw_root_default) || exit 2
+[ -d "$ROOT" ] || { echo "stw-sync: no such directory: $ROOT" >&2; exit 2; }
+ROOT=$(cd "$ROOT" && pwd -P)
+stw_tmp
+SEP2=$'\036'
+jbn() { if [ "$1" = 1 ]; then printf true; elif [ "$1" = 0 ]; then printf false; else printf null; fi; }
+
+# observe PATH : sets branch up ahead behind dirty op gone (from local refs).
+observe() {
+  local path=$1 out line gd
+  branch= up= ahead= behind= dirty=0 op= gone=0
+  out=$(g "$path" status --porcelain=v2 --branch --untracked-files=no 2>/dev/null) || return 1
+  while IFS= read -r line; do
+    case $line in
+      '# branch.head '*) branch=${line#'# branch.head '}; [ "$branch" = '(detached)' ] && branch= ;;
+      '# branch.upstream '*) up=${line#'# branch.upstream '} ;;
+      '# branch.ab '*) set -- ${line#'# branch.ab '}; ahead=${1#+}; behind=${2#-} ;;
+      '1 '*|'2 '*|'u '*) dirty=$((dirty+1)) ;;
+    esac
+  done <<< "$out"
+  if [ -n "$branch" ] && [ -z "$up" ] && [ -n "$(g "$path" config --get "branch.$branch.merge" 2>/dev/null)" ]; then gone=1; fi
+  gd=$(g "$path" rev-parse --absolute-git-dir 2>/dev/null)
+  [ -d "$gd/rebase-merge" -o -d "$gd/rebase-apply" ] && op=rebase
+  [ -f "$gd/MERGE_HEAD" ] && op=merge
+  [ -f "$gd/CHERRY_PICK_HEAD" ] && op=cherry-pick
+  [ -f "$gd/REVERT_HEAD" ] && op=revert
+  return 0
+}
+
+# plan_of : sets action and reason from the observed facts.
+plan_of() {
+  action= reason=
+  if [ -n "$op" ]; then action=skip; reason="$op in progress"
+  elif [ -z "$branch" ]; then action=skip; reason="detached HEAD"
+  elif [ "$gone" = 1 ]; then action=skip; reason="upstream branch is gone"
+  elif [ -z "$up" ]; then action=skip; reason="no upstream configured"
+  elif [ "${behind:-0}" -gt 0 ] && [ "${ahead:-0}" -gt 0 ]; then action=skip; reason="diverged: ahead $ahead, behind $behind"
+  elif [ "${behind:-0}" -gt 0 ]; then action=fast-forward; reason="behind $behind"
+  elif [ "${ahead:-0}" -gt 0 ]; then action=none; reason="ahead $ahead, nothing to pull (push is yours)"
+  else action=none; reason="up to date"
+  fi
+}
+
+sync_repo() {
+  local name=$1 path=$2 i=$3 fetch=not-run fetched_ago= remote_moved= result= err= before after steps= p ts now rem rbranch rsha lsha
+  local R=$STW_TMP/rec.$i
+  p=$(stw_shq "$path")
+  if ! observe "$path"; then
+    printf '%s\n' "$name$STW_SEP$path$STW_SEP$STW_SEP$STW_SEP$STW_SEP$STW_SEP$STW_SEP$STW_SEP$STW_SEP$STW_SEP""error$STW_SEP""cannot read repository state$STW_SEP$STW_SEP""error" > "$R"; return
+  fi
+  ts=$(stat -f %m "$(g "$path" rev-parse --absolute-git-dir)/FETCH_HEAD" 2>/dev/null || stat -c %Y "$(g "$path" rev-parse --absolute-git-dir)/FETCH_HEAD" 2>/dev/null)
+  now=$(date +%s); [ -n "$ts" ] && fetched_ago=$((now-ts))
+  # dry run: ask the remote read-only whether the upstream branch moved
+  if [ $OFFLINE = 0 ] && [ -n "$branch" ] && [ -n "$up" ]; then
+    rem=$(g "$path" config --get "branch.$branch.remote" 2>/dev/null)
+    rbranch=$(g "$path" config --get "branch.$branch.merge" 2>/dev/null)
+    if [ -n "$rem" ] && [ -n "$rbranch" ]; then
+      rsha=$(g "$path" ls-remote "$rem" "$rbranch" 2>/dev/null | awk 'NR==1{print $1}')
+      lsha=$(g "$path" rev-parse -q --verify "$up" 2>/dev/null)
+      if [ -n "$rsha" ]; then if [ "$rsha" = "$lsha" ]; then remote_moved=0; else remote_moved=1; fi; fi
+    fi
+  fi
+  plan_of
+  result=$action
+  if [ $APPLY = 1 ] && [ $OFFLINE = 0 ]; then
+    if [ -n "$(g "$path" remote)" ]; then
+      if err=$(g "$path" fetch --no-tags origin 2>&1); then fetch=ok; err=; else fetch=failed; err=$(printf '%s' "$err" | head -c 300 | tr '\n' ' '); fi
+    else fetch=no-remote; fi
+    observe "$path"; plan_of; result=$action
+    if [ "$fetch" = failed ]; then result=error; reason="fetch failed"; fi
+    if [ "$result" = fast-forward ]; then
+      before=$(g "$path" rev-parse HEAD)
+      if err=$(g "$path" merge --ff-only "$up" 2>&1); then
+        after=$(g "$path" rev-parse HEAD); result=fast-forwarded; reason="$before..$after"; err=
+      else result=error; reason="fast-forward refused by git"; err=$(printf '%s' "$err" | head -c 300 | tr '\n' ' '); fi
+    fi
+  elif [ $APPLY = 1 ]; then fetch=skipped-offline
+  fi
+  # next steps (executable)
+  case $result in
+    fast-forward) steps="git -C $p merge --ff-only $(stw_shq "$up")" ;;
+    skip)
+      case $reason in
+        diverged*) steps="git -C $p log --oneline --left-right $(stw_shq "$up")...HEAD${SEP2}git -C $p rebase $(stw_shq "$up")" ;;
+        "no upstream configured") steps="git -C $p push -u origin $(stw_shq "$branch")" ;;
+        *"in progress") steps="git -C $p status" ;;
+      esac ;;
+    error) steps="git -C $p status" ;;
+  esac
+  if [ $APPLY = 0 ] && [ "${remote_moved:-}" = 1 ] && [ "$result" != error ]; then steps="git -C $p fetch --no-tags origin${steps:+$SEP2}$steps"; fi
+  [ "$dirty" -gt 0 ] && [ "$result" = fast-forward ] && reason="$reason; working tree has $dirty changed file(s), git refuses if they overlap"
+  printf '%s\n' "$name$STW_SEP$path$STW_SEP$branch$STW_SEP$up$STW_SEP$ahead$STW_SEP$behind$STW_SEP$dirty$STW_SEP$fetch$STW_SEP$fetched_ago$STW_SEP$remote_moved$STW_SEP$result$STW_SEP$reason$STW_SEP$err$STW_SEP$steps" > "$R"
+}
+
+idx=0
+while IFS=$STW_SEP read -r name path; do
+  if [ -n "$ONLY" ]; then case $ONLY in *"|$name|"*) ;; *) continue ;; esac; fi
+  idx=$((idx+1))
+  sync_repo "$name" "$path" $idx &
+done < <(stw_repos "$ROOT")
+wait
+: > "$STW_TMP/all"
+for i in $(seq 1 $idx); do cat "$STW_TMP/rec.$i" >> "$STW_TMP/all"; done
+
+mode=dry-run; [ $APPLY = 1 ] && mode=apply
+changed=0 errors=0 skipped=0 pending=0 total=0
+if [ $JSON = 1 ]; then
+  printf '{"schema_version":1,"command":"sync","mode":%s,"root":%s,"git":%s,"repos":[' "$(js $mode)" "$(js "$ROOT")" "$(js "$STW_GIT")"
+fi
+first=1
+while IFS=$STW_SEP read -r name path branch up ahead behind dirty fetch fago moved result reason err steps; do
+  total=$((total+1))
+  case $result in fast-forwarded) changed=$((changed+1)) ;; error) errors=$((errors+1)) ;; skip) skipped=$((skipped+1)) ;; fast-forward) pending=$((pending+1)) ;; esac
+  if [ $JSON = 1 ]; then
+    [ $first = 1 ] || printf ','; first=0
+    printf '{"name":%s,"path":%s,"branch":%s,"upstream":%s,"ahead":%s,"behind":%s,"dirty_files":%s,"fetch":%s,"last_fetch_seconds_ago":%s,"remote_moved":%s,"result":%s,"reason":%s,"error":%s,"next_steps":[' \
+      "$(js "$name")" "$(js "$path")" "$(jsn "$branch")" "$(jsn "$up")" "$(jn "$ahead")" "$(jn "$behind")" "$(jn "$dirty")" "$(js "$fetch")" "$(jn "$fago")" \
+      "$(jbn "$moved")" "$(js "$result")" "$(js "$reason")" "$(jsn "$err")"
+    f2=1; oldifs=$IFS; IFS=$SEP2; for s in $steps; do [ $f2 = 1 ] || printf ','; f2=0; js "$s"; done; IFS=$oldifs
+    printf ']}'
+  else
+    note=
+    [ "$moved" = 1 ] && [ $APPLY = 0 ] && note="  (remote has news: fetch needed)"
+    [ "$moved" = 0 ] && [ $APPLY = 0 ] && note="  (remote unchanged since last fetch)"
+    printf '%-18s %-26s %-16s %s%s\n' "$name" "${branch:-"(detached)"}" "$result" "$reason" "$note"
+    [ -n "$err" ] && printf '    error: %s\n' "$err"
+    oldifs=$IFS; IFS=$SEP2; for s in $steps; do printf '    next: %s\n' "$s"; done; IFS=$oldifs
+  fi
+done < "$STW_TMP/all"
+if [ $JSON = 1 ]; then
+  printf '],"summary":{"total":%s,"fast_forwarded":%s,"would_fast_forward":%s,"skipped":%s,"errors":%s}}\n' "$total" "$changed" "$pending" "$skipped" "$errors"
+else
+  if [ $APPLY = 1 ]; then echo "$changed fast-forwarded, $skipped skipped, $errors failed"
+  else echo "dry run: $pending would fast-forward, $skipped skipped. Nothing was written. Run with --apply to do it."; fi
+fi
+[ $APPLY = 1 ] && [ $errors -gt 0 ] && exit 1
+exit 0

@@ -1,0 +1,753 @@
+#!/usr/bin/env -S python3 -I
+# stw-push - push the default branch of the repositories of the workspace (precursor of `stw push`).
+# Usage:   stw-push [ZIEL]... [--root PATH] [--force] [--json]     push
+#          stw-push --status [ZIEL]... [--root PATH] [--json]      show the unpushed commits, change nothing
+# ZIEL:    / = workspace root (all repositories, the default), /projects/x = path from the workspace root,
+#          x = folder name (must be unique), . = current folder. A folder without .git resolves to the repository
+#          that contains it; a folder with repositories below it pushes all of them. A group of stw.toml
+#          ([groups] name = ["projects/*"]) wins over folder names when a name is ambiguous.
+# Push:    only the default branch (origin/HEAD, else main, else master) to origin; never other branches, never tags.
+#          Nested repositories and submodules first, the workspace repository last. A local branch that is behind
+#          or diverged is skipped (exit 1). Nothing to push is up-to-date. No fetch: the local remote-tracking
+#          ref is the plan.
+# --force: lease push of the default branch, only when the branch has diverged, expecting the SHA of the
+#          remote-tracking ref. There is no hard force; for that the user has to take git directly.
+# Config:  stw.toml in the workspace root. [groups] name = ["projects/*"]; [workflow] default = "fast-forward" and
+#          [workflow.repos] "path" = "pull-request" (see stw-workflow). A repository with workflow pull-request is skipped.
+# Output:  repo  branch  old->new  ok|up-to-date|skipped: reason|failed: reason  state/level, then a summary line.
+#          state: in-sync, local-ahead, remote-ahead, diverged, no-remote, failed (and no-branch, no-tracking);
+#          level: green, info, warning, error (colour only on a terminal without NO_COLOR; the label is always printed).
+# Exit:    0 only when every selected repository is in sync afterwards (pull-request repos count too), 1 otherwise
+#          (also for --status while something is unpushed), 2 usage, target or stw.toml error.
+# Submodules: a repository that has a submodule failed or skipped in the same run is skipped
+#          ("submodule /libs/sub not pushed"). Ignored folders are searched three levels deep for repositories;
+#          .worktrees and .agent-rules (old clone name; the rules are now the submodule .agents) are never searched (named by the owner); a path target inside them is that
+#          repository itself when the path is a repository root, otherwise an error.
+# no-remote: a repository without origin stays state no-remote, so the exit status stays 1 for it (rule: only
+#          "everything in sync" is 0).
+# Status:  --status uses the arithmetic of stw status (ahead = commits only here, behind = commits only on the remote
+#          tracking ref), but for the default branch against refs/remotes/origin/<branch>, not for the checked-out
+#          branch against its upstream setting, and without working tree facts.
+# ssh:     remotes over ssh get -o ConnectTimeout=15 -o BatchMode=yes unless GIT_SSH_COMMAND, GIT_SSH or
+#          core.sshCommand is set. BatchMode=yes means a passphrase-protected key needs a running ssh agent.
+# SPDX-License-Identifier: EUPL-1.2
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+
+SKIP_NAMES = {".git", ".worktrees", ".agent-rules"}
+# one place for the mapping state -> level: (fast-forward repo, pull-request repo)
+LEVELS = {
+    "in-sync": ("green", "green"),
+    "local-ahead": ("warning", "warning"),
+    "remote-ahead": ("warning", "info"),
+    "diverged": ("error", "error"),
+    "no-remote": ("info", "info"),
+    "failed": ("error", "error"),
+    "no-branch": ("warning", "warning"),
+    "no-tracking": ("warning", "warning"),
+}
+NOTES = {  # state -> (fast-forward note, pull-request note); %s = branch
+    "local-ahead": ("to push", "local %s ahead without PR"),
+    "remote-ahead": ("", "merged PR waits for sync"),
+}
+
+
+def level_of(state, wf):
+    return LEVELS[state][1 if wf == "pull-request" else 0]  # MUT-LEVELWF
+
+
+def note_of(state, wf, branch):
+    n = NOTES.get(state, ("", ""))[1 if wf == "pull-request" else 0]
+    return n % branch if "%s" in n else n
+
+
+COLORS = {"green": "32", "info": "36", "warning": "33", "error": "31"}
+ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_OPTIONAL_LOCKS="0", LC_ALL="C")
+
+
+class UsageError(Exception):
+    def __init__(self, msg, candidates=None):
+        Exception.__init__(self, msg)
+        self.candidates = candidates or []
+
+
+def find_git():
+    cands = []
+    p = shutil.which("git")
+    if p:
+        cands.append(p)
+    cands += ["/usr/bin/git", "/opt/homebrew/bin/git", "/usr/local/bin/git"]
+    for c in cands:
+        if os.access(c, os.X_OK):
+            try:
+                if subprocess.run([c, "--version"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=ENV).returncode == 0:
+                    return c
+            except OSError:
+                pass
+    sys.stderr.write("stw-push: no working git found\n")
+    sys.exit(2)
+
+
+GIT = find_git()
+
+
+def git(repo, *args, **kw):
+    p = subprocess.run([GIT, "-C", repo, "-c", "core.fsmonitor=false"] + list(args), stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, env=kw.get("env") or ENV,
+                       universal_newlines=True, errors="replace")
+    return p.returncode, p.stdout, p.stderr
+
+
+def gout(repo, *args):
+    rc, out, _ = git(repo, *args)
+    return out.strip() if rc == 0 else None
+
+
+# ---------------------------------------------------------------- discovery
+def is_repo_dir(path):
+    """A directory with its own .git; linked worktrees do not count."""
+    dot = os.path.join(path, ".git")
+    if os.path.isdir(dot):
+        return True
+    if os.path.isfile(dot):
+        try:
+            with open(dot, "r", errors="replace") as f:
+                txt = f.read(4096)
+        except OSError:
+            return False
+        m = re.match(r"gitdir:\s*(.*)", txt)
+        return bool(m) and "/worktrees/" not in m.group(1).replace("\\", "/")
+    return False
+
+
+def is_worktree_dir(path):
+    dot = os.path.join(path, ".git")
+    if os.path.isfile(dot):
+        try:
+            with open(dot, "r", errors="replace") as f:
+                m = re.match(r"gitdir:\s*(.*)", f.read(4096))
+        except OSError:
+            return False
+        return bool(m) and "/worktrees/" in m.group(1).replace("\\", "/")
+    return False
+
+
+def discover_repo(repo, repos, dirs):
+    repos.append(repo)
+    dirs.add(repo)
+    rc, out, _ = git(repo, "ls-files", "-z", "-c", "-o", "--exclude-standard")
+    if rc != 0:
+        return
+    for e in out.split("\0"):
+        if not e:
+            continue
+        isdir = e.endswith("/")
+        rel = e.rstrip("/")
+        parts = rel.split("/")
+        if any(p in SKIP_NAMES for p in parts):
+            continue
+        full = os.path.join(repo, rel)
+        for i in range(1, len(parts)):
+            dirs.add(os.path.join(repo, *parts[:i]))
+        if isdir or os.path.isdir(full):
+            if os.path.islink(full):
+                continue
+            dirs.add(full)
+            if is_repo_dir(full):
+                if full not in repos:
+                    discover_repo(full, repos, dirs)
+            elif isdir and not is_worktree_dir(full):
+                walk_plain(full, repo, repos, dirs)
+    # ignored folders: not walked, but a folder with a .git of its own is a repository
+    rc, out, _ = git(repo, "ls-files", "-z", "-o", "-i", "--exclude-standard", "--directory")  # MUT-IGNORED
+    if rc == 0:
+        for e in out.split("\0"):
+            rel = e.rstrip("/")
+            if e.endswith("/") and not any(x in SKIP_NAMES for x in rel.split("/")):
+                scan_ignored(os.path.join(repo, rel), repos, dirs, 3)
+
+
+def scan_ignored(path, repos, dirs, depth):
+    if os.path.islink(path) or not os.path.isdir(path):
+        return
+    if is_repo_dir(path):
+        if path not in repos:
+            discover_repo(path, repos, dirs)
+        return
+    if depth == 0 or is_worktree_dir(path):
+        return
+    try:
+        names = sorted(os.listdir(path))
+    except OSError:
+        return
+    for n in names:
+        if n not in SKIP_NAMES:
+            scan_ignored(os.path.join(path, n), repos, dirs, depth - 1)
+
+
+def gitlinks(repo):
+    """Absolute paths of the submodules (gitlinks) recorded in the index of repo."""
+    rc, out, _ = git(repo, "ls-files", "-s", "-z")
+    res = []
+    if rc == 0:
+        for e in out.split("\0"):
+            if e.startswith("160000") and "\t" in e:
+                res.append(os.path.join(repo, e.split("\t", 1)[1]))
+    return res
+
+
+def walk_plain(path, ctx, repos, dirs):
+    """Untracked folder (or workspace root without .git): find repositories below it by walking."""
+    try:
+        names = sorted(os.listdir(path))
+    except OSError:
+        return
+    for n in names:
+        if n in SKIP_NAMES:
+            continue
+        full = os.path.join(path, n)
+        if os.path.islink(full) or not os.path.isdir(full):
+            continue
+        if is_repo_dir(full):
+            if full not in repos:
+                dirs.add(full)
+                discover_repo(full, repos, dirs)
+        elif is_worktree_dir(full):
+            continue
+        else:
+            if ctx is not None and git(ctx, "check-ignore", "-q", "--", full)[0] == 0:
+                continue
+            dirs.add(full)
+            walk_plain(full, ctx, repos, dirs)
+
+
+def discover(root):
+    repos, dirs = [], set([root])
+    if is_repo_dir(root):
+        discover_repo(root, repos, dirs)
+    else:
+        walk_plain(root, None, repos, dirs)
+    return repos, dirs
+
+
+# ---------------------------------------------------------------- stw.toml
+def read_config(root):
+    """Text of stw.toml (line endings untouched), None when there is none; any other failure is an error."""
+    try:
+        with open(os.path.join(root, "stw.toml"), "r", encoding="utf-8", newline="") as f:
+            return f.read()
+    except FileNotFoundError:
+        return None
+    except (OSError, UnicodeDecodeError) as e:  # MUT-READERR
+        raise UsageError("stw.toml cannot be read (%s)" % (getattr(e, "strerror", None) or e.__class__.__name__))
+
+
+def strip_comment(line):
+    q, out = None, []
+    for ch in line:
+        if q:
+            if ch == q:
+                q = None
+        elif ch in "\"'":
+            q = ch
+        elif ch == "#":
+            break
+        out.append(ch)
+    return "".join(out)
+
+
+def tables_of(text):
+    """stw.toml as a list of (table name, [lines without comments]), one entry per header, in file order;
+    the name "" holds the lines before the first header."""
+    tabs = [("", [])]
+    for line in (text or "").splitlines():
+        line = strip_comment(line)
+        s = line.strip()
+        if s.startswith("["):
+            cur = re.sub(r"\s+", "", s)
+            if not cur.startswith("[["):
+                cur = cur.strip("[]")
+            tabs.append((cur, []))
+        else:
+            tabs[-1][1].append(line)
+    return tabs
+
+
+def sections_of(text):
+    """The same as {section: lines}; tables with the same name are merged."""
+    secs = {}
+    for name, lines in tables_of(text):
+        secs.setdefault(name, []).extend(lines)
+    return secs
+
+
+def parse_groups(text):
+    groups = {}
+    for name, lines in tables_of(text):
+        if name != "groups":
+            continue
+        seen_g = {}
+        for m in re.finditer(r"""^\s*("[^"]*"|'[^']*'|[A-Za-z0-9_.-]+)\s*=\s*\[(.*?)\]""", "\n".join(lines), re.S | re.M):
+            key = m.group(1).strip("\"'")
+            lst = [a or b for a, b in re.findall(r"\"([^\"]*)\"|'([^']*)'", m.group(2))]
+            if key in seen_g and seen_g[key] != lst:  # MUT-DUPGROUP
+                raise UsageError("stw.toml: duplicate key %s with different values in [groups]" % key)
+            seen_g[key] = groups[key] = lst
+    return groups
+
+
+WORKFLOWS = ("fast-forward", "pull-request")
+DEFAULT_RE = re.compile(r"""^\s*default\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$""")
+ENTRY_RE = re.compile(r"""^\s*(?:"([^"]*)"|'([^']*)'|([A-Za-z0-9_./-]+))\s*=\s*(?:"([^"]*)"|'([^']*)')\s*$""")
+
+
+def norm_key(k):
+    k = k.strip().strip("/")  # MUT-NORMKEY
+    while k.startswith("./"):
+        k = k[2:]
+    return k or "."
+
+
+def entry_of(line):
+    """(normalised key, value) of a [workflow.repos] line, None when it is not one."""
+    m = ENTRY_RE.match(line)
+    if not m:
+        return None
+    key = m.group(1) if m.group(1) is not None else m.group(2) if m.group(2) is not None else m.group(3)
+    return norm_key(key), (m.group(4) if m.group(4) is not None else m.group(5))
+
+
+def parse_workflow(text):
+    """-> (default, {path: value}). Whatever of [workflow] is not understood is an error, never ignored."""
+    secs = sections_of(text)
+    for name in secs:
+        if "workflow" in name and name not in ("workflow", "workflow.repos"):  # MUT-STRICT
+            raise UsageError("stw.toml: unsupported table [%s] (only [workflow] and [workflow.repos])" % name)
+    for line in secs[""]:
+        if re.match(r"""^\s*["']?workflow\b""", line):
+            raise UsageError("stw.toml: unsupported workflow key (use the tables [workflow] and [workflow.repos])")
+    default = "fast-forward"
+    for name, lines in tables_of(text):
+        if name != "workflow":
+            continue
+        seen_default = None
+        for line in lines:
+            if not line.strip():
+                continue
+            m = DEFAULT_RE.match(line)
+            if not m:
+                raise UsageError("stw.toml: unsupported line in [workflow]: %s" % line.strip()[:60])
+            val = m.group(1) if m.group(1) is not None else m.group(2)
+            if seen_default is not None and seen_default != val:  # MUT-DUPDEFAULT
+                raise UsageError("stw.toml: duplicate key default with different values in [workflow]")
+            seen_default = default = val
+    repos = {}
+    for name, lines in tables_of(text):
+        if name != "workflow.repos":
+            continue
+        seen = {}
+        for line in lines:
+            if not line.strip():
+                continue
+            e = entry_of(line)
+            if not e:
+                raise UsageError("stw.toml: unsupported line in [workflow.repos]: %s" % line.strip()[:60])
+            if e[0] in seen and seen[e[0]] != e[1]:  # MUT-DUPKEY
+                raise UsageError("stw.toml: duplicate key %s with different values in [workflow.repos]" % e[0])
+            seen[e[0]] = e[1]
+            repos[e[0]] = e[1]
+    for v in [default] + list(repos.values()):
+        if v not in WORKFLOWS:
+            raise UsageError("stw.toml: unknown workflow value %s (fast-forward or pull-request)" % v)
+    return default, repos
+
+
+def glob_re(pat):
+    pat = pat.strip("/")
+    out, i = "", 0
+    while i < len(pat):
+        c = pat[i]
+        if pat.startswith("**", i):
+            out += ".*"
+            i += 2
+            continue
+        out += "[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c)
+        i += 1
+    return re.compile("^" + out + "$")
+
+
+# ---------------------------------------------------------------- target resolution
+class Workspace:
+    def __init__(self, root, cwd):
+        self.root = root
+        self.cwd = cwd
+        self.repos, self.dirs = discover(root)
+        text = self.text = read_config(root)
+        self.groups = parse_groups(text)
+        self.wf_default, self.wf_repos = parse_workflow(text)
+        self.inherited = []  # (folder label, containing repo)
+
+    def rel(self, p):
+        r = os.path.relpath(p, self.root)
+        return "/" if r == "." else "/" + r
+
+    def workflow(self, repo):
+        key = norm_key(os.path.relpath(repo, self.root))
+        if key in self.wf_repos:  # MUT-WFLOOKUP
+            return self.wf_repos[key], "config"
+        return self.wf_default, "default"
+
+    def under_root(self, p):
+        return p == self.root or p.startswith(self.root + os.sep)
+
+    def repos_of_dir(self, d, notes, label, strict=False):
+        """strict: the folder must be a repository and only that one is returned (stw-workflow set/unset)."""
+        rel = os.path.relpath(d, self.root).split(os.sep)
+        hidden = [x for x in rel if x in SKIP_NAMES]
+        if hidden:  # a path inside a folder that is never searched: that repository itself or nothing  # MUT-EXCLUDED
+            if is_repo_dir(d):
+                return [d]
+            raise UsageError("target %s is inside a folder that is never searched (%s)" % (label, hidden[0]))
+        if strict:
+            if d in self.repos:  # MUT-STRICTREPO
+                return [d]
+            raise UsageError("%s is not a repository (a repository of its own is needed)" % label)
+        under = [r for r in self.repos if r == d or r.startswith(d + os.sep)]
+        if under:
+            return under
+        best = None
+        for r in self.repos:
+            if d.startswith(r + os.sep) and (best is None or len(r) > len(best)):
+                best = r
+        if best:
+            notes.append("%s resolved to containing repo %s" % (label, self.rel(best)))  # MUT-NOTE
+            self.inherited.append((label, best))
+            return [best]
+        raise UsageError("no repository found for %s" % label)
+
+    def resolve(self, t, notes, strict=False):
+        if t.startswith("+"):
+            raise UsageError("target %s: a refspec is not a target" % t)
+        if t == "":
+            raise UsageError("empty target")
+        if t == "." or t == ".." or t.startswith("./") or t.startswith("../"):
+            d = os.path.realpath(os.path.join(self.cwd, t))
+            if not self.under_root(d) or not os.path.isdir(d):
+                raise UsageError("target %s is not a folder in the workspace" % t)
+            return self.repos_of_dir(d, notes, self.rel(d), strict)
+        if t.startswith("/"):
+            d = os.path.realpath(os.path.join(self.root, t.lstrip("/")))
+            if not self.under_root(d) or not os.path.isdir(d):
+                raise UsageError("target %s is not a folder in the workspace" % t)
+            return self.repos_of_dir(d, notes, self.rel(d) if t != "/" else "/", strict)
+        if "/" in t:
+            d = os.path.realpath(os.path.join(self.root, t))
+            if not self.under_root(d) or not os.path.isdir(d):
+                raise UsageError("target %s not found" % t)
+            return self.repos_of_dir(d, notes, self.rel(d), strict)
+        cands = sorted(d for d in self.dirs if os.path.basename(d) == t)
+        if len(cands) == 1:
+            return self.repos_of_dir(cands[0], notes, self.rel(cands[0]), strict)
+        if t in self.groups:  # MUT-GROUP
+            out = []
+            rxs = [glob_re(p) for p in self.groups[t]]
+            hits = sorted(d for d in self.dirs if any(rx.match(os.path.relpath(d, self.root)) for rx in rxs))
+            for d in hits:
+                if d in self.repos:  # folders without a repository of their own are skipped  # MUT-GROUPREPO
+                    for r in self.repos_of_dir(d, notes, self.rel(d), strict):
+                        if r not in out:
+                            out.append(r)
+            if not out:
+                raise UsageError("group %s matches no repository" % t)
+            return out
+        if not cands:
+            raise UsageError("target %s not found" % t)
+        raise UsageError("target %s is ambiguous" % t, [self.rel(c) for c in cands])
+
+
+# ---------------------------------------------------------------- per repository
+def clean_text(s):
+    return re.sub(r"([A-Za-z][A-Za-z0-9+.-]*://)\S*@", r"\1", s)  # MUT-CRED
+
+
+def push_reason(stderr, rc):
+    keep = []
+    for line in stderr.splitlines():
+        s = line.strip()
+        if not s or s.startswith("hint:") or s.startswith("To ") or s.startswith("error: failed to push"):
+            continue
+        if s.startswith("remote:"):
+            s = s[7:].strip()
+            if not s:
+                continue
+        elif s.startswith("error:") or s.startswith("fatal:"):
+            s = s.split(":", 1)[1].strip()
+        keep.append(s)
+    txt = clean_text("; ".join(keep[:3])) or "push failed (exit %d)" % rc
+    return txt[:160]
+
+
+def short(sha):
+    return sha[:7] if sha else "-"
+
+
+def plan_repo(repo, force):
+    p = {"branch": None, "old": None, "new": None, "action": "skip", "reason": "", "ahead": 0, "behind": 0,
+         "commits": [], "lease": None, "state": "no-branch"}
+    if git(repo, "remote", "get-url", "origin")[0] != 0:
+        p["reason"] = "no remote origin"
+        p["state"] = "no-remote"
+        return p
+    head = gout(repo, "symbolic-ref", "-q", "refs/remotes/origin/HEAD")
+    b = None
+    if head and head.startswith("refs/remotes/origin/") and \
+            gout(repo, "rev-parse", "-q", "--verify", head) and \
+            git(repo, "check-ref-format", "--branch", head[len("refs/remotes/origin/"):])[0] == 0:  # MUT-HEADEXISTS
+        b = head[len("refs/remotes/origin/"):]
+    else:
+        for c in ("main", "master"):
+            if gout(repo, "rev-parse", "-q", "--verify", "refs/heads/" + c) or \
+                    gout(repo, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + c):  # MUT-DEFAULT
+                b = c
+                break
+    if not b:
+        p["reason"] = "no default branch (origin/HEAD, main, master)"
+        return p
+    p["branch"] = b
+    L = gout(repo, "rev-parse", "-q", "--verify", "refs/heads/" + b)
+    if not L:
+        p["reason"] = "local branch %s missing" % b
+        return p
+    T = gout(repo, "rev-parse", "-q", "--verify", "refs/remotes/origin/" + b)
+    p["old"], p["new"] = T, L
+    if T is None:
+        if force:
+            p["reason"] = "no remote-tracking ref, no lease possible"
+            p["state"] = "no-tracking"
+            return p
+        p["state"] = "local-ahead"
+        p["action"] = "push"
+        p["ahead"] = int(gout(repo, "rev-list", "--count", L) or 0)
+        p["commits"] = log_lines(repo, L)
+        return p
+    if T == L:
+        p["action"] = "noop"
+        p["state"] = "in-sync"
+        return p
+    if git(repo, "merge-base", "--is-ancestor", T, L)[0] == 0:
+        p["state"] = "local-ahead"
+        p["action"] = "push"
+        p["ahead"] = int(gout(repo, "rev-list", "--count", T + ".." + L) or 0)
+        p["commits"] = log_lines(repo, T + ".." + L)
+        return p
+    counts = (gout(repo, "rev-list", "--left-right", "--count", L + "..." + T) or "0 0").split()
+    p["ahead"], p["behind"] = int(counts[0]), int(counts[1])
+    p["state"] = "diverged"
+    if git(repo, "merge-base", "--is-ancestor", L, T)[0] == 0:
+        p["state"] = "remote-ahead"
+        p["reason"] = "behind origin by %d" % p["behind"]  # MUT-BEHIND
+        return p
+    p["commits"] = log_lines(repo, T + ".." + L)
+    if force:
+        p["action"] = "lease"
+        p["lease"] = "refs/heads/%s:%s" % (b, T)
+        return p
+    p["reason"] = "diverged (ahead %d, behind %d)" % (p["ahead"], p["behind"])
+    return p
+
+
+def log_lines(repo, rng):
+    out = gout(repo, "log", "-n", "50", "--format=%h %s", rng)
+    return out.splitlines() if out else []
+
+
+def do_push(repo, p):
+    b = p["branch"]
+    args = ["push", "--no-follow-tags", "--recurse-submodules=no"]
+    if p["action"] == "lease":
+        args.append("--force-with-lease=" + p["lease"])  # MUT-LEASE
+    args += ["origin", "refs/heads/%s:refs/heads/%s" % (b, b)]  # MUT-REFSPEC
+    env = ENV
+    if not (env.get("GIT_SSH_COMMAND") or env.get("GIT_SSH") or gout(repo, "config", "--get", "core.sshCommand")):
+        env = dict(ENV, GIT_SSH_COMMAND="ssh -o ConnectTimeout=15 -o BatchMode=yes")  # MUT-SSH
+    rc, _, err = git(repo, *args, env=env)
+    if rc == 0:
+        return "ok", ""
+    return "failed", push_reason(err, rc)
+
+
+# ---------------------------------------------------------------- main
+HELP_LINES = 32
+
+
+def usage_help():
+    with open(__file__, "r") as f:
+        lines = f.read().splitlines()[1:HELP_LINES]
+    print("\n".join(re.sub(r"^# ?", "", l) for l in lines))
+
+
+def parse(argv):
+    o = {"root": None, "force": False, "json": False, "status": False, "targets": []}
+    i, first, only_args = 0, True, False
+    while i < len(argv):
+        a = argv[i]
+        if not only_args and a == "--":
+            only_args = True
+        elif not only_args and a in ("-h", "--help"):
+            usage_help()
+            sys.exit(0)
+        elif not only_args and a == "--root":
+            i += 1
+            if i >= len(argv):
+                raise UsageError("--root needs a path")
+            o["root"] = argv[i]
+        elif not only_args and a.startswith("--root="):
+            o["root"] = a[7:]
+        elif not only_args and a == "--force":
+            o["force"] = True
+        elif not only_args and a == "--json":
+            o["json"] = True
+        elif not only_args and a == "--status":
+            o["status"] = True
+        elif not only_args and a == "--offline":
+            pass  # never fetches; accepted for parity with stw status
+        elif not only_args and a.startswith("-") and a != "-":
+            raise UsageError("unknown option %s (see --help)" % a)
+        elif first and a == "status" and not o["targets"]:
+            o["status"] = True
+        else:
+            o["targets"].append(a)
+        first = False
+        i += 1
+    return o
+
+
+def label(r):
+    txt = "%s/%s" % (r["state"], r["level"])
+    if sys.stdout.isatty() and not os.environ.get("NO_COLOR"):
+        txt = "\033[%sm%s\033[0m" % (COLORS[r["level"]], txt)
+    return txt + (" (%s)" % r["note"] if r["note"] else "")
+
+
+def default_root(cwd):
+    """The outermost folder with a stw.toml above cwd; else the top of the superproject chain of the repository."""
+    best, d = None, cwd
+    while True:
+        if os.path.exists(os.path.join(d, "stw.toml")):  # MUT-ROOTTOML
+            best = d
+        parent = os.path.dirname(d)
+        if parent == d:
+            break
+        d = parent
+    if best:
+        return best
+    top = gout(cwd, "rev-parse", "--show-toplevel")
+    if not top:
+        return cwd
+    for _ in range(10):
+        sup = gout(top, "rev-parse", "--show-superproject-working-tree")
+        if not sup:
+            break
+        top = sup
+    return top
+
+
+def fail_usage(e, as_json):
+    if as_json:
+        print(json.dumps({"schema_version": 1, "command": "push", "error": str(e), "candidates": e.candidates}))
+    sys.stderr.write("stw-push: %s\n" % e)
+    for c in e.candidates:
+        sys.stderr.write("  %s\n" % c)
+    sys.exit(2)
+
+
+def main(argv):
+    as_json = "--json" in argv
+    try:
+        o = parse(argv)
+        cwd = os.path.realpath(os.getcwd())
+        root = os.path.realpath(o["root"]) if o["root"] else default_root(cwd)
+        if not os.path.isdir(root):
+            raise UsageError("no such directory: %s" % root)
+        ws = Workspace(root, cwd)
+        notes, chosen = [], []
+        for t in (o["targets"] or ["/"]):
+            for r in ws.resolve(t, notes):
+                if r not in chosen:
+                    chosen.append(r)
+    except UsageError as e:
+        fail_usage(e, as_json)
+    chosen.sort(key=lambda r: (-(0 if r == root else len(os.path.relpath(r, root).split(os.sep))), r))  # MUT-ORDER
+    status = o["status"]
+    rows = []
+    results = {}
+    for repo in chosen:
+        wf, _src = ws.workflow(repo)
+        p = plan_repo(repo, o["force"])
+        blocked = []
+        if p["action"] in ("push", "lease"):
+            blocked = [ws.rel(g) for g in gitlinks(repo) if results.get(g) in ("skipped", "failed")]  # MUT-SUBMODULE
+        if wf == "pull-request":  # MUT-WFSKIP
+            p["action"], p["reason"] = "skip", "workflow: pull-request"
+        elif blocked:
+            p["action"], p["reason"] = "skip", "submodule %s not pushed" % ", ".join(blocked)
+        row = {"path": ws.rel(repo), "branch": p["branch"], "old": p["old"], "new": p["new"], "reason": "",
+               "ahead": p["ahead"], "behind": p["behind"], "commits": p["commits"], "state": p["state"],
+               "workflow": wf, "blocked_by": blocked}
+        if p["action"] == "skip":
+            row["result"], row["reason"] = "skipped", p["reason"]
+        elif p["action"] == "noop":
+            row["result"] = "up-to-date"
+            row["new"] = p["old"]
+        elif status:
+            row["result"] = "pending"
+        else:
+            row["result"], row["reason"] = do_push(repo, p)
+            if row["result"] != "ok":
+                row["new"] = p["old"]
+                row["state"] = "failed"
+            else:
+                row["state"] = "in-sync"
+        results[repo] = row["result"]
+        row["level"] = level_of(row["state"], wf)
+        row["note"] = note_of(row["state"], wf, row["branch"])
+        rows.append(row)
+    counts = {}
+    for r in rows:
+        counts[r["result"]] = counts.get(r["result"], 0) + 1
+    code = 1 if any(r["state"] != "in-sync" for r in rows) else 0  # MUT-EXIT
+    if o["json"]:
+        keys = ["pending"] if status else ["ok"]
+        summ = {"total": len(rows), "up_to_date": counts.get("up-to-date", 0), "skipped": counts.get("skipped", 0),
+                "failed": counts.get("failed", 0)}
+        summ["pending" if status else "ok"] = counts.get(keys[0], 0)
+        print(json.dumps({"schema_version": 1, "command": "push", "mode": "status" if status else "push",
+                          "root": root, "force": o["force"], "notes": notes, "repos": rows, "summary": summ},
+                         indent=None, sort_keys=True))
+        sys.exit(code)
+    for n in notes:
+        print("note: " + n)
+    for r in rows:
+        shas = "%s->%s" % (short(r["old"]), short(r["new"])) if r["branch"] else "-"
+        res = r["result"]
+        if res in ("skipped", "failed"):
+            res += ": " + r["reason"]
+        elif res == "pending":
+            res = "pending (ahead %d)" % r["ahead"]
+        print("%-28s %-10s %-17s %-40s %s" % (r["path"], r["branch"] or "-", shas, res, label(r)))
+        if status:
+            for c in r["commits"]:
+                print("    " + c)
+    ok_word = "pending" if status else "ok"
+    print("%d repos: %d %s, %d up-to-date, %d skipped, %d failed" % (
+        len(rows), counts.get(ok_word, 0), ok_word, counts.get("up-to-date", 0), counts.get("skipped", 0),
+        counts.get("failed", 0)))
+    sys.exit(code)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

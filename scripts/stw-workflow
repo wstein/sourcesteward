@@ -1,0 +1,259 @@
+#!/usr/bin/env -S python3 -I
+# stw-workflow - show or change the working mode of the repositories (local stw.toml only).
+# Usage:   stw-workflow [show] [ZIEL]... [--root PATH] [--json]
+#          stw-workflow set ZIEL... fast-forward|pull-request [--root PATH] [--json]
+#          stw-workflow unset ZIEL... [--root PATH] [--json]
+# Modes:   fast-forward (default) or pull-request. stw-push skips repositories in pull-request mode.
+# Config:  stw.toml in the workspace root: [workflow] default = "fast-forward", and [workflow.repos] with the path from
+#          the workspace root as key ("." is the workspace repository). A folder without its own repository inherits
+#          the mode of the repository that contains it; after a folder becomes a repository its entry still applies.
+# ZIEL:    as for stw-push (/, /path, folder name, group of stw.toml, .). set and unset need a repository of
+#          their own at the target (a folder without one is an error) and change only that repository.
+# set/unset change only stw.toml (comments and other sections stay, repeated calls change nothing, a missing file is
+# created). They never touch hosting settings such as branch protection.
+# Exit:    0 done, 2 usage or target error (including an unknown mode).
+# SPDX-License-Identifier: EUPL-1.2
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import stat
+import sys
+
+sys.dont_write_bytecode = True
+_here = os.path.dirname(os.path.realpath(__file__))
+_loader = importlib.machinery.SourceFileLoader("stw_push", os.path.join(_here, "stw-push"))
+_spec = importlib.util.spec_from_loader("stw_push", _loader)
+sp = importlib.util.module_from_spec(_spec)
+_loader.exec_module(sp)
+
+HELP_LINES = 14
+
+
+def parse(argv):
+    o = {"root": None, "json": False, "cmd": "show", "args": []}
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-h", "--help"):
+            with open(__file__, "r") as f:
+                print("\n".join(re.sub(r"^# ?", "", l) for l in f.read().splitlines()[1:HELP_LINES]))
+            sys.exit(0)
+        elif a == "--root":
+            i += 1
+            if i >= len(argv):
+                raise sp.UsageError("--root needs a path")
+            o["root"] = argv[i]
+        elif a.startswith("--root="):
+            o["root"] = a[7:]
+        elif a == "--json":
+            o["json"] = True
+        elif a.startswith("-") and a != "-":
+            raise sp.UsageError("unknown option %s (see --help)" % a)
+        else:
+            o["args"].append(a)
+        i += 1
+    if o["args"] and o["args"][0] in ("show", "set", "unset"):
+        o["cmd"] = o["args"].pop(0)
+    return o
+
+
+def key_of(ws, repo):
+    return sp.norm_key(os.path.relpath(repo, ws.root))
+
+
+def quote(s):
+    return '"%s"' % s.replace("\\", "\\\\").replace('"', '\\"')
+
+
+LINE_RE = re.compile(r"""^(\s*)("[^"]*"|'[^']*'|[A-Za-z0-9_./-]+)(\s*=\s*)("[^"]*"|'[^']*')(.*)$""")
+
+
+def edit_text(text, changes):
+    """changes: {key: value or None}. Line based: everything else stays byte for byte (comments, order, line
+    endings). Keys are compared normalised, in every [workflow.repos] table."""
+    parts = re.split(r"(\r\n|\n)", text or "")
+    recs = [[parts[i], parts[i + 1] if i + 1 < len(parts) else ""] for i in range(0, len(parts), 2)]
+    if recs and recs[-1] == ["", ""]:
+        recs.pop()
+    eol = next((r[1] for r in recs if r[1]), "\n")
+    for key, val in changes.items():
+        tables, cur = [], None
+        for i, (c, _) in enumerate(recs):
+            s = c.strip()
+            if s.startswith("["):
+                if cur is not None:
+                    tables.append((cur, i))
+                    cur = None
+                if re.sub(r"\s+", "", sp.strip_comment(s)).strip("[]") == "workflow.repos":
+                    cur = i
+        if cur is not None:
+            tables.append((cur, len(recs)))
+        hits = []
+        for a, b in tables:
+            for i in range(a + 1, b):
+                e = sp.entry_of(sp.strip_comment(recs[i][0]))
+                if e and e[0] == key:  # MUT-KEYMATCH
+                    hits.append(i)
+        if val is None:
+            for i in reversed(hits):
+                del recs[i]
+            continue
+        if hits:
+            for i in hits:
+                m = LINE_RE.match(recs[i][0])
+                recs[i][0] = "%s%s%s%s%s" % (m.group(1), m.group(2), m.group(3), quote(val), m.group(5))
+        elif tables:
+            at = tables[-1][1]
+            while at > tables[-1][0] + 1 and recs[at - 1][0].strip() == "":
+                at -= 1
+            if at > 0 and recs[at - 1][1] == "":
+                recs[at - 1][1] = eol
+            recs.insert(at, ["%s = %s" % (quote(key), quote(val)), eol])
+        else:
+            if recs and recs[-1][1] == "":
+                recs[-1][1] = eol
+            if recs and recs[-1][0].strip() != "":
+                recs.append(["", eol])
+            recs.append(["[workflow.repos]", eol])
+            recs.append(["%s = %s" % (quote(key), quote(val)), eol])
+    return "".join(c + e for c, e in recs)
+
+
+def write_config(path, new):
+    """Write through a symlink, keep the mode, fsync, replace atomically."""
+    target = os.path.realpath(path)
+    try:
+        mode = stat.S_IMODE(os.stat(target).st_mode)
+    except OSError:
+        mode = None
+    tmp = os.path.join(os.path.dirname(target), ".stw.toml.tmp.%d" % os.getpid())
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="") as f:
+            f.write(new)
+            f.flush()
+            os.fsync(f.fileno())  # MUT-FSYNC
+        if mode is not None:
+            os.chmod(tmp, mode)
+        os.replace(tmp, target)
+    except BaseException:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+    try:
+        fd = os.open(os.path.dirname(target), os.O_RDONLY)
+        try:
+            os.fsync(fd)
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
+def edit_config(path, text, changes):
+    """-> True when written. The result is read back with the same parser before anything is written."""
+    new = edit_text(text, changes)
+    if new == (text or "") or (text is None and not new):
+        return False
+    try:
+        _, repos = sp.parse_workflow(new)
+    except sp.UsageError as e:
+        raise sp.UsageError("change not applied, the result would not read back (%s)" % e)
+    for key, val in changes.items():
+        if repos.get(key) != val:  # MUT-READBACK
+            raise sp.UsageError("change not applied, %s would not read back as %s" % (key, val))
+    write_config(path, new)
+    return True
+
+
+def main(argv):
+    as_json = "--json" in argv
+    try:
+        o = parse(argv)
+        cwd = os.path.realpath(os.getcwd())
+        root = os.path.realpath(o["root"]) if o["root"] else sp.default_root(cwd)
+        if not os.path.isdir(root):
+            raise sp.UsageError("no such directory: %s" % root)
+        ws = sp.Workspace(root, cwd)
+        cmd, args, value = o["cmd"], o["args"], None
+        if cmd == "set":
+            if len(args) < 2:
+                raise sp.UsageError("set needs a target and a mode (fast-forward or pull-request)")
+            value = args.pop()
+            if value not in sp.WORKFLOWS:
+                raise sp.UsageError("unknown mode %s (fast-forward or pull-request)" % value)  # MUT-VALUE
+        if cmd in ("set", "unset") and not args:
+            raise sp.UsageError("%s needs a target" % cmd)
+        notes, chosen = [], []
+        for t in (args or ["/"]):
+            for r in ws.resolve(t, notes, strict=cmd in ("set", "unset")):
+                if r not in chosen:
+                    chosen.append(r)
+    except sp.UsageError as e:
+        if as_json:
+            print(json.dumps({"schema_version": 1, "command": "workflow", "error": str(e), "candidates": e.candidates}))
+        sys.stderr.write("stw-workflow: %s\n" % e)
+        for c in e.candidates:
+            sys.stderr.write("  %s\n" % c)
+        sys.exit(2)
+    rows = []
+    cfg = os.path.join(root, "stw.toml")
+    if cmd == "show":
+        inh = dict((r, l) for l, r in ws.inherited)
+        shown = set()
+        for repo in sorted(chosen, key=lambda r: ws.rel(r)):
+            val, src = ws.workflow(repo)
+            rows.append({"path": ws.rel(repo), "workflow": val, "source": src})
+            shown.add(key_of(ws, repo))
+        for label, repo in ws.inherited:  # folders without a repository of their own
+            val, src = ws.workflow(repo)
+            if src == "config":  # MUT-INHERIT
+                src = "inherited"
+            rows.append({"path": label, "workflow": val, "source": src})
+        if not args:  # entries that match no repository
+            for key, val in sorted(ws.wf_repos.items()):
+                if key not in shown:
+                    rows.append({"path": "/" if key == "." else "/" + key, "workflow": val, "source": "config",
+                                 "note": "no repository at this path"})
+        rows.sort(key=lambda r: r["path"])
+    else:
+        changes = {}
+        for repo in chosen:
+            changes[key_of(ws, repo)] = value if cmd == "set" else None
+        before = dict(ws.wf_repos)
+        try:
+            wrote = edit_config(cfg, ws.text, changes)
+        except (sp.UsageError, OSError) as e:  # MUT-WRITEERR
+            msg = str(e) if isinstance(e, sp.UsageError) else "stw.toml cannot be written (%s)" % (e.strerror or e.__class__.__name__)
+            if as_json:
+                print(json.dumps({"schema_version": 1, "command": "workflow", "error": msg, "candidates": []}))
+            sys.stderr.write("stw-workflow: %s\n" % msg)
+            sys.exit(2)
+        for repo in chosen:
+            k = key_of(ws, repo)
+            if cmd == "set":
+                state = "unchanged" if before.get(k) == value else "set"
+            else:
+                state = "removed" if k in before else "unchanged"
+            val = value if cmd == "set" else None
+            rows.append({"path": ws.rel(repo), "workflow": val if val else ws.wf_default,
+                         "source": "config" if cmd == "set" else "default", "change": state})
+    if as_json:
+        print(json.dumps({"schema_version": 1, "command": "workflow", "mode": cmd, "root": root,
+                          "default": ws.wf_default, "notes": notes, "repos": rows}, sort_keys=True))
+        sys.exit(0)
+    for n in notes:
+        print("note: " + n)
+    if cmd == "show":
+        print("%-28s %-14s %s" % ("Repo", "Workflow", "Source"))
+    for r in rows:
+        extra = r.get("change") or r.get("note") or ""
+        print("%-28s %-14s %-10s %s" % (r["path"], r["workflow"], r["source"], extra))
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

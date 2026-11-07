@@ -1,0 +1,44 @@
+#!/bin/bash
+# test-stw-root - root resolution of stw-status/stw-sync/stw-tidy-plan has no machine-specific fallback,
+# plus a guard that this folder holds no fixed user paths. Throw-away dirs only (mktemp, removed on exit).
+# Usage: test-stw-root [--no-mutations]
+HERE=$(cd "$(dirname "$0")" && pwd)
+SD=${STW_SCRIPTS:-$HERE}
+T=$(mktemp -d "${TMPDIR:-/tmp}/stw-root-test.XXXXXX") || exit 2
+trap 'rm -rf "$T"' EXIT
+export HOME=$T/home GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null
+mkdir -p "$HOME" "$T/nogit" "$T/repo/sub"
+unset STW_ROOT GIT_DIR GIT_WORK_TREE
+git init -q "$T/repo"
+PASS=0; FAILN=0
+chk() { local l=$1; shift; if "$@"; then PASS=$((PASS+1)); else FAILN=$((FAILN+1)); echo "FAIL: $l"; fi; }
+eq() { [ "$1" = "$2" ]; }
+has() { printf '%s\n' "$1" | grep -qF -- "$2"; }
+REAL=$(cd "$T/repo" && pwd -P)
+for s in stw-status stw-sync stw-tidy-plan; do
+  OUT=$(cd "$T/nogit" && "$SD/$s" --offline 2>&1); RC=$?
+  chk "$s: no root outside git: exit 2" eq "$RC" 2
+  chk "$s: no root: message names --root" has "$OUT" "--root"
+  chk "$s: no root: no fixed path in message" test -z "$(printf '%s' "$OUT" | grep -E '/Use''rs/')"
+  OUT=$(cd "$T/repo/sub" && "$SD/$s" --offline --json 2>&1); RC=$?
+  chk "$s: git top level of cwd is the root" has "$OUT" "\"root\":\"$REAL\""
+  OUT=$(cd "$T/nogit" && STW_ROOT="$T/repo" "$SD/$s" --offline --json 2>&1); RC=$?
+  chk "$s: STW_ROOT is used" has "$OUT" "\"root\":\"$REAL\""
+  OUT=$(cd "$T/nogit" && STW_ROOT="$T/nogit" "$SD/$s" --offline --json --root "$T/repo" 2>&1); RC=$?
+  chk "$s: --root beats STW_ROOT" has "$OUT" "\"root\":\"$REAL\""
+done
+chk "guard: no fixed user paths in this folder" test -z "$(grep -rnE '/Use''rs/|go-scr''ipts|Work''spaces/|\.claude/jo''bs' "$SD" 2>/dev/null)"
+echo "tests: $PASS passed, $FAILN failed"
+[ "$FAILN" -eq 0 ] && TESTRC=0 || TESTRC=1
+[ "${1:-}" = "--no-mutations" ] && exit $TESTRC
+MP=0; MO=0
+mutate() { # label, file, append-or-sed
+  local d="$T/mut$MP$MO"; mkdir -p "$d"; cp "$SD"/stw-lib.sh "$SD"/stw-status "$SD"/stw-sync "$SD"/stw-tidy-plan "$d/"
+  eval "$3"
+  local o; o=$(STW_SCRIPTS="$d" "$HERE/test-stw-root" --no-mutations 2>&1)
+  if printf '%s\n' "$o" | grep -qxF "FAIL: $1"; then MP=$((MP+1)); else echo "OPEN: $1"; MO=$((MO+1)); fi
+}
+mutate "guard: no fixed user paths in this folder" x 'printf "# /Use""rs/x\n" >> "$d/stw-lib.sh"'
+mutate "stw-status: no root outside git: exit 2" x 'sed -i "" "s|^  return 2\$|  printf \"%s\\n\" \"\$PWD\"|" "$d/stw-lib.sh"'
+echo "mutations: $MP proven, $MO open"
+[ "$MO" -eq 0 ] && exit $TESTRC || exit 1

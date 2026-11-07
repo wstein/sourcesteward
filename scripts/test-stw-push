@@ -1,0 +1,760 @@
+#!/bin/bash
+# test-stw-push - tests of stw-push against throw-away repositories, plus mutation proofs.
+# Usage: test-stw-push                       fast suite only (default, about 2 minutes)
+#        test-stw-push --mutations           suite plus every mutation (opt-in, takes about an hour)
+#        test-stw-push --mutations-only NAME...   suite plus just the named mutations (see run_mutations)
+#        test-stw-push --only t_review ...   just these test groups
+#        --no-mutations is accepted and means the default.
+# Everything lives under $S; nothing outside is touched, no git config is written.
+# SPDX-License-Identifier: EUPL-1.2
+HERE=$(cd "$(dirname "$0")" && pwd)
+S=$(mktemp -d "${STW_TEST_TMP:-${TMPDIR:-/tmp}}/stw-push-test.XXXXXX") || exit 2
+S=$(cd "$S" && pwd -P)
+cleanup() { case $S in */stw-push-test.??????) rm -rf "$S" ;; esac; }
+trap cleanup EXIT
+SUT_ORIG=$HERE/stw-push
+SUT=$SUT_ORIG
+SUTW_ORIG=$HERE/stw-workflow
+SUTW=$SUTW_ORIG
+W=$S/w
+R=$W/remotes
+WS=$W/ws
+SNAP=$S/snap
+REALGIT=$(command -v git)
+export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null HOME=$S/home GIT_TERMINAL_PROMPT=0
+mkdir -p "$S" "$HOME" "$S/bin"
+GC() { "$REALGIT" -c user.name=Test -c user.email=t@example.invalid -c protocol.file.allow=always -c init.defaultBranch=main "$@"; }
+# git wrapper that logs every call of the script under test
+cat > "$S/bin/git" <<EOF
+#!/bin/sh
+printf '%s\n' "\$*" >> "$S/gitlog"
+exec "$REALGIT" "\$@"
+EOF
+chmod +x "$S/bin/git"
+printf '#!/bin/sh\necho "$@" >> "%s/sshlog"\nexit 255\n' "$S" > "$S/bin/ssh"; chmod +x "$S/bin/ssh"
+
+PASS=0 FAIL=0 QUIET=0 FAILFILE=$S/fails
+pass() { PASS=$((PASS+1)); [ $QUIET = 1 ] || echo "  ok   $1"; }
+fail() { FAIL=$((FAIL+1)); echo "$1" >> "$FAILFILE"; [ $QUIET = 1 ] || echo "  FAIL $1"; [ "${MUTANT:-0}" = 1 ] && exit 0; }
+expect() { if eval "$2"; then pass "$1"; else fail "$1"; fi; }
+
+# ------------------------------------------------------------------ fixture
+mkrepo() { # dir remote-name
+  local d=$1 rem=$R/$2.git
+  mkdir -p "$d"; GC init -q "$d"; echo a > "$d/f"; GC -C "$d" add f; GC -C "$d" commit -qm init
+  GC -C "$d" remote add origin "$rem"; GC -C "$d" push -q -u origin main; GC -C "$d" remote set-head origin main
+}
+build() {
+  rm -rf "$W" "$SNAP"; mkdir -p "$R" "$W/seed"
+  local n
+  for n in ws sub nest wh cs api1 api2 inner; do
+    GC init -q --bare "$R/$n.git"
+    printf '#!/bin/sh\necho %s >> "%s/order.log"\n' "$n" "$S" > "$R/$n.git/hooks/post-receive"
+    chmod +x "$R/$n.git/hooks/post-receive"
+  done
+  mkrepo "$W/seed/sub" sub
+  mkrepo "$WS" ws
+  GC -C "$WS" submodule add -q "$R/sub.git" libs/sub
+  mkdir -p "$WS/projects/docs"; echo doc > "$WS/projects/docs/readme"
+  GC -C "$WS" add -A; GC -C "$WS" commit -qm "submodule, docs"; GC -C "$WS" push -q origin main
+  mkrepo "$WS/projects/workharbor" wh
+  mkrepo "$WS/projects/chartscribe" cs
+  mkrepo "$WS/projects/api" api2
+  mkrepo "$WS/tools/api" api1
+  mkrepo "$WS/tools/nested" nest
+  mkrepo "$WS/projects/workharbor/vendor/inner" inner
+  GC init -q "$WS/.agent-rules"; echo r > "$WS/.agent-rules/f"; GC -C "$WS/.agent-rules" add f; GC -C "$WS/.agent-rules" commit -qm r
+  GC -C "$WS" worktree add -q -b wtb1 "$WS/.worktrees/x"
+  GC -C "$WS" worktree add -q -b wtb2 "$WS/wtree"
+  cp -a "$W" "$SNAP"
+}
+fresh() { rm -rf "$W"; cp -a "$SNAP" "$W"; : > "$S/order.log"; CWD=$WS; }
+work() { echo "$RANDOM" >> "$1/f"; GC -C "$1" add f; GC -C "$1" commit -qm "work-$(basename "$1")"; }
+lsha() { GC -C "$1" rev-parse -q --verify "refs/heads/${2:-main}"; }
+rsha() { GC --git-dir="$R/$1.git" rev-parse -q --verify "refs/heads/${2:-main}"; }
+tsha() { GC -C "$1" rev-parse -q --verify "refs/remotes/origin/${2:-main}"; }
+other_push() { # remote-name : another clone pushes one commit, prints its sha
+  local d=$S/oc.$1.$RANDOM
+  GC clone -q "$R/$1.git" "$d" 2>/dev/null; echo "$RANDOM" >> "$d/f"; GC -C "$d" add f; GC -C "$d" commit -qm other
+  GC -C "$d" push -q origin main; GC -C "$d" rev-parse HEAD; rm -rf "$d"
+}
+treehash() { (cd "$W" && find . -type f -print0 | sort -z | xargs -0 shasum | shasum | cut -d' ' -f1); }
+run() { # args... ; sets OUT ERR RC LOG (git calls of this run)
+  local mark; mark=$(wc -l < "$S/gitlog" 2>/dev/null || echo 0); : >> "$S/gitlog"; mark=$(wc -l < "$S/gitlog")
+  (cd "$CWD" && PATH="$S/bin:$PATH" "$SUT" "$@") > "$S/o.txt" 2> "$S/e.txt"; RC=$?
+  OUT=$(cat "$S/o.txt"); ERR=$(cat "$S/e.txt")
+  LOG=$(tail -n +$((mark+1)) "$S/gitlog")
+  { echo "== $*"; cat "$S/o.txt" "$S/e.txt"; } >> "$S/alloutput"
+}
+runw() { # stw-workflow ; sets OUT ERR RC
+  (cd "$CWD" && PATH="$S/bin:$PATH" "$SUTW" "$@") > "$S/o.txt" 2> "$S/e.txt"; RC=$?
+  OUT=$(cat "$S/o.txt"); ERR=$(cat "$S/e.txt")
+  { echo "== workflow $*"; cat "$S/o.txt" "$S/e.txt"; } >> "$S/alloutput"
+}
+ptyrun() { # run the command with stdout on a pseudo terminal, print what it wrote (escapes made visible)
+  python3 -I -c '
+import os, pty, subprocess, sys
+m, s = pty.openpty()
+p = subprocess.Popen(sys.argv[1:], stdout=s, stdin=subprocess.DEVNULL)
+os.close(s)
+buf = b""
+while True:
+    try:
+        d = os.read(m, 4096)
+    except OSError:
+        break
+    if not d:
+        break
+    buf += d
+p.wait()
+sys.stdout.write(buf.decode("utf-8", "replace").replace("\033", "^["))' "$@"
+}
+has() { printf '%s\n' "$OUT" | grep -Eq -- "$1"; }
+errhas() { printf '%s\n' "$ERR" | grep -Eq -- "$1"; }
+nrepos() { printf '%s\n' "$OUT" | grep -Ec -- '^/[^ ]* +[^ ]+ +[^ ]+ +(ok|up-to-date|skipped|failed|pending)'; }
+
+# ------------------------------------------------------------------ cases
+t_all_and_order() {
+  echo "[all repositories, order, ignored folders]"
+  fresh
+  for r in "$WS" "$WS/libs/sub" "$WS/projects/workharbor" "$WS/projects/chartscribe" "$WS/projects/api" "$WS/tools/api" "$WS/tools/nested" "$WS/projects/workharbor/vendor/inner"; do work "$r"; done
+  run
+  expect "no target: exit 0" '[ $RC = 0 ]'
+  expect "no target: 8 repos listed" '[ "$(nrepos)" = 8 ]'
+  expect "no target: .agent-rules, worktrees not listed" '! has "agent-rules|wtree|worktrees"'
+  expect "no target: all remotes at local head" '[ "$(rsha ws)" = "$(lsha $WS)" ] && [ "$(rsha sub)" = "$(lsha $WS/libs/sub)" ] && [ "$(rsha wh)" = "$(lsha $WS/projects/workharbor)" ] && [ "$(rsha inner)" = "$(lsha $WS/projects/workharbor/vendor/inner)" ] && [ "$(rsha api1)" = "$(lsha $WS/tools/api)" ] && [ "$(rsha api2)" = "$(lsha $WS/projects/api)" ] && [ "$(rsha nest)" = "$(lsha $WS/tools/nested)" ] && [ "$(rsha cs)" = "$(lsha $WS/projects/chartscribe)" ]'
+  expect "order: submodule before workspace repo (remote log)" '[ "$(grep -n "^sub$" $S/order.log | cut -d: -f1)" -lt "$(grep -n "^ws$" $S/order.log | cut -d: -f1)" ]'
+  expect "order: workspace repo is last" '[ "$(tail -n 1 $S/order.log)" = ws ]'
+  expect "order: nested inner before workharbor" '[ "$(grep -n "^inner$" $S/order.log | cut -d: -f1)" -lt "$(grep -n "^wh$" $S/order.log | cut -d: -f1)" ]'
+  expect "summary line" 'has "^8 repos: 8 ok, 0 up-to-date, 0 skipped, 0 failed"'
+  expect "output line has old->new and ok" 'has "^/projects/workharbor +main +[0-9a-f]{7}->[0-9a-f]{7} +ok"'
+  CWD=$S; work "$WS/tools/api"; run --root "$WS" /tools/api
+  expect "--root PATH from elsewhere" '[ $RC = 0 ] && [ "$(rsha api1)" = "$(lsha $WS/tools/api)" ]'
+}
+t_targets() {
+  echo "[targets]"
+  fresh; work "$WS/projects/workharbor"; work "$WS/projects/chartscribe"; work "$WS"
+  run /projects/workharbor
+  expect "path target pushes only that repo" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $WS/projects/workharbor)" ] && [ "$(rsha cs)" != "$(lsha $WS/projects/chartscribe)" ] && [ "$(rsha ws)" != "$(lsha $WS)" ] && [ "$(nrepos)" = 2 ]'
+  fresh; work "$WS/projects/workharbor"; work "$WS/projects/chartscribe"
+  run chartscribe
+  expect "short name (unique)" '[ "$(rsha cs)" = "$(lsha $WS/projects/chartscribe)" ] && [ "$(rsha wh)" != "$(lsha $WS/projects/workharbor)" ]'
+  fresh; work "$WS/projects/workharbor"; work "$WS/projects/chartscribe"; work "$WS/projects/api"; work "$WS"
+  run projects
+  expect "folder with several repos pushes all below, not the workspace repo" '[ $RC = 0 ] && [ "$(nrepos)" = 4 ] && [ "$(rsha wh)" = "$(lsha $WS/projects/workharbor)" ] && [ "$(rsha cs)" = "$(lsha $WS/projects/chartscribe)" ] && [ "$(rsha api2)" = "$(lsha $WS/projects/api)" ] && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  fresh; work "$WS/projects/workharbor"; work "$WS/projects/chartscribe"; work "$WS"
+  CWD=$WS/projects/workharbor; run --root "$WS" .
+  expect ". from inside a repo" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $WS/projects/workharbor)" ] && [ "$(rsha cs)" != "$(lsha $WS/projects/chartscribe)" ]'
+  CWD=$WS/projects; work "$WS/projects/chartscribe"; run --root "$WS" .
+  expect ". on a folder with repos pushes those below" '[ $RC = 0 ] && [ "$(rsha cs)" = "$(lsha $WS/projects/chartscribe)" ] && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  fresh; work "$WS"
+  run /projects/docs
+  expect "folder without .git resolves to containing repo" '[ $RC = 0 ] && [ "$(rsha ws)" = "$(lsha $WS)" ]'
+  expect "resolved note is printed" 'has "resolved to containing repo /"'
+  fresh; work "$WS/libs/sub"
+  CWD=$WS/libs/sub; run --status
+  expect "default root from inside a submodule is the superproject" '[ "$(nrepos)" = 8 ] && has "^/ +main"'
+}
+t_ambiguity() {
+  echo "[ambiguity, groups, errors]"
+  fresh; work "$WS/projects/api"; work "$WS/tools/api"
+  GC -C "$WS/tools/api" remote set-url origin "https://user:SECRETPW@example.invalid/x.git"
+  run api
+  expect "ambiguous name: exit 2" '[ $RC = 2 ]'
+  expect "ambiguous name: candidates listed" 'errhas "/projects/api" && errhas "/tools/api"'
+  expect "ambiguous name: nothing pushed" '[ "$(rsha api1)" != "$(lsha $WS/tools/api)" ] && [ "$(rsha api2)" != "$(lsha $WS/projects/api)" ]'
+  expect "ambiguous name: no credentials in output" '! errhas SECRETPW && ! has SECRETPW'
+  fresh; work "$WS/projects/api"; work "$WS/tools/api"
+  cat > "$WS/stw.toml" <<'EOF'
+# comment
+[other]
+api = ["tools/api"]
+
+[groups]
+api = [
+  "projects/api", # inline comment
+]
+all = ["projects/*", "tools/*"]
+EOF
+  run api
+  expect "group wins over ambiguous name" '[ $RC = 0 ] && [ "$(rsha api2)" = "$(lsha $WS/projects/api)" ] && [ "$(rsha api1)" != "$(lsha $WS/tools/api)" ]'
+  fresh; work "$WS/projects/api"; work "$WS/tools/api"; work "$WS/projects/chartscribe"; work "$WS"
+  printf '[groups]\nall = ["projects/*", "tools/*"]\n' > "$WS/stw.toml"
+  run all
+  expect "group with globs (folders without own repo are skipped)" '[ $RC = 0 ] && [ "$(nrepos)" = 6 ] && [ "$(rsha cs)" = "$(lsha $WS/projects/chartscribe)" ] && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  fresh; work "$WS/projects/api"; work "$WS/tools/api"
+  printf '[other]\napi = ["tools/api"]\n' > "$WS/stw.toml"
+  run api
+  expect "group only read from [groups]" '[ $RC = 2 ]'
+  fresh; work "$WS/projects/workharbor"
+  run nosuchthing
+  expect "unknown name: exit 2, nothing pushed" '[ $RC = 2 ] && [ "$(rsha wh)" != "$(lsha $WS/projects/workharbor)" ]'
+  run /nosuch/dir
+  expect "unknown path: exit 2" '[ $RC = 2 ]'
+  run '+main'
+  expect "+refspec as target rejected" '[ $RC = 2 ] && errhas refspec'
+  run '+/projects/workharbor'
+  expect "+path as target rejected, nothing pushed" '[ $RC = 2 ] && [ "$(rsha wh)" != "$(lsha $WS/projects/workharbor)" ]'
+  run -f
+  expect "-f is not an option" '[ $RC = 2 ] && errhas "unknown option"'
+  run --force-if-includes workharbor
+  expect "--force-if-includes is not offered" '[ $RC = 2 ] && errhas "unknown option"'
+}
+t_branches() {
+  echo "[default branch only]"
+  fresh; local wh=$WS/projects/workharbor
+  GC -C "$wh" checkout -q -b topic; work "$wh"; GC -C "$wh" tag v1
+  GC -C "$wh" checkout -q main; work "$wh"; GC -C "$wh" checkout -q topic
+  run workharbor
+  expect "main pushed although not checked out" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh main)" ]'
+  expect "topic branch stays local" '[ "$(GC --git-dir=$R/wh.git for-each-ref --format="%(refname)" refs/heads)" = refs/heads/main ]'
+  expect "tags are not pushed" '[ -z "$(GC --git-dir=$R/wh.git tag)" ]'
+  fresh
+  GC -C "$wh" branch develop; GC -C "$wh" push -q origin develop; GC -C "$wh" remote set-head origin develop
+  work "$wh"; GC -C "$wh" checkout -q develop; work "$wh"; GC -C "$wh" checkout -q main
+  run workharbor
+  expect "origin/HEAD decides the default branch" '[ "$(rsha wh develop)" = "$(lsha $wh develop)" ] && [ "$(rsha wh main)" != "$(lsha $wh main)" ]'
+  fresh
+  GC -C "$wh" branch -q -m main trunk; GC -C "$wh" remote set-head origin -d; GC -C "$wh" update-ref -d refs/remotes/origin/main
+  run workharbor
+  expect "no default branch: skipped with reason, exit 1" '[ $RC = 1 ] && has "skipped: no default branch"'
+}
+t_states() {
+  echo "[behind, diverged, up-to-date, no origin, tracking ref]"
+  fresh; local wh=$WS/projects/workharbor cs=$WS/projects/chartscribe o
+  o=$(other_push wh); GC -C "$wh" fetch -q origin; work "$cs"
+  run
+  expect "behind: skipped, exit 1" '[ $RC = 1 ] && has "^/projects/workharbor +main .* skipped: behind origin by 1"'
+  expect "behind: remote untouched" '[ "$(rsha wh)" = "$o" ]'
+  expect "behind: other repos still pushed" '[ "$(rsha cs)" = "$(lsha $cs)" ]'
+  expect "behind: no push call for it" '! printf "%s\n" "$LOG" | grep -q "^-C $wh .*push"'
+  fresh; work "$wh"; o=$(other_push wh); GC -C "$wh" fetch -q origin
+  run workharbor
+  expect "diverged: skipped, exit 1, remote untouched" '[ $RC = 1 ] && has "skipped: diverged \(ahead 1, behind 1\)" && [ "$(rsha wh)" = "$o" ]'
+  fresh
+  run workharbor
+  expect "up-to-date: exit 0" '[ $RC = 0 ] && has "^/projects/workharbor +main +([0-9a-f]{7})->\1 +up-to-date" && has "2 up-to-date"'
+  expect "up-to-date: no push call" '! printf "%s\n" "$LOG" | grep -q " push "'
+  fresh; work "$wh"; GC -C "$wh" remote remove origin
+  run workharbor
+  expect "no origin: skipped, exit 1" '[ $RC = 1 ] && has "skipped: no remote origin"'
+  fresh; work "$wh"; GC -C "$wh" update-ref -d refs/remotes/origin/main
+  run --force workharbor
+  expect "--force without tracking ref: skipped (no lease possible)" '[ $RC = 1 ] && has "skipped: no remote-tracking ref" && [ "$(rsha wh)" != "$(lsha $wh)" ]'
+  run workharbor
+  expect "no tracking ref, no --force: normal push" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ]'
+  fresh; work "$wh"; printf '#!/bin/sh\necho "denied by https://user:SECRETPW@example.invalid/policy" >&2\nexit 1\n' > "$R/wh.git/hooks/pre-receive"; chmod +x "$R/wh.git/hooks/pre-receive"
+  run workharbor
+  expect "hook text passed on, shortened, without credentials" '[ $RC = 1 ] && has "failed: .*denied by" && ! has SECRETPW && ! errhas SECRETPW'
+}
+t_force() {
+  echo "[--force = lease]"
+  fresh; local wh=$WS/projects/workharbor o o2
+  work "$wh"; o=$(other_push wh); GC -C "$wh" fetch -q origin
+  run --force workharbor
+  expect "--force on divergence: pushed, exit 0" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ] && has " ok"'
+  expect "--force: lease with explicit expected SHA" 'printf "%s\n" "$LOG" | grep -qF -- "--force-with-lease=refs/heads/main:$o"'
+  fresh; work "$wh"; o=$(other_push wh); GC -C "$wh" fetch -q origin; o2=$(other_push wh)
+  run --force workharbor
+  expect "--force: remote moved since fetch -> lease rejects, remote untouched" '[ $RC = 1 ] && has "failed:" && [ "$(rsha wh)" = "$o2" ]'
+  fresh; work "$wh"
+  run --force workharbor
+  expect "--force without divergence: plain push, no lease" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ] && ! printf "%s\n" "$LOG" | grep -q "force"'
+  fresh; o=$(other_push wh); GC -C "$wh" fetch -q origin
+  run --force workharbor
+  expect "--force when behind: still skipped" '[ $RC = 1 ] && has "skipped: behind" && [ "$(rsha wh)" = "$o" ]'
+}
+t_status() {
+  echo "[--status, output form, json]"
+  fresh
+  for r in "$WS" "$WS/libs/sub" "$WS/projects/workharbor"; do work "$r"; done
+  local before after
+  before=$(treehash); run --status
+  after=$(treehash)
+  expect "--status: tree and refs identical before/after" '[ "$before" = "$after" ]'
+  expect "--status: shows pending with unpushed commits, exit 1" '[ $RC = 1 ] && has "pending \(ahead 1\)" && has "^    [0-9a-f]{7} work-workharbor" && has "^8 repos: 3 pending, 5 up-to-date"'
+  expect "--status: no push call" '! printf "%s\n" "$LOG" | grep -q " push "'
+  run status workharbor
+  expect "bare word status works" 'has "pending" && [ "$(nrepos)" = 2 ]'
+  expect "no git commands in the output" '! grep -E "git " "$S/alloutput"'
+  run --json
+  expect "--json valid with stable keys" 'printf "%s" "$OUT" | python3 -I -c "
+import json,sys
+d=json.load(sys.stdin)
+assert d[\"schema_version\"]==1 and d[\"command\"]==\"push\" and d[\"mode\"]==\"push\"
+assert set(d[\"summary\"])>={\"total\",\"ok\",\"up_to_date\",\"skipped\",\"failed\"} and d[\"summary\"][\"ok\"]==3
+r=[x for x in d[\"repos\"] if x[\"path\"]==\"/projects/workharbor\"][0]
+assert set(r)>={\"path\",\"branch\",\"old\",\"new\",\"result\",\"reason\",\"ahead\",\"behind\",\"commits\"} and r[\"result\"]==\"ok\"
+"'
+  run api
+  run --json api
+  expect "--json error document valid (exit 2)" '[ $RC = 2 ] && printf "%s" "$OUT" | python3 -I -c "
+import json,sys
+d=json.load(sys.stdin); assert d[\"candidates\"]==[\"/projects/api\",\"/tools/api\"], d"'
+}
+t_nohardforce() {
+  echo "[no hard force anywhere]"
+  expect "script builds no hard force / -f / + refspec argument" '! grep -E "args\\.append\\(\"--force\"|args\\.append\\(\"-f\"|args[^#]*\"\\+|args \\+= .*\"--force\"" "$SUT"'
+  expect "git call log of all runs: no --force without -with-lease, no -f, no + refspec" '! grep -E -- "--force([^-]|$)|(^| )-f( |$)|(^| )\+" "$S/gitlog"'
+  expect "git call log: no --tags, --all, --mirror, --delete" '! grep -E -- "--tags|--all|--mirror|--delete" "$S/gitlog"'
+  expect "usage text says there is no hard force" 'grep -q "no hard force" "$SUT"'
+}
+t_workflow() {
+  echo "[workflow: stw-workflow and stw-push]"
+  fresh; local wh=$WS/projects/workharbor cs=$WS/projects/chartscribe cfg=$WS/stw.toml h1 h2
+  runw
+  expect "show: table with default source" '[ $RC = 0 ] && has "^Repo +Workflow +Source" && has "^/projects/workharbor +fast-forward +default"'
+  runw set /projects/workharbor pull-request
+  expect "set creates stw.toml" '[ $RC = 0 ] && [ -f "$cfg" ] && grep -q "^\"projects/workharbor\" = \"pull-request\"" "$cfg" && has "set"'
+  runw
+  expect "show: config source" 'has "^/projects/workharbor +pull-request +config"'
+  h1=$(shasum < "$cfg"); runw set /projects/workharbor pull-request; h2=$(shasum < "$cfg")
+  expect "set is idempotent (file identical, reported unchanged)" '[ "$h1" = "$h2" ] && has "unchanged"'
+  work "$wh"; work "$cs"
+  run
+  expect "pull-request repo is skipped with reason, warning, exit 1" '[ $RC = 1 ] && has "^/projects/workharbor +main .* skipped: workflow: pull-request +local-ahead/warning \(local main ahead without PR\)" && [ "$(rsha wh)" != "$(lsha $wh)" ]'
+  expect "fast-forward repo is pushed" '[ "$(rsha cs)" = "$(lsha $cs)" ]'
+  run --force workharbor
+  expect "--force does not change it" '[ $RC = 1 ] && has "workflow: pull-request" && [ "$(rsha wh)" != "$(lsha $wh)" ]'
+  run --status workharbor
+  expect "status shows the workflow skip" 'has "skipped: workflow: pull-request" && has "local-ahead/warning"'
+  runw unset /projects/workharbor
+  expect "unset removes the entry" '[ $RC = 0 ] && ! grep -q workharbor "$cfg" && has "removed"'
+  h1=$(shasum < "$cfg"); runw unset /projects/workharbor; h2=$(shasum < "$cfg")
+  expect "unset is idempotent" '[ "$h1" = "$h2" ] && has "unchanged"'
+  run workharbor
+  expect "after unset the repo is pushed" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ]'
+  # comments and other sections survive, the new entry goes into the existing table
+  cat > "$cfg" <<'EOF'
+# my workspace
+[groups]
+api = ["projects/api"]   # the api
+
+[workflow]
+default = "fast-forward"  # house rule
+
+[workflow.repos]
+# special case
+"projects/chartscribe" = "pull-request"  # docs only
+
+[other]
+x = 1
+EOF
+  runw set /projects/workharbor pull-request
+  printf '# my workspace\n[groups]\napi = ["projects/api"]   # the api\n\n[workflow]\ndefault = "fast-forward"  # house rule\n\n[workflow.repos]\n# special case\n"projects/chartscribe" = "pull-request"  # docs only\n"projects/workharbor" = "pull-request"\n\n[other]\nx = 1\n' > "$S/expected.toml"
+  expect "comments, order and other sections kept; entries added in the table" 'cmp -s "$cfg" "$S/expected.toml"'
+  runw set /projects/chartscribe fast-forward
+  expect "set changes a value in place, keeps the trailing comment" 'grep -q "^\"projects/chartscribe\" = \"fast-forward\"  # docs only" "$cfg"'
+  runw set /projects/workharbor bogus
+  expect "unknown mode: exit 2, file unchanged" '[ $RC = 2 ] && ! grep -q bogus "$cfg"'
+  rm -f "$cfg"; runw set /projects/workharbor bogus
+  expect "unknown mode does not create the file" '[ $RC = 2 ] && [ ! -e "$cfg" ]'
+  expect "no commands in workflow output" '! grep -E "git " "$S/alloutput"'
+  # inheritance and groups
+  fresh; printf '[workflow.repos]\n"." = "pull-request"\n' > "$cfg"
+  runw /projects/docs
+  expect "folder without repo inherits from the containing repo" 'has "^/projects/docs +pull-request +inherited"'
+  work "$WS"; run /projects/docs
+  expect "folder target resolves to the PR repo and is skipped" '[ $RC = 1 ] && has "workflow: pull-request" && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  fresh; runw set /projects/docs pull-request
+  expect "set on a folder without repo: exit 2, no file" '[ $RC = 2 ] && errhas "not a repository" && [ ! -e "$cfg" ]'
+  fresh; printf '[groups]\napi = ["projects/api"]\n' > "$cfg"; runw set api pull-request
+  expect "group wins over name in stw-workflow" '[ $RC = 0 ] && grep -q "projects/api\" = \"pull-request\"" "$cfg" && ! grep -q "tools/api" "$cfg"'
+  fresh; runw set api pull-request
+  expect "ambiguous name without group: exit 2" '[ $RC = 2 ] && errhas "/tools/api" && [ ! -e "$cfg" ]'
+  runw --json
+  expect "workflow --json valid" 'printf "%s" "$OUT" | python3 -I -c "import json,sys; d=json.load(sys.stdin); assert d[\"command\"]==\"workflow\" and d[\"repos\"] and d[\"default\"]==\"fast-forward\""'
+}
+t_levels() {
+  echo "[state and level]"
+  fresh; local wh=$WS/projects/workharbor cs=$WS/projects/chartscribe api=$WS/projects/api nest=$WS/tools/nested o
+  work "$wh"; work "$cs"; o=$(other_push cs); GC -C "$cs" fetch -q origin   # wh: local-ahead, cs: diverged
+  o=$(other_push api2); GC -C "$api" fetch -q origin                         # api: remote-ahead
+  GC -C "$nest" remote remove origin; work "$nest"                         # nest: no-remote
+  run --json
+  expect "json carries state and level per repo, central mapping" 'printf "%s" "$OUT" | python3 -I -c "
+import json,sys
+d=json.load(sys.stdin); m={r[\"path\"]:(r[\"state\"],r[\"level\"]) for r in d[\"repos\"]}
+assert m[\"/projects/workharbor\"]==(\"in-sync\",\"green\"), m
+assert m[\"/projects/chartscribe\"]==(\"diverged\",\"error\"), m
+assert m[\"/projects/api\"]==(\"remote-ahead\",\"warning\"), m
+assert m[\"/tools/nested\"]==(\"no-remote\",\"info\"), m
+assert m[\"/tools/api\"]==(\"in-sync\",\"green\"), m
+"'
+  work "$WS/tools/api"
+  run --status
+  expect "status: local-ahead warning, in-sync green, labels in text" 'has "pending \(ahead 1\).*local-ahead/warning \(to push\)" && has "up-to-date .*in-sync/green" && has "diverged/error" && has "remote-ahead/warning" && has "no-remote/info"'
+  fresh; work "$wh"; printf '#!/bin/sh\nexit 1\n' > "$R/wh.git/hooks/pre-receive"; chmod +x "$R/wh.git/hooks/pre-receive"
+  run workharbor
+  expect "failed push: failed/error" 'has "failed/error"'
+  expect "no escape codes when not a terminal" '! printf "%s" "$OUT" | grep -q "$(printf "\033")"'
+  fresh
+  OUT=$(cd "$CWD" && PATH="$S/bin:$PATH" ptyrun "$SUT" --status workharbor)
+  expect "colour on a terminal" 'printf "%s" "$OUT" | grep -qF "^[[32m"'
+  OUT=$(cd "$CWD" && NO_COLOR=1 PATH="$S/bin:$PATH" ptyrun "$SUT" --status workharbor)
+  expect "NO_COLOR turns colour off, label stays" '! printf "%s" "$OUT" | grep -qF "^[[" && printf "%s" "$OUT" | grep -q "in-sync/green"'
+}
+t_levelmap() {
+  echo "[state -> level by workflow, exit codes]"
+  fresh; local wh=$WS/projects/workharbor cs=$WS/projects/chartscribe cfg=$WS/stw.toml s
+  printf '[workflow.repos]\n"projects/workharbor" = "pull-request"\n' > "$cfg"
+  lvl() { printf '%s' "$OUT" | python3 -I -c 'import json,sys; d=json.load(sys.stdin); print({r["path"]:r["level"] for r in d["repos"]}[sys.argv[1]])' "$1"; }
+  local exp_ff exp_pr
+  for s in in-sync local-ahead remote-ahead diverged no-remote; do
+    fresh; printf '[workflow.repos]\n"projects/workharbor" = "pull-request"\n' > "$cfg"
+    case $s in
+      local-ahead) work "$wh"; work "$cs" ;;
+      remote-ahead) other_push wh >/dev/null; other_push cs >/dev/null; GC -C "$wh" fetch -q origin; GC -C "$cs" fetch -q origin ;;
+      diverged) work "$wh"; work "$cs"; other_push wh >/dev/null; other_push cs >/dev/null; GC -C "$wh" fetch -q origin; GC -C "$cs" fetch -q origin ;;
+      no-remote) work "$wh"; work "$cs"; GC -C "$wh" remote remove origin; GC -C "$cs" remote remove origin ;;
+    esac
+    case $s in
+      in-sync) exp_ff=green exp_pr=green ;;
+      local-ahead) exp_ff=warning exp_pr=warning ;;
+      remote-ahead) exp_ff=warning exp_pr=info ;;
+      diverged) exp_ff=error exp_pr=error ;;
+      no-remote) exp_ff=info exp_pr=info ;;
+    esac
+    run --status --json
+    expect "$s: fast-forward repo is $exp_ff" '[ "$(lvl /projects/chartscribe)" = "$exp_ff" ]'
+    expect "$s: pull-request repo is $exp_pr" '[ "$(lvl /projects/workharbor)" = "$exp_pr" ]'
+    expect "$s: json has state, workflow" 'printf "%s" "$OUT" | python3 -I -c "import json,sys; d=json.load(sys.stdin); r={x[\"path\"]:x for x in d[\"repos\"]}; assert r[\"/projects/chartscribe\"][\"state\"]==sys.argv[1] and r[\"/projects/workharbor\"][\"workflow\"]==\"pull-request\"" "$s"'
+    # exit code per workflow
+    run --status chartscribe;  RCF=$RC
+    run --status workharbor;   RCP=$RC
+    case $s in
+      in-sync) ef=0 ep=0 ;; *) ef=1 ep=1 ;;
+    esac
+    expect "$s: exit fast-forward repo $ef" '[ $RCF = $ef ]'
+    expect "$s: exit pull-request repo $ep" '[ $RCP = $ep ]'
+  done
+  fresh; work "$cs"; printf '#!/bin/sh\nexit 1\n' > "$R/cs.git/hooks/pre-receive"; chmod +x "$R/cs.git/hooks/pre-receive"
+  run --json chartscribe
+  expect "failed: error level, exit 1" '[ $RC = 1 ] && [ "$(lvl /projects/chartscribe)" = error ]'
+  fresh; work "$cs"
+  run --json chartscribe
+  expect "pushed repo is green afterwards" '[ $RC = 0 ] && [ "$(lvl /projects/chartscribe)" = green ]'
+  fresh; work "$cs"; printf '[workflow.repos]\n"projects/chartscribe" = "pull-request"\n' > "$cfg"
+  run chartscribe
+  expect "pull-request notes: local main ahead without PR" 'has "local main ahead without PR"'
+  fresh; other_push cs >/dev/null; GC -C "$cs" fetch -q origin; printf '[workflow.repos]\n"projects/chartscribe" = "pull-request"\n' > "$cfg"
+  run chartscribe
+  expect "pull-request remote-ahead: merged PR waits for sync" 'has "remote-ahead/info \(merged PR waits for sync\)"'
+}
+t_review() {
+  echo "[review round]"
+  local wh=$WS/projects/workharbor cs=$WS/projects/chartscribe sub=$WS/libs/sub cfg=$WS/stw.toml i o h
+  # 1: root from a nested (non-submodule) repository comes from the outermost stw.toml
+  fresh; printf '[workflow.repos]\n"projects/workharbor" = "pull-request"\n' > "$cfg"; work "$wh"; work "$WS"
+  CWD=$wh; run
+  expect "1: nested repo cwd: workspace stw.toml applies, workspace repo included" '[ $RC = 1 ] && has "^/projects/workharbor +main .*skipped: workflow: pull-request" && has "^/ +main" && [ "$(rsha wh)" != "$(lsha $wh)" ] && [ "$(rsha ws)" = "$(lsha $WS)" ]'
+  # 2: valid TOML that is not understood is an error
+  for i in 1 2 3 4 5 6; do
+    fresh; work "$wh"
+    case $i in
+      1) printf '[workflow]\nrepos = { "projects/workharbor" = "pull-request" }\n' ;;
+      2) printf '[workflow.repos]\n"projects/workharbor".x = "pull-request"\n' ;;
+      3) printf 'workflow.repos."projects/workharbor" = "pull-request"\n' ;;
+      4) printf '[workflow.repos."projects/workharbor"]\nmode = "pull-request"\n' ;;
+      5) printf '[workflow]\nmode = "pull-request"\n' ;;
+      6) printf '[workflow.repos]\n"projects/workharbor" = pull-request\n' ;;
+    esac > "$cfg"
+    run workharbor
+    expect "2: unsupported stw.toml form $i: push exit 2, nothing pushed" '[ $RC = 2 ] && errhas "stw.toml" && [ "$(rsha wh)" != "$(lsha $wh)" ]'
+    runw
+    expect "2: unsupported stw.toml form $i: stw-workflow exit 2" '[ $RC = 2 ] && errhas "stw.toml"'
+  done
+  # 3: unreadable or non-UTF-8 stw.toml is never overwritten
+  fresh; printf '[workflow.repos]\n"projects/chartscribe" = "pull-request"\n' > "$cfg"; chmod 000 "$cfg"
+  runw set /projects/workharbor pull-request; local rc1=$RC; run workharbor; local rc2=$RC; chmod 600 "$cfg"
+  expect "3: unreadable stw.toml: exit 2 for both, content kept" '[ $rc1 = 2 ] && [ $rc2 = 2 ] && [ "$(cat "$cfg")" = "$(printf "[workflow.repos]\n\"projects/chartscribe\" = \"pull-request\"")" ]'
+  fresh; printf '[workflow.repos]\n# \377\376\n' > "$cfg"; h=$(shasum < "$cfg")
+  runw set /projects/workharbor pull-request
+  expect "3: non-UTF-8 stw.toml: exit 2, no traceback, file kept" '[ $RC = 2 ] && ! errhas Traceback && [ "$h" = "$(shasum < "$cfg")" ]'
+  run workharbor
+  expect "3: non-UTF-8 stw.toml: stw-push exit 2 without traceback" '[ $RC = 2 ] && ! errhas Traceback'
+  # 4: keys are compared normalised, duplicate tables are all handled
+  fresh; printf '[workflow.repos]\n"./projects/chartscribe/" = "pull-request"\n' > "$cfg"
+  runw set /projects/chartscribe fast-forward
+  expect "4: set replaces a differently written key, no duplicate" '[ $RC = 0 ] && [ "$(grep -c chartscribe "$cfg")" = 1 ] && grep -q "fast-forward" "$cfg"'
+  runw set /projects/chartscribe pull-request; runw unset /projects/chartscribe
+  expect "4: unset removes it and says so" '[ $RC = 0 ] && has "removed" && ! grep -q chartscribe "$cfg"'
+  fresh; printf '[workflow.repos]\n"projects/chartscribe" = "fast-forward"\n\n[workflow.repos]\n"projects/chartscribe/" = "pull-request"\n' > "$cfg"
+  runw set /projects/chartscribe fast-forward; runw /projects/chartscribe
+  expect "4: duplicate tables: the effective value is the one set" 'has "^/projects/chartscribe +fast-forward +config"'
+  # 6: a superproject is not pushed while a submodule is failed or skipped
+  fresh; work "$sub"; work "$WS"; printf '#!/bin/sh\nexit 1\n' > "$R/sub.git/hooks/pre-receive"; chmod +x "$R/sub.git/hooks/pre-receive"
+  run
+  expect "6: submodule failed: superproject skipped, reason names the submodule" '[ $RC = 1 ] && has "^/libs/sub +main .*failed:" && has "^/ +main .*skipped: submodule /libs/sub not pushed" && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  fresh; work "$sub"; o=$(other_push sub); GC -C "$sub" fetch -q origin; work "$WS"
+  run
+  expect "6: submodule skipped (diverged): superproject skipped" '[ $RC = 1 ] && has "^/ +main .*skipped: submodule /libs/sub not pushed" && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  run --status
+  expect "6: --status predicts the same" 'has "^/ +main .*skipped: submodule /libs/sub not pushed"'
+  # 7: repositories in ignored folders are found
+  fresh; GC init -q --bare "$R/ign.git"; GC init -q --bare "$R/ign2.git"
+  mkrepo "$WS/ignored/deep" ign; mkrepo "$WS/ignrepo" ign2; printf '/ignored/\n/ignrepo/\n' > "$WS/.gitignore"
+  run --status
+  expect "7: repository inside an ignored folder, and an ignored folder that is a repository" 'has "^/ignored/deep " && has "^/ignrepo " && [ "$(nrepos)" = 10 ]'
+  # 11: credentials with a slash in the password
+  fresh; work "$wh"; printf '#!/bin/sh\necho "denied https://us3r:s3c/ret@x@example.invalid/p" >&2\nexit 1\n' > "$R/wh.git/hooks/pre-receive"; chmod +x "$R/wh.git/hooks/pre-receive"
+  run /projects/workharbor
+  expect "11: password containing / is not shown" 'has "failed: denied" && ! has "s3c" && ! has "ret@" && ! has "us3r"'
+  # 12: origin/HEAD is only used when its target exists
+  fresh; work "$wh"; GC -C "$wh" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/+evil
+  run workharbor
+  expect "12: dangling origin/HEAD falls back to main" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ]'
+  # 13: configuration that would push more must not widen the push
+  fresh; work "$wh"; GC -C "$wh" tag -a v9 -m tag
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=push.followTags GIT_CONFIG_VALUE_0=true run /projects/workharbor
+  expect "13: push.followTags does not push tags" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ] && [ -z "$(GC --git-dir=$R/wh.git tag)" ]'
+  fresh; work "$sub"; GC -C "$WS" add libs/sub; GC -C "$WS" commit -qm bump; o=$(rsha sub)
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=push.recurseSubmodules GIT_CONFIG_VALUE_0=on-demand run /projects/docs
+  expect "13: push.recurseSubmodules does not push the submodule" '[ $RC = 0 ] && [ "$(rsha ws)" = "$(lsha $WS)" ] && [ "$(rsha sub)" = "$o" ]'
+  # 14: ssh gets a connect timeout unless the user chose an ssh command
+  fresh; work "$wh"; GC -C "$wh" remote set-url origin ssh://fakehost.invalid/x.git; : > "$S/sshlog"
+  run /projects/workharbor
+  expect "14: ssh remote: ConnectTimeout is set, failure reported" 'grep -q "ConnectTimeout=" "$S/sshlog" && has "failed:"'
+  : > "$S/sshlog"; GIT_SSH_COMMAND="ssh -v" run /projects/workharbor
+  expect "14: own GIT_SSH_COMMAND is respected" '! grep -q "ConnectTimeout=" "$S/sshlog" && grep -q -- "-v" "$S/sshlog"'
+  # C: groups and set
+  fresh; printf '[groups]\nprojs = ["projects/*"]\n' > "$cfg"
+  runw set projs pull-request
+  expect "C: group globs skip folders without repo; only the repos themselves get an entry" '[ $RC = 0 ] && [ "$(grep -c "= \"pull-request\"" "$cfg")" = 3 ] && ! grep -q "docs" "$cfg" && ! grep -q "inner" "$cfg"'
+  fresh; runw set /projects/workharbor pull-request
+  expect "C: set on a repository with nested repositories changes only that one" '[ "$(grep -c "= \"pull-request\"" "$cfg")" = 1 ]'
+  # 10: writing stw.toml keeps symlink, mode, line endings
+  fresh; printf '# c\r\n[workflow.repos]\r\n"projects/chartscribe" = "pull-request"\r\n' > "$S/real.toml"; chmod 640 "$S/real.toml"; ln -s "$S/real.toml" "$cfg"
+  runw set /projects/workharbor pull-request
+  expect "10: symlinked stw.toml stays a symlink and the target is written" '[ -L "$cfg" ] && grep -q workharbor "$S/real.toml"'
+  expect "10: mode kept" '[ "$(stat -f %Lp "$S/real.toml")" = 640 ]'
+  expect "10: CRLF kept on every line" '[ "$(grep -c "$(printf "\r")$" "$S/real.toml")" = "$(wc -l < "$S/real.toml" | tr -d " ")" ] && [ "$(wc -l < "$S/real.toml" | tr -d " ")" = 4 ]'
+  rm -f "$cfg"
+}
+t_round3() {
+  echo "[round 3]"
+  local wh=$WS/projects/workharbor cfg=$WS/stw.toml h
+  # 1: a path target inside a folder that is never searched
+  fresh; work "$WS"
+  run /.agent-rules
+  expect "1: /.agent-rules is exactly that repository, not the containing one" '[ $RC = 1 ] && has "^/\\.agent-rules " && ! has "^/ +main" && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  run /.worktrees/x
+  expect "1: path inside .worktrees (not a repo root): exit 2, clear message" '[ $RC = 2 ] && errhas "never searched" && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  run .agent-rules
+  expect "1: short name .agent-rules is not found" '[ $RC = 2 ] && errhas "not found"'
+  # 2: writing failures are messages, never tracebacks
+  fresh; mkrepo "$WS/a\\b" ign; GC init -q --bare "$R/ign2.git"; mkrepo "$WS/q\"r" ign2
+  runw set '/a\b' pull-request
+  expect "2: folder a\\b: exit 2, message, nothing written" '[ $RC = 2 ] && errhas "not applied" && ! errhas Traceback && [ ! -e "$cfg" ] && [ -z "$(ls -A "$WS" | grep "stw.toml")" ]'
+  runw set '/q"r' pull-request
+  expect "2: folder q\"r: exit 2, message, nothing written" '[ $RC = 2 ] && errhas "not applied" && ! errhas Traceback && [ ! -e "$cfg" ] && [ -z "$(ls -A "$WS" | grep "stw.toml")" ]'
+  fresh; chmod 555 "$WS"
+  runw set /projects/workharbor pull-request; local rc=$RC; chmod 755 "$WS"
+  expect "2: read-only workspace folder: exit 2, message, no traceback, nothing left behind" '[ $rc = 2 ] && errhas "cannot be written" && ! errhas Traceback && [ -z "$(ls -A "$WS" | grep "stw.toml")" ]'
+  # 3: the same key twice in one table with different values
+  fresh; printf '[workflow.repos]\n"projects/chartscribe" = "fast-forward"\n"projects/chartscribe/" = "pull-request"\n' > "$cfg"; h=$(shasum < "$cfg")
+  run chartscribe
+  expect "3: duplicate key, different values: stw-push exit 2" '[ $RC = 2 ] && errhas "duplicate"'
+  runw set /projects/chartscribe fast-forward
+  expect "3: set does not touch the file, exit 2" '[ $RC = 2 ] && errhas "duplicate" && [ "$h" = "$(shasum < "$cfg")" ]'
+}
+t_round4() {
+  echo "[round 4: duplicate keys in every table]"
+  local wh=$WS/projects/workharbor cfg=$WS/stw.toml h
+  fresh; work "$wh"; work "$WS"
+  printf '[workflow]\ndefault = "fast-forward"\ndefault = "pull-request"\n' > "$cfg"; h=$(shasum < "$cfg")
+  run
+  expect "4a: duplicate default with different values: push exit 2 before any push" '[ $RC = 2 ] && errhas "duplicate key default" && ! has "skipped" && [ "$(rsha wh)" != "$(lsha $wh)" ] && [ "$(rsha ws)" != "$(lsha $WS)" ]'
+  runw set /projects/workharbor pull-request
+  expect "4a: duplicate default: set exit 2, file bytes unchanged" '[ $RC = 2 ] && errhas "duplicate key default" && [ "$h" = "$(shasum < "$cfg")" ]'
+  printf '[workflow]\ndefault = "fast-forward"\ndefault = "fast-forward"\n' > "$cfg"
+  run workharbor
+  expect "4b: the same default twice is allowed" '[ $RC = 0 ] && [ "$(rsha wh)" = "$(lsha $wh)" ]'
+  fresh; work "$wh"; printf '[workflow]\ndefault = "fast-forward"\n\n[workflow]\ndefault = "pull-request"\n' > "$cfg"
+  run workharbor
+  expect "4c: duplicated [workflow] table: the last one wins" 'has "skipped: workflow: pull-request" && [ "$(rsha wh)" != "$(lsha $wh)" ]'
+  fresh; printf '[groups]\napi = ["projects/api"]\napi = ["tools/api"]\n' > "$cfg"; work "$WS/projects/api"
+  run api
+  expect "4d: duplicate group with different lists: exit 2, nothing pushed" '[ $RC = 2 ] && errhas "duplicate key api" && [ "$(rsha api2)" != "$(lsha $WS/projects/api)" ]'
+  fresh; printf '[groups]\napi = ["projects/api"]\napi = ["projects/api"]\n' > "$cfg"; work "$WS/projects/api"
+  run api
+  expect "4e: the same group twice is allowed" '[ $RC = 0 ] && [ "$(rsha api2)" = "$(lsha $WS/projects/api)" ]'
+}
+all_tests() {
+  : > "$S/gitlog"; : > "$S/alloutput"
+  t_all_and_order; t_targets; t_ambiguity; t_branches; t_states; t_force; t_status; t_workflow; t_levels; t_levelmap; t_review; t_round3; t_round4; t_nohardforce
+}
+
+# ------------------------------------------------------------------ static checks
+static_checks() {
+  echo "[static]"
+  if python3 -I -m py_compile "$SUT_ORIG"; then pass "py_compile"; else fail "py_compile"; fi
+  rm -rf "$HERE/__pycache__" 2>/dev/null
+  bash -n "$0" && pass "bash -n test-stw-push" || fail "bash -n test-stw-push"
+  local sc; sc=$(command -v shellcheck || ls /opt/homebrew/bin/shellcheck /usr/local/bin/shellcheck "$HOME"/.local/share/mise/installs/shellcheck/*/shellcheck 2>/dev/null | head -n 1)
+  if [ -n "$sc" ]; then "$sc" -S warning "$0" && pass "shellcheck" || fail "shellcheck"; else echo "  UNKNOWN shellcheck (not found)"; fi
+}
+
+# ------------------------------------------------------------------ mutations
+MUT_PROVEN=0 MUT_OPEN=0 OPEN_LIST=
+mutation() { # name, old, new [, file (default stw-push)]
+  local name=$1 old=$2 new=$3 file=${4:-stw-push} dir=$S/mut/$1 nf
+  if [ -n "${MUT_ONLY:-}" ]; then case " $MUT_ONLY " in *" $name "*) ;; *) return ;; esac; fi
+  rm -rf "$dir"; mkdir -p "$dir"; cp "$SUT_ORIG" "$dir/stw-push"; cp "$SUTW_ORIG" "$dir/stw-workflow"
+  if ! python3 -I -c '
+import sys
+t = open(sys.argv[1]).read()
+assert t.count(sys.argv[2]) == 1, "pattern not unique/found"
+open(sys.argv[1], "w").write(t.replace(sys.argv[2], sys.argv[3]))' "$dir/$file" "$old" "$new"; then
+    MUT_OPEN=$((MUT_OPEN+1)); OPEN_LIST="$OPEN_LIST $name(pattern)"; echo "  open   $name (pattern did not apply)"; return
+  fi
+  chmod +x "$dir/stw-push" "$dir/stw-workflow"
+  SUT=$dir/stw-push; SUTW=$dir/stw-workflow; QUIET=1; : > "$FAILFILE"
+  ( MUTANT=1; all_tests >/dev/null 2>&1 ); SUT=$SUT_ORIG; SUTW=$SUTW_ORIG
+  nf=$(wc -l < "$FAILFILE")
+  QUIET=0
+  if [ "$nf" -gt 0 ]; then
+    MUT_PROVEN=$((MUT_PROVEN+1)); echo "  proven $name -> $(head -n 1 "$FAILFILE")"
+  else
+    MUT_OPEN=$((MUT_OPEN+1)); OPEN_LIST="$OPEN_LIST $name"; echo "  open   $name (all tests still pass)"
+  fi
+  rm -rf "$dir"
+}
+run_mutations() {
+  echo "[mutations]"
+  mutation order-reversed 'chosen.sort(key=lambda r: (-(0 if r == root else len(os.path.relpath(r, root).split(os.sep))), r))' 'chosen.sort(key=lambda r: ((0 if r == root else len(os.path.relpath(r, root).split(os.sep))), r))'
+  mutation group-precedence-removed 'if t in self.groups:  # MUT-GROUP' 'if False:'
+  mutation groups-from-any-section 'sec = "\n".join(sections_of(text).get("groups", []))' 'sec = "\n".join(l for v in sections_of(text).values() for l in v)'
+  mutation hard-force 'args.append("--force-with-lease=" + p["lease"])  # MUT-LEASE' 'args.append("--force")'
+  mutation lease-without-expected-value 'args.append("--force-with-lease=" + p["lease"])  # MUT-LEASE' 'args.append("--force-with-lease=refs/heads/" + b)'
+  mutation force-lease-without-divergence '    if git(repo, "merge-base", "--is-ancestor", T, L)[0] == 0:
+        p["state"] = "local-ahead"
+        p["action"] = "push"' '    if git(repo, "merge-base", "--is-ancestor", T, L)[0] == 0:
+        p["state"] = "local-ahead"
+        p["action"] = "lease" if force else "push"
+        p["lease"] = "refs/heads/%s:%s" % (b, T)'
+  mutation force-without-tracking-ref '        if force:
+            p["reason"] = "no remote-tracking ref, no lease possible"
+            p["state"] = "no-tracking"
+            return p' '        if False:
+            return p'
+  mutation tags-pushed 'args += ["origin", "refs/heads/%s:refs/heads/%s" % (b, b)]  # MUT-REFSPEC' 'args += ["--tags", "origin", "refs/heads/%s:refs/heads/%s" % (b, b)]'
+  mutation all-branches-pushed 'args += ["origin", "refs/heads/%s:refs/heads/%s" % (b, b)]  # MUT-REFSPEC' 'args += ["--all", "origin"]'
+  mutation current-branch-not-default '    p["branch"] = b
+' '    b = gout(repo, "symbolic-ref", "--short", "-q", "HEAD") or b
+    p["branch"] = b
+'
+  mutation origin-head-ignored 'if head and head.startswith("refs/remotes/origin/") and \' 'if False and \'
+  mutation no-default-check '    if not b:
+        p["reason"] = "no default branch (origin/HEAD, main, master)"
+        return p' '    b = b or "main"'
+  mutation status-pushes '        elif status:
+            row["result"] = "pending"' '        elif False:
+            row["result"] = "pending"'
+  mutation credentials-not-stripped 'return re.sub(r"([A-Za-z][A-Za-z0-9+.-]*://)\S*@", r"\1", s)  # MUT-CRED' 'return s'
+  mutation credentials-old-regex-slash-password 'return re.sub(r"([A-Za-z][A-Za-z0-9+.-]*://)\S*@", r"\1", s)  # MUT-CRED' 'return re.sub(r"([A-Za-z][A-Za-z0-9+.-]*://)[^/@\s]*@", r"\1", s)'
+  mutation candidates-leak-url '[self.rel(c) for c in cands]' '[self.rel(c) + " " + (gout(c, "remote", "get-url", "origin") or "") for c in cands]'
+  mutation refspec-target-accepted 'if t.startswith("+"):' 'if False:'
+  mutation short-option-accepted 'elif not only_args and a.startswith("-") and a != "-":' 'elif False:'
+  mutation no-containing-note '            notes.append("%s resolved to containing repo %s" % (label, self.rel(best)))  # MUT-NOTE' '            pass'
+  mutation ambiguous-picks-first 'if len(cands) == 1:' 'if len(cands) >= 1:'
+  mutation unknown-name-means-all '        if not cands:
+            raise UsageError("target %s not found" % t)' '        if not cands:
+            return list(self.repos)'
+  mutation dot-not-supported 'if t == "." or t == ".." or t.startswith("./") or t.startswith("../"):' 'if t == "..":'
+  mutation slash-path-not-supported 'if t.startswith("/"):' 'if False:'
+  mutation behind-not-detected 'if git(repo, "merge-base", "--is-ancestor", L, T)[0] == 0:' 'if False:'
+  mutation behind-with-command-hint '"behind origin by %d" % p["behind"]  # MUT-BEHIND' '"behind origin by %d, run git pull" % p["behind"]'
+  mutation diverged-pushed '    p["reason"] = "diverged (ahead %d, behind %d)" % (p["ahead"], p["behind"])' '    p["action"] = "push"'
+  mutation up-to-date-pushed '    if T == L:
+        p["action"] = "noop"' '    if False:
+        p["action"] = "noop"'
+  mutation origin-check-removed 'if git(repo, "remote", "get-url", "origin")[0] != 0:' 'if False:'
+  mutation json-invalid 'indent=None, sort_keys=True))' 'indent=None, sort_keys=True) + ",")'
+  mutation ignored-names-not-skipped 'SKIP_NAMES = {".git", ".worktrees", ".agent-rules"}' 'SKIP_NAMES = {".git"}'
+  mutation worktrees-as-repos 'return bool(m) and "/worktrees/" not in m.group(1).replace("\\", "/")' 'return bool(m)'
+  mutation superproject-root-ignored '    for _ in range(10):' '    for _ in range(0):'
+  mutation workflow-pr-not-skipped 'if wf == "pull-request":  # MUT-WFSKIP' 'if False:'
+  mutation workflow-config-ignored 'if key in self.wf_repos:  # MUT-WFLOOKUP' 'if False:'
+  mutation workflow-inherit-unlabelled 'if src == "config":  # MUT-INHERIT' 'if False:' stw-workflow
+  mutation workflow-unknown-mode-accepted 'if value not in sp.WORKFLOWS:' 'if False:' stw-workflow
+  mutation level-diverged-warning '"diverged": ("error", "error"),' '"diverged": ("warning", "warning"),'
+  mutation level-no-remote-warning '"no-remote": ("info", "info"),' '"no-remote": ("warning", "warning"),'
+  mutation level-in-sync-info '"in-sync": ("green", "green"),' '"in-sync": ("info", "info"),'
+  mutation level-local-ahead-swapped '"local-ahead": ("warning", "warning"),' '"local-ahead": ("info", "info"),'
+  mutation level-remote-ahead-swapped '"remote-ahead": ("warning", "info"),' '"remote-ahead": ("info", "warning"),'
+  mutation level-ignores-workflow 'return LEVELS[state][1 if wf == "pull-request" else 0]  # MUT-LEVELWF' 'return LEVELS[state][0]'
+  mutation level-failed-warning '"failed": ("error", "error"),' '"failed": ("warning", "warning"),'
+  mutation note-pr-removed '"local-ahead": ("to push", "local %s ahead without PR"),' '"local-ahead": ("to push", ""),'
+  mutation exit-always-0 'code = 1 if any(r["state"] != "in-sync" for r in rows) else 0  # MUT-EXIT' 'code = 0'
+  mutation colour-ignores-no-color ' and not os.environ.get("NO_COLOR")' ''
+  mutation colour-on-pipe 'if sys.stdout.isatty() and' 'if True and'
+  mutation review-root-ignores-stw-toml 'if os.path.exists(os.path.join(d, "stw.toml")):  # MUT-ROOTTOML' 'if False:'
+  mutation review-parser-table-check-removed 'if "workflow" in name and name not in ("workflow", "workflow.repos"):  # MUT-STRICT' 'if False:'
+  mutation review-parser-workflow-line-ignored '        m = DEFAULT_RE.match(line)
+        if not m:
+            raise UsageError("stw.toml: unsupported line in [workflow]: %s" % line.strip()[:60])' '        m = DEFAULT_RE.match(line)
+        if not m:
+            continue'
+  mutation review-parser-root-key-ignored 'if re.match(r"""^\s*["'"'"']?workflow\b""", line):' 'if False:'
+  mutation review-unreadable-config-ignored '    except (OSError, UnicodeDecodeError) as e:  # MUT-READERR' '    except OSError:
+        return None
+    except UnicodeDecodeError as e:'
+  mutation rv-norm-key-noop 'k = k.strip().strip("/")  # MUT-NORMKEY' 'k = k.strip()'
+  mutation review-key-match-removed 'if e and e[0] == key:  # MUT-KEYMATCH' 'if False:' stw-workflow
+  mutation review-first-table-only '        for a, b in tables:
+            for i in range(a + 1, b):' '        for a, b in tables[:1]:
+            for i in range(a + 1, b):' stw-workflow
+  mutation review-readback-removed 'if repos.get(key) != val:  # MUT-READBACK' 'if False:' stw-workflow
+  mutation review-set-without-repo-allowed 'if d in self.repos:  # MUT-STRICTREPO' 'if True:'
+  mutation review-group-takes-folders 'if d in self.repos:  # folders without a repository of their own are skipped  # MUT-GROUPREPO' 'if True:'
+  mutation review-submodule-not-blocking 'blocked = [ws.rel(g) for g in gitlinks(repo) if results.get(g) in ("skipped", "failed")]  # MUT-SUBMODULE' 'blocked = []'
+  mutation rv-checkignore-removed 'rc, out, _ = git(repo, "ls-files", "-z", "-o", "-i", "--exclude-standard", "--directory")  # MUT-IGNORED' 'rc, out, _ = 1, "", ""'
+  mutation review-origin-head-target-unchecked 'gout(repo, "rev-parse", "-q", "--verify", head) and \' 'True and \'
+  mutation rv-no-follow-tags-removed 'args = ["push", "--no-follow-tags", "--recurse-submodules=no"]' 'args = ["push", "--recurse-submodules=no"]'
+  mutation rv-recurse-sub-removed 'args = ["push", "--no-follow-tags", "--recurse-submodules=no"]' 'args = ["push", "--no-follow-tags"]'
+  mutation review-ssh-timeout-removed 'env = dict(ENV, GIT_SSH_COMMAND="ssh -o ConnectTimeout=15 -o BatchMode=yes")  # MUT-SSH' 'pass'
+  mutation review-ssh-overrides-user-command 'if not (env.get("GIT_SSH_COMMAND") or env.get("GIT_SSH") or gout(repo, "config", "--get", "core.sshCommand")):' 'if True:'
+  mutation exit-pr-repos-not-counted 'code = 1 if any(r["state"] != "in-sync" for r in rows) else 0  # MUT-EXIT' 'code = 1 if any(r["state"] != "in-sync" and r["workflow"] != "pull-request" for r in rows) else 0'
+  mutation exit-warnings-are-ok 'code = 1 if any(r["state"] != "in-sync" for r in rows) else 0  # MUT-EXIT' 'code = 1 if any(r["level"] == "error" for r in rows) else 0'
+  mutation review-symlink-replaced 'target = os.path.realpath(path)' 'target = path' stw-workflow
+  mutation review-mode-not-kept '    if mode is not None:
+        os.chmod(tmp, mode)' '    if False:
+        os.chmod(tmp, mode)' stw-workflow
+  mutation review-crlf-lost 'eol = next((r[1] for r in recs if r[1]), "\n")' 'eol = "\n"' stw-workflow
+  mutation round3-excluded-path-falls-back 'if hidden:  # a path inside a folder that is never searched: that repository itself or nothing  # MUT-EXCLUDED' 'if False:'
+  mutation round3-write-error-uncaught 'except (sp.UsageError, OSError) as e:  # MUT-WRITEERR' 'except ZeroDivisionError as e:' stw-workflow
+  mutation round3-duplicate-key-allowed 'if e[0] in seen and seen[e[0]] != e[1]:  # MUT-DUPKEY' 'if False:'
+  mutation round4-duplicate-default-allowed 'if seen_default is not None and seen_default != val:  # MUT-DUPDEFAULT' 'if False:'
+  mutation round4-duplicate-group-allowed 'if key in seen_g and seen_g[key] != lst:  # MUT-DUPGROUP' 'if False:'
+  # review-fsync-removed stays open on purpose: an fsync is not observable without a crash or strace test.
+  mutation review-fsync-removed 'os.fsync(f.fileno())  # MUT-FSYNC' 'pass' stw-workflow
+  mutation workflow-comments-lost 'return "".join(c + e for c, e in recs)' 'return "".join(c + e for c, e in recs if not c.lstrip().startswith("#"))' stw-workflow
+  mutation workflow-unset-noop '            for i in reversed(hits):
+                del recs[i]' '            pass' stw-workflow
+  mutation workflow-file-not-created '    target = os.path.realpath(path)' '    target = os.path.realpath(path)
+    if not os.path.exists(target):
+        return' stw-workflow
+  echo "mutations: $MUT_PROVEN proven, $MUT_OPEN open"
+  [ $MUT_OPEN = 0 ] || echo "open mutations:$OPEN_LIST"
+}
+
+# ------------------------------------------------------------------ main
+: > "$FAILFILE"
+echo "building fixture under $S"
+build
+if [ "$1" = "--only" ]; then # --only t_review t_status ... : run just these groups
+  shift; : > "$S/gitlog"; : > "$S/alloutput"
+  for f in "$@"; do "$f"; done
+  echo "tests: $PASS passed, $FAIL failed"; [ "$FAIL" = 0 ]; exit
+fi
+static_checks
+: > "$FAILFILE"
+all_tests
+echo "tests: $PASS passed, $FAIL failed"
+RESULT_FAIL=$FAIL
+case "$1" in
+  --mutations) run_mutations ;;
+  --mutations-only) shift; MUT_ONLY="$*"; run_mutations ;;
+esac
+[ "$RESULT_FAIL" = 0 ]

@@ -1,0 +1,183 @@
+#!/bin/bash
+# stw-status - where am I in every repository of the workspace.
+# Purpose: per repo branch, upstream ahead/behind, changes, stash, running operation,
+#          submodule pin drift and open pull requests. Read-only.
+# Usage:   stw-status [--json] [--offline] [--root PATH] [--repo NAME]...
+#          --offline: no GitHub calls. --repo: only these repos (name as listed).
+# Exit:    0 done (also when repos need attention), 2 usage error or no git.
+# Root:    --root, else the repo/superproject of the current directory, else $STW_ROOT,
+#          else the git top level; otherwise exit 2.
+# SPDX-License-Identifier: EUPL-1.2
+DIR=$(cd "$(dirname "$0")" && pwd)
+. "$DIR/stw-lib.sh"
+
+JSON=0 OFFLINE=0 ROOT= ONLY=
+while [ $# -gt 0 ]; do
+  case $1 in
+    --json) JSON=1 ;;
+    --offline) OFFLINE=1 ;;
+    --root) ROOT=${2:-}; shift ;;
+    --repo) ONLY="$ONLY|${2:-}|"; shift ;;
+    -h|--help) sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "stw-status: unknown argument $1 (see --help)" >&2; exit 2 ;;
+  esac
+  shift
+done
+[ -n "$ROOT" ] || ROOT=$(stw_root_default) || exit 2
+[ -d "$ROOT" ] || { echo "stw-status: no such directory: $ROOT" >&2; exit 2; }
+ROOT=$(cd "$ROOT" && pwd -P)
+stw_tmp
+GH_OK=0
+if [ $OFFLINE = 0 ] && stw_have_gh; then GH_OK=1; fi
+
+RECS=$STW_TMP/recs
+: > "$RECS"
+n=0
+stw_repos "$ROOT" | while IFS=$STW_SEP read -r name path; do
+  if [ -n "$ONLY" ]; then case $ONLY in *"|$name|"*) ;; *) continue ;; esac; fi
+  n=$((n+1))
+  branch= upstream= ahead= behind= staged=0 unstaged=0 untracked=0 conflicts=0 head= state=ok err=
+  if ! out=$(g "$path" status --porcelain=v2 --branch --untracked-files=normal 2>&1); then
+    state=error; err=$out
+  else
+    while IFS= read -r line; do
+      case $line in
+        '# branch.head '*) branch=${line#'# branch.head '}; [ "$branch" = '(detached)' ] && branch= ;;
+        '# branch.oid '*) head=${line#'# branch.oid '}; head=${head:0:12} ;;
+        '# branch.upstream '*) upstream=${line#'# branch.upstream '} ;;
+        '# branch.ab '*) set -- ${line#'# branch.ab '}; ahead=${1#+}; behind=${2#-} ;;
+        '1 '*|'2 '*) xy=${line:2:2}
+           [ "${xy:0:1}" != . ] && staged=$((staged+1)); [ "${xy:1:1}" != . ] && unstaged=$((unstaged+1)) ;;
+        'u '*) conflicts=$((conflicts+1)) ;;
+        '? '*) untracked=$((untracked+1)) ;;
+      esac
+    done <<< "$out"
+  fi
+  upstream_gone=0
+  if [ -n "$branch" ] && [ -z "$upstream" ]; then
+    cfg=$(g "$path" config --get "branch.$branch.merge" 2>/dev/null) && [ -n "$cfg" ] && upstream_gone=1
+  fi
+  stash=$(g "$path" stash list 2>/dev/null | wc -l | tr -d ' ')
+  gd=$(g "$path" rev-parse --absolute-git-dir 2>/dev/null)
+  op=
+  if [ -n "$gd" ]; then
+    [ -d "$gd/rebase-merge" -o -d "$gd/rebase-apply" ] && op=rebase
+    [ -f "$gd/MERGE_HEAD" ] && op=merge
+    [ -f "$gd/CHERRY_PICK_HEAD" ] && op=cherry-pick
+    [ -f "$gd/REVERT_HEAD" ] && op=revert
+    [ -f "$gd/BISECT_LOG" ] && op=bisect
+  fi
+  # submodule pin: commit recorded in the root vs checked out
+  pin= pinstate=
+  if [ "$path" != "$ROOT" ]; then
+    rel=${path#"$ROOT"/}
+    pin=$(g "$ROOT" ls-tree HEAD -- "$rel" 2>/dev/null | awk '{print $3}')
+    full=$(g "$path" rev-parse HEAD 2>/dev/null)
+    if [ -n "$pin" ] && [ -n "$full" ]; then
+      if [ "$pin" = "$full" ]; then pinstate=ok
+      elif g "$path" merge-base --is-ancestor "$pin" "$full" 2>/dev/null; then pinstate=ahead
+      elif g "$path" merge-base --is-ancestor "$full" "$pin" 2>/dev/null; then pinstate=behind
+      else pinstate=diverged-or-unknown; fi
+    fi
+  fi
+  slug=$(stw_slug "$path")
+  prs=0 prerr=
+  : > "$STW_TMP/pr.$n"
+  if [ $GH_OK = 1 ] && [ -n "$slug" ]; then
+    if "$STW_GH" pr list --repo "$slug" --state open --limit 100 \
+        --json number,title,headRefName,isDraft,author,reviewDecision,mergeStateStatus \
+        --jq '.[] | [.number,.title,.headRefName,.isDraft,.author.login,.reviewDecision,.mergeStateStatus] | map(tostring) | join("\u001f")' \
+        > "$STW_TMP/pr.$n" 2> "$STW_TMP/pr.err"; then
+      prs=$(wc -l < "$STW_TMP/pr.$n" | tr -d ' ')
+    else
+      prerr=$(head -c 200 "$STW_TMP/pr.err" | tr '\n' ' '); : > "$STW_TMP/pr.$n"
+    fi
+  fi
+  printf '%s\n' "$name$STW_SEP$path$STW_SEP$state$STW_SEP$branch$STW_SEP$head$STW_SEP$upstream$STW_SEP$ahead$STW_SEP$behind$STW_SEP$staged$STW_SEP$unstaged$STW_SEP$untracked$STW_SEP$conflicts$STW_SEP$stash$STW_SEP$op$STW_SEP$pin$STW_SEP$pinstate$STW_SEP$slug$STW_SEP$prs$STW_SEP$prerr$STW_SEP$upstream_gone$STW_SEP$err$STW_SEP$n" >> "$RECS"
+done
+
+# ---- render
+total=0 attention=0
+if [ $JSON = 1 ]; then
+  printf '{"schema_version":1,"command":"status","root":%s,"git":%s,"gh":%s,"github":%s,"repos":[' "$(js "$ROOT")" "$(js "$STW_GIT")" "$(jsn "$STW_GH")" "$(jb $GH_OK)"
+fi
+first=1
+while IFS=$STW_SEP read -r name path state branch head upstream ahead behind staged unstaged untracked conflicts stash op pin pinstate slug prs prerr gone err idx; do
+  total=$((total+1))
+  reasons=
+  [ -n "$op" ] && reasons="$reasons operation:$op"
+  [ "$conflicts" -gt 0 ] && reasons="$reasons conflicts"
+  [ "$staged" -gt 0 ] && reasons="$reasons staged"
+  [ "$unstaged" -gt 0 ] && reasons="$reasons unstaged"
+  [ "$untracked" -gt 0 ] && reasons="$reasons untracked"
+  [ "${behind:-0}" -gt 0 ] && reasons="$reasons behind"
+  [ -n "$branch" ] && [ -z "$upstream" ] && reasons="$reasons no-upstream"
+  [ -z "$branch" ] && [ "$state" = ok ] && reasons="$reasons detached"
+  [ "$state" = error ] && reasons="$reasons error"
+  attn=0; [ -n "$reasons" ] && { attn=1; attention=$((attention+1)); }
+  # next steps: executable commands
+  steps=
+  p=$(stw_shq "$path")
+  [ "${behind:-0}" -gt 0 ] && [ "${ahead:-0}" = 0 ] && steps="$steps${steps:+$STW_SEP}git -C $p pull --ff-only"
+  [ "${behind:-0}" -gt 0 ] && [ "${ahead:-0}" -gt 0 ] && steps="$steps${steps:+$STW_SEP}git -C $p log --oneline --left-right @{u}...HEAD"
+  [ -n "$branch" ] && [ -z "$upstream" ] && [ "$gone" = 0 ] && steps="$steps${steps:+$STW_SEP}git -C $p push -u origin $(stw_shq "$branch")"
+  [ "$((staged+unstaged+untracked+conflicts))" -gt 0 ] && steps="$steps${steps:+$STW_SEP}git -C $p status -sb"
+  [ "$pinstate" = ahead ] && steps="$steps${steps:+$STW_SEP}git -C $(stw_shq "$ROOT") diff --submodule=log -- $(stw_shq "${path#"$ROOT"/}")"
+  if [ $JSON = 1 ]; then
+    [ $first = 1 ] || printf ','
+    first=0
+    printf '{"name":%s,"path":%s,"state":%s,"branch":%s,"detached":%s,"head":%s,"upstream":%s,"upstream_gone":%s,"ahead":%s,"behind":%s,' \
+      "$(js "$name")" "$(js "$path")" "$(js "$state")" "$(jsn "$branch")" "$(if [ -z "$branch" ]; then printf 1; else printf 0; fi | { read -r v; jb "$v"; })" "$(jsn "$head")" "$(jsn "$upstream")" "$(jb "$gone")" "$(jn "$ahead")" "$(jn "$behind")"
+    printf '"changes":{"staged":%s,"unstaged":%s,"untracked":%s,"conflicts":%s},"stash":%s,"operation":%s,"gitlink":{"recorded":%s,"state":%s},"slug":%s,"attention":%s,"reasons":[' \
+      "$staged" "$unstaged" "$untracked" "$conflicts" "$stash" "$(jsn "$op")" "$(jsn "$pin")" "$(jsn "$pinstate")" "$(jsn "$slug")" "$(jb $attn)"
+    f2=1; for r in $reasons; do [ $f2 = 1 ] || printf ','; f2=0; js "$r"; done
+    printf '],"pull_requests":{"read":%s,"error":%s,"open":[' "$(if [ -n "$slug" ] && [ $GH_OK = 1 ] && [ -z "$prerr" ]; then printf true; else printf false; fi)" "$(jsn "$prerr")"
+    f3=1
+    while IFS=$STW_SEP read -r num title hb draft author rd ms; do
+      [ -n "$num" ] || continue
+      [ $f3 = 1 ] || printf ','; f3=0
+      printf '{"number":%s,"title":%s,"head":%s,"draft":%s,"author":%s,"review":%s,"merge_state":%s}' "$num" "$(js "$title")" "$(js "$hb")" "$draft" "$(js "$author")" "$(jsn "$rd")" "$(jsn "$ms")"
+    done < "$STW_TMP/pr.$idx"
+    printf ']},"error":%s,"next_steps":[' "$(jsn "$err")"
+    f4=1; oldifs=$IFS; IFS=$STW_SEP; for s in $steps; do [ $f4 = 1 ] || printf ','; f4=0; js "$s"; done; IFS=$oldifs
+    printf ']}'
+  else
+    mark=' '; [ $attn = 1 ] && mark='!'
+    where=${branch:-"(detached $head)"}
+    if [ "$state" = error ]; then line="error: $err"
+    else
+      if [ -n "$upstream" ]; then
+        if [ "${ahead:-0}" = 0 ] && [ "${behind:-0}" = 0 ]; then line="$upstream up to date"
+        else line="$upstream"; [ "${ahead:-0}" -gt 0 ] && line="$line ahead $ahead"; [ "${behind:-0}" -gt 0 ] && line="$line behind $behind"; fi
+      elif [ "$gone" = 1 ]; then line="upstream gone"; else line="no upstream"; fi
+      ch=
+      [ "$staged" -gt 0 ] && ch="$ch ${staged} staged"; [ "$unstaged" -gt 0 ] && ch="$ch ${unstaged} unstaged"
+      [ "$untracked" -gt 0 ] && ch="$ch ${untracked} untracked"; [ "$conflicts" -gt 0 ] && ch="$ch ${conflicts} conflicts"
+      [ -z "$ch" ] && ch=" clean"
+      line="$line  $ch"
+    fi
+    printf '%s %-18s %-30s %s\n' "$mark" "$name" "$where" "$line"
+    [ -n "$op" ] && printf '    operation in progress: %s\n' "$op"
+    [ "$stash" -gt 0 ] && printf '    %s stash entr%s\n' "$stash" "$(if [ "$stash" = 1 ]; then printf y; else printf ies; fi)"
+    case $pinstate in ahead|behind|diverged-or-unknown) printf '    submodule: checked-out commit is %s the recorded gitlink\n' "$pinstate" ;; esac
+    if [ -n "$prerr" ]; then printf '    pull requests: not read (%s)\n' "$prerr"
+    elif [ "$prs" -gt 0 ]; then
+      printf '    %s open pull request%s:\n' "$prs" "$(if [ "$prs" = 1 ]; then :; else printf s; fi)"
+      while IFS=$STW_SEP read -r num title hb draft author rd ms; do
+        [ -n "$num" ] || continue
+        fl=; [ "$draft" = true ] && fl=" draft"
+        printf '      #%s %s [%s%s%s%s]\n' "$num" "$title" "$hb" "$fl" "${rd:+, $rd}" "${ms:+, $ms}"
+      done < "$STW_TMP/pr.$idx"
+    fi
+    oldifs=$IFS; IFS=$STW_SEP; for s in $steps; do printf '    next: %s\n' "$s"; done; IFS=$oldifs
+  fi
+done < "$RECS"
+if [ $JSON = 1 ]; then
+  printf '],"summary":{"total":%s,"attention":%s}}\n' "$total" "$attention"
+else
+  if [ $GH_OK = 0 ]; then
+    if [ $OFFLINE = 1 ]; then echo "(pull requests not read: --offline)"; else echo "(pull requests not read: gh missing or not logged in; run: gh auth login)"; fi
+  fi
+  if [ "$attention" -gt 0 ]; then echo "$attention of $total repositories need attention"; else echo "$total repositories, nothing needs attention"; fi
+fi
+exit 0
