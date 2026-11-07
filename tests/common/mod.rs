@@ -468,3 +468,41 @@ impl Fx {
         repo.write_object(&c).unwrap().detach()
     }
 }
+
+/// Stdout of a successful `stw` run, independent of the developer's token and workspace.
+pub fn stw_stdout(args: &[&str]) -> String {
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("STW_ROOT")
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(args)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0), "{args:?}");
+    String::from_utf8(o.stdout).unwrap()
+}
+
+pub fn status_fixture() -> Fx {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("a.txt", Some("a\n"))], "c0");
+    fx.branch("main", c0);
+    fx.remote("main", c0);
+    fx.origin_head("main");
+    fx.track("main");
+    fx.set_head("main");
+    fx.checkout_head();
+    fx
+}
+
+/// Pretty JSON of `stw status` for `root_arg`; the fixture root is redacted.
+pub fn status_json(fx: &Fx, root_arg: &str) -> String {
+    let out = stw_stdout(&["status", "--root", root_arg, "--offline", "--json"]);
+    let pretty =
+        serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(&out).unwrap())
+            .unwrap();
+    // stw prints the canonical root; the fixture path may run through a symlink
+    let canon = std::fs::canonicalize(&fx.path).unwrap();
+    pretty.replace(&path_str(&canon), "[ROOT]")
+}
