@@ -1,5 +1,7 @@
 # stw (SourceSteward)
 
+Implementation scope, feature decisions, dependencies, and acceptance gates: [Rust migration plan](docs/migration-plan.md).
+
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 **Today stw itself starts no other program**: no `git`, no `gh`, no `ssh`. GitHub is reached over its REST API.
