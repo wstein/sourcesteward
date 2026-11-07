@@ -1,0 +1,89 @@
+{
+ "total_count": 7,
+ "check_runs": [
+  {
+   "id": 127686850986,
+   "name": "check-requirements / close-unmet-requirements",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-06T03:11:14Z",
+   "completed_at": "2026-11-06T03:11:14Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686850947,
+   "name": "close-no-help-wanted",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-06T03:11:14Z",
+   "completed_at": "2026-11-06T03:11:14Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686850921,
+   "name": "close-unmet-requirements",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-06T03:11:14Z",
+   "completed_at": "2026-11-06T03:11:14Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686850784,
+   "name": "close-from-default-branch / close-from-default-branch",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-06T03:11:14Z",
+   "completed_at": "2026-11-06T03:11:14Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686850533,
+   "name": "ready-for-review",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-06T03:11:14Z",
+   "completed_at": "2026-11-06T03:11:14Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686849838,
+   "name": "check-requirements / check-requirements",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-06T03:11:17Z",
+   "completed_at": "2026-11-06T03:11:22Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  },
+  {
+   "id": 127686849089,
+   "name": "label-external / label_issues",
+   "head_sha": "3988a274744f92464c6f8ea873c1a836a4d01356",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-06T03:11:17Z",
+   "completed_at": "2026-11-06T03:11:22Z",
+   "app": {
+    "slug": "github-actions"
+   }
+  }
+ ]
+}

@@ -540,3 +540,71 @@ pub fn status_json(fx: &Fx, root_arg: &str) -> String {
     let canon = std::fs::canonicalize(&fx.path).unwrap();
     pretty.replace(&path_str(&canon), "[ROOT]")
 }
+
+/// A fake GitHub API with a handler per request: `(path, query) -> (status, extra headers, body)`.
+/// Records `"<request line> | <authorization header>"` of every request.
+pub struct FakeRoutes {
+    pub url: String,
+    hits: std::sync::Arc<std::sync::Mutex<Vec<String>>>,
+}
+
+impl FakeRoutes {
+    pub fn start(
+        handler: impl Fn(&str, &str) -> (u16, Vec<(String, String)>, String) + Send + 'static,
+    ) -> FakeRoutes {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let hits = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+        let seen = hits.clone();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut s) = stream else { continue };
+                let mut buf = Vec::new();
+                let mut chunk = [0u8; 1024];
+                while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                    match s.read(&mut chunk) {
+                        Ok(0) | Err(_) => break,
+                        Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                    }
+                }
+                let text = String::from_utf8_lossy(&buf).into_owned();
+                let line = text.lines().next().unwrap_or("").to_string();
+                let auth = text
+                    .lines()
+                    .find(|l| l.to_ascii_lowercase().starts_with("authorization:"))
+                    .unwrap_or("");
+                seen.lock().unwrap().push(format!("{line} | {auth}"));
+                let target = line.split_whitespace().nth(1).unwrap_or("/");
+                let (path, query) = target.split_once('?').unwrap_or((target, ""));
+                let (status, headers, body) = handler(path, query);
+                let extra: String = headers
+                    .iter()
+                    .map(|(k, v)| format!("{k}: {v}\r\n"))
+                    .collect();
+                let resp = format!(
+                    "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\n{extra}Content-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = s.write_all(resp.as_bytes());
+            }
+        });
+        FakeRoutes { url, hits }
+    }
+
+    pub fn hits(&self) -> Vec<String> {
+        self.hits.lock().unwrap().clone()
+    }
+}
+
+/// `page` and `per_page` of a query string (defaults 1 and 30), for paginating fixtures.
+pub fn page_of(query: &str) -> (usize, usize) {
+    let get = |k: &str, d: usize| {
+        query
+            .split('&')
+            .find_map(|kv| kv.strip_prefix(&format!("{k}=")))
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(d)
+    };
+    (get("page", 1), get("per_page", 30))
+}

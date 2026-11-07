@@ -6,6 +6,8 @@ use serde_json::Value;
 use crate::auth::{self, TokenSource};
 use crate::error::{Error, Result};
 
+pub mod reads;
+
 const API: &str = "https://api.github.com";
 /// Environment variable that points the REST calls elsewhere (GitHub Enterprise, tests); no trailing slash.
 pub const API_URL_ENV: &str = "STW_GITHUB_API_URL";
@@ -91,17 +93,23 @@ impl Client {
     }
 
     pub fn new(token: String, source: TokenSource) -> Client {
+        let base = std::env::var(API_URL_ENV)
+            .ok()
+            .filter(|v| !v.is_empty())
+            .map(|v| v.trim_end_matches('/').to_string())
+            .unwrap_or_else(|| API.to_string());
+        Client::with_base(token, source, base)
+    }
+
+    /// A client for an explicit API base (no trailing slash): tests and GitHub Enterprise.
+    pub fn with_base(token: String, source: TokenSource, base: String) -> Client {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .timeout_global(Some(Duration::from_secs(30)))
             .http_status_as_error(false)
             .user_agent(concat!("stw/", env!("CARGO_PKG_VERSION")))
             .build()
             .into();
-        let base = std::env::var(API_URL_ENV)
-            .ok()
-            .filter(|v| !v.is_empty())
-            .map(|v| v.trim_end_matches('/').to_string())
-            .unwrap_or_else(|| API.to_string());
+        let base = base.trim_end_matches('/').to_string();
         Client {
             agent,
             token,

@@ -1,0 +1,28 @@
+[
+ {
+  "id": 5805880866,
+  "user": {
+   "login": "tidy-dev",
+   "id": 75402236,
+   "type": "User"
+  },
+  "state": "APPROVED",
+  "commit_id": "3e6aeafb1b796b862389c1abe4deba5e60fa0b01",
+  "submitted_at": "2026-11-06T19:33:17Z",
+  "author_association": "CONTRIBUTOR",
+  "body": ""
+ },
+ {
+  "id": 5805895187,
+  "user": {
+   "login": "copilot-pull-request-reviewer[bot]",
+   "id": 175728472,
+   "type": "Bot"
+  },
+  "state": "COMMENTED",
+  "commit_id": "3e6aeafb1b796b862389c1abe4deba5e60fa0b01",
+  "submitted_at": "2026-11-06T19:34:32Z",
+  "author_association": "CONTRIBUTOR",
+  "body": "<!-- ccr-overview-v2 -->\n\n### \ud83d\udfe2 Approval recommended\n\nNo active review issues are reported for the change restoring configurable model selection in issue-triage automation.\n\n**No open issues** \ud83c\udf89\n\n<details>\n<summary><strong>What changed in this PR</strong></summary>\n\nRemoves the accidental model pin from GitHub CLI\u2019s issue-triage automation, restoring model selection through repository variables and `gh aw` defaults.\n\n**Changes:**\n- Removes the explicit Copilot model from the workflow source.\n- Regenerates the lock file with separate triage and security-check model fallback chains, dynamic model reporting, and no pinned-model cost overrides.\n- Documents model-selection variables and their fallback order.\n\n| File | Description |\r\n| ---- | ----------- |\r\n| `docs/\u200bissue-triage.md` | Documents model selection and fallback behavior. |\r\n| `.github/\u200bworkflows/\u200bissue-triage.md` | Removes the model pin while retaining the Copilot engine. |\r\n| `.github/\u200bworkflows/\u200bissue-triage.lock.yml` | Updates generated model configuration and reporting to match the unpinned workflow. |\n</details>\n\n<sub>Review effort: Balanced</sub>"
+ }
+]
