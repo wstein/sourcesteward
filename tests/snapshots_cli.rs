@@ -42,7 +42,9 @@ fn status_json(fx: &Fx, root_arg: &str) -> String {
     let pretty =
         serde_json::to_string_pretty(&serde_json::from_str::<serde_json::Value>(&out).unwrap())
             .unwrap();
-    pretty.replace(&path_str(&fx.path), "[ROOT]")
+    // stw prints the canonical root; the fixture path may run through a symlink
+    let canon = std::fs::canonicalize(&fx.path).unwrap();
+    pretty.replace(&path_str(&canon), "[ROOT]")
 }
 
 #[test]
