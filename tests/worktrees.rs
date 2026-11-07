@@ -61,3 +61,20 @@ fn registration_without_gitdir_file_is_ignored_like_git_does() {
     assert!(w.stale.is_empty());
     assert!(w.branch_dir("plain").is_none());
 }
+
+/// G2: scanning from a linked worktree must still report the branch checked out in the main checkout.
+#[test]
+fn scan_from_a_linked_root_sees_the_main_checkout() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("a.txt", Some("a\n"))], "c0");
+    fx.branch("main", c0);
+    fx.branch("owner", c0);
+    fx.set_head("owner");
+    fx.checkout_head();
+    let wt = real_worktree(&fx, "linked", "main");
+    let w = worktrees::scan(&stw::repo::open(&wt).unwrap()).unwrap();
+    assert_eq!(w.branch_dir("owner"), Some(&fx.path), "{w:?}");
+    assert_eq!(w.branch_dir("main"), Some(&wt));
+    assert_eq!(w.main_dir.as_ref(), Some(&fx.path));
+    assert_eq!(w.linked.len(), 1, "the linked root is listed once: {w:?}");
+}

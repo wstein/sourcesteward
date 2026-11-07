@@ -1092,3 +1092,54 @@ fn a_branch_changing_a_different_non_utf8_path_is_kept() {
         "the unmerged branch must survive apply"
     );
 }
+
+/// G2: run from a linked worktree, tidy must not delete the (merged) branch that the main checkout has
+/// checked out.
+#[test]
+fn from_a_linked_root_the_main_checkouts_branch_is_kept() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("a", Some("old\n"))], "c0");
+    let c1 = fx.commit(Some(c0), &[("a", Some("new\n"))], "c1");
+    fx.remote("main", c1);
+    fx.origin_head("main");
+    fx.branch("main", c1);
+    fx.branch("owner", c0); // ancestor of origin/main: merged
+    fx.set_head("owner");
+    fx.checkout_head();
+    let wt = real_worktree(&fx, "linked", "main");
+    let now = fx
+        .repo()
+        .find_commit(c1)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W { fx, now, c0, u: c1 };
+    let rr = RepoRef {
+        name: "fx".into(),
+        path: wt,
+    };
+    let p = plan_repo_with_opts(
+        &rr,
+        PrProof {
+            prs: None,
+            note: "off".into(),
+        },
+        &PlanOpts {
+            backup_days: 7,
+            now,
+        },
+    );
+    assert!(p.error.is_none(), "{:?}", p.error);
+    let bp = p.branches.iter().find(|b| b.branch == "owner").unwrap();
+    assert_eq!(bp.decision, "keep", "[{}] {}", bp.proof, bp.detail);
+    let dir = scratch();
+    let r = apply_repo(&rr, &p, None, &opts(&w, dir.path(), RUN));
+    assert!(r.error.is_none(), "{:?}", r.error);
+    assert_eq!(
+        w.fx.tip("owner"),
+        c0,
+        "the main checkout's branch must survive apply"
+    );
+}

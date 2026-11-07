@@ -89,9 +89,11 @@ fn normalize(p: &std::path::Path) -> PathBuf {
 
 pub fn scan(repo: &gix::Repository) -> Result<Worktrees> {
     let mut w = Worktrees::default();
-    // main worktree: HEAD of the common dir
-    if let Some(dir) = repo.workdir() {
-        if let Ok(Some(name)) = repo.head_name() {
+    // main worktree: its own HEAD and directory, also when `repo` was opened at a linked worktree (there
+    // `repo.workdir()` and `repo.head_name()` describe the linked checkout, which `worktrees()` lists)
+    let main = repo.main_repo()?;
+    if let Some(dir) = main.workdir() {
+        if let Ok(Some(name)) = main.head_name() {
             if let Some(b) = crate::repo::branch_short(name.as_ref()) {
                 w.in_use.push((b, dir.to_path_buf()));
             }
