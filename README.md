@@ -29,7 +29,7 @@ diverged, or when a merge, rebase or similar operation is running. Local changes
 
 ## agent-rules
 
-`sync` and `status` print one line about the rules repository (`wstein/agent-rules`) when the workspace has a checkout:
+`sync` and `status` print one line about the rules repository (`wstein/dotagents`) when the workspace has a checkout:
 `agent-rules: current | behind N commits of origin/<default> | ahead N commits ... | diverged | dirty | not on default branch | not found`.
 In a whr workspace the checkout is the git submodule `.agents` (normally a detached HEAD at the commit the superproject
 records); a plain checkout on the default branch works too. It is `--rules-path PATH` (`sync` and `status`), else

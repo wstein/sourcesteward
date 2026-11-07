@@ -626,7 +626,7 @@ fn the_rules_submodule_is_only_touched_by_rules_apply() {
     gix::init(&root).unwrap();
     std::fs::write(
         root.join(".gitmodules"),
-        "[submodule \".agents\"]\n\tpath = .agents\n\turl = https://github.com/wstein/agent-rules\n",
+        "[submodule \".agents\"]\n\tpath = .agents\n\turl = https://github.com/wstein/dotagents\n",
     )
     .unwrap();
     let rs = root.to_str().unwrap();

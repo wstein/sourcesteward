@@ -1,4 +1,4 @@
-//! `stw sync` and the rules repository (`wstein/agent-rules`), when the workspace has a checkout of it.
+//! `stw sync` and the rules repository (`wstein/dotagents`), when the workspace has a checkout of it.
 //!
 //! In a whr workspace the checkout is the git submodule `.agents`: normally a detached HEAD at the commit the
 //! superproject records. A plain checkout on the default branch works too.
