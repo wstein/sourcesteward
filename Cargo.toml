@@ -35,3 +35,11 @@ strip = true
 
 [dev-dependencies]
 tempfile = "3"
+# Versions as pinned by jj-vcs/jj (2026-11).
+proptest = "1.11"
+insta = { version = "1.47", features = ["filters"] }
+datatest-stable = "0.3"
+
+[[test]]
+name = "slug_cases"
+harness = false

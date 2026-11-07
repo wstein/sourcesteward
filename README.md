@@ -206,6 +206,10 @@ bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PA
 ```
 
 `tests/oracle/*.sh` use the `git` binary **only as a reference** in tests (patch ID, fast-forward results).
+Test helpers (dev-dependencies only, not in the binary): `proptest` (`tests/patchid_props.rs`, small case count),
+`insta` (`tests/snapshots_cli.rs`; snapshots in `tests/snapshots/`, review with `cargo insta review` or
+`INSTA_UPDATE=always cargo test --test snapshots_cli`), `datatest-stable` (`tests/slug_cases.rs`: one `.url` and
+`.slug` file pair per case in `tests/slug_cases/`).
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check` are clean.
 
 ## Reflog identity and order of writes
