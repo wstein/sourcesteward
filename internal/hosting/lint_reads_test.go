@@ -30,7 +30,7 @@ func TestGuardLintShapes(t *testing.T) {
 		{"repos/o/r/pulls/7/commits?per_page=100&page=4", [7]bool{false, false, false, false, false, false, false}},
 		{"repos/o/r/pulls?state=open&per_page=25&page=1", [7]bool{false, true, true, true, false, false, false}},
 		{"rate_limit", [7]bool{false, true, true, true, false, false, false}},
-		{"repos/o/r/branches/main", [7]bool{false, true, true, true, false, false, false}},
+		{"repos/o/r/branches/main", [7]bool{false, true, true, true, false, false, true}}, // land: the protection summary when /protection answers 403 (Spec 043 FR-090)
 		{lintComments(7, 1) + "&x=1", [7]bool{false, false, false, false, false, false, false}},
 		{"repos/o/r/issues/7/comments?per_page=30&page=0", [7]bool{false, false, false, false, false, false, false}},
 		{"repos/o/r/issues/7/comments?per_page=30&page=11", [7]bool{false, false, false, false, false, false, false}},

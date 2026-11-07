@@ -19,7 +19,9 @@ func landCommand() *cobra.Command {
 		Use:   "land --stack NUMBER,NUMBER[,...] --reviewed NUMBER:SHA [--reviewed NUMBER:SHA ...] [--plan] [--repo OWNER/NAME] [--remote NAME] [--ack-draft] [--delete-branch] [--wait DURATION] [PATH] [--human | --json]",
 		Short: "Owner only: plan the landing of a linear chain of reviewed pull requests with one fast-forward push of the tip",
 		Long: "Owner-only command (Spec 043). --stack lands a whole linear chain of reviewed, separately stacked pull requests with ONE fast-forward push of the tip to the\n" +
-			"default branch; GitHub then marks each pull request whose head is in the default branch as merged. No rebase, no new SHAs, no restack, no retarget.\n" +
+			"default branch; GitHub then marks each pull request whose head is in the default branch as merged. No rebase, no new SHAs, no restack.\n" +
+			"A native stack (each base is the head branch of the previous pull request) is retargeted to the default branch first (gh pr edit N --base DEFAULT, bottom first), re-read, then pushed once.\n" +
+			"The native sequence is land-unmeasured until its allowlist entry carries recorded evidence (scripts/measure-native-stack.sh).\n" +
 			"An agent may run only --plan: it is read-only, allowed in agent mode and labelled mode agent. It reads GitHub (pull requests, checks, rules, rulesets, reviews, events)\n" +
 			"and runs one disclosed fetch into refs/stw/land/ (objects and that namespace only; no FETCH_HEAD, no user ref). Without --plan the command is an apply:\n" +
 			"it is refused in agent mode (also without a terminal, with STW_AGENT or an agent marker) before any read, and --yes is never accepted.\n" +

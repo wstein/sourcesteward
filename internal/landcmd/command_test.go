@@ -338,3 +338,70 @@ func TestOpenFailureIsExitOne(t *testing.T) {
 }
 
 var _ = hosting.CodeForbidden
+
+// cubistryReader is the world of the observed failure: a native stack 11 (main), 12 (head branch of 11),
+// no pull_request rule, the classic protection answers 403 and delete_branch_on_merge is not visible.
+func cubistryReader() *fakeReader {
+	r := chainReader()
+	r.bodies["repos/o/r"] = `{"default_branch":"main","delete_branch_on_merge":null}`
+	r.bodies["repos/o/r/rules/branches/main?per_page=100&page=1"] = `[{"type":"required_linear_history","ruleset_id":7}]`
+	r.bodies["repos/o/r/rulesets/7"] = `{"bypass_actors":[]}`
+	r.bodies["repos/o/r/branches/main"] = `{"protected":true,"protection":{"enabled":false,"required_status_checks":{"contexts":[],"checks":[],"enforcement_level":"off"}}}`
+	r.status["repos/o/r/branches/main/protection"] = 403
+	r.bodies["repos/o/r/pulls/12"] = strings.Replace(r.bodies["repos/o/r/pulls/12"], `"base":{"ref":"main"`, `"base":{"ref":"feat-11"`, 1)
+	r.bodies["repos/o/r/pulls/11"] = strings.Replace(r.bodies["repos/o/r/pulls/11"], `"ref":"feat-11"`, `"ref":"feat-11"`, 1)
+	return r
+}
+
+func TestNativeStackPlanOnATokenWithoutAdministrationRead(t *testing.T) {
+	f := baseFlags()
+	f.Stack, f.Reviewed = "11,12", []string{"11:" + sha('1'), "12:" + sha('2')}
+	open := func(p *Params) {
+		p.Open = func(context.Context, string, string) (Reader, func(), error) { return cubistryReader(), func() {}, nil }
+	}
+	// without evidence: refused as unmeasured, but the shape and the checks are readable
+	out, err, _, _ := run(t, f, nil, true, open)
+	if err == nil {
+		t.Fatal("an unmeasured native shape must not be landable")
+	}
+	doc := validate(t, out)
+	if strings.Contains(out, `"checks-unknown"`) || strings.Contains(out, `unreadable`) {
+		t.Fatalf("the reads must work without administration rights: %s", out)
+	}
+	if !strings.Contains(out, "native-stack-shape") || !strings.Contains(out, "scripts/measure-native-stack.sh") || doc["landable"] != false {
+		t.Fatalf("%s", out)
+	}
+	// with the recorded native entry: landable, with the retarget before the push
+	out, err, _, _ = run(t, f, nil, true, func(p *Params) {
+		open(p)
+		g := NewGitHubForge(cubistryReader(), "o/r")
+		repo, _ := g.Repository(context.Background())
+		rs, _ := g.Rulesets(context.Background(), "main")
+		p.Shapes = land.NewNativeShapeSet(land.ShapeOf(repo, rs, true).Key())
+	})
+	if err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	doc = validate(t, out)
+	if doc["landable"] != true || !strings.Contains(out, `"kind":"retarget"`) || !strings.Contains(out, `"gh","pr","edit","12","--base","main"`) {
+		t.Fatalf("%s", out)
+	}
+}
+
+func TestRemoteMismatchSaysHowToProceed(t *testing.T) {
+	f := baseFlags()
+	f.JSON, f.Human = false, true
+	out, err, _, _ := run(t, f, nil, true, func(p *Params) { p.Git = &mismatchGit{} })
+	if err == nil {
+		t.Fatal("a wrong checkout must be refused")
+	}
+	for _, want := range []string{"remote-repo-mismatch", "x/other", "o/r", "positional PATH", "--remote"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("message lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+type mismatchGit struct{ stubGit }
+
+func (g *mismatchGit) RemoteRepo(context.Context, string) (string, error) { return "x/other", nil }

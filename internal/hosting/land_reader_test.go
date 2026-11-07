@@ -28,6 +28,8 @@ var landShapes = []string{
 	"repos/o/r/rules/branches/main?per_page=100&page=1",
 	"repos/o/r/rules/branches/release%2F1?per_page=100&page=3",
 	"repos/o/r/branches/main/protection",
+	"repos/o/r/branches/main",
+	"repos/o/r/branches/release%2F1",
 	"repos/o/r/rulesets/77",
 	"repos/o/r/commits/" + "0123456789012345678901234567890123456789" + "/check-runs?per_page=100&page=1",
 	"repos/o/r/commits/" + "0123456789012345678901234567890123456789" + "/statuses?per_page=100&page=1",
@@ -50,6 +52,11 @@ var landRefused = []string{
 	"repos/o/r/rules/branches/-x?per_page=100&page=1",
 	"repos/o/r/rules/branches/?per_page=100&page=1",
 	"repos/o/r/branches/main/protection/required_status_checks",
+	"repos/o/r/branches/main/rename",
+	"repos/o/r/branches/main/",
+	"repos/o/r/branches/-x",
+	"repos/o/r/branches/ma%2Fin/../x",
+	"repos/o/r/branches",
 	"repos/o/r/rulesets/0x1",
 	"repos/o/r/rulesets/77/extra",
 	"repos/o/r/git/refs/heads/main",
@@ -180,7 +187,7 @@ func TestLandEndpointBuilders(t *testing.T) {
 func TestEscapedPathsAreAdmittedPerMode(t *testing.T) {
 	cases := map[string]map[guardMode]bool{
 		"repos/o/r/rules/branches/release%2F1?per_page=100&page=1": {guardLand: true},
-		"repos/o/r/branches/release%2F1":                           {guardWatch: true, guardPulls: true, guardStatus: true},
+		"repos/o/r/branches/release%2F1":                           {guardWatch: true, guardPulls: true, guardStatus: true, guardLand: true},
 		"repos/o/r/pulls/1%32":                                     {},
 	}
 	for path, want := range cases {

@@ -328,6 +328,9 @@ func (g *GitHubForge) rules(ctx context.Context, branch string) ([]ruleDoc, erro
 }
 
 // protection reads the classic branch protection: contexts, and "none", "present" or "unreadable".
+// The protection endpoint needs administration read. On a 403 the branch endpoint answers with read
+// access: `protection.enabled` false is none, true carries the required contexts, a missing
+// `protection` object is unreadable (Spec 043 FR-090). Any other failure is unreadable.
 func (g *GitHubForge) protection(ctx context.Context, branch string) (contexts []string, state string) {
 	ep, err := hosting.LandProtectionEndpoint(g.repo, branch)
 	if err != nil {
@@ -342,13 +345,52 @@ func (g *GitHubForge) protection(ctx context.Context, branch string) (contexts [
 		} `json:"required_status_checks"`
 	}
 	if err := g.get(ctx, ep, &doc); err != nil {
-		if status(err) == 404 {
+		switch status(err) {
+		case 404:
 			return nil, "none" // "Branch not protected" is not an error (FR-012)
+		case 403:
+			return g.branchProtection(ctx, branch)
 		}
 		return nil, "unreadable"
 	}
 	contexts = append(contexts, doc.Checks.Contexts...)
 	for _, c := range doc.Checks.Checks {
+		contexts = append(contexts, c.Context)
+	}
+	return contexts, "present"
+}
+
+func (g *GitHubForge) branchProtection(ctx context.Context, branch string) (contexts []string, state string) {
+	ep, err := hosting.LandBranchEndpoint(g.repo, branch)
+	if err != nil {
+		return nil, "unreadable"
+	}
+	var doc struct {
+		Protected  *bool `json:"protected"`
+		Protection *struct {
+			Enabled *bool `json:"enabled"`
+			Checks  struct {
+				Contexts []string `json:"contexts"`
+				Checks   []struct {
+					Context string `json:"context"`
+				} `json:"checks"`
+			} `json:"required_status_checks"`
+		} `json:"protection"`
+	}
+	if err := g.get(ctx, ep, &doc); err != nil {
+		return nil, "unreadable"
+	}
+	if doc.Protection == nil || doc.Protection.Enabled == nil {
+		if doc.Protected != nil && !*doc.Protected {
+			return nil, "none" // no rule of any kind applies to the branch
+		}
+		return nil, "unreadable"
+	}
+	if !*doc.Protection.Enabled {
+		return nil, "none"
+	}
+	contexts = append(contexts, doc.Protection.Checks.Contexts...)
+	for _, c := range doc.Protection.Checks.Checks {
 		contexts = append(contexts, c.Context)
 	}
 	return contexts, "present"

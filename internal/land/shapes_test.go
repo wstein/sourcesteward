@@ -33,9 +33,17 @@ func TestUnreadableShapeNeverMatches(t *testing.T) {
 	if set.Has(s) {
 		t.Fatal("an unreadable shape must never match, even when its key was recorded")
 	}
+	// delete_branch_on_merge is absent for a token without administration read; the landing order does
+	// not depend on it (Spec 043 FR-089), so the shape stays readable and records the value unknown.
 	un := ShapeOf(RepoFacts{DefaultBranch: "main"}, RulesetFacts{Readable: true, Protection: "none"}, true)
-	if un.Readable {
-		t.Fatal("delete_branch_on_merge unreadable must make the shape unreadable")
+	if !un.Readable || un.DeleteBranchOnMerge != "unknown" {
+		t.Fatalf("delete_branch_on_merge unknown must stay readable: %+v", un)
+	}
+	if !NewShapeSet(un.Key()).Has(un) {
+		t.Fatal("a recorded shape with an unknown setting must match")
+	}
+	if ShapeOf(RepoFacts{DefaultBranch: "main"}, RulesetFacts{Readable: true, Protection: "unreadable"}, true).Readable {
+		t.Fatal("unreadable protection must stay unreadable")
 	}
 }
 

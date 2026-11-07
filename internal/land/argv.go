@@ -53,3 +53,9 @@ func RefName(s string) bool {
 
 // Argv prefixes "git" for display.
 func Argv(args []string) []string { return append([]string{"git"}, args...) }
+
+// RetargetArgv is the base edit of one native item (FR-086): the pull request's base becomes the
+// default branch. Only the base changes; the head, title and body are untouched.
+func RetargetArgv(number int, branch string) []string {
+	return []string{"gh", "pr", "edit", strconv.Itoa(number), "--base", branch}
+}
