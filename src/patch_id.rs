@@ -10,7 +10,7 @@
 //! xdiff; both are Myers-based but differ in heuristics, so IDs agree only where the hunks agree. The
 //! oracle script in `tests/oracle/` measures the agreement on real commits.
 
-use gix::bstr::{BStr, BString, ByteSlice};
+use gix::bstr::{BStr, BString};
 use gix::diff::blob::{Algorithm, Diff, InternedInput};
 use gix::objs::tree::EntryKind;
 use gix::ObjectId;
@@ -91,7 +91,7 @@ fn content(repo: &gix::Repository, kind: EntryKind, id: ObjectId) -> Result<Vec<
 }
 
 /// Hash the unified-diff lines (without hunk headers) of `before` -> `after` into `h`.
-fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &str, new_name: &str) {
+fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_name: &[u8]) {
     let input = InternedInput::new(before, after);
     let mut diff = Diff::compute(Algorithm::Myers, &input);
     diff.postprocess_no_heuristic(&input);
@@ -99,8 +99,8 @@ fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &str, new_n
     if hunks.is_empty() {
         return;
     }
-    h.line(format!("--- {old_name}").as_bytes());
-    h.line(format!("+++ {new_name}").as_bytes());
+    h.line(&[b"--- ".as_slice(), old_name].concat());
+    h.line(&[b"+++ ".as_slice(), new_name].concat());
     let b: Vec<&[u8]> = input.before.iter().map(|t| input.interner[*t]).collect();
     let a: Vec<&[u8]> = input.after.iter().map(|t| input.interner[*t]).collect();
     let emit = |h: &mut Hasher, prefix: u8, line: &[u8]| {
@@ -263,6 +263,40 @@ fn tree_diff_inner(
     Ok((h.finish(), log))
 }
 
+/// `prefix` + `path` as git writes it in a diff header with `core.quotePath=true`: when the name contains
+/// a control character, `"`, `\`, DEL or a byte >= 0x80, it is wrapped in double quotes with C escapes
+/// (`\a \b \t \n \v \f \r \" \\`) and three-digit octal escapes for the other bytes.
+fn quote_path(prefix: &[u8], path: &BStr) -> Vec<u8> {
+    let needs_quote = path
+        .iter()
+        .any(|&b| b < 0x20 || b == b'"' || b == b'\\' || b >= 0x7f);
+    let mut out = Vec::with_capacity(path.len() + prefix.len() + 2);
+    if !needs_quote {
+        out.extend_from_slice(prefix);
+        out.extend_from_slice(path);
+        return out;
+    }
+    out.push(b'"');
+    out.extend_from_slice(prefix);
+    for &b in path.iter() {
+        match b {
+            0x07 => out.extend_from_slice(b"\\a"),
+            0x08 => out.extend_from_slice(b"\\b"),
+            b'\t' => out.extend_from_slice(b"\\t"),
+            b'\n' => out.extend_from_slice(b"\\n"),
+            0x0b => out.extend_from_slice(b"\\v"),
+            0x0c => out.extend_from_slice(b"\\f"),
+            b'\r' => out.extend_from_slice(b"\\r"),
+            b'"' => out.extend_from_slice(b"\\\""),
+            b'\\' => out.extend_from_slice(b"\\\\"),
+            b if b < 0x20 || b >= 0x7f => out.extend_from_slice(format!("\\{b:03o}").as_bytes()),
+            b => out.push(b),
+        }
+    }
+    out.push(b'"');
+    out
+}
+
 fn hash_file(
     repo: &gix::Repository,
     h: &mut Hasher,
@@ -270,18 +304,24 @@ fn hash_file(
     old: Option<(EntryKind, ObjectId)>,
     new: Option<(EntryKind, ObjectId)>,
 ) -> Result<()> {
-    let p = path.to_str_lossy();
-    h.line(format!("diff --git a/{p} b/{p}").as_bytes());
+    // git quotes names in diff headers (core.quotePath=true) and hashes the raw bytes
+    let header = [quote_path(b"a/", path), quote_path(b"b/", path)];
+    let mut line = b"diff --git ".to_vec();
+    line.extend_from_slice(&header[0]);
+    line.push(b' ');
+    line.extend_from_slice(&header[1]);
+    h.line(&line);
+    let dev_null = b"/dev/null".to_vec();
     let (old_name, new_name) = (
         if old.is_some() {
-            format!("a/{p}")
+            header[0].clone()
         } else {
-            "/dev/null".into()
+            dev_null.clone()
         },
         if new.is_some() {
-            format!("b/{p}")
+            header[1].clone()
         } else {
-            "/dev/null".into()
+            dev_null
         },
     );
     match (old, new) {

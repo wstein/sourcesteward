@@ -148,6 +148,40 @@ impl Fx {
         repo.write_object(&commit).unwrap().detach()
     }
 
+    /// Commit on top of `parent` that adds the blob `content` at the raw byte path `name` (which need not
+    /// be UTF-8). Writes objects only; no ref is touched.
+    pub fn commit_bytes_path(&self, parent: ObjectId, name: &[u8], content: &[u8]) -> ObjectId {
+        let repo = self.repo();
+        let tree = repo
+            .find_commit(parent)
+            .unwrap()
+            .tree_id()
+            .unwrap()
+            .detach();
+        let mut ed = repo.edit_tree(tree).unwrap();
+        let blob = repo.write_blob(content).unwrap().detach();
+        ed.upsert(gix::bstr::BStr::new(name), EntryKind::Blob, blob)
+            .unwrap();
+        let tr = ed.write().unwrap().detach();
+        let t = self.clock.get() + 60;
+        self.clock.set(t);
+        let sig = gix::actor::Signature {
+            name: "T".into(),
+            email: "t@example.com".into(),
+            time: gix::date::Time::new(t, 0),
+        };
+        let commit = gix::objs::Commit {
+            tree: tr,
+            parents: vec![parent].into(),
+            author: sig.clone(),
+            committer: sig,
+            encoding: None,
+            message: "change".into(),
+            extra_headers: vec![],
+        };
+        repo.write_object(&commit).unwrap().detach()
+    }
+
     /// Commit on top of `parent` that adds a submodule entry (gitlink) `path` pointing at `target`.
     pub fn commit_gitlink(
         &self,

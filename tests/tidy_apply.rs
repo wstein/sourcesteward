@@ -1052,3 +1052,43 @@ fn restore_picks_the_newest_run_unless_told_and_can_filter_a_branch() {
     let e = restore(&dir, Some("no-such-run"), None).err().unwrap();
     assert_eq!(e.kind(), stw::error::Kind::Usage);
 }
+
+/// G1: two different non-UTF-8 paths with the same content used to get the same patch ID, so tidy took the
+/// unmerged branch for already merged ("equal-patches") and deleted it.
+#[test]
+fn a_branch_changing_a_different_non_utf8_path_is_kept() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("base", Some("x\n"))], "c0");
+    let on_main = fx.commit_bytes_path(c0, b"\xff.txt", b"new\n");
+    let feature = fx.commit_bytes_path(c0, b"\xfe.txt", b"new\n");
+    fx.remote("main", on_main);
+    fx.origin_head("main");
+    fx.branch("main", on_main);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("feature", feature);
+    let now = fx
+        .repo()
+        .find_commit(feature)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W {
+        fx,
+        now,
+        c0,
+        u: feature,
+    };
+    let p = plan(&w);
+    let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
+    assert_eq!(bp.decision, "keep", "[{}] {}", bp.proof, bp.detail);
+    let dir = scratch();
+    apply(&w, dir.path());
+    assert_eq!(
+        w.fx.tip("feature"),
+        feature,
+        "the unmerged branch must survive apply"
+    );
+}
