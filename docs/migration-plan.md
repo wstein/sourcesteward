@@ -1,8 +1,7 @@
 # SourceSteward Rust implementation plan
 
-Assessment: 2026-11-07. Workspace baseline: `9daec32` (`main`). This is a durable implementation plan,
-not a handoff or a claim of completed migration. It preserves the earlier M0–M13 numbering from the local
-comparison; dependencies, acceptance gates, and policy corrections below supersede that draft.
+Assessment: 2026-11-07. Workspace baseline: `9daec32` (`main`). This is an implementation plan,
+not a handoff or a claim of completed migration. The milestones are numbered M0–M13.
 
 Tracking: [migration epic #2](https://github.com/wstein/whr-anchorage/issues/2),
 [M0 runner/hosting #3](https://github.com/wstein/whr-anchorage/issues/3),
@@ -13,12 +12,12 @@ These are workspace issues; legacy issues remain historical references and are n
 
 ## Direction and evidence boundary
 
-Build the useful Git/GitHub workflow subset in Rust. Treat `legacy/sourcesteward` as an edge-case and test
+Build the Git/GitHub workflow subset in Rust. Treat `legacy/sourcesteward` as an edge-case and test
 reference, not a parity target. Keep the existing Rust status/tidy/sync usable while adding workflow reads
 and recovery before new history mutations. Native jj support is deferred; jj inspires the operation model.
 
-Every new function starts as a script under `spikes/stw/<feature>/`; the owner accepts it live before product
-implementation. Existing A–D prototypes are available, but live acceptance is still open in the backlog.
+Every new user-facing function starts as a script under `spikes/stw/<feature>/`; the owner accepts it live before
+product implementation. M0 is the exception (see the recommended order). Existing A–D prototypes are available, but live acceptance is still open in the backlog.
 Prototype availability, passing historical tests, and product acceptance are separate states. This assessment
 does not execute product or prototype suites; their runtime correctness is UNKNOWN here.
 
@@ -38,7 +37,7 @@ independently rerun for this plan. No new dependency on native jj is proposed.
 ## Feature matrix
 
 Rust status: **present** means code exists; **partial** means a narrower contract; **absent** means no public
-command in `src/cli.rs`. Decisions are recommendations unless already recorded in Chartroom.
+command in `src/cli.rs`. Decisions are recommendations unless recorded in Chartroom or marked as owner decision in this plan.
 
 | Capability | Go evidence under `legacy/sourcesteward/` | Rust evidence under `projects/sourcesteward/` | Decision |
 | --- | --- | --- | --- |
@@ -46,7 +45,7 @@ command in `src/cli.rs`. Decisions are recommendations unless already recorded i
 | Git/jj identity and ref inventory | `internal/inspection/{git,jj,inventory}.go` | `src/status.rs`, `src/repo/` (Git only) | Keep Git identity in status; defer native jj and inventory query language. |
 | Workspace repository fanout | `internal/inspection/repos*.go` | `src/repo/`, workspace selection in `src/cli.rs` | Keep shared iteration instead of another `repos` command. |
 | Local status, worktrees, gitlinks | `internal/statuscmd/`, `internal/inspection/pins*.go` | `src/status.rs`, `src/repo/worktrees.rs` | Keep; expand only for demonstrated workflow needs. |
-| PR status/review state | `internal/reviewstate/parse.go`, `internal/prviews/` | `src/github.rs:154`, `src/status.rs:318`; review remains null | Port strict parser and trustworthy comment provenance (M3). |
+| PR status/review state | `internal/reviewstate/parse.go`, `internal/prviews/` | `src/github.rs:154`, `src/status.rs:318`; review remains null | Port strict parser and verifiable comment author and head binding (M3). |
 | Sync and rules update | `internal/stwsync/` | `src/sync/`, `src/cli.rs` SyncArgs | Keep ff-only; no automatic stash, reset, merge, or rebase. |
 | Tidy plan/apply/restore | `internal/tidywizard/` | `src/tidy.rs`, `src/tidy_apply.rs:495,908` | Keep manifest-first and fresh-state checks; do not copy wizard/authorization ceremony. |
 | Tidy recovery retention/history | recovery and journals in `internal/tidywizard/` | `src/tidy_apply.rs:90,936`; JSONL stores OIDs, no retention refs | Add reachability roots and general undo (M5); object IDs alone do not survive GC. |
@@ -99,10 +98,10 @@ binary, modify/delete, rename, and genuine marker text need explicit resolution 
 
 Prototype identity behavior is not a product contract: original-committer fallback, ENV identity requirements,
 and synthetic `stw-oplog` identities must not be copied into commit-writing commands. Product-created commits
-use the configured Git identity, validated read-only; never set user.*, override author/committer, or accept identity
-parameters as a workaround. Distinguish Git commit attribution from the existing Rust reflog-only fallback.
-Preserving an original commit author during replay needs an explicit owner decision before implementation because
-current global instructions require author and committer to equal the configured identity for pushed commits.
+use the configured Git identity, validated read-only; never set user.* or accept identity parameters as a workaround.
+New commits get the configured identity as author and committer; commits rewritten by restack, rebase, or
+cherry-pick keep their original author and get the configured identity as committer (decision 6). Distinguish Git
+commit attribution from the existing Rust reflog-only fallback.
 
 ## Milestones and dependencies
 
@@ -113,12 +112,12 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | ID | Deliverable and dependencies | Acceptance gate | Benefit / Effort / Risk |
 | --- | --- | --- | --- |
 | M0 | Foundation: one `via: git` runner; enable gix merge only when needed; extend GitHub reads. No dependencies. | Empty PATH gives typed unsupported (exit 1) for Git steps, core reads still work; fixed argv, repository selection/env/locale tests, unknown-option/version errors, credential redaction; measure merge feature size. | 5 / 3 / 3 |
-| M1 | In-memory replay engine. Needs M0 merge capability and accepted A spike. | Compare trees with Git on clean, rename, binary, empty-start, became-empty, already-upstream, root/merge rejection fixtures; no disk/ref/index changes; author/committer policy resolved. | 5 / 4 / 4 |
+| M1 | In-memory replay engine. Needs M0 merge capability and accepted A spike. | Compare trees with Git on clean, rename, binary, empty-start, became-empty, already-upstream, root/merge rejection fixtures; no disk/ref/index changes; attribution per decision 6. | 5 / 4 / 4 |
 | M2 | Whole-stack plan and conflict preview A. Needs M1 and accepted stack input contract. | Explicit bottom-up chain first; later PR-derived edges; reject cycles/ambiguous bases; level-3 and inherited conflicts visible; stable JSON; unchanged repo. Review invalidation annotation adds M3. | 5 / 3 / 3 |
 | M3 | Strict review parser/state and comment reads. Needs M0 HTTP read extension. | Shared rule corpus: malformed order, wrong PR, 39/64 hex, uppercase, tabs, CRLF, stale head, later FINDINGS, untrusted author, invalid carry chain; UNKNOWN stays explicit. | 5 / 2 / 3 |
 | M4 | Read-only carry-over and ready-check. Needs M3 and M0 range-diff runner. | Equal patch-id, no merge commits, every range-diff entry '='; reordered/whitespace/rewritten-parent counterexamples; exact-head CI, missing/skipped/failed checks, correct base, blockers. No automatic posting/ready mutation. | 5 / 3 / 4 |
 | M5 | Retained oplog and local undo B for tidy/sync, then all new mutations. Needs accepted B spike; gix ref/object design. | Retain old tips through GC in scratch; validate expected old values; crash journal intent/completion; dry run, idempotence, symbolic refs, missing worktree, dirty/untracked obstruction, rollback failure; remote effects explicitly not undone. | 5 / 4 / 5 |
-| M6 | Conflict-free local restack apply. Needs M1/M2/M5 and identity decision. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
+| M6 | Conflict-free local restack apply. Needs M1/M2/M5. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
 | M7 | rerere C in explicit resolution. Needs accepted C spike and M0; integrate M12 worktree flow. | Shared cache reuse in two worktrees, exact reused count, failure/no-match fallback; no persistent Git config writes. Preview cache prediction remains optional and UNKNOWN until measured. | 3 / 2 / 3 |
 | M8 | PR lint. Needs M3. | Per-rule positive/negative fixtures for identity, attribution, session links, text limits, malformed review claims; escape hostile titles/comments; runtime error distinct from findings. | 4 / 2 / 2 |
 | M9 | PR/stack queue and debt view. Needs M2/M3/M4. | Count units not PRs; stale drafts, rewritten heads, bottom-up order, ledger parse failures, queue/nit rules against current dotagents; pagination and stale data reported. Read-only. | 4 / 4 / 3 |
@@ -161,7 +160,7 @@ already recorded in Chartroom). Scripts-first stays for new user-facing function
 6. **Recorded decision: replay attribution.** New commits carry the configured Git identity as author and committer.
    Commits rewritten by restack, rebase, or cherry-pick keep their original author; the committer is the configured
    identity, as `git rebase` does. A dotagents rule change for this is in progress.
-7. **Defer native jj and in-memory rerere prediction.** Rerere reuse during Git resolution is useful without
+7. **Defer native jj and in-memory rerere prediction.** Rerere reuse during Git resolution works without
    reimplementing Git's conflict-ID algorithm. jj-style structured conflict persistence needs another design, not
    merely commits containing marker text. Benefit 2, effort 5, risk 4 for native parity at this stage.
 
