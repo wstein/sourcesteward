@@ -16,7 +16,7 @@ import (
 // the forge, asks Git and fetches once into the private namespace; it writes nothing else and
 // never prompts. Every failing precondition is listed (FR-019).
 func Plan(ctx context.Context, o Options, mode Mode, pol Policy, f Forge, g Git) Report {
-	p := &planner{ctx: ctx, o: o, pol: pol, f: f, g: g, pulls: map[int]PullFacts{}, bad: map[int]bool{}, evidence: map[int]string{}, checks: map[int]string{}}
+	p := &planner{ctx: ctx, o: o, pol: pol, f: f, g: g, pulls: map[int]PullFacts{}, bad: map[int]bool{}, evidence: map[int]string{}, checks: map[int]string{}, native: map[int]string{}}
 	if p.o.RangeBound <= 0 {
 		p.o.RangeBound = DefaultRangeBound
 	}
@@ -52,8 +52,9 @@ type planner struct {
 	bad      map[int]bool // pull requests that are refused or unreadable; they number in reasons
 	evidence map[int]string
 	checks   map[int]string
-	tip      string // reviewed head of the top pull request
-	m        string // remote default branch tip
+	native   map[int]string // native items: number to the old base ref
+	tip      string         // reviewed head of the top pull request
+	m        string         // remote default branch tip
 	replay   bool
 	merged   map[int]string // outcome per number in a replay
 }
@@ -125,8 +126,8 @@ func (p *planner) run() {
 	if gitOK && p.replayCheck() {
 		return
 	}
-	for _, it := range p.o.Chain {
-		p.pullChecks(it)
+	for i, it := range p.o.Chain {
+		p.pullChecks(i, it)
 	}
 	p.sideChildren()
 	if gitOK {
@@ -151,7 +152,7 @@ func (p *planner) remote() bool {
 		if shown == "" {
 			shown = "not a recognized GitHub URL"
 		}
-		return p.check("remote", 0, false, shown, ReasonRemoteMismatch, "remote "+p.o.Remote+" is "+shown+", expected "+p.o.Repo)
+		return p.check("remote", 0, false, shown, ReasonRemoteMismatch, "remote "+p.o.Remote+" is "+shown+", expected "+p.o.Repo+"; run in that checkout, pass its absolute path as positional PATH, or use --remote NAME")
 	}
 	return p.check("remote", 0, true, p.o.Remote+" is "+got, "", "")
 }
@@ -256,7 +257,7 @@ func prState(pf PullFacts, ok bool) string {
 }
 
 // pullChecks is FR-060, FR-061, FR-063 (bases), FR-068 and the facts of FR-014.
-func (p *planner) pullChecks(it Item) {
+func (p *planner) pullChecks(i int, it Item) {
 	pf, ok := p.pulls[it.Number]
 	if !ok {
 		return
@@ -266,7 +267,11 @@ func (p *planner) pullChecks(it Item) {
 	case pf.Merged:
 		p.check("open", n, false, "merged", ReasonAlreadyMerged, fmt.Sprintf("merged with merge commit %s; nothing is changed, name the rest", pf.MergeCommit))
 	case pf.State != "open":
-		p.check("open", n, false, pf.State, ReasonNotOpen, "the pull request is "+pf.State)
+		detail := "the pull request is " + pf.State
+		if pf.BaseRef != p.repo.DefaultBranch {
+			detail += "; GitHub can close a pull request whose base branch was deleted (research.md R3); stw does not reopen or recreate it"
+		}
+		p.check("open", n, false, pf.State, ReasonNotOpen, detail)
 	default:
 		p.check("open", n, true, "open", "", "")
 	}
@@ -293,23 +298,22 @@ func (p *planner) pullChecks(it Item) {
 		rebase = fmt.Sprint(*pf.Rebaseable)
 	}
 	p.check("rebaseable", n, true, rebase, "", "") // recorded, not a precondition of a fast-forward (FR-014)
+	p.baseShape(i, it.Number, pf)
+}
+
+// baseShape is FR-063 and FR-084: the bottom targets the default branch; any other item targets the
+// default branch (flat) or the head branch of its immediate predecessor (native). The evidence gate
+// of FR-085 runs with the shape in rules().
+func (p *planner) baseShape(i, n int, pf PullFacts) {
 	switch {
 	case pf.BaseRef == p.repo.DefaultBranch:
 		p.check("base", n, true, pf.BaseRef, "", "")
-	case p.isChainHead(pf.BaseRef, n):
-		p.check("base", n, false, pf.BaseRef, ReasonLandUnmeasured, DetailNativeStackShape+": the base is the head branch of another pull request of the chain; not measured")
+	case i > 0 && p.pulls[p.o.Chain[i-1].Number].HeadRef != "" && pf.BaseRef == p.pulls[p.o.Chain[i-1].Number].HeadRef:
+		p.native[n] = pf.BaseRef
+		p.check("base", n, true, fmt.Sprintf("%s (native: head branch of #%d)", pf.BaseRef, p.o.Chain[i-1].Number), "", "")
 	default:
-		p.check("base", n, false, pf.BaseRef, ReasonBaseNotInChain, "the base is neither the default branch nor part of the chain")
+		p.check("base", n, false, pf.BaseRef, ReasonBaseNotInChain, "the base is neither the default branch nor, for a pull request above the bottom, the head branch of the previous pull request of the chain")
 	}
-}
-
-func (p *planner) isChainHead(ref string, self int) bool {
-	for n, pf := range p.pulls {
-		if n != self && pf.HeadRef == ref {
-			return true
-		}
-	}
-	return false
 }
 
 // sideChildren is FR-066.
@@ -584,6 +588,7 @@ func (p *planner) rules() {
 		rs = RulesetFacts{Protection: "unreadable"}
 	}
 	shape := ShapeOf(p.repo, rs, true)
+	p.nativeGate(shape)
 	if !shape.Readable {
 		p.check("ruleset", 0, false, "unreadable", ReasonLandUnmeasured, "the ruleset, protection or delete_branch_on_merge could not be read (a 403 or a plan limit); an unreadable shape never matches")
 		return
@@ -688,6 +693,16 @@ func (p *planner) finish() {
 	if r.Landable {
 		r.Result = ResultLandable
 	}
+	out0 := "blocked"
+	if r.Landable {
+		out0 = effectPlanned
+	}
+	for _, it := range p.o.Chain {
+		if old, ok := p.native[it.Number]; ok {
+			r.Effects = append(r.Effects, Effect{ID: fmt.Sprintf("retarget-%d", it.Number), Kind: retargetKind, Argv: RetargetArgv(it.Number, p.repo.DefaultBranch), Outcome: out0,
+				Detail: fmt.Sprintf("base %s becomes %s before the push (head unchanged); on a failure stw prints, and never runs, the restore command", old, p.repo.DefaultBranch)})
+		}
+	}
 	if p.m != "" && p.tip != "" {
 		out := "blocked"
 		if r.Landable {
@@ -697,4 +712,20 @@ func (p *planner) finish() {
 			Detail: fmt.Sprintf("one fast-forward push of the tip #%d; GitHub marks the other pull requests merged", p.o.Chain[len(p.o.Chain)-1].Number)})
 	}
 	r.ApplyAllowed = r.Landable && !r.Mode.Agent()
+}
+
+// nativeGate is FR-085: a native chain needs an allowlist entry measured for the native sequence.
+// Without it every native item is land-unmeasured, and the plan says what the claim rests on.
+func (p *planner) nativeGate(shape Shape) {
+	if len(p.native) == 0 || (shape.Readable && p.o.Shapes.HasNative(shape)) {
+		return
+	}
+	for _, it := range p.o.Chain {
+		if _, ok := p.native[it.Number]; ok {
+			p.check("native-shape", it.Number, false, "not measured", ReasonLandUnmeasured,
+				DetailNativeStackShape+": the base is the head branch of the previous pull request; the retarget sequence is not recorded as measured for this repository shape")
+		}
+	}
+	p.r.Notes = append(p.r.Notes, "native stack: the sequence (retarget, re-read, one push) is verified by fixtures only and not measured against GitHub for this repository shape; "+
+		"run scripts/measure-native-stack.sh in a sandbox repository and record the evidence in research.md and internal/land/shapes.json")
 }

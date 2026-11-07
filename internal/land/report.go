@@ -60,6 +60,7 @@ const (
 	maxOffendingCommits     = 10
 	maxDetailBytes          = 240
 	pushKind, fetchKind     = "push", "fetch"
+	retargetKind            = "retarget"
 	effectPlanned, effectOK = "planned", "done"
 )
 

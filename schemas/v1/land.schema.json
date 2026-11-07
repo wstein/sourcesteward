@@ -100,7 +100,7 @@
         "additionalProperties": false,
         "properties": {
           "id": { "type": "string" },
-          "kind": { "enum": ["fetch", "push", "delete-branch"] },
+          "kind": { "enum": ["fetch", "push", "retarget", "delete-branch"] },
           "argv": { "type": "array", "minItems": 2, "items": { "type": "string" } },
           "outcome": { "type": "string" },
           "detail": { "type": "string" }

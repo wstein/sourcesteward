@@ -25,6 +25,7 @@ var landRoute = regexp.MustCompile(`\A(?:user|repos/[A-Za-z0-9_-][A-Za-z0-9_.-]*
 	`issues/[1-9][0-9]{0,8}/events\?per_page=100&page=([1-3])|` +
 	`rules/branches/([^/?#]+)\?per_page=100&page=([1-3])|` +
 	`branches/([^/?#]+)/protection|` +
+	`branches/([^/?#]+)|` +
 	`rulesets/[1-9][0-9]{0,11}))\z`)
 
 func admitsLand(m guardMode) bool { return m == guardLand }
@@ -40,8 +41,8 @@ func landReadEndpoint(p string) bool {
 			return false
 		}
 	}
-	// m[3] is the rules branch segment, m[5] the protection segment (m[1], m[2], m[4] are page numbers).
-	for _, seg := range []string{m[3], m[5]} {
+	// m[3] is the rules branch segment, m[5] the protection segment, m[6] the branch segment (m[1], m[2], m[4] are page numbers).
+	for _, seg := range []string{m[3], m[5], m[6]} {
 		if seg != "" && !branchSegmentValid(seg) {
 			return false
 		}
@@ -113,6 +114,17 @@ func LandProtectionEndpoint(repo, branch string) (string, error) {
 		return "", fmt.Errorf("invalid land read")
 	}
 	return base + "/branches/" + seg + "/protection", nil
+}
+
+// LandBranchEndpoint is the branch itself: readable with read access, it reports `protected` and
+// the `protection` summary, which stands in for the classic protection when that answers 403.
+func LandBranchEndpoint(repo, branch string) (string, error) {
+	base, err := landRepo(repo)
+	seg, e2 := EncodeBranchSegment(branch)
+	if err != nil || e2 != nil {
+		return "", fmt.Errorf("invalid land read")
+	}
+	return base + "/branches/" + seg, nil
 }
 
 // LandRulesetEndpoint is one ruleset (its bypass actors).

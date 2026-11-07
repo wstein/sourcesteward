@@ -26,8 +26,8 @@ type Shape struct {
 	Protection          string // none, present or unreadable
 	RuleTypes           []string
 	BypassModes         []string
-	// Readable is false when any part could not be read (a 403 on rulesets or protection, an
-	// unreadable delete_branch_on_merge). An unreadable shape never matches the allowlist.
+	// Readable is false when the rules, rulesets or protection could not be read (a 403 or a plan
+	// limit). An unreadable shape never matches the allowlist.
 	Readable bool
 }
 
@@ -54,7 +54,9 @@ func ShapeOf(repo RepoFacts, rs RulesetFacts, stack bool) Shape {
 	if s.Protection == "" {
 		s.Protection = "unreadable"
 	}
-	s.Readable = rs.Readable && s.Protection != "unreadable" && s.DeleteBranchOnMerge != "unknown"
+	// delete_branch_on_merge is absent without administration read; the landing order does not
+	// depend on it (FR-089), so unknown stays readable and is recorded as the value unknown.
+	s.Readable = rs.Readable && s.Protection != "unreadable"
 	return s
 }
 
@@ -65,11 +67,11 @@ func (s Shape) Key() string {
 }
 
 // ShapeSet is a set of recorded shape keys.
-type ShapeSet struct{ keys map[string]bool }
+type ShapeSet struct{ keys, native map[string]bool }
 
 // NewShapeSet builds a set from keys (tests and the loader).
 func NewShapeSet(keys ...string) *ShapeSet {
-	set := &ShapeSet{keys: map[string]bool{}}
+	set := &ShapeSet{keys: map[string]bool{}, native: map[string]bool{}}
 	for _, k := range keys {
 		set.keys[k] = true
 	}
@@ -89,6 +91,7 @@ type shapeFile struct {
 	Shapes        []struct {
 		Key      string `json:"key"`
 		Stack    bool   `json:"stack"`
+		Native   bool   `json:"native"`
 		Evidence string `json:"evidence"`
 	} `json:"shapes"`
 }
@@ -113,7 +116,11 @@ func LoadShapes(raw []byte) (*ShapeSet, error) {
 		if e.Stack != strings.HasPrefix(e.Key, "stack=true;") {
 			return nil, fmt.Errorf("shapes.json: entry %d: stack flag does not match the key", i)
 		}
+		if e.Native && !e.Stack {
+			return nil, fmt.Errorf("shapes.json: entry %d: native needs stack", i)
+		}
 		set.keys[e.Key] = true
+		set.native[e.Key] = e.Native
 	}
 	return set, nil
 }

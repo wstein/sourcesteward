@@ -302,3 +302,69 @@ func TestEventsPaginationAndTruncation(t *testing.T) {
 		t.Fatal("a truncated event list must be an error, not a complete list")
 	}
 }
+
+// A token without administration read answers 403 on the classic protection. The branch endpoint
+// is readable with read access and says whether classic protection exists (Spec 043 FR-090).
+func TestProtectionFallsBackToTheBranchEndpointOn403(t *testing.T) {
+	rules := "repos/o/r/rules/branches/main?per_page=100&page=1"
+	prot := "repos/o/r/branches/main/protection"
+	br := "repos/o/r/branches/main"
+	ruleBody := `[{"type":"required_status_checks","ruleset_id":1,"parameters":{"required_status_checks":[{"context":"ci/all"}]}}]`
+	cases := []struct {
+		name     string
+		branch   string // body of the branch endpoint, "" for absent (404)
+		status   map[string]int
+		readable bool
+		state    string
+		contexts string
+	}{
+		{"classic protection off", `{"protected":true,"protection":{"enabled":false,"required_status_checks":{"contexts":[],"checks":[],"enforcement_level":"off"}}}`, nil, true, "none", "ci/all"},
+		{"not protected at all", `{"protected":false}`, nil, true, "none", "ci/all"},
+		{"classic protection on", `{"protected":true,"protection":{"enabled":true,"required_status_checks":{"contexts":["legacy"],"checks":[{"context":"lint"}],"enforcement_level":"everyone"}}}`, nil, true, "present", "ci/all,legacy,lint"},
+		{"protection object missing", `{"protected":true}`, nil, false, "unreadable", ""},
+		{"branch endpoint 403", "", map[string]int{br: 403}, false, "unreadable", ""},
+		{"branch endpoint 404", "", nil, false, "unreadable", ""},
+		{"branch endpoint malformed", `not json`, nil, false, "unreadable", ""},
+		{"protection 500 does not fall back", `{"protected":false}`, map[string]int{prot: 500}, false, "unreadable", ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &fakeReader{bodies: map[string]string{rules: ruleBody}, status: map[string]int{prot: 403}}
+			if c.branch != "" {
+				f.bodies[br] = c.branch
+			}
+			for k, v := range c.status {
+				f.status[k] = v
+			}
+			got, _ := newForge(f).Required(context.Background(), "main")
+			if got.Readable != c.readable || strings.Join(got.Contexts, ",") != c.contexts {
+				t.Fatalf("required: %+v", got)
+			}
+			f.bodies["repos/o/r/rulesets/1"] = `{"id":1,"bypass_actors":[]}`
+			rs, _ := newForge(f).Rulesets(context.Background(), "main")
+			if rs.Protection != c.state || rs.Readable != c.readable {
+				t.Fatalf("rulesets: %+v", rs)
+			}
+			for _, e := range f.log {
+				if !hosting.LandEndpointAllowed(e) {
+					t.Errorf("endpoint %q is outside the land guard", e)
+				}
+			}
+		})
+	}
+}
+
+// 404 on classic protection stays "none" without a second read (observed on wstein/sourcesteward).
+func TestProtection404NeedsNoFallbackRead(t *testing.T) {
+	rules := "repos/o/r/rules/branches/main?per_page=100&page=1"
+	f := &fakeReader{bodies: map[string]string{rules: `[]`}, status: map[string]int{"repos/o/r/branches/main/protection": 404}}
+	got, _ := newForge(f).Required(context.Background(), "main")
+	if !got.Readable {
+		t.Fatalf("%+v", got)
+	}
+	for _, e := range f.log {
+		if e == "repos/o/r/branches/main" {
+			t.Fatal("the branch endpoint was read although the protection answered 404")
+		}
+	}
+}
