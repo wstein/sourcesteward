@@ -3,9 +3,11 @@
 //! gix has no fast-forward or checkout-to-commit API. This module checks first (dirty paths, overlap,
 //! untracked files in the way) and writes only after every check passed.
 //!
-//! Order of writes: checks, then the branch ref (HEAD and branch reflog), then working tree files, then the
-//! index. The ref moves first because it is the write that can fail for reasons no check sees (permissions,
-//! locks, reflog); when it fails, nothing else was touched.
+//! Order of writes: checks, then the index lock (`.git/index.lock`, taken and held until the index is
+//! committed), then the branch ref (HEAD and branch reflog), then working tree files, then the index. The lock
+//! comes first so that a held lock (another git process, a stale lock file) is refused before anything was
+//! written. The ref moves before the files because it is the write that can fail for reasons no check sees
+//! (permissions, locks, reflog); when it fails, no file was touched.
 //!
 //! What this does not guarantee: there is no transaction across ref, files and index. If the process is
 //! killed (or the machine loses power) after the ref moved and before the index is written, `HEAD` points to
@@ -20,7 +22,8 @@
 //! When writing files or the index returns an error, the ref is put back to the old commit (reflog entry
 //! "stw: undo fast-forward ..."). Files already written stay, and so does everything the checkout wrote before
 //! it failed; the index is written last, so a failure before that leaves it unchanged, and a failed index write
-//! leaves the old index too (it is replaced by renaming a lock file). If putting the ref back fails as well, the error names both
+//! leaves the old index too (it is replaced by renaming the lock file). A lock that is held before the call
+//! starts is not such a failure: it is refused before the first write. If putting the ref back fails as well, the error names both
 //! failures and the ref stays at the new commit with files and index partly old: recover as after a kill.
 use std::collections::BTreeSet;
 use std::sync::atomic::AtomicBool;
@@ -31,7 +34,9 @@ use gix::ObjectId;
 use crate::repo;
 use crate::status;
 
-/// Why a fast-forward was refused. Nothing was changed when one of these is returned.
+/// Why a fast-forward failed. Nothing was changed when a check refused it (`Overlap`, `Conflicts`,
+/// `UntrackedInTheWay`, `Unsupported`) or when `Other` reports a held index lock or a failed ref update. `Other`
+/// can also report a failure while writing files or the index; then the ref is put back but written files stay.
 #[derive(Debug)]
 pub enum FfError {
     /// Tracked local changes (index or working tree) on paths the fast-forward would touch.
@@ -273,7 +278,15 @@ pub fn fast_forward(
         return Err(FfError::UntrackedInTheWay(in_the_way));
     }
 
-    // 4. the ref first, expecting the old value (HEAD log and branch log). It is the write that can fail for
+    // 4. the index lock, held until the index is committed: a held lock is refused before any write
+    let lock = gix::lock::File::acquire_to_update_resource(
+        repo.index_path(),
+        gix::lock::acquire::Fail::Immediately,
+        None,
+        0,
+    )
+    .map_err(|e| FfError::Other(format!("index lock {}: {e}", repo.index_path().display())))?;
+    // 5. the ref next, expecting the old value (HEAD log and branch log). It is the write that can fail for
     //    reasons no earlier check sees (permissions, locks, reflog); when it does, nothing else was touched.
     move_head(
         repo,
@@ -281,8 +294,8 @@ pub fn fast_forward(
         target,
         format!("merge {reflog_label}: Fast-forward"),
     )?;
-    // 5. files, then the index. If this fails, the ref is put back (a partial checkout can still remain).
-    let write_files = || -> Result<(), FfError> {
+    // 6. files, then the index. If this fails, the ref is put back (a partial checkout can still remain).
+    let write_files = move || -> Result<(), FfError> {
         let mut real = gix::index::File::at(
             repo.index_path(),
             repo.object_hash(),
@@ -376,7 +389,13 @@ pub fn fast_forward(
         }
         real.sort_entries();
         real.remove_tree(); // gix does not update the tree cache on write (gix issue 2421)
-        real.write(Default::default())
+                            // commit last: write into the lock taken above, then rename it over the index
+        let mut out = std::io::BufWriter::with_capacity(64 * 1024, lock);
+        real.write_to(&mut out, Default::default())
+            .map_err(|e| FfError::Other(format!("index: {e}")))?;
+        out.into_inner()
+            .map_err(|e| FfError::Other(format!("index: {e}")))?
+            .commit()
             .map_err(|e| FfError::Other(format!("index: {e}")))?;
 
         Ok(())

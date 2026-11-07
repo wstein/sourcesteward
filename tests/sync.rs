@@ -420,25 +420,63 @@ fn a_failed_file_write_puts_the_ref_back() {
     assert_eq!((ch.staged, ch.unstaged, ch.untracked), (0, 1, 0));
 }
 
-/// If the index cannot be written (here: a stale index.lock), the files are already in place, the index is
-/// as before, and the ref is put back. git status then shows the new files as changes against the old HEAD.
+/// G3: the index lock is taken before the first write and held until the index is committed, so a held lock
+/// (another git process, or a stale `index.lock`) is refused up front: no ref move, no file written, index
+/// untouched, and the lock file of the other process is left alone. (Before, the files were written first and
+/// the refusal came at the index write; the ref was put back but the new files stayed.)
+/// The put-back of the ref after a failure while writing is covered by the read-only-directory test above and
+/// by `a_failed_rollback_reports_both_errors_and_leaves_the_ref`.
 #[test]
-fn a_failed_index_write_puts_the_ref_back_and_keeps_the_written_files() {
+fn a_held_index_lock_is_refused_before_anything_is_written() {
     let s = setup();
     let index_before = std::fs::read(s.fx.path.join(".git/index")).unwrap();
-    std::fs::write(s.fx.path.join(".git/index.lock"), "").unwrap();
+    let head_log_before = std::fs::read(s.fx.path.join(".git/logs/HEAD")).ok();
+    let a_before = s.fx.read("a.txt");
+    let lock = s.fx.path.join(".git/index.lock");
+    std::fs::write(&lock, "held").unwrap();
     let err = fast_forward(&s.fx.repo(), s.new, "origin/main");
-    std::fs::remove_file(s.fx.path.join(".git/index.lock")).unwrap();
+    let lock_left = std::fs::read(&lock).ok();
+    std::fs::remove_file(&lock).unwrap();
     let err = err.unwrap_err().to_string();
-    assert!(err.starts_with("index:"), "{err}");
-    assert!(!err.contains("could not be put back"), "{err}");
-    assert_eq!(s.fx.tip("main"), s.old, "the ref must be back");
+    assert!(err.contains("index"), "{err}");
+    assert_eq!(
+        lock_left.as_deref(),
+        Some(b"held".as_slice()),
+        "the foreign lock stays"
+    );
+    assert_eq!(s.fx.tip("main"), s.old, "the ref must not move");
+    assert_eq!(
+        std::fs::read(s.fx.path.join(".git/logs/HEAD")).ok(),
+        head_log_before,
+        "no reflog entry, not even an undo"
+    );
     assert_eq!(
         std::fs::read(s.fx.path.join(".git/index")).unwrap(),
         index_before
     );
-    assert_eq!(s.fx.read("dir/new.txt").as_deref(), Some("new\n"));
-    assert!(!s.fx.exists("old.txt"));
+    assert_eq!(s.fx.read("a.txt"), a_before, "no file may be rewritten");
+    assert!(s.fx.exists("old.txt"), "no file may be deleted");
+    assert!(!s.fx.exists("dir/new.txt"), "no file may be added");
+}
+
+/// A held ref lock is refused before any file is written (the ref moves before the files).
+#[test]
+fn a_held_ref_lock_is_refused_before_any_file_is_written() {
+    let s = setup();
+    let a_before = s.fx.read("a.txt");
+    let lock = s.fx.path.join(".git/refs/heads/main.lock");
+    std::fs::write(&lock, "held").unwrap();
+    let err = fast_forward(&s.fx.repo(), s.new, "origin/main");
+    std::fs::remove_file(&lock).unwrap();
+    assert!(err.is_err());
+    assert_eq!(s.fx.tip("main"), s.old);
+    assert_eq!(s.fx.read("a.txt"), a_before);
+    assert!(s.fx.exists("old.txt"));
+    assert!(!s.fx.exists("dir/new.txt"));
+    assert!(
+        !s.fx.path.join(".git/index.lock").exists(),
+        "our index lock is released"
+    );
 }
 
 /// If the ref cannot be put back, the error names both failures and the ref stays where it is.
