@@ -26,7 +26,7 @@ owner's choice of the GitHub merge button.
    `stw land --plan` (read-only), see the rule for `--plan` below.
 2. **One pull request per run, or one chain with `--stack`.** Without `--stack` a stack is landed by one run per pull request, bottom
    first, and the run for a child performs the retarget step of the measured order (decision 6). With `--stack` (owner decision
-   2026-10-26) one run lands a whole linear chain with a single push of the tip and no retarget at all (FR-060 to FR-083); no other
+   2026-10-26) one run lands a whole linear chain with a single push of the tip; only the native shape retargets first (FR-084 to FR-092; FR-060 to FR-083); no other
    run lands two pull requests.
 3. **Fresh preconditions.** Every precondition is read again immediately before the effect; nothing from `--plan` is trusted by the apply.
 4. **Git decides.** Fast-forwardness is computed with Git over local objects (`merge-base --is-ancestor`); the GitHub API is evidence for
@@ -282,11 +282,12 @@ Companion rule (answer "B yes"): dependent parts are by default ONE pull request
 workspace `AGENTS.md`). Such a pull request needs no `--stack`: the single landing of FR-016 and FR-018 already pushes its whole range
 once. `--stack` serves the separate stacked pull requests that must be merged independently or were opened before the rule.
 
-**Accepted chain shape (foreman decision, owner may reverse).** Until E1 and E2 are measured, only chains whose pull requests **all
-target the default branch** are accepted (the shape of this workflow: children opened with base `main` that contain the parent's
-commits). The native `gh stack` shape (each base is the parent's branch) is refused with `land-unmeasured` and the detail
-`native-stack-shape`: pushing the tip may not mark the pull requests above the bottom as merged, and with `delete_branch_on_merge` on GitHub
-may then retarget or close them after the push (R3, N4). E1 and E2 recorded for the native shape lift that refusal.
+**Accepted chain shapes.** (1) The flat shape: every pull request targets the default branch (children opened with base `main` that
+contain the parent's commits). (2) The native `gh stack` shape (amendment 2026-11-07, [Native stack landing](#native-stack-landing-amendment-2026-11-07)):
+each base is the head branch of the previous pull request of the chain. A pushed tip does not mark the pull requests above the bottom as
+merged while their base is not the default branch (R2), and a deleted base branch can close them (R3), so the native shape lands with a fixed
+sequence: retarget first, re-read, then the one push (FR-084 to FR-092). A native chain is `land-unmeasured` (detail `native-stack-shape`)
+until the allowlist entry of the repository shape carries `native: true` with recorded evidence (FR-085).
 
 **Interface.** The explicit form is `stw land --stack 12,13,14 --reviewed 12:SHA --reviewed 13:SHA --reviewed 14:SHA` (bottom first). The
 explicit list is the owner's statement of the chain, so no discovery can add a pull request nobody named. A flagless wizard
@@ -316,9 +317,9 @@ one.
   `review_evidence` and its checks. What stw does not verify: that the independent review was CLEAR.
 - **FR-063 Chain is linear.** For every consecutive pair the lower head is an **ancestor** of the next head
   (`git merge-base --is-ancestor <head_i> <head_i+1>` exit 0, over local objects after the private fetch of FR-016) and the heads
-  differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. The GitHub base of **every** pull request is the default branch
-  (accepted shape above); a base that is the head ref of another listed pull request is the unmeasured native shape
-  (`land-unmeasured`, `native-stack-shape`), and any other base is `base-not-in-chain`. Git decides, not the API (decision 4).
+  differ; exit 1 is `chain-not-linear`, exit 128 is `object-missing`. The GitHub base of the bottom is the default branch; the base of every
+  other pull request is the default branch (flat) or the head ref of its immediate predecessor in the list (native, FR-084). Any other base is
+  `base-not-in-chain`. A native base is `land-unmeasured` (`native-stack-shape`) until FR-085 holds. Git decides, not the API (decision 4).
 - **FR-064 Checks on every head.** The **tip head** has every required context of FR-012 green (`checks-not-green` for a missing or failing
   one, `tip-checks-pending` for a pending one); this is the check the direct push bypasses. A lower head needs only the checks it itself
   reports, none failing or pending (`checks-not-green`, `checks-pending`). In the accepted shape (every base is the default branch) no
@@ -356,9 +357,10 @@ one.
 
 ### Effects
 
-- **FR-070 One push, no base edit.** The landing effect is exactly `git push --porcelain <remote> <tip-sha>:refs/heads/<default>` (FR-020
-  unchanged: no force mode, no lease, no `+`, fully qualified ref). **No** `gh pr edit` and no other write exists in chain mode, because
-  every listed pull request lands with the push and side children are refused (FR-066). The Spec 022 transport extension is therefore
+- **FR-070 One push; a base edit only for the native shape.** The landing effect is exactly `git push --porcelain <remote> <tip-sha>:refs/heads/<default>` (FR-020
+  unchanged: no force mode, no lease, no `+`, fully qualified ref). For the flat shape **no** `gh pr edit` and no other write exists in chain mode, because
+  every listed pull request lands with the push and side children are refused (FR-066). The native shape adds exactly one more write, the
+  retarget of FR-086, and nothing else (amendment 2026-11-07). The Spec 022 transport extension is therefore
   smaller than for the single landing: the chain mode adds no write endpoint (its new reads are FR-080); the argument-vector allowlist of FR-033 gains the chain push
   and, on request, the branch deletes of FR-075 (the single landing's base edit stays what it is).
 - **FR-071 Atomicity.** One ref update is atomic on the remote: either the whole chain lands, or nothing does (a rejection leaves the
@@ -382,7 +384,7 @@ one.
   one push per branch so each outcome is its own. With `delete_branch_on_merge` on, GitHub may delete the heads itself after marking
   (then `already-absent`, FR-032); whether it does so for pull requests marked by a push and not by the merge button is **to be measured in
   the spike** (E2). Side children are refused (FR-066) and, in the accepted shape, every base is the default branch, so no listed pull
-  request has a landed branch as its base; the native shape, where the closing of R3 may occur, is refused as unmeasured (FR-063).
+  request has a landed branch as its base; the native shape, where the closing of R3 may occur, is retargeted first (FR-086) and gated by FR-085.
 - **FR-076 Pull request bodies.** stw never edits bodies, titles, labels, comments or state of any pull request (FR-033), nor does it
   close a pull request that GitHub left open (FR-073); it reports each state, prints the fallback commands and the owner decides.
 - **FR-077 Failure semantics.** `push-refused` (FR-040), `base-moved` (FR-042), a precondition refusal and `confirmation-failed` leave the
@@ -420,6 +422,55 @@ one.
   `not-fast-forward` (default branch moved), `head-changed-no-checks` with the close-and-reopen text, `checks-not-green` on the tip,
   `stack-side-child`, `ruleset-forbids-push`, `land-unmeasured` (including `native-stack-shape`), `tip-checks-pending`, `range-mismatch`.
 - **US9 (P2) Replay.** After a push that was interrupted before the marking, a rerun skips the push and reports the per pull request states.
+
+## Native stack landing (amendment 2026-11-07)
+
+Owner request 2026-11-07: `stw land` must be able to land a native pull request stack (for example `wstein/cubistry` #332, base `main`,
+and #333, base `feat/calendar7-3d-v2`, the head branch of #332). The plan of that stack was refused three ways: `native-stack-shape`,
+unreadable required checks and unreadable ruleset. This amendment keeps the apply model of this spec (one fast-forward push of the tip, the
+reviewed SHAs unchanged, no rebase-merge, no new SHAs, no new CI run) and adds the retarget that the native shape needs.
+
+- **FR-084 Native shape.** Pull request `i` (not the bottom) is native when its base ref equals the head ref of pull request `i-1` of the list.
+  A pull request whose base is the default branch is flat. Flat and native items may be mixed; the bottom must be flat. A base that is the head ref of
+  any other listed pull request, or any other ref, is `base-not-in-chain`.
+- **FR-085 Evidence gate.** A native chain is landable only if the allowlist entry (`internal/land/shapes.json`) matching the repository shape
+  has `"native": true`. The entry needs its `evidence` pointer to a recorded run of `scripts/measure-native-stack.sh` (research.md,
+  "Native stack: measurement"). Without it every native item is `land-unmeasured` with the detail `native-stack-shape`, the plan still lists the
+  sequence of FR-086 and notes that the sequence is verified by fixtures only and not measured against GitHub. The decision of this amendment: the
+  shape is **not** reported as measured on the strength of fixtures; "supported by fixture" is the label of the code path, "measured" is reserved
+  for recorded evidence (constitution II). A `native` entry also admits the flat chain of the same repository shape.
+- **FR-086 Sequence.** In this order, each step after the previous succeeded; any failure stops the run:
+  1. Evaluate every precondition of FR-060 to FR-068 (the plan) and the typed approval of FR-072.
+  2. For each native item, bottom first: `gh pr edit N --base DEFAULT` (a `PATCH` of `base` only). This is the only write before the push.
+     The heads do not change, so the reviewed SHAs and the checks of the heads stay valid.
+  3. Re-read everything and evaluate again (FR-087). Any reason, a changed plan digest or a base that is not the default branch refuses the push.
+  4. The one push of FR-070. 5. The bounded wait of FR-073. 6. Branch deletes only on `--delete-branch` (FR-075).
+  Deleting a base branch is never a step before the retarget: a deleted base can close its pull request (R3).
+- **FR-087 Re-read after the retarget (`Reverify`).** Compares the plan before with the plan after the retarget. Typed reasons:
+  `retarget-not-applied` (a base is still not the default branch), `head-changed` (a head or the plan digest differs: someone pushed, or GitHub
+  restacked), `child-closed` (a listed pull request is closed or merged elsewhere: stw does not reopen or recreate it), `base-moved` (the default
+  tip differs), and every reason the plan itself reports for the re-read state, in particular `tip-checks-pending` and `checks-missing` (a
+  retarget starts a run when a workflow listens to the `edited` event; a head without any run is `checks-missing`; the push waits until the run
+  ends). The check test is the one of FR-064; it is run again, not assumed to hold.
+- **FR-088 Failure branch.** After a failed or interrupted retarget or a refused re-read nothing is pushed. stw prints, and never runs,
+  `gh pr edit N --base OLD_BASE` for each pull request it retargeted (FR-031 failure branch). A rerun starts at step 1: a retargeted pull
+  request is flat then, so the remaining steps are the flat landing.
+- **FR-089 `delete_branch_on_merge`.** It does not decide the order: the retarget precedes the push, so a branch that GitHub deletes after
+  the marking is no base of an open listed pull request. What GitHub does with a pull request whose base branch is deleted is **UNKNOWN**
+  in the documentation pages read on 2026-11-07 (see research.md): measured are the closing after a manual deletion (R3) and a retarget
+  at a button merge (S-B). Neither outcome is relied upon. The setting is part of the shape key as `true`, `false` or `unknown`; `unknown`
+  (the field is absent for a token without administration read) is a readable shape.
+- **FR-090 Reads without administration rights (decision 2026-11-07).** Required contexts: the rules of the branch
+  (`GET /repos/{o}/{r}/rules/branches/{branch}`, readable with read access) and classic protection. Classic protection
+  (`GET .../branches/{branch}/protection`) needs administration read; on a 403 stw reads `GET /repos/{o}/{r}/branches/{branch}`: `protection.enabled` false means
+  none (same as a 404), true gives `protection.required_status_checks` (`contexts`, `checks`), a missing `protection` object is unreadable.
+  Neither source answering is `checks-unknown` and shape unreadable, as before (fail closed, no owner override). The ruleset detail
+  (`GET .../rulesets/{id}`) must show `bypass_actors`; an absent key is unreadable.
+- **FR-091 Wrong checkout.** `remote-repo-mismatch` stays a refusal. Its detail names the remote, its repository and the expected one, and says
+  how to proceed: run in a checkout whose remote is the expected repository, pass the absolute path of that checkout as the positional PATH
+  argument (`stw land --stack ... --plan /abs/path/to/checkout`) or select the remote with `--remote NAME`.
+- **FR-092 Apply stays gated.** This amendment changes the plan, the shape gate, the reads and `Reverify` (pure and read-only). The apply of
+  slice 5 (T027, T028) is still not built: T022 and T023 (design and security review) come before its code.
 
 ## Safety
 

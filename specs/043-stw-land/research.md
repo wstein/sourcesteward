@@ -117,3 +117,36 @@ by the owner (owner-only settings) and the result recorded; with `pull_request` 
 Until E1 to E3 are recorded for a repository shape, `stw land --stack` stays `land-unmeasured` for it (decision 9), and the spike repository
 is the first shape to be added with `stack: true` to `internal/land/shapes.json`. The real repositories follow only after the owner has
 chosen the ruleset bypass question (spec.md Q2).
+
+## Native stack: endpoint observations and GitHub documentation (2026-11-07)
+
+Read-only `gh api` GETs against `wstein/cubistry` (public) with the owner's fine-grained token, status codes only. The token is a fine-grained
+token whose repository `permissions` object reports admin, but it lacks the Administration permission. These are observations of one token, not of a
+read-only collaborator.
+
+| Endpoint | Status | Field facts |
+| --- | --- | --- |
+| `repos/wstein/cubistry` | 200 | `delete_branch_on_merge`, `allow_rebase_merge`, `allow_squash_merge`, `allow_merge_commit` are `null` (not visible to this token); `default_branch` is visible |
+| `rules/branches/main` | 200 | rule types and `ruleset_id` visible (here `required_linear_history`) |
+| `rulesets` and `rulesets/{id}` | 200 | `bypass_actors` visible (empty list here), `conditions`, `rules` |
+| `branches/main/protection` | 403 `Resource not accessible by personal access token` | classic protection needs the Administration permission |
+| `branches/main` | 200 | `protected: true` (a ruleset applies), `protection.enabled: false`, `required_status_checks` empty with `enforcement_level: off` |
+| `wstein/sourcesteward`: `branches/main/protection` | 404 `Branch not protected` | and `branches/main` shows `protection.enabled: false` too |
+
+Consequence (FR-090): the 403 on classic protection and the `null` repository setting made every `wstein/cubistry` plan unreadable.
+`branches/{b}` is readable with this token and separates "no classic protection" from "unreadable". UNKNOWN: whether a token without any
+write or administration right sees the `protection` object of `branches/{b}`; the first run with such a token decides (a missing object
+stays unreadable, fail closed).
+
+GitHub documentation read on 2026-11-07 (pages: managing the automatic deletion of branches, changing the base branch of a pull request,
+about pull requests, about merge methods): none states what happens to an open pull request whose base branch is deleted (retarget or close),
+and none states whether automatic deletion applies to a pull request marked merged by a push. The claim of N4 is not confirmed by these pages.
+Both stay **UNKNOWN**; the sequence of FR-086 does not depend on either. Rebase merge "creates new commit SHAs" (merge methods page), which is why
+this spec lands by fast-forward push.
+
+### Native stack: measurement (owner-run)
+
+`scripts/measure-native-stack.sh` runs the whole sequence of FR-086 in a sandbox repository of the owner and prints a record to paste here.
+It performs writes (branches, three pull requests, retargets, one push to the default branch) and is the owner's operation (see the header
+of the script). Recorded results (empty until the owner has run it): none. Until then no `native: true` entry exists in
+`internal/land/shapes.json`.
