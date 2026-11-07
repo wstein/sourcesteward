@@ -111,7 +111,12 @@ fn ssh_and_local_remotes_go_through_the_git_runner_only() {
 #[test]
 fn unknown_transports_are_refused_typed_and_start_nothing() {
     let (fx, log, shim) = setup();
-    for url in ["ext::sh -c 'touch /tmp/stw-ext-marker'", "fd::7"] {
+    for url in [
+        "ext::touch /nonexistent/stw-ext-marker",
+        "fd::7",
+        "myhelper::some-address",
+        "ssh::host/path",
+    ] {
         fx.set_origin_url(url);
         let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
         let r = &v["repos"][0];

@@ -344,6 +344,18 @@ fn missing_git_is_a_typed_unsupported_result() {
         r.run(t.path(), Op::FetchOrigin),
         Err(GitError::NotFound)
     ));
+    // tests run in the package directory: this relative entry would find an executable `git` there
+    let rel = Path::new("tests/fixtures/relative-bin");
+    assert!(
+        rel.join("git").is_file(),
+        "fixture missing (tests run in the package directory)"
+    );
+    let r = Runner::from_env(osv(&[("PATH", rel.to_str().unwrap())]));
+    assert!(matches!(
+        r.run(t.path(), Op::FetchOrigin),
+        Err(GitError::NotFound)
+    ));
+    assert!(matches!(r.version(), Err(GitError::NotFound)));
 }
 
 #[test]
@@ -423,6 +435,35 @@ fn an_unknown_option_is_a_typed_error() {
     assert!(matches!(e, GitError::UnknownOption(_)), "{e:?}");
     assert!(e.is_unsupported());
     assert_eq!(e.kind(), "unknown-option");
+}
+
+#[test]
+fn unknown_options_are_recognised_by_exit_code_and_by_text() {
+    let cases = [
+        ("echo 'usage: git fetch [<options>]' >&2; exit 129", true),
+        (
+            "echo \"error: unrecognized option '--no-tags'\" >&2; exit 1",
+            true,
+        ),
+        ("echo 'error: unknown switch `q' >&2; exit 1", true),
+        ("echo 'fatal: boom' >&2; exit 1", false),
+    ];
+    for (body, unknown) in cases {
+        let t = tmp();
+        let bin = t.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let repo = t.path().join("repo");
+        std::fs::create_dir(&repo).unwrap();
+        fake_git(&bin, "2.47.3", body);
+        let e = runner_with(&bin, &[])
+            .run(&repo, Op::FetchOrigin)
+            .unwrap_err();
+        assert_eq!(
+            matches!(e, GitError::UnknownOption(_)),
+            unknown,
+            "{body}: {e:?}"
+        );
+    }
 }
 
 #[test]
@@ -682,9 +723,7 @@ fn real_git_refuses_the_ext_transport() {
     }
     let t = tmp();
     let marker = t.path().join("ext-ran");
-    let (_up, clone) = fetch_fixture(t.path(), |_| {
-        format!("ext::sh -c 'touch {}'", marker.display())
-    });
+    let (_up, clone) = fetch_fixture(t.path(), |_| format!("ext::touch {}", marker.display()));
     let e = Runner::from_process()
         .run(&clone, Op::FetchOrigin)
         .unwrap_err();
