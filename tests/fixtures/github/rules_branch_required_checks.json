@@ -1,0 +1,49 @@
+[
+ {
+  "type": "required_linear_history",
+  "ruleset_source_type": "Repository",
+  "ruleset_source": "o/r",
+  "ruleset_id": 11
+ },
+ {
+  "type": "required_status_checks",
+  "parameters": {
+   "strict_required_status_checks_policy": true,
+   "do_not_enforce_on_create": false,
+   "required_status_checks": [
+    {
+     "context": "ci/build",
+     "integration_id": 15368
+    },
+    {
+     "context": "lint\nREVIEW: CLEAR"
+    }
+   ]
+  },
+  "ruleset_source_type": "Repository",
+  "ruleset_source": "o/r",
+  "ruleset_id": 12
+ },
+ {
+  "type": "pull_request",
+  "parameters": {
+   "required_approving_review_count": 1,
+   "dismiss_stale_reviews_on_push": true
+  },
+  "ruleset_source_type": "Organization",
+  "ruleset_source": "o",
+  "ruleset_id": 13
+ },
+ {
+  "type": "some_future_rule",
+  "ruleset_source_type": "Repository",
+  "ruleset_source": "o/r",
+  "ruleset_id": 14
+ },
+ {
+  "type": "deletion",
+  "ruleset_source_type": "Repository",
+  "ruleset_source": "o/r",
+  "ruleset_id": 11
+ }
+]

@@ -494,3 +494,233 @@ impl Client {
         ))
     }
 }
+
+// ---- branch rules and repository merge settings --------------------------------------------------
+
+/// Type of an active branch rule (`rules/branches`); unknown types keep their escaped name.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RuleKind {
+    RequiredStatusChecks,
+    PullRequest,
+    RequiredLinearHistory,
+    NonFastForward,
+    Deletion,
+    Creation,
+    Update,
+    RequiredSignatures,
+    Other(String),
+}
+
+impl RuleKind {
+    fn parse(raw: &str) -> RuleKind {
+        match raw {
+            "required_status_checks" => RuleKind::RequiredStatusChecks,
+            "pull_request" => RuleKind::PullRequest,
+            "required_linear_history" => RuleKind::RequiredLinearHistory,
+            "non_fast_forward" => RuleKind::NonFastForward,
+            "deletion" => RuleKind::Deletion,
+            "creation" => RuleKind::Creation,
+            "update" => RuleKind::Update,
+            "required_signatures" => RuleKind::RequiredSignatures,
+            other => RuleKind::Other(escape_untrusted(other, 100).0),
+        }
+    }
+}
+
+/// One required status check of a `required_status_checks` rule.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RequiredCheck {
+    pub context: String,
+    /// The app that must report it; None when the rule accepts any source.
+    pub integration_id: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BranchRule {
+    pub kind: RuleKind,
+    /// Only for `RequiredStatusChecks`.
+    pub checks: Vec<RequiredCheck>,
+    /// `strict_required_status_checks_policy` of a `RequiredStatusChecks` rule.
+    pub strict: Option<bool>,
+    /// `required_approving_review_count` of a `PullRequest` rule.
+    pub required_approvals: Option<u64>,
+    /// Repository or organization the ruleset belongs to (escaped).
+    pub source: Option<String>,
+    pub ruleset_id: Option<u64>,
+    /// False when a required-checks rule came without readable parameters: the list is then partial.
+    pub parameters_readable: bool,
+}
+
+fn parse_rule(v: &Value, _b: &Budget) -> Option<BranchRule> {
+    let kind = RuleKind::parse(v["type"].as_str()?);
+    let p = &v["parameters"];
+    let mut rule = BranchRule {
+        kind,
+        checks: Vec::new(),
+        strict: None,
+        required_approvals: None,
+        source: esc_opt(&v["ruleset_source"], 200),
+        ruleset_id: v["ruleset_id"].as_u64(),
+        parameters_readable: true,
+    };
+    match rule.kind {
+        RuleKind::RequiredStatusChecks => match p["required_status_checks"].as_array() {
+            Some(list) => {
+                rule.strict = p["strict_required_status_checks_policy"].as_bool();
+                for c in list {
+                    match c["context"].as_str() {
+                        Some(ctx) => rule.checks.push(RequiredCheck {
+                            context: escape_untrusted(ctx, 200).0,
+                            integration_id: c["integration_id"].as_u64(),
+                        }),
+                        None => rule.parameters_readable = false,
+                    }
+                }
+            }
+            None => rule.parameters_readable = false,
+        },
+        RuleKind::PullRequest => {
+            rule.required_approvals = p["required_approving_review_count"].as_u64();
+        }
+        _ => {}
+    }
+    Some(rule)
+}
+
+/// A repository setting that may be hidden from the token: absent or non-boolean is `Unknown`, never `Off`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Setting {
+    On,
+    Off,
+    Unknown,
+}
+
+impl Setting {
+    fn of(v: &Value) -> Setting {
+        match v.as_bool() {
+            Some(true) => Setting::On,
+            Some(false) => Setting::Off,
+            None => Setting::Unknown,
+        }
+    }
+}
+
+/// Merge-related fields of the repository object. The `allow_*` fields and `delete_branch_on_merge` are only
+/// sent to tokens with admin rights.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RepoSettings {
+    pub default_branch: Option<String>,
+    pub delete_branch_on_merge: Setting,
+    pub allow_rebase_merge: Setting,
+    pub allow_squash_merge: Setting,
+    pub allow_merge_commit: Setting,
+}
+
+/// Outcome of a single-object read.
+#[derive(Clone, Debug)]
+pub enum ReadOne<T> {
+    Value(T),
+    Denied {
+        kind: Denial,
+        status: u16,
+        message: String,
+    },
+    NotFound,
+    Failed(String),
+}
+
+fn valid_branch(b: &str) -> bool {
+    !b.is_empty()
+        && b.len() <= 255
+        && !b.starts_with(['-', '/'])
+        && !b.ends_with(['/', '.'])
+        && !b.ends_with(".lock")
+        && b != "@"
+        && !b.contains("..")
+        && !b.contains("//")
+        && !b.contains("@{")
+        && !b.contains("/.")
+        && !b.chars().any(|c| {
+            c.is_control()
+                || matches!(
+                    c,
+                    ' ' | '~' | '^' | ':' | '?' | '*' | '[' | '\\' | '%' | '#'
+                )
+        })
+}
+
+/// Percent-encode everything except unreserved characters (a `/` becomes `%2F`).
+fn encode_segment(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        if b.is_ascii_alphanumeric() || matches!(b, b'-' | b'.' | b'_' | b'~') {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    out
+}
+
+impl Client {
+    fn check_owner_repo(owner: &str, repo: &str) -> Result<String> {
+        let slug = format!("{owner}/{repo}");
+        if !owner.contains('/') && !repo.contains('/') && valid_slug(&slug) {
+            Ok(slug)
+        } else {
+            Err(Error::usage(format!("not a repository: {slug:?}")))
+        }
+    }
+
+    /// Active rules that apply to a branch (rulesets; readable with read access). Classic branch protection is
+    /// not part of this answer and needs admin rights: an empty list does not prove the absence of it.
+    /// A required-checks rule without readable parameters makes the list partial.
+    pub fn branch_rules(
+        &self,
+        owner: &str,
+        repo: &str,
+        branch: &str,
+        budget: &Budget,
+    ) -> Result<Read<BranchRule>> {
+        let slug = Self::check_owner_repo(owner, repo)?;
+        if !valid_branch(branch) {
+            return Err(Error::usage(format!(
+                "not a usable branch name: {branch:?}"
+            )));
+        }
+        let mut read = self.list(
+            &format!("/repos/{slug}/rules/branches/{}", encode_segment(branch)),
+            budget,
+            Value::as_array,
+            parse_rule,
+        );
+        if let Read::Observed(o) = &mut read {
+            if o.incomplete.is_none() && o.items.iter().any(|r| !r.parameters_readable) {
+                o.incomplete = Some("a required-checks rule had unreadable parameters".into());
+            }
+        }
+        Ok(read)
+    }
+
+    /// `default_branch` and the merge-method settings of a repository (the latter `Unknown` without admin rights).
+    pub fn repo_settings(&self, owner: &str, repo: &str) -> Result<ReadOne<RepoSettings>> {
+        let slug = Self::check_owner_repo(owner, repo)?;
+        Ok(match self.page(&format!("{}/repos/{slug}", self.base)) {
+            Page::Json(v) if v["default_branch"].is_string() => ReadOne::Value(RepoSettings {
+                default_branch: esc_opt(&v["default_branch"], 255),
+                delete_branch_on_merge: Setting::of(&v["delete_branch_on_merge"]),
+                allow_rebase_merge: Setting::of(&v["allow_rebase_merge"]),
+                allow_squash_merge: Setting::of(&v["allow_squash_merge"]),
+                allow_merge_commit: Setting::of(&v["allow_merge_commit"]),
+            }),
+            Page::Json(_) => ReadOne::Failed("unexpected response shape: not a repository".into()),
+            Page::Denied(kind, status, message) => ReadOne::Denied {
+                kind,
+                status,
+                message,
+            },
+            Page::NotFound => ReadOne::NotFound,
+            Page::Failed(m) => ReadOne::Failed(m),
+        })
+    }
+}

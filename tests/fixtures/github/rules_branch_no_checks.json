@@ -1,0 +1,8 @@
+[
+  {
+    "type": "required_linear_history",
+    "ruleset_source_type": "Repository",
+    "ruleset_source": "wstein/cubistry",
+    "ruleset_id": 25943525
+  }
+]
