@@ -466,10 +466,21 @@ impl Runner {
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
-        let mut child = cmd.spawn().map_err(|e| match e.kind() {
-            std::io::ErrorKind::NotFound => GitError::NotFound,
-            _ => GitError::Spawn(redact(&e.to_string(), &self.secrets)),
-        })?;
+        // ETXTBSY (26): another thread of this process still holds the executable open for writing
+        // (it was just installed); a short retry is the documented remedy.
+        let spawned = (0..10).find_map(|attempt| match cmd.spawn() {
+            Err(e) if e.raw_os_error() == Some(26) && attempt < 9 => {
+                std::thread::sleep(Duration::from_millis(20));
+                None
+            }
+            other => Some(other),
+        });
+        let mut child = spawned
+            .expect("loop returns a result")
+            .map_err(|e| match e.kind() {
+                std::io::ErrorKind::NotFound => GitError::NotFound,
+                _ => GitError::Spawn(redact(&e.to_string(), &self.secrets)),
+            })?;
         let (tx, rx) = mpsc::channel::<(bool, Option<Vec<u8>>)>();
         let streams: [(bool, Option<Box<dyn Read + Send>>); 2] = [
             (false, child.stdout.take().map(|s| Box::new(s) as _)),

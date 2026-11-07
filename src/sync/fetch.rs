@@ -1,9 +1,11 @@
-//! Fetch of `origin` (apply mode only) through gix's own transports.
+//! Fetch of `origin` (apply mode only).
 //!
-//! stw tries the fetch for every remote kind and reports what gix says. For `https://` remotes gix needs
-//! no other program. For ssh remotes gix runs the system `ssh`, and for local paths and `file://` it runs
-//! `git-upload-pack` (observed with fake programs on PATH, see `tests/remote_kinds.rs`); when such a fetch
-//! fails the result is typed (`unsupported-remote`) and the message says to use git directly.
+//! By remote kind: `ssh://`, `user@host:path`, local paths and `file://` are fetched by the installed `git`
+//! through the runner (`git_runner`, reported as `"via": "git"`), because gix would start `ssh` or
+//! `git-upload-pack` itself for them (`tests/remote_kinds.rs` proves it no longer does). `https://`,
+//! `http://` and `git://` are fetched by gix without any program (`"via": "gix"`); a failure of those
+//! non-https kinds is typed `unsupported-remote`. Any other transport (`ext::`, `fd::`) is refused typed
+//! without starting anything. Without a usable `git` the git steps report `unsupported`.
 //!
 //! HTTPS credentials: when the server asks, the GitHub token found by `auth` is offered for `github.com`
 //! only (user `x-access-token`). Other hosts get no credentials from us.
@@ -15,6 +17,7 @@ use gix::remote::Direction;
 use gix::url::Scheme;
 
 use crate::error::Result;
+use crate::git_runner::{self, Op};
 use crate::github::Client;
 
 /// What happened to the fetch of `origin`.
@@ -26,6 +29,27 @@ pub enum Fetch {
     /// The fetch of a non-https remote failed; carries gix's message and the hint to use git directly.
     Unsupported(String),
     Failed(String),
+    /// The step needs the installed git and it is missing, too old or lacks an option; carries the reason.
+    GitUnsupported(String),
+}
+
+/// A fetch result plus how it was done.
+#[derive(Debug)]
+pub struct Fetched {
+    pub fetch: Fetch,
+    /// `"git"` (runner), `"gix"`, or None when nothing was started.
+    pub via: Option<&'static str>,
+    /// Kind of the typed git error (`not-found`, `version`, `unknown-option`, `timeout`, ...).
+    pub git_error: Option<&'static str>,
+}
+
+impl Fetched {
+    pub fn label(&self) -> &'static str {
+        self.fetch.label()
+    }
+    pub fn message(&self) -> Option<&str> {
+        self.fetch.message()
+    }
 }
 
 impl Fetch {
@@ -36,26 +60,71 @@ impl Fetch {
             Fetch::NoRemote => "no-remote",
             Fetch::Unsupported(_) => "unsupported-remote",
             Fetch::Failed(_) => "failed",
+            Fetch::GitUnsupported(_) => "unsupported",
         }
     }
 
     pub fn message(&self) -> Option<&str> {
         match self {
-            Fetch::Unsupported(m) | Fetch::Failed(m) => Some(m),
+            Fetch::Unsupported(m) | Fetch::Failed(m) | Fetch::GitUnsupported(m) => Some(m),
             Fetch::Done | Fetch::NoRemote => None,
         }
     }
 }
 
-pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetch {
+pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetched {
     let url = repo
         .find_remote("origin")
         .ok()
         .and_then(|r| r.url(Direction::Fetch).cloned());
-    match run(repo, gh) {
-        Ok(true) => Fetch::Done,
-        Ok(false) => Fetch::NoRemote,
-        Err(e) => failure(&e.to_string(), url.as_ref()),
+    let done = |fetch, via, git_error| Fetched {
+        fetch,
+        via,
+        git_error,
+    };
+    let Some(u) = url.as_ref() else {
+        // no `origin`, or one without a fetch URL: gix reports which
+        return match run_gix(repo, gh) {
+            Ok(false) => done(Fetch::NoRemote, None, None),
+            Ok(true) => done(Fetch::Done, Some("gix"), None),
+            Err(e) => done(failure(&e.to_string(), None), Some("gix"), None),
+        };
+    };
+    match u.scheme {
+        Scheme::Ssh | Scheme::File => {
+            let dir = repo
+                .workdir()
+                .map(std::path::Path::to_path_buf)
+                .unwrap_or_else(|| repo.git_dir().to_path_buf());
+            match git_runner::shared().run(&dir, Op::FetchOrigin) {
+                Ok(_) => done(Fetch::Done, Some(git_runner::VIA), None),
+                Err(e) => {
+                    let msg: String = scrub(&e.to_string(), url.as_ref())
+                        .chars()
+                        .take(400)
+                        .collect();
+                    let fetch = if e.is_unsupported() {
+                        Fetch::GitUnsupported(msg)
+                    } else {
+                        Fetch::Failed(msg)
+                    };
+                    done(fetch, Some(git_runner::VIA), Some(e.kind()))
+                }
+            }
+        }
+        Scheme::Https | Scheme::Http | Scheme::Git => match run_gix(repo, gh) {
+            Ok(true) => done(Fetch::Done, Some("gix"), None),
+            Ok(false) => done(Fetch::NoRemote, None, None),
+            Err(e) => done(failure(&e.to_string(), url.as_ref()), Some("gix"), None),
+        },
+        _ => done(
+            Fetch::Unsupported(format!(
+                "this remote uses a transport stw does not run: origin is {}",
+                display_url(u)
+            )),
+            None,
+            None,
+        ),
     }
 }
 
@@ -142,7 +211,7 @@ pub fn offer_credentials(
     }))
 }
 
-fn run(repo: &gix::Repository, gh: Option<&Client>) -> Result<bool> {
+fn run_gix(repo: &gix::Repository, gh: Option<&Client>) -> Result<bool> {
     let Ok(remote) = repo.find_remote("origin") else {
         return Ok(false);
     };

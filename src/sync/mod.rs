@@ -25,6 +25,10 @@ pub struct SyncRec {
     pub behind: Option<usize>,
     pub dirty: usize,
     pub fetch: String,
+    /// How the fetch ran: `git` (runner), `gix`; None when none ran.
+    pub via: Option<String>,
+    /// Typed error kind of a failed git step.
+    pub git_error: Option<String>,
     pub fetched_ago: Option<u64>,
     pub remote_moved: Option<bool>,
     pub result: String,
@@ -118,6 +122,8 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         } else {
             let fetched = fetch::fetch_origin(&repo, gh);
             rec.fetch = fetched.label().into();
+            rec.via = fetched.via.map(str::to_string);
+            rec.git_error = fetched.git_error.map(str::to_string);
             err = fetched.message().map(str::to_string);
             if rec.fetch == "failed" && gh.is_none() {
                 err = err.map(|e| {
@@ -134,6 +140,9 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         if rec.fetch == "failed" {
             result = "error".into();
             reason = "fetch failed".into();
+        } else if rec.fetch == "unsupported" {
+            result = "error".into();
+            reason = "fetch needs the installed git, which cannot be used".into();
         } else if rec.fetch == "unsupported-remote" {
             result = "error".into();
             reason = "fetch failed: use git directly for this remote kind".into();
@@ -173,10 +182,18 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec]) -> Value {
     let repos: Vec<Value> = list
         .iter()
         .map(|s| {
-            json!({"name": s.name, "path": s.path, "branch": jopt(s.branch.as_deref()), "upstream": jopt(s.upstream.as_deref()),
+            let mut v = json!({"name": s.name, "path": s.path, "branch": jopt(s.branch.as_deref()), "upstream": jopt(s.upstream.as_deref()),
                    "ahead": s.ahead, "behind": s.behind, "dirty_files": s.dirty, "fetch": s.fetch,
                    "last_fetch_seconds_ago": s.fetched_ago, "remote_moved": s.remote_moved,
-                   "result": s.result, "reason": s.reason, "error": jopt(s.err.as_deref())})
+                   "result": s.result, "reason": s.reason, "error": jopt(s.err.as_deref())});
+            // additive: present only when a fetch ran
+            if let Some(via) = &s.via {
+                v["via"] = json!(via);
+            }
+            if let Some(k) = &s.git_error {
+                v["git_error"] = json!(k);
+            }
+            v
         })
         .collect();
     json!({"schema_version": 2, "command": "sync", "mode": if apply {"apply"} else {"dry-run"}, "root": root,

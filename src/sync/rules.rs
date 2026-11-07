@@ -61,6 +61,7 @@ pub struct RulesRec {
     pub behind: Option<usize>,
     pub dirty: usize,
     pub fetch: String,
+    pub via: Option<String>,
     pub fetched_ago: Option<u64>,
     /// `none`, `would-update`, `updated`, `refused` (only meaningful with `--rules`)
     pub action: String,
@@ -275,7 +276,9 @@ pub fn agent_rules(root: &Path, gh: Option<&Client>, o: &RulesOpts) -> RulesRec 
     } else if o.update && o.apply {
         let f = fetch::fetch_origin(&repo, gh);
         rec.fetch = f.label().into();
-        if rec.fetch == "failed" || rec.fetch == "unsupported-remote" {
+        rec.via = f.via.map(str::to_string);
+        if rec.fetch == "failed" || rec.fetch == "unsupported-remote" || rec.fetch == "unsupported"
+        {
             refuse(
                 &mut rec,
                 format!("fetch failed: {}", f.message().unwrap_or("unknown error")),
@@ -459,11 +462,15 @@ pub fn render_human(r: &RulesRec) -> String {
 }
 
 pub fn to_json(r: &RulesRec) -> Value {
-    json!({"path": jopt(r.path.as_deref()), "state": r.state, "branch": jopt(r.branch.as_deref()),
+    let mut v = json!({"path": jopt(r.path.as_deref()), "state": r.state, "branch": jopt(r.branch.as_deref()),
            "default_ref": jopt(r.default_ref.as_deref()), "ahead": r.ahead, "behind": r.behind,
            "dirty_files": r.dirty, "fetch": r.fetch, "last_fetch_seconds_ago": r.fetched_ago,
            "requested": r.requested, "head": jopt(r.head.as_deref()), "detached": r.detached,
            "submodule": r.submodule, "foreign_authors": r.foreign, "action": r.action, "reason": r.reason,
            "commits": r.commits.iter().map(|c| json!({"sha": c.sha, "subject": c.subject, "author": c.author, "committer": c.committer})).collect::<Vec<_>>(),
-           "files": r.files, "flagged_files": r.flagged, "updated": r.updated})
+           "files": r.files, "flagged_files": r.flagged, "updated": r.updated});
+    if let Some(via) = &r.via {
+        v["via"] = json!(via);
+    }
+    v
 }
