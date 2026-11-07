@@ -498,3 +498,62 @@ fn a_failed_rollback_reports_both_errors_and_leaves_the_ref() {
         "a refused undo must not move the ref"
     );
 }
+
+/// G4: the attributes that decide how a changed file is written (here `eol=crlf`) come from the whole target
+/// tree, also when `.gitattributes` itself is not part of the update.
+#[test]
+fn an_unchanged_gitattributes_applies_to_a_changed_file() {
+    let fx = Fx::new();
+    let c0 = fx.commit(
+        None,
+        &[
+            (".gitattributes", Some("*.txt text eol=crlf\n")),
+            ("a.txt", Some("old\n")),
+        ],
+        "c0",
+    );
+    let c1 = fx.commit(
+        Some(c0),
+        &[("a.txt", Some("new\n")), ("b.txt", Some("added\n"))],
+        "c1",
+    );
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.checkout_head();
+    assert_eq!(fx.read("a.txt").as_deref(), Some("old\r\n"));
+    fast_forward(&fx.repo(), c1, "origin/main").unwrap();
+    assert_eq!(fx.read("a.txt").as_deref(), Some("new\r\n"));
+    assert_eq!(fx.read("b.txt").as_deref(), Some("added\r\n"));
+    let ch = status::changes(&fx.repo(), true).unwrap();
+    assert_eq!((ch.staged, ch.unstaged, ch.untracked), (0, 0, 0), "{ch:?}");
+}
+
+/// A `.gitattributes` that is part of the update applies to the other changed files of the same update; a
+/// file the update does not change is not rewritten.
+#[test]
+fn a_gitattributes_added_by_the_update_applies_to_its_changed_files() {
+    let fx = Fx::new();
+    let c0 = fx.commit(
+        None,
+        &[("a.txt", Some("old\n")), ("same.txt", Some("same\n"))],
+        "c0",
+    );
+    let c1 = fx.commit(
+        Some(c0),
+        &[
+            (".gitattributes", Some("*.txt text eol=crlf\n")),
+            ("a.txt", Some("new\n")),
+        ],
+        "c1",
+    );
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.checkout_head();
+    fast_forward(&fx.repo(), c1, "origin/main").unwrap();
+    assert_eq!(fx.read("a.txt").as_deref(), Some("new\r\n"));
+    assert_eq!(
+        fx.read("same.txt").as_deref(),
+        Some("same\n"),
+        "not part of the update"
+    );
+}

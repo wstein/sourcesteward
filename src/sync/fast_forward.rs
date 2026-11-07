@@ -315,8 +315,18 @@ pub fn fast_forward(
             .filter(|c| c.new.as_ref().map(|(m, _)| !m.is_commit()).unwrap_or(false))
             .map(|c| c.path.clone())
             .collect();
-        partial.remove_entries(|_, p, _| !wanted.contains(p));
-        if !partial.entries().is_empty() {
+        // Attributes (eol, filters) are looked up in the index that is checked out. The whole target index is kept
+        // for that, and every entry that is not part of the update is marked skip-worktree, which the checkout
+        // does not write. Removing those entries instead would hide an unchanged `.gitattributes`.
+        let mut any = false;
+        for (e, p) in partial.entries_mut_with_paths() {
+            if wanted.contains(p) {
+                any = true;
+            } else {
+                e.flags.insert(gix::index::entry::Flags::SKIP_WORKTREE);
+            }
+        }
+        if any {
             let mut opts = repo
                 .checkout_options(gix::worktree::stack::state::attributes::Source::IdMapping)
                 .map_err(|e| FfError::Other(e.to_string()))?;
