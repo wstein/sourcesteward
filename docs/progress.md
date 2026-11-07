@@ -98,6 +98,15 @@ v0.2.0) lands a whole linear chain with one fast-forward push of the tip, gated 
 measurements (research.md, "Stack landing") and a security review before code. Nothing is
 implemented or measured yet.
 
+Status 2026-11-07 (native stack landing, branch `codex/land-native-stack`): the plan of `stw land --stack` accepts the native
+`gh stack` shape (each base is the previous pull request's head branch) as the sequence retarget, re-read, one push (Spec 043
+FR-084 to FR-092, tasks T032 to T036 done). It is fixture-tested only: the shape stays `land-unmeasured` until the owner runs
+`scripts/measure-native-stack.sh` in a sandbox repository and records the evidence (T037); no `native` entry exists in
+`internal/land/shapes.json`. The reads work for a token without administration rights (branch endpoint fallback for the classic
+protection, unknown `delete_branch_on_merge` readable). The apply is still not built (T038, after T022 and T023). What GitHub does
+with a pull request whose base branch is deleted is UNKNOWN in the documentation read. No independent review of this branch is
+recorded yet.
+
 ## Active work: Spec 015 local restacking, first slice (source implemented, verification pending)
 
 The read-only `stw restack plan` for native Git is implemented in source on `feat/015-restack-plan` (hidden command, unpublished
