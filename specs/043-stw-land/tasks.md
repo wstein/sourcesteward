@@ -66,3 +66,15 @@ fixtures); never a real repository. Failing test first for each task. Each slice
 - [ ] T029 Failing tests then the journal: one intent fact before the push and one outcome fact after it, one per branch delete; chain digest bound. (Coverage: FR-043, FR-077).
 - [ ] T030 `docs/commands.md`, `docs/json-contracts.md` (when the schema is published), `docs/agent-guide.md` (agents run only `stw land --stack ... --plan`); smoke script on a local bare remote with a three-pull-request chain; relation to the single landing and to the one-PR commit series. (Coverage: FR-079, FR-083, US6, US7); the docs state the no-undo recovery of FR-083.
 - [ ] T031 First dogfood after T021: plan only, then the real chain landing in the spike repository with the owner at the terminal; result recorded in research.md. (Coverage: FR-073).
+
+## Slice 6 - Native stack landing (amendment 2026-11-07; spec.md FR-084 to FR-092)
+
+Plan-level only. The apply stays behind T022 and T023 (FR-092).
+
+- [x] T032 Failing tests then the native shape in the plan: base classification (bottom flat, flat or native above, `base-not-in-chain` for any other base), the `native` flag of the allowlist file, the evidence gate (`land-unmeasured`/`native-stack-shape` without it, with the sequence and the evidence note), `retarget-N` effects before the push, flat chain unchanged. (Coverage: FR-084, FR-085, FR-086).
+- [x] T033 Failing tests then `Reverify` and `RestoreArgv`: success, base not retargeted, head moved, child closed, tip check pending or gone after the retarget, default branch moved, a never landable plan; restore commands in chain order. (Coverage: FR-087, FR-088).
+- [x] T034 Failing tests then the reads without administration rights: classic protection 403 falls back to `GET branches/{b}` (enabled false, enabled true, `protected` false, missing object, 403, 404, malformed, 500 without fallback); `delete_branch_on_merge` unknown stays a readable shape; the hosting guard admits the branch shape in land mode only as that exact path. (Coverage: FR-089, FR-090).
+- [x] T035 Failing test then the `remote-repo-mismatch` text (PATH or `--remote`). (Coverage: FR-091).
+- [x] T036 `scripts/measure-native-stack.sh` with offline tests (fake `gh` and `git`): refusals of unsafe repositories, dry run, retarget order, no push after a moved head, verbatim refusal text. Owner-run. (Coverage: FR-085).
+- [ ] T037 **Owner-run**: run the script in a sandbox repository with the settings of the target shape (research.md, "Native stack: measurement"), paste the record into research.md and add the `native: true` entry with its evidence pointer to `internal/land/shapes.json`. Until then no native chain is landable. (Coverage: FR-085, FR-089).
+- [ ] T038 Apply for the native sequence (retarget writes, re-read with `Reverify`, push, wait) after T022 and T023; the retarget joins the argument-vector allowlist of FR-033 and the journal of FR-043. (Coverage: FR-086, FR-092).

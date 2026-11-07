@@ -79,3 +79,19 @@ profile and final signed-SHA review. 016 remote flags cannot invoke that local
 helper. 043 identity authority is trusted workspace policy, global config only
 corroborates, with existing human confirmation/shape/retarget/deletion gates.
 No build, installation, helper run, schema-file edit or live write is claimed.
+
+## Amendment 2026-11-07: native stack landing
+
+| Requirement | Task IDs | Test (Go unless noted) |
+| --- | --- | --- |
+| FR-084 | T032 | `internal/land/native_test.go`: `TestNativeBaseShapes` (mixed, skip base, bottom base, unrelated base) |
+| FR-085 | T032, T036, T037 | `TestNativeChainWithoutEvidenceIsLandUnmeasuredButShowsTheSequence`, `TestNativeEntryAlsoAdmitsTheFlatChainButAFlatEntryNotTheNativeOne`, `TestShapeSetNativeFlagInTheAllowlistFile`; `scripts/test_measure_native_stack.py` |
+| FR-086 | T032, T038 | `TestNativeChainIsLandableWithRecordedEvidenceAndRetargetsBottomFirst`; apply order is T038 (not built) |
+| FR-087 | T033 | `TestReverifyAfterRetarget` (7 cases), `TestReverifyRefusesAPlanThatWasNeverLandable` |
+| FR-088 | T033 | `TestRestoreArgvNamesTheOldBaseOfEachNativeItem` |
+| FR-089 | T034 | `TestUnreadableShapeNeverMatches` (unknown setting stays readable), `TestClosedNativeChildNamesTheDeletedBase` |
+| FR-090 | T034 | `TestProtectionFallsBackToTheBranchEndpointOn403`, `TestProtection404NeedsNoFallbackRead`, `TestNativeStackPlanOnATokenWithoutAdministrationRead`, hosting guard tests |
+| FR-091 | T035 | `TestRemoteMismatchSaysHowToProceed` |
+| FR-092 | T038 | open: T022 and T023 precede the apply |
+
+Open: the GitHub behavior for a pull request whose base branch is deleted is UNKNOWN in the documentation (research.md); the owner-run measurement T037 records it. The schema `land.schema.json` gained the effect kind `retarget`; its frozen digest was updated in the same commit.
