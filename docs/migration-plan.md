@@ -132,6 +132,8 @@ Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a sep
 M7/M12 can follow local restack; M10/M11 follow proven recovery and publication policy.
 M7 does not require publication; M6 does not push. M12 publication guards must land before pending state can
 be created in a product used with push/ready commands. These are dependency tracks, not permission to start agents.
+M0 starts directly in `projects/sourcesteward` without a spike (owner decision: infrastructure, the Git boundary is
+already recorded in Chartroom). Scripts-first stays for new user-facing functions.
 
 ## Decisions, tradeoffs, and open evidence
 
@@ -141,21 +143,24 @@ be created in a product used with push/ready commands. These are dependency trac
    Currently gix itself can spawn ssh/git-upload-pack for non-HTTPS fetch (`tests/remote_kinds.rs`); M0 must close
    that indirect path too. Keep authentication usable; exact environment scrub/credential allowlist and minimum Git
    versions need fixtures. Git version requirements differ: preview spike 2.40, resolve spike 2.45.
-2. **Recommend explicit stack input first.** Existing prototypes take `ONTO BRANCH...`; local upstream config does
-   not reliably encode stack parentage. Keep explicit ordered input until owner accepts a durable local/PR edge
-   model. Reject ambiguity instead of guessing from merge-base. Benefit 5, effort 2, risk 2. Concurrent stack-model
-   work is separate; do not treat its unmerged design as accepted.
+2. **Open: stack input.** Recommend explicit stack input first. Existing prototypes take `ONTO BRANCH...`; local
+   upstream config does not reliably encode stack parentage. Keep explicit ordered input until owner accepts a durable
+   local/PR edge model. Reject ambiguity instead of guessing from merge-base. Benefit 5, effort 2, risk 2. The decision
+   stays open until the stack-model spike (`spikes/stw/stack-model`, branch `feat/stw-stack-model`, in review) has CLEAR
+   and the owner accepted it live. It is needed before M2 and M6. Do not treat its unmerged design as accepted.
 3. **Recommend recovery before new mutation.** JSONL manifest IDs do not retain objects; add retained ref snapshots
    and crash detection before restack. Full worktree atomicity remains unavailable; surface incomplete operations.
    Benefit 5, effort 4, risk 5. Keep tidy restore compatibility during migration.
 4. **Recommend controlled binary transition.** `dayboard/LOGBOOK.md` records Go release v0.2.0 remains installed until M3+M4.
    Do not replace that channel with Rust while removing working review gates. Current installed binary/version and
    packaging channel are UNKNOWN in this assessment; owner chooses release/repository/channel and accepts live.
-5. **Open: local CLEAR evidence.** The workspace has no PRs. A review note, local receipt, or external report could
-   carry exact-head evidence, but notes are editable claims too. Define author trust, head binding, and evidence
-   storage before M10; do not introduce a Git note namespace as an already approved decision.
-6. **Open: replay attribution.** Resolve preservation of historical authors with the global pushed-identity rule;
-   no commit-writing implementation starts by overriding identity. No design decision is delegated to a prototype.
+5. **Deferred: local CLEAR evidence.** The workspace has no PRs. A review note, local receipt, or external report could
+   carry exact-head evidence, but notes are editable claims too. Owner deferred the decision until before M10. Define
+   author trust, head binding, and evidence storage by then; do not introduce a Git note namespace as an already
+   approved decision.
+6. **Recorded decision: replay attribution.** New commits carry the configured Git identity as author and committer.
+   Commits rewritten by restack, rebase, or cherry-pick keep their original author; the committer is the configured
+   identity, as `git rebase` does. A dotagents rule change for this is in progress.
 7. **Defer native jj and in-memory rerere prediction.** Rerere reuse during Git resolution is useful without
    reimplementing Git's conflict-ID algorithm. jj-style structured conflict persistence needs another design, not
    merely commits containing marker text. Benefit 2, effort 5, risk 4 for native parity at this stage.
