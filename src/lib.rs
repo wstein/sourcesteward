@@ -3,6 +3,7 @@ pub mod auth;
 pub mod cli;
 pub mod dev;
 pub mod error;
+pub mod git_runner;
 pub mod github;
 pub mod output;
 pub mod patch_id;
