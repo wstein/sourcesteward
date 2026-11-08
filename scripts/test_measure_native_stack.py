@@ -21,6 +21,7 @@ case "$1 $2" in
   "repo clone") mkdir -p "$4" ;;
   "pr create")
     n=$(cat "$FIX/n" 2>/dev/null || echo 100); n=$((n + 1)); echo "$n" > "$FIX/n"
+    [ "${FAIL_PR_CREATE:-0}" != "$((n - 100))" ] || { echo "boom" >&2; exit 1; }
     head=; base=
     while [ $# -gt 0 ]; do case $1 in --head) head=$2 ;; --base) base=$2 ;; esac; shift; done
     echo "sha-$head" > "$FIX/head_$n"; echo "$base" > "$FIX/base_$n"
@@ -79,6 +80,8 @@ class MeasureNativeStack(unittest.TestCase):
             ['--repo', 'wstein/cubistry', '--confirm', 'wstein/cubistry'],
             ['--repo', 'wstein/sourcesteward', '--confirm', 'wstein/sourcesteward'],
             ['--repo', 'wstein/plain', '--confirm', 'wstein/plain'],
+            ['--repo', 'measure-org/prod', '--confirm', 'measure-org/prod'],
+            ['--repo', 'sandbox-inc/product', '--confirm', 'sandbox-inc/product'],
             ['--repo', '../x', '--confirm', '../x'],
             self.ok_args('--wait', 'x'),
             self.ok_args('--wait', '901'),
@@ -88,6 +91,36 @@ class MeasureNativeStack(unittest.TestCase):
             r = self.run_script(*args)
             self.assertEqual(r.returncode, 64, (args, r.stderr))
         self.assertEqual(self.calls(), [])
+
+    def test_deny_list_ignores_case(self):
+        for name in ('WStein/Cubistry', 'wstein/SourceSteward', 'WSTEIN/Anchorage-Workspace'):
+            r = self.run_script('--repo', name, '--confirm', name)
+            self.assertEqual(r.returncode, 64, name)
+            self.assertIn('real repository', r.stderr, name)
+
+    def test_the_name_pattern_is_case_insensitive_on_the_name(self):
+        r = self.run_script(*self.ok_args('--dry-run'))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        r = self.run_script('--repo', 'wstein/STW-Native-SANDBOX', '--confirm', 'wstein/STW-Native-SANDBOX', '--dry-run')
+        self.assertEqual(r.returncode, 0, r.stderr)
+
+    def test_dry_run_never_sleeps(self):
+        log = Path(self.tmp.name) / 'sleep.log'
+        fake = Path(self.tmp.name) / 'fakesleep'
+        fake.write_text('#!/bin/sh\necho "$*" >> %s\n' % log)
+        fake.chmod(0o755)
+        r = self.run_script(*self.ok_args('--dry-run', '--deletion-test', '--wait', '600'), MEASURE_SLEEP=str(fake))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertFalse(log.exists(), 'a dry run must not sleep')
+
+    def test_a_midway_failure_lists_what_it_left_behind(self):
+        r = self.run_script(*self.ok_args(), FAIL_PR_CREATE='2')
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn('left behind', r.stderr)
+        self.assertRegex(r.stderr, r'branch: stw-measure-\d+-a')
+        self.assertRegex(r.stderr, r'branch: stw-measure-\d+-b')
+        self.assertIn('pull request: #101', r.stderr)
+        self.assertNotIn('pull request: #102', r.stderr)
 
     def test_dry_run_calls_nothing_and_prints_the_writes_in_order(self):
         r = self.run_script(*self.ok_args('--dry-run', '--deletion-test'))
