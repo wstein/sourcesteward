@@ -244,13 +244,40 @@ untrusted: cut, then escaped reversibly (`\\`, `\n`, `\r`, `\t`, `\u{hex}` for c
 characters). Slug and SHA are validated before they enter a path. Tests: `tests/github_reads.rs` with the fixtures in
 `tests/fixtures/github/` (see its README for which are recorded and which are hand-written).
 
+## Review state from comments (internal API, M3)
+
+`stw::review` (no command uses it yet; `stw status` keeps `review: null`, because that field is GitHub's `reviewDecision`,
+not the comment-based state, and its JSON contract is unchanged). Pure functions on the comments read by
+`github::reads`; nothing is posted and nothing is marked Ready.
+
+- Grammar (first line of the comment, nothing else on it): `Review: <CLEAR|FINDINGS> head=<40 lower-case hex> patch-id=<40 hex> pr=<n|none>` and
+  `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex> pr=<n|none>`. Fixed keys and order, single spaces, no Markdown, tab or CR.
+  `n` is a decimal number from 1 without leading zeros. `pr=none` is a local review (scope `Local`); the shared dotagents grammar
+  has no `none`. A line that reads like a review line but breaks the grammar is never accepted: it is the finding
+  `unparsed-review-variant`. Other text is not a review line.
+- `evaluate(scope, head, comments, trusted)` and `evaluate_read(.., &Read<Comment>, ..)`. Status: `clear`, `clear-carried`,
+  `findings`, `no-review`, `unverified-author`, `unknown`. Only comments of `trusted` logins (case-insensitive; empty list:
+  nobody) decide. Lines of other authors are findings (`untrusted-author`); if they are the only lines for the head the
+  state is `unverified-author`, never `clear`. Lines with another `pr=` are `wrong-pr`, lines about another head `stale-head`.
+- The latest line for the head by `(created_at, id)` wins: a later `FINDINGS` cancels a `CLEAR`, a later `CLEAR` replaces `FINDINGS`.
+  A carry-over to the head counts if the latest trusted line before it that names `from` is a `CLEAR` review or itself a valid
+  carry-over (same `pr=`, at most 16 links); otherwise it is the finding `invalid-carry-chain` and is skipped. The parser does
+  not recompute patch-ids; declared patch-ids and the chain are in the result for M4.
+- `unknown` (with `reasons`): the read is partial, denied, not found or failed; a body has a malformed escape; a trusted line has no
+  usable `created_at`; a trusted `unparsed-review-variant` is newer than the decision (or there is no decision). It is never read as
+  `no-review`.
+- Provenance per line: comment id, author, `created_at`, `updated_at`, `edited`. `ReviewState::to_json()` is the stable JSON
+  (version 1), not yet part of any command.
+- Tests: the dotagents corpus `tests/review_corpus/review-line-examples.md` (copy of `docs/review-line-examples.md`, dotagents
+  c7c343c), `tests/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/review_read.rs`.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test network -- --ignored   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 110 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 149 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 

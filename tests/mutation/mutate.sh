@@ -390,6 +390,144 @@ m Y6 'a registration with .. is treated by its path like any other (dot-dot behi
   '.any(|c| matches!(c, std::path::Component::ParentDir))' '.any(|_| false)' \
   tidy_apply a_dot_dot_behind_a_symlink_selects_nothing_by_its_lexical_path
 
+m VR1 'a hex field ignores its key (swapped order accepted)' src/review.rs \
+  '    tok.strip_prefix(key)?.strip_prefix('\''='\'')
+' '    tok.split_once('\''='\'').map(|x| x.1)
+' \
+  review_states 'run::variant_malformed_order.json'
+m VR2 'a 41-digit id is accepted' src/review.rs \
+  's.len() == 40 && s.bytes()' 's.len() >= 40 && s.bytes()' \
+  review_states 'run::variant_hex41_head.json'
+m VR3 'a 39-digit id is accepted' src/review.rs \
+  's.len() == 40 && s.bytes()' 's.len() >= 39 && s.bytes()' \
+  review_states 'run::variant_hex39_head.json'
+m VR4 'a 64-digit patch-id is accepted' src/review.rs \
+  's.len() == 40 && s.bytes()' 'matches!(s.len(), 40 | 64) && s.bytes()' \
+  review_states 'run::variant_hex64_patch_id.json'
+m VR5 'upper-case hex is accepted' src/review.rs \
+  'b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\''))
+}
+
+fn field' 'b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\'' | b'\''A'\''..=b'\''F'\''))
+}
+
+fn field' \
+  review_states 'run::variant_uppercase_head.json'
+m VR6 'a tab separates fields' src/review.rs \
+  'line.split('\'' '\'').collect()' 'line.split(['\'' '\'', '\''\t'\'']).collect()' \
+  review_states 'run::variant_tab_separator.json'
+m VR7 'a double space is skipped' src/review.rs \
+  'line.split('\'' '\'').collect()' 'line.split('\'' '\'').filter(|s| !s.is_empty()).collect()' \
+  review_states 'run::variant_double_space.json'
+m VR8 'a trailing CR is dropped (Go behaviour)' src/review.rs \
+  '    if !(truncated && !has_break) {
+        if let Some(l) = parse_strict(line) {' '    let line = line.strip_suffix('\''\r'\'').unwrap_or(line);
+    if !(truncated && !has_break) {
+        if let Some(l) = parse_strict(line) {' \
+  review_states 'run::variant_crlf.json'
+m VR9 'a cut first line may pass' src/review.rs \
+  'if !(truncated && !has_break) {' 'if true {' \
+  review_lines 'cr_tab_and_cut_lines_are_variants'
+m VR10 'pr=none is not recognised' src/review.rs \
+  'if v == "none" {' 'if v == "nonex" {' \
+  review_states 'run::pr_none_local_scope.json'
+m VR11 'a leading zero in pr is accepted' src/review.rs \
+  '&& !v.starts_with('\''0'\'');' '&& true;' \
+  review_lines 'numbers_are_canonical_decimals'
+m VR12 'any pr number matches the scope' src/review.rs \
+  '(Scope::Pr(n), PrRef::Number(m)) => n == m,' '(Scope::Pr(_), PrRef::Number(_)) => true,' \
+  review_states 'run::wrong_pr.json'
+m VR13 'a numbered line counts in a local scope' src/review.rs \
+  '(Scope::Local, PrRef::None) => true,' '(Scope::Local, _) => true,' \
+  review_states 'run::pr_number_in_local_scope.json'
+m VR14 'the first line is taken from the last line' src/review.rs \
+  '        Some((l, _)) => (l, true),' '        Some((_, l)) => (l, true),' \
+  review_states 'run::first_line_only.json'
+m VR15 'ordinary Review: text is a variant' src/review.rs \
+  '(prefixed && (keys || verdict_word))' '(prefixed)' \
+  review_states 'run::plain_comment_is_not_a_review.json'
+m VS1 'every author is trusted' src/review.rs \
+  'trusted.iter().any(|t| t.eq_ignore_ascii_case(author))' '!trusted.is_empty() || true' \
+  review_states 'run::default_trusts_nobody.json'
+m VS2 'logins compare case-sensitively' src/review.rs \
+  't.eq_ignore_ascii_case(author)' '*t == author' \
+  review_states 'run::author_login_case_insensitive.json'
+m VS3 'an untrusted line for another head makes the state unverified' src/review.rs \
+  'untrusted_relevant |= entry.names_head(head);' 'untrusted_relevant |= true;' \
+  review_states 'run::untrusted_line_for_other_head_is_not_unverified.json'
+m VS4 'the edited flag is never set' src/review.rs \
+  'edited: c.updated_at != c.created_at,' 'edited: false,' \
+  review_states 'run::edited_comment_is_flagged.json'
+m VS5 'comments are not ordered by time' src/review.rs \
+  '    strict.sort_by(|a, b| {' '    strict.sort_by(|_a, _b| std::cmp::Ordering::Equal);
+    let _ = (|a: &Entry, b: &Entry| {' \
+  review_states 'run::order_by_created_at_not_by_input.json'
+m VS6 'equal timestamps are not ordered by comment id' src/review.rs \
+  '(&a.ev.created_at, a.ev.comment_id).cmp(&(&b.ev.created_at, b.ev.comment_id))' '(&a.ev.created_at,).cmp(&(&b.ev.created_at,))' \
+  review_states 'run::same_second_ties_by_id.json'
+m VS7 'the first review wins instead of the latest' src/review.rs \
+  'Line::Review { head: h, .. } if h == head => decisive = Some((pos, None)),' 'Line::Review { head: h, .. } if h == head => { decisive.get_or_insert((pos, None)); }' \
+  review_states 'run::later_findings_cancels_clear.json'
+m VS8 'the first carry-over wins instead of the latest' src/review.rs \
+  'Some(root) => decisive = Some((pos, Some(root))),' 'Some(root) => { decisive.get_or_insert((pos, Some(root))); }' \
+  review_states 'run::later_valid_carry_replaces_findings.json'
+m VS9 'a review of another head counts for this head' src/review.rs \
+  '            Line::Review { head: h, .. } => h == head,' '            Line::Review { head: h, .. } => h == head || true,' \
+  review_states 'run::stale_head_is_not_a_review_of_the_head.json'
+m VC1 'a carry-over from a head to itself is valid' src/review.rs \
+  '        if from == to {' '        if false && from == to {' \
+  review_states 'run::carry_self_is_invalid.json'
+m VC2 'a carry-over from FINDINGS is valid' src/review.rs \
+  'return (verdict == Verdict::Clear).then(|| (q, vec![pos]));' 'return Some((q, vec![pos]));' \
+  review_states 'run::carry_from_findings_is_invalid.json'
+m VC3 'chains of carry-overs are not followed' src/review.rs \
+  'Line::Carried { to: t, .. } if t == from => {' 'Line::Carried { to: t, .. } if t == from && false => {' \
+  review_states 'run::carry_chain_of_two.json'
+m VC4 'chain length is unbounded' src/review.rs \
+  'return (links.len() <= MAX_LINKS).then_some((root, links));' 'return Some((root, links));' \
+  review_read 'chain_length_is_bounded'
+m VC5 'carry-over results are not memoised' src/review.rs \
+  '        self.memo[pos] = Some(r.clone());' '        let _ = &r;' \
+  review_read 'diamond_of_invalid_carry_overs_is_not_exponential'
+m VC6 'a carry-over before its source is valid' src/review.rs \
+  '        for q in (0..pos).rev() {' '        for q in (0..self.e.len()).rev().filter(|q| *q != pos) {' \
+  review_states 'run::carry_before_its_source_is_invalid.json'
+m VU1 'a variant of an untrusted author makes the state unknown' src/review.rs \
+  '                if is_trusted {
+                    variants.push' '                if true {
+                    variants.push' \
+  review_states 'run::variant_by_untrusted_does_not_make_unknown.json'
+m VU2 'an older variant counts as newer than the decision' src/review.rs \
+  '(stamp.clone(), *id) > *n' '(stamp.clone(), *id) < *n' \
+  review_states 'run::variant_older_than_clear_keeps_clear.json'
+m VU3 'a variant without any decision is ignored' src/review.rs \
+  '            None => true,
+            Some(n)' '            None => false,
+            Some(n)' \
+  review_states 'run::variant_malformed_order.json'
+m VU4 'a variant with an unusable timestamp is ordered' src/review.rs \
+  'Some(n) => !*ok || (stamp' 'Some(n) => (stamp' \
+  review_states 'run::variant_with_bad_timestamp_is_unknown.json'
+m VU5 'an incomplete read is not noted' src/review.rs \
+  'reasons.push(format!("comments incomplete: {why}"));' 'let _ = why;' \
+  review_read 'incomplete_read_is_unknown_even_with_a_clear'
+m VU6 'UNKNOWN is reported as no review' src/review.rs \
+  '        status: Status::Unknown,
+        decisive: None,' '        status: Status::NoReview,
+        decisive: None,' \
+  review_read 'unreadable_reads_are_unknown'
+m VU7 'a timestamp without T is accepted' src/review.rs \
+  '            10 => *c == b'\''T'\'',' '            10 => true,' \
+  review_states 'run::bad_timestamp_without_t.json'
+m VU8 'a timestamp with trailing text is accepted' src/review.rs \
+  '    b.len() == 20
+' '    b.len() >= 20
+' \
+  review_states 'run::bad_timestamp_trailing_digit.json'
+m VU9 'a tab escape is read as a line feed' src/review.rs \
+  '            '\''t'\'' => out.push('\''\t'\''),' '            '\''t'\'' => out.push('\''\n'\''),' \
+  review_lines 'unescape_reverses_the_reads_escaping'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
