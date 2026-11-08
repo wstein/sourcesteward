@@ -339,3 +339,22 @@ fn git_gets_a_null_stdin_even_when_stw_has_a_pipe() {
     assert_eq!(o.status.code(), Some(1));
     assert_eq!(std::fs::read_to_string(&log).unwrap().trim(), "NULL-STDIN");
 }
+
+#[test]
+fn a_local_config_key_that_runs_a_command_gives_unsupported_with_the_key_and_starts_no_fetch() {
+    let (fx, log, shim) = setup();
+    fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
+    append_config(&fx, "[core]\n\tsshCommand = touch /nonexistent/never\n");
+    let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+    let r = &v["repos"][0];
+    assert_eq!(o.status.code(), Some(1), "{v}");
+    assert_eq!(r["fetch"], "unsupported");
+    assert_eq!(r["git_error"], "refused-config");
+    assert_eq!(r["via"], "git");
+    assert!(
+        r["error"].as_str().unwrap().contains("core.sshcommand"),
+        "{r}"
+    );
+    let calls = std::fs::read_to_string(&log).unwrap();
+    assert_eq!(calls.trim(), "git --version", "{calls}");
+}

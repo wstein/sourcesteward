@@ -5,8 +5,11 @@ Implementation scope, feature decisions, dependencies, and acceptance gates: [Ru
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/no_binaries.rs` allows a process
-nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` over https
-start no program, there is no `gh`, no `ssh` of stw's own, and an empty `PATH` still serves every gix read. Later `push`,
+nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
+program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
+from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
+driver such as git-lfs can make it look modified), https fetch uses no credential helper, and an empty `PATH` still serves
+every gix read. There is no `gh` and no `ssh` of stw's own. Later `push`,
 `range-diff` and conflict resolution in a worktree use the same runner. Each step that ran through it carries `"via": "git"`
 in the JSON output; without a usable `git` (missing, older than the step needs, unknown option) the step reports
 `unsupported` (exit 1, typed). See `chartroom/notes/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
@@ -199,7 +202,7 @@ Only `github.com` remotes are used for REST; the fetch offers the token to `gith
 gix would start `ssh` or `git-upload-pack` itself for the first row; stw never hands such a URL to gix
 (`tests/remote_kinds.rs` puts fake `ssh`, `git-upload-pack` and `git` first on `PATH` and checks that only the runner
 starts `git`). `via`, and `git_error` (`not-found`, `version`, `unknown-option`, `timeout`, `output-limit`, `exit`,
-`spawn`) appear in the repository entry of `sync` and in `agent_rules` only when a fetch ran. Credentials in a remote URL
+`spawn`, `repository`, `refused-config`) appear in the repository entry of `sync` and in `agent_rules` only when a fetch ran. Credentials in a remote URL
 and GitHub tokens are never printed. `status`, `tidy plan` and dry-run `sync` never fetch. `git://` was not exercised
 against a server (UNKNOWN beyond the error path).
 
@@ -207,16 +210,22 @@ Runner rules (`src/git_runner.rs`):
 
 - Fixed argument vector per operation (`Op`), never composed from free text: `git -C <absolute repo> -c core.fsmonitor=false
   -c submodule.recurse=false -c fetch.recurseSubmodules=false -c gc.auto=0 -c maintenance.auto=false
-  -c protocol.ext.allow=never fetch --quiet --no-tags --no-recurse-submodules origin`. No shell. An empty, relative or
-  missing repository path is refused; the process working directory is never used.
+  -c protocol.ext.allow=never -c core.hooksPath=/dev/null fetch --quiet --no-tags --no-recurse-submodules
+  --upload-pack=git-upload-pack origin`. No shell, no repository hook, no repository-chosen upload-pack program. An empty,
+  relative, missing or non-repository path is refused; the process working directory is never used.
+- Repository config that runs commands is refused: `core.sshCommand`, `core.gitProxy`, `core.askPass`,
+  `core.alternateRefsCommand`, any `credential.*`, `url.*.insteadOf`/`pushInsteadOf`, `remote.origin.receivepack` and
+  `remote.origin.vcs` in the local or worktree config give `fetch: unsupported` with `git_error: refused-config` and the
+  key name; the same keys in the user's own config are allowed (a repository that sets `credential.helper` locally cannot
+  be fetched over ssh by stw; use git directly).
 - Environment allowlist: `PATH`, `HOME`, `USER`, `LOGNAME`, `XDG_CONFIG_HOME`, `TMPDIR`, `SSH_AUTH_SOCK`, `SSH_AGENT_PID`,
   `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`, `GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `DISPLAY`, the proxy
-  variables and `SSL_CERT_FILE`/`SSL_CERT_DIR`. Everything else is dropped: all other `GIT_*` (`GIT_DIR`, `GIT_WORK_TREE`,
+  variables and `SSL_CERT_FILE`/`SSL_CERT_DIR`; `PATH` is passed on with its absolute entries only (an empty or relative entry would let git run `ssh` from the worktree). Everything else is dropped: all other `GIT_*` (`GIT_DIR`, `GIT_WORK_TREE`,
   `GIT_INDEX_FILE`, `GIT_CONFIG_*`, `GIT_EXEC_PATH`, `GIT_TRACE*`, author and committer variables), `EDITOR`, `VISUAL`,
   `PAGER`, `LANG*`, `LC_*`, `GH_TOKEN`, `GITHUB_TOKEN`. Fixed: `LC_ALL=C`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`,
   `GIT_PAGER=cat`, `GIT_EDITOR=true`, `GIT_ALLOW_PROTOCOL=file:ssh:git:http:https`, `GIT_CEILING_DIRECTORIES` = parent of
   the repository. The user's Git configuration and identity stay in effect; stw sets no author or committer.
-- Time (120 s) and output (1 MiB per stream) are bounded; the child is killed on either limit. `git --version` is read once
+- Time (120 s) and output (1 MiB per stream) are bounded; git runs in its own process group, which is killed on either limit. ssh options are the user's: a host-key prompt (`BatchMode` is not forced) blocks until the time limit. `git --version` is read once
   per run; the fetch needs 2.30.0 (UNKNOWN below 2.47.3: only that version was run). A spawn that fails with ETXTBSY is retried.
 - Errors are typed (`GitError`) and redacted: URL user info, GitHub token shapes, `Authorization:` values and the values of
   `GH_TOKEN`/`GITHUB_TOKEN` never reach output.
