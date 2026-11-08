@@ -369,7 +369,8 @@ func (g *GitHubForge) branchProtection(ctx context.Context, branch string) (cont
 		Protected  *bool `json:"protected"`
 		Protection *struct {
 			Enabled *bool `json:"enabled"`
-			Checks  struct {
+			// A pointer: an absent or null object is unreadable, not "no required checks".
+			Checks *struct {
 				Contexts []string `json:"contexts"`
 				Checks   []struct {
 					Context string `json:"context"`
@@ -388,6 +389,9 @@ func (g *GitHubForge) branchProtection(ctx context.Context, branch string) (cont
 	}
 	if !*doc.Protection.Enabled {
 		return nil, "none"
+	}
+	if doc.Protection.Checks == nil {
+		return nil, "unreadable"
 	}
 	contexts = append(contexts, doc.Protection.Checks.Contexts...)
 	for _, c := range doc.Protection.Checks.Checks {
