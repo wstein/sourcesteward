@@ -53,7 +53,7 @@ func TestNativeChainIsLandableWithRecordedEvidenceAndRetargetsBottomFirst(t *tes
 		t.Fatalf("effect order %s", got)
 	}
 	rt := effectsOf(r, "retarget")
-	if strings.Join(rt[0].Argv, " ") != "gh pr edit 12 --base main" || strings.Join(rt[1].Argv, " ") != "gh pr edit 13 --base main" {
+	if strings.Join(rt[0].Argv, " ") != "gh pr edit 12 --repo o/r --base main" || strings.Join(rt[1].Argv, " ") != "gh pr edit 13 --repo o/r --base main" {
 		t.Fatalf("retarget argv %v %v", rt[0].Argv, rt[1].Argv)
 	}
 }
@@ -257,7 +257,7 @@ func TestRestoreArgvNamesTheOldBaseOfEachNativeItem(t *testing.T) {
 	for _, a := range got {
 		lines = append(lines, strings.Join(a, " "))
 	}
-	if strings.Join(lines, "|") != "gh pr edit 12 --base feat-1|gh pr edit 13 --base feat-2" {
+	if strings.Join(lines, "|") != "gh pr edit 12 --repo o/r --base feat-1|gh pr edit 13 --repo o/r --base feat-2" {
 		t.Fatalf("%v", lines)
 	}
 	if n := len(RestoreArgv(happy().plan())); n != 0 {
@@ -289,5 +289,29 @@ func TestShapeSetNativeFlagInTheAllowlistFile(t *testing.T) {
 	unreadable.Readable = false
 	if set.HasNative(unreadable) {
 		t.Fatal("an unreadable shape never matches")
+	}
+}
+
+// The plan after the retarget may be clean while the head of one pull request differs from the one
+// the approval bound; Reverify compares the heads itself and does not rely on the plan's reasons.
+func TestReverifyComparesEachHeadDirectly(t *testing.T) {
+	before := nativeHappy().plan()
+	after := before
+	after.Chain = append([]ChainEntry(nil), before.Chain...)
+	after.Reasons = nil
+	for i := range after.Chain {
+		after.Chain[i].BaseRef = "main"
+	}
+	after.Chain[1].Head = sha('9')
+	got := Reverify(before, after)
+	if len(got) != 1 || got[0].Code != ReasonHeadChanged || got[0].Number != 12 {
+		t.Fatalf("%+v", got)
+	}
+}
+
+func TestRetargetArgvNamesTheRepository(t *testing.T) {
+	got := strings.Join(RetargetArgv("o/r", 7, "main"), " ")
+	if got != "gh pr edit 7 --repo o/r --base main" {
+		t.Fatal(got)
 	}
 }
