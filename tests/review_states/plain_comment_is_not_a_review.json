@@ -1,0 +1,32 @@
+{
+ "scope": 15,
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [
+  {
+   "id": 1,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:01Z",
+   "body": "LGTM, merge it"
+  },
+  {
+   "id": 2,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:02Z",
+   "body": "Review: please look at the tests"
+  },
+  {
+   "id": 3,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:03Z",
+   "body": "Reviewed the diff, fine"
+  }
+ ],
+ "expect": {
+  "status": "no-review",
+  "decisive": null,
+  "findings": []
+ }
+}

@@ -1,0 +1,30 @@
+{
+ "scope": "local",
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [
+  {
+   "id": 1,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:01Z",
+   "body": "Review: CLEAR head={B} patch-id={P} pr=none"
+  },
+  {
+   "id": 2,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:02Z",
+   "body": "Carried-over: from={B} to={A} patch-id={P} pr=none"
+  }
+ ],
+ "expect": {
+  "status": "clear-carried",
+  "decisive": 2,
+  "findings": [],
+  "chain": [
+   1,
+   2
+  ]
+ }
+}

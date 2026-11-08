@@ -45,3 +45,7 @@ datatest-stable = "=0.3.3"
 [[test]]
 name = "slug_cases"
 harness = false
+
+[[test]]
+name = "review_states"
+harness = false

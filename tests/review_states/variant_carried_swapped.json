@@ -1,0 +1,23 @@
+{
+ "scope": 15,
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [
+  {
+   "id": 1,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:01Z",
+   "body": "Carried-over: to={A} from={B} patch-id={P} pr=15"
+  }
+ ],
+ "expect": {
+  "status": "unknown",
+  "decisive": null,
+  "findings": [
+   "unparsed-review-variant:1"
+  ],
+  "unknown_reason_contains": "unparsed review line"
+ }
+}

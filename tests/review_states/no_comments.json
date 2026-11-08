@@ -1,0 +1,13 @@
+{
+ "scope": 15,
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [],
+ "expect": {
+  "status": "no-review",
+  "decisive": null,
+  "findings": []
+ }
+}

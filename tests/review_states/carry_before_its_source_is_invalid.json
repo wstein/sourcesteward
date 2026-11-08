@@ -1,0 +1,29 @@
+{
+ "scope": 15,
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [
+  {
+   "id": 1,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:01Z",
+   "body": "Carried-over: from={B} to={A} patch-id={P} pr=15"
+  },
+  {
+   "id": 2,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:02Z",
+   "body": "Review: CLEAR head={B} patch-id={P} pr=15"
+  }
+ ],
+ "expect": {
+  "status": "no-review",
+  "decisive": null,
+  "findings": [
+   "invalid-carry-chain:1",
+   "stale-head:2"
+  ]
+ }
+}
