@@ -166,3 +166,86 @@ fn repositories_are_opened_only_through_repo_open() {
         }
     }
 }
+
+// ---- fast-forward and filter attributes ---------------------------------------------------------
+
+/// main at c0, origin/main at c1 (changes `changed`); `.gitattributes` sends `*.bin` through filter `lfs`,
+/// whose smudge program is configured when `driver` is set.
+fn ff_fixture(changed: &str, driver: bool) -> (Fx, tempfile::TempDir, gix::ObjectId) {
+    let fx = Fx::new();
+    let base = [
+        (".gitattributes", Some("*.bin filter=lfs\n")),
+        ("data.bin", Some("pointer-v1\n")),
+        ("other.txt", Some("o1\n")),
+    ];
+    let c0 = fx.commit(None, &base, "c0");
+    let c1 = fx.commit(Some(c0), &[(changed, Some("v2\n"))], "c1");
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.remote("main", c1);
+    fx.origin_head("main");
+    fx.track("main");
+    fx.checkout_head();
+    let markers = tempfile::tempdir().unwrap();
+    if driver {
+        use std::io::Write;
+        std::fs::OpenOptions::new()
+            .append(true)
+            .open(fx.path.join(".git/config"))
+            .unwrap()
+            .write_all(
+                format!(
+                    "[filter \"lfs\"]\n\tsmudge = \"touch {}; echo SMUDGED\"\n\tclean = cat\n",
+                    markers.path().join("smudge").display()
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+    }
+    (fx, markers, c0)
+}
+
+fn sync_apply(fx: &Fx) -> serde_json::Value {
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(["sync", "--offline", "--apply", "--json", "--root"])
+        .arg(&fx.path)
+        .output()
+        .unwrap();
+    serde_json::from_slice(&o.stdout).unwrap()
+}
+
+#[test]
+fn fast_forward_is_refused_before_any_write_when_a_changed_path_has_a_filter_attribute() {
+    for driver in [true, false] {
+        let (fx, mdir, c0) = ff_fixture("data.bin", driver);
+        let v = sync_apply(&fx);
+        let r = &v["repos"][0];
+        assert_eq!(r["result"], "error", "driver={driver}: {r}");
+        assert!(
+            r["error"].as_str().unwrap().contains("data.bin")
+                && r["error"].as_str().unwrap().contains("filter"),
+            "{r}"
+        );
+        assert_eq!(fx.tip("main"), c0, "the ref must not move");
+        assert_eq!(
+            fx.read("data.bin").as_deref(),
+            Some("pointer-v1\n"),
+            "nothing was written"
+        );
+        assert_eq!(markers(mdir.path()), Vec::<String>::new());
+    }
+}
+
+#[test]
+fn fast_forward_of_paths_without_a_filter_attribute_still_works_next_to_a_filter_driver() {
+    let (fx, mdir, _c0) = ff_fixture("other.txt", true);
+    let v = sync_apply(&fx);
+    let r = &v["repos"][0];
+    assert_eq!(r["result"], "fast-forwarded", "{r}");
+    assert_eq!(fx.read("other.txt").as_deref(), Some("v2\n"));
+    assert_eq!(markers(mdir.path()), Vec::<String>::new());
+}

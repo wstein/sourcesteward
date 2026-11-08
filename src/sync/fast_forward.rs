@@ -82,6 +82,41 @@ struct Change {
     new: Option<(gix::objs::tree::EntryMode, ObjectId)>,
 }
 
+/// Changed paths (present in the new tree) for which the attributes of the new tree set `filter`.
+fn filter_attribute_paths(
+    repo: &gix::Repository,
+    new_tree: &gix::Tree<'_>,
+    changes: &[Change],
+) -> Result<Vec<String>, FfError> {
+    use gix::attrs::StateRef;
+    let index = repo.index_from_tree(&new_tree.id)?;
+    let mut stack = repo
+        .attributes_only(
+            &index,
+            gix::worktree::stack::state::attributes::Source::IdMapping,
+        )
+        .map_err(|e| FfError::Other(format!("attributes: {e}")))?;
+    let mut out = stack.selected_attribute_matches(["filter"]);
+    let mut found = vec![];
+    for c in changes {
+        let Some((mode, _)) = &c.new else { continue };
+        if mode.is_commit() {
+            continue;
+        }
+        let platform = stack
+            .at_entry(c.path.as_bstr(), Some(gix::index::entry::Mode::FILE))
+            .map_err(|e| FfError::Other(format!("attributes: {e}")))?;
+        platform.matching_attributes(&mut out);
+        let filtered = out
+            .iter_selected()
+            .any(|m| matches!(m.assignment.state, StateRef::Set | StateRef::Value(_)));
+        if filtered {
+            found.push(c.path.to_str_lossy().into_owned());
+        }
+    }
+    Ok(found)
+}
+
 fn rel_path(b: &BStr) -> Result<std::path::PathBuf, FfError> {
     Ok(gix::path::from_bstr(b)?.into_owned())
 }
@@ -276,6 +311,17 @@ pub fn fast_forward(
     }
     if !in_the_way.is_empty() {
         return Err(FfError::UntrackedInTheWay(in_the_way));
+    }
+
+    // 3b. a changed path with a `filter=` attribute: stw runs no filter driver (repo::open drops them), so the
+    //     checkout would write the raw blob (git-lfs: a pointer file instead of the content). Refuse first.
+    let filtered = filter_attribute_paths(repo, &new_tree, &changes)?;
+    if !filtered.is_empty() {
+        return Err(FfError::Unsupported(format!(
+            "{} has a filter attribute (git-lfs or similar); stw runs no filter driver and would write the \
+             unconverted content",
+            filtered.join(", ")
+        )));
     }
 
     // 4. the index lock, held until the index is committed: a held lock is refused before any write
