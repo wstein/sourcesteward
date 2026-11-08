@@ -118,3 +118,51 @@ fn sync_dry_run_and_offline_start_no_program_named_by_the_repository() {
         "sync started a program"
     );
 }
+
+/// Every repository the commands read is opened by `repo::open` (which drops filter drivers). A direct
+/// `gix::open`, `gix::open_opts` or `gix::discover` elsewhere would bypass that.
+#[test]
+fn repositories_are_opened_only_through_repo_open() {
+    fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            if p.is_dir() {
+                walk(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+    let mut files = vec![];
+    walk(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    for f in files {
+        let rel = f
+            .strip_prefix(env!("CARGO_MANIFEST_DIR"))
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+        // the repo module itself, and the runner, which reads only the repository's own config
+        if rel == "src/repo/mod.rs" || rel == "src/git_runner.rs" {
+            continue;
+        }
+        let text = std::fs::read_to_string(&f).unwrap();
+        for (n, line) in text.lines().enumerate() {
+            let code = line.split("//").next().unwrap();
+            for bad in [
+                "gix::open(",
+                "gix::open_opts(",
+                "gix::discover(",
+                "gix::ThreadSafeRepository::open",
+            ] {
+                assert!(
+                    !code.contains(bad),
+                    "{rel}:{}: {bad} bypasses repo::open",
+                    n + 1
+                );
+            }
+        }
+    }
+}

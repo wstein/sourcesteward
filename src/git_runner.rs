@@ -616,7 +616,9 @@ fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
 /// Read the repository's config with gix and refuse when a local or worktree section sets such a key. A
 /// directory that is not a usable repository is refused too (fail closed).
 fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError> {
-    let r = gix::open(repo).map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
+    // isolated: only the repository's own files are read, never the user's or system config
+    let r = gix::open_opts(repo, gix::open::Options::isolated())
+        .map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
     let snapshot = r.config_snapshot();
     for section in snapshot.plumbing().sections() {
         if !matches!(
