@@ -413,6 +413,20 @@ impl Runner {
                     .find(|(n, _)| n == OsStr::new(k))
                     .map(|(n, v)| (n.clone(), v.clone()))
             })
+            .filter_map(|(n, v)| {
+                if n != OsStr::new("PATH") {
+                    return Some((n, v));
+                }
+                // git resolves `ssh` and helpers through PATH with the repository as working directory: an
+                // empty or relative entry would pick a program out of the worktree
+                let abs: Vec<PathBuf> = std::env::split_paths(&v)
+                    .filter(|d| d.is_absolute())
+                    .collect();
+                std::env::join_paths(abs)
+                    .ok()
+                    .filter(|p| !p.is_empty())
+                    .map(|p| (n, p))
+            })
             .collect();
         let mut set = |k: &str, v: OsString| out.push((OsString::from(k), v));
         set("LC_ALL", "C".into());

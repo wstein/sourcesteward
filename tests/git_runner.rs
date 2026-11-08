@@ -927,3 +927,72 @@ fn a_directory_that_is_not_a_repository_is_refused_before_git_starts() {
     assert!(matches!(e, GitError::Repo(_)), "{e:?}");
     assert!(!std::fs::read_to_string(&log).unwrap().contains("ARGV"));
 }
+
+// ---- PATH of the child --------------------------------------------------------------------------
+
+#[test]
+fn the_child_gets_only_absolute_path_entries() {
+    let t = tmp();
+    let r = Runner::from_env(osv(&[("PATH", ":.:bin:/usr/bin::./x:/bin:")]));
+    let env = r.child_env(t.path()).unwrap();
+    let path = env
+        .iter()
+        .find(|(k, _)| k == "PATH")
+        .unwrap()
+        .1
+        .to_str()
+        .unwrap()
+        .to_string();
+    assert_eq!(path, "/usr/bin:/bin");
+    // nothing absolute left: no PATH variable rather than an empty one (an empty one means "current directory")
+    let r = Runner::from_env(osv(&[("PATH", ":.:bin")]));
+    assert!(r
+        .child_env(t.path())
+        .unwrap()
+        .iter()
+        .all(|(k, _)| k != "PATH"));
+}
+
+#[test]
+fn git_does_not_find_ssh_in_the_worktree_through_empty_or_dot_path_entries() {
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let t = tmp();
+    let (_up, clone) = fetch_fixture(t.path(), |_| "ssh://fake-host/up".to_string());
+    let marker = t.path().join("worktree-ssh-ran");
+    script(
+        &clone,
+        "ssh",
+        &format!("touch '{}'\nexit 1", marker.display()),
+    );
+    let git_dir = {
+        let out = std::process::Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap();
+        PathBuf::from(String::from_utf8(out.stdout).unwrap().trim())
+            .parent()
+            .unwrap()
+            .to_path_buf()
+    };
+    for path in [
+        format!(":.:{}", git_dir.display()),
+        format!(".:{}:", git_dir.display()),
+    ] {
+        let r = Runner::from_env(osv(&[
+            ("PATH", path.as_str()),
+            ("HOME", t.path().to_str().unwrap()),
+        ]));
+        let e = r.run(&clone, Op::FetchOrigin);
+        assert!(
+            e.is_err(),
+            "no ssh exists on the child's PATH, the fetch must fail"
+        );
+        assert!(
+            !marker.exists(),
+            "ssh from the worktree ran (PATH {path:?})"
+        );
+    }
+}
