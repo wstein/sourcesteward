@@ -415,6 +415,8 @@ struct Chains<'a> {
     memo: Vec<Option<Result<Root, &'static str>>>,
     /// Position of the last `FINDINGS` review per head (any pr).
     last_findings: &'a std::collections::HashMap<String, usize>,
+    /// Positions of the lines that name a head (a review of it or a carry-over to it), ascending.
+    names: &'a std::collections::HashMap<String, Vec<usize>>,
 }
 
 const NO_SOURCE: &str = "from is not a CLEAR or a valid carry-over before this comment";
@@ -425,6 +427,16 @@ const PATCH_ID_MISMATCH: &str =
     "patch-id-mismatch: the declared patch-id differs from the patch-id of the CLEAR at the root";
 
 impl Chains<'_> {
+    /// All results, in position order, so that `compute` only ever finds the results of earlier positions
+    /// in the memo (no recursion, however long the thread).
+    fn fill(&mut self) {
+        for pos in 0..self.e.len() {
+            if !self.e[pos].foreign && matches!(self.e[pos].ev.line, Line::Carried { .. }) {
+                self.valid(pos).ok();
+            }
+        }
+    }
+
     /// Valid chain for the carry-over at `pos`: the latest line before it that names `from` must be a CLEAR
     /// review of it or a valid carry-over to it, and every link declares the patch-id of the root CLEAR.
     fn valid(&mut self, pos: usize) -> Result<Root, &'static str> {
@@ -459,16 +471,15 @@ impl Chains<'_> {
         if from == to {
             return Err(NO_SOURCE);
         }
-        for q in (0..pos).rev() {
+        let names = self.names;
+        let before = names.get(&from).map_or(&[][..], |v| &v[..]);
+        for &q in before.iter().rev().filter(|&&q| q < pos) {
             if self.e[q].foreign {
-                if self.e[q].names_head(&from) {
-                    return Err(NO_SOURCE);
-                }
-                continue;
+                return Err(NO_SOURCE);
             }
-            match self.e[q].ev.line.clone() {
-                Line::Review { verdict, head, .. } if head == from => {
-                    if verdict != Verdict::Clear {
+            match &self.e[q].ev.line {
+                Line::Review { verdict, head, .. } if *head == from => {
+                    if *verdict != Verdict::Clear {
                         return Err(NO_SOURCE);
                     }
                     if self.patch_id(q) != patch_id {
@@ -484,7 +495,7 @@ impl Chains<'_> {
                         members: vec![first, (to, pos)],
                     });
                 }
-                Line::Carried { to: t, .. } if t == from => {
+                Line::Carried { to: t, .. } if *t == from => {
                     if let Ok(mut src) = self.valid(q) {
                         if self.patch_id(src.root) != patch_id {
                             return Err(PATCH_ID_MISMATCH);
@@ -614,12 +625,22 @@ pub fn evaluate(
             last_findings.insert(head.clone(), pos);
         }
     }
+    let mut names: std::collections::HashMap<String, Vec<usize>> = std::collections::HashMap::new();
+    for (pos, e) in strict.iter().enumerate() {
+        let h = match &e.ev.line {
+            Line::Review { head, .. } => head,
+            Line::Carried { to, .. } => to,
+        };
+        names.entry(h.clone()).or_default().push(pos);
+    }
     let mut chains = Chains {
+        names: &names,
         last_findings: &last_findings,
         memo: vec![None; strict.len()],
         e: &strict,
     };
     let mut decisive: Option<(usize, Option<Root>)> = None;
+    chains.fill();
     // Positions of trusted lines for another pr that name the head.
     let mut foreign_head: Vec<usize> = Vec::new();
     for (pos, entry) in strict.iter().enumerate() {

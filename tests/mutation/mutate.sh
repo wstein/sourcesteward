@@ -481,7 +481,7 @@ m VC2 'a carry-over from FINDINGS is valid' src/review.rs \
   'return (verdict == Verdict::Clear).then(|| (q, vec![pos]));' 'return Some((q, vec![pos]));' \
   review_states 'run::carry_from_findings_is_invalid.json'
 m VC3 'chains of carry-overs are not followed' src/review.rs \
-  'Line::Carried { to: t, .. } if t == from => {' 'Line::Carried { to: t, .. } if t == from && false => {' \
+  'Line::Carried { to: t, .. } if *t == from => {' 'Line::Carried { to: t, .. } if *t == from && false => {' \
   review_states 'run::carry_chain_of_two.json'
 m VC4 'chain length is unbounded' src/review.rs \
   'return (links.len() <= MAX_LINKS).then_some((root, links));' 'return Some((root, links));' \
@@ -489,9 +489,6 @@ m VC4 'chain length is unbounded' src/review.rs \
 m VC5 'carry-over results are not memoised' src/review.rs \
   '        self.memo[pos] = Some(r.clone());' '        let _ = &r;' \
   review_read 'diamond_of_invalid_carry_overs_is_not_exponential'
-m VC6 'a carry-over before its source is valid' src/review.rs \
-  '        for q in (0..pos).rev() {' '        for q in (0..self.e.len()).rev().filter(|q| *q != pos) {' \
-  review_states 'run::carry_before_its_source_is_invalid.json'
 m VU1 'a variant of an untrusted author makes the state unknown' src/review.rs \
   '                if is_trusted {
                     variants.push' '                if true {
@@ -543,15 +540,6 @@ m VW4 'an untrusted line for another pr is evidence' src/review.rs \
                     }
 ' '' \
   review_states 'run::wrong_pr_untrusted_is_ignored.json'
-m VW5 'a line for another pr naming the source does not break the chain' src/review.rs \
-  '                if self.e[q].names_head(&from) {
-                    return None;
-                }
-' '                if self.e[q].names_head(&from) {
-                    continue;
-                }
-' \
-  review_states 'run::wrong_pr_findings_on_chain_member_breaks_chain.json'
 m VW6 'a line for another pr naming another head makes the state unknown' src/review.rs \
   '        if entry.foreign {
             if entry.names_head(head) {' '        if entry.foreign {
@@ -579,6 +567,17 @@ m VC12 'FINDINGS before the CLEAR also spoils the chain' src/review.rs \
 m VC13 'FINDINGS only counts for the first chain head' src/review.rs \
   '            .is_some_and(|&f| f > member.1)' '            .is_some_and(|&f| f > member.1 && member.1 == 0)' \
   review_states 'run::findings_on_intermediate_member_after_carry_invalidates.json'
+
+m VC14 'a carry-over may use a line posted after it' src/review.rs \
+  'for &q in before.iter().rev().filter(|&&q| q < pos) {' 'for &q in before.iter().rev().filter(|&&q| q != pos) {' \
+  review_states 'run::carry_before_its_source_is_invalid.json'
+m VC15 'only the latest line that names the source decides' src/review.rs \
+  '            if self.e[q].foreign {
+                return Err(NO_SOURCE);
+            }' '            if self.e[q].foreign {
+                continue;
+            }' \
+  review_states 'run::wrong_pr_carry_to_source_breaks_chain.json'
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

@@ -129,12 +129,21 @@ fn json_carries_provenance_and_status() {
     assert_eq!(j["pr"], "15");
 }
 
+fn stamp(id: u64) -> String {
+    format!(
+        "2026-01-01T{:02}:{:02}:{:02}Z",
+        id / 3600,
+        id / 60 % 60,
+        id % 60
+    )
+}
+
 fn rc(id: u64, body: String) -> ReviewComment {
     ReviewComment {
         id,
         author: "owner".into(),
-        created_at: format!("2026-01-01T00:{:02}:{:02}Z", id / 60, id % 60),
-        updated_at: format!("2026-01-01T00:{:02}:{:02}Z", id / 60, id % 60),
+        created_at: stamp(id),
+        updated_at: stamp(id),
         body,
         body_truncated: false,
     }
@@ -219,4 +228,17 @@ fn diamond_of_invalid_carry_overs_is_not_exponential() {
         "{:?}",
         t.elapsed()
     );
+}
+
+#[test]
+fn thousands_of_carry_overs_do_not_overflow_the_stack() {
+    for n in [5000, 50000] {
+        let v = chain_of(n);
+        let st = evaluate(Scope::Pr(15), &head(n), &v, &["owner"]);
+        assert_eq!(st.status, Status::NoReview, "{n}");
+        assert!(st
+            .findings
+            .iter()
+            .any(|f| f.kind.label() == "invalid-carry-chain"));
+    }
 }
