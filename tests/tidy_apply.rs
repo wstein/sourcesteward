@@ -1143,3 +1143,71 @@ fn from_a_linked_root_the_main_checkouts_branch_is_kept() {
         "the main checkout's branch must survive apply"
     );
 }
+
+/// Git's patch ID ignores whitespace, also in file names: `a b.txt` and `ab.txt` get equal IDs. The
+/// equal-patches proof additionally needs identical changed paths, else the branch would be deleted.
+#[test]
+fn a_branch_changing_a_path_that_differs_only_by_spaces_is_kept() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("base", Some("x\n"))], "c0");
+    let on_main = fx.commit(Some(c0), &[("ab.txt", Some("new\n"))], "main");
+    let feature = fx.commit(Some(c0), &[("a b.txt", Some("new\n"))], "feature");
+    fx.remote("main", on_main);
+    fx.origin_head("main");
+    fx.branch("main", on_main);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("feature", feature);
+    let now = fx
+        .repo()
+        .find_commit(feature)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W {
+        fx,
+        now,
+        c0,
+        u: feature,
+    };
+    let p = plan(&w);
+    let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
+    assert_eq!(bp.decision, "keep", "[{}] {}", bp.proof, bp.detail);
+    let dir = scratch();
+    apply(&w, dir.path());
+    assert_eq!(w.fx.tip("feature"), feature);
+}
+
+/// The same change on the same paths on a different base is still recognised (the proof is not weakened).
+#[test]
+fn a_branch_with_the_same_change_on_the_same_path_is_still_deleted() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("base", Some("x\n"))], "c0");
+    let on_main = fx.commit(Some(c0), &[("a b.txt", Some("new\n"))], "main");
+    let feature = fx.commit(Some(c0), &[("a b.txt", Some("new\n"))], "feature");
+    fx.remote("main", on_main);
+    fx.origin_head("main");
+    fx.branch("main", on_main);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("feature", feature);
+    let now = fx
+        .repo()
+        .find_commit(feature)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W {
+        fx,
+        now,
+        c0,
+        u: feature,
+    };
+    let p = plan(&w);
+    let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
+    assert_eq!((bp.decision, bp.proof), ("delete", "equal-patches"));
+}

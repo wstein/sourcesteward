@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use crate::error::{Error, Result};
 use crate::github::{AnyPr, Client, GithubState};
 use crate::output::*;
-use crate::patch_id::commit_patch_id;
+use crate::patch_id::commit_patch_key;
 use crate::repo::worktrees::{self, StaleRegistration};
 use crate::repo::{self, RepoRef};
 
@@ -93,32 +93,36 @@ pub fn is_backup(branch: &str) -> bool {
         .any(|p| branch.starts_with(p))
 }
 
+/// (patch ID, digest of the changed paths): equal patches need both equal.
+pub type PatchKey = (ObjectId, ObjectId);
+
 /// Patch-ID cache of one repository: commit -> patch ID (None for merges).
 #[derive(Default)]
 pub struct PatchCache {
-    map: HashMap<ObjectId, Option<ObjectId>>,
+    map: HashMap<ObjectId, Option<PatchKey>>,
 }
 
 impl PatchCache {
-    pub fn get(&mut self, repo: &gix::Repository, c: ObjectId) -> Result<Option<ObjectId>> {
+    pub fn get(&mut self, repo: &gix::Repository, c: ObjectId) -> Result<Option<PatchKey>> {
         if let Some(v) = self.map.get(&c) {
             return Ok(*v);
         }
-        let v = commit_patch_id(repo, c)?;
+        let v = commit_patch_key(repo, c)?;
         self.map.insert(c, v);
         Ok(v)
     }
 }
 
 /// `git cherry <base> <tip>` has no `+` line: every non-merge commit of `base..tip` has an equal
-/// patch among the non-merge commits of `tip..base`. Needs at least one such commit.
+/// patch among the non-merge commits of `tip..base`: equal patch ID and identical changed paths (git's patch
+/// ID ignores white space in file names). Needs at least one such commit.
 pub fn all_patches_in_base(
     repo: &gix::Repository,
     cache: &mut PatchCache,
     base: ObjectId,
     tip: ObjectId,
 ) -> Result<bool> {
-    let mut needed: HashSet<ObjectId> = HashSet::new();
+    let mut needed: HashSet<PatchKey> = HashSet::new();
     for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
         let info = info?;
         if let Some(p) = cache.get(repo, info.id)? {

@@ -155,6 +155,16 @@ fn kind_of(m: gix::objs::tree::EntryMode) -> Option<EntryKind> {
 /// Patch ID of `commit` against its first parent. `None` for merge commits and for commits that
 /// change nothing (git prints no ID for those either).
 pub fn commit_patch_id(repo: &gix::Repository, commit: ObjectId) -> Result<Option<ObjectId>> {
+    Ok(commit_patch_key(repo, commit)?.map(|(id, _)| id))
+}
+
+/// Patch ID of `commit` and a digest of its changed paths (raw bytes, sorted). Git's patch ID ignores all
+/// white space, also inside file names, so `a b.txt` and `ab.txt` get the same ID; whoever takes equal IDs as
+/// proof of equal patches has to compare the path digest as well.
+pub fn commit_patch_key(
+    repo: &gix::Repository,
+    commit: ObjectId,
+) -> Result<Option<(ObjectId, ObjectId)>> {
     let c = repo.find_commit(commit)?;
     let parents: Vec<ObjectId> = c.parent_ids().map(|p| p.detach()).collect();
     if parents.len() > 1 {
@@ -168,7 +178,7 @@ pub fn commit_patch_id(repo: &gix::Repository, commit: ObjectId) -> Result<Optio
     if old_tree.id == new_tree.id {
         return Ok(None); // empty commit: no patch, nothing to compare
     }
-    tree_diff_patch_id(repo, &old_tree, &new_tree).map(Some)
+    tree_diff_inner(repo, &old_tree, &new_tree, false).map(|(id, _, paths)| Some((id, paths)))
 }
 
 /// Patch ID of the difference between two trees.
@@ -177,7 +187,7 @@ pub fn tree_diff_patch_id(
     old: &gix::Tree<'_>,
     new: &gix::Tree<'_>,
 ) -> Result<ObjectId> {
-    tree_diff_inner(repo, old, new, false).map(|(id, _)| id)
+    tree_diff_inner(repo, old, new, false).map(|(id, _, _)| id)
 }
 
 /// The normalized lines that go into the hash (debug aid for the oracle comparison).
@@ -188,7 +198,7 @@ pub fn commit_patch_text(repo: &gix::Repository, commit: ObjectId) -> Result<Str
         Some(p) => repo.find_commit(p.detach())?.tree()?,
         None => repo.empty_tree(),
     };
-    let (_, log) = tree_diff_inner(repo, &old_tree, &new_tree, true)?;
+    let (_, log, _) = tree_diff_inner(repo, &old_tree, &new_tree, true)?;
     Ok(String::from_utf8_lossy(&log).into_owned())
 }
 
@@ -197,7 +207,7 @@ fn tree_diff_inner(
     old: &gix::Tree<'_>,
     new: &gix::Tree<'_>,
     log: bool,
-) -> Result<(ObjectId, Vec<u8>)> {
+) -> Result<(ObjectId, Vec<u8>, ObjectId)> {
     use gix::diff::tree::recorder::Change;
     let mut rec = gix::diff::tree::Recorder::default();
     let mut state = gix::diff::tree::State::default();
@@ -251,6 +261,12 @@ fn tree_diff_inner(
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
+    let mut paths = gix::hash::hasher(gix::hash::Kind::Sha1);
+    for f in &files {
+        paths.update(&(f.path.len() as u64).to_be_bytes());
+        paths.update(&f.path);
+    }
+    let paths = paths.try_finalize()?;
     let mut h = Hasher::new();
     if log {
         h.log = Some(Vec::new());
@@ -260,7 +276,7 @@ fn tree_diff_inner(
         h.finish_file()?;
     }
     let log = h.log.take().unwrap_or_default();
-    Ok((h.finish(), log))
+    Ok((h.finish(), log, paths))
 }
 
 /// `prefix` + `path` as git writes it in a diff header with `core.quotePath=true`: when the name contains
