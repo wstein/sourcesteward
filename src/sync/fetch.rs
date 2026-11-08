@@ -217,10 +217,14 @@ fn run_gix(repo: &gix::Repository, gh: Option<&Client>) -> Result<bool> {
     };
     let remote = remote.with_fetch_tags(gix::remote::fetch::Tags::None);
     let mut conn = remote.connect(Direction::Fetch)?;
-    if let Some(c) = gh {
-        let (user, pass) = c.basic_auth();
-        conn = conn.with_credentials(move |action| offer_credentials(action, &user, &pass));
-    }
+    // Always replace gix's own credential cascade: without a token it would run credential helpers named
+    // in the repository's config (`credential.helper = !cmd`) on an http(s) 401. Our closure answers only
+    // with the GitHub token for github.com and with nothing otherwise.
+    let creds = gh.map(Client::basic_auth);
+    conn = conn.with_credentials(move |action| match &creds {
+        Some((user, pass)) => offer_credentials(action, user, pass),
+        None => Ok(None),
+    });
     let prep = conn.prepare_fetch(gix::progress::Discard, Default::default())?;
     prep.receive(gix::progress::Discard, &AtomicBool::new(false))?;
     Ok(true)

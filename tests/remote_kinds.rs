@@ -263,3 +263,48 @@ fn dry_run_and_offline_never_look_at_the_remote_kind() {
     }
     assert!(!log.exists());
 }
+
+/// Append a config snippet to the fixture repository's own config.
+fn append_config(fx: &Fx, text: &str) {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(fx.path.join(".git/config"))
+        .unwrap();
+    write!(f, "{text}").unwrap();
+}
+
+#[test]
+fn a_repo_local_credential_helper_never_runs_when_there_is_no_token() {
+    let (fx, _log, shim) = setup();
+    let marker = shim.path().join("helper-ran");
+    let api = FakeRoutes::start(|_, _| {
+        (
+            401,
+            vec![(
+                "WWW-Authenticate".to_string(),
+                "Basic realm=\"x\"".to_string(),
+            )],
+            String::new(),
+        )
+    });
+    fx.set_origin_url(&format!("{}/x/y.git", api.url));
+    append_config(
+        &fx,
+        &format!(
+            "[credential]\n\thelper = \"!f() {{ touch {}; }}; f\"\n",
+            marker.display()
+        ),
+    );
+    // `sh` must be findable, or a helper could not start and the test would prove nothing
+    let path = format!("{}:/usr/bin:/bin", shim.path().display());
+    let (o, v) = run_stw(&fx, std::path::Path::new(&path), &["sync", "--apply"]);
+    let r = &v["repos"][0];
+    assert_eq!(o.status.code(), Some(1), "{v}");
+    assert!(!api.hits().is_empty(), "the 401 server was never asked");
+    assert_eq!(r["via"], "gix");
+    assert!(
+        !marker.exists(),
+        "the repository-local credential helper ran"
+    );
+}
