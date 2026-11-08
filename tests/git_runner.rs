@@ -1061,6 +1061,7 @@ fn a_grandchild_holding_the_pipe_is_killed_with_the_group_on_timeout_and_on_outp
             &rest.replace("PIDFILE", &format!("'{}'", pidfile.display())),
         );
         let e = runner_with(&bin, &[])
+            .group_mode(GroupMode::Own)
             .limits(limits)
             .run(&repo, Op::FetchOrigin)
             .unwrap_err();
@@ -1170,4 +1171,72 @@ fn include_and_hook_sections_in_local_or_worktree_config_are_refused_by_name() {
         matches!(&e, GitError::Refused { key } if key == "include.path"),
         "{e:?}"
     );
+}
+
+// ---- process group: own group without a terminal, the foreground group with one -----------------
+
+use stw::git_runner::{own_process_group, GroupMode};
+
+fn pgid_of(pid: &str) -> String {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "pgid=", "-p", pid])
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&out.stdout).trim().to_string()
+}
+
+#[test]
+fn the_group_choice_follows_the_terminal() {
+    assert!(own_process_group(false, false), "no terminal: own group");
+    assert!(!own_process_group(true, false));
+    assert!(!own_process_group(false, true));
+    assert!(!own_process_group(true, true));
+}
+
+#[test]
+fn own_mode_puts_git_in_its_own_group_and_foreground_mode_keeps_ours() {
+    let ours = pgid_of(&std::process::id().to_string());
+    for (mode, same) in [(GroupMode::Own, false), (GroupMode::Foreground, true)] {
+        let t = tmp();
+        let bin = t.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let repo = t.path().join("repo");
+        gix::init(&repo).unwrap();
+        let out = t.path().join("pgid");
+        fake_git(
+            &bin,
+            "2.47.3",
+            &format!("ps -o pgid= -p $$ > '{}'", out.display()),
+        );
+        runner_with(&bin, &[])
+            .group_mode(mode)
+            .run(&repo, Op::FetchOrigin)
+            .unwrap();
+        let theirs = std::fs::read_to_string(&out).unwrap().trim().to_string();
+        assert_eq!(
+            theirs == ours,
+            same,
+            "{mode:?}: git group {theirs}, ours {ours}"
+        );
+    }
+}
+
+#[test]
+fn foreground_mode_kills_only_git_on_timeout_and_never_its_own_group() {
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let repo = t.path().join("repo");
+    gix::init(&repo).unwrap();
+    fake_git(&bin, "2.47.3", "exec sleep 60");
+    let e = runner_with(&bin, &[])
+        .group_mode(GroupMode::Foreground)
+        .limits(Limits {
+            timeout: Duration::from_millis(400),
+            ..Limits::default()
+        })
+        .run(&repo, Op::FetchOrigin)
+        .unwrap_err();
+    assert!(matches!(e, GitError::Timeout { .. }), "{e:?}");
+    // this process is in the group that must not be killed: still running proves it
 }

@@ -358,3 +358,74 @@ fn a_local_config_key_that_runs_a_command_gives_unsupported_with_the_key_and_sta
     let calls = std::fs::read_to_string(&log).unwrap();
     assert_eq!(calls.trim(), "git --version", "{calls}");
 }
+
+/// openpty: a terminal pair, for tests of the terminal-dependent process group.
+fn pty() -> (std::fs::File, std::fs::File) {
+    use std::os::fd::FromRawFd;
+    let (mut m, mut s) = (0, 0);
+    // SAFETY: openpty fills two new file descriptors that this function then owns.
+    let rc = unsafe {
+        libc::openpty(
+            &mut m,
+            &mut s,
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            std::ptr::null(),
+        )
+    };
+    assert_eq!(rc, 0, "openpty failed");
+    unsafe { (std::fs::File::from_raw_fd(m), std::fs::File::from_raw_fd(s)) }
+}
+
+fn group_log_git(shim: &std::path::Path, log: &std::path::Path) {
+    std::fs::write(
+        shim.join("git"),
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'git version 2.47.3'; exit 0; fi\n\
+             echo \"git=$(ps -o pgid= -p $$ | tr -d ' ') stw=$(ps -o pgid= -p $PPID | tr -d ' ')\" >> '{}'\nexit 1\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+}
+
+fn groups_of_run(terminal: bool) -> (String, String) {
+    let (fx, log, shim) = setup();
+    group_log_git(shim.path(), &log);
+    fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_stw"));
+    cmd.env_clear()
+        .env("PATH", format!("{}:/usr/bin:/bin", shim.path().display()))
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(["sync", "--apply", "--json", "--root"])
+        .arg(&fx.path)
+        .stdout(std::process::Stdio::piped());
+    let _keep = if terminal {
+        let (master, slave) = pty();
+        cmd.stdin(slave.try_clone().unwrap()).stderr(slave);
+        Some(master)
+    } else {
+        cmd.stdin(std::process::Stdio::null())
+            .stderr(std::process::Stdio::piped());
+        None
+    };
+    let o = cmd.output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    let line = std::fs::read_to_string(&log).unwrap();
+    let line = line
+        .lines()
+        .find(|l| l.starts_with("git="))
+        .unwrap()
+        .to_string();
+    let (g, s) = line.split_once(" stw=").unwrap();
+    (g.trim_start_matches("git=").to_string(), s.to_string())
+}
+
+#[test]
+fn with_a_terminal_git_stays_in_the_foreground_group_without_one_it_gets_its_own() {
+    let (git, stw) = groups_of_run(true);
+    assert_eq!(git, stw, "terminal: git must share stw's process group");
+    let (git, stw) = groups_of_run(false);
+    assert_ne!(git, stw, "no terminal: git must have its own process group");
+}

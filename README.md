@@ -227,7 +227,7 @@ Runner rules (`src/git_runner.rs`):
   `PAGER`, `LANG*`, `LC_*`, `GH_TOKEN`, `GITHUB_TOKEN`. Fixed: `LC_ALL=C`, `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`,
   `GIT_PAGER=cat`, `GIT_EDITOR=true`, `GIT_ALLOW_PROTOCOL=file:ssh:git:http:https`, `GIT_CEILING_DIRECTORIES` = parent of
   the repository. The user's Git configuration and identity stay in effect; stw sets no author or committer.
-- Time (120 s) and output (1 MiB per stream) are bounded; git runs in its own process group, which is killed on either limit. ssh options are the user's: a host-key prompt (`BatchMode` is not forced) blocks until the time limit. `git --version` is read once
+- Time (120 s) and output (1 MiB per stream) are bounded; the process group depends on the terminal. Without a terminal on stdin or stderr (agents, CI) git runs in its own process group, and a timeout or output limit kills the whole group, helpers holding the pipes included. With a terminal git stays in stw's foreground group, as plain git: prompts (ssh host key, passphrase) and Ctrl-C work, and a timeout or output limit kills git only, so a helper it started can outlive it. ssh options are the user's (`BatchMode` is not forced): without a terminal a host-key prompt cannot be answered and blocks until the time limit. `git --version` is read once
   per run; the fetch needs 2.30.0 (UNKNOWN below 2.47.3: only that version was run). A spawn that fails with ETXTBSY is retried.
 - Errors are typed (`GitError`) and redacted: URL user info, GitHub token shapes, `Authorization:` values and the values of
   `GH_TOKEN`/`GITHUB_TOKEN` never reach output.

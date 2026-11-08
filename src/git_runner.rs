@@ -259,7 +259,26 @@ pub struct Output {
     pub stderr: String,
 }
 
+/// Which process group git runs in.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum GroupMode {
+    /// Own group unless stdin or stderr of stw is a terminal (the default).
+    Auto,
+    /// Always its own group: a timeout or output limit kills git and the helpers holding its pipes.
+    Own,
+    /// Always stw's group, as with plain git: tty prompts and Ctrl-C reach git. A timeout kills git only.
+    Foreground,
+}
+
+/// The `Auto` rule: with a terminal on stdin or stderr git stays in the foreground process group, so that
+/// terminal prompts (ssh host key, passphrase) and Ctrl-C work as with plain git; without one (agents, CI)
+/// git gets its own group.
+pub fn own_process_group(stdin_is_tty: bool, stderr_is_tty: bool) -> bool {
+    !(stdin_is_tty || stderr_is_tty)
+}
+
 pub struct Runner {
+    group: GroupMode,
     env: Vec<(OsString, OsString)>,
     limits: Limits,
     secrets: Vec<String>,
@@ -293,11 +312,17 @@ impl Runner {
             .filter(|v| !v.is_empty())
             .collect();
         Runner {
+            group: GroupMode::Auto,
             env,
             limits: Limits::default(),
             secrets,
             version: OnceLock::new(),
         }
+    }
+
+    pub fn group_mode(mut self, mode: GroupMode) -> Runner {
+        self.group = mode;
+        self
     }
 
     pub fn limits(mut self, limits: Limits) -> Runner {
@@ -498,13 +523,25 @@ impl Runner {
         mut cmd: Command,
         limits: &Limits,
     ) -> std::result::Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>), GitError> {
-        // own process group: a timeout or output limit can then kill git together with the helpers it
-        // started (ssh, upload-pack) that still hold the pipes
+        // Without a terminal git gets its own process group: a timeout or output limit then kills it together
+        // with the helpers it started (ssh, upload-pack) that still hold the pipes. With a terminal it stays
+        // in the foreground group (tty prompts and Ctrl-C work); then only git itself is killed.
+        use std::io::IsTerminal;
         use std::os::unix::process::CommandExt;
+        let own_group = match self.group {
+            GroupMode::Own => true,
+            GroupMode::Foreground => false,
+            GroupMode::Auto => own_process_group(
+                std::io::stdin().is_terminal(),
+                std::io::stderr().is_terminal(),
+            ),
+        };
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .process_group(0);
+            .stderr(Stdio::piped());
+        if own_group {
+            cmd.process_group(0);
+        }
         // ETXTBSY (26): another thread of this process still holds the executable open for writing
         // (it was just installed); a short retry is the documented remedy.
         let spawned = (0..10).find_map(|attempt| match cmd.spawn() {
@@ -565,7 +602,7 @@ impl Runner {
                     };
                     buf.extend_from_slice(&chunk);
                     if buf.len() > max {
-                        kill_group(&mut child);
+                        kill_child(&mut child, own_group);
                         let _ = child.wait();
                         return Err(GitError::OutputLimit {
                             stream: name,
@@ -586,7 +623,7 @@ impl Runner {
                 Some((st, at)) if open == 0 || at.elapsed() > GRACE => return Ok((st, out, err)),
                 Some(_) => {}
                 None if Instant::now() >= deadline => {
-                    kill_group(&mut child);
+                    kill_child(&mut child, own_group);
                     let _ = child.wait();
                     return Err(GitError::Timeout {
                         secs: limits.timeout.as_secs().max(1),
@@ -647,12 +684,15 @@ fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError>
     Ok(())
 }
 
-/// SIGKILL the whole process group of `child` (it leads its own group), then reap it.
-fn kill_group(child: &mut std::process::Child) {
-    if let Ok(pid) = i32::try_from(child.id()) {
-        // SAFETY: plain kill(2) on a group id taken from a child we spawned with process_group(0).
-        unsafe {
-            libc::kill(-pid, libc::SIGKILL);
+/// SIGKILL `child`; when it leads its own process group (`own_group`), the whole group. Never signals a
+/// group that is not the child's own (it would be stw's).
+fn kill_child(child: &mut std::process::Child, own_group: bool) {
+    if own_group {
+        if let Ok(pid) = i32::try_from(child.id()) {
+            // SAFETY: plain kill(2) on a group id taken from a child we spawned with process_group(0).
+            unsafe {
+                libc::kill(-pid, libc::SIGKILL);
+            }
         }
     }
     let _ = child.kill();
