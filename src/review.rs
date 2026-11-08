@@ -406,13 +406,17 @@ type Root = (usize, Vec<usize>);
 
 struct Chains<'a> {
     e: &'a [Entry],
-    memo: Vec<Option<Option<Root>>>,
+    memo: Vec<Option<Result<Root, &'static str>>>,
 }
+
+const NO_SOURCE: &str = "from is not a CLEAR or a valid carry-over before this comment";
+const PATCH_ID_MISMATCH: &str =
+    "patch-id-mismatch: the declared patch-id differs from the patch-id of the CLEAR at the root";
 
 impl Chains<'_> {
     /// Valid chain for the carry-over at `pos`: the latest line before it that names `from` must be a CLEAR
-    /// review of it or a valid carry-over to it.
-    fn valid(&mut self, pos: usize) -> Option<Root> {
+    /// review of it or a valid carry-over to it, and every link declares the patch-id of the root CLEAR.
+    fn valid(&mut self, pos: usize) -> Result<Root, &'static str> {
         if let Some(m) = &self.memo[pos] {
             return m.clone();
         }
@@ -421,34 +425,56 @@ impl Chains<'_> {
         r
     }
 
-    fn compute(&mut self, pos: usize) -> Option<Root> {
-        let Line::Carried { from, to, .. } = self.e[pos].ev.line.clone() else {
-            return None;
+    fn patch_id(&self, pos: usize) -> &str {
+        match &self.e[pos].ev.line {
+            Line::Review { patch_id, .. } | Line::Carried { patch_id, .. } => patch_id,
+        }
+    }
+
+    fn compute(&mut self, pos: usize) -> Result<Root, &'static str> {
+        let Line::Carried {
+            from, to, patch_id, ..
+        } = self.e[pos].ev.line.clone()
+        else {
+            return Err(NO_SOURCE);
         };
         if from == to {
-            return None;
+            return Err(NO_SOURCE);
         }
         for q in (0..pos).rev() {
             if self.e[q].foreign {
                 if self.e[q].names_head(&from) {
-                    return None;
+                    return Err(NO_SOURCE);
                 }
                 continue;
             }
             match self.e[q].ev.line.clone() {
                 Line::Review { verdict, head, .. } if head == from => {
-                    return (verdict == Verdict::Clear).then(|| (q, vec![pos]));
+                    if verdict != Verdict::Clear {
+                        return Err(NO_SOURCE);
+                    }
+                    if self.patch_id(q) != patch_id {
+                        return Err(PATCH_ID_MISMATCH);
+                    }
+                    return Ok((q, vec![pos]));
                 }
                 Line::Carried { to: t, .. } if t == from => {
-                    if let Some((root, mut links)) = self.valid(q) {
+                    if let Ok((root, mut links)) = self.valid(q) {
+                        if self.patch_id(root) != patch_id {
+                            return Err(PATCH_ID_MISMATCH);
+                        }
                         links.push(pos);
-                        return (links.len() <= MAX_LINKS).then_some((root, links));
+                        return if links.len() <= MAX_LINKS {
+                            Ok((root, links))
+                        } else {
+                            Err(NO_SOURCE)
+                        };
                     }
                 }
                 _ => {}
             }
         }
-        None
+        Err(NO_SOURCE)
     }
 }
 
@@ -561,12 +587,12 @@ pub fn evaluate(
         match &entry.ev.line {
             Line::Review { head: h, .. } if h == head => decisive = Some((pos, None)),
             Line::Carried { to, .. } if to == head => match chains.valid(pos) {
-                Some(root) => decisive = Some((pos, Some(root))),
-                None => findings.push(Finding {
+                Ok(root) => decisive = Some((pos, Some(root))),
+                Err(why) => findings.push(Finding {
                     kind: FindingKind::InvalidCarryChain,
                     comment_id: entry.ev.comment_id,
                     author: entry.ev.author.clone(),
-                    detail: "from is not a CLEAR or a valid carry-over before this comment".into(),
+                    detail: why.into(),
                 }),
             },
             _ => {}

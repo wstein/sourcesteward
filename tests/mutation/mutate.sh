@@ -558,6 +558,12 @@ m VW6 'a line for another pr naming another head makes the state unknown' src/re
             if true {' \
   review_states 'run::wrong_pr_for_other_head_is_ignored.json'
 
+m VC7 'the patch-id of a carry-over from a CLEAR review is not compared' src/review.rs \
+  '                    if self.patch_id(q) != patch_id {' '                    if false && self.patch_id(q) != patch_id {' \
+  review_states 'run::carry_patch_id_mismatch_is_invalid.json'
+m VC8 'the patch-id of a later link is not compared with the root' src/review.rs \
+  '                        if self.patch_id(root) != patch_id {' '                        if false && self.patch_id(root) != patch_id {' \
+  review_states 'run::carry_second_link_patch_id_mismatch_is_invalid.json'
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

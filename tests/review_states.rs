@@ -85,6 +85,19 @@ fn run(path: &Path) -> datatest_stable::Result<()> {
         .collect();
     exp.sort();
     assert_eq!(got, exp, "{name}: findings");
+    if let Some(m) = want.get("detail_contains") {
+        for (id, text) in m.as_object().unwrap() {
+            let id: u64 = id.parse().unwrap();
+            let text = text.as_str().unwrap();
+            assert!(
+                st.findings
+                    .iter()
+                    .any(|f| f.comment_id == id && f.detail.contains(text)),
+                "{name}: no finding for {id} with {text}: {:?}",
+                st.findings
+            );
+        }
+    }
     if let Some(r) = want.get("unknown_reason_contains") {
         assert!(
             st.reasons.iter().any(|x| x.contains(r.as_str().unwrap())),
