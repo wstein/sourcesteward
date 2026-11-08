@@ -308,3 +308,34 @@ fn a_repo_local_credential_helper_never_runs_when_there_is_no_token() {
         "the repository-local credential helper ran"
     );
 }
+
+#[test]
+fn git_gets_a_null_stdin_even_when_stw_has_a_pipe() {
+    let (fx, log, shim) = setup();
+    std::fs::write(
+        shim.path().join("git"),
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'git version 2.47.3'; exit 0; fi\n\
+             if [ /dev/stdin -ef /dev/null ]; then echo NULL-STDIN >> '{log}'; else echo OTHER-STDIN >> '{log}'; fi\nexit 1\n",
+            log = log.display()
+        ),
+    )
+    .unwrap();
+    fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
+    let mut child = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", shim.path())
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(["sync", "--apply", "--json", "--root"])
+        .arg(&fx.path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let _held_open = child.stdin.take();
+    let o = child.wait_with_output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    assert_eq!(std::fs::read_to_string(&log).unwrap().trim(), "NULL-STDIN");
+}

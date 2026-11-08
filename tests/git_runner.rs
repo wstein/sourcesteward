@@ -570,6 +570,8 @@ fn redaction_removes_url_credentials_and_tokens() {
             "fatal: https://github.com/a/b.git",
         ),
         ("ssh://git:pw@host:22/x", "ssh://host:22/x"),
+        ("https://user:p@ss@host/x.git", "https://host/x.git"),
+        ("https://us@er:p@@ss@host/x", "https://host/x"),
         ("http://tok@host/x", "http://host/x"),
         (
             "clone 'https://x-access-token:ghs_abc@github.com/a/b'",
@@ -607,6 +609,15 @@ fn real_git_available() -> bool {
         .arg("--version")
         .output()
         .is_ok_and(|o| o.status.success())
+}
+
+/// A runner for the real git with an isolated home: the user's global config does not apply.
+fn real_runner(home: &Path) -> Runner {
+    Runner::from_env(osv(&[
+        ("PATH", std::env::var("PATH").unwrap().as_str()),
+        ("HOME", home.to_str().unwrap()),
+        ("XDG_CONFIG_HOME", home.join(".config").to_str().unwrap()),
+    ]))
 }
 
 /// Run git in `dir` (a tempdir this test created) with an isolated environment.
@@ -679,7 +690,7 @@ fn real_git_fetches_a_local_path_remote() {
     }
     let t = tmp();
     let (up, clone) = fetch_fixture(t.path(), |u| u.display().to_string());
-    let out = Runner::from_process().run(&clone, Op::FetchOrigin).unwrap();
+    let out = real_runner(t.path()).run(&clone, Op::FetchOrigin).unwrap();
     assert!(out.stdout.len() < 1000);
     assert_eq!(rev(&clone, "refs/remotes/origin/main"), rev(&up, "HEAD"));
 }
@@ -729,7 +740,7 @@ fn real_git_refuses_the_ext_transport() {
     let t = tmp();
     let marker = t.path().join("ext-ran");
     let (_up, clone) = fetch_fixture(t.path(), |_| format!("ext::touch {}", marker.display()));
-    let e = Runner::from_process()
+    let e = real_runner(t.path())
         .run(&clone, Op::FetchOrigin)
         .unwrap_err();
     assert!(matches!(e, GitError::Exit { .. }), "{e:?}");
@@ -761,7 +772,7 @@ fn real_git_runs_no_repository_hook_on_fetch() {
         "reference-transaction",
         &format!("touch '{}'", marker.display()),
     );
-    Runner::from_process().run(&clone, Op::FetchOrigin).unwrap();
+    real_runner(t.path()).run(&clone, Op::FetchOrigin).unwrap();
     assert!(!marker.exists(), "a repository hook ran during the fetch");
 }
 
@@ -783,7 +794,7 @@ fn real_git_ignores_a_repository_local_uploadpack_command() {
         &clone,
         &format!("[remote \"origin\"]\n\tuploadpack = {}\n", helper.display()),
     );
-    Runner::from_process().run(&clone, Op::FetchOrigin).unwrap();
+    real_runner(t.path()).run(&clone, Op::FetchOrigin).unwrap();
     assert!(!marker.exists(), "remote.origin.uploadpack ran");
     assert_eq!(rev(&clone, "refs/remotes/origin/main"), rev(&up, "HEAD"));
 }
@@ -806,7 +817,7 @@ fn real_git_does_not_run_a_repository_local_ssh_command() {
         &clone,
         &format!("[core]\n\tsshCommand = {}\n", helper.display()),
     );
-    let _ = Runner::from_process().run(&clone, Op::FetchOrigin);
+    let _ = real_runner(t.path()).run(&clone, Op::FetchOrigin);
     assert!(!marker.exists(), "core.sshCommand of the repository ran");
 }
 

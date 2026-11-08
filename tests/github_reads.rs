@@ -292,7 +292,12 @@ fn commit_ids_that_are_not_full_lower_case_hex_are_dropped() {
         {"id": 2, "state": "APPROVED", "commit_id": SHA.to_uppercase(), "user": {"login": "a"}},
         {"id": 3, "state": "APPROVED", "commit_id": "abc123", "user": {"login": "a"}},
         {"id": 4, "state": "APPROVED", "commit_id": "../etc", "user": {"login": "a"}},
-        {"id": 5, "state": "APPROVED", "commit_id": null, "user": {"login": "a"}}
+        {"id": 5, "state": "APPROVED", "commit_id": null, "user": {"login": "a"}},
+        {"id": 6, "state": "APPROVED", "commit_id": format!("{SHA}0"), "user": {"login": "a"}},
+        {"id": 7, "state": "APPROVED", "commit_id": &SHA[..39], "user": {"login": "a"}},
+        {"id": 8, "state": "APPROVED", "commit_id": format!("{SHA}{}", &SHA[..24]), "user": {"login": "a"}},
+        {"id": 9, "state": "APPROVED", "commit_id": format!("{SHA}{}", &SHA[..23]), "user": {"login": "a"}},
+        {"id": 10, "state": "APPROVED", "commit_id": format!("{SHA}{SHA}"), "user": {"login": "a"}}
     ])
     .to_string();
     let api = status_server(200, vec![], body);
@@ -302,7 +307,22 @@ fn commit_ids_that_are_not_full_lower_case_hex_are_dropped() {
             .unwrap(),
     );
     let ids: Vec<Option<&str>> = o.items.iter().map(|r| r.commit_id.as_deref()).collect();
-    assert_eq!(ids, [Some(SHA), None, None, None, None]);
+    let sha256 = format!("{SHA}{}", &SHA[..24]);
+    assert_eq!(
+        ids,
+        [
+            Some(SHA),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            Some(sha256.as_str()),
+            None,
+            None
+        ]
+    );
 }
 
 #[test]
