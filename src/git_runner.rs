@@ -607,6 +607,9 @@ fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
             "sshcommand" | "gitproxy" | "askpass" | "alternaterefscommand"
         ),
         "credential" => true,
+        // git follows include files (a refused key in one of them would run) and newer git defines hooks
+        // in `hook.<name>.*`; any such section in the repository's own config is refused
+        "include" | "includeif" | "hook" => true,
         "url" => matches!(key, "insteadof" | "pushinsteadof"),
         "remote" => sub == Some("origin") && matches!(key, "receivepack" | "vcs"),
         _ => false,

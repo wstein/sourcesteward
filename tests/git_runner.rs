@@ -1075,3 +1075,99 @@ fn a_grandchild_holding_the_pipe_is_killed_with_the_group_on_timeout_and_on_outp
         assert!(wait_dead(&pid), "grandchild {pid} survived ({e:?})");
     }
 }
+
+// ---- include files and hooks in the repository config -------------------------------------------
+
+/// git follows `include.path` and `includeIf.<cond>.path`: a refused key in such a file would run.
+#[test]
+fn real_git_does_not_follow_includes_of_the_repository_config() {
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let forms = [
+        ("[include]\n\tpath = extra\n", "include.path"),
+        (
+            "[includeIf \"gitdir:**\"]\n\tpath = extra\n",
+            "includeif.gitdir:**.path",
+        ),
+    ];
+    for (form, key) in forms {
+        let t = tmp();
+        let (_up, clone) = fetch_fixture(t.path(), |_| "ssh://fake-host/up".to_string());
+        let marker = t.path().join("included-ssh-ran");
+        let helper = script(
+            t.path(),
+            "my-ssh",
+            &format!("touch '{}'\nexit 1", marker.display()),
+        );
+        std::fs::write(
+            clone.join(".git/extra"),
+            format!("[core]\n\tsshCommand = {}\n", helper.display()),
+        )
+        .unwrap();
+        append_local_config(&clone, form);
+        let e = real_runner(t.path())
+            .run(&clone, Op::FetchOrigin)
+            .unwrap_err();
+        assert!(
+            matches!(&e, GitError::Refused { key: k } if k == key),
+            "{key}: {e:?}"
+        );
+        assert!(
+            !marker.exists(),
+            "{key}: a command from an included file ran"
+        );
+    }
+}
+
+#[test]
+fn include_and_hook_sections_in_local_or_worktree_config_are_refused_by_name() {
+    let cases: &[(&str, &str)] = &[
+        ("[include]\n\tpath = x\n", "include.path"),
+        ("[include]\n\tpath = x\n\tpath = y\n", "include.path"),
+        (
+            "[includeIf \"gitdir:/a/\"]\n\tpath = x\n",
+            "includeif.gitdir:/a/.path",
+        ),
+        (
+            "[includeIf \"onbranch:main\"]\n\tpath = x\n",
+            "includeif.onbranch:main.path",
+        ),
+        ("[hook \"pre\"]\n\tcommand = evil\n", "hook.pre.command"),
+        ("[hook]\n\tpre-push = x\n", "hook.pre-push"),
+    ];
+    for (snippet, key) in cases {
+        let t = tmp();
+        let bin = t.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let repo = t.path().join("repo");
+        gix::init(&repo).unwrap();
+        let log = fake_git(&bin, "2.47.3", "exit 0");
+        append_local_config(&repo, snippet);
+        let e = runner_with(&bin, &[])
+            .run(&repo, Op::FetchOrigin)
+            .unwrap_err();
+        assert!(
+            matches!(&e, GitError::Refused { key: k } if k == key),
+            "{snippet:?}: {e:?}"
+        );
+        assert!(!std::fs::read_to_string(&log).unwrap().contains("ARGV"));
+    }
+    // in the worktree config too
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let repo = t.path().join("repo");
+    gix::init(&repo).unwrap();
+    fake_git(&bin, "2.47.3", "exit 0");
+    append_local_config(&repo, "[extensions]\n\tworktreeConfig = true\n");
+    std::fs::write(repo.join(".git/config.worktree"), "[include]\n\tpath = x\n").unwrap();
+    let e = runner_with(&bin, &[])
+        .run(&repo, Op::FetchOrigin)
+        .unwrap_err();
+    assert!(
+        matches!(&e, GitError::Refused { key } if key == "include.path"),
+        "{e:?}"
+    );
+}
