@@ -241,11 +241,13 @@ and index:
   files and index are old or partly new.
 - If the process is killed (or the machine loses power) after the ref moved and before the index was written,
   `HEAD` points to the new commit while files and index are old or partly new; stw does not detect or repair this
-  on the next run. `git status` shows the update as local changes. stw installs no signal handler, so a kill
-  during the checkout or index write also leaves a stale `.git/index.lock`: remove that lock file first (only
-  when no git process runs), otherwise git refuses every command that writes the index. To finish the update:
-  `git reset --hard HEAD` (tested in a scratch repository; it also discards unrelated local changes). Without discarding anything
-  else: `git checkout HEAD -- <paths>` with the paths of
+  on the next run. `git status` shows the update as local changes. A kill at any point after the index lock
+  was taken (before the ref moved, during the checkout, during the index write) also leaves a stale
+  `.git/index.lock`; no signal handler could prevent that for SIGKILL or a power loss. Remove that lock file
+  first (only when no git process runs), otherwise git refuses every command that writes the index. If the
+  ref had not moved yet, nothing else changed. To finish the update:
+  `git reset --hard HEAD` (tested in a scratch repository; it also discards unrelated local changes). Without
+  discarding anything else: `git checkout HEAD -- <paths>` with the paths of
   `git diff --name-only --diff-filter=d <old commit> HEAD`, then `git rm --cached` and remove the files of
   `--diff-filter=D`. A plain `git checkout HEAD -- <path>` fails for a path that the update deleted ("pathspec
   did not match"; tested). To go back: `git reset --hard <old commit>` (same caveat; not tested), where the old
