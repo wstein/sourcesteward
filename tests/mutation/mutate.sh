@@ -469,7 +469,7 @@ m VS7 'the first review wins instead of the latest' src/review.rs \
   'Line::Review { head: h, .. } if h == head => decisive = Some((pos, None)),' 'Line::Review { head: h, .. } if h == head => { decisive.get_or_insert((pos, None)); }' \
   review_states 'run::later_findings_cancels_clear.json'
 m VS8 'the first carry-over wins instead of the latest' src/review.rs \
-  'Some(root) => decisive = Some((pos, Some(root))),' 'Some(root) => { decisive.get_or_insert((pos, Some(root))); }' \
+  'Ok(root) => decisive = Some((pos, Some(root))),' 'Ok(root) => { decisive.get_or_insert((pos, Some(root))); }' \
   review_states 'run::later_valid_carry_replaces_findings.json'
 m VS9 'a review of another head counts for this head' src/review.rs \
   '            Line::Review { head: h, .. } => h == head,' '            Line::Review { head: h, .. } => h == head || true,' \
@@ -478,13 +478,13 @@ m VC1 'a carry-over from a head to itself is valid' src/review.rs \
   '        if from == to {' '        if false && from == to {' \
   review_states 'run::carry_self_is_invalid.json'
 m VC2 'a carry-over from FINDINGS is valid' src/review.rs \
-  'return (verdict == Verdict::Clear).then(|| (q, vec![pos]));' 'return Some((q, vec![pos]));' \
+  '                    if *verdict != Verdict::Clear {' '                    if false && *verdict != Verdict::Clear {' \
   review_states 'run::carry_from_findings_is_invalid.json'
 m VC3 'chains of carry-overs are not followed' src/review.rs \
   'Line::Carried { to: t, .. } if *t == from => {' 'Line::Carried { to: t, .. } if *t == from && false => {' \
   review_states 'run::carry_chain_of_two.json'
 m VC4 'chain length is unbounded' src/review.rs \
-  'return (links.len() <= MAX_LINKS).then_some((root, links));' 'return Some((root, links));' \
+  '                        return if src.links.len() <= MAX_LINKS {' '                        return if true || src.links.len() <= MAX_LINKS {' \
   review_read 'chain_length_is_bounded'
 m VC5 'carry-over results are not memoised' src/review.rs \
   '        self.memo[pos] = Some(r.clone());' '        let _ = &r;' \
@@ -550,7 +550,7 @@ m VC7 'the patch-id of a carry-over from a CLEAR review is not compared' src/rev
   '                    if self.patch_id(q) != patch_id {' '                    if false && self.patch_id(q) != patch_id {' \
   review_states 'run::carry_patch_id_mismatch_is_invalid.json'
 m VC8 'the patch-id of a later link is not compared with the root' src/review.rs \
-  '                        if self.patch_id(root) != patch_id {' '                        if false && self.patch_id(root) != patch_id {' \
+  '                        if self.patch_id(src.root) != patch_id {' '                        if false && self.patch_id(src.root) != patch_id {' \
   review_states 'run::carry_second_link_patch_id_mismatch_is_invalid.json'
 m VC9 'a chain may return to a head it already cleared' src/review.rs \
   'if src.members.iter().any(|m| m.0 == to) {' 'if false && src.members.iter().any(|m| m.0 == to) {' \
@@ -582,6 +582,28 @@ m VC15 'only the latest line that names the source decides' src/review.rs \
 m VS10 'an empty login can be trusted' src/review.rs \
   '    !author.is_empty() && trusted.iter()' '    trusted.iter()' \
   review_states 'run::empty_login_is_never_trusted.json'
+
+m VU10 'a timestamp that does not end in Z is accepted' src/review.rs \
+  '            19 => *c == b'\''Z'\'',' '            19 => true,' \
+  review_states 'run::bad_timestamp_wrong_zone_letter.json'
+m VU11 'truncation of a read body does not reach the parser' src/review.rs \
+  '            body_truncated: c.body_truncated,' '            body_truncated: false,' \
+  review_read 'truncation_of_a_read_body_reaches_the_parser'
+m VU12 'a variant in the same second as the decision is ordered by time only' src/review.rs \
+  '(stamp.clone(), *id) > *n' '*stamp > n.0' \
+  review_states 'run::variant_same_second_higher_id_is_newer.json'
+m VS11 'a login that starts with a trusted login is trusted' src/review.rs \
+  't.eq_ignore_ascii_case(author)' 'author.to_ascii_lowercase().starts_with(&t.to_ascii_lowercase())' \
+  review_states 'run::trusted_login_is_not_a_prefix.json'
+m VS12 'a login that is a prefix of a trusted login is trusted' src/review.rs \
+  't.eq_ignore_ascii_case(author)' 't.to_ascii_lowercase().starts_with(&author.to_ascii_lowercase())' \
+  review_states 'run::trusted_login_is_not_a_suffix_or_shorter.json'
+m VC16 'an invalid carry-over to the source ends the search instead of falling back to earlier lines' src/review.rs \
+  '                    if let Ok(mut src) = self.valid(q) {' '                    if self.valid(q).is_err() {
+                        return Err(NO_SOURCE);
+                    }
+                    if let Ok(mut src) = self.valid(q) {' \
+  review_states 'run::invalid_carry_to_source_is_skipped_for_an_earlier_line.json'
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

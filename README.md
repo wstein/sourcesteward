@@ -252,21 +252,32 @@ not the comment-based state, and its JSON contract is unchanged). Pure functions
 
 - Grammar (first line of the comment, nothing else on it): `Review: <CLEAR|FINDINGS> head=<40 lower-case hex> patch-id=<40 hex> pr=<n|none>` and
   `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex> pr=<n|none>`. Fixed keys and order, single spaces, no Markdown, tab or CR.
-  `n` is a decimal number from 1 without leading zeros. `pr=none` is a local review (scope `Local`); the shared dotagents grammar
-  has no `none`. A line that reads like a review line but breaks the grammar is never accepted: it is the finding
+  `n` is a decimal number from 1 without leading zeros. `pr=none` is a local review (scope `Local`); dotagents is to adopt
+  `pr=([1-9][0-9]*|none)`. A line that reads like a review line but breaks the grammar is never accepted: it is the finding
   `unparsed-review-variant`. Other text is not a review line.
 - `evaluate(scope, head, comments, trusted)` and `evaluate_read(.., &Read<Comment>, ..)`. Status: `clear`, `clear-carried`,
-  `findings`, `no-review`, `unverified-author`, `unknown`. Only comments of `trusted` logins (case-insensitive; empty list:
-  nobody) decide. Lines of other authors are findings (`untrusted-author`); if they are the only lines for the head the
-  state is `unverified-author`, never `clear`. Lines with another `pr=` are `wrong-pr`, lines about another head `stale-head`.
+  `findings`, `no-review`, `unverified-author`, `unknown`. Trust is a list of logins (case-insensitive, whole login, an empty
+  login never; empty list: nobody); `author_association` is not a gate. Only comments of trusted logins decide. Lines of other
+  authors are findings (`untrusted-author`); if they are the only lines for the head the state is `unverified-author`, never
+  `clear`. Lines about another head that play no part in the decision are `stale-head`.
+- A trusted line with another `pr=` (or `pr=none` in a pull request scope, a number in the local scope) is the finding `wrong-pr`.
+  If it names the head (a review of it or a carry-over to it) and is newer than the decision, or there is no decision, the state is
+  `unknown`; it also ends any carry-over chain that passes through the head it names.
 - The latest line for the head by `(created_at, id)` wins: a later `FINDINGS` cancels a `CLEAR`, a later `CLEAR` replaces `FINDINGS`.
-  A carry-over to the head counts if the latest trusted line before it that names `from` is a `CLEAR` review or itself a valid
-  carry-over (same `pr=`, at most 16 links); otherwise it is the finding `invalid-carry-chain` and is skipped. The parser does
-  not recompute patch-ids; declared patch-ids and the chain are in the result for M4.
+  A carry-over to the head counts if the latest line before it that names `from` is a `CLEAR` review, or a carry-over that is
+  itself valid. An invalid carry-over to `from` is skipped and the search continues with the earlier lines that name `from`
+  (so an older CLEAR of `from` still carries); a trusted line of another pr that names `from` ends the search with an invalid
+  chain. A chain is invalid (finding `invalid-carry-chain`, with the reason in `detail`) when: no such source exists; every link
+  must declare the patch-id of the root CLEAR (`patch-id-mismatch`; the declared values are compared, nothing is recomputed, M4
+  does that from git); a link returns to a head the chain already cleared (`repeated-head`); a `FINDINGS` review of any head of
+  the chain (the root and every intermediate head, not the final head) was posted after that head was cleared
+  (`member-findings`); more than 16 links. The final head's own later `FINDINGS` simply wins as the latest line. Chains are
+  computed iteratively, so thousands of carry-overs are fine.
 - `unknown` (with `reasons`): the read is partial, denied, not found or failed; a body has a malformed escape; a trusted line has no
-  usable `created_at`; a trusted `unparsed-review-variant` is newer than the decision (or there is no decision). It is never read as
-  `no-review`.
-- Provenance per line: comment id, author, `created_at`, `updated_at`, `edited`. `ReviewState::to_json()` is the stable JSON
+  usable `created_at`; a trusted `unparsed-review-variant` or a trusted wrong-pr line naming the head is newer than the decision (or
+  there is no decision). It is never read as `no-review`.
+- Provenance per line: comment id, author, `created_at`, `updated_at`, `edited`. An edited comment is only flagged: a decisive or
+  chain comment with `edited` counts normally and the flag is in the result. `ReviewState::to_json()` is the stable JSON
   (version 1), not yet part of any command.
 - Tests: the dotagents corpus `tests/review_corpus/review-line-examples.md` (copy of `docs/review-line-examples.md`, dotagents
   c7c343c), `tests/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/review_read.rs`.
@@ -277,7 +288,7 @@ not the comment-based state, and its JSON contract is unchanged). Pure functions
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test network -- --ignored   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 149 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 169 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 

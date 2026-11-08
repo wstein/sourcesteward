@@ -242,3 +242,17 @@ fn thousands_of_carry_overs_do_not_overflow_the_stack() {
             .any(|f| f.kind.label() == "invalid-carry-chain"));
     }
 }
+
+#[test]
+fn truncation_of_a_read_body_reaches_the_parser() {
+    // A body cut inside its first line leaves a valid-looking prefix; it must not count as a review.
+    let mut c = comment(
+        1,
+        "owner",
+        &format!("Review: CLEAR head={A} patch-id={P} pr=15"),
+    );
+    c.body_truncated = true;
+    let st = evaluate_read(Scope::Pr(15), A, &observed(vec![c], None), &["owner"]);
+    assert_eq!(st.status, Status::Unknown);
+    assert_eq!(st.findings[0].kind.label(), "unparsed-review-variant");
+}
