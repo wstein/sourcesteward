@@ -352,7 +352,7 @@ pub(crate) fn worktree_blocker(
             return Some(format!("contains the checked-out submodule {sub}"));
         }
     }
-    let wt_repo = match gix::open(&l.dir) {
+    let wt_repo = match repo::open(&l.dir) {
         Ok(r) => r,
         Err(e) => return Some(format!("cannot be read: {e}")),
     };

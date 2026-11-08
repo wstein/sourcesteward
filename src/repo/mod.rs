@@ -101,7 +101,32 @@ pub fn open(path: &Path) -> Result<gix::Repository> {
         gix::open_opts(path, gix::open::Options::default().permissions(perms))?
     };
     repo.committer_or_set_fallback(FALLBACK_NAME, FALLBACK_EMAIL)?;
+    drop_filter_drivers(&mut repo)?;
     Ok(repo)
+}
+
+/// Forget every `filter.<name>.*` driver of the (in-memory) configuration. gix would start the `clean`,
+/// `smudge` or `process` program named there (also from the repository's own config) while it compares a
+/// worktree file with the index; stw's reads start no program. Files with a `filter=` attribute are then
+/// compared unconverted, so a driver that rewrites content (git-lfs, keyword expansion) can make such a
+/// file look modified. Nothing is written to any config file.
+fn drop_filter_drivers(repo: &mut gix::Repository) -> Result<()> {
+    let mut snapshot = repo.config_snapshot_mut();
+    let file: &mut gix::config::File = &mut snapshot;
+    let subsections: Vec<Option<gix::bstr::BString>> = file
+        .sections_by_name("filter")
+        .into_iter()
+        .flatten()
+        .map(|s| s.header().subsection_name().map(ToOwned::to_owned))
+        .collect();
+    for sub in subsections {
+        while file
+            .remove_section("filter", sub.as_ref().map(|b| b.as_ref()))
+            .is_some()
+        {}
+    }
+    snapshot.commit()?;
+    Ok(())
 }
 
 /// `owner/repo` of origin when its host is exactly `github.com` (any scheme, also `git@github.com:o/r`).
