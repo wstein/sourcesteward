@@ -24,6 +24,8 @@ serde_json = { version = "1", features = ["preserve_order"] }
 # Blocking, no async runtime; GitHub needs five GET endpoints only.
 ureq = { version = "3", features = ["json"] }
 base64 = "0.22"
+# kill(2) on the process group of a timed-out git (std has no group kill); already in the lock file via gix/ureq.
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 security-framework = "3"

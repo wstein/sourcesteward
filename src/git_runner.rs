@@ -498,9 +498,13 @@ impl Runner {
         mut cmd: Command,
         limits: &Limits,
     ) -> std::result::Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>), GitError> {
+        // own process group: a timeout or output limit can then kill git together with the helpers it
+        // started (ssh, upload-pack) that still hold the pipes
+        use std::os::unix::process::CommandExt;
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+            .stderr(Stdio::piped())
+            .process_group(0);
         // ETXTBSY (26): another thread of this process still holds the executable open for writing
         // (it was just installed); a short retry is the documented remedy.
         let spawned = (0..10).find_map(|attempt| match cmd.spawn() {
@@ -561,7 +565,7 @@ impl Runner {
                     };
                     buf.extend_from_slice(&chunk);
                     if buf.len() > max {
-                        let _ = child.kill();
+                        kill_group(&mut child);
                         let _ = child.wait();
                         return Err(GitError::OutputLimit {
                             stream: name,
@@ -582,7 +586,7 @@ impl Runner {
                 Some((st, at)) if open == 0 || at.elapsed() > GRACE => return Ok((st, out, err)),
                 Some(_) => {}
                 None if Instant::now() >= deadline => {
-                    let _ = child.kill();
+                    kill_group(&mut child);
                     let _ = child.wait();
                     return Err(GitError::Timeout {
                         secs: limits.timeout.as_secs().max(1),
@@ -636,6 +640,17 @@ fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError>
         }
     }
     Ok(())
+}
+
+/// SIGKILL the whole process group of `child` (it leads its own group), then reap it.
+fn kill_group(child: &mut std::process::Child) {
+    if let Ok(pid) = i32::try_from(child.id()) {
+        // SAFETY: plain kill(2) on a group id taken from a child we spawned with process_group(0).
+        unsafe {
+            libc::kill(-pid, libc::SIGKILL);
+        }
+    }
+    let _ = child.kill();
 }
 
 fn is_executable_file(p: &Path) -> bool {

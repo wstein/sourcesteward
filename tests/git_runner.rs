@@ -996,3 +996,71 @@ fn git_does_not_find_ssh_in_the_worktree_through_empty_or_dot_path_entries() {
         );
     }
 }
+
+// ---- process group ------------------------------------------------------------------------------
+
+/// True while a process with this id exists and is not a zombie.
+fn alive(pid: &str) -> bool {
+    let out = std::process::Command::new("ps")
+        .args(["-o", "stat=", "-p", pid])
+        .output()
+        .unwrap();
+    let stat = String::from_utf8_lossy(&out.stdout);
+    let stat = stat.trim();
+    !stat.is_empty() && !stat.starts_with('Z')
+}
+
+fn wait_dead(pid: &str) -> bool {
+    for _ in 0..150 {
+        if !alive(pid) {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    false
+}
+
+#[test]
+fn a_grandchild_holding_the_pipe_is_killed_with_the_group_on_timeout_and_on_output_limit() {
+    for (rest, limits) in [
+        (
+            "sleep 60 & echo $! > PIDFILE\nsleep 60",
+            Limits {
+                timeout: Duration::from_millis(400),
+                ..Limits::default()
+            },
+        ),
+        (
+            "sleep 60 & echo $! > PIDFILE\nyes xxxxxxxxxxxxxxxxxxxx | head -c 5000000",
+            Limits {
+                max_stdout: 10_000,
+                ..Limits::default()
+            },
+        ),
+    ] {
+        let t = tmp();
+        let bin = t.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let repo = t.path().join("repo");
+        gix::init(&repo).unwrap();
+        let pidfile = t.path().join("grandchild.pid");
+        fake_git(
+            &bin,
+            "2.47.3",
+            &rest.replace("PIDFILE", &format!("'{}'", pidfile.display())),
+        );
+        let e = runner_with(&bin, &[])
+            .limits(limits)
+            .run(&repo, Op::FetchOrigin)
+            .unwrap_err();
+        assert!(
+            matches!(e, GitError::Timeout { .. } | GitError::OutputLimit { .. }),
+            "{e:?}"
+        );
+        let pid = std::fs::read_to_string(&pidfile)
+            .unwrap()
+            .trim()
+            .to_string();
+        assert!(wait_dead(&pid), "grandchild {pid} survived ({e:?})");
+    }
+}

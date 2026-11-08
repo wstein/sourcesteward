@@ -2933,6 +2933,7 @@ dependencies = [
  "datatest-stable",
  "gix",
  "insta",
+ "libc",
  "proptest",
  "security-framework",
  "serde_json",
