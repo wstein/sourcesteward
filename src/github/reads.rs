@@ -298,11 +298,15 @@ enum Page {
 }
 
 impl Client {
-    fn page(&self, url: &str) -> Page {
+    /// One GET, cut off after `timeout` (never longer than the client's own 30 s).
+    fn page(&self, url: &str, timeout: Duration) -> Page {
         let path = url.trim_start_matches(self.base.as_str()).to_string();
         let mut resp = match self
             .agent
             .get(url)
+            .config()
+            .timeout_global(Some(timeout))
+            .build()
             .header("Authorization", &format!("Bearer {}", self.token))
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
@@ -366,7 +370,12 @@ impl Client {
                 break;
             }
             let url = format!("{}{path}?per_page={per_page}&page={page}", self.base);
-            let v = match self.page(&url) {
+            // each request gets what is left of the list's time budget
+            let left = budget.time.saturating_sub(start.elapsed());
+            let v = match self.page(
+                &url,
+                left.clamp(Duration::from_millis(1), Duration::from_secs(30)),
+            ) {
                 Page::Json(v) => v,
                 other if pages == 0 => {
                     return match other {
@@ -705,22 +714,29 @@ impl Client {
     /// `default_branch` and the merge-method settings of a repository (the latter `Unknown` without admin rights).
     pub fn repo_settings(&self, owner: &str, repo: &str) -> Result<ReadOne<RepoSettings>> {
         let slug = Self::check_owner_repo(owner, repo)?;
-        Ok(match self.page(&format!("{}/repos/{slug}", self.base)) {
-            Page::Json(v) if v["default_branch"].is_string() => ReadOne::Value(RepoSettings {
-                default_branch: esc_opt(&v["default_branch"], 255),
-                delete_branch_on_merge: Setting::of(&v["delete_branch_on_merge"]),
-                allow_rebase_merge: Setting::of(&v["allow_rebase_merge"]),
-                allow_squash_merge: Setting::of(&v["allow_squash_merge"]),
-                allow_merge_commit: Setting::of(&v["allow_merge_commit"]),
-            }),
-            Page::Json(_) => ReadOne::Failed("unexpected response shape: not a repository".into()),
-            Page::Denied(kind, status, message) => ReadOne::Denied {
-                kind,
-                status,
-                message,
+        Ok(
+            match self.page(
+                &format!("{}/repos/{slug}", self.base),
+                Duration::from_secs(30),
+            ) {
+                Page::Json(v) if v["default_branch"].is_string() => ReadOne::Value(RepoSettings {
+                    default_branch: esc_opt(&v["default_branch"], 255),
+                    delete_branch_on_merge: Setting::of(&v["delete_branch_on_merge"]),
+                    allow_rebase_merge: Setting::of(&v["allow_rebase_merge"]),
+                    allow_squash_merge: Setting::of(&v["allow_squash_merge"]),
+                    allow_merge_commit: Setting::of(&v["allow_merge_commit"]),
+                }),
+                Page::Json(_) => {
+                    ReadOne::Failed("unexpected response shape: not a repository".into())
+                }
+                Page::Denied(kind, status, message) => ReadOne::Denied {
+                    kind,
+                    status,
+                    message,
+                },
+                Page::NotFound => ReadOne::NotFound,
+                Page::Failed(m) => ReadOne::Failed(m),
             },
-            Page::NotFound => ReadOne::NotFound,
-            Page::Failed(m) => ReadOne::Failed(m),
-        })
+        )
     }
 }

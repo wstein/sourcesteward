@@ -471,3 +471,29 @@ fn escaping_is_complete_and_reversible() {
     assert_eq!(escape_untrusted("äöüß", 2), ("äö".to_string(), true));
     assert_eq!(escape_untrusted("äö", 2), ("äö".to_string(), false));
 }
+
+#[test]
+fn a_slow_server_cannot_exceed_the_time_budget() {
+    let all = arr(fixture("issue_comments.json"));
+    // first page at once, every later page after 4 seconds
+    let api = FakeRoutes::start(move |_, q| {
+        if page_of(q).0 > 1 {
+            std::thread::sleep(Duration::from_secs(4));
+        }
+        (200, vec![], paged(all.clone(), None, q))
+    });
+    let b = Budget {
+        per_page: 10,
+        time: Duration::from_millis(500),
+        ..Budget::default()
+    };
+    let start = std::time::Instant::now();
+    let r = client(&api).issue_comments(SLUG, 1, &b).unwrap();
+    assert!(
+        start.elapsed() < Duration::from_secs(3),
+        "{:?}",
+        start.elapsed()
+    );
+    assert_eq!(r.state(), "partial");
+    assert_eq!(observed(r).items.len(), 10);
+}

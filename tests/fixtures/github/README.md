@@ -8,3 +8,7 @@ Fixtures for `tests/github_reads.rs`.
   The status descriptions contain hostile characters on purpose.
 - `rules_branch_no_checks.json` (`wstein/cubistry` branch `main`) and `rules_branch_cli_trunk.json` (`cli/cli` branch `trunk`), `repo_settings_no_admin.json` (`wstein/cubistry`, trimmed to its fields): recorded 2026-11-07, unauthenticated GET. The repository object has none of the `allow_*` and `delete_branch_on_merge` fields without admin rights.
 - `rules_branch_required_checks.json`, `repo_settings_admin.json`: hand-written after the documented schema (a required_status_checks rule and the admin view of the repository object).
+- Branch name encoding: stw sends `/` as `%2F`. A read-only GET on 2026-11-08 of `cli/cli` for the existing branch
+  `af/12325-pr-view-project-null` answered HTTP 200 with a rules array for both `af%2F12325-...` and the raw-slash form.
+  Whether GitHub resolved the encoded form to that branch's own rules (and not to a fallback) is UNKNOWN; no fixture was
+  recorded for it.
