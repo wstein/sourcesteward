@@ -192,7 +192,10 @@ def acceptance(binary=BINARY):
                 hook = source / '.git/hooks/reference-transaction'
                 hook.parent.mkdir(exist_ok=True)
                 shutil.copy2(helper, hook)
-                observe('helper', status=('refused', 'error'))
+                # A plan without --state-dir is read-only and neutralizes the executable
+                # hook (Spec 031, docs/tidy.md); a stored plan would be refused.
+                hooked = observe('helper')
+                assert any('default-hooks' in item and 'neutralized' in item for item in hooked['limitations']), hooked
                 hook.unlink()
             else:
                 config = source / '.jj/repo/config.toml'
