@@ -579,6 +579,10 @@ m VC15 'only the latest line that names the source decides' src/review.rs \
             }' \
   review_states 'run::wrong_pr_carry_to_source_breaks_chain.json'
 
+m VS10 'an empty login can be trusted' src/review.rs \
+  '    !author.is_empty() && trusted.iter()' '    trusted.iter()' \
+  review_states 'run::empty_login_is_never_trusted.json'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

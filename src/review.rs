@@ -398,7 +398,7 @@ impl Entry {
 }
 
 fn is_trusted(author: &str, trusted: &[&str]) -> bool {
-    trusted.iter().any(|t| t.eq_ignore_ascii_case(author))
+    !author.is_empty() && trusted.iter().any(|t| t.eq_ignore_ascii_case(author))
 }
 
 /// A valid carry-over chain: position of the CLEAR review, the positions of the carry-overs after it, and the
