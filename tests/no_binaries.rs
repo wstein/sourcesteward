@@ -291,6 +291,11 @@ fn the_markers_catch_the_ways_to_start_a_process() {
         "fn f() { let c = <std::process::Command>::new(\"x\"); }",
         "unsafe { libc::syscall(libc::SYS_execve, a, b, c) }",
         "extern \"C\" { fn execve(a: *const u8); }",
+        "unsafe { syscall(59, a, b, c) }",
+        "let n = libc::SYS_execve;",
+        "use std::*;",
+        "fn f(c: &process::Child) {}",
+        "fn f(c: process::Command) {}",
     ] {
         assert!(spawn_marker(code).is_some(), "{code}");
     }

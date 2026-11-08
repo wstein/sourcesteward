@@ -249,3 +249,54 @@ fn fast_forward_of_paths_without_a_filter_attribute_still_works_next_to_a_filter
     assert_eq!(fx.read("other.txt").as_deref(), Some("v2\n"));
     assert_eq!(markers(mdir.path()), Vec::<String>::new());
 }
+
+#[test]
+fn fast_forward_uses_the_attributes_of_the_target_tree_and_checks_added_paths() {
+    // c1 adds the filter rule and a new filtered file: the old tree has neither
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("other.txt", Some("o1\n"))], "c0");
+    let c1 = fx.commit(
+        Some(c0),
+        &[
+            (".gitattributes", Some("*.bin filter=lfs\n")),
+            ("new.bin", Some("pointer\n")),
+        ],
+        "c1",
+    );
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.remote("main", c1);
+    fx.origin_head("main");
+    fx.track("main");
+    fx.checkout_head();
+    let v = sync_apply(&fx);
+    let r = &v["repos"][0];
+    assert_eq!(r["result"], "error", "{r}");
+    assert!(r["error"].as_str().unwrap().contains("new.bin"), "{r}");
+    assert!(!fx.exists("new.bin"));
+    assert_eq!(fx.tip("main"), c0);
+
+    // the old tree had the rule, the new one removes it and changes a .bin: nothing filters it any more
+    let fx = Fx::new();
+    let c0 = fx.commit(
+        None,
+        &[
+            (".gitattributes", Some("*.bin filter=lfs\n")),
+            ("data.bin", Some("a\n")),
+        ],
+        "c0",
+    );
+    let c1 = fx.commit(
+        Some(c0),
+        &[(".gitattributes", None), ("data.bin", Some("b\n"))],
+        "c1",
+    );
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.remote("main", c1);
+    fx.origin_head("main");
+    fx.track("main");
+    fx.checkout_head();
+    let v = sync_apply(&fx);
+    assert_eq!(v["repos"][0]["result"], "fast-forwarded", "{v}");
+}
