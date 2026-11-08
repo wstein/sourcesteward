@@ -564,6 +564,22 @@ m VC7 'the patch-id of a carry-over from a CLEAR review is not compared' src/rev
 m VC8 'the patch-id of a later link is not compared with the root' src/review.rs \
   '                        if self.patch_id(root) != patch_id {' '                        if false && self.patch_id(root) != patch_id {' \
   review_states 'run::carry_second_link_patch_id_mismatch_is_invalid.json'
+m VC9 'a chain may return to a head it already cleared' src/review.rs \
+  'if src.members.iter().any(|m| m.0 == to) {' 'if false && src.members.iter().any(|m| m.0 == to) {' \
+  review_states 'run::cycle_back_to_root_is_invalid.json'
+m VC10 'FINDINGS on an intermediate chain head is ignored' src/review.rs \
+  'if src.members.iter().any(|m| self.spoiled(m)) {' 'if false && src.members.iter().any(|m| self.spoiled(m)) {' \
+  review_states 'run::findings_on_intermediate_member_after_carry_invalidates.json'
+m VC11 'FINDINGS on the root head after the carry-over is ignored' src/review.rs \
+  '                    if self.spoiled(&first) {' '                    if false && self.spoiled(&first) {' \
+  review_states 'run::findings_on_chain_member_after_carry_invalidates.json'
+m VC12 'FINDINGS before the CLEAR also spoils the chain' src/review.rs \
+  '            .is_some_and(|&f| f > member.1)' '            .is_some_and(|_| true)' \
+  review_states 'run::findings_on_chain_member_before_the_clear_is_superseded.json'
+m VC13 'FINDINGS only counts for the first chain head' src/review.rs \
+  '            .is_some_and(|&f| f > member.1)' '            .is_some_and(|&f| f > member.1 && member.1 == 0)' \
+  review_states 'run::findings_on_intermediate_member_after_carry_invalidates.json'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

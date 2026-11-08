@@ -401,15 +401,26 @@ fn is_trusted(author: &str, trusted: &[&str]) -> bool {
     trusted.iter().any(|t| t.eq_ignore_ascii_case(author))
 }
 
-/// The root of a valid carry-over: position of the CLEAR review and the carry-over positions after it.
-type Root = (usize, Vec<usize>);
+/// A valid carry-over chain: position of the CLEAR review, the positions of the carry-overs after it, and the
+/// heads the chain has cleared with the position of the line that cleared each (root head first).
+#[derive(Clone)]
+struct Root {
+    root: usize,
+    links: Vec<usize>,
+    members: Vec<(String, usize)>,
+}
 
 struct Chains<'a> {
     e: &'a [Entry],
     memo: Vec<Option<Result<Root, &'static str>>>,
+    /// Position of the last `FINDINGS` review per head (any pr).
+    last_findings: &'a std::collections::HashMap<String, usize>,
 }
 
 const NO_SOURCE: &str = "from is not a CLEAR or a valid carry-over before this comment";
+const REPEATED_HEAD: &str = "repeated-head: the chain returns to a head it already cleared";
+const MEMBER_FINDINGS: &str =
+    "member-findings: a head of the chain got FINDINGS after it was cleared";
 const PATCH_ID_MISMATCH: &str =
     "patch-id-mismatch: the declared patch-id differs from the patch-id of the CLEAR at the root";
 
@@ -423,6 +434,13 @@ impl Chains<'_> {
         let r = self.compute(pos);
         self.memo[pos] = Some(r.clone());
         r
+    }
+
+    /// True when a `FINDINGS` review of the head of `member` comes after the line that cleared it.
+    fn spoiled(&self, member: &(String, usize)) -> bool {
+        self.last_findings
+            .get(&member.0)
+            .is_some_and(|&f| f > member.1)
     }
 
     fn patch_id(&self, pos: usize) -> &str {
@@ -456,16 +474,31 @@ impl Chains<'_> {
                     if self.patch_id(q) != patch_id {
                         return Err(PATCH_ID_MISMATCH);
                     }
-                    return Ok((q, vec![pos]));
+                    let first = (from, q);
+                    if self.spoiled(&first) {
+                        return Err(MEMBER_FINDINGS);
+                    }
+                    return Ok(Root {
+                        root: q,
+                        links: vec![pos],
+                        members: vec![first, (to, pos)],
+                    });
                 }
                 Line::Carried { to: t, .. } if t == from => {
-                    if let Ok((root, mut links)) = self.valid(q) {
-                        if self.patch_id(root) != patch_id {
+                    if let Ok(mut src) = self.valid(q) {
+                        if self.patch_id(src.root) != patch_id {
                             return Err(PATCH_ID_MISMATCH);
                         }
-                        links.push(pos);
-                        return if links.len() <= MAX_LINKS {
-                            Ok((root, links))
+                        if src.members.iter().any(|m| m.0 == to) {
+                            return Err(REPEATED_HEAD);
+                        }
+                        if src.members.iter().any(|m| self.spoiled(m)) {
+                            return Err(MEMBER_FINDINGS);
+                        }
+                        src.links.push(pos);
+                        src.members.push((to, pos));
+                        return if src.links.len() <= MAX_LINKS {
+                            Ok(src)
                         } else {
                             Err(NO_SOURCE)
                         };
@@ -570,7 +603,19 @@ pub fn evaluate(
         (&a.ev.created_at, a.ev.comment_id).cmp(&(&b.ev.created_at, b.ev.comment_id))
     });
 
+    let mut last_findings = std::collections::HashMap::new();
+    for (pos, e) in strict.iter().enumerate() {
+        if let Line::Review {
+            verdict: Verdict::Findings,
+            head,
+            ..
+        } = &e.ev.line
+        {
+            last_findings.insert(head.clone(), pos);
+        }
+    }
     let mut chains = Chains {
+        last_findings: &last_findings,
         memo: vec![None; strict.len()],
         e: &strict,
     };
@@ -619,10 +664,10 @@ pub fn evaluate(
                 Line::Review { .. } => Status::Clear,
                 Line::Carried { .. } => Status::ClearCarried,
             };
-            if let Some((r, links)) = root {
-                res.chain.push(strict[r].ev.clone());
+            if let Some(r) = root {
+                res.chain.push(strict[r.root].ev.clone());
                 res.chain
-                    .extend(links.iter().map(|&l| strict[l].ev.clone()));
+                    .extend(r.links.iter().map(|&l| strict[l].ev.clone()));
             }
         }
     }
