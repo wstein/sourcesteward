@@ -353,7 +353,12 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
 
 /// True when `dir` is not below `<work tree>/.worktrees/` (compared as written and with symbolic links resolved).
 pub fn outside_worktrees_dir(repo: &gix::Repository, dir: &std::path::Path) -> bool {
-    let Some(root) = repo.workdir().map(|w| w.join(".worktrees")) else {
+    // `.worktrees/` of the main checkout, also when `repo` was opened at a linked worktree
+    let Some(root) = repo
+        .main_repo()
+        .ok()
+        .and_then(|m| m.workdir().map(|w| w.join(".worktrees")))
+    else {
         return true;
     };
     if dir.starts_with(&root) {

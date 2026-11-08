@@ -397,3 +397,49 @@ fn the_summary_counts_what_apply_would_do_with_worktrees() {
     assert!(blocker("clean").is_null());
     assert!(blocker("dirty").as_str().unwrap().contains("uncommitted"));
 }
+
+/// From a linked worktree root, `.worktrees/` is still the one of the main checkout.
+#[test]
+fn from_a_linked_root_the_worktrees_directory_is_the_main_checkouts() {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, &[("a.txt", Some("a\n"))], "c0");
+    fx.remote("main", c0);
+    fx.origin_head("main");
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("root", c0);
+    fx.branch("inside", c0);
+    let root = real_worktree(&fx, "root", "root");
+    add_worktree_at(
+        &fx,
+        "in",
+        "inside",
+        &fx.path.join(".worktrees/in"),
+        true,
+        false,
+    );
+    let rr = stw::repo::RepoRef {
+        name: "fx".into(),
+        path: root,
+    };
+    let p = stw::tidy::plan_repo_with_opts(
+        &rr,
+        stw::tidy::PrProof {
+            prs: None,
+            note: "off".into(),
+        },
+        &stw::tidy::PlanOpts {
+            backup_days: 7,
+            now: 1_800_000_000,
+        },
+    );
+    assert!(p.error.is_none(), "{:?}", p.error);
+    let wt = p
+        .branches
+        .iter()
+        .find(|b| b.branch == "inside")
+        .and_then(|b| b.worktree.as_ref())
+        .expect("worktree of inside");
+    assert!(!wt.outside, "below the main checkout's .worktrees/");
+}
