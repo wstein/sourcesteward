@@ -528,6 +528,36 @@ m VU9 'a tab escape is read as a line feed' src/review.rs \
   '            '\''t'\'' => out.push('\''\t'\''),' '            '\''t'\'' => out.push('\''\n'\''),' \
   review_lines 'unescape_reverses_the_reads_escaping'
 
+m VW1 'a trusted line for another pr is not considered' src/review.rs \
+  'if decisive_pos.is_none_or(|d| fp > d) {' 'if false && decisive_pos.is_none_or(|d| fp > d) {' \
+  review_states 'run::wrong_pr_newer_findings_makes_unknown.json'
+m VW2 'a trusted line for another pr without any decision is ignored' src/review.rs \
+  'if decisive_pos.is_none_or(|d| fp > d) {' 'if decisive_pos.is_some_and(|d| fp > d) {' \
+  review_states 'run::wrong_pr_without_decision_is_unknown.json'
+m VW3 'a trusted line for another pr older than the decision counts as newer' src/review.rs \
+  'if decisive_pos.is_none_or(|d| fp > d) {' 'if decisive_pos.is_none_or(|d| fp < d) {' \
+  review_states 'run::wrong_pr_older_than_clear_keeps_clear.json'
+m VW4 'an untrusted line for another pr is evidence' src/review.rs \
+  '                    if !is_trusted {
+                        continue;
+                    }
+' '' \
+  review_states 'run::wrong_pr_untrusted_is_ignored.json'
+m VW5 'a line for another pr naming the source does not break the chain' src/review.rs \
+  '                if self.e[q].names_head(&from) {
+                    return None;
+                }
+' '                if self.e[q].names_head(&from) {
+                    continue;
+                }
+' \
+  review_states 'run::wrong_pr_findings_on_chain_member_breaks_chain.json'
+m VW6 'a line for another pr naming another head makes the state unknown' src/review.rs \
+  '        if entry.foreign {
+            if entry.names_head(head) {' '        if entry.foreign {
+            if true {' \
+  review_states 'run::wrong_pr_for_other_head_is_ignored.json'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

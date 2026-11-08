@@ -13,10 +13,11 @@
   }
  ],
  "expect": {
-  "status": "no-review",
+  "status": "unknown",
   "decisive": null,
   "findings": [
    "wrong-pr:1"
-  ]
+  ],
+  "unknown_reason_contains": "another pr"
  }
 }

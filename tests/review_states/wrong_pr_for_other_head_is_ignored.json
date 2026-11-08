@@ -1,0 +1,22 @@
+{
+ "scope": 15,
+ "head": "{A}",
+ "trusted": [
+  "owner"
+ ],
+ "comments": [
+  {
+   "id": 1,
+   "author": "owner",
+   "created_at": "2026-01-01T00:00:01Z",
+   "body": "Review: CLEAR head={B} patch-id={P} pr=16"
+  }
+ ],
+ "expect": {
+  "status": "no-review",
+  "decisive": null,
+  "findings": [
+   "wrong-pr:1"
+  ]
+ }
+}

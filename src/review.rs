@@ -384,6 +384,8 @@ fn valid_stamp(s: &str) -> bool {
 
 struct Entry {
     ev: Evidence,
+    /// A trusted line for another pull request (or `pr=none`): not evidence, but it may name the head.
+    foreign: bool,
 }
 
 impl Entry {
@@ -427,6 +429,12 @@ impl Chains<'_> {
             return None;
         }
         for q in (0..pos).rev() {
+            if self.e[q].foreign {
+                if self.e[q].names_head(&from) {
+                    return None;
+                }
+                continue;
+            }
             match self.e[q].ev.line.clone() {
                 Line::Review { verdict, head, .. } if head == from => {
                     return (verdict == Verdict::Clear).then(|| (q, vec![pos]));
@@ -498,13 +506,16 @@ pub fn evaluate(
                 let pr = match &line {
                     Line::Review { pr, .. } | Line::Carried { pr, .. } => *pr,
                 };
-                if !scope.accepts(pr) {
+                let foreign = !scope.accepts(pr);
+                if foreign {
                     let d = match pr {
                         PrRef::Number(n) => format!("pr={n}"),
                         PrRef::None => "pr=none".into(),
                     };
                     findings.push(find(FindingKind::WrongPr, c, d));
-                    continue;
+                    if !is_trusted {
+                        continue;
+                    }
                 }
                 let ev = Evidence {
                     comment_id: c.id,
@@ -514,7 +525,7 @@ pub fn evaluate(
                     edited: c.updated_at != c.created_at,
                     line,
                 };
-                let entry = Entry { ev };
+                let entry = Entry { ev, foreign };
                 if !is_trusted {
                     findings.push(find(FindingKind::UntrustedAuthor, c, String::new()));
                     untrusted_relevant |= entry.names_head(head);
@@ -538,7 +549,15 @@ pub fn evaluate(
         e: &strict,
     };
     let mut decisive: Option<(usize, Option<Root>)> = None;
+    // Positions of trusted lines for another pr that name the head.
+    let mut foreign_head: Vec<usize> = Vec::new();
     for (pos, entry) in strict.iter().enumerate() {
+        if entry.foreign {
+            if entry.names_head(head) {
+                foreign_head.push(pos);
+            }
+            continue;
+        }
         match &entry.ev.line {
             Line::Review { head: h, .. } if h == head => decisive = Some((pos, None)),
             Line::Carried { to, .. } if to == head => match chains.valid(pos) {
@@ -555,6 +574,7 @@ pub fn evaluate(
     }
 
     let mut res = unknown(scope, head, findings, vec![]);
+    let decisive_pos = decisive.as_ref().map(|d| d.0);
     match decisive {
         None => {
             res.status = if untrusted_relevant {
@@ -581,7 +601,7 @@ pub fn evaluate(
         }
     }
     // Lines about other heads that took no part in the decision.
-    for e in &strict {
+    for e in strict.iter().filter(|e| !e.foreign) {
         if !e.names_head(head) && !res.chain.iter().any(|c| c.comment_id == e.ev.comment_id) {
             res.findings.push(Finding {
                 kind: FindingKind::StaleHead,
@@ -604,6 +624,15 @@ pub fn evaluate(
         };
         if newer {
             reasons.push(format!("comment {id} has an unparsed review line"));
+        }
+    }
+    // Likewise a trusted line for another pr that names the head: it may be meant for this one.
+    for &fp in &foreign_head {
+        if decisive_pos.is_none_or(|d| fp > d) {
+            reasons.push(format!(
+                "comment {} names the head with another pr",
+                strict[fp].ev.comment_id
+            ));
         }
     }
     if !reasons.is_empty() {
