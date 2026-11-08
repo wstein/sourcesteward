@@ -45,12 +45,14 @@ esac
 [ "$confirm" = "$repo" ] || usage "--confirm must repeat --repo exactly (this script writes to that repository)"
 case $wait in ''|*[!0-9]*) usage "--wait must be a number of seconds" ;; esac
 [ "$wait" -le 900 ] || usage "--wait is at most 900"
-case $repo in
+lcrepo=$(printf '%s' "$repo" | tr 'A-Z' 'a-z')
+case $lcrepo in
   wstein/sourcesteward|wstein/cubistry|wstein/anchorage-workspace|wstein/whr-anchorage) usage "$repo is a real repository, not a sandbox" ;;
 esac
-case $repo in
+# the pattern applies to NAME only, never to the owner part
+case ${lcrepo#*/} in
   *sandbox*|*spike*|*scratch*|*measure*) ;;
-  *) usage "the repository name must contain sandbox, spike, scratch or measure" ;;
+  *) usage "the repository NAME (after the slash) must contain sandbox, spike, scratch or measure" ;;
 esac
 
 # say prints a command; do runs it unless this is a dry run.
@@ -65,6 +67,12 @@ else
 fi
 recfile=$tmp/record.md
 [ "$dry" -eq 0 ] || recfile=/dev/stdout
+left=$tmp/left-behind.log
+if [ "$dry" -eq 0 ]; then
+  : > "$left"
+  # a failure midway leaves branches and pull requests in the sandbox; name them
+  trap 'rc=$?; if [ "$rc" -ne 0 ] && [ -s "$left" ]; then { echo "measure-native-stack.sh: failed (exit $rc); left behind in $repo:"; cat "$left"; } >&2; fi' EXIT
+fi
 id=$(date +%Y%m%d%H%M%S)
 ba=stw-measure-$id-a bb=stw-measure-$id-b bc=stw-measure-$id-c
 
@@ -84,6 +92,7 @@ commit_on() { # branch from file
   do_ $GIT -C "$tmp/repo" add "$3"
   do_ $GIT -C "$tmp/repo" commit --quiet -m "measure: $1"
   do_ $GIT -C "$tmp/repo" push --quiet -u origin "$1"
+  [ "$dry" -eq 1 ] || echo "branch: $1" >> "$left"
 }
 commit_on "$ba" "origin/$def" "measure-$id-a.txt"
 commit_on "$bb" "$ba" "measure-$id-b.txt"
@@ -93,6 +102,7 @@ pr_create() { # head base title
   say "$GH pr create --repo $repo --head $1 --base $2 --title $3 --body 'stw land native stack measurement'"
   if [ "$dry" -eq 1 ]; then echo "PR-$1"; return; fi
   url=$($GH pr create --repo "$repo" --head "$1" --base "$2" --title "$3" --body 'stw land native stack measurement')
+  echo "pull request: #${url##*/}" >> "$left"
   echo "${url##*/}"
 }
 na=$(pr_create "$ba" "$def" "measure $id a")
@@ -173,7 +183,7 @@ view() { # number
     nd=$(pr_create "$bd" "$def" "measure $id d"); ne=$(pr_create "$be" "$bd" "measure $id e")
     hd=$(revparse "$bd")
     do_ $GIT -C "$tmp/repo" push --porcelain origin "$hd:refs/heads/$def" >&2
-    $SLEEP 20
+    [ "$dry" -eq 1 ] || $SLEEP 20
     do_ $GIT -C "$tmp/repo" push --quiet origin --delete "$bd" >&2
     for step in 5 30 60; do
       [ "$dry" -eq 1 ] || $SLEEP "$step"
