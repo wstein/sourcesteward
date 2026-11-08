@@ -8,7 +8,8 @@ stw starts the installed `git` in one place only, the runner (`src/git_runner.rs
 nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
-driver such as git-lfs can make it look modified), https fetch uses no credential helper, and an empty `PATH` still serves
+driver such as git-lfs can make it look modified, and `sync --apply` refuses, before any write, a fast-forward that
+would write such a path), https fetch uses no credential helper, and an empty `PATH` still serves
 every gix read. There is no `gh` and no `ssh` of stw's own. Later `push`,
 `range-diff` and conflict resolution in a worktree use the same runner. Each step that ran through it carries `"via": "git"`
 in the JSON output; without a usable `git` (missing, older than the step needs, unknown option) the step reports
@@ -214,8 +215,9 @@ Runner rules (`src/git_runner.rs`):
   --upload-pack=git-upload-pack origin`. No shell, no repository hook, no repository-chosen upload-pack program. An empty,
   relative, missing or non-repository path is refused; the process working directory is never used.
 - Repository config that runs commands is refused: `core.sshCommand`, `core.gitProxy`, `core.askPass`,
-  `core.alternateRefsCommand`, any `credential.*`, `url.*.insteadOf`/`pushInsteadOf`, `remote.origin.receivepack` and
-  `remote.origin.vcs` in the local or worktree config give `fetch: unsupported` with `git_error: refused-config` and the
+  `core.alternateRefsCommand`, any `credential.*`, `url.*.insteadOf`/`pushInsteadOf`, `remote.origin.receivepack`,
+  `remote.origin.vcs`, and any `include`, `includeIf` or `hook` section (git follows include files, so a refused key
+  could hide in one) in the local or worktree config give `fetch: unsupported` with `git_error: refused-config` and the
   key name; the same keys in the user's own config are allowed (a repository that sets `credential.helper` locally cannot
   be fetched over ssh by stw; use git directly).
 - Environment allowlist: `PATH`, `HOME`, `USER`, `LOGNAME`, `XDG_CONFIG_HOME`, `TMPDIR`, `SSH_AUTH_SOCK`, `SSH_AGENT_PID`,
@@ -324,4 +326,4 @@ gix has no API stability promise before 1.0: the pin is exact and updates are de
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
 index during `--apply`; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
-during fast-forward; Linux and Windows (only macOS arm64 was run; keychain code is macOS-only); cold-cache timings.
+during fast-forward; Windows, and Linux beyond the test suite (the original measurements ran on macOS arm64; the M0 review and tests ran on Linux aarch64; keychain code is macOS-only); cold-cache timings.
