@@ -1211,3 +1211,131 @@ fn a_branch_with_the_same_change_on_the_same_path_is_still_deleted() {
     let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
     assert_eq!((bp.decision, bp.proof), ("delete", "equal-patches"));
 }
+
+/// Plan (and apply) for a branch `feature` forked from `c0`, against `origin/main` = one commit on `c0` that
+/// applies `main_edits`. Returns (decision, proof) of `feature` and whether the branch still exists after apply.
+fn feature_vs_main(
+    base: &[(&str, Option<&str>)],
+    main_edits: &[(&str, Option<&str>)],
+    feature_edits: &[(&str, Option<&str>)],
+) -> (&'static str, &'static str, bool) {
+    let fx = Fx::new();
+    let c0 = fx.commit(None, base, "c0");
+    let on_main = fx.commit(Some(c0), main_edits, "main");
+    let feature = fx.commit(Some(c0), feature_edits, "feature");
+    fx.remote("main", on_main);
+    fx.origin_head("main");
+    fx.branch("main", on_main);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("feature", feature);
+    let now = fx
+        .repo()
+        .find_commit(feature)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W {
+        fx,
+        now,
+        c0,
+        u: feature,
+    };
+    let p = plan(&w);
+    let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
+    let (d, pr) = (bp.decision, bp.proof);
+    let dir = scratch();
+    apply(&w, dir.path());
+    (d, pr, has(&w, "feature"))
+}
+
+/// Git's patch ID ignores white space in file content too; a change that differs from main only in white space
+/// (here: indentation of a Makefile recipe) is a different change and must keep the branch.
+#[test]
+fn a_change_that_differs_only_in_white_space_is_kept() {
+    let base = [("Makefile", Some("all:\n\tcc x\n"))];
+    let (d, proof, exists) = feature_vs_main(
+        &base,
+        &[("Makefile", Some("all:\n  cc x\n"))],
+        &[("Makefile", Some("all:\n\t\tcc   x\n"))],
+    );
+    assert_eq!((d, exists), ("keep", true), "[{proof}]");
+}
+
+/// The same change with the same white space is still recognised, also when main has other commits before it
+/// (a rebase of an unchanged commit).
+#[test]
+fn an_identical_change_with_white_space_is_still_recognised() {
+    let fx = Fx::new();
+    let c0 = fx.commit(
+        None,
+        &[("Makefile", Some("all:\n\tcc x\n")), ("o.txt", Some("o\n"))],
+        "c0",
+    );
+    let other = fx.commit(Some(c0), &[("o.txt", Some("o2\n"))], "other");
+    let on_main = fx.commit(
+        Some(other),
+        &[("Makefile", Some("all:\n\t\tcc   x\n"))],
+        "main",
+    );
+    let feature = fx.commit(
+        Some(c0),
+        &[("Makefile", Some("all:\n\t\tcc   x\n"))],
+        "feature",
+    );
+    fx.remote("main", on_main);
+    fx.origin_head("main");
+    fx.branch("main", on_main);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("feature", feature);
+    let now = fx
+        .repo()
+        .find_commit(feature)
+        .unwrap()
+        .committer()
+        .unwrap()
+        .seconds()
+        + DAY;
+    let w = W {
+        fx,
+        now,
+        c0,
+        u: feature,
+    };
+    let p = plan(&w);
+    let bp = p.branches.iter().find(|b| b.branch == "feature").unwrap();
+    assert_eq!((bp.decision, bp.proof), ("delete", "equal-patches"));
+}
+
+/// Path digest: a deleted file `a b.txt` is not the deletion of `ab.txt`.
+#[test]
+fn deleting_a_path_that_differs_only_by_spaces_is_kept() {
+    let base = [("a b.txt", Some("x\n")), ("ab.txt", Some("x\n"))];
+    let (d, proof, exists) = feature_vs_main(&base, &[("ab.txt", None)], &[("a b.txt", None)]);
+    assert_eq!((d, exists), ("keep", true), "[{proof}]");
+}
+
+/// Path digest: paths of equal length that differ in the place of the space (`ab ` vs `a b`).
+#[test]
+fn adding_paths_of_equal_length_that_differ_in_the_space_is_kept() {
+    let base = [("base", Some("x\n"))];
+    let (d, proof, exists) =
+        feature_vs_main(&base, &[("ab ", Some("new\n"))], &[("a b", Some("new\n"))]);
+    assert_eq!((d, exists), ("keep", true), "[{proof}]");
+}
+
+/// Git hashes the diff lines without separators: the added line `a+b` and the two added lines `a`, `b` give
+/// the same patch ID. The exact digest keeps the line borders (newlines and length prefix).
+#[test]
+fn one_added_line_is_not_two_added_lines_with_the_same_text() {
+    let base = [("f.txt", Some("x\n"))];
+    let (d, proof, exists) = feature_vs_main(
+        &base,
+        &[("f.txt", Some("x\na\nb\n"))],
+        &[("f.txt", Some("x\na+b\n"))],
+    );
+    assert_eq!((d, exists), ("keep", true), "[{proof}]");
+}

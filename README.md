@@ -265,7 +265,10 @@ on a single file), the ref is restored but files already written stay; `git stat
 
 - Patch ID (`git patch-id --stable`, for squash/rebase-merge detection): `src/patch_id.rs`. On 2424 real commits 2399 equal git (98.97 %);
   the others are 6 binary diffs and 19 text diffs with different hunk placement. A hunk-placement difference makes equal patches look different (a missed `equal-patches` proof).
-  Paths are hashed as git writes them (quoted, raw bytes). Git ignores white space in file names too (`a b.txt` equals `ab.txt`), so the `equal-patches` proof also requires identical changed paths.
+  Paths are hashed as git writes them (quoted, raw bytes). Git's ID ignores white space in file names and in file
+  content (`a b.txt` equals `ab.txt`; `\tcc x` equals `  cc   x`), so the `equal-patches` proof also requires an
+  identical digest of the diff lines with their white space (file names included): a change that differs from main
+  only in white space keeps the branch.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.

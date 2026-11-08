@@ -23,7 +23,20 @@ const CONTEXT: u32 = 3;
 struct Hasher {
     cur: gix::hash::Hasher,
     sum: [u8; 20],
+    /// The same lines with their white space kept, hashed per file and summed like `sum`.
+    exact_cur: gix::hash::Hasher,
+    exact_sum: [u8; 20],
     log: Option<Vec<u8>>,
+}
+
+/// Add `digest` to `sum` as a little-endian number, byte by byte (git's `hash_obj` sum in stable mode).
+fn add_digest(sum: &mut [u8; 20], digest: &[u8]) {
+    let mut carry: u16 = 0;
+    for (i, b) in digest.iter().enumerate() {
+        carry += sum[i] as u16 + *b as u16;
+        sum[i] = carry as u8;
+        carry >>= 8;
+    }
 }
 
 impl Hasher {
@@ -31,11 +44,16 @@ impl Hasher {
         Hasher {
             cur: gix::hash::hasher(gix::hash::Kind::Sha1),
             sum: [0; 20],
+            exact_cur: gix::hash::hasher(gix::hash::Kind::Sha1),
+            exact_sum: [0; 20],
             log: None,
         }
     }
     /// Feed one logical line with all ASCII whitespace removed (git's `remove_space`).
     fn line(&mut self, line: &[u8]) {
+        // the exact variant keeps every byte; the length prefix keeps line borders unambiguous
+        self.exact_cur.update(&(line.len() as u64).to_be_bytes());
+        self.exact_cur.update(line);
         let mut buf = Vec::with_capacity(line.len());
         buf.extend(
             line.iter()
@@ -52,19 +70,24 @@ impl Hasher {
     fn finish_file(&mut self) -> Result<()> {
         let done = std::mem::replace(&mut self.cur, gix::hash::hasher(gix::hash::Kind::Sha1));
         let digest = done.try_finalize()?;
-        let mut carry: u16 = 0;
-        for (i, b) in digest.as_bytes().iter().enumerate() {
-            carry += self.sum[i] as u16 + *b as u16;
-            self.sum[i] = carry as u8;
-            carry >>= 8;
-        }
+        add_digest(&mut self.sum, digest.as_bytes());
+        let exact = std::mem::replace(
+            &mut self.exact_cur,
+            gix::hash::hasher(gix::hash::Kind::Sha1),
+        )
+        .try_finalize()?;
+        add_digest(&mut self.exact_sum, exact.as_bytes());
         if let Some(log) = &mut self.log {
             log.extend_from_slice(b"--file-end--\n");
         }
         Ok(())
     }
-    fn finish(self) -> ObjectId {
-        ObjectId::from_bytes_or_panic(&self.sum)
+    /// (patch ID, white-space-preserving digest of the same lines)
+    fn finish(self) -> (ObjectId, ObjectId) {
+        (
+            ObjectId::from_bytes_or_panic(&self.sum),
+            ObjectId::from_bytes_or_panic(&self.exact_sum),
+        )
     }
 }
 
@@ -152,19 +175,21 @@ fn kind_of(m: gix::objs::tree::EntryMode) -> Option<EntryKind> {
     Some(m.kind())
 }
 
+/// (patch ID, white-space-preserving digest of the same diff lines, which include the quoted raw paths): equal
+/// patches need both equal.
+pub type PatchKey = (ObjectId, ObjectId);
+
 /// Patch ID of `commit` against its first parent. `None` for merge commits and for commits that
 /// change nothing (git prints no ID for those either).
 pub fn commit_patch_id(repo: &gix::Repository, commit: ObjectId) -> Result<Option<ObjectId>> {
     Ok(commit_patch_key(repo, commit)?.map(|(id, _)| id))
 }
 
-/// Patch ID of `commit` and a digest of its changed paths (raw bytes, sorted). Git's patch ID ignores all
-/// white space, also inside file names, so `a b.txt` and `ab.txt` get the same ID; whoever takes equal IDs as
-/// proof of equal patches has to compare the path digest as well.
-pub fn commit_patch_key(
-    repo: &gix::Repository,
-    commit: ObjectId,
-) -> Result<Option<(ObjectId, ObjectId)>> {
+/// Patch ID of `commit` and a digest of the same diff lines with their white space kept (the lines include the
+/// file names, as raw bytes). Git's patch ID ignores all white space, in file names and in file content, so
+/// `a b.txt` and `ab.txt`, or `\tcc x` and `  cc   x`, get the same ID; whoever takes equal IDs as proof of
+/// equal patches has to compare the second component as well.
+pub fn commit_patch_key(repo: &gix::Repository, commit: ObjectId) -> Result<Option<PatchKey>> {
     let c = repo.find_commit(commit)?;
     let parents: Vec<ObjectId> = c.parent_ids().map(|p| p.detach()).collect();
     if parents.len() > 1 {
@@ -178,7 +203,7 @@ pub fn commit_patch_key(
     if old_tree.id == new_tree.id {
         return Ok(None); // empty commit: no patch, nothing to compare
     }
-    tree_diff_inner(repo, &old_tree, &new_tree, false).map(|(id, _, paths)| Some((id, paths)))
+    tree_diff_inner(repo, &old_tree, &new_tree, false).map(|((id, exact), _)| Some((id, exact)))
 }
 
 /// Patch ID of the difference between two trees.
@@ -187,7 +212,7 @@ pub fn tree_diff_patch_id(
     old: &gix::Tree<'_>,
     new: &gix::Tree<'_>,
 ) -> Result<ObjectId> {
-    tree_diff_inner(repo, old, new, false).map(|(id, _, _)| id)
+    tree_diff_inner(repo, old, new, false).map(|((id, _), _)| id)
 }
 
 /// The normalized lines that go into the hash (debug aid for the oracle comparison).
@@ -198,7 +223,7 @@ pub fn commit_patch_text(repo: &gix::Repository, commit: ObjectId) -> Result<Str
         Some(p) => repo.find_commit(p.detach())?.tree()?,
         None => repo.empty_tree(),
     };
-    let (_, log, _) = tree_diff_inner(repo, &old_tree, &new_tree, true)?;
+    let (_, log) = tree_diff_inner(repo, &old_tree, &new_tree, true)?;
     Ok(String::from_utf8_lossy(&log).into_owned())
 }
 
@@ -207,7 +232,7 @@ fn tree_diff_inner(
     old: &gix::Tree<'_>,
     new: &gix::Tree<'_>,
     log: bool,
-) -> Result<(ObjectId, Vec<u8>, ObjectId)> {
+) -> Result<((ObjectId, ObjectId), Vec<u8>)> {
     use gix::diff::tree::recorder::Change;
     let mut rec = gix::diff::tree::Recorder::default();
     let mut state = gix::diff::tree::State::default();
@@ -261,12 +286,6 @@ fn tree_diff_inner(
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
-    let mut paths = gix::hash::hasher(gix::hash::Kind::Sha1);
-    for f in &files {
-        paths.update(&(f.path.len() as u64).to_be_bytes());
-        paths.update(&f.path);
-    }
-    let paths = paths.try_finalize()?;
     let mut h = Hasher::new();
     if log {
         h.log = Some(Vec::new());
@@ -276,7 +295,7 @@ fn tree_diff_inner(
         h.finish_file()?;
     }
     let log = h.log.take().unwrap_or_default();
-    Ok((h.finish(), log, paths))
+    Ok((h.finish(), log))
 }
 
 /// `prefix` + `path` as git writes it in a diff header with `core.quotePath=true`: when the name contains

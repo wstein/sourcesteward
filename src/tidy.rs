@@ -15,7 +15,7 @@ use serde_json::{json, Value};
 use crate::error::{Error, Result};
 use crate::github::{AnyPr, Client, GithubState};
 use crate::output::*;
-use crate::patch_id::commit_patch_key;
+use crate::patch_id::{commit_patch_key, PatchKey};
 use crate::repo::worktrees::{self, StaleRegistration};
 use crate::repo::{self, RepoRef};
 
@@ -93,9 +93,6 @@ pub fn is_backup(branch: &str) -> bool {
         .any(|p| branch.starts_with(p))
 }
 
-/// (patch ID, digest of the changed paths): equal patches need both equal.
-pub type PatchKey = (ObjectId, ObjectId);
-
 /// Patch-ID cache of one repository: commit -> patch ID (None for merges).
 #[derive(Default)]
 pub struct PatchCache {
@@ -114,8 +111,9 @@ impl PatchCache {
 }
 
 /// `git cherry <base> <tip>` has no `+` line: every non-merge commit of `base..tip` has an equal
-/// patch among the non-merge commits of `tip..base`: equal patch ID and identical changed paths (git's patch
-/// ID ignores white space in file names). Needs at least one such commit.
+/// patch among the non-merge commits of `tip..base`: equal patch ID and identical diff lines with their
+/// white space, file names included (git's patch ID ignores white space in names and content). Needs at least
+/// one such commit.
 pub fn all_patches_in_base(
     repo: &gix::Repository,
     cache: &mut PatchCache,
