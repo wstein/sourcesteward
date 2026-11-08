@@ -172,6 +172,10 @@ fn quoted_and_non_utf8_paths_match_git_patch_id_stable() {
         (b"\xc3\xbc.txt", "a12c693af8ae99d796ab163cc4d391e913f19adb"),
         (b"t\tab.txt", "faae4ad69a0dc6143099a6fceff270da7fb62492"),
         (b"q\"uote.txt", "ff18615e2275a8a676ab1526f29ab14125a1db0a"),
+        (b"\x7f.txt", "64d9f87c617abdc0eb9229696a84e7256de748ad"),
+        (b"\x01.txt", "21735f47b71b799fa2d82978ab5b53bb2a9e5a19"),
+        (b"a\nb.txt", "cefd92ed6d854eb7ae81b83453ef72b216d0eda4"),
+        (b"\x07.txt", "f2ce79681538895a24b118925225655e0a353d2a"),
         (b"sp ace.txt", "a0a1149c3668767a807914ec85e9b042e0e99b16"),
         (b"a\\b.txt", "a776b496cf58e9ec19a57a9c1eb38424e1394a27"),
     ];

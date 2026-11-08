@@ -526,6 +526,7 @@ fn an_unchanged_gitattributes_applies_to_a_changed_file() {
     assert_eq!(fx.read("b.txt").as_deref(), Some("added\r\n"));
     let ch = status::changes(&fx.repo(), true).unwrap();
     assert_eq!((ch.staged, ch.unstaged, ch.untracked), (0, 0, 0), "{ch:?}");
+    assert_no_skip_worktree(&fx);
 }
 
 /// A `.gitattributes` that is part of the update applies to the other changed files of the same update; a
@@ -556,4 +557,32 @@ fn a_gitattributes_added_by_the_update_applies_to_its_changed_files() {
         Some("same\n"),
         "not part of the update"
     );
+}
+
+/// No index entry may carry skip-worktree after a fast-forward (the flag is only a means for the partial
+/// checkout and must never reach `.git/index`; `git ls-files -v` would show `S` instead of `H`). The
+/// fixtures have no skip-worktree entries before.
+fn assert_no_skip_worktree(fx: &Fx) {
+    let index = gix::index::File::at(
+        fx.path.join(".git/index"),
+        gix::hash::Kind::Sha1,
+        true,
+        Default::default(),
+    )
+    .unwrap();
+    assert!(!index.entries().is_empty());
+    for e in index.entries() {
+        assert!(
+            !e.flags.contains(gix::index::entry::Flags::SKIP_WORKTREE),
+            "skip-worktree on {}",
+            e.path(&index)
+        );
+    }
+}
+
+#[test]
+fn a_fast_forward_writes_no_skip_worktree_flag_to_the_index() {
+    let s = setup();
+    fast_forward(&s.fx.repo(), s.new, "origin/main").unwrap();
+    assert_no_skip_worktree(&s.fx);
 }
