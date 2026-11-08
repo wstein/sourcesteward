@@ -38,7 +38,7 @@ func (s *ShapeSet) HasNative(shape Shape) bool {
 func retargets(r Report) []Effect {
 	var out []Effect
 	for _, e := range r.Effects {
-		if e.Kind == retargetKind && len(e.Argv) == 6 {
+		if e.Kind == retargetKind && len(e.Argv) == 8 {
 			out = append(out, e)
 		}
 	}
@@ -89,8 +89,8 @@ func Reverify(before, after Report) []Reason {
 		if err != nil || closed[n] {
 			continue
 		}
-		if a, ok := entry(after, n); ok && a.BaseRef != e.Argv[5] {
-			add(ReasonRetargetNotApplied, n, fmt.Sprintf("the base is %s, expected %s", a.BaseRef, e.Argv[5]))
+		if a, ok := entry(after, n); ok && a.BaseRef != e.Argv[7] {
+			add(ReasonRetargetNotApplied, n, fmt.Sprintf("the base is %s, expected %s", a.BaseRef, e.Argv[7]))
 		}
 	}
 	if after.DefaultTip != before.DefaultTip {
@@ -114,7 +114,7 @@ func RestoreArgv(before Report) [][]string {
 			continue
 		}
 		if c, ok := entry(before, n); ok {
-			out = append(out, []string{"gh", "pr", "edit", e.Argv[3], "--base", c.BaseRef})
+			out = append(out, RetargetArgv(e.Argv[5], n, c.BaseRef))
 		}
 	}
 	return out

@@ -383,7 +383,7 @@ func TestNativeStackPlanOnATokenWithoutAdministrationRead(t *testing.T) {
 		t.Fatalf("%v\n%s", err, out)
 	}
 	doc = validate(t, out)
-	if doc["landable"] != true || !strings.Contains(out, `"kind":"retarget"`) || !strings.Contains(out, `"gh","pr","edit","12","--base","main"`) {
+	if doc["landable"] != true || !strings.Contains(out, `"kind":"retarget"`) || !strings.Contains(out, `"gh","pr","edit","12","--repo","o/r","--base","main"`) {
 		t.Fatalf("%s", out)
 	}
 }

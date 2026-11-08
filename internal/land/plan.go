@@ -340,7 +340,7 @@ func (p *planner) sideChildren() {
 		if parent, ok := heads[op.BaseRef]; ok && !listed[op.Number] && op.BaseRef != p.repo.DefaultBranch {
 			found = true
 			p.r.Children = append(p.r.Children, op.Number)
-			p.check("side-child", op.Number, false, "base "+op.BaseRef, ReasonSideChild, fmt.Sprintf("its base is the head branch of #%d; land or retarget it first (stw never retargets)", parent))
+			p.check("side-child", op.Number, false, "base "+op.BaseRef, ReasonSideChild, fmt.Sprintf("its base is the head branch of #%d; land it first or retarget it by hand (stw retargets only the pull requests of the chain)", parent))
 			delete(p.bad, op.Number) // the side child is not part of the chain
 		}
 	}
@@ -699,7 +699,7 @@ func (p *planner) finish() {
 	}
 	for _, it := range p.o.Chain {
 		if old, ok := p.native[it.Number]; ok {
-			r.Effects = append(r.Effects, Effect{ID: fmt.Sprintf("retarget-%d", it.Number), Kind: retargetKind, Argv: RetargetArgv(it.Number, p.repo.DefaultBranch), Outcome: out0,
+			r.Effects = append(r.Effects, Effect{ID: fmt.Sprintf("retarget-%d", it.Number), Kind: retargetKind, Argv: RetargetArgv(p.o.Repo, it.Number, p.repo.DefaultBranch), Outcome: out0,
 				Detail: fmt.Sprintf("base %s becomes %s before the push (head unchanged); on a failure stw prints, and never runs, the restore command", old, p.repo.DefaultBranch)})
 		}
 	}

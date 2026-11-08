@@ -441,7 +441,7 @@ reviewed SHAs unchanged, no rebase-merge, no new SHAs, no new CI run) and adds t
   for recorded evidence (constitution II). A `native` entry also admits the flat chain of the same repository shape.
 - **FR-086 Sequence.** In this order, each step after the previous succeeded; any failure stops the run:
   1. Evaluate every precondition of FR-060 to FR-068 (the plan) and the typed approval of FR-072.
-  2. For each native item, bottom first: `gh pr edit N --base DEFAULT` (a `PATCH` of `base` only). This is the only write before the push.
+  2. For each native item, bottom first: `gh pr edit N --repo OWNER/NAME --base DEFAULT` (a `PATCH` of `base` only; `--repo` names the repository so the edit never depends on the working directory). This is the only write before the push.
      The heads do not change, so the reviewed SHAs and the checks of the heads stay valid.
   3. Re-read everything and evaluate again (FR-087). Any reason, a changed plan digest or a base that is not the default branch refuses the push.
   4. The one push of FR-070. 5. The bounded wait of FR-073. 6. Branch deletes only on `--delete-branch` (FR-075).
@@ -453,7 +453,7 @@ reviewed SHAs unchanged, no rebase-merge, no new SHAs, no new CI run) and adds t
   retarget starts a run when a workflow listens to the `edited` event; a head without any run is `checks-missing`; the push waits until the run
   ends). The check test is the one of FR-064; it is run again, not assumed to hold.
 - **FR-088 Failure branch.** After a failed or interrupted retarget or a refused re-read nothing is pushed. stw prints, and never runs,
-  `gh pr edit N --base OLD_BASE` for each pull request it retargeted (FR-031 failure branch). A rerun starts at step 1: a retargeted pull
+  `gh pr edit N --repo OWNER/NAME --base OLD_BASE` for each pull request it retargeted (FR-031 failure branch). A rerun starts at step 1: a retargeted pull
   request is flat then, so the remaining steps are the flat landing.
 - **FR-089 `delete_branch_on_merge`.** It does not decide the order: the retarget precedes the push, so a branch that GitHub deletes after
   the marking is no base of an open listed pull request. What GitHub does with a pull request whose base branch is deleted is **UNKNOWN**
@@ -492,7 +492,8 @@ pull request and deletes no branch unless asked.
   empty (FR-064); the owner closes and reopens that pull request or pushes, and re-reviews.
 - `--stack` where the pull requests all have base `main` and their heads are a linear chain (the shape of this workflow): the accepted shape;
   the diff each pull request shows then contains its parents' commits, which changes nothing about the landing. A chain whose bases are
-  the parents' branches (native `gh stack`) is refused `land-unmeasured` until E1 and E2 are recorded.
+  the parents' branches (native `gh stack`) is planned as the retarget sequence of FR-084 to FR-088 and is `land-unmeasured` until the allowlist entry
+  of the repository shape carries `native: true` with recorded evidence (FR-085).
 - `--stack` with a listed pull request already `MERGED`: with `merge_commit_sha` equal to its own head it is part of a previous landing (replay, FR-074); with another SHA it is `already-merged-elsewhere` for that number, nothing changes and the owner names the rest.
 - Stack: child head is based on the bottom's head; after the bottom lands, the child is a fast-forward of the new default branch only if
   the bottom landed as exactly its head (always true for this command).
