@@ -92,6 +92,14 @@ fn prev_is_ident(c: &[char], i: usize) -> bool {
     i > 0 && (c[i - 1].is_alphanumeric() || c[i - 1] == '_')
 }
 
+/// `word` as a whole identifier in `code`.
+fn has_word(code: &str, word: &str) -> bool {
+    code.match_indices(word).any(|(i, _)| {
+        !code[..i].chars().next_back().is_some_and(is_ident)
+            && !code[i + word.len()..].chars().next().is_some_and(is_ident)
+    })
+}
+
 fn is_ident(ch: char) -> bool {
     ch.is_alphanumeric() || ch == '_'
 }
@@ -134,6 +142,16 @@ pub fn spawn_marker(text: &str) -> Option<String> {
         "libc::popen",
         "nix::unistd",
         ".spawn()",
+        "syscall",
+        "SYS_exec",
+        "SYS_fork",
+        "SYS_clone",
+        "SYS_vfork",
+        // glob imports hide `process` (`use std::*; <process::Command>::new(..)`)
+        "std::*",
+        "std::{*",
+        "core::*",
+        "extern \"\"",
     ] {
         if code.contains(m) {
             return Some(m.to_string());
@@ -163,7 +181,15 @@ pub fn spawn_marker(text: &str) -> Option<String> {
         }
         let prev_nonspace = code[..at].trim_end().chars().next_back();
         let in_use = use_ranges.iter().any(|(s, e)| at >= *s && at < *e);
-        if (prev_nonspace == Some(':') || in_use) && !process_tail_is_harmless(&code[end..]) {
+        // a field or method called `process` (`x.process`) is not a path
+        if prev_nonspace == Some('.') {
+            continue;
+        }
+        // `process::<something>` is a path wherever it stands (`<process::Command>::new`, `= process::Command`)
+        let path_use = code[end..].trim_start().starts_with("::");
+        if (path_use || prev_nonspace == Some(':') || in_use)
+            && !process_tail_is_harmless(&code[end..])
+        {
             return Some("process".to_string());
         }
     }
@@ -191,6 +217,9 @@ fn only_the_runner_spawns_a_process() {
     for f in files {
         let is_runner = f.file_name().is_some_and(|n| n == RUNNER);
         let text = std::fs::read_to_string(&f).unwrap();
+        if !is_runner && has_word(&code_only(&text), "libc") {
+            panic!("{}: uses libc; only {RUNNER} may", f.display());
+        }
         if let Some(marker) = spawn_marker(&text) {
             if is_runner {
                 runner_spawns = true;
@@ -249,6 +278,12 @@ fn the_markers_catch_the_ways_to_start_a_process() {
         "std :: process :: Command :: new(x)",
         "std::process\n    ::Command::new(x)",
         "let s = \"//\"; std::process::Command::new(x);",
+        "use std::*;\nfn f() { <process::Command>::new(\"x\"); }",
+        "use std::{*};",
+        "fn f() { let c = (process::Command::new(\"x\")); }",
+        "fn f() { let c = <std::process::Command>::new(\"x\"); }",
+        "unsafe { libc::syscall(libc::SYS_execve, a, b, c) }",
+        "extern \"C\" { fn execve(a: *const u8); }",
     ] {
         assert!(spawn_marker(code).is_some(), "{code}");
     }
@@ -268,6 +303,8 @@ fn the_markers_catch_the_ways_to_start_a_process() {
         "let t = r#\"Command::new(\"x\")\"#;",
         "/// the process exits\nfn f() {}",
         "let processed = 1;",
+        "let d = x.process; d.process(1);",
+        "fn process(x: u8) {} fn g() { process(1); }",
     ] {
         assert!(
             spawn_marker(code).is_none(),
@@ -275,4 +312,6 @@ fn the_markers_catch_the_ways_to_start_a_process() {
             spawn_marker(code)
         );
     }
+    assert!(has_word("unsafe { libc::kill(1, 2) }", "libc"));
+    assert!(!has_word("let mylibc = 1; libcx::a", "libc"));
 }
