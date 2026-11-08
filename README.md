@@ -226,19 +226,25 @@ set and non-empty. Otherwise both are ignored (and the `EMAIL` variable with the
 the fallback, decides; a name from the environment is never combined with an email from elsewhere.
 
 `sync --apply` writes in this order: all checks first (dirty paths, overlap, untracked files in the way), then the
-branch ref (the write that can still fail for reasons no check sees: permissions, locks, reflog), then working
-tree files, then the index. There is no transaction across the three:
+index lock (`.git/index.lock`, taken here and held until the index is committed), then the branch ref (the write
+that can still fail for reasons no check sees: permissions, locks, reflog), then working tree files, then the
+index (written into the lock, which is renamed over the index last). There is no transaction across ref, files
+and index:
 
-- A refused check or a failed ref update leaves index, working tree and `HEAD` untouched (`tests/sync.rs`).
+- A refused check, a held `index.lock` (another git process or a stale lock file) or a failed ref update leaves
+  index, working tree and `HEAD` untouched (`tests/sync.rs`). The foreign lock file is not removed.
 - If writing files fails, the ref is put back to the old commit (reflog entry `stw: undo fast-forward ...`). Files
   the checkout already wrote stay; the index was not touched. `git status` shows those files as changes.
-- If writing the index fails, the ref is put back; all files are already new, the index is the old one.
+- If writing or committing the index fails, the ref is put back; all files are already new, the index is the old
+  one.
 - If the ref cannot be put back either, the error names both failures. `HEAD` then stays on the new commit while
   files and index are old or partly new.
 - If the process is killed (or the machine loses power) after the ref moved and before the index was written,
   `HEAD` points to the new commit while files and index are old or partly new; stw does not detect or repair this
-  on the next run. `git status` shows the update as local changes. To finish it: `git reset --hard HEAD`
-  (tested in a scratch repository; it also discards unrelated local changes). Without discarding anything
+  on the next run. `git status` shows the update as local changes. stw installs no signal handler, so a kill
+  during the checkout or index write also leaves a stale `.git/index.lock`: remove that lock file first (only
+  when no git process runs), otherwise git refuses every command that writes the index. To finish the update:
+  `git reset --hard HEAD` (tested in a scratch repository; it also discards unrelated local changes). Without discarding anything
   else: `git checkout HEAD -- <paths>` with the paths of
   `git diff --name-only --diff-filter=d <old commit> HEAD`, then `git rm --cached` and remove the files of
   `--diff-filter=D`. A plain `git checkout HEAD -- <path>` fails for a path that the update deleted ("pathspec
