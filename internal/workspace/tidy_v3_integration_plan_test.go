@@ -78,7 +78,10 @@ func TestPlanRecordsEveryForgeFreeClassAndReviewReasons(t *testing.T) {
 		t.Fatalf("plan failed: %+v", r.Diagnostics)
 	}
 	p := r.Plan
-	if p.ProofPolicy == nil || !reflect.DeepEqual(*p.ProofPolicy, defaultIntegrationPolicy()) {
+	// An offline plan records that the pull request proof was unavailable.
+	wantPolicy := defaultIntegrationPolicy()
+	wantPolicy.PRProof = v3PRProofUnavailable
+	if p.ProofPolicy == nil || !reflect.DeepEqual(*p.ProofPolicy, wantPolicy) {
 		t.Fatalf("default policy %+v", p.ProofPolicy)
 	}
 	want := map[string][3]string{ // decision, reason, proof
