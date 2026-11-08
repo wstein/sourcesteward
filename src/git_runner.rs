@@ -79,6 +79,9 @@ impl Op {
                 "--quiet",
                 "--no-tags",
                 "--no-recurse-submodules",
+                // `-c remote.origin.uploadpack=` does not win over the repository's own value (git uses
+                // the first one); the option does
+                "--upload-pack=git-upload-pack",
                 "origin",
             ],
         }
@@ -99,6 +102,9 @@ const LEADING: &[&str] = &[
     "maintenance.auto=false",
     "-c",
     "protocol.ext.allow=never",
+    // no repository hook (`reference-transaction`, ...)
+    "-c",
+    "core.hooksPath=/dev/null",
 ];
 
 /// Variables taken over from the caller's environment (credential and transport variables of the user).
@@ -177,8 +183,13 @@ pub enum GitError {
     },
     /// The process could not be started.
     Spawn(String),
-    /// The repository path was refused (empty, relative, missing, not a directory).
+    /// The repository path was refused (empty, relative, missing, not a directory, not a repository).
     Repo(String),
+    /// The repository's own config (local or worktree scope) names a key that makes git run a command.
+    /// The key is lower-case, as `section.subsection.key`. The same key in the user's config is allowed.
+    Refused {
+        key: String,
+    },
 }
 
 impl GitError {
@@ -193,6 +204,7 @@ impl GitError {
             GitError::Exit { .. } => "exit",
             GitError::Spawn(_) => "spawn",
             GitError::Repo(_) => "repository",
+            GitError::Refused { .. } => "refused-config",
         }
     }
 
@@ -200,7 +212,10 @@ impl GitError {
     pub fn is_unsupported(&self) -> bool {
         matches!(
             self,
-            GitError::NotFound | GitError::Version { .. } | GitError::UnknownOption(_)
+            GitError::NotFound
+                | GitError::Version { .. }
+                | GitError::UnknownOption(_)
+                | GitError::Refused { .. }
         )
     }
 }
@@ -226,6 +241,11 @@ impl std::fmt::Display for GitError {
             },
             GitError::Spawn(m) => write!(f, "git could not be started: {m}"),
             GitError::Repo(m) => write!(f, "repository path refused: {m}"),
+            GitError::Refused { key } => write!(
+                f,
+                "the repository's own git config sets {key}, which makes git run a command; \
+                 stw does not run git with it (put it in your user config instead)"
+            ),
         }
     }
 }
@@ -432,6 +452,7 @@ impl Runner {
                 required: op.min_version(),
             });
         }
+        refuse_local_command_config(repo)?;
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
         self.apply_env(&mut cmd, Some(repo));
@@ -557,6 +578,50 @@ impl Runner {
             }
         }
     }
+}
+
+/// Keys that make git run a program, as `section.subsection.key` in lower case. Checked in the local and
+/// worktree config only (the user's own config is trusted).
+fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
+    match section {
+        "core" => matches!(
+            key,
+            "sshcommand" | "gitproxy" | "askpass" | "alternaterefscommand"
+        ),
+        "credential" => true,
+        "url" => matches!(key, "insteadof" | "pushinsteadof"),
+        "remote" => sub == Some("origin") && matches!(key, "receivepack" | "vcs"),
+        _ => false,
+    }
+}
+
+/// Read the repository's config with gix and refuse when a local or worktree section sets such a key. A
+/// directory that is not a usable repository is refused too (fail closed).
+fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError> {
+    let r = gix::open(repo).map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
+    let snapshot = r.config_snapshot();
+    for section in snapshot.plumbing().sections() {
+        if !matches!(
+            section.meta().source,
+            gix::config::Source::Local | gix::config::Source::Worktree
+        ) {
+            continue;
+        }
+        let header = section.header();
+        let name = header.name().to_string().to_ascii_lowercase();
+        let sub = header.subsection_name().map(|s| s.to_string());
+        for key in section.body().value_names() {
+            let key = key.to_string().to_ascii_lowercase();
+            if runs_a_command(&name, sub.as_deref(), &key) {
+                let full = match &sub {
+                    Some(sub) => format!("{name}.{sub}.{key}"),
+                    None => format!("{name}.{key}"),
+                };
+                return Err(GitError::Refused { key: full });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn is_executable_file(p: &Path) -> bool {

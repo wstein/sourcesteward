@@ -105,10 +105,13 @@ fn the_argument_vector_is_fixed_and_names_the_repository_explicitly() {
             "maintenance.auto=false",
             "-c",
             "protocol.ext.allow=never",
+            "-c",
+            "core.hooksPath=/dev/null",
             "fetch",
             "--quiet",
             "--no-tags",
             "--no-recurse-submodules",
+            "--upload-pack=git-upload-pack",
             "origin"
         ]
     );
@@ -251,7 +254,7 @@ fn the_started_process_sees_the_scrubbed_environment_and_the_fixed_argv() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     let log = fake_git(&bin, "2.47.3", "exit 0");
     let r = runner_with(
         &bin,
@@ -276,7 +279,9 @@ fn the_started_process_sees_the_scrubbed_environment_and_the_fixed_argv() {
         "{argv}"
     );
     assert!(
-        argv.ends_with("fetch --quiet --no-tags --no-recurse-submodules origin"),
+        argv.ends_with(
+            "fetch --quiet --no-tags --no-recurse-submodules --upload-pack=git-upload-pack origin"
+        ),
         "{argv}"
     );
     for bad in [
@@ -300,7 +305,7 @@ fn the_working_directory_of_the_child_is_the_repository() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     script(
         &bin,
         "git",
@@ -364,7 +369,7 @@ fn old_or_unreadable_versions_are_typed_and_nothing_else_is_started() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     let log = fake_git(&bin, "2.20.1", "exit 0");
     let r = runner_with(&bin, &[]);
     let e = r.run(&repo, Op::FetchOrigin).unwrap_err();
@@ -407,7 +412,7 @@ fn the_version_is_checked_once_per_runner() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     let log = fake_git(&bin, "2.47.3", "exit 0");
     let r = runner_with(&bin, &[]);
     r.run(&repo, Op::FetchOrigin).unwrap();
@@ -423,7 +428,7 @@ fn an_unknown_option_is_a_typed_error() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     fake_git(
         &bin,
         "2.47.3",
@@ -453,7 +458,7 @@ fn unknown_options_are_recognised_by_exit_code_and_by_text() {
         let bin = t.path().join("bin");
         std::fs::create_dir(&bin).unwrap();
         let repo = t.path().join("repo");
-        std::fs::create_dir(&repo).unwrap();
+        gix::init(&repo).unwrap();
         fake_git(&bin, "2.47.3", body);
         let e = runner_with(&bin, &[])
             .run(&repo, Op::FetchOrigin)
@@ -472,7 +477,7 @@ fn a_failing_git_reports_exit_code_and_redacted_stderr() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     fake_git(
         &bin,
         "2.47.3",
@@ -504,7 +509,7 @@ fn time_is_bounded() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     fake_git(&bin, "2.47.3", "sleep 30");
     let r = runner_with(&bin, &[]).limits(Limits {
         timeout: Duration::from_millis(400),
@@ -527,7 +532,7 @@ fn output_is_bounded() {
     let bin = t.path().join("bin");
     std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
-    std::fs::create_dir(&repo).unwrap();
+    gix::init(&repo).unwrap();
     fake_git(&bin, "2.47.3", "yes xxxxxxxxxxxxxxxxxxxx | head -c 5000000");
     let r = runner_with(&bin, &[]).limits(Limits {
         max_stdout: 10_000,
@@ -729,4 +734,196 @@ fn real_git_refuses_the_ext_transport() {
         .unwrap_err();
     assert!(matches!(e, GitError::Exit { .. }), "{e:?}");
     assert!(!marker.exists(), "the ext transport ran a command");
+}
+
+// ---- repository-local commands (hooks, uploadpack) -----------------------------------------------
+
+fn append_local_config(repo: &Path, text: &str) {
+    use std::io::Write;
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(repo.join(".git/config"))
+        .unwrap();
+    write!(f, "{text}").unwrap();
+}
+
+#[test]
+fn real_git_runs_no_repository_hook_on_fetch() {
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let t = tmp();
+    let (_up, clone) = fetch_fixture(t.path(), |u| u.display().to_string());
+    let marker = t.path().join("hook-ran");
+    script(
+        &clone.join(".git/hooks"),
+        "reference-transaction",
+        &format!("touch '{}'", marker.display()),
+    );
+    Runner::from_process().run(&clone, Op::FetchOrigin).unwrap();
+    assert!(!marker.exists(), "a repository hook ran during the fetch");
+}
+
+#[test]
+fn real_git_ignores_a_repository_local_uploadpack_command() {
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let t = tmp();
+    let (up, clone) = fetch_fixture(t.path(), |u| u.display().to_string());
+    let marker = t.path().join("uploadpack-ran");
+    let helper = script(
+        t.path(),
+        "my-upload-pack",
+        &format!("touch '{}'\nexec git-upload-pack \"$@\"", marker.display()),
+    );
+    append_local_config(
+        &clone,
+        &format!("[remote \"origin\"]\n\tuploadpack = {}\n", helper.display()),
+    );
+    Runner::from_process().run(&clone, Op::FetchOrigin).unwrap();
+    assert!(!marker.exists(), "remote.origin.uploadpack ran");
+    assert_eq!(rev(&clone, "refs/remotes/origin/main"), rev(&up, "HEAD"));
+}
+
+#[test]
+fn real_git_does_not_run_a_repository_local_ssh_command() {
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let t = tmp();
+    let (_up, clone) = fetch_fixture(t.path(), |_| "ssh://fake-host/up".to_string());
+    let marker = t.path().join("ssh-ran");
+    let helper = script(
+        t.path(),
+        "my-ssh",
+        &format!("touch '{}'\nexit 1", marker.display()),
+    );
+    append_local_config(
+        &clone,
+        &format!("[core]\n\tsshCommand = {}\n", helper.display()),
+    );
+    let _ = Runner::from_process().run(&clone, Op::FetchOrigin);
+    assert!(!marker.exists(), "core.sshCommand of the repository ran");
+}
+
+/// Local (repository or worktree) config keys that make git run a command are refused with the key name;
+/// the same keys in the user's global config stay allowed.
+#[test]
+fn local_config_keys_that_run_commands_are_refused_by_name() {
+    let cases: &[(&str, &str)] = &[
+        ("[core]\n\tsshCommand = evil\n", "core.sshcommand"),
+        ("[core]\n\tgitProxy = evil\n", "core.gitproxy"),
+        ("[core]\n\taskPass = evil\n", "core.askpass"),
+        (
+            "[core]\n\talternateRefsCommand = evil\n",
+            "core.alternaterefscommand",
+        ),
+        ("[credential]\n\thelper = evil\n", "credential.helper"),
+        (
+            "[credential \"https://example.com\"]\n\thelper = evil\n",
+            "credential.https://example.com.helper",
+        ),
+        ("[credential]\n\tusername = x\n", "credential.username"),
+        (
+            "[url \"ext::x \"]\n\tinsteadOf = https://a/\n",
+            "url.ext::x .insteadof",
+        ),
+        (
+            "[url \"ssh://b/\"]\n\tpushInsteadOf = https://a/\n",
+            "url.ssh://b/.pushinsteadof",
+        ),
+        (
+            "[remote \"origin\"]\n\treceivepack = evil\n",
+            "remote.origin.receivepack",
+        ),
+        ("[remote \"origin\"]\n\tvcs = evil\n", "remote.origin.vcs"),
+    ];
+    for (snippet, key) in cases {
+        let t = tmp();
+        let bin = t.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let repo = t.path().join("repo");
+        gix::init(&repo).unwrap();
+        let log = fake_git(&bin, "2.47.3", "exit 0");
+        append_local_config(&repo, snippet);
+        let e = runner_with(&bin, &[])
+            .run(&repo, Op::FetchOrigin)
+            .unwrap_err();
+        match &e {
+            GitError::Refused { key: k } => assert_eq!(k, key),
+            other => panic!("{key}: {other:?}"),
+        }
+        assert!(e.is_unsupported());
+        assert_eq!(e.kind(), "refused-config");
+        assert!(e.to_string().contains(key), "{e}");
+        let calls = std::fs::read_to_string(&log).unwrap();
+        assert!(!calls.contains("ARGV"), "{key}: git was started: {calls}");
+    }
+}
+
+#[test]
+fn harmless_local_config_and_the_same_keys_in_the_users_config_are_allowed() {
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let repo = t.path().join("repo");
+    gix::init(&repo).unwrap();
+    fake_git(&bin, "2.47.3", "exit 0");
+    append_local_config(
+        &repo,
+        "[remote \"origin\"]\n\turl = ssh://h/x\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[remote \"other\"]\n\tvcs = x\n[user]\n\tname = T\n[core]\n\tbare = false\n",
+    );
+    // the user's global config holds all the dangerous keys
+    let home = t.path().join("home");
+    std::fs::create_dir(&home).unwrap();
+    std::fs::write(
+        home.join(".gitconfig"),
+        "[core]\n\tsshCommand = ssh -i k\n\taskPass = a\n[credential]\n\thelper = store\n",
+    )
+    .unwrap();
+    runner_with(&bin, &[("HOME", home.to_str().unwrap())])
+        .run(&repo, Op::FetchOrigin)
+        .unwrap();
+}
+
+#[test]
+fn a_worktree_config_is_checked_like_the_local_one() {
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let repo = t.path().join("repo");
+    gix::init(&repo).unwrap();
+    fake_git(&bin, "2.47.3", "exit 0");
+    append_local_config(&repo, "[extensions]\n\tworktreeConfig = true\n");
+    std::fs::write(
+        repo.join(".git/config.worktree"),
+        "[core]\n\tsshCommand = evil\n",
+    )
+    .unwrap();
+    let e = runner_with(&bin, &[])
+        .run(&repo, Op::FetchOrigin)
+        .unwrap_err();
+    assert!(
+        matches!(&e, GitError::Refused { key } if key == "core.sshcommand"),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn a_directory_that_is_not_a_repository_is_refused_before_git_starts() {
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let plain = t.path().join("plain");
+    std::fs::create_dir(&plain).unwrap();
+    let log = fake_git(&bin, "2.47.3", "exit 0");
+    let e = runner_with(&bin, &[])
+        .run(&plain, Op::FetchOrigin)
+        .unwrap_err();
+    assert!(matches!(e, GitError::Repo(_)), "{e:?}");
+    assert!(!std::fs::read_to_string(&log).unwrap().contains("ARGV"));
 }

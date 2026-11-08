@@ -95,7 +95,7 @@ fn ssh_and_local_remotes_go_through_the_git_runner_only() {
         }
         assert_eq!(calls.lines().count(), 2, "{url}: {calls}");
         assert!(
-            calls.contains("fetch --quiet --no-tags --no-recurse-submodules origin"),
+            calls.contains("fetch --quiet --no-tags --no-recurse-submodules --upload-pack=git-upload-pack origin"),
             "{calls}"
         );
         let everything = all(&o);
