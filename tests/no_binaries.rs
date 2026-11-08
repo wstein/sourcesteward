@@ -196,6 +196,21 @@ pub fn spawn_marker(text: &str) -> Option<String> {
     None
 }
 
+/// Why a file other than the runner is not allowed to be as it is, or None.
+pub fn file_violation(text: &str) -> Option<String> {
+    if has_word(&code_only(text), "libc") {
+        return Some("uses libc".to_string());
+    }
+    spawn_marker(text).map(|m| format!("may start a process ({m})"))
+}
+
+#[test]
+fn files_other_than_the_runner_may_not_use_libc() {
+    assert!(file_violation("fn f() { unsafe { libc::getpid(); } }").is_some());
+    assert!(file_violation("use libc;").is_some());
+    assert!(file_violation("fn f() { let a = 1; }").is_none());
+}
+
 #[test]
 fn only_the_runner_spawns_a_process() {
     let mut files = vec![];
@@ -217,18 +232,10 @@ fn only_the_runner_spawns_a_process() {
     for f in files {
         let is_runner = f.file_name().is_some_and(|n| n == RUNNER);
         let text = std::fs::read_to_string(&f).unwrap();
-        if !is_runner && has_word(&code_only(&text), "libc") {
-            panic!("{}: uses libc; only {RUNNER} may", f.display());
-        }
-        if let Some(marker) = spawn_marker(&text) {
-            if is_runner {
-                runner_spawns = true;
-            } else {
-                panic!(
-                    "{}: may start a process ({marker}); only {RUNNER} may",
-                    f.display()
-                );
-            }
+        if is_runner {
+            runner_spawns = spawn_marker(&text).is_some();
+        } else if let Some(why) = file_violation(&text) {
+            panic!("{}: {why}; only {RUNNER} may", f.display());
         }
     }
     // the check stays live: the runner is the place that really starts git
