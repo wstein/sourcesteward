@@ -1,5 +1,17 @@
 # Progress and handoff
 
+## Hugo download resilience (2026-11-09, source candidate)
+
+PR #408 CI job 129002686806 stopped before tests when the official Hugo download
+returned HTTP 504. The installer now makes at most three attempts for HTTP
+500/502/503/504 and URL/timeout failures, with 1 s and 2 s backoff. Permanent
+HTTP errors, archive size checks, pinned checksums and runtime validation remain
+fail-closed. Offline Hugo tests pass (14 tests), including retry exhaustion and
+preservation of an existing destination after a bad checksum. Documentation
+checks pass (433 documents). Full Go checks were attempted but unavailable in
+the repair environment (no Go toolchain or gofmt); hosted CI and independent
+review remain pending. No dependency change or production installation was made.
+
 ## Active work: base conflicts of open pull requests (Spec 047, issue #355, source candidate)
 
 Stacked on the Spec 046 branch. `stw pulls --conflicts` probes each open pull request of one repository against its base (`git merge-tree`

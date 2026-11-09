@@ -11,9 +11,25 @@ import shutil
 import subprocess
 import tarfile
 import tempfile
+import time
+from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
+
+def download(url):
+    """Retry transient release-host failures, at most three download attempts."""
+    for attempt in range(3):
+        try:
+            with urlopen(url, timeout=60) as response:
+                return response.read(150_000_001)
+        except HTTPError as error:
+            if error.code not in (500, 502, 503, 504) or attempt == 2:
+                raise
+        except (URLError, TimeoutError):
+            if attempt == 2:
+                raise
+        time.sleep(2 ** attempt)
 
 def install(destination):
     pin = json.loads((ROOT / 'scripts/hugo-release.json').read_text())
@@ -23,8 +39,7 @@ def install(destination):
         raise ValueError('Unsupported platform; install official Hugo ' + pin['version'] + ' and set HUGO')
     artifact = pin['artifacts'][key]
     url = 'https://github.com/gohugoio/hugo/releases/download/v' + pin['version'] + '/' + artifact['name']
-    with urlopen(url, timeout=60) as response:
-        raw = response.read(150_000_001)
+    raw = download(url)
     if len(raw) > 150_000_000 or hashlib.sha256(raw).hexdigest() != artifact['sha256']:
         raise ValueError('Hugo release checksum mismatch')
     with tempfile.TemporaryDirectory(prefix='stw-hugo-install-') as directory:
