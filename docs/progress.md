@@ -10,7 +10,10 @@ fail-closed. Offline Hugo tests pass (14 tests), including retry exhaustion and
 preservation of an existing destination after a bad checksum. Documentation
 checks pass (433 documents). Full Go checks were attempted but unavailable in
 the repair environment (no Go toolchain or gofmt); hosted CI and independent
-review remain pending. No dependency change or production installation was made.
+review remain pending. The broader Python discovery ran 463 tests with 9 failures,
+13 errors and 1 skip (Go-dependent architecture/CI/release checks and CI step
+execution); this environment does not establish a full green baseline.
+No dependency change or production installation was made.
 
 ## Active work: base conflicts of open pull requests (Spec 047, issue #355, source candidate)
 
