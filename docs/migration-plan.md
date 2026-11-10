@@ -194,7 +194,7 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (native jj deferred). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
 | `tidy apply` | present, Git only | M5 | **port** (done); recovery retention is M5. | same as `tidy plan` |
 | `tidy restore` | present; no journal listing | M5 | **port** (done). | `cli/tidy_v3_restore_test.go`, `tidy_prune_v4_restore_test.go` |
-| `tidy history` | absent | M5 | **owner decides**: lists stored journals; Rust `restore` takes `--run` or the newest. Fold into the M5 recovery question. | `cli/tidy_prune_v4_history_test.go` |
+| `tidy history` | absent | M5 | **owner decides** (open): lists stored journals; Rust `restore` takes `--run` or the newest. Tied to the slimmed M5 (decision 2026-11-10). | `cli/tidy_prune_v4_history_test.go` |
 | `review carry-over` | absent | M4 | **port**: reuses a CLEAR after a rebase; proof is equal patch-id, no merge commits, range-diff all `=`. Needs `range-diff` in the runner. | `internal/carryover` (46; repositories are built in `fixture_test.go`, no data files), `cli/review_test.go` |
 | `ready-check` | absent | M4 | **port**: pure `Evaluate` over seven conditions (open, review, checks, base, blocker, conflict, rebaseable). Review condition comes from the Rust M3 state. | `internal/readycheck` (25), `cli/readycheck_test.go` |
 | `lint pr` | absent | M8 | **port**: PR text rules. | `internal/lintpr` (15), `lintprcmd` (17), `cli/lint_test.go` |
@@ -252,12 +252,19 @@ Archive `legacy/sourcesteward` only when all 33 commands and the two extra binar
 
 ### Order of the ports
 
-Proposal from the milestone table: **M3 -> M4 -> M8 -> M9 -> M10**; in parallel the local stack line **M1/M2/M6**.
-Reason: restack makes stacking cheap, and M3/M4 replace the review gates that keep Go v0.2.0 installed.
+Owner decisions of 2026-11-10 (chosen by selection):
+- **Two port lines in parallel.** Line A: M3 -> M4 -> M8 -> M9 -> M10. Line B: M1 -> M2 -> M6 (restack, stacks).
+  Reason: restack makes stacking cheap, and M3/M4 replace the review gates that keep Go v0.2.0 installed.
+- **M5 is slimmed.** Instead of the full oplog: a backup ref `refs/stw/backup/<n>` before every mutation, evidence by
+  `range-diff`, undo = set the ref back. No journal, no retention logic, no general undo. M6 may start without spike B.
+  `tidy history` stays tied to this question; port or drop is still open (owner decides).
+- **Ports without spike** apply as soon as AGENTS.md with that rule is on `main` (commit `docs(agents)` of this branch).
+- **Go pages job:** the job `pages` on `main` of `wstein/sourcesteward` is red (Pages not set up). Decided: do nothing,
+  the legacy repository is archived. Noise until the archive.
+- **The 13 `defer` commands stay open.** Before the archive the owner turns each into a port or a `drop`; agents do not
+  decide this.
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
-- Defer: M5, M7, M11, M12, M13.
-- **Open owner decision (M5):** a slim recovery path (backup ref plus `range-diff` before each local rewrite) instead of the
-  full oplog with undo? It would let M6 start without spike B. Price: no general undo, no crash journal.
+- Still deferred: M7, M11, M12, M13.
 
 ### Next slice
 
