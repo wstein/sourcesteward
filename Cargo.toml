@@ -16,7 +16,7 @@ path = "src/main.rs"
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
 # Pinned exactly: gix has no API stability promise before 1.0.
 gix = { version = "=0.90.0", default-features = false, features = [
-    "sha1", "parallel", "blob-diff", "revision", "index", "status", "dirwalk",
+    "sha1", "parallel", "blob-diff", "merge", "revision", "index", "status", "dirwalk",
     "worktree-mutation", "attributes", "excludes",
     "blocking-network-client", "blocking-http-transport-reqwest-rust-tls",
 ] }
