@@ -62,6 +62,9 @@ pub fn parse_version(text: &str) -> Option<Version> {
 pub enum Op {
     /// `git fetch origin` for an ssh or local-path remote (no tags, no submodules).
     FetchOrigin,
+    /// `git check-attr filter diff merge -- .gitmodules` (`cached`: from the index only): what git itself would
+    /// apply to `.gitmodules` when `stw add` commits it. Prints one `path: attribute: value` line per attribute.
+    CheckAttrGitmodules { cached: bool },
     /// `git reset --hard HEAD` in a fresh clone that was fetched without a work tree (`stw add`). Runs
     /// with `core.attributesFile=/dev/null`; the caller has verified that no attribute file of the tree
     /// sets a filter.
@@ -102,6 +105,14 @@ impl Op {
                 "--upload-pack=git-upload-pack",
                 "origin",
             ]),
+            Op::CheckAttrGitmodules { cached } => {
+                let mut a = v(&["check-attr"]);
+                if *cached {
+                    a.push("--cached".to_string());
+                }
+                a.extend(v(&["filter", "diff", "merge", "--", ".gitmodules"]));
+                a
+            }
             Op::CheckoutClone => v(&["reset", "--hard", "--quiet", "HEAD"]),
             Op::SubmoduleAddExisting { url, path } => {
                 let mut a = v(&["submodule", "add", "--"]);

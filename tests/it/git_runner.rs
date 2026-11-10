@@ -1250,6 +1250,8 @@ fn add_ops() -> Vec<Op> {
     );
     let path = stw::add::SubPath::parse("projects/tool").unwrap();
     vec![
+        Op::CheckAttrGitmodules { cached: false },
+        Op::CheckAttrGitmodules { cached: true },
         Op::CheckoutClone,
         Op::SubmoduleAddExisting {
             url,
@@ -1290,7 +1292,17 @@ fn the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport() {
         "core.attributesFile=/dev/null",
     ];
     let ops = add_ops();
-    let expect: [&[&str]; 4] = [
+    let expect: [&[&str]; 6] = [
+        &["check-attr", "filter", "diff", "merge", "--", ".gitmodules"],
+        &[
+            "check-attr",
+            "--cached",
+            "filter",
+            "diff",
+            "merge",
+            "--",
+            ".gitmodules",
+        ],
         &["reset", "--hard", "--quiet", "HEAD"],
         &[
             "submodule",

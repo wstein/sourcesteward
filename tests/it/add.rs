@@ -788,16 +788,73 @@ fn other_staged_and_unstaged_changes_stay_out_of_the_commit_and_stay_as_they_wer
     assert_eq!(e.ws.read("untracked.txt").as_deref(), Some("u\n"));
 }
 
+/// A workspace attribute that attaches a filter to `.gitmodules` in any way git understands must refuse the
+/// add before a git step that would run the driver. `git check-attr` answers; the workspace's global config
+/// has a driver that leaves a marker file when it runs.
 #[test]
-fn escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs() {
-    let cases = [
-        (".gitattributes", "\\.gitmodules filter=evil\n"),
-        (".gitattributes", "\u{feff}.gitmodules filter=evil\n"),
-        (".gitattributes", "\u{feff}* filter=evil\n"),
-        (".git/info/attributes", "\\.gitmodules filter=evil\n"),
-        (".gitattributes", "\\.gitmodules diff=evil\n"),
+fn every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs() {
+    type Setup = Box<dyn Fn(&Env)>;
+    let attrs = |text: &'static str| -> Setup {
+        Box::new(move |e: &Env| e.ws.write(".gitattributes", text))
+    };
+    let info = |text: &'static str| -> Setup {
+        Box::new(move |e: &Env| e.ws.write(".git/info/attributes", text))
+    };
+    let commit_then_remove: Setup = Box::new(|e: &Env| {
+        e.ws.write(".gitattributes", ".gitmodules filter=evil\n");
+        e.ws.stage(".gitattributes");
+        std::fs::remove_file(e.ws.path.join(".gitattributes")).unwrap();
+    });
+    let symlinked: Setup = Box::new(|e: &Env| {
+        e.ws.write(".gitattributes", ".gitmodules filter=evil\n");
+        e.ws.stage(".gitattributes");
+        std::fs::remove_file(e.ws.path.join(".gitattributes")).unwrap();
+        e.ws.write("harmless", "# harmless\n");
+        std::os::unix::fs::symlink("harmless", e.ws.path.join(".gitattributes")).unwrap();
+    });
+    // (name, setup, must be refused); a name git does not match may only be harmless
+    let cases: Vec<(&str, Setup, bool)> = vec![
+        ("plain", attrs(".gitmodules filter=evil\n"), true),
+        ("star", attrs("* filter=evil\n"), true),
+        ("backslash", attrs("\\.gitmodules filter=evil\n"), true),
+        ("bom", attrs("\u{feff}.gitmodules filter=evil\n"), true),
+        ("bom star", attrs("\u{feff}* filter=evil\n"), true),
+        (
+            "quoted pattern",
+            attrs("\".gitmodules\"filter=evil\n"),
+            true,
+        ),
+        ("quoted star", attrs("\"*\"filter=evil\n"), true),
+        (
+            "octal escape",
+            attrs("\"\\056gitmodules\" filter=evil\n"),
+            true,
+        ),
+        (
+            "double star twice",
+            attrs("**/**/.gitmodules filter=evil\n"),
+            true,
+        ),
+        (
+            "leading slash double star",
+            attrs("/**/**/.gitmodules filter=evil\n"),
+            true,
+        ),
+        ("tab", attrs(".gitmodules\tfilter=evil\n"), true),
+        (
+            "macro",
+            attrs("[attr]evil2 filter=evil\n.gitmodules evil2\n"),
+            true,
+        ),
+        ("diff", attrs("\\.gitmodules diff=evil\n"), true),
+        ("merge", attrs("*.gitmodules merge=evil\n"), true),
+        ("info quoted", info("\"*\"filter=evil\n"), true),
+        ("info backslash", info("\\.gitmodules filter=evil\n"), true),
+        ("index only", commit_then_remove, true),
+        ("symlink", symlinked, true),
+        ("upper case name", attrs(".GITMODULES filter=evil\n"), false),
     ];
-    for (file, text) in cases {
+    for (name, setup, must_refuse) in cases {
         let (src, _) = source(&[("a.txt", "a\n")]);
         let e = env();
         let marker = e.home.path().join("filter-ran");
@@ -810,14 +867,53 @@ fn escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs() {
             ),
         )
         .unwrap();
-        e.ws.write(file, text);
+        setup(&e);
+        let c = local(&src, "octo", "tool");
+        let r = e.run(&c, &req("octo", "tool", "projects/tool"), false);
+        assert!(!marker.exists(), "{name}: a filter program ran");
+        if must_refuse {
+            let err = r.expect_err(name);
+            assert!(err.to_string().contains("for .gitmodules"), "{name}: {err}");
+        }
+    }
+}
+
+#[test]
+fn a_filter_in_the_clones_attributes_is_found_however_it_is_written() {
+    for text in [
+        "*.bin filter=lfs\n",
+        "\"*\"filter=lfs\n",
+        "\".gitmodules\"filter=x\n",
+        "* -filter\n",
+        "* !filter\n",
+        "*\tfilter=x\n",
+        "\u{feff}* filter=x\n",
+        "[attr]big filter=lfs\n",
+        "* FILTER=x\n",
+    ] {
+        let (src, _) = source(&[("a.txt", "a\n"), ("sub/.gitattributes", text)]);
+        let e = env();
         refuses(
             &e,
             &local(&src, "octo", "tool"),
             &req("octo", "tool", "projects/tool"),
-            "for .gitmodules",
+            "sets a filter",
         );
-        assert!(!marker.exists(), "a filter program ran for {text:?}");
+    }
+    for text in [
+        "*.png text=auto\n",
+        "# filter=x\n",
+        "filter.txt text\n",
+        "src/filter text\n",
+    ] {
+        let (src, _) = source(&[("a.txt", "a\n"), (".gitattributes", text)]);
+        let e = env();
+        e.run(
+            &local(&src, "octo", "tool"),
+            &req("octo", "tool", "projects/tool"),
+            false,
+        )
+        .unwrap_or_else(|er| panic!("{text:?} refused: {er}"));
     }
 }
 

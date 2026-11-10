@@ -296,7 +296,7 @@ pub fn add(
     }
 
     git_runner::check_config_for_add(ws, false).map_err(|e| refused(e.to_string()))?;
-    check_gitmodules_attributes(ws, &gitdir)?;
+    check_gitmodules_attributes(ws, runner)?;
     check_path(ws, &gitdir, &wsrepo, req)?;
     check_gitmodules_clean(ws, &wsrepo)?;
 
@@ -409,73 +409,77 @@ fn ignore_worktrees(moddir: &Path) -> Result<()> {
 
 // ---------------------------------------------------------------------------------------------- checks
 
-/// Lines of an attributes file that set one of `names` (`name`, `name=value`) for a pattern accepted by
-/// `pattern_ok`. Macro definitions (`[attr]x ...`) count with any pattern.
-fn attribute_lines_setting(text: &str, names: &[&str], pattern_ok: &dyn Fn(&str) -> bool) -> bool {
+/// Does an attributes file name the attribute `filter` anywhere (`filter`, `-filter`, `!filter`, `filter=x`,
+/// also right after a closing quote, in a macro definition)? No pattern matching: any such line counts, which
+/// refuses a little too much and cannot be fooled by a pattern form. Used for the files of a fresh clone,
+/// where no work tree exists for `git check-attr` yet.
+fn sets_filter(text: &str) -> bool {
     // git skips a UTF-8 byte order mark at the start of an attributes file
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     for line in text.lines() {
-        let line = line.trim();
+        let line = line.trim().to_ascii_lowercase();
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        let mut tokens = line.split_whitespace();
-        let Some(first) = tokens.next() else { continue };
-        let is_macro = first.starts_with("[attr]");
-        if !is_macro && !pattern_ok(first.trim_matches('"')) {
-            continue;
-        }
-        for t in tokens {
-            let name = t.split('=').next().unwrap_or("").to_ascii_lowercase();
-            if names.contains(&name.as_str()) && !t.starts_with('-') && !t.starts_with('!') {
+        let mut from = 0;
+        while let Some(i) = line[from..].find("filter") {
+            let at = from + i;
+            let before = line[..at].chars().next_back();
+            let after = line[at + "filter".len()..].chars().next();
+            let start_ok = before.is_none_or(|c| c.is_whitespace() || matches!(c, '"' | '-' | '!'));
+            let end_ok = after.is_none_or(|c| c.is_whitespace() || c == '=');
+            if start_ok && end_ok {
                 return true;
             }
+            from = at + "filter".len();
         }
     }
     false
 }
 
-/// Could the attribute pattern `p` match the file `.gitmodules`? Conservative: a pattern with a bracket
-/// expression or a backslash (`\.gitmodules` matches the file in git) counts as a match.
-fn pattern_may_match_gitmodules(p: &str) -> bool {
-    let p = p.strip_prefix('/').unwrap_or(p);
-    if p.contains('[') || p.contains('\\') {
-        return true;
+/// What git would apply to `.gitmodules` when the commit is made: asked of git itself (`check-attr`, from the
+/// work tree with its index fallback, and from the index alone), through the runner. Any value but
+/// `unspecified` for `filter`, `diff` or `merge`, any other output and any failure refuses (fail closed); a
+/// symlink as `.gitattributes` refuses too (git does not follow it and reads the index copy).
+fn check_gitmodules_attributes(ws: &Path, runner: &Runner) -> Result<()> {
+    if ws
+        .join(".gitattributes")
+        .symlink_metadata()
+        .is_ok_and(|m| m.file_type().is_symlink())
+    {
+        return Err(refused(
+            ".gitattributes is a symlink; git reads its index copy for .gitmodules and stw add does not run git with it",
+        ));
     }
-    if p.contains('/') && !p.starts_with("**/") {
-        return false;
-    }
-    let p = p.strip_prefix("**/").unwrap_or(p);
-    glob(p.as_bytes(), b".gitmodules")
-}
-
-fn glob(p: &[u8], s: &[u8]) -> bool {
-    match p.split_first() {
-        None => s.is_empty(),
-        Some((b'*', rest)) => (0..=s.len()).any(|i| glob(rest, &s[i..])),
-        Some((b'?', rest)) => !s.is_empty() && glob(rest, &s[1..]),
-        Some((c, rest)) => {
-            s.first().is_some_and(|d| d.eq_ignore_ascii_case(c)) && glob(rest, &s[1..])
-        }
-    }
-}
-
-/// `.gitattributes` (top level) and `info/attributes` must not attach `filter`, `diff` or `merge` to
-/// `.gitmodules`: `git commit` would run the driver on it.
-fn check_gitmodules_attributes(ws: &Path, gitdir: &Path) -> Result<()> {
-    for f in [ws.join(".gitattributes"), gitdir.join("info/attributes")] {
-        if let Ok(text) = std::fs::read(&f) {
-            let text = String::from_utf8_lossy(&text);
-            if attribute_lines_setting(
-                &text,
-                &["filter", "diff", "merge"],
-                &pattern_may_match_gitmodules,
-            ) {
+    for cached in [false, true] {
+        let out = runner
+            .run(ws, Op::CheckAttrGitmodules { cached })
+            .map_err(|e| refused(format!("git check-attr failed: {e}")))?;
+        let text = String::from_utf8_lossy(&out.stdout).into_owned();
+        let mut seen = 0;
+        for line in text.lines() {
+            let mut it = line.rsplitn(3, ": ");
+            let (Some(value), Some(attr), Some(path)) = (it.next(), it.next(), it.next()) else {
                 return Err(refused(format!(
-                    "{} sets filter, diff or merge for .gitmodules; stw add does not run git with it",
-                    f.display()
+                    "git check-attr printed {line:?}; not understood"
+                )));
+            };
+            if path != ".gitmodules" || !matches!(attr, "filter" | "diff" | "merge") {
+                return Err(refused(format!(
+                    "git check-attr printed {line:?}; not understood"
                 )));
             }
+            if value != "unspecified" {
+                return Err(refused(format!(
+                    "git applies {attr}: {value} for .gitmodules (an attributes file or info/attributes); stw add does not run git with it"
+                )));
+            }
+            seen += 1;
+        }
+        if seen != 3 {
+            return Err(refused(format!(
+                "git check-attr printed {seen} of 3 attributes for .gitmodules; not understood"
+            )));
         }
     }
     Ok(())
@@ -606,7 +610,7 @@ fn verify_clone(sub: &Path, url: &CanonicalUrl) -> Result<()> {
     // info/attributes of the git dir and of the common dir
     for dir in [repo.git_dir(), repo.common_dir()] {
         if let Ok(t) = std::fs::read(dir.join("info/attributes")) {
-            if attribute_lines_setting(&String::from_utf8_lossy(&t), &["filter"], &|_| true) {
+            if sets_filter(&String::from_utf8_lossy(&t)) {
                 return Err(filter_refusal("info/attributes"));
             }
         }
@@ -628,7 +632,7 @@ fn verify_clone(sub: &Path, url: &CanonicalUrl) -> Result<()> {
             continue;
         }
         let obj = repo.find_object(e.oid)?;
-        if attribute_lines_setting(&String::from_utf8_lossy(&obj.data), &["filter"], &|_| true) {
+        if sets_filter(&String::from_utf8_lossy(&obj.data)) {
             return Err(filter_refusal(&e.filepath.to_string()));
         }
     }
@@ -818,28 +822,27 @@ mod tests {
     }
 
     #[test]
-    fn attribute_scan_sees_filters_only() {
-        let any = |_: &str| true;
-        assert!(attribute_lines_setting(
+    fn the_clone_scan_sees_a_filter_however_it_is_written() {
+        for t in [
             "*.bin filter=lfs diff=lfs",
-            &["filter"],
-            &any
-        ));
-        assert!(attribute_lines_setting(
             "* text FILTER=x",
-            &["filter"],
-            &any
-        ));
-        assert!(attribute_lines_setting(
             "[attr]big filter=lfs",
-            &["filter"],
-            &any
-        ));
-        assert!(!attribute_lines_setting(
+            "\"*\"filter=lfs",
+            ".gitmodules\"filter=x",
+            "* -filter",
+            "* !filter",
+            "*\tfilter=x",
+            "\u{feff}* filter=x",
+        ] {
+            assert!(sets_filter(t), "{t:?}");
+        }
+        for t in [
             "* text=auto\n# filter=x",
-            &["filter"],
-            &any
-        ));
-        assert!(!attribute_lines_setting("*.bin -filter", &["filter"], &any));
+            "filter.txt text",
+            "src/filter text",
+            "*.filtered text",
+        ] {
+            assert!(!sets_filter(t), "{t:?}");
+        }
     }
 }
