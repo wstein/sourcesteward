@@ -95,7 +95,7 @@ it documents non-atomic worktree and symbolic-ref updates. Product design must r
 not promise a filesystem transaction. Undo cannot reverse a push or recover arbitrary untracked files.
 
 The D prototype uses `pending` and `pending-meta` refs, Git cherry-pick in a dedicated worktree, and an optional
-oplog hook. Product mutations must require a working recovery path; silently proceeding without oplog is not the
+oplog hook. Product mutations must require a working recovery path; silently proceeding without a backup ref is not the
 product acceptance target. The marker-removal heuristic is not sufficient evidence for all conflict kinds:
 binary, modify/delete, rename, and genuine marker text need explicit resolution checks.
 
@@ -119,7 +119,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M2 | Whole-stack plan and conflict preview A. Needs M1 and accepted stack input contract. | Explicit bottom-up chain first; later PR-derived edges; reject cycles/ambiguous bases; level-3 and inherited conflicts visible; stable JSON; unchanged repo. Review invalidation annotation adds M3. | 5 / 3 / 3 |
 | M3 | Strict review parser/state and comment reads. Needs M0 HTTP read extension. | Shared rule corpus: malformed order, wrong PR, 39/64 hex, uppercase, tabs, CRLF, stale head, later FINDINGS, untrusted author, invalid carry chain; UNKNOWN stays explicit. | 5 / 2 / 3 |
 | M4 | Read-only carry-over and ready-check. Needs M3 and M0 range-diff runner. | Equal patch-id, no merge commits, every range-diff entry '='; reordered/whitespace/rewritten-parent counterexamples; exact-head CI, missing/skipped/failed checks, correct base, blockers. No automatic posting/ready mutation. | 5 / 3 / 4 |
-| M5 | Superseded by the Cutover section (2026-11-10): a backup ref `refs/stw/backup/<n>` before each mutation, no spike B, no journal, no general undo. Original: retained oplog and local undo B for tidy/sync, then all new mutations. Needs accepted B spike; gix ref/object design. | Retain old tips through GC in scratch; validate expected old values; crash journal intent/completion; dry run, idempotence, symbolic refs, missing worktree, dirty/untracked obstruction, rollback failure; remote effects explicitly not undone. | 5 / 4 / 5 |
+| M5 | Superseded by the Cutover section (2026-11-10): a backup ref `refs/stw/backup/<n>` before each mutation, no spike B, no journal, no general undo. Original: retained oplog and local undo B for tidy/sync, then all new mutations. Needs accepted B spike; gix ref/object design. | Slim M5: the backup ref exists before every mutation and survives GC in scratch; undo sets the ref back with CAS on the expected value; `range-diff` shows the change; remote effects are not undone. Original: retain old tips through GC in scratch; validate expected old values; crash journal intent/completion; dry run, idempotence, symbolic refs, missing worktree, dirty/untracked obstruction, rollback failure; remote effects explicitly not undone. | 5 / 4 / 5 |
 | M6 | Conflict-free local restack apply. Needs M1/M2/M5. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
 | M7 | rerere C in explicit resolution. Needs accepted C spike and M0; integrate M12 worktree flow. | Shared cache reuse in two worktrees, exact reused count, failure/no-match fallback; no persistent Git config writes. Preview cache prediction remains optional and UNKNOWN until measured. | 3 / 2 / 3 |
 | M8 | PR lint. Needs M3. | Per-rule positive/negative fixtures for identity, attribution, session links, text limits, malformed review claims; escape hostile titles/comments; runtime error distinct from findings. | 4 / 2 / 2 |
@@ -194,13 +194,13 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `sync` | partial: dry run by default, `--apply` fast-forwards (Go acts by default) | - | **port** (done): fast-forward of every repository. Deviation: Rust is dry-run by default. | `internal/stwsync` (162), `cli/sync_test.go` |
 | `sync --plan`, `--dry-run` (flag) | covered: dry run is the default | - | **drop**: replaced by the default dry run and `--apply`. | same |
 | `sync --ff-only` (flag) | the Rust behavior | - | **port** (done). | same |
-| `sync --rebase`, `--merge`, `--autostash`, `--no-autostash` (flag) | absent; Rust never merges, rebases or stashes | - | **drop** (matrix: no automatic stash, reset, merge, rebase). | same |
+| `sync --rebase`, `--merge`, `--autostash`, `--no-autostash` (flag) | absent; Rust never merges, rebases or stashes | - | **drop** (matrix: no automatic stash, reset, merge, rebase). Deviation: Go follows the Git configuration (`pull.rebase`, `rebase.autoStash`, `merge.autoStash`, `fetch.prune`; `sync.go:33-35`), Rust ignores it. | same |
 | `sync --prune`, `--no-prune` (flag) | absent (no prune in `src/sync/`, grep) | - | **defer**: no Rust behavior yet. | same |
 | `sync --submodules` (flag) | absent in `src/sync/` (grep) | - | **defer**: Go moves detached pinned submodules to the recorded commit. | same |
 | `sync --rules` (flag) | present with `--rules-path` | - | **port** (done); **drop** `--owner-identity`, `--allowed-committer`: Go refuses on foreign identities, Rust prints an info line (README: no owner or author check). | same |
 | `sync restore` (mode) | absent | M5 | **owner decides** (open): Go journals each change with recovery refs `refs/stw/recovery/sync/RUN_ID/N` and `restore` resets branches back. Tied to the slimmed M5 (backup ref) as `tidy history` is. | `internal/stwsync/restore_test.go`, `cli/sync_test.go` |
 | `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (native jj deferred). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
-| `tidy apply` | present, Git only | M5 | **port** (done); recovery retention is M5. | same as `tidy plan` |
+| `tidy apply` | present, Git only | M5 | **port** (done); backup ref is M5 (slim). | same as `tidy plan` |
 | `tidy restore` | present; no journal listing | M5 | **port** (done). | `cli/tidy_v3_restore_test.go`, `tidy_prune_v4_restore_test.go` |
 | `tidy history` | absent | M5 | **owner decides** (open): lists stored journals; Rust `restore` takes `--run` or the newest. Tied to the slimmed M5 (decision 2026-11-10). | `cli/tidy_prune_v4_history_test.go` |
 | `review carry-over` | absent | M4 | **port**: reuses a CLEAR after a rebase; proof is equal patch-id, no merge commits, range-diff all `=`. Needs `range-diff` in the runner. | `internal/carryover` (46; repositories are built in `fixture_test.go`, no data files), `cli/review_test.go` |
@@ -272,7 +272,7 @@ Owner decisions of 2026-11-10 (chosen by selection):
 - **Ports without spike** apply as soon as AGENTS.md with that rule is on `main` (commit `docs(agents)` of this branch).
 - **Go pages job:** the job `pages` on `main` of `wstein/sourcesteward` is red (Pages not set up). Decided: do nothing,
   the legacy repository is archived. Noise until the archive.
-- **The 13 `defer` commands stay open.** Before the archive the owner turns each into a port or a `drop`; agents do not
+- **The 13 `defer` commands and the 2 `defer` flag rows (`--prune`, `--submodules`) stay open.** Before the archive the owner turns each into a port or a `drop`; agents do not
   decide this.
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
 - Still deferred: M7, M11, M12, M13.
@@ -301,7 +301,7 @@ Slice 1 (port, no spike), in this order, each a reviewable commit:
    `Carried-over:` line; nothing is posted. Mapping of the 46 Go tests (45 cases and `TestMain`) to Rust cases in
    `tests/carryover.rs` unless noted; each gets one case with the same scenario:
    - Request parsing: `TestParseRequestAcceptsOnlyFullLowercaseObjectIDs`, `TestParseRequestRejectsBadCounts`,
-     `TestParseRequestValidatesPullNumberAndRemote` (the Go limit on the PR number is UNKNOWN until read there).
+     `TestParseRequestValidatesPullNumberAndRemote` (Go allows a PR number of 1 to 999999999, `internal/carryover/types.go:165`).
    - Fixed argv, in `tests/git_runner.rs`: `TestGuardAllowsOnlyTheReviewedVectors`,
      `TestGuardRefusesAnExtraArgumentOnEveryShape`, `TestDiffAndLogPinEveryOutputFlag`,
      `TestRunnerRefusesInvalidIDsBeforeRunningGit`. Deviation: Rust fixes the argv in code per `Op`.
