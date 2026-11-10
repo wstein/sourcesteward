@@ -350,6 +350,9 @@ fn run_steps(
             path: req.path.clone(),
         },
     )?;
+    // a directory or symlink that appeared during the run: refuse; from here on `.git/modules/PATH` is ours
+    modules_clear(gitdir, req)?;
+    undo.own_modules();
     git(
         ws,
         Op::AbsorbGitDirs {
@@ -503,7 +506,22 @@ fn check_path(ws: &Path, gitdir: &Path, repo: &gix::Repository, req: &Request) -
     if crate::repo::submodule_paths(ws).iter().any(|s| s == p) {
         return Err(refused(format!("{p} is a submodule already (skipped)")));
     }
-    // `.git/modules/PATH`, with no symlink in any component
+    modules_clear(gitdir, req)?;
+    // no submodule section of PATH in the Workspace config
+    let cfg = std::fs::read_to_string(gitdir.join("config")).unwrap_or_default();
+    let needle = format!("[submodule \"{p}\"]");
+    if cfg.lines().any(|l| l.trim() == needle) {
+        return Err(refused(format!(
+            "the workspace config has a [submodule \"{p}\"] section"
+        )));
+    }
+    Ok(())
+}
+
+/// `.git/modules/PATH` must not exist and no component of it may be a symlink (the absorb writes there).
+/// Checked up front and again right before the absorb.
+fn modules_clear(gitdir: &Path, req: &Request) -> Result<()> {
+    let p = req.path.as_str();
     let mut m = gitdir.join("modules");
     for c in std::iter::once("").chain(req.path.components()) {
         if !c.is_empty() {
@@ -520,14 +538,6 @@ fn check_path(ws: &Path, gitdir: &Path, repo: &gix::Repository, req: &Request) -
                 )));
             }
         }
-    }
-    // no submodule section of PATH in the Workspace config
-    let cfg = std::fs::read_to_string(gitdir.join("config")).unwrap_or_default();
-    let needle = format!("[submodule \"{p}\"]");
-    if cfg.lines().any(|l| l.trim() == needle) {
-        return Err(refused(format!(
-            "the workspace config has a [submodule \"{p}\"] section"
-        )));
     }
     Ok(())
 }
@@ -632,6 +642,8 @@ struct Undo {
     created: Vec<PathBuf>,
     /// The commit exists: from here on nothing is rolled back.
     committed: bool,
+    /// `.git/modules/PATH` was absent right before the absorb, so what exists there afterwards is this run's.
+    modules_owned: bool,
 }
 
 /// Bytes of the files the git steps change (`None`: the file did not exist).
@@ -650,6 +662,7 @@ impl Undo {
             snapshot: None,
             created: Vec::new(),
             committed: false,
+            modules_owned: false,
         })
     }
 
@@ -689,6 +702,10 @@ impl Undo {
         });
     }
 
+    fn own_modules(&mut self) {
+        self.modules_owned = true;
+    }
+
     fn mark_committed(&mut self) {
         self.committed = true;
     }
@@ -720,10 +737,11 @@ impl Undo {
             restore(self.gitdir.join("index"), &snap.index, &mut problems);
             restore(self.gitdir.join("config"), &snap.config, &mut problems);
             // absent before the run (checked up front); symlinks were refused
-            if self
-                .modules
-                .symlink_metadata()
-                .is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink())
+            if self.modules_owned
+                && self
+                    .modules
+                    .symlink_metadata()
+                    .is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink())
                 && self.modules.starts_with(self.gitdir.join("modules"))
             {
                 if let Err(e) = std::fs::remove_dir_all(&self.modules) {

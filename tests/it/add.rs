@@ -860,3 +860,48 @@ fn changes_made_while_the_clone_runs_survive_a_later_failure() {
         .contains("meanwhile = yes"));
     assert!(!e.ws.exists("projects/tool"));
 }
+
+#[test]
+fn a_git_dir_that_appears_during_the_run_is_refused_and_never_removed() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    // a symlink at `.git/modules` that appears after the first check: the absorb must not write through it
+    let e = env();
+    let out = scratch();
+    let (p, ws, o) = (
+        src.path.clone(),
+        e.ws.path.clone(),
+        out.path().to_path_buf(),
+    );
+    let c = cloner(move |u, dest| {
+        clone_from_path(&p, dest, u.as_str());
+        std::os::unix::fs::symlink(&o, ws.join(".git/modules")).unwrap();
+        Ok(())
+    });
+    let err = e
+        .run(&c, &req("octo", "tool", "projects/tool"), false)
+        .unwrap_err();
+    assert!(err.to_string().contains("exists"), "{err}");
+    assert!(
+        std::fs::read_dir(out.path()).unwrap().next().is_none(),
+        "the absorb wrote through the symlink"
+    );
+    assert!(!e.ws.exists("projects/tool"));
+    // a foreign directory at `.git/modules/PATH` that appears during the run stays
+    let e = env();
+    let (p, ws) = (src.path.clone(), e.ws.path.clone());
+    let c = cloner(move |u, dest| {
+        clone_from_path(&p, dest, u.as_str());
+        std::fs::create_dir_all(ws.join(".git/modules/projects/tool")).unwrap();
+        std::fs::write(ws.join(".git/modules/projects/tool/theirs"), "x").unwrap();
+        Ok(())
+    });
+    let err = e
+        .run(&c, &req("octo", "tool", "projects/tool"), false)
+        .unwrap_err();
+    assert!(err.to_string().contains("exists"), "{err}");
+    assert_eq!(
+        e.ws.read(".git/modules/projects/tool/theirs").as_deref(),
+        Some("x"),
+        "a directory this run did not create was removed"
+    );
+}
