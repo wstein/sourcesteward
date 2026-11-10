@@ -756,6 +756,12 @@ m SA19 'stw add: the superproject of a submodule is not used' src/repo/mod.rs \
   'Some(superproject_of(&top).unwrap_or(top))' 'Some(top)' \
   cli 'add_run_inside_a_submodule_binds_into_the_superproject'
 
+m SA21 'stw add: the --cached check-attr run is skipped' src/add.rs \
+  'for cached in [false, true] {' 'for cached in [false] {' \
+  add 'every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs'
+m SA22 'stw add: the system attributes file is not switched off' src/git_runner.rs \
+  'if !matches!(op, Op::FetchOrigin) {' 'if false {' \
+  git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

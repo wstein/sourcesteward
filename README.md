@@ -410,7 +410,7 @@ checks, the git steps and the rollback run for real); a run against a live GitHu
 older than 2.47.3, macOS, a `url.<x>.insteadOf` rewrite (the clone ignores the user's config), concurrent runs on one
 `PATH`, and a race between the checks and the removal of a clone directory are not covered. The clone's attribute
 scan refuses a little too much (a line naming `filter` anywhere, also in an unrelated pattern); `git check-attr` is
-trusted for the workspace (its `text`/`eol`/`working-tree-encoding` effects on `.gitmodules` are not asked). The
+trusted for the workspace (its `text`/`eol`/`working-tree-encoding` effects on `.gitmodules` are not asked). `GIT_ATTR_NOSYSTEM=1` keeps `/etc/gitattributes` out of every git step of `stw add`; that this works against a real system attributes file was not checked live (no root). The
 `.git/modules` check before the absorb narrows the race window but does not close
 it (no `dirfd`/`O_NOFOLLOW`).
 
