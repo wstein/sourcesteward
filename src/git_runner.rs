@@ -543,6 +543,10 @@ impl Runner {
         set("GIT_PAGER", "cat".into());
         set("GIT_EDITOR", "true".into());
         set("GIT_ALLOW_PROTOCOL", op.allow_protocol().into());
+        // the operations of `stw add` evaluate attributes: no system attributes file (`/etc/gitattributes`)
+        if !matches!(op, Op::FetchOrigin) {
+            set("GIT_ATTR_NOSYSTEM", "1".into());
+        }
         if let Some(parent) = repo.and_then(Path::parent) {
             set("GIT_CEILING_DIRECTORIES", parent.as_os_str().to_owned());
         }

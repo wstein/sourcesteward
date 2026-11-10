@@ -1334,6 +1334,13 @@ fn the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport() {
         let env = r.child_env_for(t.path(), &op).unwrap();
         let allow = env.iter().find(|(k, _)| k == "GIT_ALLOW_PROTOCOL").unwrap();
         assert_eq!(allow.1, "none", "{op:?}");
+        // no system attributes file (it could attach a filter): set for every operation that evaluates attributes
+        let nosys = env.iter().find(|(k, _)| k == "GIT_ATTR_NOSYSTEM");
+        assert_eq!(
+            nosys.map(|(_, v)| v.as_os_str()),
+            Some(std::ffi::OsStr::new("1")),
+            "{op:?}"
+        );
     }
     // the fetch keeps its transports and its vector (no extra pairs)
     let fetch = tail(Op::FetchOrigin);
