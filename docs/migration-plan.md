@@ -190,7 +190,14 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | Go command | Rust today | M | Vorschlag | Test source in Go |
 | --- | --- | --- | --- | --- |
 | `status` | present; review column stays `null` (README, M3) | M4 | **port**: core command; the comment-based review state is not wired in. | `internal/statuscmd` (40), `statusremote` (109), `cli/status_*_test.go`; goldens pin Go text and schema v1, reuse inputs not goldens |
-| `sync` | partial: ff-only, `--rules` | - | **port** (done for ff-only); **drop** `--rebase`, `--merge`, `--autostash` (matrix: no automatic stash, reset, merge, rebase). | `internal/stwsync` (162), `cli/sync_test.go` |
+| `sync` | partial: dry run by default, `--apply` fast-forwards (Go acts by default) | - | **port** (done): fast-forward of every repository. Deviation: Rust is dry-run by default. | `internal/stwsync` (162), `cli/sync_test.go` |
+| `sync --plan`, `--dry-run` (flag) | covered: dry run is the default | - | **drop**: replaced by the default dry run and `--apply`. | same |
+| `sync --ff-only` (flag) | the Rust behavior | - | **port** (done). | same |
+| `sync --rebase`, `--merge`, `--autostash`, `--no-autostash` (flag) | absent; Rust never merges, rebases or stashes | - | **drop** (matrix: no automatic stash, reset, merge, rebase). | same |
+| `sync --prune`, `--no-prune` (flag) | absent (no prune in `src/sync/`, grep) | - | **defer**: no Rust behavior yet. | same |
+| `sync --submodules` (flag) | absent in `src/sync/` (grep) | - | **defer**: Go moves detached pinned submodules to the recorded commit. | same |
+| `sync --rules` (flag) | present with `--rules-path` | - | **port** (done); **drop** `--owner-identity`, `--allowed-committer`: Go refuses on foreign identities, Rust prints an info line (README: no owner or author check). | same |
+| `sync restore` (mode) | absent | M5 | **owner decides** (open): Go journals each change with recovery refs `refs/stw/recovery/sync/RUN_ID/N` and `restore` resets branches back. Tied to the slimmed M5 (backup ref) as `tidy history` is. | `internal/stwsync/restore_test.go`, `cli/sync_test.go` |
 | `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (native jj deferred). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
 | `tidy apply` | present, Git only | M5 | **port** (done); recovery retention is M5. | same as `tidy plan` |
 | `tidy restore` | present; no journal listing | M5 | **port** (done). | `cli/tidy_v3_restore_test.go`, `tidy_prune_v4_restore_test.go` |
@@ -225,8 +232,9 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 
 Also in the Go repository: `cmd/gh-jj` (gh extension wrapper) and `cmd/stw-docs`: **drop** (matrix: no brand/site/gh-jj
 wrappers).
-Tally of the 33 commands: port 10 (5 of them present in Rust: status, sync, tidy plan, apply, restore), drop 9,
-defer 13, owner decides 1.
+Tally: 34 items = the 33 commands plus the mode `sync restore`. Rows marked (flag) are proposals inside their command and
+are not counted. Port 10 (5 of them present in Rust: status, sync, tidy plan, apply, restore), drop 9, defer 13, owner
+decides 2 (`tidy history`, `sync restore`).
 
 Test corpus: the Go fixtures are mostly Go code (repository builders such as `internal/carryover/fixture_test.go`), few
 data files (`cli/testdata`, `internal/hosting/testdata`). "Shared corpus" therefore means: per Go test, one named Rust
@@ -242,7 +250,7 @@ case with the same scenario, or a named deviation. Where the Rust rules are stri
 A Go command counts as **replaced** when (a) its Rust equivalent passes the test cases derived from Go (deviations
 named) and an independent review of the exact head is CLEAR, or (b) the owner decided `drop` for it explicitly.
 `defer` is not an end state: before archiving, the owner turns each deferred command into a port (a) or a `drop` (b).
-Archive `legacy/sourcesteward` only when all 33 commands and the two extra binaries are replaced. Then:
+Archive `legacy/sourcesteward` only when all 34 items, every flag row and the two extra binaries are replaced. Then:
 1. Owner: archive the repository `wstein/sourcesteward` (GitHub setting).
 2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
 3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`).
