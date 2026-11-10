@@ -51,7 +51,7 @@ command in `src/cli.rs`. Decisions are recommendations unless recorded in Chartr
 | PR status/review state | `internal/reviewstate/parse.go`, `internal/prviews/` | `src/github.rs:154`, `src/status.rs:318`; review remains null | Port strict parser and verifiable comment author and head binding (M3). |
 | Sync and rules update | `internal/stwsync/` | `src/sync/`, `src/cli.rs` SyncArgs | Keep ff-only; no automatic stash, reset, merge, or rebase. |
 | Tidy plan/apply/restore | `internal/tidywizard/` | `src/tidy.rs`, `src/tidy_apply.rs:495,908` | Keep manifest-first and fresh-state checks; do not copy wizard/authorization ceremony. |
-| Tidy recovery retention/history | recovery and journals in `internal/tidywizard/` | `src/tidy_apply.rs:90,936`; JSONL stores OIDs, no retention refs | Add reachability roots and general undo (M5); object IDs alone do not survive GC. |
+| Tidy recovery retention/history | recovery and journals in `internal/tidywizard/` | `src/tidy_apply.rs:90,936`; JSONL stores OIDs, no retention refs | Add a backup ref per mutation (M5, slimmed 2026-11-10, see Cutover section); object IDs alone do not survive GC. |
 | Isolated workspace creation/retirement | `internal/inspection/jj_workspace.go`, `internal/workspace/` | worktree inspection/removal, no creation command | Defer general workspace wizard; add owned resolve worktree lifecycle in M12. |
 | Stack/conflict plan | `internal/restack/replay.go`, `internal/conflicts/` | absent | Redesign as whole-stack preview (M1/M2). |
 | Review carry-over | `internal/carryover/`, especially `git.go` guards | absent | Port proof semantics, not permissive grammar (M4). |
@@ -81,7 +81,7 @@ D: **4/5**; full native jj parity: **2/5**. Scores order experiments, not approv
 | Option | Existing spike and evidence | Product recommendation | Acceptance still needed |
 | --- | --- | --- | --- |
 | A: conflict preview | `spikes/stw/conflicts/README.md`, `stw-rebase-lib.sh`, `test-stw-stack-preview` | Replay whole explicit stack in memory; show conflicts at every level and inherited conflict uncertainty. | Owner live demo plus gix/Git tree oracle; no refs/index/worktree changes. |
-| B: oplog/undo | `spikes/stw/oplog/README.md`, `stw-oplog-lib.sh` | Record operation intent and old refs before mutation, retain objects through refs, undo local effects with CAS. | Live demo including GC, concurrent ref move, partial checkout failure, interrupted operation. |
+| B: oplog/undo | `spikes/stw/oplog/README.md`, `stw-oplog-lib.sh` | Record operation intent and old refs before mutation, retain objects through refs, undo local effects with CAS. Superseded by the Cutover section (2026-11-10): not built, M5 uses a backup ref. | Live demo including GC, concurrent ref move, partial checkout failure, interrupted operation. |
 | C: rerere | `spikes/stw/deferred/README.md`, `stw-resolve` | Reuse Git's common-dir rr-cache during explicit resolution; report actual reuse. | Resolve same conflict in two worktrees; reject mistaken reuse and preserve user edits. |
 | D: deferred conflicts | `spikes/stw/deferred/stw-restack`, `stw-resolve`, `stw-pending-check` | Store pending candidates separately; leave conflicted branches unchanged; block push/land/ready. | Resolve bottom-up, abort/retry, changed parent, stale old tip, undo, and all publication guards. |
 
@@ -119,7 +119,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M2 | Whole-stack plan and conflict preview A. Needs M1 and accepted stack input contract. | Explicit bottom-up chain first; later PR-derived edges; reject cycles/ambiguous bases; level-3 and inherited conflicts visible; stable JSON; unchanged repo. Review invalidation annotation adds M3. | 5 / 3 / 3 |
 | M3 | Strict review parser/state and comment reads. Needs M0 HTTP read extension. | Shared rule corpus: malformed order, wrong PR, 39/64 hex, uppercase, tabs, CRLF, stale head, later FINDINGS, untrusted author, invalid carry chain; UNKNOWN stays explicit. | 5 / 2 / 3 |
 | M4 | Read-only carry-over and ready-check. Needs M3 and M0 range-diff runner. | Equal patch-id, no merge commits, every range-diff entry '='; reordered/whitespace/rewritten-parent counterexamples; exact-head CI, missing/skipped/failed checks, correct base, blockers. No automatic posting/ready mutation. | 5 / 3 / 4 |
-| M5 | Retained oplog and local undo B for tidy/sync, then all new mutations. Needs accepted B spike; gix ref/object design. | Retain old tips through GC in scratch; validate expected old values; crash journal intent/completion; dry run, idempotence, symbolic refs, missing worktree, dirty/untracked obstruction, rollback failure; remote effects explicitly not undone. | 5 / 4 / 5 |
+| M5 | Superseded by the Cutover section (2026-11-10): a backup ref `refs/stw/backup/<n>` before each mutation, no spike B, no journal, no general undo. Original: retained oplog and local undo B for tidy/sync, then all new mutations. Needs accepted B spike; gix ref/object design. | Retain old tips through GC in scratch; validate expected old values; crash journal intent/completion; dry run, idempotence, symbolic refs, missing worktree, dirty/untracked obstruction, rollback failure; remote effects explicitly not undone. | 5 / 4 / 5 |
 | M6 | Conflict-free local restack apply. Needs M1/M2/M5. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
 | M7 | rerere C in explicit resolution. Needs accepted C spike and M0; integrate M12 worktree flow. | Shared cache reuse in two worktrees, exact reused count, failure/no-match fallback; no persistent Git config writes. Preview cache prediction remains optional and UNKNOWN until measured. | 3 / 2 / 3 |
 | M8 | PR lint. Needs M3. | Per-rule positive/negative fixtures for identity, attribution, session links, text limits, malformed review claims; escape hostile titles/comments; runtime error distinct from findings. | 4 / 2 / 2 |
@@ -130,7 +130,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof, native jj opt-in. | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
 
 Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a separate workstream,
-**accepted A/B → M1 → M2 → M5 → M6** for local stacks. M8 is independent after M3.
+**accepted A → M1 → M2 → M5 (slim) → M6** for local stacks. M8 is independent after M3.
 M7/M12 can follow local restack; M10/M11 follow proven recovery and publication policy.
 M7 does not require publication; M6 does not push. M12 publication guards must land before pending state can
 be created in a product used with push/ready commands. These are dependency tracks, not permission to start agents.
@@ -154,6 +154,7 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
 3. **Recommend recovery before new mutation.** JSONL manifest IDs do not retain objects; add retained ref snapshots
    and crash detection before restack. Full worktree atomicity remains unavailable; surface incomplete operations.
    Benefit 5, effort 4, risk 5. Keep tidy restore compatibility during migration.
+   Superseded 2026-11-10 by the slimmed M5 (Cutover section): backup ref before each mutation, no crash journal.
 4. **Recommend controlled binary transition.** `dayboard/LOGBOOK.md` records Go release v0.2.0 remains installed until M3+M4.
    Do not replace that channel with Rust while removing working review gates. Current installed binary/version and
    packaging channel are UNKNOWN in this assessment; owner chooses release/repository/channel and accepts live.
