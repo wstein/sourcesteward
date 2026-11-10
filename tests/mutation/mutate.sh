@@ -263,7 +263,7 @@ m A1 "the ref is not rolled back when writing files fails" src/sync/fast_forward
         return Err(e);
     }
     if let Err(e) = Ok::<(), FfError>(()) {' \
-  sync a_failed_file_write_puts_the_ref_back
+  sync a_failed_index_write_puts_the_ref_back_and_keeps_the_written_files
 m A2 "a failing ref update is ignored" src/sync/fast_forward.rs \
   '    .map_err(|e| FfError::Other(format!("ref update: {e}")))?;' '    .map_err(|e| FfError::Other(format!("ref update: {e}")))
     .ok();' \
@@ -618,13 +618,13 @@ for i in "${!IDS[@]}"; do
   if [ "$count" != 1 ]; then echo "$id BAD MUTATION (pattern occurs $count times in ${FILES[$i]})"; bad=$((bad+1)); continue; fi
   OLD="$old" NEW="${NEWS[$i]}" perl -0777 -pi -e '$o=$ENV{OLD}; $n=$ENV{NEW}; $p=index($_,$o); substr($_,$p,length($o))=$n;' "$f"
   tgt=${TARGETS[$i]} tst=${TESTS[$i]}
-  case "$tgt" in slug_cases|review_states|snapshots_cli|snapshots_symlink) ;; *) tst="$tgt::$tst"; tgt=it ;; esac
+  [ -f "$WORK/tests/$tgt.rs" ] || { tst="$tgt::$tst"; tgt=it; }
   out=$(cd "$WORK" && cargo test --test "$tgt" -- --exact "$tst" 2>&1)
   if grep -q "could not compile" <<<"$out"; then
     echo "$id COMPILE ERROR: ${DESCS[$i]}"; bad=$((bad+1))
-  elif grep -q "test ${TESTS[$i]} ... FAILED" <<<"$out" && grep -q "panicked at" <<<"$out"; then
+  elif grep -q "test $tst ... FAILED" <<<"$out" && grep -q "panicked at" <<<"$out"; then
     why=$(grep -A2 "panicked at" <<<"$out" | sed -n '2,3p' | tr '\n' ' ' | cut -c1-150)
-    echo "$id killed by ${TARGETS[$i]}::${TESTS[$i]} [$why]: ${DESCS[$i]}"; killed=$((killed+1))
+    echo "$id killed by $tgt::$tst [$why]: ${DESCS[$i]}"; killed=$((killed+1))
   else
     echo "$id SURVIVED: ${DESCS[$i]}"; bad=$((bad+1))
   fi
