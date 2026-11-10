@@ -1,5 +1,4 @@
-mod common;
-use common::*;
+use crate::common::*;
 use stw::patch_id::commit_patch_id;
 
 fn pid(fx: &Fx, c: gix::ObjectId) -> gix::ObjectId {
@@ -150,13 +149,13 @@ fn matches_git_patch_id_stable_on_known_vectors() {
     );
     assert_eq!(
         pid(&fx, c).to_string(),
-        include_str!("vectors/modify_delete_add.id").trim()
+        include_str!("../vectors/modify_delete_add.id").trim()
     );
     // no newline at end of file: the marker line is not hashed
     let d = fx.commit(Some(c), &[("dir/f.txt", Some("alpha\nbeta"))], "no newline");
     assert_eq!(
         pid(&fx, d).to_string(),
-        include_str!("vectors/no_newline.id").trim()
+        include_str!("../vectors/no_newline.id").trim()
     );
 }
 

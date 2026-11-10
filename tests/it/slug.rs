@@ -1,5 +1,4 @@
-mod common;
-use common::*;
+use crate::common::*;
 
 fn slug(url: &str) -> Option<String> {
     let fx = Fx::new();

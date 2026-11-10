@@ -2,10 +2,9 @@
 //! else: gix never starts `ssh` or `git-upload-pack` itself. Unknown transports (`ext::`) are refused typed
 //! without starting anything. A failed fetch is typed, the URL's password is never printed. Fake programs
 //! first on PATH record every call.
-mod common;
 use std::process::Command;
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 
 fn setup() -> (Fx, std::path::PathBuf, tempfile::TempDir) {

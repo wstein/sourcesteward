@@ -1,7 +1,6 @@
 //! Branch rules (`GET /repos/{o}/{r}/rules/branches/{branch}`) and repository merge settings, against a fake
 //! API serving recorded and hand-written fixtures. No network, no real token.
-mod common;
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 use stw::auth::TokenSource;
 use stw::github::reads::{Budget, Read, ReadOne, RuleKind, Setting};

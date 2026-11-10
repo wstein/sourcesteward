@@ -1,5 +1,4 @@
-mod common;
-use common::*;
+use crate::common::*;
 use stw::github::AnyPr;
 use stw::repo::RepoRef;
 use stw::tidy::{plan_repo_with, PrProof, RepoPlan};

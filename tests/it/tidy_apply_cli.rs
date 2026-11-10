@@ -1,9 +1,8 @@
 //! `stw tidy apply` and `stw tidy restore` as a process: flags, JSON, exit codes, default manifest place,
 //! reflog identity of the restored branch.
-mod common;
 use std::process::{Command, Output};
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 
 fn build() -> Fx {

@@ -1,5 +1,4 @@
-mod common;
-use common::*;
+use crate::common::*;
 use stw::repo::worktrees;
 
 fn fixture() -> Fx {

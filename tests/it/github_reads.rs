@@ -1,9 +1,8 @@
 //! The extended GitHub reads (issue comments, PR reviews, check runs, commit statuses) against a fake API
 //! that serves recorded and hand-written fixtures from `tests/fixtures/github/`. No network, no real token.
-mod common;
 use std::time::Duration;
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 use stw::auth::TokenSource;
 use stw::github::reads::{

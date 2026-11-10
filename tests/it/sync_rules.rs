@@ -1,6 +1,5 @@
 //! `stw sync` and the agent-rules checkout: the state line, and the fast-forward update with its conditions.
-mod common;
-use common::*;
+use crate::common::*;
 use stw::sync::rules::{agent_rules, render_human, to_json, RulesOpts};
 
 struct R {

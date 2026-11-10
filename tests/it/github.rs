@@ -1,9 +1,8 @@
 //! GitHub REST behavior against a fake API: the token is used but never printed, `--offline` makes no
 //! request, and the JSON field names are the documented ones.
-mod common;
 use std::process::{Command, Output};
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 
 const TOKEN: &str = "SECRETTOKEN-0123456789";

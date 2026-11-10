@@ -1,5 +1,4 @@
-mod common;
-use common::*;
+use crate::common::*;
 use stw::repo::RepoRef;
 use stw::status;
 use stw::sync::fast_forward::{fast_forward, put_ref_back, FfError};

@@ -1,7 +1,6 @@
 //! Property tests for the in-process patch ID: invariance under whitespace in the changed line and under
 //! shifting the change by extra lines above it; sensitivity to the changed content.
-mod common;
-use common::*;
+use crate::common::*;
 use proptest::prelude::*;
 use stw::patch_id::commit_patch_id;
 

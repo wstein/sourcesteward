@@ -3,10 +3,9 @@
 //! checks are listed in tests/mutation/mutate.sh. OPEN (no mutation proves them): the `.git` file check of a
 //! worktree (another check refuses the same case first), the registration path check, the fsync of the manifest.
 //! Mutation ids: B1..B5, T3..T13, W4..W12, Y1..Y6, RS1..RS6, M1, N2.
-mod common;
 use std::path::Path;
 
-use common::*;
+use crate::common::*;
 use stw::repo::RepoRef;
 use stw::tidy::{plan_repo_with_opts, PlanOpts, PrProof, RepoPlan};
 use stw::tidy_apply::{

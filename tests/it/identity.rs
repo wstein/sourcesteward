@@ -1,9 +1,8 @@
 //! The reflog identity of `sync --apply`: GIT_COMMITTER_*, then user.name/email of the Git config, then
 //! the fallback `stw <stw@localhost>`. Runs in an environment without any identity.
-mod common;
 use std::process::Command;
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 
 /// main (checked out) is one commit behind origin/main.

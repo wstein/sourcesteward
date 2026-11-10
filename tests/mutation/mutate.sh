@@ -617,7 +617,9 @@ for i in "${!IDS[@]}"; do
   count=$(OLD="$old" perl -0777 -ne '$o=$ENV{OLD}; $c=0; $p=0; while (($p=index($_,$o,$p))>=0) { $c++; $p+=length($o); } print $c;' "$f")
   if [ "$count" != 1 ]; then echo "$id BAD MUTATION (pattern occurs $count times in ${FILES[$i]})"; bad=$((bad+1)); continue; fi
   OLD="$old" NEW="${NEWS[$i]}" perl -0777 -pi -e '$o=$ENV{OLD}; $n=$ENV{NEW}; $p=index($_,$o); substr($_,$p,length($o))=$n;' "$f"
-  out=$(cd "$WORK" && cargo test --test "${TARGETS[$i]}" -- --exact "${TESTS[$i]}" 2>&1)
+  tgt=${TARGETS[$i]} tst=${TESTS[$i]}
+  case "$tgt" in slug_cases|review_states|snapshots_cli|snapshots_symlink) ;; *) tst="$tgt::$tst"; tgt=it ;; esac
+  out=$(cd "$WORK" && cargo test --test "$tgt" -- --exact "$tst" 2>&1)
   if grep -q "could not compile" <<<"$out"; then
     echo "$id COMPILE ERROR: ${DESCS[$i]}"; bad=$((bad+1))
   elif grep -q "test ${TESTS[$i]} ... FAILED" <<<"$out" && grep -q "panicked at" <<<"$out"; then

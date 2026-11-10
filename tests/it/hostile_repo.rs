@@ -1,11 +1,10 @@
 //! A repository that names programs everywhere (filter drivers, textconv, credential helper, hooks, ssh
 //! command) must not make `status`, `tidy plan` or `sync` start any of them. Markers are files the programs
 //! would create; `sh` is on PATH so that a program could really run.
-mod common;
 use std::path::Path;
 use std::process::Command;
 
-use common::*;
+use crate::common::*;
 
 fn hostile() -> (Fx, tempfile::TempDir) {
     let fx = Fx::new();

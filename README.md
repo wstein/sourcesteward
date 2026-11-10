@@ -4,7 +4,7 @@ Implementation scope, feature decisions, dependencies, and acceptance gates: [Ru
 
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
-stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/no_binaries.rs` allows a process
+stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
 nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
@@ -201,7 +201,7 @@ Only `github.com` remotes are used for REST; the fetch offers the token to `gith
 | other transports (`ext::`, `fd::`) | nobody | none | `fetch: unsupported-remote` |
 
 gix would start `ssh` or `git-upload-pack` itself for the first row; stw never hands such a URL to gix
-(`tests/remote_kinds.rs` puts fake `ssh`, `git-upload-pack` and `git` first on `PATH` and checks that only the runner
+(`tests/it/remote_kinds.rs` puts fake `ssh`, `git-upload-pack` and `git` first on `PATH` and checks that only the runner
 starts `git`). `via`, and `git_error` (`not-found`, `version`, `unknown-option`, `timeout`, `output-limit`, `exit`,
 `spawn`, `repository`, `refused-config`) appear in the repository entry of `sync` and in `agent_rules` only when a fetch ran. Credentials in a remote URL
 and GitHub tokens are never printed. `status`, `tidy plan` and dry-run `sync` never fetch. `git://` was not exercised
@@ -241,7 +241,7 @@ page or had a malformed entry is `Observed` with `incomplete: Some(reason)`; `Re
 read list, so partial or unreadable evidence cannot make a pull request Ready. 401, 403 (no permission, for example Checks)
 and 429/exhausted rate limit are `Read::Denied`, 404 is `NotFound`, other failures `Failed`; none is a crash. GitHub text is
 untrusted: cut, then escaped reversibly (`\\`, `\n`, `\r`, `\t`, `\u{hex}` for control, zero-width and direction
-characters). Slug and SHA are validated before they enter a path. Tests: `tests/github_reads.rs` with the fixtures in
+characters). Slug and SHA are validated before they enter a path. Tests: `tests/it/github_reads.rs` with the fixtures in
 `tests/fixtures/github/` (see its README for which are recorded and which are hand-written).
 
 ## Review state from comments (internal API, M3)
@@ -280,20 +280,21 @@ not the comment-based state, and its JSON contract is unchanged). Pure functions
   chain comment with `edited` counts normally and the flag is in the result. `ReviewState::to_json()` is the stable JSON
   (version 1), not yet part of any command.
 - Tests: the dotagents corpus `tests/review_corpus/review-line-examples.md` (copy of `docs/review-line-examples.md`, dotagents
-  c7c343c), `tests/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/review_read.rs`.
+  c7c343c), `tests/it/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/it/review_read.rs`.
 
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
-cargo test --test network -- --ignored   # clones a public repo, rewinds it, fetches and fast-forwards
+cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
 bash tests/mutation/mutate.sh SCRATCH    # 169 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
+Integration tests live in one binary: new tests go to `tests/it/<name>.rs` with a `mod <name>;` line in `tests/it/main.rs` (one link instead of one per file; `slug_cases`, `review_states`, `snapshots_cli` and `snapshots_symlink` stay separate binaries).
 `tests/oracle/*.sh` use the `git` binary **only as a reference** in tests (patch ID, fast-forward results).
-Test helpers (dev-dependencies only, not in the binary): `proptest` (`tests/patchid_props.rs`, small case count),
+Test helpers (dev-dependencies only, not in the binary): `proptest` (`tests/it/patchid_props.rs`, small case count),
 `insta` (`tests/snapshots_cli.rs`; snapshots in `tests/snapshots/`, review with `cargo insta review` or
 `INSTA_UPDATE=always cargo test --test snapshots_cli`), `datatest-stable` (`tests/slug_cases.rs`: one `.url` and
 `.slug` file pair per case in `tests/slug_cases/`).
@@ -317,7 +318,7 @@ index (written into the lock, which is renamed over the index last). There is no
 and index:
 
 - A refused check, a held `index.lock` (another git process or a stale lock file) or a failed ref update leaves
-  index, working tree and `HEAD` untouched (`tests/sync.rs`). The foreign lock file is not removed.
+  index, working tree and `HEAD` untouched (`tests/it/sync.rs`). The foreign lock file is not removed.
 - If writing files fails, the ref is put back to the old commit (reflog entry `stw: undo fast-forward ...`). Files
   the checkout already wrote stay; the index was not touched. `git status` shows those files as changes.
 - If writing or committing the index fails, the ref is put back; all files are already new, the index is the old

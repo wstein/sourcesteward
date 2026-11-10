@@ -1,7 +1,6 @@
 //! The backup rule of `tidy plan` and `tidy apply`: backup branches (`r9-*`, `r10-*`, `pre-restack*`, `archive/*`, `backup/*`)
 //! are `keep` while the tip commit is younger than N days and `delete` from N days on. A proof still wins.
-mod common;
-use common::*;
+use crate::common::*;
 use stw::repo::RepoRef;
 use stw::tidy::{plan_repo_with_opts, BranchPlan, PlanOpts, PrProof, RepoPlan};
 

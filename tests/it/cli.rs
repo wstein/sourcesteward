@@ -1,8 +1,7 @@
 //! The `stw` binary: options, JSON envelope, exit codes.
-mod common;
 use std::process::{Command, Output};
 
-use common::*;
+use crate::common::*;
 use serde_json::Value;
 
 fn stw(args: &[&str]) -> Output {
