@@ -1,7 +1,7 @@
 //! The one place where stw starts the installed `git` (`"via": "git"` in the JSON output).
 //!
 //! Decision (chartroom, 2026-11-07): `stw` reads and merges with `gix`; it starts `git` only for push, fetch of
-//! ssh and local-path remotes, `range-diff` and conflict resolution in a worktree. `tests/no_binaries.rs`
+//! ssh and local-path remotes, `range-diff` and conflict resolution in a worktree. `tests/it/no_binaries.rs`
 //! allows a process to be started in this file and nowhere else.
 //!
 //! Rules of every call:

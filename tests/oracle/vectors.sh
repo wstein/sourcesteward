@@ -1,6 +1,6 @@
 #!/bin/bash
 # Regenerates tests/vectors/*.id with the git binary (oracle only): builds the same contents as
-# tests/patchid.rs::matches_git_patch_id_stable_on_known_vectors in a scratch repository.
+# tests/it/patchid.rs::matches_git_patch_id_stable_on_known_vectors in a scratch repository.
 set -eu
 OUT=$(cd "$(dirname "$0")/../vectors" && pwd)
 T=$(mktemp -d "${TMPDIR:-/tmp}/stw-vec.XXXXXX"); trap 'rm -rf "$T"' EXIT

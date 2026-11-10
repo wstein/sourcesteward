@@ -1,4 +1,4 @@
-Fixtures for `tests/github_reads.rs`.
+Fixtures for `tests/it/github_reads.rs`.
 
 - `issue_comments.json`, `pr_reviews.json`, `check_runs.json`: recorded on 2026-11-07 from the public repository
   `cli/cli` (issue 14963 comments, PR 14972 reviews, check runs of commit 3988a274..., unauthenticated GET),

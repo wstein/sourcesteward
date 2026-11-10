@@ -142,8 +142,8 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
 
 1. **Recorded decision: Git boundary.** Read/merge through gix; installed Git only for push, ssh/local fetch,
    range-diff, and conflict resolution. HTTPS fetch stays gix. Mark each such output step `via: git`.
-   Update `tests/no_binaries.rs` to permit only the runner module rather than removing the architecture check.
-   Currently gix itself can spawn ssh/git-upload-pack for non-HTTPS fetch (`tests/remote_kinds.rs`); M0 must close
+   Update `tests/it/no_binaries.rs` to permit only the runner module rather than removing the architecture check.
+   Currently gix itself can spawn ssh/git-upload-pack for non-HTTPS fetch (`tests/it/remote_kinds.rs`); M0 must close
    that indirect path too. Keep authentication usable; exact environment scrub/credential allowlist and minimum Git
    versions need fixtures. Git version requirements differ: preview spike 2.40, resolve spike 2.45.
 2. **Open: stack input.** Recommend explicit stack input first. Existing prototypes take `ONTO BRANCH...`; local
@@ -285,8 +285,8 @@ State, read from the repository (2026-11-10, main `ca219d0`):
 - M0: `src/git_runner.rs` (802 lines) has the runner (argv fixed per `Op`, environment allowlist, bounds, timeout). The
   only `Op` is `FetchOrigin`; there is no `range-diff`. GitHub reads exist in `src/github/reads.rs` (comments, reviews,
   check runs, commit statuses). `gix` has no merge feature in `Cargo.toml` (needed only from M1).
-- M3: `src/review.rs` (782 lines), `tests/review_lines.rs`, `tests/review_states.rs` with 99 files in `tests/review_states/`,
-  `tests/review_read.rs`; merged with `8aa9940` and follow-ups up to `469a4f4`. No command uses it.
+- M3: `src/review.rs` (782 lines), `tests/it/review_lines.rs`, `tests/review_states.rs` with 99 files in `tests/review_states/`,
+  `tests/it/review_read.rs`; merged with `8aa9940` and follow-ups up to `469a4f4`. No command uses it.
 - M4: absent. No `review` or `ready-check` command, no carry-over check (patch-id/range-diff); `src/review.rs` only parses
   `Carried-over` chains.
 
@@ -296,20 +296,20 @@ Slice 1 (port, no spike), in this order, each a reviewable commit:
    mapped; mutation of the parser fails the new cases.
 2. `Op::RangeDiff` and the fetch of the PR head into a private ref in `src/git_runner.rs` (fixed argv, minimum Git
    version, bounded output). Go fetches `+refs/pull/N/head` into `refs/stw/carry-over/` (`internal/carryover/git.go:21,228`);
-   the runner has only `FetchOrigin`. Tests in `tests/git_runner.rs`.
+   the runner has only `FetchOrigin`. Tests in `tests/it/git_runner.rs`.
 3. Carry-over core and `stw review carry-over --pr N OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD`. The output is the exact
    `Carried-over:` line; nothing is posted. Mapping of the 46 Go tests (45 cases and `TestMain`) to Rust cases in
    `tests/carryover.rs` unless noted; each gets one case with the same scenario:
    - Request parsing: `TestParseRequestAcceptsOnlyFullLowercaseObjectIDs`, `TestParseRequestRejectsBadCounts`,
      `TestParseRequestValidatesPullNumberAndRemote` (Go allows a PR number of 1 to 999999999, `internal/carryover/types.go:165`).
-   - Fixed argv, in `tests/git_runner.rs`: `TestGuardAllowsOnlyTheReviewedVectors`,
+   - Fixed argv, in `tests/it/git_runner.rs`: `TestGuardAllowsOnlyTheReviewedVectors`,
      `TestGuardRefusesAnExtraArgumentOnEveryShape`, `TestDiffAndLogPinEveryOutputFlag`,
      `TestRunnerRefusesInvalidIDsBeforeRunningGit`. Deviation: Rust fixes the argv in code per `Op`.
    - Fetch of the PR head (step 2): `TestFetchWritesOnlyThePrivateRef`, `TestFetchWritesNoConfiguredRefmapRef`,
      `TestNoHookRunsDuringTheFetch`, `TestMovedPullHeadRefuses`, `TestUnreachableRemoteIsUnknown`.
-   - Patch-id: `TestPatchIDIgnoresRenameDetection`, `TestPatchIDSeesBinaryContent` map to `tests/patchid.rs` and
+   - Patch-id: `TestPatchIDIgnoresRenameDetection`, `TestPatchIDSeesBinaryContent` map to `tests/it/patchid.rs` and
      `tests/vectors/` (add the case where missing); `TestNoDiffDriverRunsAndAWhitespaceChangeStaysNo`.
-   - Runner environment, existing tests in `tests/git_runner.rs` or new: `TestInheritedGitDirDoesNotRedirectTheRunner`,
+   - Runner environment, existing tests in `tests/it/git_runner.rs` or new: `TestInheritedGitDirDoesNotRedirectTheRunner`,
      `TestEnvironmentDropsTheRepositorySelectingVariables`, `TestACorruptIndexFileOfTheEnvironmentChangesNothing`,
      `TestCheckoutOutsideARepositoryIsAReadFailure`.
    - Hostile configuration: `TestAttributesThatHideTextDoNotHideACommit`, `TestSubmoduleIgnoreSettingsDoNotHideAGitlinkChange`,

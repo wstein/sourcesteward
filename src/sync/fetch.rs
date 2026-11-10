@@ -2,7 +2,7 @@
 //!
 //! By remote kind: `ssh://`, `user@host:path`, local paths and `file://` are fetched by the installed `git`
 //! through the runner (`git_runner`, reported as `"via": "git"`), because gix would start `ssh` or
-//! `git-upload-pack` itself for them (`tests/remote_kinds.rs` proves it no longer does). `https://`,
+//! `git-upload-pack` itself for them (`tests/it/remote_kinds.rs` proves it no longer does). `https://`,
 //! `http://` and `git://` are fetched by gix without any program (`"via": "gix"`); a failure of those
 //! non-https kinds is typed `unsupported-remote`. Any other transport (`ext::`, `fd::`) is refused typed
 //! without starting anything. Without a usable `git` the git steps report `unsupported`.
