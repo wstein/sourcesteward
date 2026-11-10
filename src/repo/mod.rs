@@ -105,6 +105,19 @@ pub fn open(path: &Path) -> Result<gix::Repository> {
     Ok(repo)
 }
 
+/// Open a repository reading only its own config files (no user, no system config, no environment
+/// selectors). For `stw add`, which inspects a fresh clone and the workspace before any git program runs.
+pub fn open_isolated(path: &Path) -> Result<gix::Repository> {
+    Ok(gix::open_opts(path, gix::open::Options::isolated())?)
+}
+
+/// The top level of the work tree that contains `dir`, if there is one.
+pub fn top_level(dir: &Path) -> Option<PathBuf> {
+    gix::discover(dir)
+        .ok()
+        .and_then(|r| r.workdir().map(Path::to_path_buf))
+}
+
 /// Forget every `filter.<name>.*` driver of the (in-memory) configuration. gix would start the `clean`,
 /// `smudge` or `process` program named there (also from the repository's own config) while it compares a
 /// worktree file with the index; stw's reads start no program. Files with a `filter=` attribute are then

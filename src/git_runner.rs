@@ -56,25 +56,43 @@ pub fn parse_version(text: &str) -> Option<Version> {
 }
 
 /// The operations that run through `git`. Each has a fixed argument vector and its own minimum version.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The operations of `stw add` carry validated values (`add::CanonicalUrl`, `add::SubPath`,
+/// `add::RepoName`), never free text.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
     /// `git fetch origin` for an ssh or local-path remote (no tags, no submodules).
     FetchOrigin,
+    /// `git reset --hard HEAD` in a fresh clone that was fetched without a work tree (`stw add`). Runs
+    /// with `core.attributesFile=/dev/null`; the caller has verified that no attribute file of the tree
+    /// sets a filter.
+    CheckoutClone,
+    /// `git submodule add -- <url> <path>` on the present clone at `<path>`: local, no network.
+    SubmoduleAddExisting {
+        url: crate::add::CanonicalUrl,
+        path: crate::add::SubPath,
+    },
+    /// `git submodule absorbgitdirs -- <path>`: the clone's git dir moves to `.git/modules/<path>`.
+    AbsorbGitDirs { path: crate::add::SubPath },
+    /// The one commit of `stw add`: `commit -m "add <name> submodule" -- .gitmodules <path>`.
+    CommitSubmodule {
+        name: crate::add::RepoName,
+        path: crate::add::SubPath,
+    },
 }
 
 impl Op {
     /// Minimum installed Git for this capability. Not copied from jj (2.42, which `worktree add --orphan`
     /// needs): the fetch vector uses `-C`, `-c`, `--quiet`, `--no-tags`, `--no-recurse-submodules` and
     /// `protocol.ext.allow`, all older than 2.30. Verified against 2.47.3 only (see the README).
-    pub fn min_version(self) -> Version {
-        match self {
-            Op::FetchOrigin => Version(2, 30, 0),
-        }
+    pub fn min_version(&self) -> Version {
+        // the `stw add` vectors use only options that exist since git 2.30 as well; verified against 2.47.3 only
+        Version(2, 30, 0)
     }
 
-    fn args(self) -> &'static [&'static str] {
+    fn args(&self) -> Vec<String> {
+        let v = |a: &[&str]| a.iter().map(|s| (*s).to_string()).collect::<Vec<String>>();
         match self {
-            Op::FetchOrigin => &[
+            Op::FetchOrigin => v(&[
                 "fetch",
                 "--quiet",
                 "--no-tags",
@@ -83,7 +101,50 @@ impl Op {
                 // the first one); the option does
                 "--upload-pack=git-upload-pack",
                 "origin",
+            ]),
+            Op::CheckoutClone => v(&["reset", "--hard", "--quiet", "HEAD"]),
+            Op::SubmoduleAddExisting { url, path } => {
+                let mut a = v(&["submodule", "add", "--"]);
+                a.push(url.as_str().to_string());
+                a.push(path.as_str().to_string());
+                a
+            }
+            Op::AbsorbGitDirs { path } => {
+                let mut a = v(&["submodule", "absorbgitdirs", "--"]);
+                a.push(path.as_str().to_string());
+                a
+            }
+            Op::CommitSubmodule { name, path } => {
+                let mut a = v(&["commit", "--quiet", "--no-verify", "-m"]);
+                a.push(format!("add {} submodule", name.as_str()));
+                a.extend(v(&["--", ".gitmodules"]));
+                a.push(path.as_str().to_string());
+                a
+            }
+        }
+    }
+
+    /// Extra `-c` pairs after the shared leading ones. The `stw add` operations never sign, never use
+    /// a configured or global attributes file (it would attach filter drivers) and never use a pager.
+    fn extra_leading(&self) -> &'static [&'static str] {
+        match self {
+            Op::FetchOrigin => &[],
+            _ => &[
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "tag.gpgsign=false",
+                "-c",
+                "core.attributesFile=/dev/null",
             ],
+        }
+    }
+
+    /// Value of `GIT_ALLOW_PROTOCOL` of the child. The `stw add` operations are local: no transport at all.
+    fn allow_protocol(&self) -> &'static str {
+        match self {
+            Op::FetchOrigin => "file:ssh:git:http:https",
+            _ => "none",
         }
     }
 }
@@ -360,7 +421,7 @@ impl Runner {
             };
             let mut cmd = Command::new(exe);
             cmd.arg("--version").current_dir("/");
-            self.apply_env(&mut cmd, None);
+            self.apply_env(&mut cmd, None, &Op::FetchOrigin);
             match self.exec(
                 cmd,
                 &Limits {
@@ -416,6 +477,7 @@ impl Runner {
         Self::check_repo(repo)?;
         let mut v: Vec<OsString> = vec!["-C".into(), repo.as_os_str().to_owned()];
         v.extend(LEADING.iter().map(OsString::from));
+        v.extend(op.extra_leading().iter().map(OsString::from));
         v.extend(op.args().iter().map(OsString::from));
         Ok(v)
     }
@@ -426,10 +488,20 @@ impl Runner {
         repo: &Path,
     ) -> std::result::Result<Vec<(OsString, OsString)>, GitError> {
         Self::check_repo(repo)?;
-        Ok(self.env_for(Some(repo)))
+        Ok(self.env_for(Some(repo), &Op::FetchOrigin))
     }
 
-    fn env_for(&self, repo: Option<&Path>) -> Vec<(OsString, OsString)> {
+    /// The environment the child gets for `op` in `repo`.
+    pub fn child_env_for(
+        &self,
+        repo: &Path,
+        op: &Op,
+    ) -> std::result::Result<Vec<(OsString, OsString)>, GitError> {
+        Self::check_repo(repo)?;
+        Ok(self.env_for(Some(repo), op))
+    }
+
+    fn env_for(&self, repo: Option<&Path>, op: &Op) -> Vec<(OsString, OsString)> {
         let mut out: Vec<(OsString, OsString)> = KEEP
             .iter()
             .filter_map(|k| {
@@ -459,16 +531,16 @@ impl Runner {
         set("GIT_OPTIONAL_LOCKS", "0".into());
         set("GIT_PAGER", "cat".into());
         set("GIT_EDITOR", "true".into());
-        set("GIT_ALLOW_PROTOCOL", "file:ssh:git:http:https".into());
+        set("GIT_ALLOW_PROTOCOL", op.allow_protocol().into());
         if let Some(parent) = repo.and_then(Path::parent) {
             set("GIT_CEILING_DIRECTORIES", parent.as_os_str().to_owned());
         }
         out
     }
 
-    fn apply_env(&self, cmd: &mut Command, repo: Option<&Path>) {
+    fn apply_env(&self, cmd: &mut Command, repo: Option<&Path>, op: &Op) {
         cmd.env_clear();
-        for (k, v) in self.env_for(repo) {
+        for (k, v) in self.env_for(repo, op) {
             cmd.env(k, v);
         }
     }
@@ -476,7 +548,7 @@ impl Runner {
     /// Run `op` in `repo`. Checks the repository path, finds git, checks the version (once), starts the fixed
     /// vector with the scrubbed environment, and bounds time and output.
     pub fn run(&self, repo: &Path, op: Op) -> std::result::Result<Output, GitError> {
-        let argv = self.argv(repo, op)?;
+        let argv = self.argv(repo, op.clone())?;
         let exe = self.find_git().ok_or(GitError::NotFound)?;
         let found = self.version().map_err(|e| match e {
             GitError::Version { found, .. } => GitError::Version {
@@ -494,7 +566,7 @@ impl Runner {
         refuse_local_command_config(repo)?;
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
-        self.apply_env(&mut cmd, Some(repo));
+        self.apply_env(&mut cmd, Some(repo), &op);
         let (status, stdout, stderr) = self.exec(cmd, &self.limits)?;
         let stderr = shorten(
             &redact(&String::from_utf8_lossy(&stderr), &self.secrets),
@@ -656,6 +728,48 @@ fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
 /// Read the repository's config with gix and refuse when a local or worktree section sets such a key. A
 /// directory that is not a usable repository is refused too (fail closed).
 fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError> {
+    refuse_config(repo, &|section, sub, key| runs_a_command(section, sub, key))
+}
+
+/// Keys that `stw add` refuses in the repository's own config (local and worktree scope) on top of
+/// `runs_a_command`: filter drivers, signing programs, diff/merge/tool commands, program-starting `core` keys,
+/// aliases, pagers, trailers, per-remote programs and submodule update commands. The list is by key name
+/// (conservative: `core.fsmonitor=true` is refused, `=false` too). The user's own config is not scanned.
+fn refused_by_add(section: &str, sub: Option<&str>, key: &str) -> bool {
+    if runs_a_command(section, sub, key) {
+        return true;
+    }
+    match section {
+        "filter" | "gpg" | "pager" | "trailer" | "alias" => true,
+        "commit" | "tag" | "push" => key == "gpgsign",
+        "diff" => key == "external" || (sub.is_some() && matches!(key, "textconv" | "command")),
+        "merge" => sub.is_some() && key == "driver",
+        "mergetool" | "difftool" => key == "cmd",
+        "core" => matches!(
+            key,
+            "fsmonitor" | "hookspath" | "pager" | "editor" | "attributesfile" | "excludesfile"
+        ),
+        "sequence" => key == "editor",
+        "submodule" => key == "update",
+        "protocol" => key == "allow",
+        "uploadpack" => key == "packobjectshook",
+        "remote" => matches!(key, "receivepack" | "uploadpack" | "vcs" | "proxy"),
+        _ => false,
+    }
+}
+
+/// The config check of `stw add`, for the Workspace (`clone = false`) and for the fresh clone
+/// (`clone = true`, where `core.worktree` is refused too: a clone made by this run has none).
+pub fn check_config_for_add(repo: &Path, clone: bool) -> std::result::Result<(), GitError> {
+    refuse_config(repo, &|section, sub, key| {
+        refused_by_add(section, sub, key) || (clone && section == "core" && key == "worktree")
+    })
+}
+
+fn refuse_config(
+    repo: &Path,
+    refused: &dyn Fn(&str, Option<&str>, &str) -> bool,
+) -> std::result::Result<(), GitError> {
     // isolated: only the repository's own files are read, never the user's or system config
     let r = gix::open_opts(repo, gix::open::Options::isolated())
         .map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
@@ -672,7 +786,7 @@ fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError>
         let sub = header.subsection_name().map(|s| s.to_string());
         for key in section.body().value_names() {
             let key = key.to_string().to_ascii_lowercase();
-            if runs_a_command(&name, sub.as_deref(), &key) {
+            if refused(&name, sub.as_deref(), &key) {
                 let full = match &sub {
                     Some(sub) => format!("{name}.{sub}.{key}"),
                     None => format!("{name}.{key}"),

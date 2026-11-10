@@ -1240,3 +1240,174 @@ fn foreground_mode_kills_only_git_on_timeout_and_never_its_own_group() {
     assert!(matches!(e, GitError::Timeout { .. }), "{e:?}");
     // this process is in the group that must not be killed: still running proves it
 }
+
+// ---------------------------------------------------------------------------------------------- stw add
+
+fn add_ops() -> Vec<Op> {
+    let url = stw::add::CanonicalUrl::new(
+        &stw::add::RepoName::parse("octo").unwrap(),
+        &stw::add::RepoName::parse("tool").unwrap(),
+    );
+    let path = stw::add::SubPath::parse("projects/tool").unwrap();
+    vec![
+        Op::CheckoutClone,
+        Op::SubmoduleAddExisting {
+            url,
+            path: path.clone(),
+        },
+        Op::AbsorbGitDirs { path: path.clone() },
+        Op::CommitSubmodule {
+            name: stw::add::RepoName::parse("tool").unwrap(),
+            path,
+        },
+    ]
+}
+
+#[test]
+fn the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport() {
+    let t = tmp();
+    let r = Runner::from_env(osv(&[("PATH", "/usr/bin")]));
+    let tail = |op: Op| -> Vec<String> {
+        let a: Vec<String> = r
+            .argv(t.path(), op)
+            .unwrap()
+            .iter()
+            .map(|a| a.to_string_lossy().into_owned())
+            .collect();
+        // after `-C <repo>` and the shared `-c` pairs of every call: the extra pairs, then the vector
+        let i = a
+            .iter()
+            .position(|x| x == "core.hooksPath=/dev/null")
+            .unwrap();
+        a[i + 1..].to_vec()
+    };
+    let lead = [
+        "-c",
+        "commit.gpgsign=false",
+        "-c",
+        "tag.gpgsign=false",
+        "-c",
+        "core.attributesFile=/dev/null",
+    ];
+    let ops = add_ops();
+    let expect: [&[&str]; 4] = [
+        &["reset", "--hard", "--quiet", "HEAD"],
+        &[
+            "submodule",
+            "add",
+            "--",
+            "https://github.com/octo/tool.git",
+            "projects/tool",
+        ],
+        &["submodule", "absorbgitdirs", "--", "projects/tool"],
+        &[
+            "commit",
+            "--quiet",
+            "--no-verify",
+            "-m",
+            "add tool submodule",
+            "--",
+            ".gitmodules",
+            "projects/tool",
+        ],
+    ];
+    for (op, want) in ops.into_iter().zip(expect) {
+        let got = tail(op.clone());
+        let want: Vec<String> = lead
+            .iter()
+            .chain(want.iter())
+            .map(|s| s.to_string())
+            .collect();
+        assert_eq!(got, want, "{op:?}");
+        let env = r.child_env_for(t.path(), &op).unwrap();
+        let allow = env.iter().find(|(k, _)| k == "GIT_ALLOW_PROTOCOL").unwrap();
+        assert_eq!(allow.1, "none", "{op:?}");
+    }
+    // the fetch keeps its transports and its vector (no extra pairs)
+    let fetch = tail(Op::FetchOrigin);
+    assert_eq!(fetch[0], "fetch");
+    let env = r.child_env_for(t.path(), &Op::FetchOrigin).unwrap();
+    assert_eq!(
+        env.iter()
+            .find(|(k, _)| k == "GIT_ALLOW_PROTOCOL")
+            .unwrap()
+            .1,
+        "file:ssh:git:http:https"
+    );
+}
+
+#[test]
+fn the_add_config_check_refuses_program_keys_in_workspace_and_clone() {
+    let refused = [
+        "[filter \"lfs\"]\n\tclean = x\n",
+        "[filter]\n\tprocess = x\n",
+        "[gpg]\n\tprogram = x\n",
+        "[commit]\n\tgpgsign = true\n",
+        "[tag]\n\tgpgsign = true\n",
+        "[push]\n\tgpgsign = true\n",
+        "[diff]\n\texternal = x\n",
+        "[diff \"d\"]\n\ttextconv = x\n",
+        "[diff \"d\"]\n\tcommand = x\n",
+        "[merge \"m\"]\n\tdriver = x\n",
+        "[mergetool \"t\"]\n\tcmd = x\n",
+        "[difftool \"t\"]\n\tcmd = x\n",
+        "[core]\n\tfsmonitor = x\n",
+        "[core]\n\thooksPath = x\n",
+        "[core]\n\tpager = x\n",
+        "[core]\n\teditor = x\n",
+        "[core]\n\tattributesFile = x\n",
+        "[core]\n\texcludesFile = x\n",
+        "[core]\n\tsshCommand = x\n",
+        "[pager]\n\tlog = x\n",
+        "[trailer \"t\"]\n\tcmd = x\n",
+        "[alias]\n\tx = !x\n",
+        "[sequence]\n\teditor = x\n",
+        "[submodule \"s\"]\n\tupdate = !x\n",
+        "[protocol \"ext\"]\n\tallow = always\n",
+        "[uploadpack]\n\tpackObjectsHook = x\n",
+        "[remote \"o2\"]\n\treceivepack = x\n",
+        "[remote \"o2\"]\n\tuploadpack = x\n",
+        "[remote \"o2\"]\n\tvcs = x\n",
+        "[remote \"o2\"]\n\tproxy = x\n",
+        "[credential]\n\thelper = x\n",
+        "[include]\n\tpath = x\n",
+        "[url \"u\"]\n\tinsteadOf = x\n",
+    ];
+    for extra in refused {
+        let t = tmp();
+        gix::init(t.path()).unwrap();
+        let cfg = t.path().join(".git/config");
+        let mut text = std::fs::read_to_string(&cfg).unwrap();
+        text.push_str(extra);
+        std::fs::write(&cfg, text).unwrap();
+        for clone in [false, true] {
+            assert!(
+                matches!(
+                    stw::git_runner::check_config_for_add(t.path(), clone),
+                    Err(GitError::Refused { .. })
+                ),
+                "{extra:?} clone={clone}"
+            );
+        }
+    }
+    // identity, branch, an ordinary remote and the keys the check must let through
+    let t = tmp();
+    gix::init(t.path()).unwrap();
+    let cfg = t.path().join(".git/config");
+    let mut text = std::fs::read_to_string(&cfg).unwrap();
+    text.push_str(
+        "[user]\n\tname = T\n\temail = t@e\n[remote \"origin\"]\n\turl = https://github.com/a/b.git\n\tfetch = +refs/heads/*:refs/remotes/origin/*\n[branch \"main\"]\n\tremote = origin\n[submodule \"s\"]\n\turl = https://github.com/a/s.git\n\tactive = true\n[core]\n\tbare = false\n",
+    );
+    std::fs::write(&cfg, text).unwrap();
+    stw::git_runner::check_config_for_add(t.path(), false).unwrap();
+    stw::git_runner::check_config_for_add(t.path(), true).unwrap();
+    // core.worktree: allowed in a workspace (separate git dirs), refused in a clone made by this run
+    let mut text = std::fs::read_to_string(&cfg).unwrap();
+    text.push_str("[core]\n\tworktree = /elsewhere\n");
+    std::fs::write(&cfg, text).unwrap();
+    stw::git_runner::check_config_for_add(t.path(), false).unwrap();
+    assert!(matches!(
+        stw::git_runner::check_config_for_add(t.path(), true),
+        Err(GitError::Refused { .. })
+    ));
+}

@@ -1,4 +1,5 @@
 //! stw: everyday git and GitHub workflows for agents, on gitoxide, without `git` or `gh` binaries.
+pub mod add;
 pub mod auth;
 pub mod cli;
 pub mod dev;
