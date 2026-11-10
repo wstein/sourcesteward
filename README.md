@@ -22,6 +22,7 @@ stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw sync      [--apply] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
+stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 ```
 
 | Command | What it does | Writes |
@@ -30,6 +31,7 @@ stw sync      [--apply] [--json] [--offline] [--root PATH] [--repo NAME]...
 | `tidy plan` | the plan only: per local branch `delete`, `review` or `keep`, with the proof. `tidy` alone prints the usage (exit 2) | nothing |
 | `tidy apply` | carries the plan out: deletes the local branches it marks `delete`, removes clean linked worktrees of such branches and dead worktree registrations. No confirmation flag; `--yes` is an unknown flag | local branches, worktrees, a manifest outside the repository |
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
+| `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `sync` | dry run: what would be fast-forwarded and why not. `--apply`: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included | only with `--apply` |
 
 `sync --apply` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
@@ -188,6 +190,37 @@ creates). The token is never printed or logged. Without a token everything works
 (and the notes say so) and fetching private repositories (the error says to set `GH_TOKEN` or `GITHUB_TOKEN`).
 Only `github.com` remotes are used for REST; the fetch offers the token to `github.com` over https only, as user
 `x-access-token`. `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
+
+## stw add
+
+`stw add OWNER/REPO [PATH]` (`REPO` alone takes the owner of the workspace's GitHub origin; `PATH` defaults to
+`projects/REPO`, relative to the workspace root, which must be the top level of a git repository with a `.git`
+directory). It never creates a repository (that stays in `whr-add`) and needs read access only.
+
+1. gix clones `https://github.com/OWNER/REPO.git` into `PATH`, a directory this run creates itself, without a work
+   tree. The token (if any) reaches only the gix transport, through the same token-only closure as `sync`; it is
+   offered for `github.com` over https only. The user's and the system git config are not read for the clone.
+2. The clone is checked before a file is written: its own config sets no key that runs a program, `origin` is exactly
+   the canonical URL, there is a commit, and no `.gitattributes` of the tree (any case, any depth, the NTFS short name)
+   and no `info/attributes` sets a `filter` (git-lfs and git-crypt repositories are refused for now).
+3. Through the runner (`via: git`): `reset --hard` writes the work tree, `submodule add -- <url> <path>` and
+   `submodule absorbgitdirs -- <path>` bind it (no transport: `GIT_ALLOW_PROTOCOL=none`), and one commit
+   `add REPO submodule` holds `.gitmodules` and the gitlink only. The commit is never signed
+   (`commit.gpgsign=false`, `tag.gpgsign=false`), uses no attributes file (`core.attributesFile=/dev/null`) and takes
+   author and committer from the git config; without `user.name` and `user.email` the run stops with exit 2 before it
+   touches anything.
+
+Refused with exit 1 and the workspace unchanged: a workspace config that sets a key of the list in
+`git_runner::refused_by_add` (filter, gpg, signing, diff/merge/tool commands, program-starting `core` keys, aliases,
+pagers, trailers, per-remote programs, `submodule.*.update`, plus the runner's own list), a `.gitattributes` or
+`info/attributes` line that can match `.gitmodules` and sets `filter`, `diff` or `merge`, an existing `PATH` or index
+entry, a symlink in `PATH` or `.git/modules/PATH`, an existing `.git/modules/PATH`, a registered submodule or
+`[submodule "PATH"]` section, a `.gitmodules` that is a symlink or has uncommitted changes, an empty repository. Names
+and paths: `[A-Za-z0-9._-]` for names (not `.`, `..`, `-x`); `PATH` relative, `[A-Za-z0-9._/-]`, no empty, `.`, `..`
+or `-x` component, none of `.git`, `.gitmodules`, `.gitattributes`, `.gitignore`, `.mailmap` in any case (exit 2).
+A failure before the commit restores `.gitmodules`, the index, the workspace config, `.git/modules/PATH` and the
+directories this run created. `--dry-run` runs every check and changes nothing. Evidence and open points: the spike
+`spikes/stw/add/README.md` (Q1-Q8). Not verified: see "Not verified".
 
 ## Remote kinds and the git runner
 
@@ -362,6 +395,13 @@ on a single file), the ref is restored but files already written stay; `git stat
 gix has no API stability promise before 1.0: the pin is exact and updates are deliberate.
 
 ## Not verified
+
+`stw add`: the gix clone over https was not run in the test suite (the tests replace the clone by a local copy; the
+checks, the git steps and the rollback run for real); a run against a live GitHub repository is a manual check. Git
+older than 2.47.3, macOS, a `url.<x>.insteadOf` rewrite (the clone ignores the user's config), concurrent runs on one
+`PATH`, and a race between the checks and the removal of a clone directory are not covered. The rollback removes
+`.git/modules/PATH` when it exists after a failed run (absent before: checked up front) and cannot tell a directory a
+concurrent process created.
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
 index during `--apply`; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
