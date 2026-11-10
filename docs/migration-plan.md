@@ -179,16 +179,16 @@ and all owner live acceptances were **not run** for this documentation assessmen
 Owner direction (2026-11-10): replace the Go implementation and archive it; no two implementations side by side. Few new
 features; migrate what is wanted from Go quickly, against the Go test cases. Acceptance rules: AGENTS.md ("Scripts first,
 then product"). This section is the working plan; it does not replace the milestone table above (M-numbers refer to it).
-"Vorschlag" is a proposal for the owner, not a decision.
+"Proposal" means a proposal for the owner, not a decision.
 
 ### Port inventory
 
 Source: `legacy/sourcesteward/internal/cli/root.go:182` (registration) and `stw --help` of a binary built from the gitlink
-`b9ec1f2` (hidden commands read from the sources, marked h). 33 leaf commands; `help` is Cobra's own.
+`b9ec1f2` (hidden commands read from the sources, marked h). 33 leaf commands; `help` is a custom help command (`root.go:183`) and is not counted.
 Rust today: `src/cli.rs` has `status`, `tidy plan|apply|restore`, `sync` and the hidden `dev patch-id`; everything else
 is **absent** as a command. Test counts are `grep -c '^func Test'` per Go package, not runs.
 
-| Go command | Rust today | M | Vorschlag | Test source in Go |
+| Go command | Rust today | M | Proposal | Test source in Go |
 | --- | --- | --- | --- | --- |
 | `status` | present; review column stays `null` (README, M3) | M4 | **port**: core command; the comment-based review state is not wired in. | `internal/statuscmd` (40), `statusremote` (109), `cli/status_*_test.go`; goldens pin Go text and schema v1, reuse inputs not goldens |
 | `sync` | partial: dry run by default, `--apply` fast-forwards (Go acts by default) | - | **port** (done): fast-forward of every repository. Deviation: Rust is dry-run by default. | `internal/stwsync` (162), `cli/sync_test.go` |
@@ -254,7 +254,8 @@ named) and an independent review of the exact head is CLEAR, or (b) the owner de
 Archive `legacy/sourcesteward` only when all 34 items, every flag row and the two extra binaries are replaced. Then:
 1. Owner: archive the repository `wstein/sourcesteward` (GitHub setting).
 2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
-3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`).
+3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`); changes to
+   skills go by pull request in `wstein/dotagents`, on owner request.
 4. Owner: last Go version. v0.2.1 is not published (`dayboard/BACKLOG.md`: owner publishes, then the gitlink is raised);
    decide whether to publish it as the last release or archive at v0.2.0. Installed binary stays v0.2.0 until M3+M4
    (decision 4 above).
@@ -262,7 +263,8 @@ Archive `legacy/sourcesteward` only when all 34 items, every flag row and the tw
 ### Order of the ports
 
 Owner decisions of 2026-11-10 (chosen by selection):
-- **Two port lines in parallel.** Line A: M3 -> M4 -> M8 -> M9 -> M10. Line B: M1 -> M2 -> M6 (restack, stacks).
+- **Two port lines in parallel.** Line A: M3 -> M4 -> M8 -> M9 -> M10 (M10 needs the slim M5). Line B: M1 -> M2 -> M6
+  (restack, stacks; M6 needs the slim M5).
   Reason: restack makes stacking cheap, and M3/M4 replace the review gates that keep Go v0.2.0 installed.
 - **M5 is slimmed.** Instead of the full oplog: a backup ref `refs/stw/backup/<n>` before every mutation, evidence by
   `range-diff`, undo = set the ref back. No journal, no retention logic, no general undo. M6 may start without spike B.
@@ -274,6 +276,8 @@ Owner decisions of 2026-11-10 (chosen by selection):
   decide this.
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
 - Still deferred: M7, M11, M12, M13.
+- **Open: the `drop` proposals.** Criterion (b) needs an explicit owner decision per `drop`: 9 command rows, the (flag) rows
+  marked drop and the two extra binaries. Until then they are proposals.
 
 ### Next slice
 
@@ -283,17 +287,43 @@ State, read from the repository (2026-11-10, main `ca219d0`):
   check runs, commit statuses). `gix` has no merge feature in `Cargo.toml` (needed only from M1).
 - M3: `src/review.rs` (782 lines), `tests/review_lines.rs`, `tests/review_states.rs` with 99 files in `tests/review_states/`,
   `tests/review_read.rs`; merged with `8aa9940` and follow-ups up to `469a4f4`. No command uses it.
-- M4: absent. No `review` or `ready-check` command, no carry-over code.
+- M4: absent. No `review` or `ready-check` command, no carry-over check (patch-id/range-diff); `src/review.rs` only parses
+  `Carried-over` chains.
 
 Slice 1 (port, no spike), in this order, each a reviewable commit:
 1. Go corpus check for M3: for each case in `internal/reviewstate/{parse,state}_test.go` one Rust case in
    `tests/review_states/` or a named deviation (64-hex, CR, `pr=none`, PR-number width). Done when every Go case is
    mapped; mutation of the parser fails the new cases.
-2. `Op::RangeDiff` in `src/git_runner.rs` (fixed argv, minimum Git version, bounded output) with tests in
-   `tests/git_runner.rs`.
-3. Carry-over core and `stw review carry-over --pr N OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD`: Rust cases for the scenarios of
-   `internal/carryover/*_test.go` (pure rebase, identical heads, merge commit, patch-id change, whitespace-only change,
-   added empty commit, reordered commits, rename with content change, rewritten parent, missing object, no writes, read
-   failure is never a yes, hostile configuration and environment). Output is the exact `Carried-over:` line; nothing is
-   posted.
+2. `Op::RangeDiff` and the fetch of the PR head into a private ref in `src/git_runner.rs` (fixed argv, minimum Git
+   version, bounded output). Go fetches `+refs/pull/N/head` into `refs/stw/carry-over/` (`internal/carryover/git.go:21,228`);
+   the runner has only `FetchOrigin`. Tests in `tests/git_runner.rs`.
+3. Carry-over core and `stw review carry-over --pr N OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD`. The output is the exact
+   `Carried-over:` line; nothing is posted. Mapping of the 46 Go tests (45 cases and `TestMain`) to Rust cases in
+   `tests/carryover.rs` unless noted; each gets one case with the same scenario:
+   - Request parsing: `TestParseRequestAcceptsOnlyFullLowercaseObjectIDs`, `TestParseRequestRejectsBadCounts`,
+     `TestParseRequestValidatesPullNumberAndRemote` (the Go limit on the PR number is UNKNOWN until read there).
+   - Fixed argv, in `tests/git_runner.rs`: `TestGuardAllowsOnlyTheReviewedVectors`,
+     `TestGuardRefusesAnExtraArgumentOnEveryShape`, `TestDiffAndLogPinEveryOutputFlag`,
+     `TestRunnerRefusesInvalidIDsBeforeRunningGit`. Deviation: Rust fixes the argv in code per `Op`.
+   - Fetch of the PR head (step 2): `TestFetchWritesOnlyThePrivateRef`, `TestFetchWritesNoConfiguredRefmapRef`,
+     `TestNoHookRunsDuringTheFetch`, `TestMovedPullHeadRefuses`, `TestUnreachableRemoteIsUnknown`.
+   - Patch-id: `TestPatchIDIgnoresRenameDetection`, `TestPatchIDSeesBinaryContent` map to `tests/patchid.rs` and
+     `tests/vectors/` (add the case where missing); `TestNoDiffDriverRunsAndAWhitespaceChangeStaysNo`.
+   - Runner environment, existing tests in `tests/git_runner.rs` or new: `TestInheritedGitDirDoesNotRedirectTheRunner`,
+     `TestEnvironmentDropsTheRepositorySelectingVariables`, `TestACorruptIndexFileOfTheEnvironmentChangesNothing`,
+     `TestCheckoutOutsideARepositoryIsAReadFailure`.
+   - Hostile configuration: `TestAttributesThatHideTextDoNotHideACommit`, `TestSubmoduleIgnoreSettingsDoNotHideAGitlinkChange`,
+     `TestVerdictsOfTheCleanConfiguration`, `TestVerdictsDoNotChangeUnderHostileConfiguration`, `TestOneHostileSettingAtATime`.
+   - Output bounds: `TestParseLogRejectsMalformedOutput`, `TestRunnerBoundsTheCommitsPerSide`.
+   - Output: `TestHumanOutputEndsWithTheLineOnlyForAYes`, `TestJSONHasTheContractKeys`, `TestLineFormat`. Deviation: schema 2
+     instead of Go v1; the line has 40-hex patch-id and `pr=<n|none>`.
+   - Scenarios: `TestPureRebaseIsCarriedOverWithTheExactLine`, `TestIdenticalHeadsAreCarriedOver`,
+     `TestMergeCommitRefusesAndOnlyThatCondition`, `TestPatchIDChangeRefuses`,
+     `TestWhitespaceOnlyChangeKeepsThePatchIDButRangeDiffRefuses`, `TestAddedEmptyCommitRefuses`,
+     `TestReorderedCommitsRefuseByPosition`, `TestRenameWithContentChangeRefuses`,
+     `TestRewrittenParentIsCarriedOverWithTheFourArgumentForm`, `TestMissingObjectRefuses`, `TestCheckWritesNothing`,
+     `TestReadFailuresNeverBecomeAYes`, `TestEmptyPatchIDAndEmptyRangeRefuse`,
+     `TestCommitComparisonIgnoresOnlyBlobIDsAndLineNumbers`, `TestCommitComparisonAddedRemovedAndReordered`,
+     `TestPullHeadComparison`. Deviation: Go also takes a 64-hex patch-id; Rust takes 40 hex only.
+   - `TestMain`: drop (Go harness; the Rust harness stays confined to scratch).
 Slice 2: `ready-check` (M4) from `internal/readycheck`. Then M8 (`lint pr`), M9 (`pulls`).
