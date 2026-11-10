@@ -195,13 +195,9 @@ pub struct GixCloner {
 
 impl Cloner for GixCloner {
     fn clone_into(&self, url: &CanonicalUrl, dest: &Path) -> std::result::Result<(), String> {
-        let msg = |e: &dyn std::fmt::Display| {
-            git_runner::redact(&e.to_string(), &[])
-                .chars()
-                .take(400)
-                .collect::<String>()
-        };
         let creds = self.credentials.clone();
+        let shown = self.credentials.clone();
+        let msg = |e: &dyn std::fmt::Display| clone_message(&e.to_string(), shown.as_ref());
         let mut prep = gix::clone::PrepareFetch::new(
             url.as_str(),
             dest,
@@ -224,6 +220,22 @@ impl Cloner for GixCloner {
         drop(repo);
         Ok(())
     }
+}
+
+/// The text of a failed clone: credentials and token shapes removed, and gix's "No credentials were returned"
+/// (an unknown repository and a refused token look the same to GitHub) said in words.
+fn clone_message(raw: &str, credentials: Option<&(String, String)>) -> String {
+    let secrets: Vec<String> = credentials.map(|(_, t)| t.clone()).into_iter().collect();
+    let text = git_runner::redact(raw, &secrets);
+    let text = if text.contains("No credentials were returned") {
+        match credentials {
+            Some(_) => "not found or no access (the token was not accepted for this repository)".to_string(),
+            None => "not found or no access (no token found; private repositories need GH_TOKEN or GITHUB_TOKEN)".to_string(),
+        }
+    } else {
+        text
+    };
+    text.chars().take(400).collect()
 }
 
 /// What a successful run did.
@@ -797,6 +809,26 @@ mod tests {
         }
         assert_eq!(owner_of_origin("https://gitlab.com/octo/ws"), None);
         assert_eq!(owner_of_origin("/srv/ws"), None);
+    }
+
+    #[test]
+    fn clone_errors_hide_the_token_and_say_what_a_missing_credential_means() {
+        let creds = Some(("x-access-token".to_string(), "tok_SECRET_123".to_string()));
+        let m = clone_message("request to tok_SECRET_123 failed", creds.as_ref());
+        assert!(!m.contains("tok_SECRET_123"), "{m}");
+        let m = clone_message("No credentials were returned at all as if x", None);
+        assert!(m.contains("not found or no access"), "{m}");
+        assert!(m.contains("no token"), "{m}");
+        let m = clone_message(
+            "No credentials were returned at all as if x",
+            creds.as_ref(),
+        );
+        assert!(m.contains("not found or no access"), "{m}");
+        assert!(!m.contains("no token"), "{m}");
+        assert_eq!(
+            clone_message("connection refused", None),
+            "connection refused"
+        );
     }
 
     #[test]
