@@ -856,6 +856,16 @@ fn every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs() {
         ("info backslash", info("\\.gitmodules filter=evil\n"), true),
         ("index only", commit_then_remove, true),
         ("symlink", symlinked, true),
+        // the work tree copy is harmless, only the index copy names the filter
+        (
+            "index copy only differs",
+            Box::new(|e: &Env| {
+                e.ws.write(".gitattributes", ".gitmodules filter=evil\n");
+                e.ws.stage(".gitattributes");
+                e.ws.write(".gitattributes", "# harmless\n");
+            }),
+            true,
+        ),
         (
             "symlink without an index copy",
             Box::new(|e: &Env| {
