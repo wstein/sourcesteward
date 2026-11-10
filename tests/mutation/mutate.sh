@@ -280,14 +280,14 @@ m I5 "a partial environment identity still reaches gix (beats the Git config)" s
 m A3 "a failed rollback is not reported" src/sync/fast_forward.rs \
   '"{cause}; and the ref could not be put back: {undo}"' '"{cause}{undo:.0}"' \
   sync a_failed_rollback_reports_both_errors_and_leaves_the_ref
-m A4 "the ref is not rolled back when the index write fails" src/sync/fast_forward.rs \
+m A4 "the ref is not rolled back when a file write fails" src/sync/fast_forward.rs \
   '    if let Err(e) = write_files() {' '    if let Err(e) = write_files() {
         return Err(e);
     }
     if let Err(e) = Ok::<(), FfError>(()) {' \
   sync a_failed_file_write_puts_the_ref_back
 
-# tidy apply / restore / backup rule. OPEN (no mutation kills them; see tests/tidy_apply.rs): the .git-file
+# tidy apply / restore / backup rule. OPEN (no mutation kills them; see tests/it/tidy_apply.rs): the .git-file
 # registration check (W9), the registration path check, fsync of the manifest.
 m B1 'a backup of exactly N days is kept' src/tidy.rs \
   'if age >= limit {' 'if age > limit {' \

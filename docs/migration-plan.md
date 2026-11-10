@@ -299,7 +299,7 @@ Slice 1 (port, no spike), in this order, each a reviewable commit:
    the runner has only `FetchOrigin`. Tests in `tests/it/git_runner.rs`.
 3. Carry-over core and `stw review carry-over --pr N OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD`. The output is the exact
    `Carried-over:` line; nothing is posted. Mapping of the 46 Go tests (45 cases and `TestMain`) to Rust cases in
-   `tests/carryover.rs` unless noted; each gets one case with the same scenario:
+   `tests/it/carryover.rs` unless noted; each gets one case with the same scenario:
    - Request parsing: `TestParseRequestAcceptsOnlyFullLowercaseObjectIDs`, `TestParseRequestRejectsBadCounts`,
      `TestParseRequestValidatesPullNumberAndRemote` (Go allows a PR number of 1 to 999999999, `internal/carryover/types.go:165`).
    - Fixed argv, in `tests/it/git_runner.rs`: `TestGuardAllowsOnlyTheReviewedVectors`,
