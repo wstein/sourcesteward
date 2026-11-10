@@ -195,7 +195,8 @@ Only `github.com` remotes are used for REST; the fetch offers the token to `gith
 
 `stw add OWNER/REPO [PATH]` (`REPO` alone takes the owner of the workspace's GitHub origin; `PATH` defaults to
 `projects/REPO`, relative to the workspace root, which must be the top level of a git repository with a `.git`
-directory). It never creates a repository (that stays in `whr-add`) and needs read access only.
+directory). The root is `--root`, else the superproject of the repository of the current directory, else that
+repository (a workspace without `.gitmodules` is fine), and only without any repository `$STW_ROOT`. It never creates a repository (that stays in `whr-add`) and needs read access only.
 
 1. gix clones `https://github.com/OWNER/REPO.git` into `PATH`, a directory this run creates itself, without a work
    tree. The token (if any) reaches only the gix transport, through the same token-only closure as `sync`; it is
@@ -213,13 +214,18 @@ directory). It never creates a repository (that stays in `whr-add`) and needs re
 Refused with exit 1 and the workspace unchanged: a workspace config that sets a key of the list in
 `git_runner::refused_by_add` (filter, gpg, signing, diff/merge/tool commands, program-starting `core` keys, aliases,
 pagers, trailers, per-remote programs, `submodule.*.update`, plus the runner's own list), a `.gitattributes` or
-`info/attributes` line that can match `.gitmodules` and sets `filter`, `diff` or `merge`, an existing `PATH` or index
+`info/attributes` line that can match `.gitmodules` and sets `filter`, `diff` or `merge` (a pattern with `[` or a
+backslash counts as a match, a UTF-8 byte order mark at the start of the file is skipped as git does), an existing `PATH` or index
 entry, a symlink in `PATH` or `.git/modules/PATH`, an existing `.git/modules/PATH`, a registered submodule or
 `[submodule "PATH"]` section, a `.gitmodules` that is a symlink or has uncommitted changes, an empty repository. Names
 and paths: `[A-Za-z0-9._-]` for names (not `.`, `..`, `-x`); `PATH` relative, `[A-Za-z0-9._/-]`, no empty, `.`, `..`
-or `-x` component, none of `.git`, `.gitmodules`, `.gitattributes`, `.gitignore`, `.mailmap` in any case (exit 2).
-A failure before the commit restores `.gitmodules`, the index, the workspace config, `.git/modules/PATH` and the
-directories this run created. `--dry-run` runs every check and changes nothing. Evidence and open points: the spike
+or `-x` component, none of `.git`, `.git.*`, `.gitmodules`, `.gitattributes`, `.gitignore`, `.mailmap` in any case
+(exit 2). A failure before the commit restores `.gitmodules`, the index and the workspace config (saved right before
+the first git step, so a change another process made during the clone stays), `.git/modules/PATH` (only when this
+run's absorb created it; `.git/modules` is checked for symlinks and for an existing `PATH` again right before the
+absorb) and the directories this run created. After the commit nothing is rolled back. `--dry-run` runs every check and
+changes nothing. `--json` has `read_only` (true for a dry run), `clone_via` (`gix`) and `via` (`git`), both null for a
+dry run. A clone error masks the token; an unknown repository and a refused token both read "not found or no access". Evidence and open points: the spike
 `spikes/stw/add/README.md` (Q1-Q8). Not verified: see "Not verified".
 
 ## Remote kinds and the git runner
@@ -399,9 +405,10 @@ gix has no API stability promise before 1.0: the pin is exact and updates are de
 `stw add`: the gix clone over https was not run in the test suite (the tests replace the clone by a local copy; the
 checks, the git steps and the rollback run for real); a run against a live GitHub repository is a manual check. Git
 older than 2.47.3, macOS, a `url.<x>.insteadOf` rewrite (the clone ignores the user's config), concurrent runs on one
-`PATH`, and a race between the checks and the removal of a clone directory are not covered. The rollback removes
-`.git/modules/PATH` when it exists after a failed run (absent before: checked up front) and cannot tell a directory a
-concurrent process created.
+`PATH`, and a race between the checks and the removal of a clone directory are not covered. The attribute check for
+`.gitmodules` matches patterns with a small glob (`*`, `?`, `**/`) and treats `[` and `\` as a match; other pattern
+forms git accepts are UNKNOWN. The `.git/modules` check before the absorb narrows the race window but does not close
+it (no `dirfd`/`O_NOFOLLOW`).
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
 index during `--apply`; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
