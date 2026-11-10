@@ -646,11 +646,29 @@ fn filter_refusal(file: &str) -> Error {
 
 // ---------------------------------------------------------------------------------------------- rollback
 
-/// The commit HEAD points to (`None` when unborn or unreadable).
-fn head_of(ws: &Path) -> Option<String> {
-    crate::repo::open_isolated(ws)
-        .ok()
-        .and_then(|r| r.head_id().ok().map(|id| id.to_string()))
+/// What HEAD is.
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum Head {
+    Unborn,
+    Id(String),
+    /// The repository or its HEAD cannot be read.
+    Unreadable,
+}
+
+fn head_of(ws: &Path) -> Head {
+    let Ok(repo) = crate::repo::open_isolated(ws) else {
+        return Head::Unreadable;
+    };
+    let Ok(head) = repo.head() else {
+        return Head::Unreadable;
+    };
+    if head.is_unborn() {
+        return Head::Unborn;
+    }
+    match head.id() {
+        Some(id) => Head::Id(id.to_string()),
+        None => Head::Unreadable,
+    }
 }
 
 /// What a run changed, and how to restore it. Only what this run created is removed.
@@ -663,7 +681,7 @@ struct Undo {
     created: Vec<PathBuf>,
     /// HEAD before the run (`None`: unborn). A different HEAD at rollback time means the commit exists: from
     /// there on nothing is rolled back, also when the git step that made it reported a failure.
-    head_before: Option<String>,
+    head_before: Head,
     /// `.git/modules/PATH` was absent right before the absorb, so what exists there afterwards is this run's.
     modules_owned: bool,
 }
@@ -728,13 +746,17 @@ impl Undo {
         self.modules_owned = true;
     }
 
-    fn is_committed(&self) -> bool {
-        head_of(&self.ws) != self.head_before
+    fn is_committed(&self, now: &Head) -> bool {
+        *now != self.head_before
     }
 
     /// Restore. Returns a sentence for the error message.
     fn rollback(&mut self) -> String {
-        if self.is_committed() {
+        let now = head_of(&self.ws);
+        if now == Head::Unreadable || self.head_before == Head::Unreadable {
+            return "HEAD unreadable: state left as is".to_string();
+        }
+        if self.is_committed(&now) {
             return "the commit was made; nothing was rolled back".to_string();
         }
         let mut problems = Vec::new();
@@ -826,5 +848,24 @@ mod tests {
         ] {
             assert!(!sets_filter(t), "{t:?}");
         }
+    }
+
+    #[test]
+    fn an_unreadable_head_is_reported_as_such_and_nothing_is_rolled_back() {
+        let t = tempfile::tempdir().unwrap();
+        let ws = t.path().join("ws");
+        std::fs::create_dir_all(ws.join(".git")).unwrap();
+        std::fs::write(ws.join(".git/HEAD"), "garbage\n").unwrap();
+        let req = Request {
+            owner: RepoName::parse("o").unwrap(),
+            repo: RepoName::parse("r").unwrap(),
+            path: SubPath::parse("projects/r").unwrap(),
+        };
+        let mut undo = Undo::new(&ws, &ws.join(".git"), &req).unwrap();
+        undo.create_dirs(&ws, &req).unwrap();
+        let note = undo.rollback();
+        assert!(note.contains("HEAD unreadable"), "{note}");
+        assert!(!note.contains("commit was made"), "{note}");
+        assert!(ws.join("projects/r").is_dir(), "left as it is");
     }
 }
