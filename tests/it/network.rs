@@ -1,4 +1,4 @@
-//! Needs network (public GitHub repository, no token required). Run: cargo test --test network -- --ignored
+//! Needs network (public GitHub repository, no token required). Run: cargo test --test it -- --ignored network
 use stw::repo::RepoRef;
 use stw::sync::{sync_repo, Opts};
 
