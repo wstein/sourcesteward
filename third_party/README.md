@@ -31,5 +31,5 @@ license and patent grant. Distinct safeexec, pflag, timezone and YAML terms/noti
 | golang.org/x/text | v0.43.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | gopkg.in/yaml.v3 | v3.0.1 | [MIT/Apache terms](licenses/yaml-LICENSE.txt), [NOTICE](licenses/yaml-NOTICE.txt) |
 | github.com/spf13/cobra | v1.10.2 | [Apache-2.0](licenses/Apache-2.0.txt) |
-| github.com/spf13/pflag | v1.0.10 | [BSD-3](licenses/BSD-3-pflag.txt), Copyright (c) 2012 Alex Ogier and The Go Authors |
+| github.com/spf13/pflag | v1.1.0 | [BSD-3](licenses/BSD-3-pflag.txt), Copyright (c) 2012 Alex Ogier and The Go Authors |
 | Go standard library and runtime | go.mod toolchain | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
