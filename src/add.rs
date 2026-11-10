@@ -164,22 +164,6 @@ pub fn parse_request(
     Ok(Request { owner, repo, path })
 }
 
-/// The owner of a GitHub URL (`https://github.com/O/r(.git)`, `git@github.com:O/r`, `ssh://git@github.com/O/r`,
-/// with or without user info).
-pub fn owner_of_origin(url: &str) -> Option<String> {
-    let rest = if let Some(r) = url.strip_prefix("git@github.com:") {
-        r
-    } else {
-        let r = url
-            .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("ssh://"))?;
-        let r = r.split_once('@').map_or(r, |(_, r)| r);
-        r.strip_prefix("github.com/")?
-    };
-    let owner = rest.split('/').next()?;
-    RepoName::parse(owner).ok().map(|o| o.0)
-}
-
 /// Where the clone comes from. The product clones with gix over https; tests supply a local repository.
 pub trait Cloner {
     /// Create the repository of `url` in the empty directory `dest` WITHOUT writing a work tree.
@@ -797,20 +781,6 @@ pub fn absolute_root(root: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn owner_of_the_usual_github_urls() {
-        for u in [
-            "https://github.com/octo/ws.git",
-            "https://tok@github.com/octo/ws",
-            "git@github.com:octo/ws.git",
-            "ssh://git@github.com/octo/ws",
-        ] {
-            assert_eq!(owner_of_origin(u).as_deref(), Some("octo"), "{u}");
-        }
-        assert_eq!(owner_of_origin("https://gitlab.com/octo/ws"), None);
-        assert_eq!(owner_of_origin("/srv/ws"), None);
-    }
 
     #[test]
     fn clone_errors_hide_the_token_and_say_what_a_missing_credential_means() {
