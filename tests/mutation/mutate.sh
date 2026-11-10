@@ -69,7 +69,7 @@ m D5 "index is not written after the file changes" src/sync/fast_forward.rs \
   sync clean_fast_forward_updates_files_index_and_ref
 m R1 "a failed non-https fetch is reported as a plain failure" src/sync/fetch.rs \
   '        Some(u) if u.scheme != Scheme::Https => Fetch::Unsupported(format!(' '        Some(u) if false && u.scheme != Scheme::Https => Fetch::Unsupported(format!(' \
-  remote_kinds remotes_that_need_other_programs_fail_with_a_typed_error
+  remote_kinds network_remotes_of_gix_fail_typed_without_any_program
 m C1 "an unreadable repository does not change the exit code" src/cli.rs \
   "Ok(failed(list.iter().any(|s| s.error.is_some())))" "Ok(failed(false))" \
   cli a_repository_that_cannot_be_read_exits_1_in_every_command
@@ -91,7 +91,7 @@ m G1 "gix pin text differs from the constant" src/output.rs \
 m N1 "a process is started in a nested module" src/repo/worktrees.rs \
   "pub fn scan(" "fn spawn() { let _ = std::process::Command::new(\"git\"); }
 pub fn scan(" \
-  no_binaries src_never_spawns_a_process
+  no_binaries only_the_runner_spawns_a_process
 m H1 "credentials are chosen by ctx.host, which gix leaves empty" src/sync/fetch.rs \
   '    if !https || host.as_deref() != Some("github.com") {' '    if ctx.host.as_deref() != Some("github.com") {' \
   credentials token_is_offered_for_github_https_urls
@@ -131,7 +131,7 @@ m O6 "a gone upstream is reported as up to date" src/sync/mod.rs \
 m O8 "a URL password is printed" src/sync/fetch.rs \
   '    plain.user = None;
     plain.password = None;' '    let _ = &plain;' \
-  remote_kinds remotes_that_need_other_programs_fail_with_a_typed_error
+  remote_kinds network_remotes_of_gix_fail_typed_without_any_program
 m F3 "a new submodule leaves no directory" src/sync/fast_forward.rs \
   '        std::fs::create_dir_all(&dir)' '        Ok::<(), std::io::Error>(())' \
   sync a_new_submodule_leaves_its_empty_directory_like_git_does
@@ -263,7 +263,7 @@ m A1 "the ref is not rolled back when writing files fails" src/sync/fast_forward
         return Err(e);
     }
     if let Err(e) = Ok::<(), FfError>(()) {' \
-  sync a_failed_index_write_puts_the_ref_back_and_keeps_the_written_files
+  sync a_failed_file_write_puts_the_ref_back
 m A2 "a failing ref update is ignored" src/sync/fast_forward.rs \
   '    .map_err(|e| FfError::Other(format!("ref update: {e}")))?;' '    .map_err(|e| FfError::Other(format!("ref update: {e}")))
     .ok();' \
@@ -285,7 +285,7 @@ m A4 "the ref is not rolled back when the index write fails" src/sync/fast_forwa
         return Err(e);
     }
     if let Err(e) = Ok::<(), FfError>(()) {' \
-  sync a_failed_index_write_puts_the_ref_back_and_keeps_the_written_files
+  sync a_failed_file_write_puts_the_ref_back
 
 # tidy apply / restore / backup rule. OPEN (no mutation kills them; see tests/tidy_apply.rs): the .git-file
 # registration check (W9), the registration path check, fsync of the manifest.
@@ -370,7 +370,7 @@ m M1 'default manifest directory is not under the data directory' src/tidy_apply
 m N2 'a process is started in the apply module' src/tidy_apply.rs \
   'pub fn new_run_id()' 'fn spawn() { let _ = std::process::Command::new("git"); }
 pub fn new_run_id()' \
-  no_binaries src_never_spawns_a_process
+  no_binaries only_the_runner_spawns_a_process
 m Y1 'the ref delete does not check the planned commit' src/tidy_apply.rs \
   'PreviousValue::MustExistAndMatch(Target::Object(sha))' 'PreviousValue::MustExist' \
   tidy_apply a_branch_moved_after_the_plan_is_not_deleted_by_the_ref_update
