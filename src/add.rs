@@ -727,7 +727,7 @@ impl Undo {
 
     /// Restore. Returns a sentence for the error message.
     fn rollback(&mut self) -> String {
-        if self.committed {
+        if self.is_committed() {
             return "the commit was made; nothing was rolled back".to_string();
         }
         let mut problems = Vec::new();
