@@ -856,6 +856,14 @@ fn every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs() {
         ("info backslash", info("\\.gitmodules filter=evil\n"), true),
         ("index only", commit_then_remove, true),
         ("symlink", symlinked, true),
+        (
+            "symlink without an index copy",
+            Box::new(|e: &Env| {
+                e.ws.write("harmless", "# harmless\n");
+                std::os::unix::fs::symlink("harmless", e.ws.path.join(".gitattributes")).unwrap();
+            }),
+            true,
+        ),
         ("upper case name", attrs(".GITMODULES filter=evil\n"), false),
     ];
     for (name, setup, must_refuse) in cases {
@@ -1127,4 +1135,54 @@ fn a_commit_that_exists_is_never_rolled_back_even_when_git_reports_failure() {
     assert!(e.ws.exists("projects/tool/.git"));
     assert!(e.ws.read(".gitmodules").unwrap().contains("projects/tool"));
     assert!(e.ws.exists(".git/modules/projects/tool/HEAD"));
+}
+
+/// `git check-attr` that fails or prints nothing must refuse (fail closed), not pass.
+#[test]
+fn a_failing_or_silent_check_attr_refuses() {
+    for body in [
+        "exit 1",
+        "exit 0",
+        "echo '.gitmodules: filter: unspecified'; exit 0",
+    ] {
+        let (src, _) = source(&[("a.txt", "a\n")]);
+        let e = env();
+        let real = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+            .map(|d| d.join("git"))
+            .find(|p| p.is_file())
+            .unwrap();
+        let bin = scratch();
+        let fake = bin.path().join("git");
+        std::fs::write(
+            &fake,
+            format!(
+                "#!/bin/bash\nfor a in \"$@\"; do [ \"$a\" = check-attr ] && {{ {body}; }}; done\nexec {} \"$@\"\n",
+                real.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+            .unwrap();
+        let before = fingerprint(&e.ws.path);
+        let r = runner_with_path(
+            e.home.path(),
+            &format!(
+                "{}:{}",
+                bin.path().display(),
+                std::env::var("PATH").unwrap()
+            ),
+        );
+        let c = cloner(|_, _| panic!("refused before the clone"));
+        let err = add::add(
+            &e.ws.path,
+            &req("octo", "tool", "projects/tool"),
+            &c,
+            &r,
+            false,
+        )
+        .unwrap_err();
+        assert!(err.to_string().contains("check-attr"), "{body}: {err}");
+        assert_eq!(fingerprint(&e.ws.path), before);
+        let _ = &src;
+    }
 }
