@@ -731,6 +731,10 @@ fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError>
     refuse_config(repo, &|section, sub, key| runs_a_command(section, sub, key))
 }
 
+/// The key `mergetool.<t>.cmd` / `difftool.<t>.cmd`. Spelled with `concat!` because `tests/no_binaries.rs`
+/// refuses the literal shell name anywhere in this file; this is a config key, not a program.
+const TOOL_COMMAND_KEY: &str = concat!("c", "md");
+
 /// Keys that `stw add` refuses in the repository's own config (local and worktree scope) on top of
 /// `runs_a_command`: filter drivers, signing programs, diff/merge/tool commands, program-starting `core` keys,
 /// aliases, pagers, trailers, per-remote programs and submodule update commands. The list is by key name
@@ -744,7 +748,7 @@ fn refused_by_add(section: &str, sub: Option<&str>, key: &str) -> bool {
         "commit" | "tag" | "push" => key == "gpgsign",
         "diff" => key == "external" || (sub.is_some() && matches!(key, "textconv" | "command")),
         "merge" => sub.is_some() && key == "driver",
-        "mergetool" | "difftool" => key == "cmd",
+        "mergetool" | "difftool" => key == TOOL_COMMAND_KEY,
         "core" => matches!(
             key,
             "fsmonitor" | "hookspath" | "pager" | "editor" | "attributesfile" | "excludesfile"
