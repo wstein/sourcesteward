@@ -691,6 +691,8 @@ fn names_and_paths_are_validated() {
         "a/.gitmodules",
         "a/.GitAttributes/b",
         ".gitignore",
+        ".git.foo",
+        "a/.GIT.x/b",
         ".mailmap",
         "a b",
         "a~1",

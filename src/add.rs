@@ -67,7 +67,8 @@ impl CanonicalUrl {
     }
 }
 
-/// Names git treats specially in a path component (any case, trailing dots and spaces ignored).
+/// Names git treats specially in a path component (any case, trailing dots and spaces ignored); `.git.*` is
+/// refused as well, as in the spike.
 const SPECIAL: &[&str] = &[
     ".git",
     ".gitmodules",
@@ -105,7 +106,7 @@ impl SubPath {
                 return Err(format!("{s:?} has an empty, '.', '..' or '-x' component"));
             }
             let t = c.trim_end_matches(['.', ' ']).to_ascii_lowercase();
-            if SPECIAL.contains(&t.as_str()) {
+            if SPECIAL.contains(&t.as_str()) || t.starts_with(".git.") {
                 return Err(format!("{s:?}: {c:?} is a name git treats specially"));
             }
         }
