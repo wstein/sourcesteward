@@ -341,3 +341,29 @@ fn add_dry_run_text_names_the_root() {
         text(&o.stdout)
     );
 }
+
+#[test]
+fn add_run_inside_a_submodule_binds_into_the_superproject() {
+    let sup = root();
+    sup.write(
+        ".gitmodules",
+        "[submodule \"sub\"]\n\tpath = projects/sub\n\turl = https://github.com/test/sub.git\n",
+    );
+    sup.stage(".gitmodules");
+    std::fs::create_dir_all(sup.path.join("projects/sub")).unwrap();
+    gix::init(sup.path.join("projects/sub")).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env_remove("STW_ROOT")
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(sup.path.join("projects/sub"))
+        .args(["add", "--json", "--dry-run", "octo/tool"])
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let got = std::fs::canonicalize(v["root"].as_str().unwrap()).unwrap();
+    assert_eq!(got, std::fs::canonicalize(&sup.path).unwrap());
+}
