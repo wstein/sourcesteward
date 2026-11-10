@@ -1,13 +1,12 @@
 //! `stw add`: an existing repository becomes a submodule of a workspace, in one local commit, and a refused or
 //! failed run leaves the workspace as it was. The clone itself is replaced by a local cloner (no network); the
 //! git steps (`reset`, `submodule add`, `absorbgitdirs`, `commit`) run through the real runner and the real git.
-mod common;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::ffi::OsString;
 use std::path::Path;
 
-use common::*;
+use crate::common::*;
 use stw::add::{self, CanonicalUrl, Cloner, RepoName, Request, SubPath};
 use stw::error::Kind;
 use stw::git_runner::Runner;

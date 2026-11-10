@@ -5,6 +5,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod add;
 mod auth;
 mod cli;
 mod credentials;
