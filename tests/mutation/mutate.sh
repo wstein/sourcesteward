@@ -605,6 +605,32 @@ m VC16 'an invalid carry-over to the source ends the search instead of falling b
                     if let Ok(mut src) = self.valid(q) {' \
   review_states 'run::invalid_carry_to_source_is_skipped_for_an_earlier_line.json'
 
+m SA1 'stw add: a filter attribute in the tree is not refused' src/add.rs \
+  'if attribute_lines_setting(&String::from_utf8_lossy(&obj.data), &["filter"], &|_| true) {' 'if false {' \
+  add 'a_tracked_filter_attribute_is_refused_before_the_work_tree_is_written'
+m SA2 'stw add: the origin of the clone is not compared' src/add.rs \
+  'if origin.as_deref() != Some(url.as_str()) {' 'if false {' \
+  add 'a_clone_with_another_origin_is_refused'
+m SA3 'stw add: rollback keeps the changed workspace config' src/add.rs \
+  'restore(self.gitdir.join("config"), &self.config, &mut problems);' '' \
+  add 'a_failure_after_the_add_restores_gitmodules_index_config_and_the_git_dir'
+m SA4 'stw add: rollback keeps .git/modules/PATH' src/add.rs \
+  'if let Err(e) = std::fs::remove_dir_all(&self.modules) {' 'if let Err(e) = Ok::<(), std::io::Error>(()) {' \
+  add 'a_failure_after_the_add_restores_gitmodules_index_config_and_the_git_dir'
+m SA5 'stw add: the workspace config is not checked' src/add.rs \
+  'git_runner::check_config_for_add(ws, false).map_err(|e| refused(e.to_string()))?;' '' \
+  add 'a_workspace_config_that_runs_a_program_is_refused_before_anything_is_cloned'
+m SA6 'stw add: mergetool/difftool cmd key is not refused' src/git_runner.rs \
+  'key == TOOL_COMMAND_KEY' 'false' \
+  git_runner 'the_add_config_check_refuses_program_keys_in_workspace_and_clone'
+m SA7 'stw add: the commit takes every tracked change (no pathspec)' src/git_runner.rs \
+  'a.extend(v(&["--", ".gitmodules"]));
+                a.push(path.as_str().to_string());' 'a.extend(v(&["-a"]));' \
+  add 'other_staged_and_unstaged_changes_stay_out_of_the_commit_and_stay_as_they_were'
+m SA8 'stw add: the local steps may use a transport' src/git_runner.rs \
+  '_ => "none",' '_ => "file:ssh:git:http:https",' \
+  git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
