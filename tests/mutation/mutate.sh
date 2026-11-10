@@ -762,6 +762,56 @@ m SA21 'stw add: the --cached check-attr run is skipped' src/add.rs \
 m SA22 'stw add: the system attributes file is not switched off' src/git_runner.rs \
   'if !matches!(op, Op::FetchOrigin) {' 'if false {' \
   git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
+
+m RP1 'replay: an empty-start commit is not kept' src/replay.rs \
+  '    if own_tree == base_tree {' '    if false && own_tree == base_tree {' \
+  replay empty_start_commit_is_kept_like_git
+m RP2 'replay: a commit that became empty is kept' src/replay.rs \
+  '    if merged == new_tree {' '    if false && merged == new_tree {' \
+  replay commit_that_became_empty_is_dropped_like_git
+m RP3 'replay: a patch already upstream is not skipped' src/replay.rs \
+  '                if upstream.contains(&key) {' '                if false && upstream.contains(&key) {' \
+  replay patch_already_upstream_is_skipped_like_git
+m RP4 'replay: upstream patches compare by patch ID alone' src/replay.rs \
+  '                if upstream.contains(&key) {' '                if upstream.iter().any(|k| k.0 == key.0) {' \
+  replay whitespace_variant_of_an_upstream_patch_is_not_skipped
+m RP5 'replay: a root commit is accepted' src/replay.rs \
+  '            0 => return Err(ReplayError::RootCommit(info.id)),' '            0 => {}' \
+  replay root_commit_in_the_range_is_refused
+m RP6 'replay: a merge commit is replayed as its first parent' src/replay.rs \
+  '        _ => return Err(ReplayError::MergeCommit(commit)),' '        _ => parents[0],' \
+  replay merge_commit_in_the_range_is_refused_before_anything_is_replayed
+m RP7 'replay: the original committer is kept' src/replay.rs \
+  '        committer: committer.clone(),' '        committer: decoded.committer().map_err(git_err)?.into(),' \
+  replay replayed_commit_keeps_the_author_and_takes_the_configured_committer
+m RP8 'replay: the configured identity becomes the author' src/replay.rs \
+  '        author: decoded.author().map_err(git_err)?.into(),' '        author: committer.clone(),' \
+  replay replayed_commit_keeps_the_author_and_takes_the_configured_committer
+m RP9 'replay: objects are written to the repository, not to memory' src/replay.rs \
+  '    let mut mem = repo.clone().with_object_memory();' '    let mut mem = repo.clone();' \
+  replay nothing_is_written_to_the_repository_and_the_new_objects_live_in_memory
+m RP10 'replay: merge drivers of the configuration stay configured' src/replay.rs \
+  '            while file.remove_section("merge", Some(sub.as_ref())).is_some() {}' '            let _ = &sub;' \
+  replay a_merge_driver_of_the_configuration_is_never_started
+m RP11 'replay: an unchanged commit is reported as clean' src/replay.rs \
+  '    let status = if new == commit { Status::Unchanged } else { Status::Clean };' '    let status = Status::Clean;' \
+  replay rerun_over_a_replayed_range_returns_the_original_commits
+m RP12 'replay: an unchanged commit is rewritten' src/replay.rs \
+  '    if tree == old_tree && parent == old_parent {' '    if false && tree == old_tree && parent == old_parent {' \
+  replay rerun_over_a_replayed_range_returns_the_original_commits
+m RP13 'replay: the replay goes on after a conflict' src/replay.rs \
+  '        if stop {' '        if false && stop {' \
+  replay content_conflict_matches_git
+m RP14 'replay: conflicts are not detected' src/replay.rs \
+  '    if outcome.has_unresolved_conflicts(how) {' '    if false && outcome.has_unresolved_conflicts(how) {' \
+  replay content_conflict_matches_git
+m RP15 'replay: user.* beats committer.* for the identity' src/replay.rs \
+  '        let v = cfg.string(a).or_else(|| cfg.string(b)).map(|v| v.to_owned());' '        let v = cfg.string(b).or_else(|| cfg.string(a)).map(|v| v.to_owned());' \
+  replay committer_comes_from_the_config_only
+m RP16 'replay: rename detection is off' src/replay.rs \
+  '            ("renames", "true"),' '            ("renames", "false"),' \
+  replay rename_on_the_new_side_follows_the_edit
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

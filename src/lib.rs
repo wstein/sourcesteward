@@ -8,6 +8,7 @@ pub mod git_runner;
 pub mod github;
 pub mod output;
 pub mod patch_id;
+pub mod replay;
 pub mod repo;
 pub mod review;
 pub mod status;
