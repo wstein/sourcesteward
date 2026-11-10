@@ -397,6 +397,8 @@ fn ignore_worktrees(moddir: &Path) -> Result<()> {
 /// Lines of an attributes file that set one of `names` (`name`, `name=value`) for a pattern accepted by
 /// `pattern_ok`. Macro definitions (`[attr]x ...`) count with any pattern.
 fn attribute_lines_setting(text: &str, names: &[&str], pattern_ok: &dyn Fn(&str) -> bool) -> bool {
+    // git skips a UTF-8 byte order mark at the start of an attributes file
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     for line in text.lines() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -419,10 +421,10 @@ fn attribute_lines_setting(text: &str, names: &[&str], pattern_ok: &dyn Fn(&str)
 }
 
 /// Could the attribute pattern `p` match the file `.gitmodules`? Conservative: a pattern with a bracket
-/// expression counts as a match.
+/// expression or a backslash (`\.gitmodules` matches the file in git) counts as a match.
 fn pattern_may_match_gitmodules(p: &str) -> bool {
     let p = p.strip_prefix('/').unwrap_or(p);
-    if p.contains('[') {
+    if p.contains('[') || p.contains('\\') {
         return true;
     }
     if p.contains('/') && !p.starts_with("**/") {

@@ -785,3 +785,36 @@ fn other_staged_and_unstaged_changes_stay_out_of_the_commit_and_stay_as_they_wer
     assert_eq!(e.ws.read("README").as_deref(), Some("edited\n"));
     assert_eq!(e.ws.read("untracked.txt").as_deref(), Some("u\n"));
 }
+
+#[test]
+fn escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs() {
+    let cases = [
+        (".gitattributes", "\\.gitmodules filter=evil\n"),
+        (".gitattributes", "\u{feff}.gitmodules filter=evil\n"),
+        (".gitattributes", "\u{feff}* filter=evil\n"),
+        (".git/info/attributes", "\\.gitmodules filter=evil\n"),
+        (".gitattributes", "\\.gitmodules diff=evil\n"),
+    ];
+    for (file, text) in cases {
+        let (src, _) = source(&[("a.txt", "a\n")]);
+        let e = env();
+        let marker = e.home.path().join("filter-ran");
+        std::fs::write(
+            e.home.path().join(".gitconfig"),
+            format!(
+                "[filter \"evil\"]\n\tclean = touch {} && cat\n\tsmudge = touch {} && cat\n",
+                marker.display(),
+                marker.display()
+            ),
+        )
+        .unwrap();
+        e.ws.write(file, text);
+        refuses(
+            &e,
+            &local(&src, "octo", "tool"),
+            &req("octo", "tool", "projects/tool"),
+            "for .gitmodules",
+        );
+        assert!(!marker.exists(), "a filter program ran for {text:?}");
+    }
+}
