@@ -606,7 +606,7 @@ m VC16 'an invalid carry-over to the source ends the search instead of falling b
   review_states 'run::invalid_carry_to_source_is_skipped_for_an_earlier_line.json'
 
 m SA1 'stw add: a filter attribute in the tree is not refused' src/add.rs \
-  'if attribute_lines_setting(&String::from_utf8_lossy(&obj.data), &["filter"], &|_| true) {' 'if false {' \
+  'if sets_filter(&String::from_utf8_lossy(&obj.data)) {' 'if false {' \
   add 'a_tracked_filter_attribute_is_refused_before_the_work_tree_is_written'
 m SA2 'stw add: the origin of the clone is not compared' src/add.rs \
   'if origin.as_deref() != Some(url.as_str()) {' 'if false {' \
@@ -631,19 +631,42 @@ m SA8 'stw add: the local steps may use a transport' src/git_runner.rs \
   '_ => "none",' '_ => "file:ssh:git:http:https",' \
   git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
 
-m SA9 'stw add: a backslash pattern is not taken for .gitmodules' src/add.rs \
-  "if p.contains('[') || p.contains('\\\\') {" "if p.contains('[') {" \
-  add 'escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs'
-m SA10 'stw add: a byte order mark is not skipped in attribute files' src/add.rs \
-  "let text = text.strip_prefix('\\u{feff}').unwrap_or(text);" '' \
-  add 'escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs'
 m SA11 'stw add: STW_ROOT wins over the repository of the current directory' src/cli.rs \
   'repo::add_root(&cwd))' 'repo::default_root(&cwd)).or_else(|| repo::top_level(&cwd))' \
   cli 'add_prefers_the_repository_of_the_current_directory_over_stw_root'
+m SA13 'stw add: the token is not masked in clone errors' src/add.rs \
+  'let secrets: Vec<String> = credentials.map(|(_, t)| t.clone()).into_iter().collect();' 'let secrets: Vec<String> = Vec::new();' \
+  add 'clone_errors_hide_the_token_and_say_what_a_missing_credential_means'
+m SA14 'stw add: an index entry below PATH is not seen' src/add.rs \
+  'if path == p || path.starts_with(&prefix) {' 'if path == p {' \
+  add 'an_index_entry_below_path_refuses_even_without_the_directory'
+m SA15 'stw add: the rollback removes a .git/modules/PATH it did not create' src/add.rs \
+  'if self.modules_owned' 'if true' \
+  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
+m SA16 'stw add: .git/modules is not checked again before the absorb' src/add.rs \
+  '    modules_clear(gitdir, req)?;
+    undo.own_modules();' '    undo.own_modules();' \
+  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
+
+m SA9 'stw add: the check-attr answer is ignored' src/add.rs \
+  'if value != "unspecified" {' 'if false {' \
+  add 'every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs'
+m SA10 'stw add: a failing check-attr is not a refusal' src/add.rs \
+  '            .map_err(|e| refused(format!("git check-attr failed: {e}")))?;' '            .unwrap_or(git_runner::Output { stdout: b".gitmodules: filter: unspecified\n.gitmodules: diff: unspecified\n.gitmodules: merge: unspecified\n".to_vec(), stderr: String::new() });' \
+  add 'a_failing_or_silent_check_attr_refuses'
+m SA20 'stw add: a symlinked .gitattributes is not refused' src/add.rs \
+  '        .is_ok_and(|m| m.file_type().is_symlink())
+    {
+        return Err(refused(
+            ".gitattributes is a symlink' '        .is_ok_and(|m| m.file_type().is_symlink() && false)
+    {
+        return Err(refused(
+            ".gitattributes is a symlink' \
+  add 'every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs'
 m SA12 'stw add: the rollback state is saved before the clone' src/add.rs \
 '            snapshot: None,
             created: Vec::new(),
-            committed: false,
+            head_before: head_of(ws),
             modules_owned: false,
         })
     }
@@ -684,7 +707,7 @@ m SA12 'stw add: the rollback state is saved before the clone' src/add.rs \
                 config: std::fs::read(gitdir.join("config")).ok(),
             }),
             created: Vec::new(),
-            committed: false,
+            head_before: head_of(ws),
             modules_owned: false,
         })
     }
@@ -723,19 +746,15 @@ m SA12 'stw add: the rollback state is saved before the clone' src/add.rs \
         }
 ' \
   add 'changes_made_while_the_clone_runs_survive_a_later_failure'
-m SA13 'stw add: the token is not masked in clone errors' src/add.rs \
-  'let secrets: Vec<String> = credentials.map(|(_, t)| t.clone()).into_iter().collect();' 'let secrets: Vec<String> = Vec::new();' \
-  add 'clone_errors_hide_the_token_and_say_what_a_missing_credential_means'
-m SA14 'stw add: an index entry below PATH is not seen' src/add.rs \
-  'if path == p || path.starts_with(&prefix) {' 'if path == p {' \
-  add 'an_index_entry_below_path_refuses_even_without_the_directory'
-m SA15 'stw add: the rollback removes a .git/modules/PATH it did not create' src/add.rs \
-  'if self.modules_owned' 'if true' \
-  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
-m SA16 'stw add: .git/modules is not checked again before the absorb' src/add.rs \
-  '    modules_clear(gitdir, req)?;
-    undo.own_modules();' '    undo.own_modules();' \
-  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
+m SA17 'stw add: a filter after a closing quote is not seen in the clone' src/add.rs \
+  "matches!(c, '\"' | '-' | '!')" "matches!(c, '-' | '!')" \
+  add 'a_filter_in_the_clones_attributes_is_found_however_it_is_written'
+m SA18 'stw add: a commit that exists is rolled back' src/add.rs \
+  'head_of(&self.ws) != self.head_before' 'false' \
+  add 'a_commit_that_exists_is_never_rolled_back_even_when_git_reports_failure'
+m SA19 'stw add: the superproject of a submodule is not used' src/repo/mod.rs \
+  'Some(superproject_of(&top).unwrap_or(top))' 'Some(top)' \
+  cli 'add_run_inside_a_submodule_binds_into_the_superproject'
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

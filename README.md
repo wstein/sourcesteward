@@ -213,9 +213,12 @@ repository (a workspace without `.gitmodules` is fine), and only without any rep
 
 Refused with exit 1 and the workspace unchanged: a workspace config that sets a key of the list in
 `git_runner::refused_by_add` (filter, gpg, signing, diff/merge/tool commands, program-starting `core` keys, aliases,
-pagers, trailers, per-remote programs, `submodule.*.update`, plus the runner's own list), a `.gitattributes` or
-`info/attributes` line that can match `.gitmodules` and sets `filter`, `diff` or `merge` (a pattern with `[` or a
-backslash counts as a match, a UTF-8 byte order mark at the start of the file is skipped as git does), an existing `PATH` or index
+pagers, trailers, per-remote programs, `submodule.*.update`, plus the runner's own list), a workspace for which
+`git check-attr filter diff merge -- .gitmodules` (work tree with index fallback, and `--cached`; through the runner)
+prints anything but `unspecified`, prints something unexpected or fails (stw does not parse attribute files for this),
+a symlinked `.gitattributes`, an attributes file of the clone (any `.gitattributes` of the tree, `info/attributes`)
+that names the attribute `filter` in any spelling (no pattern matching: `filter=x`, `-filter`, `"*"filter=x`, in a
+macro), an existing `PATH` or index
 entry, a symlink in `PATH` or `.git/modules/PATH`, an existing `.git/modules/PATH`, a registered submodule or
 `[submodule "PATH"]` section, a `.gitmodules` that is a symlink or has uncommitted changes, an empty repository. Names
 and paths: `[A-Za-z0-9._-]` for names (not `.`, `..`, `-x`); `PATH` relative, `[A-Za-z0-9._/-]`, no empty, `.`, `..`
@@ -405,9 +408,10 @@ gix has no API stability promise before 1.0: the pin is exact and updates are de
 `stw add`: the gix clone over https was not run in the test suite (the tests replace the clone by a local copy; the
 checks, the git steps and the rollback run for real); a run against a live GitHub repository is a manual check. Git
 older than 2.47.3, macOS, a `url.<x>.insteadOf` rewrite (the clone ignores the user's config), concurrent runs on one
-`PATH`, and a race between the checks and the removal of a clone directory are not covered. The attribute check for
-`.gitmodules` matches patterns with a small glob (`*`, `?`, `**/`) and treats `[` and `\` as a match; other pattern
-forms git accepts are UNKNOWN. The `.git/modules` check before the absorb narrows the race window but does not close
+`PATH`, and a race between the checks and the removal of a clone directory are not covered. The clone's attribute
+scan refuses a little too much (a line naming `filter` anywhere, also in an unrelated pattern); `git check-attr` is
+trusted for the workspace (its `text`/`eol`/`working-tree-encoding` effects on `.gitmodules` are not asked). The
+`.git/modules` check before the absorb narrows the race window but does not close
 it (no `dirfd`/`O_NOFOLLOW`).
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
