@@ -378,7 +378,6 @@ fn run_steps(
             path: req.path.clone(),
         },
     )?;
-    undo.mark_committed();
     let commit = crate::repo::open(ws)?.head_id()?.to_string();
     Ok(Report {
         owner: req.owner.as_str().into(),
@@ -647,6 +646,13 @@ fn filter_refusal(file: &str) -> Error {
 
 // ---------------------------------------------------------------------------------------------- rollback
 
+/// The commit HEAD points to (`None` when unborn or unreadable).
+fn head_of(ws: &Path) -> Option<String> {
+    crate::repo::open_isolated(ws)
+        .ok()
+        .and_then(|r| r.head_id().ok().map(|id| id.to_string()))
+}
+
 /// What a run changed, and how to restore it. Only what this run created is removed.
 struct Undo {
     ws: PathBuf,
@@ -655,8 +661,9 @@ struct Undo {
     /// Taken right before the first git step that writes to the workspace.
     snapshot: Option<Snapshot>,
     created: Vec<PathBuf>,
-    /// The commit exists: from here on nothing is rolled back.
-    committed: bool,
+    /// HEAD before the run (`None`: unborn). A different HEAD at rollback time means the commit exists: from
+    /// there on nothing is rolled back, also when the git step that made it reported a failure.
+    head_before: Option<String>,
     /// `.git/modules/PATH` was absent right before the absorb, so what exists there afterwards is this run's.
     modules_owned: bool,
 }
@@ -676,7 +683,7 @@ impl Undo {
             modules: gitdir.join("modules").join(req.path.as_str()),
             snapshot: None,
             created: Vec::new(),
-            committed: false,
+            head_before: head_of(ws),
             modules_owned: false,
         })
     }
@@ -721,12 +728,8 @@ impl Undo {
         self.modules_owned = true;
     }
 
-    fn mark_committed(&mut self) {
-        self.committed = true;
-    }
-
     fn is_committed(&self) -> bool {
-        self.committed
+        head_of(&self.ws) != self.head_before
     }
 
     /// Restore. Returns a sentence for the error message.
@@ -799,27 +802,6 @@ pub fn absolute_root(root: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn nothing_is_rolled_back_after_the_commit() {
-        let t = tempfile::tempdir().unwrap();
-        let ws = t.path().join("ws");
-        std::fs::create_dir_all(ws.join(".git")).unwrap();
-        let req = Request {
-            owner: RepoName::parse("o").unwrap(),
-            repo: RepoName::parse("r").unwrap(),
-            path: SubPath::parse("projects/r").unwrap(),
-        };
-        let mut undo = Undo::new(&ws, &ws.join(".git"), &req).unwrap();
-        undo.create_dirs(&ws, &req).unwrap();
-        undo.mark_git_started();
-        std::fs::write(ws.join(".gitmodules"), "changed by the add").unwrap();
-        undo.mark_committed();
-        assert!(undo.is_committed());
-        undo.rollback();
-        assert!(ws.join("projects/r").is_dir(), "the clone directory stays");
-        assert!(ws.join(".gitmodules").is_file(), ".gitmodules stays");
-    }
 
     #[test]
     fn the_clone_scan_sees_a_filter_however_it_is_written() {

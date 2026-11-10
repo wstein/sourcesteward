@@ -73,9 +73,13 @@ fn workspace() -> Fx {
 
 /// Runner over the real git, a scratch HOME (no global config, no filters) and a hostile caller environment.
 fn runner(home: &Path) -> Runner {
+    runner_with_path(home, &std::env::var("PATH").unwrap())
+}
+
+fn runner_with_path(home: &Path, path: &str) -> Runner {
     let osv = |k: &str, v: &str| (OsString::from(k), OsString::from(v));
     Runner::from_env(vec![
-        osv("PATH", &std::env::var("PATH").unwrap()),
+        osv("PATH", path),
         osv("HOME", home.to_str().unwrap()),
         osv("XDG_CONFIG_HOME", home.join(".config").to_str().unwrap()),
         osv("GIT_AUTHOR_NAME", "Evil"),
@@ -1075,4 +1079,52 @@ fn clone_errors_hide_the_token_and_say_what_a_missing_credential_means() {
         add::clone_message("connection refused", None),
         "connection refused"
     );
+}
+
+/// A `git` that does what git does and then exits 1 after a `commit`: the commit exists although the step
+/// failed (a timeout kill after the ref was written looks the same). Nothing may be rolled back then.
+#[test]
+fn a_commit_that_exists_is_never_rolled_back_even_when_git_reports_failure() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    let e = env();
+    let real = std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|d| d.join("git"))
+        .find(|p| p.is_file())
+        .unwrap();
+    let bin = scratch();
+    let fake = bin.path().join("git");
+    std::fs::write(
+        &fake,
+        format!(
+            "#!/bin/bash\nc=\nfor a in \"$@\"; do [ \"$a\" = commit ] && c=1; done\n{} \"$@\"\nrc=$?\n[ -n \"$c\" ] && exit 1\nexit $rc\n",
+            real.display()
+        ),
+    )
+    .unwrap();
+    std::fs::set_permissions(&fake, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let before = e.ws.tip("main");
+    let r = runner_with_path(
+        e.home.path(),
+        &format!(
+            "{}:{}",
+            bin.path().display(),
+            std::env::var("PATH").unwrap()
+        ),
+    );
+    let c = local(&src, "octo", "tool");
+    let err = add::add(
+        &e.ws.path,
+        &req("octo", "tool", "projects/tool"),
+        &c,
+        &r,
+        false,
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("nothing was rolled back"), "{err}");
+    let repo = e.ws.repo();
+    let head = repo.head_commit().unwrap();
+    assert_ne!(head.id().detach(), before, "the commit exists");
+    assert!(e.ws.exists("projects/tool/.git"));
+    assert!(e.ws.read(".gitmodules").unwrap().contains("projects/tool"));
+    assert!(e.ws.exists(".git/modules/projects/tool/HEAD"));
 }
