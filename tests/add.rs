@@ -737,3 +737,52 @@ fn a_relative_or_non_repository_workspace_is_a_usage_error() {
     let e = add::add(home.path(), &r, &c, &runner(home.path()), false).unwrap_err();
     assert_eq!(e.kind(), Kind::Usage);
 }
+
+#[test]
+fn other_staged_and_unstaged_changes_stay_out_of_the_commit_and_stay_as_they_were() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    let e = env();
+    e.ws.write("staged.txt", "staged\n");
+    e.ws.stage("staged.txt");
+    e.ws.write("README", "edited\n");
+    e.ws.write("untracked.txt", "u\n");
+    let report = e
+        .run(
+            &local(&src, "octo", "tool"),
+            &req("octo", "tool", "projects/tool"),
+            false,
+        )
+        .unwrap();
+    let repo = e.ws.repo();
+    let head = repo.head_commit().unwrap();
+    assert_eq!(
+        report.commit.as_deref(),
+        Some(head.id().to_string().as_str())
+    );
+    let tree = head.tree().unwrap();
+    assert!(
+        tree.lookup_entry_by_path("staged.txt").unwrap().is_none(),
+        "staged file not committed"
+    );
+    assert!(tree
+        .lookup_entry_by_path("untracked.txt")
+        .unwrap()
+        .is_none());
+    let readme = tree
+        .lookup_entry_by_path("README")
+        .unwrap()
+        .unwrap()
+        .object()
+        .unwrap();
+    assert_eq!(readme.data, b"ws\n", "unstaged edit not committed");
+    let index = repo.index_or_empty().unwrap();
+    assert!(
+        index
+            .entries()
+            .iter()
+            .any(|en| en.path(&index) == "staged.txt"),
+        "still staged"
+    );
+    assert_eq!(e.ws.read("README").as_deref(), Some("edited\n"));
+    assert_eq!(e.ws.read("untracked.txt").as_deref(), Some("u\n"));
+}
