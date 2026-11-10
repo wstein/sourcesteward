@@ -12,12 +12,14 @@ These are workspace issues; legacy issues remain historical references and are n
 
 ## Direction and evidence boundary
 
-Build the Git/GitHub workflow subset in Rust. Treat `legacy/sourcesteward` as an edge-case and test
-reference, not a parity target. Keep the existing Rust status/tidy/sync usable while adding workflow reads
+Build the Git/GitHub workflow subset in Rust. Treat `legacy/sourcesteward` as the source of ports and as a test
+reference, not a parity target: every Go command gets a decision (see "Cutover and archive of legacy/sourcesteward"). Keep the existing Rust status/tidy/sync usable while adding workflow reads
 and recovery before new history mutations. Native jj support is deferred; jj inspires the operation model.
 
-Every new user-facing function starts as a script under `spikes/stw/<feature>/`; the owner accepts it live before
-product implementation. M0 is the exception (see the recommended order). Existing A–D prototypes are available, but live acceptance is still open in the backlog.
+Every new user-facing function without a Go counterpart starts as a script under `spikes/stw/<feature>/`; the owner
+accepts it live before product implementation. Ports of existing Go behavior skip spike and live acceptance: they are
+written in Rust against test cases derived from Go, deviations are named, and an independent review applies (AGENTS.md,
+"Scripts first, then product"). M0 is the exception (see the recommended order). Existing A–D prototypes are available, but live acceptance is still open in the backlog.
 Prototype availability, passing historical tests, and product acceptance are separate states. This assessment
 does not execute product or prototype suites; their runtime correctness is UNKNOWN here.
 
@@ -27,6 +29,7 @@ an agent to push. Other repositories may use PR workflows; policy must be select
 
 Code references below are repository-relative and identify inspected implementations or entry points, not
 proof that every path works. Legacy was inspected at `0d0d9bee128a8336626b50763092020122d25fdc` (clean checkout); the workspace gitlink differs. Inspect its current revision when reusing fixtures.
+The cutover section below was built at the gitlink `b9ec1f22efbcfaba3072263cf1b7422819fde14e` (`v0.2.0-55`).
 Primary jj references for the design comparison: [conflicts](https://www.jj-vcs.dev/latest/conflicts/) and
 [CLI reference: operation log and undo](https://www.jj-vcs.dev/latest/cli-reference/). These describe jj; they do
 not establish that the Git pending prototype implements jj semantics or its workspace-scoped undo behavior.
@@ -124,7 +127,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M10 | Rust push/workflow from accepted scripts. Needs M0/M4/M5, repository policy and local CLEAR evidence contract. | Existing `scripts/test-stw-push` behaviors translated after script acceptance; ff-only default branch, submodules first, no tags/force, exact-head CLEAR; partial remote effects reported and never described as undoable. Pending guard from M12 before deferred flow enabled. | 4 / 3 / 5 |
 | M11 | Owner-invoked land stack. Needs M2/M4/M5/M6/M10 and explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
 | M12 | Deferred conflicts D and owned resolve worktrees. Needs M1/M2/M5/M6/M7/M0 and accepted D spike. | Real conflicted branches stay at old tips; pending metadata/ref transaction; parent-first resolve; abort preserves pending; stale CAS; binary/delete conflicts; undo; push/land/ready refuse pending state. | 4 / 5 / 5 |
-| M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof, native jj opt-in. | One owner-selected slice at a time with script/live acceptance; define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
+| M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof, native jj opt-in. | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
 
 Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a separate workstream,
 **accepted A/B → M1 → M2 → M5 → M6** for local stacks. M8 is independent after M3.
@@ -132,7 +135,8 @@ M7/M12 can follow local restack; M10/M11 follow proven recovery and publication 
 M7 does not require publication; M6 does not push. M12 publication guards must land before pending state can
 be created in a product used with push/ready commands. These are dependency tracks, not permission to start agents.
 M0 starts directly in `projects/sourcesteward` without a spike (owner decision: infrastructure, the Git boundary is
-already recorded in Chartroom). Scripts-first stays for new user-facing functions.
+already recorded in Chartroom). Scripts-first stays for new behavior without a Go counterpart; ports of Go behavior
+(M3, M4, M8, M9 and the single-branch part of M1/M2) go directly to product.
 
 ## Decisions, tradeoffs, and open evidence
 
@@ -168,3 +172,112 @@ Known limits from the Rust README remain relevant: patch-ID oracle mismatches, p
 windows, platform/filter/sparse-checkout uncertainty, and restore missing-object after pruning. Their historical
 counts are not new measurements. Go and Rust test suites, full mutation sweeps, network tests, platform checks,
 and all owner live acceptances were **not run** for this documentation assessment.
+
+## Cutover and archive of legacy/sourcesteward
+
+Owner direction (2026-11-10): replace the Go implementation and archive it; no two implementations side by side. Few new
+features; migrate what is wanted from Go quickly, against the Go test cases. Acceptance rules: AGENTS.md ("Scripts first,
+then product"). This section is the working plan; it does not replace the milestone table above (M-numbers refer to it).
+"Vorschlag" is a proposal for the owner, not a decision.
+
+### Port inventory
+
+Source: `legacy/sourcesteward/internal/cli/root.go:182` (registration) and `stw --help` of a binary built from the gitlink
+`b9ec1f2` (hidden commands read from the sources, marked h). 33 leaf commands; `help` is Cobra's own.
+Rust today: `src/cli.rs` has `status`, `tidy plan|apply|restore`, `sync` and the hidden `dev patch-id`; everything else
+is **absent** as a command. Test counts are `grep -c '^func Test'` per Go package, not runs.
+
+| Go command | Rust today | M | Vorschlag | Test source in Go |
+| --- | --- | --- | --- | --- |
+| `status` | present; review column stays `null` (README, M3) | M4 | **port**: core command; the comment-based review state is not wired in. | `internal/statuscmd` (40), `statusremote` (109), `cli/status_*_test.go`; goldens pin Go text and schema v1, reuse inputs not goldens |
+| `sync` | partial: ff-only, `--rules` | - | **port** (done for ff-only); **drop** `--rebase`, `--merge`, `--autostash` (matrix: no automatic stash, reset, merge, rebase). | `internal/stwsync` (162), `cli/sync_test.go` |
+| `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (native jj deferred). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
+| `tidy apply` | present, Git only | M5 | **port** (done); recovery retention is M5. | same as `tidy plan` |
+| `tidy restore` | present; no journal listing | M5 | **port** (done). | `cli/tidy_v3_restore_test.go`, `tidy_prune_v4_restore_test.go` |
+| `tidy history` | absent | M5 | **owner decides**: lists stored journals; Rust `restore` takes `--run` or the newest. Fold into the M5 recovery question. | `cli/tidy_prune_v4_history_test.go` |
+| `review carry-over` | absent | M4 | **port**: reuses a CLEAR after a rebase; proof is equal patch-id, no merge commits, range-diff all `=`. Needs `range-diff` in the runner. | `internal/carryover` (46; repositories are built in `fixture_test.go`, no data files), `cli/review_test.go` |
+| `ready-check` | absent | M4 | **port**: pure `Evaluate` over seven conditions (open, review, checks, base, blocker, conflict, rebaseable). Review condition comes from the Rust M3 state. | `internal/readycheck` (25), `cli/readycheck_test.go` |
+| `lint pr` | absent | M8 | **port**: PR text rules. | `internal/lintpr` (15), `lintprcmd` (17), `cli/lint_test.go` |
+| `pulls` | absent | M9 | **port** as read-only queue after M2/M3/M4; Rust has open-PR reads only. | `internal/pulls` (85), `pullscmd` (65), `prviews` (17), `cli/pulls_test.go` |
+| `restack plan` (h) | absent | M1/M2 | **port** the single-branch prediction (`--branch --old-parent --new-parent`); whole-stack preview is new behavior (spike A). | `internal/restack` (54), `conflicts` (24), `cli/testdata/restack-plan-*.json` |
+| `land` | absent | M11 | **defer**: `internal/land/shapes.json` lists no measured shape, so the Go apply path cannot run today (`cli/land.go` help). | `internal/land` (42), `landcmd` (25); v0.2.1 fixtures as in M11 |
+| `watch` | absent | M13 | **defer**: helpers wait with background loops meanwhile. | `internal/watch` (89), `watchcmd` (50) |
+| `issues` | absent | M13 | **defer**. | `internal/issues` (39), `issuescmd` (28) |
+| `workspace plan` | absent | M12 | **defer**: general workspace wizard deferred (matrix); owned resolve worktrees come with M12. | `internal/workspace` (965, `testdata/`), `internal/acceptance` |
+| `workspace apply` | absent | M12 | **defer**, as `workspace plan`. | same |
+| `workspace handoff` | absent | M12 | **defer**, as `workspace plan`. | same |
+| `workspace retire-plan` | absent | M12 | **defer**, as `workspace plan`. | same |
+| `release check` (h) | absent | M13 | **defer**: hidden in Go until its docs item (`cli/release.go:29`); publication stays with the owner. | `internal/release` (356), `cli/release_*_test.go`, `releaseworkflow` |
+| `release plan` (h) | absent | M13 | **defer**, as `release check`. | same |
+| `release verify` (h) | absent | M13 | **defer**, as `release check`. | same |
+| `release record` (h) | absent | M13 | **defer**, as `release check`. | same |
+| `release build` (h) | absent | M13 | **defer**, as `release check`. | same |
+| `release dispatch` (h) | absent | M13 | **defer**, as `release check`. | same |
+| `hosting repo` | no command; reads in `src/github.rs`, `src/github/reads.rs` | M4/M9 | **drop** as command (matrix: no hosting CLI wrappers); the reads stay internal. | `cli/testdata/hosting-repo.json`, `internal/hosting` (327) |
+| `hosting pr` | as above | M4/M9 | **drop** as command. | `cli/testdata/hosting-pr.json` |
+| `hosting prs` | as above | M4/M9 | **drop** as command. | `internal/hosting/testdata` |
+| `hosting ci` | as above; `check_runs`, `commit_statuses` exist | M4 | **drop** as command; ready-check needs the reads. | `cli/testdata/hosting-ci.json` |
+| `inspect` | absent | - | **drop**: Git identity is in `status` (matrix). | `internal/inspection` (529) |
+| `inventory` | absent | - | **drop**: worktree facts are in `src/repo/worktrees.rs` (matrix: no inventory query language). | `internal/inspection` |
+| `repos` | absent | - | **drop**: shared workspace iteration instead (matrix). | `internal/fanout`, `cli/repos_test.go` |
+| `pins` (h) | no command; `gitlink_state` in `src/status.rs:176` | - | **drop**: hidden in Go until its spec item (`cli/pins.go:39`), gitlinks are in `status`. | `cli/pins_test.go`, `cli/testdata/pins-*.json` |
+| `version` | `--version` | - | **drop** (matrix: no version subcommand). | `cmd/stw/main_test.go` |
+
+Also in the Go repository: `cmd/gh-jj` (gh extension wrapper) and `cmd/stw-docs`: **drop** (matrix: no brand/site/gh-jj
+wrappers).
+Tally of the 33 commands: port 10 (5 of them present in Rust: status, sync, tidy plan, apply, restore), drop 9,
+defer 13, owner decides 1.
+
+Test corpus: the Go fixtures are mostly Go code (repository builders such as `internal/carryover/fixture_test.go`), few
+data files (`cli/testdata`, `internal/hosting/testdata`). "Shared corpus" therefore means: per Go test, one named Rust
+case with the same scenario, or a named deviation. Where the Rust rules are stricter than Go the Rust rule wins:
+- Review lines (M3, M4): Go accepts a 64-hex patch-id, drops a trailing CR and accepts PR numbers of at most 9 digits
+  and no `pr=none` (`internal/reviewstate/parse.go:36-54`). Rust: exactly 40 hex, no CR, `pr=none` for local reviews.
+  The Rust corpus today comes from dotagents (`tests/review_corpus/`), not from the Go tests.
+- PR lint and queue rules (M8, M9): not compared with the current dotagents rules; UNKNOWN until each rule is checked.
+- Golden outputs of `status` pin Go text and schema v1; Rust has schema 2.
+
+### Cutover criteria
+
+A Go command counts as **replaced** when (a) its Rust equivalent passes the test cases derived from Go (deviations
+named) and an independent review of the exact head is CLEAR, or (b) the owner decided `drop` for it explicitly.
+`defer` is not an end state: before archiving, the owner turns each deferred command into a port (a) or a `drop` (b).
+Archive `legacy/sourcesteward` only when all 33 commands and the two extra binaries are replaced. Then:
+1. Owner: archive the repository `wstein/sourcesteward` (GitHub setting).
+2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
+3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`).
+4. Owner: last Go version. v0.2.1 is not published (`dayboard/BACKLOG.md`: owner publishes, then the gitlink is raised);
+   decide whether to publish it as the last release or archive at v0.2.0. Installed binary stays v0.2.0 until M3+M4
+   (decision 4 above).
+
+### Order of the ports
+
+Proposal from the milestone table: **M3 -> M4 -> M8 -> M9 -> M10**; in parallel the local stack line **M1/M2/M6**.
+Reason: restack makes stacking cheap, and M3/M4 replace the review gates that keep Go v0.2.0 installed.
+- M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
+- Defer: M5, M7, M11, M12, M13.
+- **Open owner decision (M5):** a slim recovery path (backup ref plus `range-diff` before each local rewrite) instead of the
+  full oplog with undo? It would let M6 start without spike B. Price: no general undo, no crash journal.
+
+### Next slice
+
+State, read from the repository (2026-11-10, main `ca219d0`):
+- M0: `src/git_runner.rs` (802 lines) has the runner (argv fixed per `Op`, environment allowlist, bounds, timeout). The
+  only `Op` is `FetchOrigin`; there is no `range-diff`. GitHub reads exist in `src/github/reads.rs` (comments, reviews,
+  check runs, commit statuses). `gix` has no merge feature in `Cargo.toml` (needed only from M1).
+- M3: `src/review.rs` (782 lines), `tests/review_lines.rs`, `tests/review_states.rs` with 99 files in `tests/review_states/`,
+  `tests/review_read.rs`; merged with `8aa9940` and follow-ups up to `469a4f4`. No command uses it.
+- M4: absent. No `review` or `ready-check` command, no carry-over code.
+
+Slice 1 (port, no spike), in this order, each a reviewable commit:
+1. Go corpus check for M3: for each case in `internal/reviewstate/{parse,state}_test.go` one Rust case in
+   `tests/review_states/` or a named deviation (64-hex, CR, `pr=none`, PR-number width). Done when every Go case is
+   mapped; mutation of the parser fails the new cases.
+2. `Op::RangeDiff` in `src/git_runner.rs` (fixed argv, minimum Git version, bounded output) with tests in
+   `tests/git_runner.rs`.
+3. Carry-over core and `stw review carry-over --pr N OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD`: Rust cases for the scenarios of
+   `internal/carryover/*_test.go` (pure rebase, identical heads, merge commit, patch-id change, whitespace-only change,
+   added empty commit, reordered commits, rename with content change, rewritten parent, missing object, no writes, read
+   failure is never a yes, hostile configuration and environment). Output is the exact `Carried-over:` line; nothing is
+   posted.
+Slice 2: `ready-check` (M4) from `internal/readycheck`. Then M8 (`lint pr`), M9 (`pulls`).
