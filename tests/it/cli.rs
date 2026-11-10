@@ -284,3 +284,41 @@ fn add_dry_run_checks_and_changes_nothing_and_bad_arguments_exit_2() {
     let o = stw(&["add", "--dry-run", "--root", root_arg, "octo/tool"]);
     assert_eq!(code(&o), 1, "{}", text(&o.stderr));
 }
+
+#[test]
+fn add_prefers_the_repository_of_the_current_directory_over_stw_root() {
+    // a repository without .gitmodules, and another one named by STW_ROOT
+    let here = root();
+    let other = root();
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env("STW_ROOT", &other.path)
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(&here.path)
+        .args(["add", "--json", "--dry-run", "octo/tool"])
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let got = std::fs::canonicalize(v["root"].as_str().unwrap()).unwrap();
+    assert_eq!(got, std::fs::canonicalize(&here.path).unwrap());
+    // without any repository around, STW_ROOT is used
+    let nowhere = scratch();
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .env("STW_ROOT", &other.path)
+        .env("HOME", "/nonexistent")
+        .env("GIT_CEILING_DIRECTORIES", nowhere.path().parent().unwrap())
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(nowhere.path())
+        .args(["add", "--json", "--dry-run", "octo/tool"])
+        .output()
+        .unwrap();
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let got = std::fs::canonicalize(v["root"].as_str().unwrap()).unwrap();
+    assert_eq!(got, std::fs::canonicalize(&other.path).unwrap());
+}

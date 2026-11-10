@@ -23,22 +23,38 @@ pub fn default_root(cwd: &Path) -> Option<PathBuf> {
     if let Ok(repo) = gix::discover(cwd) {
         if let Some(top) = repo.workdir() {
             let top = top.to_path_buf();
-            // a submodule checkout: the superproject is the nearest parent with a .gitmodules naming it
-            let mut cur = top.parent();
-            while let Some(dir) = cur {
-                if dir.join(".gitmodules").is_file() && dir.join(".git").exists() {
-                    if let Ok(rel) = top.strip_prefix(dir) {
-                        if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {
-                            return Some(dir.to_path_buf());
-                        }
-                    }
-                }
-                cur = dir.parent();
+            if let Some(sup) = superproject_of(&top) {
+                return Some(sup);
             }
             if top.join(".gitmodules").is_file() {
                 return Some(top);
             }
         }
+    }
+    std::env::var_os("STW_ROOT").map(PathBuf::from)
+}
+
+/// A submodule checkout: the superproject is the nearest parent with a `.gitmodules` naming it.
+fn superproject_of(top: &Path) -> Option<PathBuf> {
+    let mut cur = top.parent();
+    while let Some(dir) = cur {
+        if dir.join(".gitmodules").is_file() && dir.join(".git").exists() {
+            if let Ok(rel) = top.strip_prefix(dir) {
+                if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {
+                    return Some(dir.to_path_buf());
+                }
+            }
+        }
+        cur = dir.parent();
+    }
+    None
+}
+
+/// Root for `stw add`: the superproject of the repository of `cwd`, else that repository's top level (a
+/// workspace without `.gitmodules` yet is a valid target), and only without any repository `$STW_ROOT`.
+pub fn add_root(cwd: &Path) -> Option<PathBuf> {
+    if let Some(top) = top_level(cwd) {
+        return Some(superproject_of(&top).unwrap_or(top));
     }
     std::env::var_os("STW_ROOT").map(PathBuf::from)
 }

@@ -257,8 +257,7 @@ fn run_add(a: AddArgs) -> Result<u8> {
     let root = a
         .root
         .clone()
-        .or_else(|| repo::default_root(&cwd))
-        .or_else(|| repo::top_level(&cwd))
+        .or_else(|| repo::add_root(&cwd))
         .ok_or_else(|| {
             Error::usage(
                 "no workspace root: pass --root PATH, run inside the workspace, or set STW_ROOT",
