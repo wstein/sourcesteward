@@ -8,9 +8,9 @@ use serde_json::Value;
 
 use crate::error::{exit, Error, Kind, Result};
 use crate::github::GithubState;
-use crate::output::print_json;
+use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
-use crate::{dev, status, sync, tidy, tidy_apply};
+use crate::{add, dev, git_runner, status, sync, tidy, tidy_apply};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -50,6 +50,9 @@ enum Command {
     /// Fast-forward every repository to its upstream (dry run unless --apply)
     #[command(after_help = EXIT_CODES)]
     Sync(SyncArgs),
+    /// Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
+    #[command(after_help = EXIT_CODES)]
+    Add(AddArgs),
     #[command(hide = true)]
     Dev {
         #[command(subcommand)]
@@ -153,6 +156,23 @@ struct SyncArgs {
 }
 
 #[derive(Args)]
+struct AddArgs {
+    /// OWNER/REPO of an existing repository, or REPO (the owner of the workspace's GitHub origin is used)
+    spec: String,
+    /// Where the project goes, relative to the workspace [default: projects/REPO]
+    path: Option<String>,
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Run every check and change nothing
+    #[arg(long)]
+    dry_run: bool,
+    /// Workspace root, the top level of its git repository [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+}
+
+#[derive(Args)]
 struct StatusArgs {
     #[command(flatten)]
     common: Common,
@@ -230,6 +250,54 @@ pub fn main() -> ExitCode {
             })
         }
     }
+}
+
+fn run_add(a: AddArgs) -> Result<u8> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = a
+        .root
+        .clone()
+        .or_else(|| repo::default_root(&cwd))
+        .or_else(|| repo::top_level(&cwd))
+        .ok_or_else(|| {
+            Error::usage(
+                "no workspace root: pass --root PATH, run inside the workspace, or set STW_ROOT",
+            )
+        })?;
+    let root = add::absolute_root(&root)?;
+    let origin_owner = repo::open_isolated(&root)
+        .ok()
+        .and_then(|r| repo::slug(&r))
+        .and_then(|slug| slug.split('/').next().map(str::to_string));
+    let req = add::parse_request(&a.spec, a.path.as_deref(), origin_owner.as_deref())?;
+    let github = GithubState::discover(false);
+    let cloner = add::GixCloner {
+        credentials: github.client().map(|c| c.basic_auth()),
+    };
+    let report = add::add(&root, &req, &cloner, git_runner::shared(), a.dry_run)?;
+    if a.json {
+        print_json(&serde_json::json!({
+            "schema_version": 2, "command": "add", "read_only": false, "root": output::p2s(&root),
+            "owner": report.owner, "repo": report.repo, "path": report.path, "url": report.url,
+            "dry_run": report.dry_run, "commit": report.commit, "gitlink": report.gitlink,
+            "via": git_runner::VIA,
+        }));
+    } else if report.dry_run {
+        println!(
+            "would add {}/{} as {} (dry run, nothing changed)",
+            report.owner, report.repo, report.path
+        );
+    } else {
+        println!(
+            "added {}/{} as {}: commit {} records {}",
+            report.owner,
+            report.repo,
+            report.path,
+            output::short(report.commit.as_deref().unwrap_or("")),
+            output::short(report.gitlink.as_deref().unwrap_or(""))
+        );
+    }
+    Ok(exit::OK)
 }
 
 fn manifest_dir(given: Option<PathBuf>) -> Result<PathBuf> {
@@ -369,6 +437,7 @@ fn run(command: Command) -> Result<u8> {
             }
             Ok(failed(!r.complete()))
         }
+        Command::Add(a) => run_add(a),
         Command::Sync(a) => {
             let ws = workspace(&a.common, a.rules_path.as_deref())?;
             let opts = sync::Opts {

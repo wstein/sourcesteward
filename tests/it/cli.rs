@@ -239,3 +239,48 @@ fn engine_names_the_pinned_gix_version() {
         "output::GIX_VERSION and the Cargo.toml pin differ"
     );
 }
+
+#[test]
+fn add_dry_run_checks_and_changes_nothing_and_bad_arguments_exit_2() {
+    let fx = root();
+    let root_arg = fx.path.to_str().unwrap();
+    let o = stw(&[
+        "add",
+        "--json",
+        "--dry-run",
+        "--root",
+        root_arg,
+        "octo/tool",
+    ]);
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["command"], "add");
+    assert_eq!(v["dry_run"], true);
+    assert_eq!(v["url"], "https://github.com/octo/tool.git");
+    assert_eq!(v["path"], "projects/tool");
+    assert!(v["commit"].is_null());
+    assert!(!fx.exists("projects"), "a dry run creates nothing");
+    // the owner of the workspace's GitHub origin is the default
+    let o = stw(&["add", "--dry-run", "--root", root_arg, "tool", "libs/tool"]);
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    assert!(
+        text(&o.stdout).contains("would add test/tool as libs/tool"),
+        "{}",
+        text(&o.stdout)
+    );
+    // usage errors: exit 2, nothing done
+    for args in [
+        vec!["add", "--root", root_arg, "octo/tool", "../x"],
+        vec!["add", "--root", root_arg, "octo/tool", "/abs"],
+        vec!["add", "--root", root_arg, "octo/tool", ".git"],
+        vec!["add", "--root", root_arg, "octo/-x"],
+        vec!["add", "--root", root_arg, "a/b/c"],
+    ] {
+        let o = stw(&args);
+        assert_eq!(code(&o), 2, "{args:?}: {}", text(&o.stderr));
+    }
+    // a refused workspace state is exit 1
+    fx.write("projects/tool/f", "x");
+    let o = stw(&["add", "--dry-run", "--root", root_arg, "octo/tool"]);
+    assert_eq!(code(&o), 1, "{}", text(&o.stderr));
+}
