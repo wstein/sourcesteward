@@ -631,6 +631,112 @@ m SA8 'stw add: the local steps may use a transport' src/git_runner.rs \
   '_ => "none",' '_ => "file:ssh:git:http:https",' \
   git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
 
+m SA9 'stw add: a backslash pattern is not taken for .gitmodules' src/add.rs \
+  "if p.contains('[') || p.contains('\\\\') {" "if p.contains('[') {" \
+  add 'escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs'
+m SA10 'stw add: a byte order mark is not skipped in attribute files' src/add.rs \
+  "let text = text.strip_prefix('\\u{feff}').unwrap_or(text);" '' \
+  add 'escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs'
+m SA11 'stw add: STW_ROOT wins over the repository of the current directory' src/cli.rs \
+  'repo::add_root(&cwd))' 'repo::default_root(&cwd)).or_else(|| repo::top_level(&cwd))' \
+  cli 'add_prefers_the_repository_of_the_current_directory_over_stw_root'
+m SA12 'stw add: the rollback state is saved before the clone' src/add.rs \
+'            snapshot: None,
+            created: Vec::new(),
+            committed: false,
+            modules_owned: false,
+        })
+    }
+
+    /// Create the missing directories of PATH one by one (`create_dir`, never `create_dir_all`): the last
+    /// one must not exist, which proves this run owns it.
+    fn create_dirs(&mut self, ws: &Path, req: &Request) -> Result<()> {
+        let mut cur = ws.to_path_buf();
+        let n = req.path.components().count();
+        for (i, c) in req.path.components().enumerate() {
+            cur.push(c);
+            match std::fs::create_dir(&cur) {
+                Ok(()) => self.created.push(cur.clone()),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && i + 1 < n => {
+                    if cur
+                        .symlink_metadata()
+                        .is_ok_and(|m| m.file_type().is_symlink())
+                    {
+                        return Err(refused(format!("{} is a symlink", cur.display())));
+                    }
+                }
+                Err(e) => {
+                    return Err(refused(format!("cannot create {}: {e}", cur.display())));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Save what the git steps are about to change, right before the first of them: a change another
+    /// process made while the clone ran (a `git add` in another terminal) is part of the saved state.
+    fn mark_git_started(&mut self) {
+        let read = |p: PathBuf| std::fs::read(p).ok();
+' \
+'            snapshot: Some(Snapshot {
+                gitmodules: std::fs::read(ws.join(".gitmodules")).ok(),
+                index: std::fs::read(gitdir.join("index")).ok(),
+                config: std::fs::read(gitdir.join("config")).ok(),
+            }),
+            created: Vec::new(),
+            committed: false,
+            modules_owned: false,
+        })
+    }
+
+    /// Create the missing directories of PATH one by one (`create_dir`, never `create_dir_all`): the last
+    /// one must not exist, which proves this run owns it.
+    fn create_dirs(&mut self, ws: &Path, req: &Request) -> Result<()> {
+        let mut cur = ws.to_path_buf();
+        let n = req.path.components().count();
+        for (i, c) in req.path.components().enumerate() {
+            cur.push(c);
+            match std::fs::create_dir(&cur) {
+                Ok(()) => self.created.push(cur.clone()),
+                Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists && i + 1 < n => {
+                    if cur
+                        .symlink_metadata()
+                        .is_ok_and(|m| m.file_type().is_symlink())
+                    {
+                        return Err(refused(format!("{} is a symlink", cur.display())));
+                    }
+                }
+                Err(e) => {
+                    return Err(refused(format!("cannot create {}: {e}", cur.display())));
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Save what the git steps are about to change, right before the first of them: a change another
+    /// process made while the clone ran (a `git add` in another terminal) is part of the saved state.
+    fn mark_git_started(&mut self) {
+        let read = |p: PathBuf| std::fs::read(p).ok();
+        if self.snapshot.is_some() {
+            return;
+        }
+' \
+  add 'changes_made_while_the_clone_runs_survive_a_later_failure'
+m SA13 'stw add: the token is not masked in clone errors' src/add.rs \
+  'let secrets: Vec<String> = credentials.map(|(_, t)| t.clone()).into_iter().collect();' 'let secrets: Vec<String> = Vec::new();' \
+  add 'clone_errors_hide_the_token_and_say_what_a_missing_credential_means'
+m SA14 'stw add: an index entry below PATH is not seen' src/add.rs \
+  'if path == p || path.starts_with(&prefix) {' 'if path == p {' \
+  add 'an_index_entry_below_path_refuses_even_without_the_directory'
+m SA15 'stw add: the rollback removes a .git/modules/PATH it did not create' src/add.rs \
+  'if self.modules_owned' 'if true' \
+  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
+m SA16 'stw add: .git/modules is not checked again before the absorb' src/add.rs \
+  '    modules_clear(gitdir, req)?;
+    undo.own_modules();' '    undo.own_modules();' \
+  add 'a_git_dir_that_appears_during_the_run_is_refused_and_never_removed'
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

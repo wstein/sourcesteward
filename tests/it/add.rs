@@ -938,16 +938,15 @@ fn the_json_report_says_what_ran_and_whether_it_wrote() {
 
 #[test]
 fn an_index_entry_below_path_refuses_even_without_the_directory() {
-    let (src, _) = source(&[("a.txt", "a\n")]);
     let e = env();
     e.ws.write("projects/tool/x", "x\n");
     e.ws.stage("projects/tool/x");
     std::fs::remove_dir_all(e.ws.path.join("projects")).unwrap();
     refuses(
         &e,
-        &local(&src, "octo", "tool"),
+        &cloner(|_, _| panic!("refused before the clone")),
         &req("octo", "tool", "projects/tool"),
-        "in the index",
+        "in the index already",
     );
     // a file in the index where a directory of PATH should be
     let e = env();
@@ -956,8 +955,28 @@ fn an_index_entry_below_path_refuses_even_without_the_directory() {
     std::fs::remove_file(e.ws.path.join("projects")).unwrap();
     refuses(
         &e,
-        &local(&src, "octo", "tool"),
+        &cloner(|_, _| panic!("refused before the clone")),
         &req("octo", "tool", "projects/tool"),
-        "in the index",
+        "is a file in the index",
+    );
+}
+
+#[test]
+fn clone_errors_hide_the_token_and_say_what_a_missing_credential_means() {
+    let creds = Some(("x-access-token".to_string(), "tok_SECRET_123".to_string()));
+    let m = add::clone_message("request to tok_SECRET_123 failed", creds.as_ref());
+    assert!(!m.contains("tok_SECRET_123"), "{m}");
+    let m = add::clone_message("No credentials were returned at all as if x", None);
+    assert!(m.contains("not found or no access"), "{m}");
+    assert!(m.contains("no token"), "{m}");
+    let m = add::clone_message(
+        "No credentials were returned at all as if x",
+        creds.as_ref(),
+    );
+    assert!(m.contains("not found or no access"), "{m}");
+    assert!(!m.contains("no token"), "{m}");
+    assert_eq!(
+        add::clone_message("connection refused", None),
+        "connection refused"
     );
 }

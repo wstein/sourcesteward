@@ -209,7 +209,7 @@ impl Cloner for GixCloner {
 
 /// The text of a failed clone: credentials and token shapes removed, and gix's "No credentials were returned"
 /// (an unknown repository and a refused token look the same to GitHub) said in words.
-fn clone_message(raw: &str, credentials: Option<&(String, String)>) -> String {
+pub fn clone_message(raw: &str, credentials: Option<&(String, String)>) -> String {
     let secrets: Vec<String> = credentials.map(|(_, t)| t.clone()).into_iter().collect();
     let text = git_runner::redact(raw, &secrets);
     let text = if text.contains("No credentials were returned") {
@@ -795,26 +795,6 @@ pub fn absolute_root(root: &Path) -> Result<PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn clone_errors_hide_the_token_and_say_what_a_missing_credential_means() {
-        let creds = Some(("x-access-token".to_string(), "tok_SECRET_123".to_string()));
-        let m = clone_message("request to tok_SECRET_123 failed", creds.as_ref());
-        assert!(!m.contains("tok_SECRET_123"), "{m}");
-        let m = clone_message("No credentials were returned at all as if x", None);
-        assert!(m.contains("not found or no access"), "{m}");
-        assert!(m.contains("no token"), "{m}");
-        let m = clone_message(
-            "No credentials were returned at all as if x",
-            creds.as_ref(),
-        );
-        assert!(m.contains("not found or no access"), "{m}");
-        assert!(!m.contains("no token"), "{m}");
-        assert_eq!(
-            clone_message("connection refused", None),
-            "connection refused"
-        );
-    }
 
     #[test]
     fn nothing_is_rolled_back_after_the_commit() {
