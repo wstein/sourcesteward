@@ -907,3 +907,31 @@ fn a_git_dir_that_appears_during_the_run_is_refused_and_never_removed() {
         "a directory this run did not create was removed"
     );
 }
+
+#[test]
+fn the_json_report_says_what_ran_and_whether_it_wrote() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    let e = env();
+    let dry = e
+        .run(
+            &local(&src, "octo", "tool"),
+            &req("octo", "tool", "projects/tool"),
+            true,
+        )
+        .unwrap()
+        .to_json("/ws");
+    assert_eq!(dry["read_only"], true);
+    assert!(dry["via"].is_null() && dry["clone_via"].is_null());
+    let done = e
+        .run(
+            &local(&src, "octo", "tool"),
+            &req("octo", "tool", "projects/tool"),
+            false,
+        )
+        .unwrap()
+        .to_json("/ws");
+    assert_eq!(done["read_only"], false);
+    assert_eq!(done["via"], "git");
+    assert_eq!(done["clone_via"], "gix");
+    assert_eq!(done["command"], "add");
+}

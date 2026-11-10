@@ -275,12 +275,7 @@ fn run_add(a: AddArgs) -> Result<u8> {
     };
     let report = add::add(&root, &req, &cloner, git_runner::shared(), a.dry_run)?;
     if a.json {
-        print_json(&serde_json::json!({
-            "schema_version": 2, "command": "add", "read_only": false, "root": output::p2s(&root),
-            "owner": report.owner, "repo": report.repo, "path": report.path, "url": report.url,
-            "dry_run": report.dry_run, "commit": report.commit, "gitlink": report.gitlink,
-            "via": git_runner::VIA,
-        }));
+        print_json(&report.to_json(&output::p2s(&root)));
     } else if report.dry_run {
         println!(
             "would add {}/{} as {} (dry run, nothing changed)",

@@ -237,6 +237,20 @@ pub struct Report {
     pub gitlink: Option<String>,
 }
 
+impl Report {
+    /// The `--json` object. A dry run writes nothing (`read_only`) and starts no process (`via` and
+    /// `clone_via` are null); otherwise the clone ran in gix and the local steps through the git runner.
+    pub fn to_json(&self, root: &str) -> serde_json::Value {
+        let via = |v: &'static str| (!self.dry_run).then_some(v);
+        serde_json::json!({
+            "schema_version": 2, "command": "add", "read_only": self.dry_run, "root": root,
+            "owner": self.owner, "repo": self.repo, "path": self.path, "url": self.url,
+            "dry_run": self.dry_run, "commit": self.commit, "gitlink": self.gitlink,
+            "clone_via": via("gix"), "via": via(git_runner::VIA),
+        })
+    }
+}
+
 fn refused(msg: impl Into<String>) -> Error {
     Error::repository(msg)
 }
