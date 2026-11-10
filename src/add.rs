@@ -626,25 +626,26 @@ struct Undo {
     ws: PathBuf,
     gitdir: PathBuf,
     modules: PathBuf,
+    /// Taken right before the first git step that writes to the workspace.
+    snapshot: Option<Snapshot>,
+    created: Vec<PathBuf>,
+}
+
+/// Bytes of the files the git steps change (`None`: the file did not exist).
+struct Snapshot {
     gitmodules: Option<Vec<u8>>,
     index: Option<Vec<u8>>,
     config: Option<Vec<u8>>,
-    created: Vec<PathBuf>,
-    git_started: bool,
 }
 
 impl Undo {
     fn new(ws: &Path, gitdir: &Path, req: &Request) -> Result<Undo> {
-        let read = |p: PathBuf| std::fs::read(p).ok();
         Ok(Undo {
             ws: ws.to_path_buf(),
             gitdir: gitdir.to_path_buf(),
             modules: gitdir.join("modules").join(req.path.as_str()),
-            gitmodules: read(ws.join(".gitmodules")),
-            index: read(gitdir.join("index")),
-            config: read(gitdir.join("config")),
+            snapshot: None,
             created: Vec::new(),
-            git_started: false,
         })
     }
 
@@ -673,8 +674,15 @@ impl Undo {
         Ok(())
     }
 
+    /// Save what the git steps are about to change, right before the first of them: a change another
+    /// process made while the clone ran (a `git add` in another terminal) is part of the saved state.
     fn mark_git_started(&mut self) {
-        self.git_started = true;
+        let read = |p: PathBuf| std::fs::read(p).ok();
+        self.snapshot = Some(Snapshot {
+            gitmodules: read(self.ws.join(".gitmodules")),
+            index: read(self.gitdir.join("index")),
+            config: read(self.gitdir.join("config")),
+        });
     }
 
     /// Restore. Returns a sentence for the error message.
@@ -692,10 +700,10 @@ impl Undo {
                 problems.push(format!("{}: {e}", p.display()));
             }
         };
-        if self.git_started {
-            restore(self.ws.join(".gitmodules"), &self.gitmodules, &mut problems);
-            restore(self.gitdir.join("index"), &self.index, &mut problems);
-            restore(self.gitdir.join("config"), &self.config, &mut problems);
+        if let Some(snap) = &self.snapshot {
+            restore(self.ws.join(".gitmodules"), &snap.gitmodules, &mut problems);
+            restore(self.gitdir.join("index"), &snap.index, &mut problems);
+            restore(self.gitdir.join("config"), &snap.config, &mut problems);
             // absent before the run (checked up front); symlinks were refused
             if self
                 .modules

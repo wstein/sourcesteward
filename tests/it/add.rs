@@ -818,3 +818,45 @@ fn escaped_and_bom_patterns_for_gitmodules_are_refused_and_no_filter_runs() {
         assert!(!marker.exists(), "a filter program ran for {text:?}");
     }
 }
+
+#[test]
+fn changes_made_while_the_clone_runs_survive_a_later_failure() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    let e = env();
+    let lock = e.ws.path.join(".git/refs/heads/main.lock");
+    let (p, l, ws) = (src.path.clone(), lock.clone(), &e.ws);
+    let c = cloner(move |u, dest| {
+        clone_from_path(&p, dest, u.as_str());
+        // another terminal: a `git add` and a config edit while the clone was running
+        ws.write("staged-meanwhile.txt", "s\n");
+        ws.stage("staged-meanwhile.txt");
+        let mut cfg = std::fs::OpenOptions::new()
+            .append(true)
+            .open(ws.path.join(".git/config"))
+            .unwrap();
+        use std::io::Write;
+        cfg.write_all(b"[note]\n\tmeanwhile = yes\n").unwrap();
+        std::fs::write(&l, "").unwrap();
+        Ok(())
+    });
+    let err = e
+        .run(&c, &req("octo", "tool", "projects/tool"), false)
+        .unwrap_err();
+    assert!(err.to_string().contains("removed"), "{err}");
+    std::fs::remove_file(&lock).unwrap();
+    let repo = e.ws.repo();
+    let index = repo.index_or_empty().unwrap();
+    assert!(
+        index
+            .entries()
+            .iter()
+            .any(|en| en.path(&index) == "staged-meanwhile.txt"),
+        "the staged file was dropped by the rollback"
+    );
+    assert!(e
+        .ws
+        .read(".git/config")
+        .unwrap()
+        .contains("meanwhile = yes"));
+    assert!(!e.ws.exists("projects/tool"));
+}
