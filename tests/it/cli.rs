@@ -322,3 +322,22 @@ fn add_prefers_the_repository_of_the_current_directory_over_stw_root() {
     let got = std::fs::canonicalize(v["root"].as_str().unwrap()).unwrap();
     assert_eq!(got, std::fs::canonicalize(&other.path).unwrap());
 }
+
+#[test]
+fn add_dry_run_text_names_the_root() {
+    let fx = root();
+    let o = stw(&[
+        "add",
+        "--dry-run",
+        "--root",
+        fx.path.to_str().unwrap(),
+        "octo/tool",
+    ]);
+    assert_eq!(code(&o), 0, "{}", text(&o.stderr));
+    let root = std::fs::canonicalize(&fx.path).unwrap();
+    assert!(
+        text(&o.stdout).contains(&format!("in {}", root.display())),
+        "{}",
+        text(&o.stdout)
+    );
+}

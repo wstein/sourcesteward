@@ -278,15 +278,19 @@ fn run_add(a: AddArgs) -> Result<u8> {
         print_json(&report.to_json(&output::p2s(&root)));
     } else if report.dry_run {
         println!(
-            "would add {}/{} as {} (dry run, nothing changed)",
-            report.owner, report.repo, report.path
-        );
-    } else {
-        println!(
-            "added {}/{} as {}: commit {} records {}",
+            "would add {}/{} as {} in {} (dry run, nothing changed)",
             report.owner,
             report.repo,
             report.path,
+            output::p2s(&root)
+        );
+    } else {
+        println!(
+            "added {}/{} as {} in {}: commit {} records {}",
+            report.owner,
+            report.repo,
+            report.path,
+            output::p2s(&root),
             output::short(report.commit.as_deref().unwrap_or("")),
             output::short(report.gitlink.as_deref().unwrap_or(""))
         );
