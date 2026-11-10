@@ -364,6 +364,7 @@ fn run_steps(
             path: req.path.clone(),
         },
     )?;
+    undo.mark_committed();
     let commit = crate::repo::open(ws)?.head_id()?.to_string();
     Ok(Report {
         owner: req.owner.as_str().into(),
@@ -629,6 +630,8 @@ struct Undo {
     /// Taken right before the first git step that writes to the workspace.
     snapshot: Option<Snapshot>,
     created: Vec<PathBuf>,
+    /// The commit exists: from here on nothing is rolled back.
+    committed: bool,
 }
 
 /// Bytes of the files the git steps change (`None`: the file did not exist).
@@ -646,6 +649,7 @@ impl Undo {
             modules: gitdir.join("modules").join(req.path.as_str()),
             snapshot: None,
             created: Vec::new(),
+            committed: false,
         })
     }
 
@@ -685,8 +689,19 @@ impl Undo {
         });
     }
 
+    fn mark_committed(&mut self) {
+        self.committed = true;
+    }
+
+    fn is_committed(&self) -> bool {
+        self.committed
+    }
+
     /// Restore. Returns a sentence for the error message.
     fn rollback(&mut self) -> String {
+        if self.committed {
+            return "the commit was made; nothing was rolled back".to_string();
+        }
         let mut problems = Vec::new();
         let restore = |p: PathBuf, old: &Option<Vec<u8>>, problems: &mut Vec<String>| {
             let r = match old {
@@ -764,6 +779,27 @@ mod tests {
         }
         assert_eq!(owner_of_origin("https://gitlab.com/octo/ws"), None);
         assert_eq!(owner_of_origin("/srv/ws"), None);
+    }
+
+    #[test]
+    fn nothing_is_rolled_back_after_the_commit() {
+        let t = tempfile::tempdir().unwrap();
+        let ws = t.path().join("ws");
+        std::fs::create_dir_all(ws.join(".git")).unwrap();
+        let req = Request {
+            owner: RepoName::parse("o").unwrap(),
+            repo: RepoName::parse("r").unwrap(),
+            path: SubPath::parse("projects/r").unwrap(),
+        };
+        let mut undo = Undo::new(&ws, &ws.join(".git"), &req).unwrap();
+        undo.create_dirs(&ws, &req).unwrap();
+        undo.mark_git_started();
+        std::fs::write(ws.join(".gitmodules"), "changed by the add").unwrap();
+        undo.mark_committed();
+        assert!(undo.is_committed());
+        undo.rollback();
+        assert!(ws.join("projects/r").is_dir(), "the clone directory stays");
+        assert!(ws.join(".gitmodules").is_file(), ".gitmodules stays");
     }
 
     #[test]
