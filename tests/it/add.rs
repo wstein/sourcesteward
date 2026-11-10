@@ -935,3 +935,29 @@ fn the_json_report_says_what_ran_and_whether_it_wrote() {
     assert_eq!(done["clone_via"], "gix");
     assert_eq!(done["command"], "add");
 }
+
+#[test]
+fn an_index_entry_below_path_refuses_even_without_the_directory() {
+    let (src, _) = source(&[("a.txt", "a\n")]);
+    let e = env();
+    e.ws.write("projects/tool/x", "x\n");
+    e.ws.stage("projects/tool/x");
+    std::fs::remove_dir_all(e.ws.path.join("projects")).unwrap();
+    refuses(
+        &e,
+        &local(&src, "octo", "tool"),
+        &req("octo", "tool", "projects/tool"),
+        "in the index",
+    );
+    // a file in the index where a directory of PATH should be
+    let e = env();
+    e.ws.write("projects", "a file\n");
+    e.ws.stage("projects");
+    std::fs::remove_file(e.ws.path.join("projects")).unwrap();
+    refuses(
+        &e,
+        &local(&src, "octo", "tool"),
+        &req("octo", "tool", "projects/tool"),
+        "in the index",
+    );
+}
