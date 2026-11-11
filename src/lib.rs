@@ -7,6 +7,7 @@ pub mod dev;
 pub mod error;
 pub mod git_runner;
 pub mod github;
+pub mod lint_pr;
 pub mod output;
 pub mod patch_id;
 pub mod replay;

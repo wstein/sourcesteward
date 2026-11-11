@@ -18,6 +18,7 @@ mod github_reads;
 mod github_rules;
 mod hostile_repo;
 mod identity;
+mod lint_pr;
 mod network;
 mod no_binaries;
 mod patchid;
