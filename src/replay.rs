@@ -107,17 +107,31 @@ impl Replay {
 }
 
 /// The committer from the Git config: `committer.name`/`committer.email`, then `user.name`/`user.email`. The
-/// in-memory fallback of `repo::open` and the environment do not count. Read-only.
+/// in-memory fallback of `repo::open`, `GIT_COMMITTER_*` and every other override do not count: only the
+/// configuration files do. Read-only.
 pub fn configured_committer(
     repo: &gix::Repository,
     now: gix::date::Time,
 ) -> Result<Signature, ReplayError> {
-    let cfg = repo.config_snapshot();
+    use gix::config::Source;
+    let snapshot = repo.config_snapshot();
+    let cfg = snapshot.plumbing();
+    // Only the Git configuration files count; GIT_COMMITTER_* and other overrides come as another source.
+    let from_files = |m: &gix::config::file::Metadata| {
+        matches!(
+            m.source,
+            Source::GitInstallation
+                | Source::System
+                | Source::Git
+                | Source::User
+                | Source::Local
+                | Source::Worktree
+        )
+    };
     let get = |a: &str, b: &str| {
         let v = cfg
-            .string(a)
-            .or_else(|| cfg.string(b))
-            .map(|v| v.to_owned());
+            .string_filter(a, from_files)
+            .or_else(|| cfg.string_filter(b, from_files));
         v.filter(|v| !v.trim().is_empty())
     };
     match (

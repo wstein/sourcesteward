@@ -814,6 +814,15 @@ m RP16 'replay: rename detection is off' src/replay.rs \
 m RP17 'replay: a file added to a renamed directory is not a conflict' src/replay.rs \
   '            if moved && exists(&base, dir)? && !exists(&new, dir)? {' '            if false && moved && exists(&base, dir)? && !exists(&new, dir)? {' \
   replay a_file_added_to_a_directory_that_onto_renamed_is_a_conflict_like_git
+m RP18 'replay: the environment counts as the configured identity' src/replay.rs \
+  '                | Source::Worktree
+        )' '                | Source::Worktree
+                | Source::Env
+                | Source::EnvOverride
+                | Source::Cli
+                | Source::Api
+        )' \
+  replay committer_ignores_the_environment
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

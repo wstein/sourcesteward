@@ -764,3 +764,55 @@ fn committer_comes_from_the_config_only() {
     let e = configured_committer(&repo, now).err().unwrap();
     assert!(matches!(e, ReplayError::NoIdentity), "{e}");
 }
+
+/// Runs in the child process of `committer_ignores_the_environment`; does nothing in a normal test run.
+#[test]
+fn env_child() {
+    let Some(cases) = std::env::var_os("STW_REPLAY_ENV_CASES") else {
+        return;
+    };
+    let cases = cases.to_string_lossy().into_owned();
+    let (with_config, without) = cases.split_once('|').unwrap();
+    let now = gix::date::Time::new(1_700_000_000, 0);
+    assert_eq!(std::env::var("GIT_COMMITTER_NAME").unwrap(), "EnvName");
+    let c = configured_committer(&gix::open(with_config).unwrap(), now).unwrap();
+    assert_eq!(
+        c.name.to_str().unwrap(),
+        "T",
+        "the environment beat the config"
+    );
+    let e = configured_committer(&gix::open(without).unwrap(), now)
+        .err()
+        .expect("the environment is not a configured identity");
+    assert!(matches!(e, ReplayError::NoIdentity), "{e}");
+}
+
+#[test]
+fn committer_ignores_the_environment() {
+    let with_config = Fx::new();
+    let without = Fx::new();
+    without.strip_identity();
+    let home = scratch();
+    let out = Command::new(std::env::current_exe().unwrap())
+        .env_clear()
+        .env("HOME", home.path())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_COMMITTER_NAME", "EnvName")
+        .env("GIT_COMMITTER_EMAIL", "env@example.com")
+        .env(
+            "STW_REPLAY_ENV_CASES",
+            format!("{}|{}", with_config.path.display(), without.path.display()),
+        )
+        .args(["replay::env_child", "--exact", "--nocapture"])
+        .output()
+        .unwrap();
+    let text =
+        String::from_utf8_lossy(&out.stdout).into_owned() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    assert!(
+        text.contains("1 passed"),
+        "the child test did not run: {text}"
+    );
+}
