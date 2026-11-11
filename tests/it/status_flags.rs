@@ -1280,3 +1280,41 @@ fn fetch_creates_no_tag_even_with_prune_tags_configured() {
         );
     }
 }
+
+#[test]
+fn the_repositories_are_worked_on_at_most_16_at_a_time_and_in_order() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::time::Duration;
+    let run = |n: usize, limit: usize| {
+        let now = AtomicUsize::new(0);
+        let peak = AtomicUsize::new(0);
+        let items: Vec<usize> = (0..n).collect();
+        let out = stw::repo::par_map(&items, limit, |i| {
+            let c = now.fetch_add(1, Ordering::SeqCst) + 1;
+            peak.fetch_max(c, Ordering::SeqCst);
+            std::thread::sleep(Duration::from_millis(40));
+            now.fetch_sub(1, Ordering::SeqCst);
+            *i * 2
+        });
+        assert_eq!(out, (0..n).map(|i| i * 2).collect::<Vec<_>>(), "order");
+        peak.load(Ordering::SeqCst)
+    };
+    assert!(run(20, 4) <= 4);
+    assert!(run(20, 4) >= 2, "it does run in parallel");
+    assert_eq!(run(0, 4), 0);
+    // the shared helpers use the bound of Go: 16
+    assert_eq!(stw::repo::MAX_PARALLEL, 16);
+    let now = AtomicUsize::new(0);
+    let peak = AtomicUsize::new(0);
+    let items: Vec<usize> = (0..40).collect();
+    let done = stw::repo::for_each_mut(items, |i| {
+        let c = now.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(c, Ordering::SeqCst);
+        std::thread::sleep(Duration::from_millis(40));
+        now.fetch_sub(1, Ordering::SeqCst);
+        *i += 1;
+    });
+    assert_eq!(done, (1..=40).collect::<Vec<_>>());
+    assert!(peak.load(Ordering::SeqCst) <= 16, "{peak:?}");
+    assert!(peak.load(Ordering::SeqCst) >= 2);
+}

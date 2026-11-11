@@ -1220,6 +1220,13 @@ m SF34 'the card counts differ from the Counts block' src/status.rs \
 m SF35 'status --fetch lets git create tags when pruneTags is configured' src/git_runner.rs \
   'a.extend(v(&["--no-prune", "--no-prune-tags"]));' 'a.extend(v(&["--no-prune"]));' \
   status_flags fetch_creates_no_tag_even_with_prune_tags_configured
+m SF36 'the repositories are worked on without a bound' src/repo/mod.rs \
+  'pub const MAX_PARALLEL: usize = 16;' 'pub const MAX_PARALLEL: usize = 1000;' \
+  status_flags the_repositories_are_worked_on_at_most_16_at_a_time_and_in_order
+m SF37 'the parallel helper ignores its limit' src/repo/mod.rs \
+  'for _ in 0..limit.max(1).min(items.len()) {' 'for _ in 0..items.len() {' \
+  status_flags the_repositories_are_worked_on_at_most_16_at_a_time_and_in_order
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

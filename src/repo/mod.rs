@@ -371,23 +371,40 @@ pub fn branch_short(full: &gix::refs::FullNameRef) -> Option<String> {
     }
 }
 
-/// Run `f` on every item of `list` in parallel and give the items back in order.
-pub fn for_each_mut<T: Send>(mut list: Vec<T>, f: impl Fn(&mut T) + Sync) -> Vec<T> {
+/// At most this many repositories are worked on at once (the bound of the Go `stw status`).
+pub const MAX_PARALLEL: usize = 16;
+
+/// `f` on every item, at most `limit` at a time; the results are in the order of `items`.
+pub fn par_map<I: Sync, T: Send>(items: &[I], limit: usize, f: impl Fn(&I) -> T + Sync) -> Vec<T> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let next = AtomicUsize::new(0);
+    let out: std::sync::Mutex<Vec<Option<T>>> =
+        std::sync::Mutex::new((0..items.len()).map(|_| None).collect());
     std::thread::scope(|s| {
-        for item in list.iter_mut() {
-            s.spawn(|| f(item));
+        for _ in 0..limit.max(1).min(items.len()) {
+            s.spawn(|| loop {
+                let i = next.fetch_add(1, Ordering::SeqCst);
+                let Some(item) = items.get(i) else { break };
+                let v = f(item);
+                out.lock().unwrap()[i] = Some(v);
+            });
         }
     });
-    list
+    out.into_inner()
+        .unwrap()
+        .into_iter()
+        .map(|v| v.expect("worker finished"))
+        .collect()
 }
 
-/// Run `f` for every repository in parallel; results keep the repository order.
+/// Run `f` on every item of `list`, at most `MAX_PARALLEL` at a time, and give the items back in order.
+pub fn for_each_mut<T: Send>(list: Vec<T>, f: impl Fn(&mut T) + Sync) -> Vec<T> {
+    let cells: Vec<std::sync::Mutex<T>> = list.into_iter().map(std::sync::Mutex::new).collect();
+    par_map(&cells, MAX_PARALLEL, |c| f(&mut c.lock().unwrap()));
+    cells.into_iter().map(|c| c.into_inner().unwrap()).collect()
+}
+
+/// Run `f` for every repository, at most `MAX_PARALLEL` at a time; results keep the repository order.
 pub fn for_each<T: Send>(list: &[RepoRef], f: impl Fn(&RepoRef) -> T + Sync) -> Vec<T> {
-    std::thread::scope(|s| {
-        let handles: Vec<_> = list.iter().map(|r| s.spawn(|| f(r))).collect();
-        handles
-            .into_iter()
-            .map(|h| h.join().expect("repository worker panicked"))
-            .collect()
-    })
+    par_map(list, MAX_PARALLEL, f)
 }
