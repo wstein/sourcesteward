@@ -78,6 +78,16 @@ enum Answer {
 
 /// test/fixture with the given open pull requests `(number, head sha, title)` and their comment answers.
 fn forge(prs: Vec<(u64, &'static str, &'static str)>, answers: Vec<(u64, Answer)>) -> FakeRoutes {
+    forge_with(prs, answers, None, "clean")
+}
+
+/// `forge` with a fixed head ref for every pull request (None: `b{n}`) and the `mergeable_state` of the single-PR answer.
+fn forge_with(
+    prs: Vec<(u64, &'static str, &'static str)>,
+    answers: Vec<(u64, Answer)>,
+    head_ref: Option<&'static str>,
+    merge_state: &'static str,
+) -> FakeRoutes {
     let answers: Arc<BTreeMap<u64, Answer>> = Arc::new(answers.into_iter().collect());
     FakeRoutes::start(move |path, query| {
         let ok = |v: Value| (200, vec![], v.to_string());
@@ -87,12 +97,12 @@ fn forge(prs: Vec<(u64, &'static str, &'static str)>, answers: Vec<(u64, Answer)
                     .map(|(n, sha, title)| {
                         json!({"number": n, "title": title, "draft": false,
                                "user": {"login": "me", "type": "User"},
-                               "head": {"ref": format!("b{n}"), "sha": sha}, "state": "open", "merged_at": null})
+                               "head": {"ref": head_ref.map_or(format!("b{n}"), str::to_string), "sha": sha}, "state": "open", "merged_at": null})
                     })
                     .collect(),
             )),
             "/repos/test/fixture/issues" => ok(json!([])),
-            p if p.starts_with("/repos/test/fixture/pulls/") => ok(json!({"mergeable_state": "clean"})),
+            p if p.starts_with("/repos/test/fixture/pulls/") => ok(json!({"mergeable_state": merge_state})),
             p if p.starts_with("/repos/test/fixture/issues/") && p.ends_with("/comments") => {
                 let n: u64 = p
                     .trim_start_matches("/repos/test/fixture/issues/")
@@ -194,6 +204,9 @@ fn the_states_of_a_mixed_set_of_pull_requests() {
             (9, HEAD, "clear after findings"),
             (10, HEAD, "other pr"),
             (11, HEAD, "chat only"),
+            (12, HEAD, "member"),
+            (13, HEAD, "collaborator"),
+            (14, HEAD, "contributor"),
         ],
         vec![
             (1, a(vec![owner(1, &review("CLEAR", HEAD, PATCH, 1))])),
@@ -236,6 +249,33 @@ fn the_states_of_a_mixed_set_of_pull_requests() {
             ),
             (10, a(vec![owner(1, &review("CLEAR", HEAD, PATCH, 99))])),
             (11, a(vec![owner(1, "thanks"), owner(2, "will do")])),
+            (
+                12,
+                a(vec![comment(
+                    1,
+                    "mem",
+                    "MEMBER",
+                    &review("CLEAR", HEAD, PATCH, 12),
+                )]),
+            ),
+            (
+                13,
+                a(vec![comment(
+                    1,
+                    "col",
+                    "COLLABORATOR",
+                    &review("CLEAR", HEAD, PATCH, 13),
+                )]),
+            ),
+            (
+                14,
+                a(vec![comment(
+                    1,
+                    "con",
+                    "CONTRIBUTOR",
+                    &review("CLEAR", HEAD, PATCH, 14),
+                )]),
+            ),
         ],
     );
     let o = run_review(&api, &["--json"]);
@@ -265,6 +305,9 @@ fn the_states_of_a_mixed_set_of_pull_requests() {
         "a trusted line of another pull request that names the head"
     );
     assert_eq!(label(11), "no-review");
+    assert_eq!(label(12), "clear", "MEMBER is trusted");
+    assert_eq!(label(13), "clear", "COLLABORATOR is trusted");
+    assert_eq!(label(14), "unverified-author", "CONTRIBUTOR is not trusted");
     let kinds = |n: u64| -> Vec<String> {
         by_number(&prs, n)["review_state"]["findings"]
             .as_array()
@@ -289,11 +332,11 @@ fn the_states_of_a_mixed_set_of_pull_requests() {
     let rv = &json_of(&o)["repos"][0]["pull_requests"]["review"];
     assert_eq!(
         rv["states"],
-        json!({"clear": 2, "clear_carried": 1, "findings": 2, "no_review": 4, "unverified_author": 1, "unknown": 1})
+        json!({"clear": 4, "clear_carried": 1, "findings": 2, "no_review": 4, "unverified_author": 2, "unknown": 1})
     );
     let t = out(&run_review(&api, &[]));
     assert!(
-        flat(&t).contains("\nreviews: 2 clear, 1 clear-carried, 2 findings, 4 no-review, 1 unverified-author, 1 ?\n"),
+        flat(&t).contains("\nreviews: 4 clear, 1 clear-carried, 2 findings, 4 no-review, 2 unverified-author, 1 ?\n"),
         "{t}"
     );
     assert!(t.contains("#10 other pr [b10, review ?, CLEAN]"), "{t}");
@@ -684,5 +727,28 @@ fn at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read() 
             "fixture: review state not read for 5 pull requests beyond the limit of 200 per run"
                 .to_string()
         ]
+    );
+}
+
+/// The head branch and the merge state of a pull request are text from the forge: escaped in the text.
+#[test]
+fn head_branch_and_merge_state_are_escaped_in_the_pull_request_line() {
+    let api = forge_with(
+        vec![(1, HEAD, "plain")],
+        vec![],
+        Some("br\u{1b}[2J\rx\u{202e}y"),
+        "clean\u{1b}[31m",
+    );
+    let t = out(&run_review(&api, &[]));
+    for c in t.chars() {
+        assert!(
+            c == '\n' || !c.is_control(),
+            "raw control character {c:?} in {t}"
+        );
+        assert!(!matches!(c as u32, 0x202A..=0x202E), "{t}");
+    }
+    assert!(
+        t.contains("[br\\u{1b}[2J\\rx\\u{202e}y, review no-review, CLEAN\\u{1b}[31M]"),
+        "{t}"
     );
 }

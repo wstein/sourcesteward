@@ -1169,7 +1169,7 @@ pub fn render_human(
                     );
                 }
                 if let Some(m) = &p.merge_state {
-                    fl += &format!(", {m}");
+                    fl += &format!(", {}", esc(m));
                 }
                 out += &format!(
                     "      #{} {} [{}{}]\n",
