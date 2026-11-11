@@ -146,6 +146,7 @@ fn json_field_names_are_the_documented_ones() {
             "schema_version",
             "command",
             "root",
+            "options",
             "engine",
             "github",
             "github_auth",
@@ -187,10 +188,15 @@ fn json_field_names_are_the_documented_ones() {
             "attention",
             "reasons",
             "counts",
+            "fetch",
+            "fetch_error",
+            "worktree_list",
             "pull_requests",
             "error"
         ])
     );
+    assert_eq!(keys(&st["options"]), doc(&["fetch", "worktrees", "icons"]));
+    assert_eq!(keys(&repo["fetch"]), doc(&["state", "via", "error"]));
     assert_eq!(
         keys(&repo["changes"]),
         doc(&["staged", "unstaged", "untracked", "conflicts"])
