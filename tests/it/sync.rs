@@ -171,6 +171,7 @@ fn sync_apply_reports_fast_forwarded_with_before_and_after() {
         &Opts {
             apply: true,
             offline: true,
+            ..Default::default()
         },
     );
     assert_eq!(rec.result, "fast-forwarded", "{rec:?}");
@@ -188,6 +189,7 @@ fn sync_apply_overlap_is_result_error_and_changes_nothing() {
         &Opts {
             apply: true,
             offline: true,
+            ..Default::default()
         },
     );
     assert_eq!(rec.result, "error", "{rec:?}");
@@ -208,6 +210,7 @@ fn diverged_is_skipped_even_with_apply() {
         &Opts {
             apply: true,
             offline: true,
+            ..Default::default()
         },
     );
     assert_eq!(rec.result, "skip", "{rec:?}");
@@ -228,6 +231,7 @@ fn dry_run_writes_nothing() {
         &Opts {
             apply: false,
             offline: true,
+            ..Default::default()
         },
     );
     assert_eq!(rec.result, "fast-forward", "{rec:?}");
@@ -322,6 +326,7 @@ fn gone_upstream_is_skipped() {
         &Opts {
             apply: false,
             offline: true,
+            ..Default::default()
         },
     );
     assert_eq!(rec.result, "skip", "{rec:?}");
@@ -339,6 +344,7 @@ fn a_failed_fetch_without_a_token_says_how_to_provide_one() {
             &Opts {
                 apply: true,
                 offline: false,
+                ..Default::default()
             },
         )
     };

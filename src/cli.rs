@@ -282,6 +282,18 @@ struct SyncArgs {
     /// Fetch origin and fast-forward; never merges, rebases, stashes, resets or pushes
     #[arg(long)]
     apply: bool,
+    /// With --apply, fetch with --prune: delete remote-tracking refs of origin (refs/remotes/origin/* only) that are
+    /// gone there. Overrides fetch.prune. Without --apply the dry run only says what it would do
+    #[arg(long, conflicts_with = "no_prune")]
+    prune: bool,
+    /// With --apply, fetch without pruning (overrides fetch.prune for a fetch by the installed git)
+    #[arg(long)]
+    no_prune: bool,
+    /// With --apply, also move each pinned (detached) submodule to the commit the superproject records when that is a
+    /// fast-forward: git submodule sync and update --no-fetch --checkout; never a clone, init or extra fetch. An
+    /// uninitialized submodule or a missing commit is reported as unreachable. The dry run says what would move
+    #[arg(long)]
+    submodules: bool,
     /// Also handle the agent-rules checkout (the submodule .agents of a whr workspace): with --apply fetch it and
     /// fast-forward HEAD to origin's default branch; without --apply only report. Refuses only to protect local
     /// changes or local commits. Never runs install.sh
@@ -584,8 +596,28 @@ fn run(command: Command) -> Result<u8> {
             let opts = sync::Opts {
                 apply: a.apply,
                 offline: a.common.offline,
+                prune: if a.prune {
+                    sync::fetch::Prune::On
+                } else if a.no_prune {
+                    sync::fetch::Prune::Off
+                } else {
+                    sync::fetch::Prune::Unset
+                },
+                submodules: a.submodules,
             };
-            let list = repo::for_each(&ws.repos, |r| sync::sync_repo(r, ws.github.client(), &opts));
+            let mut list =
+                repo::for_each(&ws.repos, |r| sync::sync_repo(r, ws.github.client(), &opts));
+            if a.submodules {
+                let root = PathBuf::from(&ws.root);
+                let rules_dir = sync::rules::checkout_path(&root, a.rules_path.as_deref());
+                sync::submodule_pass(
+                    &root,
+                    &mut list,
+                    &opts,
+                    a.common.repos.is_empty(),
+                    &rules_dir,
+                );
+            }
             let ropts = sync::rules::RulesOpts {
                 path: a.rules_path.clone(),
                 update: a.rules,
@@ -595,13 +627,13 @@ fn run(command: Command) -> Result<u8> {
             let rules =
                 sync::rules::agent_rules(&PathBuf::from(&ws.root), ws.github.client(), &ropts);
             if a.common.json {
-                let mut v = sync::to_json(&ws.root, a.apply, &list);
+                let mut v = sync::to_json(&ws.root, a.apply, &list, &opts);
                 if let Value::Object(m) = &mut v {
                     m.insert("agent_rules".into(), sync::rules::to_json(&rules));
                 }
                 print_json(&v);
             } else {
-                print!("{}", sync::render_human(a.apply, &list));
+                print!("{}", sync::render_human(a.apply, &list, &opts));
                 print!("{}", sync::rules::render_human(&rules));
             }
             Ok(failed(

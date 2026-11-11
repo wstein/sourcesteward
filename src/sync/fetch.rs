@@ -20,6 +20,18 @@ use crate::error::Result;
 use crate::git_runner::{self, Op};
 use crate::github::Client;
 
+/// `stw sync --prune` / `--no-prune`. `Unset` is the old behavior: no option is passed to git and gix never prunes.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Prune {
+    #[default]
+    Unset,
+    On,
+    Off,
+}
+
+/// The namespace `--prune` may delete in: the remote-tracking refs of `origin`.
+pub const PRUNE_SCOPE: &str = "refs/remotes/origin/";
+
 /// What happened to the fetch of `origin`.
 #[derive(Debug)]
 pub enum Fetch {
@@ -73,6 +85,39 @@ impl Fetch {
 }
 
 pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetched {
+    fetch_origin_with(repo, gh, Prune::Unset)
+}
+
+/// Every configured fetch refspec of `origin` writes below `refs/remotes/origin/` (a negative refspec `^...` and an
+/// empty value are skipped), so that `fetch --prune` can delete nothing else. Err names the refspec.
+pub fn check_prune_scope(repo: &gix::Repository) -> std::result::Result<(), String> {
+    let snap = repo.config_snapshot();
+    let specs = snap
+        .plumbing()
+        .strings_by("remote", Some("origin".into()), "fetch")
+        .unwrap_or_default();
+    for raw in specs {
+        let spec = raw.to_string();
+        let spec = spec.strip_prefix('+').unwrap_or(&spec);
+        if spec.is_empty() || spec.starts_with('^') {
+            continue;
+        }
+        let Some((_, dst)) = spec.split_once(':') else {
+            continue;
+        };
+        if !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {
+            let (shown, _) = crate::github::reads::escape_untrusted(spec, 200);
+            return Err(format!(
+                "the fetch refspec {shown:?} of origin writes outside {PRUNE_SCOPE}*: --prune would delete refs there; nothing was fetched"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// `fetch_origin` with the prune choice. `On` is always fetched by the installed git (gix has no prune, and refs
+/// are deleted only by git's own fetch), also for an https remote; `Off` and `Unset` keep the old transports.
+pub fn fetch_origin_with(repo: &gix::Repository, gh: Option<&Client>, prune: Prune) -> Fetched {
     let url = repo
         .find_remote("origin")
         .ok()
@@ -91,26 +136,9 @@ pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetched {
         };
     };
     match u.scheme {
-        Scheme::Ssh | Scheme::File => {
-            let dir = repo
-                .workdir()
-                .map(std::path::Path::to_path_buf)
-                .unwrap_or_else(|| repo.git_dir().to_path_buf());
-            match git_runner::shared().run(&dir, Op::FetchOrigin) {
-                Ok(_) => done(Fetch::Done, Some(git_runner::VIA), None),
-                Err(e) => {
-                    let msg: String = scrub(&e.to_string(), url.as_ref())
-                        .chars()
-                        .take(400)
-                        .collect();
-                    let fetch = if e.is_unsupported() {
-                        Fetch::GitUnsupported(msg)
-                    } else {
-                        Fetch::Failed(msg)
-                    };
-                    done(fetch, Some(git_runner::VIA), Some(e.kind()))
-                }
-            }
+        Scheme::Ssh | Scheme::File => run_git(repo, prune, url.as_ref(), false),
+        Scheme::Https | Scheme::Http | Scheme::Git if prune == Prune::On => {
+            run_git(repo, prune, url.as_ref(), true)
         }
         Scheme::Https | Scheme::Http | Scheme::Git => match run_gix(repo, gh) {
             Ok(true) => done(Fetch::Done, Some("gix"), None),
@@ -125,6 +153,50 @@ pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetched {
             None,
             None,
         ),
+    }
+}
+
+/// The fetch of `origin` by the installed git through the runner. `net_hint`: an https, http or git:// remote,
+/// where git gets no GitHub token from stw (only the user's own credential helpers).
+fn run_git(
+    repo: &gix::Repository,
+    prune: Prune,
+    url: Option<&gix::Url>,
+    net_hint: bool,
+) -> Fetched {
+    let done = |fetch, via, git_error| Fetched {
+        fetch,
+        via,
+        git_error,
+    };
+    if prune == Prune::On {
+        if let Err(m) = check_prune_scope(repo) {
+            return done(Fetch::Failed(m), None, Some("refused-refspec"));
+        }
+    }
+    let dir = repo
+        .workdir()
+        .map(std::path::Path::to_path_buf)
+        .unwrap_or_else(|| repo.git_dir().to_path_buf());
+    let op = match prune {
+        Prune::Unset => Op::FetchOrigin,
+        Prune::On => Op::FetchOriginPrune { prune: true },
+        Prune::Off => Op::FetchOriginPrune { prune: false },
+    };
+    match git_runner::shared().run(&dir, op) {
+        Ok(_) => done(Fetch::Done, Some(git_runner::VIA), None),
+        Err(e) => {
+            let mut msg: String = scrub(&e.to_string(), url).chars().take(400).collect();
+            if net_hint && !e.is_unsupported() {
+                msg += "; --prune fetches this remote with the installed git, which gets no GitHub token from stw: for a private repository use a git credential helper";
+            }
+            let fetch = if e.is_unsupported() {
+                Fetch::GitUnsupported(msg)
+            } else {
+                Fetch::Failed(msg)
+            };
+            done(fetch, Some(git_runner::VIA), Some(e.kind()))
+        }
     }
 }
 

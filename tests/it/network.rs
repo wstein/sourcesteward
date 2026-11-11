@@ -90,6 +90,7 @@ fn fetch_and_fast_forward_a_clone_that_was_rewound_one_commit() {
         &Opts {
             apply: false,
             offline: false,
+            ..Default::default()
         },
     );
     assert_eq!(
@@ -113,6 +114,7 @@ fn fetch_and_fast_forward_a_clone_that_was_rewound_one_commit() {
         &Opts {
             apply: true,
             offline: false,
+            ..Default::default()
         },
     );
     assert_eq!(rec.fetch, "ok", "{rec:?}");
