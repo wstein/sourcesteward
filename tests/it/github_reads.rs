@@ -496,3 +496,51 @@ fn a_slow_server_cannot_exceed_the_time_budget() {
     assert_eq!(r.state(), "partial");
     assert_eq!(observed(r).items.len(), 10);
 }
+
+/// The list reads are counted in the stats like the other requests: the comments of a pull request belong to the
+/// `pulls` source (Go reads them through the pulls gate), the plain issue list to `issues`.
+#[test]
+fn list_reads_are_counted_in_the_stats_and_comments_belong_to_the_pulls_source() {
+    let api = FakeRoutes::start(|_, _| {
+        (
+            200,
+            vec![
+                ("X-RateLimit-Limit".into(), "5000".into()),
+                ("X-RateLimit-Remaining".into(), "4990".into()),
+                ("X-RateLimit-Reset".into(), "1700000000".into()),
+            ],
+            "[]".into(),
+        )
+    });
+    let c = client(&api);
+    let b = Budget::default();
+    observed(c.issue_comments("o/r", 5, &b).unwrap());
+    observed(c.issue_comments("o/r", 6, &b).unwrap());
+    observed(c.pr_reviews("o/r", 5, &b).unwrap());
+    let st = c.stats();
+    assert_eq!(st.requests, 3);
+    let find = |src: &str| {
+        st.sources
+            .iter()
+            .find(|s| s.repo == "o/r" && s.source == src)
+            .map(|s| s.requests)
+    };
+    assert_eq!(find("pulls"), Some(3), "{st:?}");
+    assert_eq!(find("issues"), None, "{st:?}");
+    assert_eq!(st.rate.map(|r| r.remaining), Some(4990));
+}
+
+/// A list read does not start once the overall deadline has passed, and says why.
+#[test]
+fn a_list_read_obeys_the_overall_deadline() {
+    let api = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    let c = client(&api);
+    c.arm_deadline(Duration::from_millis(1));
+    std::thread::sleep(Duration::from_millis(30));
+    match c.issue_comments("o/r", 5, &Budget::default()).unwrap() {
+        Read::Failed(m) => assert!(m.contains("deadline:") && m.contains("--timeout"), "{m}"),
+        other => panic!("{}", other.state()),
+    }
+    assert!(api.hits().is_empty(), "no request after the deadline");
+    assert_eq!(c.stats().requests, 0);
+}

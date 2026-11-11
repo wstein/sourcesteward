@@ -138,10 +138,30 @@ fn classify(path: &str) -> (String, &'static str) {
     };
     let source = match seg.next().map(|s| s.split('?').next().unwrap_or("")) {
         Some("pulls") => "pulls",
-        Some("issues") => "issues",
+        // the comments of a pull request (`stw status --review`) belong to the pulls source, as in Go
+        Some("issues") => match (seg.next(), seg.next()) {
+            (Some(n), Some(c))
+                if !n.is_empty()
+                    && n.bytes().all(|b| b.is_ascii_digit())
+                    && c.split('?').next() == Some("comments") =>
+            {
+                "pulls"
+            }
+            _ => "issues",
+        },
         _ => "other",
     };
     (format!("{owner}/{name}"), source)
+}
+
+/// The `X-RateLimit-*` headers of an answer, when all three are there.
+fn rate_from(headers: &ureq::http::HeaderMap) -> Option<RateInfo> {
+    let h = |k: &str| headers.get(k)?.to_str().ok()?.trim().parse::<u64>().ok();
+    Some(RateInfo {
+        limit: h("x-ratelimit-limit")?,
+        remaining: h("x-ratelimit-remaining")?,
+        reset: h("x-ratelimit-reset")?,
+    })
 }
 
 pub struct Client {
@@ -278,22 +298,7 @@ impl Client {
                 Some(total) => Error::github(deadline_message(total)),
                 None => Error::github(format!("GitHub API unreachable for {path}: {e}")),
             });
-        let rate = sent.as_ref().ok().and_then(|r| {
-            let h = |k: &str| {
-                r.headers()
-                    .get(k)?
-                    .to_str()
-                    .ok()?
-                    .trim()
-                    .parse::<u64>()
-                    .ok()
-            };
-            Some(RateInfo {
-                limit: h("x-ratelimit-limit")?,
-                remaining: h("x-ratelimit-remaining")?,
-                reset: h("x-ratelimit-reset")?,
-            })
-        });
+        let rate = sent.as_ref().ok().and_then(|r| rate_from(r.headers()));
         self.record(path, started.elapsed(), rate);
         let mut resp = sent?;
         match resp.status().as_u16() {

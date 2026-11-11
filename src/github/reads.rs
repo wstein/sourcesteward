@@ -298,10 +298,16 @@ enum Page {
 }
 
 impl Client {
-    /// One GET, cut off after `timeout` (never longer than the client's own 30 s).
+    /// One GET, cut off after `timeout` (never longer than the client's own 30 s, nor than what is left of the
+    /// overall `--timeout`). Counted in the stats like every other request.
     fn page(&self, url: &str, timeout: Duration) -> Page {
         let path = url.trim_start_matches(self.base.as_str()).to_string();
-        let mut resp = match self
+        let timeout = match self.time_left() {
+            Ok(left) => timeout.min(left),
+            Err(m) => return Page::Failed(m),
+        };
+        let started = Instant::now();
+        let sent = self
             .agent
             .get(url)
             .config()
@@ -310,10 +316,20 @@ impl Client {
             .header("Authorization", &format!("Bearer {}", self.token))
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
-            .call()
-        {
+            .call();
+        let rate = sent
+            .as_ref()
+            .ok()
+            .and_then(|r| super::rate_from(r.headers()));
+        self.record(&path, started.elapsed(), rate);
+        let mut resp = match sent {
             Ok(r) => r,
-            Err(e) => return Page::Failed(format!("GitHub API unreachable for {path}: {e}")),
+            Err(e) => {
+                return Page::Failed(match self.deadline_passed() {
+                    Some(total) => super::deadline_message(total),
+                    None => format!("GitHub API unreachable for {path}: {e}"),
+                })
+            }
         };
         let status = resp.status().as_u16();
         let exhausted = resp
