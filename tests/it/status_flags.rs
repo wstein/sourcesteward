@@ -761,3 +761,274 @@ fn timeout_cuts_the_github_reads_with_notices_and_question_marks() {
         "local half intact: {t}"
     );
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// --stats and --verbose (Go: docs/status.md "Diagnostics", cli/status_online.go statusStatsLine/writeStatusVerbose)
+// ---------------------------------------------------------------------------------------------------------
+
+/// test/fixture: two open PRs, one issue; every answer carries the rate-limit headers (reset 2023-11-14 22:13:20 UTC).
+fn rate_api() -> FakeRoutes {
+    FakeRoutes::start(|path, _| {
+        let h = |k: &str, v: &str| (k.to_string(), v.to_string());
+        let headers = vec![
+            h("X-RateLimit-Limit", "5000"),
+            h("X-RateLimit-Remaining", "4892"),
+            h("X-RateLimit-Reset", "1700000000"),
+        ];
+        let pr = |n: u64| {
+            serde_json::json!({"number": n, "title": "t", "draft": false, "user": {"login": "me", "type": "User"},
+                           "head": {"ref": "b", "sha": "abc"}, "state": "open", "merged_at": null})
+        };
+        let body = match path {
+            "/repos/test/fixture/pulls" => serde_json::json!([pr(1), pr(2)]),
+            "/repos/test/fixture/issues" => {
+                serde_json::json!([{"number": 3, "title": "i", "labels": []}])
+            }
+            _ => serde_json::json!({"mergeable_state": "clean"}),
+        };
+        (200, headers, body.to_string())
+    })
+}
+
+#[test]
+fn without_the_flags_there_is_no_diagnostic_output() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = rate_api();
+    let t = out(&stw(Some(&api.url), &["status", "--root", &r]));
+    assert!(!t.contains("stats:") && !t.contains("Diagnostic"), "{t}");
+    assert!(
+        t.trim_end()
+            .lines()
+            .last()
+            .unwrap()
+            .contains("repositories"),
+        "{t}"
+    );
+    let v = json_of(&stw(Some(&api.url), &["status", "--root", &r, "--json"]));
+    assert!(v.get("stats").is_none(), "{v}");
+}
+
+#[test]
+fn stats_text_is_one_line_at_the_very_end_with_the_requests_and_the_rate_limit() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = rate_api();
+    let o = stw(Some(&api.url), &["status", "--root", &r, "--stats"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let t = out(&o);
+    let n = api.hits().len();
+    assert_eq!(
+        n,
+        4,
+        "list + 2 details of the PRs + issues: {:?}",
+        api.hits()
+    );
+    let last = t.trim_end().lines().last().unwrap();
+    let want = format!("stats: API: {n} reqs (4,892/5,000 left, reset 22:13 UTC) | ");
+    assert!(last.starts_with(&want), "{last}");
+    let rest = &last[want.len()..];
+    assert!(
+        rest.contains(" elapsed (local ") && rest.contains(", remote ") && rest.ends_with(')'),
+        "{rest}"
+    );
+    assert!(!t.contains("Diagnostic breakdown"), "{t}");
+    assert_eq!(t.matches("stats:").count(), 1);
+    // the summary line is still the last line of the report itself
+    let before = &t[..t.rfind("stats:").unwrap()];
+    assert!(
+        before
+            .trim_end()
+            .lines()
+            .last()
+            .unwrap()
+            .contains("repositories"),
+        "{t}"
+    );
+    assert!(!t.contains(TOKEN) && !err(&o).contains(TOKEN));
+}
+
+#[test]
+fn stats_json_adds_the_stats_member_and_stays_one_document() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = rate_api();
+    let o = stw(
+        Some(&api.url),
+        &["status", "--root", &r, "--json", "--stats"],
+    );
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let v = json_of(&o);
+    assert_eq!(v["schema_version"], 2);
+    let s = &v["stats"];
+    assert_eq!(s["requests"], 4, "{s}");
+    assert_eq!(s["rate_limit_limit"], 5000);
+    assert_eq!(s["rate_limit_remaining"], 4892);
+    assert_eq!(s["rate_limit_reset"], "2023-11-14T22:13:20Z");
+    assert!(s["duration_ms"].is_u64(), "{s}");
+    assert!(
+        err(&o).is_empty(),
+        "--stats alone prints nothing on stderr: {}",
+        err(&o)
+    );
+    // no token and no URL in the member
+    assert!(
+        !s.to_string().contains(TOKEN) && !s.to_string().contains("http"),
+        "{s}"
+    );
+}
+
+#[test]
+fn stats_without_any_request_say_so_and_leave_the_rate_limit_null() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    // no token: no client, no request
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", "/nonexistent")
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(["status", "--root", &r, "--stats", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0));
+    let s = &json_of(&o)["stats"];
+    assert_eq!(s["requests"], 0);
+    assert!(
+        s["rate_limit_limit"].is_null() && s["rate_limit_reset"].is_null(),
+        "{s}"
+    );
+}
+
+#[test]
+fn verbose_text_lists_the_sources_per_repository_before_the_stats_line() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = rate_api();
+    let o = stw(Some(&api.url), &["status", "--root", &r, "--verbose"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let t = out(&o);
+    let tail = &t[t.find("\nDiagnostic breakdown:\n").expect(&t)..];
+    let lines: Vec<&str> = tail.lines().collect();
+    assert_eq!(lines[1], "Diagnostic breakdown:");
+    assert_eq!(lines[2], "  test/fixture:");
+    assert!(
+        lines[3].starts_with("    issues:     1 req (0 cached 304s, 1 consumed) in "),
+        "{}",
+        lines[3]
+    );
+    assert!(
+        lines[4].starts_with("    pulls:      3 reqs (0 cached 304s, 3 consumed) in "),
+        "{}",
+        lines[4]
+    );
+    assert!(lines[5].starts_with("stats: API: 4 reqs"), "{}", lines[5]);
+    assert_eq!(lines.len(), 6, "{tail}");
+}
+
+#[test]
+fn verbose_with_json_keeps_stdout_a_document_and_writes_the_breakdown_to_stderr() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = rate_api();
+    let o = stw(
+        Some(&api.url),
+        &["status", "--root", &r, "--json", "--verbose"],
+    );
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let v = json_of(&o);
+    assert_eq!(
+        v["stats"]["requests"], 4,
+        "--verbose includes --stats: {}",
+        v["stats"]
+    );
+    assert!(!out(&o).contains("Diagnostic"));
+    let e = err(&o);
+    assert!(
+        e.contains("Diagnostic breakdown:\n  test/fixture:\n    issues:"),
+        "{e}"
+    );
+    assert!(
+        e.trim_end()
+            .lines()
+            .last()
+            .unwrap()
+            .starts_with("stats: API: 4 reqs"),
+        "{e}"
+    );
+    assert!(!e.contains(TOKEN));
+}
+
+#[test]
+fn stats_and_verbose_are_usage_errors_with_offline() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    for flag in ["--stats", "--verbose"] {
+        let o = stw(None, &["status", "--root", &r, "--offline", flag]);
+        assert_eq!(o.status.code(), Some(2), "{flag}: {}", err(&o));
+        assert!(
+            out(&o).is_empty() && err(&o).contains(flag),
+            "{flag}: {}",
+            err(&o)
+        );
+    }
+}
+
+#[test]
+fn verbose_shows_a_hostile_slug_escaped() {
+    let fx = status_fixture();
+    fx.set_origin_url("https://github.com/own/\u{1b}[31mRED\u{1b}[0m");
+    let r = path_str(&fx.path);
+    let api = FakeRoutes::start(|_, _| (403, vec![], "{}".into()));
+    let o = stw(Some(&api.url), &["status", "--root", &r, "--verbose"]);
+    let t = out(&o);
+    assert!(!t.contains('\u{1b}'), "raw ESC: {t:?}");
+    assert!(!err(&o).contains('\u{1b}'));
+}
+
+#[test]
+fn stats_formatting_helpers_follow_the_go_ones() {
+    use std::time::Duration as D;
+    use stw::github::{RateInfo, Stats};
+    use stw::status_stats::{group_digits, short_duration, stats_line, to_json, Timings};
+    assert_eq!(short_duration(D::from_millis(850)), "850ms");
+    assert_eq!(short_duration(D::from_millis(1400)), "1.4s");
+    assert_eq!(short_duration(D::from_secs(38)), "38s");
+    assert_eq!(short_duration(D::from_secs(125)), "2m05s");
+    assert_eq!(group_digits(0), "0");
+    assert_eq!(group_digits(999), "999");
+    assert_eq!(group_digits(1000), "1,000");
+    assert_eq!(group_digits(4892), "4,892");
+    assert_eq!(group_digits(1_234_567), "1,234,567");
+    let t = Timings {
+        total: D::from_millis(1400),
+        local: D::from_millis(110),
+        remote: D::from_millis(1300),
+    };
+    let at = |reset| Stats {
+        requests: 1,
+        rate: Some(RateInfo {
+            limit: 5000,
+            remaining: 4999,
+            reset,
+        }),
+        sources: vec![],
+    };
+    // epoch, a leap day, the end of a year, a date after 2038
+    for (reset, iso) in [
+        (0, "1970-01-01T00:00:00Z"),
+        (951_782_400, "2000-02-29T00:00:00Z"),
+        (1_704_067_199, "2023-12-31T23:59:59Z"),
+        (2_208_988_800, "2040-01-01T00:00:00Z"),
+    ] {
+        assert_eq!(to_json(&at(reset), &t)["rate_limit_reset"], iso);
+    }
+    assert_eq!(
+        stats_line(&at(1_700_000_000), &t),
+        "stats: API: 1 req (4,999/5,000 left, reset 22:13 UTC) | 1.4s elapsed (local 110ms, remote 1.3s)"
+    );
+    let none = Stats::default();
+    assert_eq!(
+        stats_line(&none, &t),
+        "stats: API: 0 reqs | 1.4s elapsed (local 110ms, remote 1.3s)"
+    );
+}

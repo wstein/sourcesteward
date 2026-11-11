@@ -575,6 +575,11 @@ pub fn counts_of(s: &RepoStatus) -> Counts {
     }
 }
 
+/// `esc` for other modules.
+pub fn escape_for_text(s: &str) -> String {
+    esc(s)
+}
+
 /// Text from outside (repository names, GitHub error messages with the slug from the origin URL) for the
 /// human output: control and invisible characters are shown as escapes, never sent to the terminal.
 fn esc(s: &str) -> String {
@@ -730,7 +735,13 @@ pub fn reasons(s: &RepoStatus) -> Vec<String> {
     v
 }
 
-pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusOpts) -> Value {
+pub fn to_json(
+    root: &str,
+    gh: &GithubState,
+    list: &[RepoStatus],
+    opts: &StatusOpts,
+    stats: Option<Value>,
+) -> Value {
     let mut attention = 0;
     let repos: Vec<Value> = list
         .iter()
@@ -775,7 +786,7 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusO
             })
         })
         .collect();
-    json!({
+    let mut doc = json!({
         "schema_version": 2, "command": "status", "root": root,
         "options": {"fetch": opts.fetch, "worktrees": opts.worktrees, "icons": null},
         "engine": engine(),
@@ -783,7 +794,11 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusO
         "repos": repos,
         "summary": {"total": list.len(), "attention": attention},
         "totals": counts_json(&totals(list)),
-    })
+    });
+    if let (Some(stats), Value::Object(m)) = (stats, &mut doc) {
+        m.insert("stats".into(), stats);
+    }
+    doc
 }
 
 /// The glyph set of the text output (`--icons`).
@@ -882,6 +897,7 @@ pub fn render_human(
     list: &[RepoStatus],
     rules: &str,
     icons: Icons,
+    diagnostics: &str,
 ) -> String {
     let mut out = counts_block(list);
     out.push('\n');
@@ -1063,5 +1079,6 @@ pub fn render_human(
     } else {
         out += &format!("{} repositories, nothing needs attention\n", list.len());
     }
+    out += diagnostics;
     out
 }

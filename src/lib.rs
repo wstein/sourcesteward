@@ -15,6 +15,7 @@ pub mod replay;
 pub mod repo;
 pub mod review;
 pub mod status;
+pub mod status_stats;
 pub mod sync;
 pub mod tidy;
 pub mod tidy_apply;

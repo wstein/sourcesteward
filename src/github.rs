@@ -98,6 +98,52 @@ impl GithubState {
 /// One request takes at most this long, whatever the overall deadline.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
+/// What GitHub said about the rate limit in its last answer that carried it (`X-RateLimit-*`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RateInfo {
+    pub limit: u64,
+    pub remaining: u64,
+    /// Unix time of the reset.
+    pub reset: u64,
+}
+
+/// The requests of one source (`pulls`, `issues`) of one repository.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceStats {
+    /// `owner/name`, or empty for a request that names no repository.
+    pub repo: String,
+    pub source: &'static str,
+    pub requests: usize,
+    /// Sum of the durations of the requests (they run in parallel, so it can exceed the elapsed time).
+    pub latency: Duration,
+}
+
+/// Diagnostic count of the requests of a run (`--stats`, `--verbose`), without any URL or token.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Stats {
+    pub requests: usize,
+    pub rate: Option<RateInfo>,
+    /// Sorted by repository, then source.
+    pub sources: Vec<SourceStats>,
+}
+
+/// `pulls` or `issues` and the repository of a REST path `/repos/OWNER/NAME/<source>...`.
+fn classify(path: &str) -> (String, &'static str) {
+    let mut seg = path.trim_start_matches('/').split('/');
+    if seg.next() != Some("repos") {
+        return (String::new(), "other");
+    }
+    let (Some(owner), Some(name)) = (seg.next(), seg.next()) else {
+        return (String::new(), "other");
+    };
+    let source = match seg.next().map(|s| s.split('?').next().unwrap_or("")) {
+        Some("pulls") => "pulls",
+        Some("issues") => "issues",
+        _ => "other",
+    };
+    (format!("{owner}/{name}"), source)
+}
+
 pub struct Client {
     agent: ureq::Agent,
     token: String,
@@ -105,6 +151,7 @@ pub struct Client {
     pub source: TokenSource,
     /// The overall deadline of the reads (`stw status --timeout`): its end and its length (for the message).
     deadline: Mutex<Option<(Instant, Duration)>>,
+    stats: Mutex<Stats>,
 }
 
 impl std::fmt::Debug for Client {
@@ -143,6 +190,43 @@ impl Client {
             base,
             source,
             deadline: Mutex::new(None),
+            stats: Mutex::new(Stats::default()),
+        }
+    }
+
+    /// The requests sent so far.
+    pub fn stats(&self) -> Stats {
+        let mut s = self.stats.lock().unwrap().clone();
+        s.sources
+            .sort_by(|a, b| (&a.repo, a.source).cmp(&(&b.repo, b.source)));
+        s
+    }
+
+    fn record(&self, path: &str, took: Duration, rate: Option<RateInfo>) {
+        let (repo, source) = classify(path);
+        let mut st = self.stats.lock().unwrap();
+        st.requests += 1;
+        // the smallest remaining count is the freshest evidence
+        if let Some(r) = rate {
+            if st.rate.is_none_or(|old| r.remaining <= old.remaining) {
+                st.rate = Some(r);
+            }
+        }
+        match st
+            .sources
+            .iter_mut()
+            .find(|x| x.repo == repo && x.source == source)
+        {
+            Some(x) => {
+                x.requests += 1;
+                x.latency += took;
+            }
+            None => st.sources.push(SourceStats {
+                repo,
+                source,
+                requests: 1,
+                latency: took,
+            }),
         }
     }
 
@@ -179,7 +263,8 @@ impl Client {
     fn get_optional(&self, url: &str) -> Result<Option<Value>> {
         let path = url.trim_start_matches(self.base.as_str());
         let timeout = self.time_left().map_err(Error::github)?;
-        let mut resp = self
+        let started = Instant::now();
+        let sent = self
             .agent
             .get(url)
             .config()
@@ -192,7 +277,25 @@ impl Client {
             .map_err(|e| match self.deadline_passed() {
                 Some(total) => Error::github(deadline_message(total)),
                 None => Error::github(format!("GitHub API unreachable for {path}: {e}")),
-            })?;
+            });
+        let rate = sent.as_ref().ok().and_then(|r| {
+            let h = |k: &str| {
+                r.headers()
+                    .get(k)?
+                    .to_str()
+                    .ok()?
+                    .trim()
+                    .parse::<u64>()
+                    .ok()
+            };
+            Some(RateInfo {
+                limit: h("x-ratelimit-limit")?,
+                remaining: h("x-ratelimit-remaining")?,
+                reset: h("x-ratelimit-reset")?,
+            })
+        });
+        self.record(path, started.elapsed(), rate);
+        let mut resp = sent?;
         match resp.status().as_u16() {
             200 => Ok(Some(resp.body_mut().read_json::<Value>().map_err(|e| {
                 Error::github(format!("GitHub API sent unreadable JSON for {path}: {e}"))

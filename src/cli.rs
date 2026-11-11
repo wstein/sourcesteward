@@ -11,7 +11,9 @@ use crate::error::{exit, Error, Kind, Result};
 use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
-use crate::{add, carryover, dev, git_runner, lint_pr_cmd, status, sync, tidy, tidy_apply};
+use crate::{
+    add, carryover, dev, git_runner, lint_pr_cmd, status, status_stats, sync, tidy, tidy_apply,
+};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -332,6 +334,14 @@ struct StatusArgs {
     /// Overall deadline of the GitHub reads, 1s to 10m, like 90s or 2m (not with --offline)
     #[arg(long, value_name = "DURATION", default_value = "90s", value_parser = parse_timeout, conflicts_with = "offline")]
     timeout: Duration,
+    /// Print diagnostics at the end: API requests, rate limit, elapsed time (not with --offline); with --json the
+    /// document gets a `stats` member
+    #[arg(long, conflicts_with = "offline")]
+    stats: bool,
+    /// Print the diagnostics per repository and source, then the stats line (not with --offline); with --json they go
+    /// to stderr
+    #[arg(long, conflicts_with = "offline")]
+    verbose: bool,
     /// Fetch origin of every repository first: remote-tracking refs only, no prune, no tags, no submodules; the one
     /// thing that is not read-only
     #[arg(long)]
@@ -619,53 +629,93 @@ fn same_path(a: &str, b: &std::path::Path) -> bool {
         || matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
 }
 
+fn run_status(a: StatusArgs) -> Result<u8> {
+    let started = std::time::Instant::now();
+    let c = a.common;
+    let ws = workspace(&c, a.rules_path.as_deref())?;
+    let root = PathBuf::from(&ws.root);
+    let opts = status::StatusOpts {
+        worktrees: a.worktrees,
+        fetch: a.fetch,
+    };
+    let mut list = repo::for_each(&ws.repos, |r| {
+        status::collect_local(r, &root, &opts, ws.github.client())
+    });
+    let local_done = started.elapsed();
+    if let Some(cl) = ws.github.client() {
+        cl.arm_deadline(a.timeout);
+    }
+    list = repo::for_each_mut(list, |s| status::read_remote(s, ws.github.client()));
+    let timings = status_stats::Timings {
+        total: started.elapsed(),
+        local: local_done,
+        remote: started.elapsed().saturating_sub(local_done),
+    };
+    let stats = ws.github.client().map(|cl| cl.stats()).unwrap_or_default();
+    let diag = a.stats || a.verbose;
+    let rules = sync::rules::agent_rules(
+        &root,
+        None,
+        &sync::rules::RulesOpts {
+            path: a.rules_path.clone(),
+            ..Default::default()
+        },
+    );
+    if c.json {
+        let mut v = status::to_json(
+            &ws.root,
+            &ws.github,
+            &list,
+            &opts,
+            diag.then(|| status_stats::to_json(&stats, &timings)),
+        );
+        if let Value::Object(m) = &mut v {
+            m.insert("agent_rules".into(), sync::rules::to_json(&rules));
+            m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+        }
+        print_json(&v);
+        if a.verbose {
+            // standard output stays one JSON document
+            eprintln!();
+            eprint!(
+                "{}",
+                status_stats::breakdown(&stats, status::escape_for_text)
+            );
+            eprintln!("{}", status_stats::stats_line(&stats, &timings));
+        }
+    } else {
+        let mut tail = String::new();
+        if a.verbose {
+            tail += "\n";
+            tail += &status_stats::breakdown(&stats, status::escape_for_text);
+        }
+        if diag {
+            tail += &status_stats::stats_line(&stats, &timings);
+            tail.push('\n');
+        }
+        print!(
+            "{}",
+            status::render_human(
+                ws.github.note.clone(),
+                &rejected_notices(&ws.rejected),
+                &list,
+                &sync::rules::render_human(&rules),
+                status::resolve_icons(a.icons.as_deref(), &status::Terminal::detect()),
+                &tail
+            )
+        );
+    }
+    Ok(if list.iter().any(|s| s.error.is_some()) {
+        exit::FAILED
+    } else {
+        exit::OK
+    })
+}
+
 fn run(command: Command) -> Result<u8> {
     let failed = |any: bool| if any { exit::FAILED } else { exit::OK };
     match command {
-        Command::Status(a) => {
-            let c = a.common;
-            let ws = workspace(&c, a.rules_path.as_deref())?;
-            let root = PathBuf::from(&ws.root);
-            let opts = status::StatusOpts {
-                worktrees: a.worktrees,
-                fetch: a.fetch,
-            };
-            let mut list = repo::for_each(&ws.repos, |r| {
-                status::collect_local(r, &root, &opts, ws.github.client())
-            });
-            if let Some(c) = ws.github.client() {
-                c.arm_deadline(a.timeout);
-            }
-            list = repo::for_each_mut(list, |s| status::read_remote(s, ws.github.client()));
-            let rules = sync::rules::agent_rules(
-                &root,
-                None,
-                &sync::rules::RulesOpts {
-                    path: a.rules_path.clone(),
-                    ..Default::default()
-                },
-            );
-            if c.json {
-                let mut v = status::to_json(&ws.root, &ws.github, &list, &opts);
-                if let Value::Object(m) = &mut v {
-                    m.insert("agent_rules".into(), sync::rules::to_json(&rules));
-                    m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
-                }
-                print_json(&v);
-            } else {
-                print!(
-                    "{}",
-                    status::render_human(
-                        ws.github.note.clone(),
-                        &rejected_notices(&ws.rejected),
-                        &list,
-                        &sync::rules::render_human(&rules),
-                        status::resolve_icons(a.icons.as_deref(), &status::Terminal::detect())
-                    )
-                );
-            }
-            Ok(failed(list.iter().any(|s| s.error.is_some())))
-        }
+        Command::Status(a) => run_status(a),
         Command::Tidy {
             command: TidyCommand::Plan(a),
         } => {
