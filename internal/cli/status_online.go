@@ -10,8 +10,99 @@ import (
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/statuscmd"
 	"github.com/wstein/sourcesteward/internal/statusremote"
+	"github.com/wstein/sourcesteward/internal/stwsync"
 	"github.com/wstein/sourcesteward/internal/untrusted"
 )
+
+// writeStatusCounts writes the `Counts` block: one aligned line per repository, then `All`. A figure is a number
+// only when it was read: `n/a` is not read, `?` is a failed read, `n+` is a lower bound. Repository names are
+// escaped; every other cell is a number or a fixed word.
+func writeStatusCounts(line func(string), names []string, repos []statuscmd.Counts, total statuscmd.Counts) {
+	rows := make([][]string, 0, len(repos)+1)
+	labels := make([]string, 0, len(repos)+1)
+	for i, c := range repos {
+		labels = append(labels, escapeReposLine(names[i]))
+		rows = append(rows, statusCountCells(c))
+	}
+	labels, rows = append(labels, "All"), append(rows, statusCountCells(total))
+	nameWidth := 0
+	for _, l := range labels {
+		nameWidth = max(nameWidth, utf8.RuneCountInString(l))
+	}
+	widths := make([]int, 5)
+	for _, row := range rows {
+		for i, cell := range row {
+			widths[i] = max(widths[i], utf8.RuneCountInString(cell))
+		}
+	}
+	line("Counts")
+	for i, row := range rows {
+		var b strings.Builder
+		b.WriteString("  " + labels[i] + strings.Repeat(" ", nameWidth-utf8.RuneCountInString(labels[i])) + "  ")
+		for j, cell := range row {
+			if j > 0 {
+				b.WriteString(" | ")
+			}
+			b.WriteString(cell)
+			if j < len(row)-1 {
+				b.WriteString(strings.Repeat(" ", widths[j]-utf8.RuneCountInString(cell)))
+			}
+		}
+		line(b.String())
+	}
+}
+
+func statusCountCells(c statuscmd.Counts) []string {
+	return []string{
+		statusSourceCell("PRs", "bot", c.PRs), statusSourceCell("Issues", "bug", c.Issues),
+		"Branches " + statusNumber(c.BranchesLocal) + "/" + statusNumber(c.BranchesRemote),
+		"Worktrees " + statusNumber(c.Worktrees), "Stash " + statusNumber(c.Stash),
+	}
+}
+
+func statusSourceCell(label, sub string, s statuscmd.SourceCount) string {
+	switch s.State {
+	case statuscmd.CountOK:
+		plus := ""
+		if s.Truncated {
+			plus = "+"
+		}
+		return fmt.Sprintf("%s %d%s (%s %d%s)", label, s.Open, plus, sub, s.Sub, plus)
+	case statuscmd.CountFailed:
+		return label + " ?"
+	}
+	return label + " n/a"
+}
+
+func statusNumber(n statuscmd.Number) string {
+	switch n.State {
+	case statuscmd.CountOK:
+		return fmt.Sprint(n.N)
+	case statuscmd.CountFailed:
+		return "?"
+	}
+	return "n/a"
+}
+
+// statusCountNames are the names of the repositories of a local status, in order.
+func statusCountNames(r stwsync.StatusResult) []string {
+	names := make([]string, len(r.Repos))
+	for i, rp := range r.Repos {
+		names[i] = rp.Name
+	}
+	return names
+}
+
+// writeStatusNotices writes the `Notices (N)` block: the messages of the model, or `none`.
+func writeStatusNotices(line func(string), notices []overview.Notice) {
+	line(fmt.Sprintf("Notices (%d)", len(notices)))
+	if len(notices) == 0 {
+		line("  none")
+	}
+	for _, n := range notices {
+		line("  " + n.Message)
+	}
+}
 
 // statusLevelCode is the SGR colour of a priority; it paints the icon and the level word only.
 var statusLevelCode = map[overview.Priority]string{
@@ -38,14 +129,12 @@ const maxStatusRepoWidth = 40
 // renderStatusNoToken prints what a run without a usable token prints: exactly the output of --offline, then the
 // notices (Spec 037): no Needs action section, no remote lines, no second summary.
 func renderStatusNoToken(w io.Writer, rep statuscmd.Report, worktrees, color bool, marks statusMarks) error {
-	if err := renderStatusText(w, rep.Local, worktrees, color, marks); err != nil {
+	if err := renderStatusText(w, rep.Local, rep.Remote.Repos, worktrees, color, marks); err != nil {
 		return err
 	}
 	var b strings.Builder
-	b.WriteString("\nNotices\n")
-	for _, n := range rep.Overview.Notices {
-		b.WriteString("  " + n.Message + "\n")
-	}
+	b.WriteString("\n")
+	writeStatusNotices(func(s string) { b.WriteString(s + "\n") }, rep.Overview.Notices)
 	if rep.VerboseRequested {
 		writeStatusVerbose(func(s string) { b.WriteString(s + "\n") }, rep)
 	}
@@ -62,9 +151,12 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 	var b strings.Builder
 	paint := statusPainter(color)
 	line := func(s string) { b.WriteString(s + "\n") }
+	repoCounts, total := rep.Counts()
+	writeStatusCounts(line, statusCountNames(rep.Local), repoCounts, total)
+	line("")
 	writeStatusActions(line, rep.Overview, icons, paint, rep.LongRequested)
 	line("")
-	line("Repositories")
+	line(fmt.Sprintf("Repositories (%d)", len(rep.Local.Repos)))
 	if rep.Local.Note != nil {
 		line("note: " + escapeReposLine(*rep.Local.Note))
 	}
@@ -76,14 +168,12 @@ func renderStatusOnline(w io.Writer, rep statuscmd.Report, icons statuscmd.IconS
 		}
 		return []string{statusRemoteLine(rr)}
 	})
-	if len(rep.Overview.Notices) > 0 {
+	line("")
+	writeStatusNotices(line, rep.Overview.Notices)
+	if rep.Local.Rules != nil {
 		line("")
-		line("Notices")
-		for _, n := range rep.Overview.Notices {
-			line("  " + n.Message)
-		}
+		renderRules(func(s string) { line(escapeReposLine(s)) }, rep.Local.Rules)
 	}
-	renderRules(func(s string) { line(escapeReposLine(s)) }, rep.Local.Rules)
 	line("")
 	line(statusSummaryLine(rep.Overview.Summary))
 	if rep.VerboseRequested {
@@ -169,11 +259,11 @@ func statusStatsLine(rep statuscmd.Report) string {
 }
 
 func writeStatusActions(line func(string), ov overview.Overview, icons statuscmd.IconSet, paint func(s, code string) string, long bool) {
+	line(fmt.Sprintf("Needs action (%d)", len(ov.Items)))
 	if len(ov.Items) == 0 {
-		line("Needs action: nothing")
+		line("  nothing")
 		return
 	}
-	line("Needs action: " + plural(len(ov.Items), "item", "items"))
 	sections := overview.Group(ov.Items)
 	width := 1
 	for _, s := range sections {

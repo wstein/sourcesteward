@@ -1,4 +1,11 @@
-Needs action: 15 items
+Counts
+  .           PRs 3 (bot 0) | Issues 5 (bug 2) | Branches 3/2 | Worktrees 1 | Stash 1
+  crewbook    PRs 1 (bot 0) | Issues n/a       | Branches 1/1 | Worktrees 0 | Stash 0
+  workharbor  PRs 2 (bot 2) | Issues 0 (bug 0) | Branches 2/0 | Worktrees 0 | Stash 4
+  gone        PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+  All         PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+
+Needs action (16)
  ✖ red     gone                  repository cannot be read: status-read-failed: cannot read the repository status
  ✖ red     wstein/sourcesteward  default branch CI is red (main, 3f2a9c1)  https://github.com/wstein/sourcesteward/actions
  ✖ red     wstein/sourcesteward  release workflow run of v1.1.0 failure  https://github.com/wstein/sourcesteward/actions/runs/7
@@ -12,17 +19,18 @@ Needs action: 15 items
  ✔ green   wstein/sourcesteward  PR #57 is ready to merge: build(deps): bump cobra  https://github.com/wstein/sourcesteward/pull/57
  ✔ green   wstein/sourcesteward  release draft v1.0.0 (4 assets) is waiting  https://github.com/wstein/sourcesteward/releases/tag/untagged-1
  ℹ blue    .                     1 stash
+ ℹ blue    workharbor            4 stashes
  ⬆ violet  wstein/workharbor     2 bot PRs: #3, #4
 
-Repositories
+Repositories (4)
 ▲ .           main  origin/main behind 2  2 unstaged
   crewbook    main  origin/main up to date  clean
   workharbor  main  origin/main up to date  clean
 ✖ gone        -     cannot read the repository status
 
-Notices
+Notices (3)
   deadline of 90 s reached: 2 sources of 1 repository not read; raise --timeout
   release drafts of wstein/crewbook not visible (token has no write access)
   repository was not read locally: remote sources of 1 repository were not read
 
-summary: 4 red, 6 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices
+summary: 4 red, 6 yellow, 2 green, 2 blue, 2 violet | 4 repositories | 3 notices

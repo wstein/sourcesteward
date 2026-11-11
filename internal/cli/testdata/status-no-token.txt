@@ -1,3 +1,9 @@
+Counts
+  .            PRs n/a | Issues n/a | Branches 0/1     | Worktrees 0   | Stash 0
+  sub\x1b[31m  PRs n/a | Issues n/a | Branches 4/2     | Worktrees 2   | Stash 2
+  gone         PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a
+  All          PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a
+
 SourceSteward status: 3 repositories in /ws
   .            main  origin/main up to date  clean
 ! sub\x1b[31m  feat  origin/feat ahead 2, behind 1  1 staged, 2 unstaged, 3 untracked, 1 conflict
@@ -9,7 +15,7 @@ SourceSteward status: 3 repositories in /ws
   gone         -     not initialized, recorded aaaaaaa
 summary: 1 of 3 repositories need attention
 
-Notices
+Notices (3)
   no GitHub token (run: gh auth login): pull requests, releases and tags were not read
   origin is not a GitHub repository: remote sources of 1 repository were not read
   repository was not read locally: remote sources of 1 repository were not read

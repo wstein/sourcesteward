@@ -116,7 +116,7 @@ func runOnline(t *testing.T, local stwsync.StatusResult, forge statusremote.Clie
 func rootOnly() stwsync.StatusResult {
 	return stwsync.StatusResult{
 		SchemaVersion: 1, Command: "status", Root: statusPtr("/ws"),
-		Repos:   []stwsync.RepoStatus{{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Reasons: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}}},
+		Repos:   []stwsync.RepoStatus{{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Reasons: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}, RemoteBranches: statusInt(1)}},
 		Summary: stwsync.StatusSummary{Total: 1},
 	}
 }
@@ -132,7 +132,7 @@ func TestStatusIsOnlineByDefault(t *testing.T) {
 	if run.err != nil || run.opened != 1 || run.locals != 1 || run.discovered != 1 || forge.reads == 0 {
 		t.Fatalf("%+v %d reads", run, forge.reads)
 	}
-	for _, want := range []string{"Needs action: nothing\n", "Repositories\n", "summary: nothing needs action | 1 repository | 0 notices\n"} {
+	for _, want := range []string{"Needs action (0)\n  nothing\n", "Repositories (1)\n", "Notices (0)\n  none\n", "summary: nothing needs action | 1 repository | 0 notices\n"} {
 		if !strings.Contains(run.out, want) {
 			t.Errorf("missing %q in\n%s", want, run.out)
 		}
@@ -212,7 +212,7 @@ func TestStatusUsageErrors(t *testing.T) {
 func TestStatusExitCodes(t *testing.T) {
 	network := &hosting.WatchError{Code: hosting.CodeNetwork, Message: "boom"}
 	failed := runOnline(t, rootOnly(), &statusForge{err: network}, nil)
-	if failed.err != nil || !strings.Contains(failed.out, "Notices") || !strings.Contains(failed.out, "network error") || failed.errOut != "" {
+	if failed.err != nil || !strings.Contains(failed.out, "Notices (") || !strings.Contains(failed.out, "network error") || failed.errOut != "" {
 		t.Errorf("an attempted request that failed is a notice and exit 0 (it was exit 1 before the Counts amendment): %v\n%s", failed.err, failed.out)
 	}
 	forge := &statusForge{err: network}
@@ -257,10 +257,10 @@ func TestStatusWithoutATokenPrintsTheOfflineViewAndTheNotice(t *testing.T) {
 			t.Fatalf("%v: %v, %d reads, not the offline output followed by the notices:\n%s", args, run.err, forge.reads, run.out)
 		}
 		notices := strings.TrimPrefix(run.out, want)
-		if !strings.HasPrefix(notices, "\nNotices\n  ") || !strings.Contains(notices, "no GitHub token (run: gh auth login)") {
+		if !strings.HasPrefix(notices, "\nNotices (") || !strings.Contains(notices, ")\n  ") || !strings.Contains(notices, "no GitHub token (run: gh auth login)") {
 			t.Errorf("%v: %q", args, notices)
 		}
-		for _, unwanted := range []string{"Needs action", "remote:", "| 0 notices", "Repositories\n"} {
+		for _, unwanted := range []string{"Needs action", "remote:", "| 0 notices", "Repositories ("} {
 			if strings.Contains(run.out, unwanted) {
 				t.Errorf("%v: %q belongs to the online layout", args, unwanted)
 			}
@@ -337,7 +337,7 @@ func TestStatusOnlineNeverLeaksAToken(t *testing.T) {
 	const canary = "ghp_CANARY0123456789"
 	for _, args := range [][]string{{}, {"--json"}} {
 		run := runOnline(t, rootOnly(), &statusForge{}, errors.New("gh failed with token "+canary), args...)
-		if run.err != nil || (len(args) == 0 && !strings.Contains(run.out, "network error") && !strings.Contains(run.out, "hosting-api-unavailable")) {
+		if run.err != nil || (len(args) == 0 && (!strings.Contains(run.out, "Notices (") || strings.Contains(run.out, "Notices (0)"))) {
 			t.Errorf("%v: a reader that cannot be opened is a failed attempt, which is a notice and exit 0: %v\n%s", args, run.err, run.out)
 		}
 		for what, text := range map[string]string{"stdout": run.out, "stderr": run.errOut, "error": fmt.Sprint(run.err)} {
@@ -473,7 +473,7 @@ func TestStatusWithoutATokenListsTheWorktreesLikeTheOfflineOutput(t *testing.T) 
 	if run.err != nil || forge.reads != 0 || !strings.HasPrefix(run.out, offline.out) || !strings.Contains(run.out, "worktree /wt/one") {
 		t.Fatalf("%v\n%s", run.err, run.out)
 	}
-	if notices := strings.TrimPrefix(run.out, offline.out); !strings.HasPrefix(notices, "\nNotices\n  ") {
+	if notices := strings.TrimPrefix(run.out, offline.out); !strings.HasPrefix(notices, "\nNotices (") || !strings.Contains(notices, ")\n  ") {
 		t.Errorf("%q", notices)
 	}
 }
@@ -491,7 +491,7 @@ func TestStatusWithoutATokenColoursLikeTheOfflineOutput(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := renderStatusText(&offline, rep.Local, true, true, asciiStatusMarks); err != nil {
+	if err := renderStatusText(&offline, rep.Local, nil, true, true, asciiStatusMarks); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(coloured.String(), "\x1b[") || !strings.HasPrefix(coloured.String(), offline.String()) {
@@ -500,7 +500,7 @@ func TestStatusWithoutATokenColoursLikeTheOfflineOutput(t *testing.T) {
 	if got := ansi.ReplaceAllString(coloured.String(), ""); got != plain.String() {
 		t.Errorf("stripping the colour must leave the plain text:\n%s\n%s", got, plain.String())
 	}
-	if !strings.HasSuffix(coloured.String(), "\nNotices\n  no GitHub token (run: gh auth login)\n") {
+	if !strings.HasSuffix(coloured.String(), "\nNotices (1)\n  no GitHub token (run: gh auth login)\n") {
 		t.Errorf("%q", coloured.String())
 	}
 }
