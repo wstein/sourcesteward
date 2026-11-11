@@ -932,6 +932,91 @@ m LC13 'lint pr: the commit page bound is not reported' src/lint_pr_cmd.rs \
         }' '        if page == COMMITS_MAX_PAGE {}' \
   lint_pr_cmd truncation_at_the_page_bounds
 
+# sync --prune, --no-prune, --submodules (tests/it/sync_flags.rs, tests/it/git_runner_sync_ops.rs)
+m SP1 "--prune is not passed to git fetch" src/git_runner.rs \
+  'a.extend(v(&["--prune", "--no-prune-tags"]));' 'a.extend(v(&["--no-prune-tags"]));' \
+  sync_flags prune_deletes_a_gone_remote_tracking_ref_and_nothing_else
+m SP2 "--no-prune-tags is not passed: remote.origin.pruneTags deletes a local tag" src/git_runner.rs \
+  'a.extend(v(&["--prune", "--no-prune-tags"]));' 'a.extend(v(&["--prune"]));' \
+  sync_flags a_tag_is_never_pruned_even_with_prune_tags_configured
+m SP3 "--no-prune is not passed: fetch.prune wins" src/git_runner.rs \
+  'a.push("--no-prune".to_string());' 'a.push("--no-tags".to_string());' \
+  sync_flags no_prune_overrides_fetch_prune
+m SP4 "a refspec outside refs/remotes/origin/ is accepted by --prune" src/sync/fetch.rs \
+  'if !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {' 'if false && !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {' \
+  sync_flags a_refspec_that_writes_outside_the_namespace_refuses_prune_before_any_fetch
+m SP5 "--prune of an https remote is fetched by gix, which never prunes" src/sync/fetch.rs \
+  'Scheme::Https | Scheme::Http | Scheme::Git if prune == Prune::On => {' 'Scheme::Https | Scheme::Http | Scheme::Git if false && prune == Prune::On => {' \
+  sync_flags prune_for_an_https_remote_goes_through_the_git_runner_and_no_prune_stays_with_gix
+m SP6 "the deleted refs are not reported" src/sync/mod.rs \
+  'rec.pruned = before.difference(&after).cloned().collect();' 'rec.pruned = Vec::new();' \
+  sync_flags prune_deletes_a_gone_remote_tracking_ref_and_nothing_else
+m SP7 "the dry run does not count the refs a prune could reach" src/sync/mod.rs \
+  'let n = tracking_refs(&r.path).map(|s| s.len())?;' 'let n = 0;' \
+  sync_flags the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do
+m SP8 "--prune and --no-prune do not exclude each other" src/cli.rs \
+  '#[arg(long, conflicts_with = "no_prune")]' '#[arg(long)]' \
+  sync_flags prune_and_no_prune_exclude_each_other
+m SP9 "the fetch of the prune ops allows ext transports in the child" src/git_runner.rs \
+  'Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https",' 'Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https:ext",' \
+  git_runner_sync_ops the_submodule_operations_allow_no_transport_and_prune_keeps_the_fetch_transports
+m SM1 "the submodule pass is never run" src/cli.rs \
+  'if a.submodules {
+                let root' 'if false && a.submodules {
+                let root' \
+  sync_flags a_pinned_submodule_moves_to_the_recorded_commit_and_nothing_else_changes
+m SM2 "local changes in the submodule are ignored" src/sync/submodules.rs \
+  'if status::changes(&sub, false).map_or(true, |c| c.dirty_paths > 0) {' 'if false {' \
+  sync_flags local_changes_in_the_submodule_keep_it_where_it_is
+m SM3 "a recorded commit that is not a fast-forward is moved to" src/sync/submodules.rs \
+  '    let ff = sub
+        .merge_base(head, recorded)
+        .is_ok_and(|b| b.is_some_and(|b| b.detach() == head));' '    let ff = true;' \
+  sync_flags a_recorded_commit_that_is_not_a_fast_forward_is_not_applied
+m SM4 "a missing recorded commit is not noticed" src/sync/submodules.rs \
+  '    if !have {' '    if false && !have {' \
+  sync_flags a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_for_it
+m SM5 "the dry run moves the submodule" src/sync/submodules.rs \
+  '    if !o.apply {' '    if false && !o.apply {' \
+  sync_flags the_dry_run_names_the_move_and_writes_nothing
+m SM6 "the rules checkout is listed as an uninitialized submodule" src/sync/submodules.rs \
+  'if dir.join(".git").exists() || canon == skip || list.iter().any(|r| r.name == p) {' 'if dir.join(".git").exists() || list.iter().any(|r| r.name == p) {' \
+  sync_flags the_rules_checkout_is_not_reported_as_an_uninitialized_submodule
+m SM7 "a --repo filter still adds uninitialized submodules" src/sync/submodules.rs \
+  '    if !include_uninitialized {' '    if false {' \
+  sync_flags a_repo_filter_does_not_add_uninitialized_submodules
+m SM8 "an uninitialized submodule is not reported" src/sync/submodules.rs \
+  '    for p in repo::submodule_paths(root) {' '    for p in Vec::<String>::new() {' \
+  sync_flags an_uninitialized_submodule_is_unreachable_and_never_cloned
+m SM9 "repository hooks run during git (core.hooksPath override dropped)" src/git_runner.rs \
+  '    "core.hooksPath=/dev/null",' '    "core.pager=cat",' \
+  sync_flags hooks_of_the_submodule_do_not_run_during_the_move
+m SM10 "a filter driver in the submodule config is accepted" src/git_runner.rs \
+  'runs_a_command(section, sub_name, key) || section == "filter"' 'runs_a_command(section, sub_name, key)' \
+  sync_flags a_filter_driver_in_the_submodule_config_refuses_the_move
+m SM11 "the submodule operations allow network transports" src/git_runner.rs \
+  '            _ => "none",' '            _ => "file:ssh:git:http:https",' \
+  git_runner_sync_ops the_submodule_operations_allow_no_transport_and_prune_keeps_the_fetch_transports
+m SM12 "submodule update runs with a fetch" src/git_runner.rs \
+  'let mut a = v(&["submodule", "update", "--no-fetch", "--checkout", "--"]);' 'let mut a = v(&["submodule", "update", "--checkout", "--"]);' \
+  git_runner_sync_ops the_new_operations_have_fixed_argument_vectors
+m SM13 "a submodule path through a symbolic link is followed" src/sync/submodules.rs \
+  '    if symlinked_path(root, &rel) {' '    if false && symlinked_path(root, &rel) {' \
+  sync_flags a_submodule_path_through_a_symbolic_link_is_left_alone
+m SM14 "URL userinfo is printed in the rewrite note" src/sync/submodules.rs \
+  'esc(&git_runner::redact(u.as_deref().unwrap_or(""), &[]))' 'esc(u.as_deref().unwrap_or(""))' \
+  sync_flags a_changed_url_in_gitmodules_is_reported_without_credentials
+m SM15 "a move that did not land is reported as moved" src/sync/submodules.rs \
+  '    if landed != Some(recorded) {' '    if false && landed != Some(recorded) {' \
+  sync_flags a_move_that_git_did_not_do_is_a_failure_not_a_success
+m SM16 "a submodule path with spaces is accepted" src/add.rs \
+  "if !s
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))" "if false && !s
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))" \
+  sync_flags a_submodule_path_that_is_not_a_plain_path_is_unreachable
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
