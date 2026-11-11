@@ -176,7 +176,7 @@ impl Op {
                 new_base,
                 new_head,
             } => {
-                let mut a = v(&["range-diff", "--no-color", "--no-patch"]);
+                let mut a = v(&["range-diff", "--no-color", "--no-patch", "--no-notes"]);
                 // the two-range form; git has no four-argument form
                 a.push(format!("{}..{}", old_base.as_str(), old_head.as_str()));
                 a.push(format!("{}..{}", new_base.as_str(), new_head.as_str()));
@@ -374,6 +374,11 @@ pub enum GitError {
     },
     /// A variable part of the vector is out of range (a pull request number of 0).
     Argument(String),
+    /// The remote's transport is not one the installed git fetches for stw (https, http, git and others stay
+    /// with gix or are not run).
+    Transport {
+        scheme: String,
+    },
 }
 
 impl GitError {
@@ -390,6 +395,7 @@ impl GitError {
             GitError::Repo(_) => "repository",
             GitError::Refused { .. } => "refused-config",
             GitError::Argument(_) => "argument",
+            GitError::Transport { .. } => "transport",
         }
     }
 
@@ -401,6 +407,7 @@ impl GitError {
                 | GitError::Version { .. }
                 | GitError::UnknownOption(_)
                 | GitError::Refused { .. }
+                | GitError::Transport { .. }
         )
     }
 }
@@ -427,6 +434,11 @@ impl std::fmt::Display for GitError {
             GitError::Spawn(m) => write!(f, "git could not be started: {m}"),
             GitError::Repo(m) => write!(f, "repository path refused: {m}"),
             GitError::Argument(m) => write!(f, "invalid argument: {m}"),
+            GitError::Transport { scheme } => write!(
+                f,
+                "origin uses {scheme}: the installed git fetches ssh and local remotes only, an https remote is \
+                 fetched by gix (not built for the pull request head)"
+            ),
             GitError::Refused { key } if key == "info/attributes" => f.write_str(
                 "the repository's info/attributes has active lines, which can hide a changed file from the \
                  patch comparison; stw does not run git with it (empty the file or compare by hand)",
@@ -702,6 +714,9 @@ impl Runner {
                 required: op.min_version(),
             });
         }
+        if matches!(op, Op::FetchPullHead { .. }) {
+            check_fetch_transport(repo)?;
+        }
         refuse_local_command_config(repo, &op)?;
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
@@ -879,6 +894,25 @@ fn refuse_local_command_config(repo: &Path, op: &Op) -> std::result::Result<(), 
         refuse_info_attributes(repo)?;
     }
     Ok(())
+}
+
+/// `FetchPullHead` runs for an ssh, scp-like, `file://` or local-path `origin` only (as `sync` does for
+/// `FetchOrigin`); anything else is refused typed before git starts: no DNS lookup, no helper program.
+fn check_fetch_transport(repo: &Path) -> std::result::Result<(), GitError> {
+    let r = gix::open_opts(repo, gix::open::Options::isolated())
+        .map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
+    let remote = r
+        .find_remote("origin")
+        .map_err(|e| GitError::Repo(format!("no usable remote origin: {e}")))?;
+    let url = remote
+        .url(gix::remote::Direction::Fetch)
+        .ok_or_else(|| GitError::Repo("remote origin has no fetch url".into()))?;
+    match url.scheme {
+        gix::url::Scheme::Ssh | gix::url::Scheme::File => Ok(()),
+        ref other => Err(GitError::Transport {
+            scheme: other.as_str().to_string(),
+        }),
+    }
 }
 
 /// `info/attributes` is read in spite of `GIT_ATTR_SOURCE`; a line in it (`* -diff`) can turn a changed file into

@@ -147,6 +147,7 @@ fn range_diff_argv_is_fixed_and_pins_the_patch_comparison() {
             "range-diff",
             "--no-color",
             "--no-patch",
+            "--no-notes",
             &format!("{}..{}", "1".repeat(40), "2".repeat(40)),
             &format!("{}..{}", "3".repeat(40), "4".repeat(40)),
         ]
@@ -427,4 +428,68 @@ fn ref_names(repo: &Path) -> Vec<String> {
     walk(&repo.join(".git/refs"), "refs/", &mut v);
     v.sort();
     v
+}
+
+#[test]
+fn pull_head_fetch_refuses_http_https_git_and_unknown_transports_before_git_starts() {
+    // Chartroom decision: the fetch of an https remote stays with gix; the installed git fetches ssh and local remotes
+    // only. A stub git logs every call: for a refused URL no `fetch` runs (and no DNS lookup is possible).
+    let t = tmp();
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    let log = bin.join("calls.log");
+    script(
+        &bin,
+        "git",
+        &format!(
+            "if [ \"$1\" = \"--version\" ]; then echo 'git version 2.47.3'; exit 0; fi\necho \"CALL $*\" >> '{}'\nexit 0",
+            log.display()
+        ),
+    );
+    let r = Runner::from_env(osv(&[(
+        "PATH",
+        &format!("{}:/usr/bin:/bin", bin.display()),
+    )]));
+    let refused = [
+        "https://github.com/o/r.git",
+        "http://example.invalid/o/r.git",
+        "git://example.invalid/o/r.git",
+        "ext::sh -c touch% /tmp/x",
+        "ftp://example.invalid/o/r",
+    ];
+    for url in refused {
+        let fx = Fx::new();
+        fx.set_origin_url(url);
+        let e = r.run(&fx.path, Op::FetchPullHead { pr: 7 }).unwrap_err();
+        assert!(matches!(e, GitError::Transport { .. }), "{url}: {e:?}");
+        assert!(e.is_unsupported(), "{url}");
+        assert_eq!(e.kind(), "transport");
+        assert!(e.to_string().contains("gix"), "{url}: {e}");
+    }
+    assert!(!log.exists(), "git ran for a refused remote");
+    // ssh (both spellings), file and a local path reach git
+    for url in [
+        "ssh://git@example.invalid/o/r.git",
+        "git@example.invalid:o/r.git",
+        "file:///nonexistent/up",
+        "/nonexistent/up",
+    ] {
+        let fx = Fx::new();
+        fx.set_origin_url(url);
+        let before = std::fs::read_to_string(&log).unwrap_or_default();
+        r.run(&fx.path, Op::FetchPullHead { pr: 7 }).unwrap();
+        let after = std::fs::read_to_string(&log).unwrap();
+        assert!(
+            after[before.len()..].contains("fetch"),
+            "{url}: git did not run: {after}"
+        );
+    }
+    // no origin at all: typed repository error, git not started
+    let fx = Fx::new();
+    fx.set_origin_url("");
+    let e = r.run(&fx.path, Op::FetchPullHead { pr: 7 });
+    assert!(e.is_err());
+    // the other fetch op is not changed by this rule
+    let fx = Fx::new();
+    r.run(&fx.path, Op::FetchOrigin).unwrap();
 }
