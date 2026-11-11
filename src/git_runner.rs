@@ -208,13 +208,6 @@ pub enum Op {
     /// Fetch `+refs/pull/<pr>/head` of `origin` into `refs/stw/carry-over/pr-<pr>`: objects and that private
     /// ref only (no tags, no FETCH_HEAD, no configured refmap). For an ssh or local-path remote, as `FetchOrigin`.
     FetchPullHead { pr: u64 },
-    /// `git update-ref --create-reflog <recovery ref> <oid> <zeros>`: the recovery ref of a `stw sync` run holds the old
-    /// tip of a branch before the run moves it. Create-only (the expected old value is the null id), so a ref of the
-    /// same name is never overwritten.
-    RecoveryRefCreate { run: RunId, n: u32, oid: Hex40 },
-    /// `git update-ref --no-deref -d <recovery ref> <oid>`: delete one recovery ref, only while it still holds `oid`
-    /// (retention of old runs).
-    RecoveryRefDelete { run: RunId, n: u32, oid: Hex40 },
     /// `git update-ref --no-deref refs/heads/<name> <new> <expected>`: move a branch that is checked out nowhere, only
     /// while it still points at `expected` (compare and swap; `stw sync restore`). Never forced.
     UpdateBranchCas {
@@ -248,9 +241,6 @@ impl Op {
             Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
                 "a pull request number starts at 1".into(),
             )),
-            Op::RecoveryRefCreate { n: 0, .. } | Op::RecoveryRefDelete { n: 0, .. } => Err(
-                GitError::Argument("a recovery ref number starts at 1".into()),
-            ),
             _ => Ok(()),
         }
     }
@@ -310,20 +300,6 @@ impl Op {
                     "origin",
                 ]);
                 a.push(format!("+refs/pull/{pr}/head:{PULL_HEAD_NAMESPACE}pr-{pr}"));
-                a
-            }
-            Op::RecoveryRefCreate { run, n, oid } => {
-                let mut a = v(&["update-ref", "--create-reflog", "-m"]);
-                a.push(format!("stw sync {run}"));
-                a.push(recovery_ref(run, *n));
-                a.push(oid.as_str().to_string());
-                a.push("0".repeat(40));
-                a
-            }
-            Op::RecoveryRefDelete { run, n, oid } => {
-                let mut a = v(&["update-ref", "--no-deref", "-d"]);
-                a.push(recovery_ref(run, *n));
-                a.push(oid.as_str().to_string());
                 a
             }
             Op::UpdateBranchCas {

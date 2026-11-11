@@ -1,6 +1,6 @@
 //! `stw sync restore [PATH] [--run ID]` (port of `internal/stwsync/restore.go`; Go cases: `restore_test.go`, the help text
 //! of `cli/sync.go`). Repositories of `sync_journal::setup`: the root `ws` and the submodule `sub`, both behind origin.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 use stw::git_runner::{Hex40, RunId};
@@ -303,7 +303,7 @@ fn a_crash_before_the_branch_moved_leaves_a_record_that_restores_as_already_rest
     let id = journal::new_run_id();
     let mut jr = Journal::new(&r, id.clone());
     jr.prepare(
-        &j.ws,
+        &r,
         "refs/heads/main",
         "w",
         Hex40::parse(&j.ws_old).unwrap(),
@@ -328,7 +328,7 @@ fn a_crash_after_the_branch_moved_and_before_the_record_was_completed_is_restore
     let id = journal::new_run_id();
     let mut jr = Journal::new(&r, id.clone());
     jr.prepare(
-        &j.ws,
+        &r,
         "refs/heads/main",
         "w",
         Hex40::parse(&j.ws_old).unwrap(),
@@ -717,4 +717,66 @@ fn a_journal_directory_that_is_a_symbolic_link_is_reported() {
         );
         assert_eq!(j.tip(&j.ws), j.ws_new);
     }
+}
+
+#[test]
+fn a_rebase_of_the_branch_in_a_linked_worktree_stops_the_restore() {
+    let j = setup();
+    run(&j);
+    j.w.git(&j.ws, &["checkout", "-q", "-b", "other"]);
+    let wt = j.w.p("linked");
+    j.w.git(
+        &j.ws,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "--detach",
+            wt.to_str().unwrap(),
+            "main",
+        ],
+    );
+    // the linked worktree has HEAD detached and a rebase of `main` running (what a stopped rebase leaves)
+    let gd = PathBuf::from(j.w.git(&wt, &["rev-parse", "--path-format=absolute", "--git-dir"]));
+    std::fs::create_dir(gd.join("rebase-merge")).unwrap();
+    std::fs::write(gd.join("rebase-merge/head-name"), "refs/heads/main\n").unwrap();
+    let (code, v, _) = restore(&j, &[]);
+    assert_eq!(code, 1, "{v}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "changed-since", "{r}");
+    assert_eq!(r["reason"], "the branch is checked out in another worktree");
+    assert_eq!(j.tip(&j.ws), j.ws_new);
+    // a bisect in a linked worktree stops it as well
+    std::fs::remove_dir_all(gd.join("rebase-merge")).unwrap();
+    std::fs::write(gd.join("BISECT_START"), "main\n").unwrap();
+    let (_, v, _) = restore(&j, &[]);
+    assert_eq!(repo(&v, "ws")["result"], "changed-since", "{v}");
+    // without an operation the detached worktree does not hold the branch
+    std::fs::remove_file(gd.join("BISECT_START")).unwrap();
+    let (code, v, err) = restore(&j, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(j.tip(&j.ws), j.ws_old);
+}
+
+#[test]
+fn reasons_are_escaped_once_and_only_in_the_output() {
+    let j = setup();
+    let id = "29990101T000000000000Z-0000000b";
+    let e = format!(
+        r#"{{"n":1,"ref":"refs/heads/main","worktree":"","old_oid":"{}","planned_new_oid":"","new_oid":"","orig_head":"","stash_oid":"","recovery_ref":"x\u001b[31m\ny","state":"prepared","reason":""}}"#,
+        j.ws_old
+    );
+    write_record(&j, &j.ws, id, &record(id, &e));
+    let (_, out, _) = j.text(&["restore"]);
+    assert!(out.contains("x\\u{1b}[31m\\ny"), "{out}");
+    assert!(!out.contains("\\\\"), "escaped twice: {out}");
+    // JSON carries the text as it is (JSON escapes it)
+    let (_, v, _) = restore(&j, &[]);
+    assert!(
+        repo(&v, "ws")["reason"]
+            .as_str()
+            .unwrap()
+            .contains("x\u{1b}[31m\ny"),
+        "{v}"
+    );
 }

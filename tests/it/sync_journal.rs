@@ -370,7 +370,7 @@ fn the_recovery_ref_and_the_record_exist_before_the_branch_moves() {
     let mut jr = Journal::new(&repo, id.clone());
     let i = jr
         .prepare(
-            &j.ws,
+            &repo,
             "refs/heads/main",
             &j.ws.display().to_string(),
             old,
@@ -403,13 +403,13 @@ fn a_run_id_is_never_used_twice() {
     );
     let mut first = Journal::new(&repo, id.clone());
     first
-        .prepare(&j.ws, "refs/heads/main", "w", old, new)
+        .prepare(&repo, "refs/heads/main", "w", old, new)
         .unwrap();
     // a second run with the same ID (a collision): its recovery ref already exists, so it stops, and the record of
     // the first stays as it was
     let mut second = Journal::new(&repo, id.clone());
     let e = second
-        .prepare(&j.ws, "refs/heads/other", "w", old, new)
+        .prepare(&repo, "refs/heads/other", "w", old, new)
         .unwrap_err();
     assert!(e.contains("recovery ref"), "{e}");
     let rec = journal::load(&journal::dir_of(&repo), &id)
@@ -505,7 +505,7 @@ fn retention_keeps_ten_runs_and_spares_what_is_not_clean() {
     let stuck = RunId::parse("20200101T000000000000Z-00000001").unwrap();
     let mut jr = Journal::new(&repo, stuck.clone());
     jr.prepare(
-        &j.ws,
+        &repo,
         "refs/heads/main",
         "w",
         Hex40::parse(&j.ws_old).unwrap(),
@@ -514,6 +514,22 @@ fn retention_keeps_ten_runs_and_spares_what_is_not_clean() {
     .unwrap();
     let dir = journal::dir_of(&repo);
     std::fs::write(dir.join("README"), "not a record").unwrap();
+    // an old completed record whose entry names a ref that is not its own recovery ref: retention never deletes
+    // that ref, and so the record stays; the real recovery ref of the entry is not touched either
+    let foreign = "20200101T000000000000Z-00000002";
+    let body = format!(
+        r#"{{"type":"sync","schema_version":1,"run_id":"{foreign}","remote":"","started":"2020-01-01T00:00:00Z","entries":[{{"n":1,"ref":"refs/heads/main","worktree":"","old_oid":"{old}","planned_new_oid":"{old}","new_oid":"{old}","orig_head":"","stash_oid":"","recovery_ref":"refs/heads/main","state":"completed","reason":""}}]}}"#,
+        old = j.ws_old
+    );
+    std::fs::write(dir.join(format!("{foreign}.json")), body).unwrap();
+    j.w.git(
+        &j.ws,
+        &[
+            "update-ref",
+            &format!("refs/stw/recovery/sync/{foreign}/1"),
+            &j.ws_old,
+        ],
+    );
     for n in 0..11 {
         j.news(&format!("n{n}"));
         let (_, v, err) = j.w.stw(&j.ws, &[]);
@@ -555,6 +571,12 @@ fn retention_keeps_ten_runs_and_spares_what_is_not_clean() {
     // the incomplete one stays too, and the foreign file is ignored and untouched
     assert!(kept.contains(&stuck.to_string()));
     assert!(dir.join("README").exists());
+    assert!(
+        kept.contains(&foreign.to_string()),
+        "a record with a foreign ref stays"
+    );
+    assert!(j.recovery(&j.ws, foreign, 1).is_some());
+    assert!(!j.tip(&j.ws).is_empty(), "the branch it named is untouched");
 }
 
 #[test]
@@ -574,42 +596,6 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
     let b = Hex40::parse(&"b".repeat(40)).unwrap();
     let r = "refs/stw/recovery/sync/20261111T123456123456Z-0a1b2c3d/2";
     assert_eq!(recovery_ref(&run, 2), r);
-    assert_eq!(
-        tail(
-            &argv(Op::RecoveryRefCreate {
-                run: run.clone(),
-                n: 2,
-                oid: a
-            }),
-            "update-ref"
-        ),
-        [
-            "update-ref".to_string(),
-            "--create-reflog".into(),
-            "-m".into(),
-            "stw sync 20261111T123456123456Z-0a1b2c3d".into(),
-            r.into(),
-            "a".repeat(40),
-            "0".repeat(40)
-        ]
-    );
-    assert_eq!(
-        tail(
-            &argv(Op::RecoveryRefDelete {
-                run: run.clone(),
-                n: 2,
-                oid: a
-            }),
-            "update-ref"
-        ),
-        [
-            "update-ref".to_string(),
-            "--no-deref".into(),
-            "-d".into(),
-            r.into(),
-            "a".repeat(40)
-        ]
-    );
     let branch = BranchRef::parse("refs/heads/feature/x").unwrap();
     assert_eq!(
         tail(
@@ -692,24 +678,6 @@ fn only_a_well_formed_run_id_or_branch_reaches_an_argument_vector() {
         assert!(BranchRef::parse(bad).is_none(), "{bad:?}");
     }
     assert!(BranchRef::parse("refs/heads/feature/ok-1.x").is_some());
-    let t = scratch();
-    let r = Runner::from_env(vec![("PATH".into(), "/usr/bin".into())]);
-    let id = RunId::parse("20261111T123456Z-0a1b2c3d").unwrap();
-    let h = Hex40::parse(&"a".repeat(40)).unwrap();
-    for op in [
-        Op::RecoveryRefCreate {
-            run: id.clone(),
-            n: 0,
-            oid: h,
-        },
-        Op::RecoveryRefDelete {
-            run: id,
-            n: 0,
-            oid: h,
-        },
-    ] {
-        assert!(matches!(r.argv(t.path(), op), Err(GitError::Argument(_))));
-    }
 }
 
 #[test]
@@ -736,4 +704,60 @@ fn a_reset_refuses_a_repository_that_names_a_filter_driver() {
         matches!(&e, GitError::Refused { key } if key == "filter.lfs.smudge"),
         "{e}"
     );
+}
+
+#[test]
+fn a_repository_config_that_names_a_program_stops_nothing_and_no_git_is_needed() {
+    // The journal step goes through gix: a local core.sshCommand, credential helper or url rewrite does not refuse it,
+    // and a run (here: from the refs already fetched) needs no `git` on PATH.
+    let j = setup();
+    for dir in [&j.ws, &j.sub] {
+        j.w.git(dir, &["fetch", "-q", "origin"]);
+        j.w.git(dir, &["config", "core.sshCommand", "false"]);
+        j.w.git(dir, &["config", "credential.helper", "false"]);
+        j.w.git(
+            dir,
+            &[
+                "config",
+                "url.https://example.invalid/.insteadOf",
+                "ssh://example.invalid/",
+            ],
+        );
+    }
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", &j.w.home)
+        .current_dir(&j.w.base)
+        .args(["sync", "--offline", "--json", "--root"])
+        .arg(&j.ws)
+        .output()
+        .unwrap();
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(o.status.code(), Some(0), "{v}");
+    let id = v["run_id"].as_str().expect("journaled").to_string();
+    for (dir, old, new) in [
+        (&j.ws, &j.ws_old, &j.ws_new),
+        (&j.sub, &j.sub_old, &j.sub_new),
+    ] {
+        assert_eq!(&j.tip(dir), new);
+        assert_eq!(j.recovery(dir, &id, 1).as_deref(), Some(old.as_str()));
+        assert!(j.journal_file(dir, &id).is_file());
+    }
+    let log = j
+        .git_dir(&j.ws)
+        .join(format!("logs/refs/stw/recovery/sync/{id}/1"));
+    assert!(log.is_file(), "the recovery ref has a reflog");
+    // restore needs git (reset --keep): the refusal of the repository's own config is said clearly
+    let (code, v, _) = j.w.stw(&j.ws, &["restore"]);
+    assert_eq!(code, 1, "{v}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "failed", "{r}");
+    assert!(
+        r["reason"]
+            .as_str()
+            .unwrap()
+            .contains("own git config sets core.sshcommand"),
+        "{r}"
+    );
+    assert_eq!(j.tip(&j.ws), j.ws_new);
 }

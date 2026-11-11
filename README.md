@@ -5,7 +5,9 @@ Implementation scope, feature decisions, dependencies, and acceptance gates: [Ru
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
-nowhere else): today for the fetch of `sync` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
+nowhere else): today for the fetch of `sync` with ssh and local-path remotes and for `sync restore` (`git reset --keep`,
+`git update-ref`). The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
+(and the repository's own config cannot block them). `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
 driver such as git-lfs can make it look modified, and `sync` refuses, before any write, a fast-forward that
@@ -667,8 +669,8 @@ and index:
 
 Every branch a run moves is journaled first, like in Go (`internal/stwsync/journal.go`; the record is the same format
 and a record of either tool is read by the other). After all checks passed and the index lock is held, and before the
-branch ref moves, `sync` creates the recovery ref `refs/stw/recovery/sync/<run id>/<n>` (create-only, it holds the old
-tip, so the objects stay reachable) and then writes the record `<git common dir>/stw/sync/<run id>.json` (state `prepared`,
+branch ref moves, `sync` creates the recovery ref `refs/stw/recovery/sync/<run id>/<n>` (create-only, written through gix with a reflog, no program
+is started; it holds the old tip, so the objects stay reachable) and then writes the record `<git common dir>/stw/sync/<run id>.json` (state `prepared`,
 with the planned new tip); after the move the record says `completed` (or `failed`). The record is replaced atomically
 (temporary file, fsync, rename, fsync of the directory); the first write refuses an existing file. Directories are `0700`, files
 `0600`; a symbolic link as `stw`, `sync` or a record is refused. If the recovery ref or the record cannot be written, the
@@ -729,13 +731,17 @@ changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`
 Deviations from Go: (1) the workspace is `PATH` or `--root` (both is a usage error), and the repositories are the root and the top-level
 submodules of `.gitmodules` (Go walks the index gitlinks, nested ones too); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
 result, exit 1); (3) a record is also refused when a `ref` is not a valid branch name by the rules of git, an OID is not 40 digits
-(a 64 digit OID of a SHA-256 repository is `bad-record`: stw has no SHA-256 support) or the file is a symbolic link; (4) any merge, rebase or similar
-operation in the main worktree stops the restore of that repository (Go: only an operation that involves the branch, also in linked
-worktrees); (5) a branch ref that is symbolic is `changed-since` before the tips are compared; (6) an unusable journal
+(a 64 digit OID of a SHA-256 repository is `bad-record`: stw has no SHA-256 support) or the file is a symbolic link; (4) any merge, rebase, bisect, cherry-pick or revert
+running in any worktree of the repository (main, linked, relative or dead registration) stops the restore of that repository (Go: only an
+operation that involves the branch); (5) a branch ref that is symbolic is `changed-since` before the tips are compared; (6) an unusable journal
 directory or record is reported as a `failed` entry of that repository, never skipped; (7) the JSON layout is the Rust one (`repos[]` as in
 `sync`, `summary` keys with underscores, `rejected_paths`), the text has no per-branch `moved` arrows but the abbreviated tips in the reason;
 (8) `git reset --keep` is not a compare and swap: between the check and the reset a commit could be added to the branch; the result is then
-`raced` or the commit is only in the reflog (Go has the same window).
+`raced` or the commit is only in the reflog (Go has the same window); (9) `reset --keep` and `update-ref` run through the runner, which
+refuses a repository whose own git config names a program (`core.sshCommand`, a credential helper, `include`, `filter.*` for the reset, ...):
+the entry is `failed` with `git-failed: the repository's own git config sets <key>` (Go has no such refusal; a run itself is not affected);
+(10) like Go and `git checkout`, `reset --keep` overwrites an ignored file that lies in the way of a file of the old tip (it only protects
+tracked local changes and untracked files that are not ignored).
 
 ## Known limits of a `sync` run
 

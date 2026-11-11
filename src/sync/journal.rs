@@ -17,14 +17,14 @@
 //!   keep their record and recovery refs (`retain`).
 //!
 //! Everything read from a record is data: the file name and the `run_id` inside must agree, the ref must be the entry's
-//! own recovery ref, an OID must be 40 lower-case hex digits. Git runs through the runner only.
+//! own recovery ref, an OID must be 40 lower-case hex digits. The recovery refs are written and deleted through gix (create-only, delete only with the expected value), so a run needs no `git`.
 use std::collections::BTreeSet;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
-use crate::git_runner::{self, recovery_ref, Hex40, Op, RunId};
+use crate::git_runner::{recovery_ref, Hex40, RunId};
 
 pub const STATE_PREPARED: &str = "prepared";
 pub const STATE_COMPLETED: &str = "completed";
@@ -315,23 +315,14 @@ impl Journal {
     /// left. Nothing is changed besides these two.
     pub fn prepare(
         &mut self,
-        repo_dir: &Path,
+        repo: &gix::Repository,
         reference: &str,
         worktree: &str,
         old: Hex40,
         planned: Hex40,
     ) -> Result<usize, String> {
         let n = self.rec.entries.len() as u32 + 1;
-        let runner = git_runner::shared();
-        runner
-            .run(
-                repo_dir,
-                Op::RecoveryRefCreate {
-                    run: self.id.clone(),
-                    n,
-                    oid: old,
-                },
-            )
+        create_recovery_ref(repo, &recovery_ref(&self.id, n), old, &self.id)
             .map_err(|e| format!("recovery ref: {e}"))?;
         self.rec.entries.push(Entry {
             n,
@@ -345,14 +336,7 @@ impl Journal {
         });
         if let Err(e) = self.write() {
             self.rec.entries.pop();
-            let _ = runner.run(
-                repo_dir,
-                Op::RecoveryRefDelete {
-                    run: self.id.clone(),
-                    n,
-                    oid: old,
-                },
-            );
+            let _ = delete_recovery_ref(repo, &recovery_ref(&self.id, n), old);
             return Err(e);
         }
         Ok(self.rec.entries.len() - 1)
@@ -430,7 +414,7 @@ impl Journal {
     /// Last step of a run that completed a change here: drop the record and the recovery refs of the completed runs
     /// beyond the `RETAINED_RUNS` most recent ones (this run counts and is never dropped). A run with a `prepared`
     /// entry is kept until a restore has dealt with it. Best effort: a failure leaves the older runs in place.
-    pub fn retain(&self, repo: &gix::Repository, repo_dir: &Path) {
+    pub fn retain(&self, repo: &gix::Repository) {
         let Ok(ids) = list_ids(&self.dir) else {
             return;
         };
@@ -445,7 +429,7 @@ impl Journal {
         // `list_ids` is sorted by the run order already
         while done.len() > RETAINED_RUNS - 1 {
             let old = done.remove(0);
-            if drop_recovery_refs(repo, repo_dir, &old) {
+            if drop_recovery_refs(repo, &old) {
                 let _ = std::fs::remove_file(self.dir.join(format!("{}.json", old.run_id)));
             }
         }
@@ -455,7 +439,7 @@ impl Journal {
 /// Delete the recovery refs of one run; true when none is left. The record is data: only the entry's own name
 /// `refs/stw/recovery/sync/<run>/<n>`, a valid old OID as the expected value and a ref that is not symbolic qualify. A
 /// ref that cannot be read keeps the record.
-fn drop_recovery_refs(repo: &gix::Repository, repo_dir: &Path, rec: &Record) -> bool {
+fn drop_recovery_refs(repo: &gix::Repository, rec: &Record) -> bool {
     let Some(id) = RunId::parse(&rec.run_id) else {
         return false;
     };
@@ -483,17 +467,70 @@ fn drop_recovery_refs(repo: &gix::Repository, repo_dir: &Path, rec: &Record) -> 
                 continue;
             }
         }
-        let gone = git_runner::shared().run(
-            repo_dir,
-            Op::RecoveryRefDelete {
-                run: id.clone(),
-                n: e.n,
-                oid: old,
-            },
-        );
+        let gone = delete_recovery_ref(repo, &own, old);
         if gone.is_err() {
             clean = false;
         }
     }
     clean
+}
+
+/// Create the recovery ref `name` at `oid` with a reflog entry. Create-only: an existing ref of that name is never
+/// replaced (the expected old value is "must not exist"). Through gix: no program is started, so the step does not depend
+/// on `git` or on the repository's own config.
+fn create_recovery_ref(
+    repo: &gix::Repository,
+    name: &str,
+    oid: Hex40,
+    run: &RunId,
+) -> Result<(), String> {
+    use gix::refs::transaction::{Change, LogChange, PreviousValue, RefEdit, RefLog};
+    use gix::refs::Target;
+    let id = gix::ObjectId::from_hex(oid.as_str().as_bytes()).map_err(|e| e.to_string())?;
+    let name: gix::refs::FullName = name
+        .try_into()
+        .map_err(|e: gix::refs::name::Error| e.to_string())?;
+    // gix lets "must not exist" pass when the ref already holds the same value: name the collision here
+    if repo
+        .try_find_reference(&name)
+        .map_err(|e| e.to_string())?
+        .is_some()
+    {
+        return Err("the ref exists already".into());
+    }
+    repo.edit_reference(RefEdit {
+        change: Change::Update {
+            log: LogChange {
+                mode: RefLog::AndReference,
+                force_create_reflog: true,
+                message: format!("stw sync {run}").into(),
+            },
+            expected: PreviousValue::MustNotExist,
+            new: Target::Object(id),
+        },
+        name,
+        deref: false,
+    })
+    .map(|_| ())
+    .map_err(|e| e.to_string())
+}
+
+/// Delete the recovery ref `name` only while it still holds `oid`.
+fn delete_recovery_ref(repo: &gix::Repository, name: &str, oid: Hex40) -> Result<(), String> {
+    use gix::refs::transaction::{Change, PreviousValue, RefEdit, RefLog};
+    use gix::refs::Target;
+    let id = gix::ObjectId::from_hex(oid.as_str().as_bytes()).map_err(|e| e.to_string())?;
+    let name: gix::refs::FullName = name
+        .try_into()
+        .map_err(|e: gix::refs::name::Error| e.to_string())?;
+    repo.edit_reference(RefEdit {
+        change: Change::Delete {
+            expected: PreviousValue::MustExistAndMatch(Target::Object(id)),
+            log: RefLog::AndReference,
+        },
+        name,
+        deref: false,
+    })
+    .map(|_| ())
+    .map_err(|e| e.to_string())
 }

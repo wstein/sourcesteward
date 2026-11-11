@@ -264,7 +264,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
                 let mut j = journal::Journal::new(&repo, run.clone());
                 let i = j
                     .prepare(
-                        &r.path,
+                        &repo,
                         &format!("refs/heads/{branch}"),
                         &p2s(&r.path),
                         old,
@@ -281,7 +281,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
                     err = None;
                     if let Some((mut j, i)) = entry {
                         match j.finish(i, journal::STATE_COMPLETED, &b.to_string(), "") {
-                            Ok(()) => j.retain(&repo, &r.path),
+                            Ok(()) => j.retain(&repo),
                             Err(e) => {
                                 reason += &format!("; the journal record stays incomplete: {e}")
                             }

@@ -117,7 +117,6 @@ pub fn restore(repos: &[RepoRef], run: Option<&str>) -> Restored {
     // a journal directory that is unusable is reported, never skipped silently
     for s in &sources {
         if let Err(e) = &s.ids {
-            let (e, _) = escape_untrusted(e, 300);
             out.repos.push(rec_for(
                 s.r,
                 FAILED,
@@ -152,14 +151,11 @@ pub fn restore(repos: &[RepoRef], run: Option<&str>) -> Restored {
         }
         match journal::load(&s.dir, &id) {
             Ok(None) => None,
-            Err(e) => {
-                let (e, _) = escape_untrusted(&e, 300);
-                Some(vec![rec_for(
-                    s.r,
-                    FAILED,
-                    format!("the journal record cannot be used: {e}"),
-                )])
-            }
+            Err(e) => Some(vec![rec_for(
+                s.r,
+                FAILED,
+                format!("the journal record cannot be used: {e}"),
+            )]),
             Ok(Some(rec)) => Some(restore_record(s, &id, rec)),
         }
     });
@@ -181,7 +177,7 @@ fn restore_record(s: &Source, id: &RunId, rec: Record) -> Vec<RestoreRec> {
     let repo = match repo::open(&s.r.path) {
         Ok(r) => r,
         Err(e) => {
-            let (e, _) = escape_untrusted(&e.to_string(), 300);
+            let e = e.to_string();
             return vec![rec_for(
                 s.r,
                 FAILED,
@@ -240,7 +236,7 @@ fn restore_entry(
     }
     let expected = expected.flatten();
     if en.state == journal::STATE_PREPARED && expected.is_none() {
-        let (named, _) = escape_untrusted(&en.recovery_ref, 200);
+        let named = &en.recovery_ref;
         rp.result = JOURNAL_INCOMPLETE;
         rp.reason = format!(
             "no planned new tip is recorded; the recovery ref {named} names the old tip for a manual reset"
@@ -278,7 +274,6 @@ fn restore_entry(
                 expected_text,
                 "restored after an incomplete record",
             ) {
-                let (e, _) = escape_untrusted(&e, 200);
                 rp.reason += &format!("; the record stays incomplete: {e}");
             }
         }
@@ -315,7 +310,7 @@ fn restore_entry(
         }
         rp.via = Some(git_runner::VIA);
         if let Err(e) = runner.run(&r.path, Op::ResetKeep { target: old }) {
-            let (e, _) = escape_untrusted(&e.to_string(), 300);
+            let e = e.to_string();
             return failed(rp, format!("git-failed: {e}"));
         }
         let now = repo
@@ -346,10 +341,24 @@ fn restore_entry(
         // git refused the expected value: someone moved the branch meanwhile
         Err(GitError::Exit { .. }) => changed(rp, "the branch moved while restoring"),
         Err(e) => {
-            let (e, _) = escape_untrusted(&e.to_string(), 300);
+            let e = e.to_string();
             failed(rp, format!("git-failed: {e}"))
         }
     }
+}
+
+/// A rebase, bisect, merge, cherry-pick or revert is running in the worktree whose git directory is `git_dir`.
+fn operation_in(git_dir: &std::path::Path) -> bool {
+    [
+        "rebase-merge",
+        "rebase-apply",
+        "BISECT_START",
+        "MERGE_HEAD",
+        "CHERRY_PICK_HEAD",
+        "REVERT_HEAD",
+    ]
+    .iter()
+    .any(|n| std::fs::symlink_metadata(git_dir.join(n)).is_ok())
 }
 
 /// Another worktree (linked, with relative links, or a dead registration) has the branch checked out, or the
@@ -361,6 +370,16 @@ fn held_elsewhere(repo: &gix::Repository, full_ref: &str) -> bool {
     let Ok(w) = worktrees::scan(repo) else {
         return true;
     };
+    // an operation in any other worktree (a rebase or bisect there has HEAD detached and works on the branch) stops
+    // the restore of this repository: the branch would be moved under it
+    if w.linked
+        .iter()
+        .chain(w.relative.iter())
+        .any(|l| operation_in(&l.git_dir))
+        || w.stale.iter().any(|l| operation_in(&l.git_dir))
+    {
+        return true;
+    }
     let on = |b: &Option<String>| b.as_deref() == Some(short_name);
     w.in_use.iter().any(|(b, _)| b == short_name)
         || w.linked.iter().any(|l| on(&l.branch))
