@@ -70,7 +70,7 @@ pub enum Status {
 }
 
 /// A conflicted path with a coarse kind (`content`, `add/add`, `modify/delete`, `rename/rename`, `rename/delete`,
-/// `submodule`, `file/directory`, `unknown`).
+/// `submodule`, `file/directory`, `directory-rename`, `unknown`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
     pub path: BString,
@@ -299,6 +299,17 @@ pub fn replay_commit(
             conflicts,
         });
     }
+    // gix has no directory renames: a file the commit adds to a directory that onto renamed would bring the old
+    // directory back. Git reports a conflict there, so does the engine.
+    let conflicts = directory_rename_conflicts(repo, base_tree, own_tree, new_tree)?;
+    if !conflicts.is_empty() {
+        return Ok(Step {
+            old: commit,
+            new: None,
+            status: Status::Conflicted,
+            conflicts,
+        });
+    }
     let merged = outcome.tree.write().map_err(git_err)?.detach();
     if merged == new_tree {
         return Ok(done(Status::Empty, None));
@@ -312,6 +323,66 @@ pub fn replay_commit(
         Status::Clean
     };
     Ok(done(status, Some(new)))
+}
+
+/// Files that the commit (`base_tree` to `own_tree`) adds below a directory which exists in `base_tree`, is gone
+/// from `new_tree` and had a file renamed out of it (`base_tree` to `new_tree`): the directory was renamed.
+/// A directory that onto only deleted is not a conflict (git adds the file there). The reported path is the one
+/// the commit added; git names the path in the new directory.
+fn directory_rename_conflicts(
+    repo: &gix::Repository,
+    base_tree: ObjectId,
+    own_tree: ObjectId,
+    new_tree: ObjectId,
+) -> Result<Vec<Conflict>, ReplayError> {
+    use gix::diff::tree_with_rewrites::Change;
+    let tree = |id: ObjectId| repo.find_tree(id).map_err(git_err);
+    let (base, own, new) = (tree(base_tree)?, tree(own_tree)?, tree(new_tree)?);
+    let diff = |a: &gix::Tree<'_>, b: &gix::Tree<'_>, renames| {
+        let options = gix::diff::Options::default().with_rewrites(renames);
+        repo.diff_tree_to_tree(a, b, options).map_err(git_err)
+    };
+    let renamed_from: Vec<BString> = diff(&base, &new, Some(Default::default()))?
+        .into_iter()
+        .filter_map(|c| match c {
+            Change::Rewrite {
+                source_location, ..
+            } => Some(source_location),
+            _ => None,
+        })
+        .collect();
+    if renamed_from.is_empty() {
+        return Ok(vec![]);
+    }
+    let exists = |t: &gix::Tree<'_>, dir: &[u8]| {
+        t.lookup_entry(dir.split(|b| *b == b'/'))
+            .map(|e| e.is_some())
+            .map_err(git_err)
+    };
+    let mut out = Vec::new();
+    for change in diff(&base, &own, None)? {
+        let Change::Addition { location, .. } = change else {
+            continue;
+        };
+        let mut end = 0;
+        while let Some(i) = location[end..].find_byte(b'/') {
+            end += i;
+            let dir = &location[..end];
+            end += 1;
+            let moved = renamed_from
+                .iter()
+                .any(|s| s.starts_with(dir) && s.get(dir.len()) == Some(&b'/'));
+            if moved && exists(&base, dir)? && !exists(&new, dir)? {
+                out.push(Conflict {
+                    path: location.clone(),
+                    kind: "directory-rename",
+                });
+                break;
+            }
+        }
+    }
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(out)
 }
 
 fn kind_of(c: &gix::merge::plumbing::tree::Conflict) -> &'static str {

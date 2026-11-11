@@ -805,6 +805,9 @@ m RP15 'replay: user.* beats committer.* for the identity' src/replay.rs \
 m RP16 'replay: rename detection is off' src/replay.rs \
   '            ("renames", "true"),' '            ("renames", "false"),' \
   replay rename_on_the_new_side_follows_the_edit
+m RP17 'replay: a file added to a renamed directory is not a conflict' src/replay.rs \
+  '            if moved && exists(&base, dir)? && !exists(&new, dir)? {' '            if false && moved && exists(&base, dir)? && !exists(&new, dir)? {' \
+  replay a_file_added_to_a_directory_that_onto_renamed_is_a_conflict_like_git
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

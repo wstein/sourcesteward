@@ -488,6 +488,63 @@ fn binary_conflict_matches_git() {
     conflict_case(&fx, base, onto, side, "content");
 }
 
+#[test]
+fn a_file_added_to_a_directory_that_onto_renamed_is_a_conflict_like_git() {
+    // git moves the new file into the renamed directory or reports a conflict (merge.directoryRenames=conflict
+    // as the Go restack pins it); the tree merge of gix does neither and would recreate the old directory.
+    let fx = Fx::new();
+    let base = fx.commit(
+        None,
+        &[
+            ("dir/x.txt", Some(&lines(10, "x"))),
+            ("dir/y.txt", Some(&lines(10, "y"))),
+            ("keep.txt", Some("keep\n")),
+        ],
+        "base",
+    );
+    let onto = fx.commit(
+        Some(base),
+        &[
+            ("dir/x.txt", None),
+            ("dir/y.txt", None),
+            ("newdir/x.txt", Some(&lines(10, "x"))),
+            ("newdir/y.txt", Some(&lines(10, "y"))),
+        ],
+        "rename dir to newdir",
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("dir/new.txt", Some("new\n"))],
+        "add dir/new.txt",
+    );
+    let (code, theirs) = oracle_merge_tree(&fx, base, onto, side);
+    assert_eq!(code, 1, "git sees a conflict: {theirs:?}");
+    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
+    assert!(r.conflicted(), "{:?}", r.steps);
+    let c = &r.steps[0].conflicts;
+    assert_eq!(c.len(), 1);
+    assert_eq!(c[0].kind, "directory-rename");
+    assert!(c[0].path.ends_with(b"new.txt"), "{c:?}");
+}
+
+#[test]
+fn a_file_added_to_a_directory_that_onto_deleted_is_not_a_conflict_like_git() {
+    let fx = Fx::new();
+    let base = fx.commit(
+        None,
+        &[("dir/x.txt", Some("x\n")), ("keep.txt", Some("keep\n"))],
+        "base",
+    );
+    let onto = fx.commit(Some(base), &[("dir/x.txt", None)], "delete dir");
+    let side = fx.commit(
+        Some(base),
+        &[("dir/new.txt", Some("new\n"))],
+        "add dir/new.txt",
+    );
+    let r = assert_matches_git(&fx, onto, base, side);
+    assert_eq!(statuses(&r), [Status::Clean]);
+}
+
 /// Every file under `.git` with its bytes, to compare before and after.
 fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
