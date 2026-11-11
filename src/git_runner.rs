@@ -55,6 +55,31 @@ pub fn parse_version(text: &str) -> Option<Version> {
     Some(Version(major, minor, patch))
 }
 
+/// A full lower-case 40-hex object id. The only free-form data that reaches an argument vector of the
+/// carry-over operations, and only in this form: it cannot start with `-`, contain `..`, a space or a ref name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Hex40([u8; 40]);
+
+impl Hex40 {
+    pub fn parse(s: &str) -> Option<Hex40> {
+        let b: [u8; 40] = s.as_bytes().try_into().ok()?;
+        b.iter()
+            .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+            .then_some(Hex40(b))
+    }
+
+    pub fn as_str(&self) -> &str {
+        std::str::from_utf8(&self.0).expect("hex digits are ASCII")
+    }
+}
+
+/// The ref namespace of `Op::FetchPullHead`; the only ref it writes is `<ROOT>pr-<n>`.
+pub const PULL_HEAD_NAMESPACE: &str = "refs/stw/carry-over/";
+
+/// The empty tree: `GIT_ATTR_SOURCE` of `Op::RangeDiff`, so that no `.gitattributes` of the worktree (`-diff`,
+/// `binary`, a textconv driver) can hide what a commit changed.
+const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
 /// The operations that run through `git`. Each has a fixed argument vector and its own minimum version.
 /// The operations of `stw add` carry validated values (`add::CanonicalUrl`, `add::SubPath`,
 /// `add::RepoName`), never free text.
@@ -81,6 +106,16 @@ pub enum Op {
         name: crate::add::RepoName,
         path: crate::add::SubPath,
     },
+    /// `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD`, rows only (`--no-patch`); carry-over. `via: git`.
+    RangeDiff {
+        old_base: Hex40,
+        old_head: Hex40,
+        new_base: Hex40,
+        new_head: Hex40,
+    },
+    /// Fetch `+refs/pull/<pr>/head` of `origin` into `refs/stw/carry-over/pr-<pr>`: objects and that private
+    /// ref only (no tags, no FETCH_HEAD, no configured refmap). For an ssh or local-path remote, as `FetchOrigin`.
+    FetchPullHead { pr: u64 },
 }
 
 impl Op {
@@ -89,7 +124,21 @@ impl Op {
     /// `protocol.ext.allow`, all older than 2.30. Verified against 2.47.3 only (see the README).
     pub fn min_version(&self) -> Version {
         // the `stw add` vectors use only options that exist since git 2.30 as well; verified against 2.47.3 only
-        Version(2, 30, 0)
+        match self {
+            // `GIT_ATTR_SOURCE` (2.40) and `--no-patch` of range-diff
+            Op::RangeDiff { .. } => Version(2, 40, 0),
+            _ => Version(2, 30, 0),
+        }
+    }
+
+    /// A variable part out of range (a pull request number of 0).
+    fn validate(&self) -> std::result::Result<(), GitError> {
+        match self {
+            Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
+                "a pull request number starts at 1".into(),
+            )),
+            _ => Ok(()),
+        }
     }
 
     fn args(&self) -> Vec<String> {
@@ -105,6 +154,34 @@ impl Op {
                 "--upload-pack=git-upload-pack",
                 "origin",
             ]),
+            Op::FetchPullHead { pr } => {
+                let mut a = v(&[
+                    "fetch",
+                    "--quiet",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    "--upload-pack=git-upload-pack",
+                    // no FETCH_HEAD; an empty refmap, so that a configured `remote.origin.fetch` writes nothing
+                    "--no-write-fetch-head",
+                    "--refmap=",
+                    "--",
+                    "origin",
+                ]);
+                a.push(format!("+refs/pull/{pr}/head:{PULL_HEAD_NAMESPACE}pr-{pr}"));
+                a
+            }
+            Op::RangeDiff {
+                old_base,
+                old_head,
+                new_base,
+                new_head,
+            } => {
+                let mut a = v(&["range-diff", "--no-color", "--no-patch"]);
+                // the two-range form; git has no four-argument form
+                a.push(format!("{}..{}", old_base.as_str(), old_head.as_str()));
+                a.push(format!("{}..{}", new_base.as_str(), new_head.as_str()));
+                a
+            }
             Op::CheckAttrGitmodules { cached } => {
                 let mut a = v(&["check-attr"]);
                 if *cached {
@@ -139,7 +216,40 @@ impl Op {
     /// a configured or global attributes file (it would attach filter drivers) and never use a pager.
     fn extra_leading(&self) -> &'static [&'static str] {
         match self {
-            Op::FetchOrigin => &[],
+            Op::FetchOrigin | Op::FetchPullHead { .. } => &[],
+            // a patch comparison pins what hides or reshapes a change: `diff.ignoreSubmodules=all` hides a
+            // gitlink, a size limit turns a file into "Binary files differ", context and algorithm reshape the
+            // inner `git log -p` patches
+            Op::RangeDiff { .. } => &[
+                "-c",
+                "diff.ignoreSubmodules=none",
+                "-c",
+                "core.attributesFile=/dev/null",
+                "-c",
+                "core.bigFileThreshold=512m",
+                "-c",
+                "diff.renames=false",
+                "-c",
+                "diff.context=3",
+                "-c",
+                "diff.interHunkContext=0",
+                "-c",
+                "diff.algorithm=myers",
+                "-c",
+                "diff.indentHeuristic=true",
+                "-c",
+                "diff.relative=false",
+                "-c",
+                "diff.suppressBlankEmpty=false",
+                "-c",
+                "core.quotePath=true",
+                "-c",
+                "log.showSignature=false",
+                "-c",
+                "log.follow=false",
+                "-c",
+                "log.mailmap=false",
+            ],
             _ => &[
                 "-c",
                 "commit.gpgsign=false",
@@ -154,7 +264,7 @@ impl Op {
     /// Value of `GIT_ALLOW_PROTOCOL` of the child. The `stw add` operations are local: no transport at all.
     fn allow_protocol(&self) -> &'static str {
         match self {
-            Op::FetchOrigin => "file:ssh:git:http:https",
+            Op::FetchOrigin | Op::FetchPullHead { .. } => "file:ssh:git:http:https",
             _ => "none",
         }
     }
@@ -262,6 +372,8 @@ pub enum GitError {
     Refused {
         key: String,
     },
+    /// A variable part of the vector is out of range (a pull request number of 0).
+    Argument(String),
 }
 
 impl GitError {
@@ -277,6 +389,7 @@ impl GitError {
             GitError::Spawn(_) => "spawn",
             GitError::Repo(_) => "repository",
             GitError::Refused { .. } => "refused-config",
+            GitError::Argument(_) => "argument",
         }
     }
 
@@ -313,6 +426,11 @@ impl std::fmt::Display for GitError {
             },
             GitError::Spawn(m) => write!(f, "git could not be started: {m}"),
             GitError::Repo(m) => write!(f, "repository path refused: {m}"),
+            GitError::Argument(m) => write!(f, "invalid argument: {m}"),
+            GitError::Refused { key } if key == "info/attributes" => f.write_str(
+                "the repository's info/attributes has active lines, which can hide a changed file from the \
+                 patch comparison; stw does not run git with it (empty the file or compare by hand)",
+            ),
             GitError::Refused { key } => write!(
                 f,
                 "the repository's own git config sets {key}, which makes git run a command; \
@@ -486,6 +604,7 @@ impl Runner {
     /// The full argument vector (without the program) for `op` in `repo`.
     pub fn argv(&self, repo: &Path, op: Op) -> std::result::Result<Vec<OsString>, GitError> {
         Self::check_repo(repo)?;
+        op.validate()?;
         let mut v: Vec<OsString> = vec!["-C".into(), repo.as_os_str().to_owned()];
         v.extend(LEADING.iter().map(OsString::from));
         v.extend(op.extra_leading().iter().map(OsString::from));
@@ -544,8 +663,13 @@ impl Runner {
         set("GIT_EDITOR", "true".into());
         set("GIT_ALLOW_PROTOCOL", op.allow_protocol().into());
         // the operations of `stw add` evaluate attributes: no system attributes file (`/etc/gitattributes`)
-        if !matches!(op, Op::FetchOrigin) {
+        if !matches!(op, Op::FetchOrigin | Op::FetchPullHead { .. }) {
             set("GIT_ATTR_NOSYSTEM", "1".into());
+        }
+        if matches!(op, Op::RangeDiff { .. }) {
+            // no `.gitattributes` of the worktree, no replace refs: nothing may hide or swap a commit
+            set("GIT_ATTR_SOURCE", EMPTY_TREE.into());
+            set("GIT_NO_REPLACE_OBJECTS", "1".into());
         }
         if let Some(parent) = repo.and_then(Path::parent) {
             set("GIT_CEILING_DIRECTORIES", parent.as_os_str().to_owned());
@@ -578,7 +702,7 @@ impl Runner {
                 required: op.min_version(),
             });
         }
-        refuse_local_command_config(repo)?;
+        refuse_local_command_config(repo, &op)?;
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
         self.apply_env(&mut cmd, Some(repo), &op);
@@ -742,8 +866,42 @@ fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
 
 /// Read the repository's config with gix and refuse when a local or worktree section sets such a key. A
 /// directory that is not a usable repository is refused too (fail closed).
-fn refuse_local_command_config(repo: &Path) -> std::result::Result<(), GitError> {
-    refuse_config(repo, &|section, sub, key| runs_a_command(section, sub, key))
+fn refuse_local_command_config(repo: &Path, op: &Op) -> std::result::Result<(), GitError> {
+    // range-diff runs `git log -p`: a diff program or textconv driver of the repository would start
+    let patch = matches!(op, Op::RangeDiff { .. });
+    refuse_config(repo, &|section, sub, key| {
+        runs_a_command(section, sub, key)
+            || (patch
+                && section == "diff"
+                && (key == "external" || (sub.is_some() && matches!(key, "textconv" | "command"))))
+    })?;
+    if patch {
+        refuse_info_attributes(repo)?;
+    }
+    Ok(())
+}
+
+/// `info/attributes` is read in spite of `GIT_ATTR_SOURCE`; a line in it (`* -diff`) can turn a changed file into
+/// "Binary files differ" and so into an equal patch. An empty or comment-only file is fine.
+fn refuse_info_attributes(repo: &Path) -> std::result::Result<(), GitError> {
+    let r = gix::open_opts(repo, gix::open::Options::isolated())
+        .map_err(|e| GitError::Repo(format!("{}: {e}", repo.display())))?;
+    let refused = || GitError::Refused {
+        key: "info/attributes".into(),
+    };
+    let text = match std::fs::read(r.common_dir().join("info").join("attributes")) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(refused()),
+    };
+    let active = text.split(|b| *b == b'\n').any(|l| {
+        let t = l.trim_ascii();
+        !t.is_empty() && t[0] != b'#'
+    });
+    if active {
+        return Err(refused());
+    }
+    Ok(())
 }
 
 /// The key `mergetool.<t>.cmd` / `difftool.<t>.cmd`. Spelled with `concat!` because `tests/no_binaries.rs`

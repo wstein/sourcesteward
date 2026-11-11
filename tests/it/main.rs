@@ -10,6 +10,7 @@ mod auth;
 mod cli;
 mod credentials;
 mod git_runner;
+mod git_runner_ops;
 mod github;
 mod github_reads;
 mod github_rules;
