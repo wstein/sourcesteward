@@ -732,7 +732,7 @@
           "truncated": false
         },
         "issues": {
-          "state": "not-read",
+          "state": "not-applicable",
           "open": null,
           "bug": null,
           "truncated": false

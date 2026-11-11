@@ -3612,7 +3612,7 @@
     },
     "counters": {
       "type": "object",
-      "description": "The counters of one repository or the totals of all. A number is null unless its state is ok: not-read is not read on purpose or at all (never 0), no-remote a repository that is not on GitHub (a total leaves it out) and failed a read that failed or a repository that cannot be read locally. truncated says that open and the count of it are lower bounds (the issues listing hit its page limit). worktrees are the linked ones whose directory exists, the main checkout excluded; branches.remote counts refs/remotes/origin/* without HEAD as of the last fetch. A total is a number only when every repository gave one.",
+      "description": "The counters of one repository or the totals of all. A number is null unless its state is ok: not-read is not read on purpose or at all (never 0), no-remote a repository that is not on GitHub (a total leaves it out) not-applicable a fact of the repository (its issues are disabled, or it is an uninitialized submodule; a total leaves it out) and failed a read that failed or a repository that cannot be read locally. truncated says that open and the count of it are lower bounds (the issues listing hit its page limit). worktrees are the linked ones whose directory exists, the main checkout excluded; branches.remote counts refs/remotes/origin/* without HEAD as of the last fetch. A total is a number only when every repository that applies gave one.",
       "required": [
         "pull_requests",
         "issues",
@@ -3635,6 +3635,7 @@
                 "ok",
                 "not-read",
                 "no-remote",
+                "not-applicable",
                 "failed"
               ]
             },
@@ -3706,6 +3707,7 @@
                 "ok",
                 "not-read",
                 "no-remote",
+                "not-applicable",
                 "failed"
               ]
             },

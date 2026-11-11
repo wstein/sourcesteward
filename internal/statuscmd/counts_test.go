@@ -89,8 +89,8 @@ func TestCountsOfOneRepository(t *testing.T) {
 		{"another host has no remote", okRepo(1, 1, 0, 0, 0), allSkipped(overview.ReasonOtherHost), Counts{
 			PRs: SourceCount{State: CountNoRemote}, Issues: SourceCount{State: CountNoRemote},
 			BranchesLocal: num(1), BranchesRemote: num(1), Worktrees: num(0), Stash: num(0)}},
-		{"disabled issues are not read", okRepo(1, 1, 0, 0, 0), withSource(read, overview.SourceIssues, skip(overview.ReasonIssuesDisabled)), Counts{
-			PRs: SourceCount{State: CountOK, Open: 3, Sub: 2}, Issues: SourceCount{State: CountNotRead},
+		{"disabled issues are a fact of the repository", okRepo(1, 1, 0, 0, 0), withSource(read, overview.SourceIssues, skip(overview.ReasonIssuesDisabled)), Counts{
+			PRs: SourceCount{State: CountOK, Open: 3, Sub: 2}, Issues: SourceCount{State: CountNotApplicable},
 			BranchesLocal: num(1), BranchesRemote: num(1), Worktrees: num(0), Stash: num(0)}},
 		{"remote branches that cannot be listed are ?", func() stwsync.RepoStatus { r := okRepo(1, 1, 0, 0, 0); r.RemoteBranches = nil; return r }(), read, Counts{
 			PRs: SourceCount{State: CountOK, Open: 3, Sub: 2}, Issues: SourceCount{State: CountOK, Open: 3, Sub: 2},
@@ -98,9 +98,9 @@ func TestCountsOfOneRepository(t *testing.T) {
 		{"a repository that cannot be read is ? everywhere", stwsync.RepoStatus{Name: "r", State: "error", Reasons: []string{}, Stash: 7}, withSource(read, overview.SourcePulls, skip(overview.ReasonNotReadLocally)), Counts{
 			PRs: SourceCount{State: CountFailed}, Issues: SourceCount{State: CountFailed},
 			BranchesLocal: Number{State: CountFailed}, BranchesRemote: Number{State: CountFailed}, Worktrees: Number{State: CountFailed}, Stash: Number{State: CountFailed}}},
-		{"an uninitialized submodule is not read, never 0", stwsync.RepoStatus{Name: "r", State: "uninitialized", Reasons: []string{}}, allSkipped(overview.ReasonNotReadLocally), Counts{
-			PRs: SourceCount{State: CountNotRead}, Issues: SourceCount{State: CountNotRead},
-			BranchesLocal: Number{State: CountNotRead}, BranchesRemote: Number{State: CountNotRead}, Worktrees: Number{State: CountNotRead}, Stash: Number{State: CountNotRead}}},
+		{"an uninitialized submodule is not applicable, never 0", stwsync.RepoStatus{Name: "r", State: "uninitialized", Reasons: []string{}}, allSkipped(overview.ReasonNotReadLocally), Counts{
+			PRs: SourceCount{State: CountNotApplicable}, Issues: SourceCount{State: CountNotApplicable},
+			BranchesLocal: Number{State: CountNotApplicable}, BranchesRemote: Number{State: CountNotApplicable}, Worktrees: Number{State: CountNotApplicable}, Stash: Number{State: CountNotApplicable}}},
 	}
 	for _, tc := range cases {
 		if got := CountsOf(tc.rp, tc.rr); got != tc.want {
@@ -171,7 +171,7 @@ func TestDocumentCarriesCountsPerRepositoryAndTotals(t *testing.T) {
 	repos := m["repos"].([]any)
 	want := []string{
 		`{"branches":{"local":0,"remote":2},"issues":{"bug":2,"open":5,"state":"ok","truncated":true},"pull_requests":{"bot":0,"open":3,"state":"ok","truncated":false},"stash":1,"worktrees":0}`,
-		`{"branches":{"local":0,"remote":1},"issues":{"bug":null,"open":null,"state":"not-read","truncated":false},"pull_requests":{"bot":0,"open":1,"state":"ok","truncated":false},"stash":0,"worktrees":0}`,
+		`{"branches":{"local":0,"remote":1},"issues":{"bug":null,"open":null,"state":"not-applicable","truncated":false},"pull_requests":{"bot":0,"open":1,"state":"ok","truncated":false},"stash":0,"worktrees":0}`,
 		`{"branches":{"local":0,"remote":1},"issues":{"bug":0,"open":0,"state":"ok","truncated":false},"pull_requests":{"bot":2,"open":2,"state":"ok","truncated":false},"stash":4,"worktrees":0}`,
 		`{"branches":{"local":null,"remote":null},"issues":{"bug":null,"open":null,"state":"failed","truncated":false},"pull_requests":{"bot":null,"open":null,"state":"failed","truncated":false},"stash":null,"worktrees":null}`,
 	}
@@ -195,8 +195,26 @@ func TestDocumentTotalsOfAHealthyWorkspaceAreSums(t *testing.T) {
 	rep.Local.Summary.Errors = 0
 	m := decode(t, rep.Document())
 	raw, _ := json.Marshal(m["totals"])
-	if w := `{"branches":{"local":0,"remote":4},"issues":{"bug":null,"open":null,"state":"not-read","truncated":false},"pull_requests":{"bot":2,"open":6,"state":"ok","truncated":false},"stash":5,"worktrees":0}`; string(raw) != w {
+	if w := `{"branches":{"local":0,"remote":4},"issues":{"bug":2,"open":5,"state":"ok","truncated":true},"pull_requests":{"bot":2,"open":6,"state":"ok","truncated":false},"stash":5,"worktrees":0}`; string(raw) != w {
 		t.Errorf("totals\n got  %s\n want %s", raw, w)
 	}
 	requireValid(t, "healthy workspace", rep.Document())
+}
+
+// A repository for which a count does not apply (an uninitialized submodule, disabled issues) never turns the
+// total into n/a: All stays the sum of the others, and a total of only such repositories is not-applicable.
+func TestTotalsLeaveOutWhatDoesNotApply(t *testing.T) {
+	read := CountsOf(okRepo(3, 2, 1, 0, 2), readRemote(3, 2, 3, 2, false))
+	uninit := CountsOf(stwsync.RepoStatus{Name: "u", State: "uninitialized", Reasons: []string{}}, nil)
+	disabled := CountsOf(okRepo(1, 1, 0, 0, 0), withSource(readRemote(1, 0, 0, 0, false), overview.SourceIssues, skip(overview.ReasonIssuesDisabled)))
+	got := SumCounts([]Counts{read, uninit, disabled})
+	want := Counts{
+		PRs: SourceCount{State: CountOK, Open: 4, Sub: 2}, Issues: SourceCount{State: CountOK, Open: 3, Sub: 2},
+		BranchesLocal: num(4), BranchesRemote: num(3), Worktrees: num(1), Stash: num(2)}
+	if got != want {
+		t.Errorf("\n got  %+v\n want %+v", got, want)
+	}
+	if got := SumCounts([]Counts{uninit, disabled}); got.Issues.State != CountNotApplicable || got.PRs != (SourceCount{State: CountOK, Open: 1}) || got.Stash != num(0) {
+		t.Errorf("only repositories that do not apply: %+v", got)
+	}
 }
