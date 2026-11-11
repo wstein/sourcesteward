@@ -328,6 +328,10 @@ struct StatusArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// Fetch origin of every repository first: remote-tracking refs only, no prune, no tags, no submodules; the one
+    /// thing that is not read-only
+    #[arg(long)]
+    fetch: bool,
     /// List the linked worktrees of each repository (the main checkout is not listed)
     #[arg(long)]
     worktrees: bool,
@@ -574,9 +578,10 @@ fn run(command: Command) -> Result<u8> {
             let root = PathBuf::from(&ws.root);
             let opts = status::StatusOpts {
                 worktrees: a.worktrees,
+                fetch: a.fetch,
             };
             let list = repo::for_each(&ws.repos, |r| {
-                let mut s = status::collect_local(r, &root, &opts);
+                let mut s = status::collect_local(r, &root, &opts, ws.github.client());
                 status::read_remote(&mut s, ws.github.client());
                 s
             });

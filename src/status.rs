@@ -206,6 +206,63 @@ pub fn gitlink_state(
 pub struct StatusOpts {
     /// `--worktrees`: list the linked worktrees of each repository.
     pub worktrees: bool,
+    /// `--fetch`: fetch `origin` first (remote-tracking refs only, no prune); the one thing that is not read-only.
+    pub fetch: bool,
+}
+
+/// What `--fetch` did for one repository.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct FetchFact {
+    /// `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote` or `unsupported` (as `stw sync`).
+    pub state: &'static str,
+    /// `git` (the installed git through the runner), `gix` (https, no program) or None.
+    pub via: Option<&'static str>,
+    pub error: Option<String>,
+}
+
+impl FetchFact {
+    pub fn not_run() -> FetchFact {
+        FetchFact {
+            state: "not-run",
+            via: None,
+            error: None,
+        }
+    }
+
+    fn json(&self) -> Value {
+        json!({"state": self.state, "via": jopt(self.via), "error": jopt(self.error.as_deref())})
+    }
+}
+
+/// `git fetch origin` for `--fetch`, through `sync::fetch` (the runner for ssh and local-path remotes, gix for
+/// https): never prunes (`--no-prune` wins over `fetch.prune`), no tags, no submodules, no hooks. Refused before
+/// anything starts when a configured fetch refspec of `origin` would write outside `refs/remotes/origin/`.
+fn fetch_first(path: &Path, gh: Option<&Client>) -> FetchFact {
+    use crate::sync::fetch::{check_prune_scope, fetch_origin_with, Prune};
+    let repo = match repo::open(path) {
+        Ok(r) => r,
+        Err(e) => {
+            return FetchFact {
+                state: "failed",
+                via: None,
+                error: Some(e.to_string().chars().take(300).collect()),
+            }
+        }
+    };
+    if let Err(m) = check_prune_scope(&repo) {
+        return FetchFact {
+            state: "failed",
+            via: None,
+            error: Some(m),
+        };
+    }
+    let f = fetch_origin_with(&repo, gh, Prune::Off);
+    let error = f.message().map(str::to_string);
+    FetchFact {
+        state: f.label(),
+        via: f.via,
+        error,
+    }
 }
 
 /// One linked worktree (`--worktrees`); the main checkout is never listed.
@@ -294,6 +351,8 @@ pub struct RepoStatus {
     pub worktrees: Option<usize>,
     /// The linked worktrees, only with `--worktrees`.
     pub worktree_list: Option<Vec<WorktreeInfo>>,
+    /// `--fetch`.
+    pub fetch: FetchFact,
 }
 
 /// Remote-tracking branches of `origin` (`refs/remotes/origin/*` without `HEAD`), as of the last fetch.
@@ -332,19 +391,28 @@ fn blank(name: String, path: String) -> RepoStatus {
         branches_remote: None,
         worktrees: None,
         worktree_list: None,
+        fetch: FetchFact::not_run(),
     }
 }
 
 /// The local half and, with a client, the remote half of one repository.
 pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
-    let mut s = collect_local(r, root, &StatusOpts::default());
+    let mut s = collect_local(r, root, &StatusOpts::default(), None);
     read_remote(&mut s, gh);
     s
 }
 
 /// The local half: what git itself tells for the repository.
-pub fn collect_local(r: &RepoRef, root: &Path, opts: &StatusOpts) -> RepoStatus {
+pub fn collect_local(
+    r: &RepoRef,
+    root: &Path,
+    opts: &StatusOpts,
+    gh: Option<&Client>,
+) -> RepoStatus {
     let mut s = blank(r.name.clone(), p2s(&r.path));
+    if opts.fetch {
+        s.fetch = fetch_first(&r.path, gh);
+    }
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
         s.facts = head_facts(&repo)?;
@@ -699,6 +767,8 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusO
                 "attention": attn,
                 "reasons": rs,
                 "counts": counts_json(&counts_of(s)),
+                "fetch": s.fetch.json(),
+                "fetch_error": jopt(s.fetch.error.as_deref()),
                 "worktree_list": s.worktree_list.as_ref().map_or(Value::Null, |l| Value::Array(l.iter().map(WorktreeInfo::json).collect())),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs},
                 "error": jopt(s.error.as_deref()),
@@ -707,7 +777,7 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusO
         .collect();
     json!({
         "schema_version": 2, "command": "status", "root": root,
-        "options": {"worktrees": opts.worktrees, "icons": null},
+        "options": {"fetch": opts.fetch, "worktrees": opts.worktrees, "icons": null},
         "engine": engine(),
         "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()),
         "repos": repos,
@@ -906,6 +976,9 @@ pub fn render_human(
         if let Some(ps @ ("ahead" | "behind" | "diverged-or-unknown")) = s.pinstate {
             out += &format!("    submodule: checked-out commit is {ps} the recorded gitlink\n");
         }
+        if let Some(e) = &s.fetch.error {
+            out += &format!("    fetch failed: {}\n", esc(e));
+        }
         for wt in s.worktree_list.iter().flatten() {
             out += &format!(
                 "    worktree {}  {}",
@@ -955,6 +1028,9 @@ pub fn render_human(
     out.push('\n');
     let mut notices: Vec<String> = github_note.into_iter().collect();
     for s in list {
+        if let Some(e) = &s.fetch.error {
+            notices.push(format!("{}: fetch failed ({})", esc(&s.name), esc(e)));
+        }
         if let Some(e) = &s.pr_error {
             notices.push(format!(
                 "{}: pull requests not read ({})",

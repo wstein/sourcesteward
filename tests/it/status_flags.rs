@@ -411,3 +411,259 @@ fn tree_of(root: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>
     walk(root, root, &mut m);
     m
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// --fetch (Go: stwsync/status.go `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules --no-prune`,
+// stwsync/status_test.go fetch cases). Harness: every repository lives in a tempdir of `World`.
+// ---------------------------------------------------------------------------------------------------------
+
+use crate::sync_flags::World;
+
+struct F {
+    w: World,
+    origin: std::path::PathBuf,
+    ws: std::path::PathBuf,
+}
+
+/// `origin` (bare) with `main` and `gone`; `ws` is a clone of it with a local branch `keep`; then origin gets one
+/// more commit on main and loses `gone`, so that `ws` is behind by one only after a fetch.
+fn fetch_setup() -> F {
+    let w = World::new();
+    let seed = w.p("seed");
+    std::fs::create_dir(&seed).unwrap();
+    w.git(&seed, &["init", "-q"]);
+    w.commit(&seed, "a.txt", "a\n");
+    w.git(&seed, &["branch", "gone"]);
+    let origin = w.p("origin.git");
+    w.git(&w.base, &["clone", "-q", "--bare", "seed", "origin.git"]);
+    let ws = w.p("ws");
+    w.git(&w.base, &["clone", "-q", "origin.git", "ws"]);
+    w.git(&ws, &["branch", "keep"]);
+    w.commit(&seed, "b.txt", "b\n");
+    w.git(
+        &seed,
+        &["push", "-q", origin.to_str().unwrap(), "HEAD:main"],
+    );
+    w.git(&origin, &["branch", "-q", "-D", "gone"]);
+    F { w, origin, ws }
+}
+
+/// `stw status` on the workspace of `f` with the git of the test environment (HOME inside the tempdir).
+fn status_of(f: &F, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &f.w.home)
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(&f.w.base)
+        .arg("status")
+        .args(["--root"])
+        .arg(&f.ws)
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+/// Everything below `ws` that a fetch may not touch: all files but the object store, the remote-tracking refs
+/// and their reflogs, FETCH_HEAD.
+fn untouchable(ws: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    tree_of(ws)
+        .into_iter()
+        .filter(|(k, _)| {
+            !(k.starts_with(".git/objects")
+                || k.starts_with(".git/refs/remotes")
+                || k.starts_with(".git/logs/refs/remotes")
+                || k == ".git/FETCH_HEAD")
+        })
+        .collect()
+}
+
+fn refs(f: &F) -> String {
+    f.w.git(
+        &f.ws,
+        &["for-each-ref", "--format=%(refname) %(objectname)"],
+    )
+}
+
+#[test]
+fn without_fetch_origin_is_not_asked_and_the_counts_stay_as_of_the_last_fetch() {
+    let f = fetch_setup();
+    let o = status_of(&f, &["--offline", "--json"]);
+    let v = json_of(&o);
+    assert_eq!(v["options"]["fetch"], false);
+    assert_eq!(v["repos"][0]["fetch"]["state"], "not-run");
+    assert_eq!(v["repos"][0]["behind"], 0);
+    assert_eq!(v["repos"][0]["counts"]["branches"]["remote"], 2); // main, gone
+    assert!(v["repos"][0]["fetch_error"].is_null());
+}
+
+#[test]
+fn fetch_updates_the_remote_tracking_refs_and_nothing_else() {
+    let f = fetch_setup();
+    let refs_before = refs(&f);
+    let tree_before = untouchable(&f.ws);
+    let o = status_of(&f, &["--offline", "--json", "--fetch"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let v = json_of(&o);
+    let r = &v["repos"][0];
+    assert_eq!(v["options"]["fetch"], true);
+    assert_eq!(r["fetch"]["state"], "ok", "{r}");
+    assert_eq!(
+        r["fetch"]["via"], "git",
+        "a local-path remote runs through the runner"
+    );
+    assert_eq!(r["behind"], 1, "the fetch moved origin/main: {r}");
+    // not pruned: `gone` is gone at origin and stays here
+    assert_eq!(r["counts"]["branches"]["remote"], 2);
+    let refs_after = refs(&f);
+    let changed: Vec<&str> = refs_after
+        .lines()
+        .filter(|l| !refs_before.lines().any(|b| b == *l))
+        .collect();
+    // origin/main moved; origin/HEAD is a symbolic ref to it and shows the same id
+    assert!(
+        changed
+            .iter()
+            .any(|l| l.starts_with("refs/remotes/origin/main "))
+            && changed
+                .iter()
+                .all(|l| l.starts_with("refs/remotes/origin/")),
+        "{changed:?}"
+    );
+    assert_eq!(
+        refs_before.lines().count(),
+        refs_after.lines().count(),
+        "no ref was added or removed"
+    );
+    assert_eq!(
+        untouchable(&f.ws),
+        tree_before,
+        "branches, index, working tree, config: unchanged"
+    );
+    // the objects of the new commit are there
+    f.w.git(&f.ws, &["rev-parse", "--verify", "-q", "origin/main"]);
+}
+
+#[test]
+fn fetch_never_prunes_not_even_with_fetch_prune_configured() {
+    let f = fetch_setup();
+    f.w.git(&f.ws, &["config", "fetch.prune", "true"]);
+    f.w.git(&f.ws, &["config", "remote.origin.pruneTags", "true"]);
+    let o = status_of(&f, &["--offline", "--fetch"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    assert!(
+        !f.w.git(&f.ws, &["branch", "-r", "--list", "origin/gone"])
+            .is_empty(),
+        "fetch.prune must not apply to status --fetch"
+    );
+}
+
+#[test]
+fn fetch_runs_no_hook_of_the_repository() {
+    let f = fetch_setup();
+    let marker = f.w.p("hook-ran");
+    for hook in [
+        "reference-transaction",
+        "post-fetch",
+        "post-merge",
+        "pre-auto-gc",
+    ] {
+        let p = f.ws.join(".git/hooks").join(hook);
+        std::fs::write(&p, format!("#!/bin/sh\ntouch {}\n", marker.display())).unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let o = status_of(&f, &["--offline", "--fetch"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    assert!(!marker.exists(), "a hook of the repository ran");
+    assert_eq!(
+        f.w.git(&f.ws, &["rev-parse", "origin/main"]),
+        f.w.git(&f.origin, &["rev-parse", "main"]),
+        "the fetch itself ran"
+    );
+}
+
+#[test]
+fn a_fetch_refspec_that_writes_outside_the_remote_tracking_namespace_is_refused_before_any_fetch() {
+    let f = fetch_setup();
+    f.w.git(
+        &f.ws,
+        &[
+            "config",
+            "--replace-all",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/heads/*",
+        ],
+    );
+    let before = refs(&f);
+    let o = status_of(&f, &["--offline", "--json", "--fetch"]);
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "a failed fetch is a notice: {}{}",
+        out(&o),
+        err(&o)
+    );
+    let v = json_of(&o);
+    let r = &v["repos"][0];
+    assert_eq!(r["fetch"]["state"], "failed", "{r}");
+    assert!(r["fetch"]["via"].is_null(), "nothing was started: {r}");
+    assert!(
+        r["fetch_error"]
+            .as_str()
+            .unwrap()
+            .contains("refs/remotes/origin/"),
+        "{r}"
+    );
+    assert_eq!(refs(&f), before, "no local branch was written");
+    // the rest of the status is still there
+    assert_eq!(r["branch"], "main");
+}
+
+#[test]
+fn a_failed_fetch_is_a_detail_line_and_a_notice_and_exit_0() {
+    let f = fetch_setup();
+    std::fs::rename(&f.origin, f.w.p("origin-moved.git")).unwrap();
+    let o = status_of(&f, &["--offline", "--fetch"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let t = out(&o);
+    assert!(t.contains("\n    fetch failed: "), "{t}");
+    let notices = t
+        .split("\n\n")
+        .find(|b| b.starts_with("Notices ("))
+        .unwrap();
+    assert!(notices.contains("ws: fetch failed ("), "{notices}");
+    assert!(!t.contains('\u{1b}'), "{t:?}");
+    assert!(t.contains("clean"), "the local half is still shown: {t}");
+}
+
+#[test]
+fn fetch_without_origin_is_no_remote_not_an_error() {
+    let f = fetch_setup();
+    f.w.git(&f.ws, &["remote", "remove", "origin"]);
+    let o = status_of(&f, &["--offline", "--json", "--fetch"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let r = &json_of(&o)["repos"][0]["fetch"];
+    assert_eq!(r["state"], "no-remote", "{r}");
+    assert!(r["error"].is_null(), "{r}");
+}
+
+#[test]
+fn fetch_sends_no_github_request_with_offline_and_does_not_leak_a_token() {
+    let f = fetch_setup();
+    let api = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &f.w.home)
+        .env("GH_TOKEN", TOKEN)
+        .env("STW_GITHUB_API_URL", &api.url)
+        .current_dir(&f.w.base)
+        .args(["status", "--offline", "--fetch", "--json", "--root"])
+        .arg(&f.ws)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    assert!(api.hits().is_empty(), "{:?}", api.hits());
+    assert!(!out(&o).contains(TOKEN) && !err(&o).contains(TOKEN));
+}

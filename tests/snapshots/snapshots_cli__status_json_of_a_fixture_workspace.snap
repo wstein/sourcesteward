@@ -7,6 +7,7 @@ expression: pretty
   "command": "status",
   "root": "[ROOT]",
   "options": {
+    "fetch": false,
     "worktrees": false,
     "icons": null
   },
@@ -61,6 +62,12 @@ expression: pretty
         "worktrees": 0,
         "stash": 0
       },
+      "fetch": {
+        "state": "not-run",
+        "via": null,
+        "error": null
+      },
+      "fetch_error": null,
       "worktree_list": null,
       "pull_requests": {
         "read": false,
