@@ -619,7 +619,7 @@ reorder, squash); with `--base BASIS` it is `BASIS`, the base `NEU` was rebased 
 (`base-not-below-new`). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff
 fails and a hint names `--base`. Problems before any check: `unknown-revision` (a revision that names nothing or no commit),
 `old-parent-not-ancestor`, `old-range-empty`, `no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
-accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. A step that could not run is `unknown`
+accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. Merge commits of the old range are left out of the pairing (range-diff and the per-commit patch-ids leave them out too); a linearized `NEU` can be proved, and the trailer line says how many were left out. A step that could not run is `unknown`
 and the verdict is `not proved`; there is never a line then. `identity-unknown`: no `user.name` and `user.email` in the Git
 configuration; stw never sets them. The identity check is as strict as `lint pr`: a rebased commit of another author is not proved.
 Git boundary: only `range-diff` runs through the installed git (`Op::RangeDiff`, Git 2.40+, `via: git`; gix has no range-diff);
