@@ -24,11 +24,12 @@ Two documents, never mixed:
 | `root` | str or null | workspace root, as v1 |
 | `note` | str or null | as v1 |
 | `actions` | array | the action items, ordered as in the spec (priority, category, repo, subject), every item, no cap |
-| `repos` | array | one object per repository: **all members of the v1 repository object unchanged** (`name`, `path`, `kind`, `state`, `head`, `branch`, ... `attention`, `reasons`, `error`) plus `remote` (below) |
+| `repos` | array | one object per repository: **all members of the v1 repository object unchanged** (`name`, `path`, `kind`, `state`, `head`, `branch`, ... `attention`, `reasons`, `error`) plus `remote` (below) and `counts` (see the amendment `Counts`) |
 | `sources` | array | exactly nine entries in the order `local`, `repo`, `pulls`, `releases`, `tags`, `ci-main`, `ci-release`, `issues`, `viewer`, each `{id, state, read, degraded, skipped}`: counts of repositories per outcome (`ok` = `read`, `error` = `degraded`); `state` is `ok` (everything read), `skipped` (nothing read, nothing failed), `error` (everything failed) or `degraded` |
 | `notices` | array | `{code, source, repos, message}`: one per missing source, `message` sanitized, at most 512 bytes; `repos` array of repository names affected (at most 256) |
 | `summary` | object | see below |
 | `error` | object or null | run-level local failure only, as v1 (`code`, `message`) |
+| `totals` | object | the counters of all repositories, the shape of `repos[].counts` (see the amendment `Counts`) |
 
 ### Action item
 
@@ -67,11 +68,11 @@ Two documents, never mixed:
 ### `summary`
 
 `{repos, attention, errors, priorities: {red, yellow, green, blue, violet}, degraded, failed, notices}`. `repos`, `attention`
-and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts all items; `degraded` true when any source is not `ok` (missing token, offline, deadline, failed read), except a skipped source that is a fact of the repository (`issues-disabled`, and `not-found` of `ci-release` when only the default `release.yml` of undeclared patterns is missing: the repository has no release workflow); a 404 for a workflow that a contract declares stays a gap and degrades; `failed` true when a requested remote read failed (the exit status 1 condition); `notices` the count.
+and `errors` have their v1 meaning (`attention` is Spec 033's rule, independent of priorities); `priorities` counts all items; `degraded` true when any source is not `ok` (missing token, offline, deadline, failed read), except a skipped source that is a fact of the repository (`issues-disabled`, and `not-found` of `ci-release` when only the default `release.yml` of undeclared patterns is missing: the repository has no release workflow); a 404 for a workflow that a contract declares stays a gap and degrades; `failed` true when a requested remote read failed (a notice; it is no exit status condition since the `Counts` amendment); `notices` the count.
 
 ## Exit status
 
-0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow; it never fails the run); items never matter. 1 on a single condition: an **attempted** request failed (any `error` source, including `network`), plus a repository unreadable locally or a run failure; 2 usage error.
+0 in exactly these situations: everything attempted succeeded, `--offline`, no usable token before any request (`no-token`), a deadline skip, a `not-found` skip (404 release workflow; it never fails the run), and an **attempted** request that failed (any `error` source, including `network`, `forbidden`, `page-too-large` and a rate-limit stop: a notice, `summary.failed` true; amended 2026-11-11, it was exit 1); items never matter. 1 only for a repository unreadable locally or a run failure; 2 usage error.
 
 ## Amendments recorded with the implementation
 
@@ -108,3 +109,19 @@ Decisions taken while implementing the work packages; they refine the text above
 - **Issues.** The issue sources of [Spec 038](../../038-stw-issues/spec.md) (`issues` per repository, `issues` and `viewer` among
   the document-level `sources`, the categories 26 to 28, `subject.kind` `issue`, the notices `no-identity` and `viewer-unknown`)
   are additions to schema 2 while it is unpublished; the schema and its frozen digest carry them.
+- **Counts (amendment 2026-11-11).** The text starts with the block `Counts` (one aligned line per repository, then `All`:
+  `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`), and the blocks `Needs action (N)` (N is
+  the number of items), `Repositories (N)` and `Notices (N)` follow, each after a blank line; the summary line stays last.
+  The schema 2 document gains, additively and without a version change, `repos[].counts` and `totals`, both
+  `{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees,
+  stash}`. `state` is `ok`, `not-read` (offline, no token, the deadline, issues disabled, an uninitialized submodule),
+  `no-remote` (no GitHub origin; a total leaves such a repository out) or `failed` (the read failed, or the repository cannot be
+  read locally); every number is null unless its state is `ok`, and what was not read is never 0. `open` of the pull requests is
+  the number the forge listed (all pages, at most 2000) and `bot` the bot pull requests among them; `open` of the issues leaves
+  the pull request entries out and `bug` counts the issues with the label `bug` (ASCII case folded, whatever their priority);
+  `truncated` marks both as lower bounds when the issues listing hit its limit of 10 pages. `worktrees` are the linked ones whose
+  directory exists, `branches.remote` is `refs/remotes/origin/*` without `HEAD` as of the last fetch. A total is a number only
+  when every repository gave one; a failed read wins over not read. `--offline` keeps the schema 1 document as published and adds
+  the `Counts` block to its text only.
+- **Exit status after a failed remote read (amendment 2026-11-11).** A failed remote read is a notice and exit 0; the text shows
+  `?` in the counts it hit.
