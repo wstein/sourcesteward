@@ -49,8 +49,11 @@ func workspaceStatusCommandWith(base statuscmd.Params) *cobra.Command {
 			"glyphs of the text: unicode (default on a terminal with a UTF-8 locale), nerd (Nerd Font) or ascii (default otherwise).\n" +
 			"A progress line goes to stderr, only when stderr is a terminal. --json prints one versioned document: schema 2 online,\n" +
 			"the frozen schema 1 with --offline.\n" +
-			"Exit statuses: 0 also when there is something to do, when a token is missing or when the deadline cut a read; 1 when a\n" +
-			"request that was made failed, a repository cannot be read or the run fails; 2 usage error.",
+			"The text starts with the Counts block (per repository and in total: open PRs with the bot ones, open issues with the bug ones,\n" +
+			"local and remote branches, linked worktrees, stashes; n/a is not read, ? is a failed read, n+ is a lower bound), then Needs action (N),\n" +
+			"Repositories (N) and Notices (N). --json adds counts per repository and totals to schema 2.\n" +
+			"Exit statuses: 0 also when there is something to do, when a token is missing, when the deadline cut a read or when a remote read\n" +
+			"failed (a notice); 1 when a repository cannot be read locally or the run fails; 2 usage error.",
 		Args:         cobra.MaximumNArgs(1),
 		SilenceUsage: true, SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -136,7 +139,7 @@ func runStatusOffline(cmd *cobra.Command, base statuscmd.Params, options stwsync
 	if jsonOutput {
 		err = json.NewEncoder(cmd.OutOrStdout()).Encode(result)
 	} else {
-		err = renderStatusText(cmd.OutOrStdout(), result, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()), marks)
+		err = renderStatusText(cmd.OutOrStdout(), result, nil, options.Worktrees, stwsync.ColorEnabled(cmd.OutOrStdout()), marks)
 	}
 	if err != nil {
 		return runtimeFailure{err}
@@ -294,12 +297,17 @@ func statusPainter(color bool) func(s, code string) string {
 	}
 }
 
-func renderStatusText(w io.Writer, r stwsync.StatusResult, worktrees, color bool, marks statusMarks) error {
+// renderStatusText prints the local screen: the Counts block, a blank line, then the Spec 033 screen. remote
+// holds what the remote half read, nil for --offline (the hosting counts are then `n/a`).
+func renderStatusText(w io.Writer, r stwsync.StatusResult, remote []statusremote.RepoResult, worktrees, color bool, marks statusMarks) error {
 	var b strings.Builder
 	paint := statusPainter(color)
 	// every piece of repository text is escaped before it is coloured, so no repository text can inject escapes
 	esc := escapeReposLine
 	line := func(s string) { b.WriteString(s + "\n") }
+	repoCounts, total := statuscmd.CountsOfRun(r, remote)
+	writeStatusCounts(line, statusCountNames(r), repoCounts, total)
+	line("")
 	head := "SourceSteward status: " + plural(len(r.Repos), "repository", "repositories")
 	if r.Root != nil {
 		head += " in " + esc(*r.Root)

@@ -1,4 +1,11 @@
-Needs action: 15 items
+Counts
+  .           PRs 3 (bot 0) | Issues 5 (bug 2) | Branches 3/2 | Worktrees 1 | Stash 1
+  crewbook    PRs 1 (bot 0) | Issues n/a       | Branches 1/1 | Worktrees 0 | Stash 0
+  workharbor  PRs 2 (bot 2) | Issues 0 (bug 0) | Branches 2/0 | Worktrees 0 | Stash 4
+  gone        PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+  All         PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+
+Needs action (16)
  ✖ red     gone                  repository cannot be read: status-read-failed: cannot read the repository status
      run: stw status --offline /ws/gone
  ✖ red     wstein/sourcesteward  default branch CI is red (main, 3f2a9c1)  https://github.com/wstein/sourcesteward/actions
@@ -25,26 +32,30 @@ Needs action: 15 items
      run: gh release edit v1.0.0 -R wstein/sourcesteward --draft=false
  ℹ blue    .                     1 stash
      run: git -C /ws stash list
+ ℹ blue    workharbor            4 stashes
+     run: git -C /ws/workharbor stash list
  ⬆ violet  wstein/workharbor     2 bot PRs: #3, #4
      run: stw pulls --repo wstein/workharbor --bots-only
 
-Repositories
+Repositories (4)
 ▲ .           main  origin/main behind 2  2 unstaged
     remote: 3 open PRs (1 ready, 1 red, 1 draft), main CI red, 1 release draft: Release one (2026-10-20, 4 assets), other issues: stw issues --repo wstein/sourcesteward
     issues: 5 open (1 red, 2 yellow)
     stash 1
+    2 linked worktrees (1 missing)
   crewbook    main  origin/main up to date  clean
     remote: 1 open PR (1 conflict), main CI green, release drafts not visible (no write access)
     issues: disabled
   workharbor  main  origin/main up to date  clean
     remote: 2 open PRs (1 ready, 1 checks pending), main CI not read (deadline), no release drafts, release runs not read (deadline)
     issues: 0 open (0 red, 0 yellow)
+    stash 4
 ✖ gone        -     cannot read the repository status
     remote: not read (not-read-locally)
 
-Notices
+Notices (3)
   deadline of 90 s reached: 2 sources of 1 repository not read; raise --timeout
   release drafts of wstein/crewbook not visible (token has no write access)
   repository was not read locally: remote sources of 1 repository were not read
 
-summary: 4 red, 6 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices
+summary: 4 red, 6 yellow, 2 green, 2 blue, 2 violet | 4 repositories | 3 notices

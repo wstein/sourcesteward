@@ -23,7 +23,7 @@ func statusCLIResult() stwsync.StatusResult {
 	return stwsync.StatusResult{
 		SchemaVersion: 1, Command: "status", Root: statusPtr("/ws"),
 		Repos: []stwsync.RepoStatus{
-			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Reasons: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}},
+			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtr("main"), Upstream: statusPtr("origin/main"), Ahead: statusInt(0), Behind: statusInt(0), Reasons: []string{}, Worktrees: stwsync.WorktreeCounts{List: []stwsync.WorktreeInfo{}}, RemoteBranches: statusInt(1)},
 			{Name: "sub\x1b[31m", Path: "/ws/sub", Kind: "submodule", State: "ok", Branch: statusPtr("feat"), Upstream: statusPtr("origin/feat"), Ahead: statusInt(2), Behind: statusInt(1),
 				Changes: stwsync.Changes{Staged: 1, Unstaged: 2, Untracked: 3, Conflicts: 1}, Operation: statusPtr("rebase"), Stash: 2,
 				Branches: stwsync.BranchCounts{Local: 4, Base: statusPtr("origin/main"), Integrated: statusInt(1), NotIntegrated: statusInt(2)},
@@ -31,8 +31,8 @@ func statusCLIResult() stwsync.StatusResult {
 					{Path: "/wt/one", Branch: statusPtr("one"), Dirty: true},
 					{Path: "/wt/two", Detached: true, Locked: statusPtr("usb")},
 				}},
-				Gitlink:   &stwsync.Gitlink{Recorded: &long, CheckedOut: statusPtr(strings.Repeat("b", 40)), State: "drift", Relation: statusPtr("ahead")},
-				Attention: true, Reasons: []string{"operation", "staged"}},
+				Gitlink:        &stwsync.Gitlink{Recorded: &long, CheckedOut: statusPtr(strings.Repeat("b", 40)), State: "drift", Relation: statusPtr("ahead")},
+				RemoteBranches: statusInt(2), Attention: true, Reasons: []string{"operation", "staged"}},
 			{Name: "gone", Path: "/ws/gone", Kind: "submodule", State: "uninitialized", Reasons: []string{}, Gitlink: &stwsync.Gitlink{Recorded: &long, State: "uninitialized"}},
 		},
 		Summary: stwsync.StatusSummary{Total: 3, Attention: 1},
@@ -155,7 +155,7 @@ func TestStatusExitStatus(t *testing.T) {
 
 func TestStatusColourOnlyWhenEnabled(t *testing.T) {
 	var b bytes.Buffer
-	if err := renderStatusText(&b, statusCLIResult(), false, true, asciiStatusMarks); err != nil || !strings.Contains(b.String(), "\x1b[") {
+	if err := renderStatusText(&b, statusCLIResult(), nil, false, true, asciiStatusMarks); err != nil || !strings.Contains(b.String(), "\x1b[") {
 		t.Fatalf("%v %q", err, b.String())
 	}
 	if strings.Contains(b.String(), "\x1b[31m\x1b") || strings.Count(b.String(), "\x1b") != strings.Count(b.String(), "\x1b[") {
@@ -196,7 +196,7 @@ func TestStatusOfflineOutputIsPinned(t *testing.T) {
 		statusGolden(t, name, out)
 	}
 	var b bytes.Buffer
-	if err := renderStatusText(&b, statusCLIResult(), true, true, asciiStatusMarks); err != nil {
+	if err := renderStatusText(&b, statusCLIResult(), nil, true, true, asciiStatusMarks); err != nil {
 		t.Fatal(err)
 	}
 	statusGolden(t, "status-offline-colour.txt", b.String())

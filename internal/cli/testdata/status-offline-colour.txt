@@ -1,3 +1,9 @@
+Counts
+  .            PRs n/a | Issues n/a | Branches 0/1     | Worktrees 0   | Stash 0
+  sub\x1b[31m  PRs n/a | Issues n/a | Branches 4/2     | Worktrees 2   | Stash 2
+  gone         PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a
+  All          PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a
+
 SourceSteward status: 3 repositories in /ws
 [2m  [0m.            main  origin/main up to date  clean
 [33m! [0msub\x1b[31m  feat  origin/feat ahead 2, behind 1  1 staged, 2 unstaged, 3 untracked, 1 conflict

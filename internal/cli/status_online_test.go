@@ -40,9 +40,10 @@ func onlineReport() statuscmd.Report {
 		SchemaVersion: 1, Command: "status", Root: statusPtrTo("/ws"), Options: stwsync.StatusEcho{Worktrees: true},
 		Repos: []stwsync.RepoStatus{
 			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: statusPtrTo("main"), Upstream: statusPtrTo("origin/main"), Ahead: statusPtrTo(0), Behind: statusPtrTo(2),
-				Changes: stwsync.Changes{Unstaged: 2}, Stash: 1, Attention: true, Reasons: []string{"unstaged", "behind"}},
-			{Name: "crewbook", Path: "/ws/crewbook", Kind: "submodule", State: "ok", Branch: statusPtrTo("main"), Upstream: statusPtrTo("origin/main"), Ahead: statusPtrTo(0), Behind: statusPtrTo(0), Reasons: []string{}},
-			{Name: "workharbor", Path: "/ws/workharbor", Kind: "submodule", State: "ok", Branch: statusPtrTo("main"), Upstream: statusPtrTo("origin/main"), Ahead: statusPtrTo(0), Behind: statusPtrTo(0), Reasons: []string{}},
+				Changes: stwsync.Changes{Unstaged: 2}, Stash: 1, Attention: true, Reasons: []string{"unstaged", "behind"},
+				Branches: stwsync.BranchCounts{Local: 3}, RemoteBranches: statusPtrTo(2), Worktrees: stwsync.WorktreeCounts{Linked: 2, Missing: 1}},
+			{Name: "crewbook", Path: "/ws/crewbook", Kind: "submodule", State: "ok", Branch: statusPtrTo("main"), Upstream: statusPtrTo("origin/main"), Ahead: statusPtrTo(0), Behind: statusPtrTo(0), Reasons: []string{}, Branches: stwsync.BranchCounts{Local: 1}, RemoteBranches: statusPtrTo(1)},
+			{Name: "workharbor", Path: "/ws/workharbor", Kind: "submodule", State: "ok", Branch: statusPtrTo("main"), Upstream: statusPtrTo("origin/main"), Ahead: statusPtrTo(0), Behind: statusPtrTo(0), Reasons: []string{}, Branches: stwsync.BranchCounts{Local: 2}, RemoteBranches: statusPtrTo(0), Stash: 4},
 			{Name: "gone", Path: "/ws/gone", Kind: "submodule", State: "error", Reasons: []string{}, Error: &stwsync.Failure{Code: "status-read-failed", Message: "cannot read the repository status"}},
 		},
 		Summary: stwsync.StatusSummary{Total: 4, Attention: 1, Errors: 1},
@@ -70,7 +71,7 @@ func onlineReport() statuscmd.Report {
 				{Number: 13, Title: "review me", URL: "https://github.com/wstein/sourcesteward/issues/13", Author: "bob", Reason: overview.IssueReasonAssigned, Assignees: []string{"wstein"}},
 			},
 		},
-		Issues: &statusremote.Issues{State: onlineOK, Open: 5, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}},
+		Issues: &statusremote.Issues{State: onlineOK, Open: 5, Bugs: 2, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}},
 		Pulls: &statusremote.Pulls{State: onlineOK, Open: statusPtrTo(3), Counts: pulls.Summary{Total: 3, Ready: 1, Draft: 1, Blocked: 1},
 			PRs: []overview.PR{
 				{Number: 57, Group: overview.GroupReady}, {Number: 58, Draft: true, Group: overview.GroupDraft}, {Number: 59, Group: overview.GroupBlocked, Reason: "checks-red"},
@@ -152,7 +153,7 @@ func TestOnlineLongTextGoldens(t *testing.T) {
 
 func TestOnlineTextSections(t *testing.T) {
 	out := renderOnline(t, onlineReport(), statuscmd.Unicode, false, false)
-	order := []string{"Needs action: 15 items", "\nRepositories\n", "\nNotices\n", "\nsummary: 4 red, 6 yellow, 2 green, 1 blue, 2 violet | 4 repositories | 3 notices\n"}
+	order := []string{"Counts\n", "\nNeeds action (16)\n", "\nRepositories (4)\n", "\nNotices (3)\n", "\nsummary: 4 red, 6 yellow, 2 green, 2 blue, 2 violet | 4 repositories | 3 notices\n"}
 	last := -1
 	for _, want := range order {
 		i := strings.Index(out, want)
@@ -215,7 +216,7 @@ func TestOnlineTextWithNothingToDo(t *testing.T) {
 	rep.Local.Note = statusPtrTo("started in a\nlinked worktree")
 	rep.Overview = overview.Build(rep.Remote.Input("/ws", rep.Local.Repos))
 	out := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	for _, want := range []string{"Needs action: nothing\n", "note: started in a\\nlinked worktree\n", "summary: nothing needs action | 1 repository | 1 notice\n"} {
+	for _, want := range []string{"Needs action (0)\n  nothing\n", "note: started in a\\nlinked worktree\n", "summary: nothing needs action | 1 repository | 1 notice\n"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("missing %q in\n%s", want, out)
 		}
@@ -226,7 +227,7 @@ func TestOnlineTextWithNothingToDo(t *testing.T) {
 
 	rep.LongRequested = true
 	outLong := renderOnline(t, rep, statuscmd.ASCII, false, false)
-	for _, want := range []string{"Needs action: nothing\n", "note: started in a\\nlinked worktree\n", "remote: no open PRs, main CI green, release drafts not visible", "summary: nothing needs action | 1 repository | 1 notice\n"} {
+	for _, want := range []string{"Needs action (0)\n  nothing\n", "note: started in a\\nlinked worktree\n", "remote: no open PRs, main CI green, release drafts not visible", "summary: nothing needs action | 1 repository | 1 notice\n"} {
 		if !strings.Contains(outLong, want) {
 			t.Errorf("missing %q in long output\n%s", want, outLong)
 		}
@@ -252,7 +253,7 @@ func TestOnlineTextCapsALongSectionAndKeepsTheCount(t *testing.T) {
 		if got := strings.Count(out, "PR #"); got != 10 {
 			t.Errorf("%d lines of the section, want the cap of 10\n%s", got, out)
 		}
-		if !strings.Contains(out, more) || strings.Contains(out, "run: stw pulls --repo acme/repok") || !strings.Contains(out, fmt.Sprintf("Needs action: %d items", repos)) {
+		if !strings.Contains(out, more) || strings.Contains(out, "run: stw pulls --repo acme/repok") || !strings.Contains(out, fmt.Sprintf("Needs action (%d)\n", repos)) {
 			t.Errorf("the omitted lines are counted in compact output\n%s", out)
 		}
 		rep.LongRequested = true
