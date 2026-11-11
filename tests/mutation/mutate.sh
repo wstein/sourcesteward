@@ -1501,6 +1501,15 @@ m NO12 "the rate-limit notice comes before the review notices" src/status.rs \
   '    notices.extend(status_review::rate_limit_notice(list));' '    notices.splice(0..0, status_review::rate_limit_notice(list));' \
   status_review the_review_notices_are_in_the_json_with_code_count_and_the_text_order
 
+m NO13 "the repositories of the notices run in reverse" src/status.rs \
+  '    for s in list {
+        let name = esc(&s.name);' '    for s in list.iter().rev() {
+        let name = esc(&s.name);' \
+  status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
+m NO14 "the repository name is not escaped in the notices" src/status.rs \
+  '        let name = esc(&s.name);' '        let name = s.name.clone();' \
+  status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

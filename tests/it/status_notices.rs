@@ -196,8 +196,8 @@ fn a_failed_fetch_is_a_notice_and_hostile_characters_stay_escaped() {
     w.git(&w.base, &["clone", "-q", "seed", "ws"]);
     let ws = w.p("ws");
     for url in [
-        "/nonexistent/stw/gone",
         "ext::sh -c \u{1b}[31mx\rLINE\nTWO\u{202e}evil",
+        "/nonexistent/stw/gone",
     ] {
         w.git(&ws, &["remote", "set-url", "origin", url]);
         let run = |json: bool| {
@@ -225,8 +225,6 @@ fn a_failed_fetch_is_a_notice_and_hostile_characters_stay_escaped() {
         let m = f["message"].as_str().unwrap();
         assert!(m.starts_with("ws: fetch failed ("), "{m}");
         assert!(v["repos"][0]["fetch_error"].is_string());
-        let (n, lines) = text_notices(&out(&t));
-        assert_eq!((n, lines[1].as_str()), (2, m));
         // the notices carry no bidi override (older fields such as `fetch_error` are unchanged)
         let raw = serde_json::to_string(a).unwrap();
         assert!(
@@ -236,14 +234,16 @@ fn a_failed_fetch_is_a_notice_and_hostile_characters_stay_escaped() {
         let all = out(&j);
         assert!(!all.chars().any(|c| c.is_control() && c != '\n'), "{all:?}");
         if url.starts_with("ext::") {
+            for esc in ["\\u{1b}", "\\u{202e}", "\\r", "\\n"] {
+                assert!(m.contains(esc), "{esc} missing in {m:?}");
+            }
             assert!(
-                m.contains("\\u{1b}")
-                    || m.contains("\\u{202e}")
-                    || m.contains("\\r")
-                    || m.contains("\\n"),
-                "{m}"
+                !m.chars().any(|c| c.is_control() || c == '\u{202e}'),
+                "{m:?}"
             );
         }
+        let (n, lines) = text_notices(&out(&t));
+        assert_eq!((n, lines[1].as_str()), (2, m));
     }
 }
 
@@ -295,5 +295,88 @@ fn reading_the_notices_changes_nothing_in_the_workspace() {
         std::fs::metadata(fx.path.join(".git/index"))
             .ok()
             .map(|m| m.modified().unwrap())
+    );
+}
+
+/// Several repositories, a hostile name of the root directory (ESC, U+202E) and a failed fetch in each: the notices
+/// come in the order of `repos`, and the name is escaped in `message` and `repos` (the text is the same list).
+#[test]
+fn notices_of_several_repositories_keep_the_list_order_and_escape_the_name() {
+    let w = World::new();
+    let seed = w.p("seed");
+    std::fs::create_dir(&seed).unwrap();
+    w.git(&seed, &["init", "-q"]);
+    w.commit(&seed, "a.txt", "a\n");
+    let root_name = "h\u{1b}[31m\u{202e}x";
+    let ws = w.p(root_name);
+    w.git(&w.base, &["clone", "-q", "seed", root_name]);
+    std::fs::create_dir(ws.join("sub")).unwrap();
+    for d in ["sub/x", "sub/y"] {
+        w.git(
+            &w.base,
+            &["clone", "-q", "seed", &format!("{root_name}/{d}")],
+        );
+    }
+    std::fs::write(
+        ws.join(".gitmodules"),
+        "[submodule \"x\"]\n\tpath = sub/x\n\turl = ../seed\n[submodule \"y\"]\n\tpath = sub/y\n\turl = ../seed\n",
+    )
+    .unwrap();
+    for d in [".", "sub/x", "sub/y"] {
+        w.git(
+            &ws.join(d),
+            &["remote", "set-url", "origin", "/nonexistent/stw/gone"],
+        );
+    }
+    let run = |json: bool| {
+        let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
+        c.env_clear()
+            .env("PATH", std::env::var_os("PATH").unwrap())
+            .env("HOME", &w.home)
+            .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+            .current_dir(&w.base)
+            .args(["status", "--offline", "--fetch", "--root"])
+            .arg(&ws);
+        if json {
+            c.arg("--json");
+        }
+        c.output().unwrap()
+    };
+    let (t, j) = (run(false), run(true));
+    let v = json_of(&j);
+    let a = v["notices"].as_array().unwrap();
+    assert_eq!(
+        codes(a),
+        ["offline", "fetch-failed", "fetch-failed", "fetch-failed"],
+        "{v}"
+    );
+    let names: Vec<&str> = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names.len(), 3, "{v}");
+    let esc_root = "h\\u{1b}[31m\\u{202e}x";
+    let expect = [esc_root, "sub/x", "sub/y"];
+    for (n, want) in a[1..].iter().zip(expect) {
+        assert_eq!(n["repos"], serde_json::json!([want]), "{n}");
+        assert!(
+            n["message"]
+                .as_str()
+                .unwrap()
+                .starts_with(&format!("{want}: fetch failed (")),
+            "{n}"
+        );
+    }
+    assert!(names[1..] == expect[1..], "{names:?}");
+    let (n, lines) = text_notices(&out(&t));
+    assert_eq!(n, 4);
+    let msgs: Vec<&str> = a.iter().map(|x| x["message"].as_str().unwrap()).collect();
+    assert_eq!(lines, msgs);
+    let all = out(&t);
+    assert!(
+        !all.contains('\u{1b}') && !all.contains('\u{202e}'),
+        "{all:?}"
     );
 }
