@@ -34,7 +34,7 @@ stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json
 stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
-stw prove     ALT NEU [--base BASIS] [--pr N|none] [--json] [--root PATH] [--repo NAME]
+stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 ```
 
@@ -593,7 +593,7 @@ tests: header of `tests/it/carryover.rs`; plan: `docs/migration-plan.md`, "Next 
 ## Local rebase proof: `stw prove` (new)
 
 New behavior without a Go counterpart (AGENTS.md "Scripts first, then product": the owner accepts it live; recipe in the
-scratch directory of the workspace). `stw prove ALT NEU [--base BASIS] [--pr N|none] [--json] [--root PATH] [--repo NAME]`
+scratch directory of the workspace). `stw prove ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]`
 (read-only, local, no pull request and no network). `ALT` is the old branch or head, `NEU` the new one: one revision each (a
 branch name, a tag, a commit id; not a range). It proves that `NEU` is `ALT` moved by a rebase and nothing else. The first line
 of the output is the verdict, `proved` or `not proved`; then one line per check with its state (`ok`, `failed`, `unknown`),
@@ -611,12 +611,14 @@ its reason and `via`; for `proved` the last line is the finished line
 | 7 | `trailers`: every `Co-Authored-By` line of an old commit is in the new commit at the same position | `trailer-missing` | `gix` |
 | 8 | `session-links`: no session link in the text of a new commit (the rule of `lint pr`) | `session-link` | `gix` |
 
+`--old-parent REV` (same name as in `restack plan` and the Go `restack plan`) is the old parent of `ALT`, the old base: for a child branch whose parent was rebased (`git rebase --onto NEWPARENT OLDPARENT ALT`: `--old-parent OLDPARENT --base NEWPARENT`). `REV` must be an ancestor of `ALT` (`old-parent-not-ancestor`) and not `ALT` itself (`old-range-empty`); the old range is then `REV..ALT` instead of `merge-base..ALT`. Without the option nothing changes; a failed range-diff then hints at both options.
+
 Checks 1 to 4 are the machine of `stw review carry-over` (`carryover::check`: range-diff, per-commit patch-ids, cumulative patch-id, merge commits), not a second implementation. The old base is
 the merge base of `ALT` and `NEU`. Without `--base` the new base is the same commit (a rewrite on the same base: amend, reword,
 reorder, squash); with `--base BASIS` it is `BASIS`, the base `NEU` was rebased onto, which must be an ancestor of `NEU`
 (`base-not-below-new`). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff
 fails and a hint names `--base`. Problems before any check: `unknown-revision` (a revision that names nothing or no commit),
-`no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
+`old-parent-not-ancestor`, `old-range-empty`, `no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
 accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. A step that could not run is `unknown`
 and the verdict is `not proved`; there is never a line then. `identity-unknown`: no `user.name` and `user.email` in the Git
 configuration; stw never sets them. The identity check is as strict as `lint pr`: a rebased commit of another author is not proved.
@@ -627,8 +629,8 @@ The repository is the one of the current directory, which must belong to the wor
 superproject of the current directory, else `$STW_ROOT`; the root and its checked-out submodules that `list_repos` accepts, never a
 path that `.gitmodules` names outside the root), or `--repo NAME`; without a repository around the current directory the workspace must
 have exactly one. Exit 0 `proved`, 1 `not proved` (result printed), 2 usage.
-JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr` (number or `"none"`), `request{old,new,base}`,
-`ends{old_head,new_head,old_base,new_base,base_source}` (`base_source`: `merge-base` or `flag`; null when the revisions did not
+JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr` (number or `"none"`), `request{old,new,base,old_parent}`,
+`ends{old_head,new_head,old_base,new_base,base_source,old_base_source}` (`base_source`, `old_base_source`: `merge-base` or `flag`; null when the revisions did not
 resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]}`), `reasons[]` (all reasons that apply),
 `hint` (the `--base` hint or null) and `line` (the `Carried-over:` line for `proved`, else null).
 

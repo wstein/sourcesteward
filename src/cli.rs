@@ -228,7 +228,8 @@ every commit is equal, old against new; (3) the patch-id of `BASE...HEAD` is equ
 (5) the same set of changed paths; (6) author and committer of every new commit are user.name <user.email> of the Git
 configuration (read only); (7) every Co-Authored-By line of an old commit is in the new commit at the same position;
 (8) no session link in the new commit texts. The old base is the
-merge base of ALT and NEU. The new base is the same commit (a rewrite on the same base) or, with --base BASIS, BASIS
+merge base of ALT and NEU, or, with --old-parent REV, REV (the old parent of ALT, which must be an ancestor of it: a child
+branch whose parent was rebased). The new base is the same commit (a rewrite on the same base) or, with --base BASIS, BASIS
 (a rebase onto it; BASIS must be an ancestor of NEU). A step that could not run is `unknown` and the verdict is `not
 proved`. Only for `proved` the last line is `Carried-over: from=<ALT> to=<NEU> patch-id=<hex> pr=<n|none>`. Nothing is
 posted and nothing is written; `git` runs for `range-diff` only, everything else is read in process.
@@ -247,6 +248,9 @@ struct ProveArgs {
     /// The base NEU was rebased onto (an ancestor of NEU) [default: the merge base of ALT and NEU, a rewrite on the same base]
     #[arg(long, value_name = "BASIS")]
     base: Option<String>,
+    /// The old parent of ALT, an ancestor of it: the old base when ALT was a child branch whose parent was rebased (`git rebase --onto NEWPARENT OLDPARENT ALT`) [default: the merge base of ALT and NEU]
+    #[arg(long, value_name = "REV")]
+    old_parent: Option<String>,
     /// Pull request number written into the line, or `none` [default: none]
     #[arg(long, value_name = "NUMBER|none")]
     pr: Option<String>,
@@ -333,8 +337,13 @@ fn selected_repo(root: Option<&Path>, name: Option<&str>) -> Result<RepoRef> {
 }
 
 fn run_prove(a: ProveArgs) -> Result<u8> {
-    let req = prove::parse_request(&a.revs, a.base.as_deref(), a.pr.as_deref())
-        .map_err(|e| Error::usage(e.to_string()))?;
+    let req = prove::parse_request(
+        &a.revs,
+        a.base.as_deref(),
+        a.old_parent.as_deref(),
+        a.pr.as_deref(),
+    )
+    .map_err(|e| Error::usage(e.to_string()))?;
     let r = selected_repo(a.root.as_deref(), a.repo.as_deref())?;
     let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
     let proof = prove::prove(&dir, git_runner::shared(), &req);

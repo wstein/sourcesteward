@@ -43,6 +43,8 @@ pub struct Request {
     pub old_rev: String,
     pub new_rev: String,
     pub base_rev: Option<String>,
+    /// The old parent of ALT (`--old-parent`), the old base; `None`: the merge base of ALT and NEU.
+    pub old_parent_rev: Option<String>,
     pub pr: PrRef,
 }
 
@@ -70,6 +72,7 @@ fn check_rev(name: &str, rev: &str) -> Result<(), UsageError> {
 pub fn parse_request(
     args: &[String],
     base: Option<&str>,
+    old_parent: Option<&str>,
     pr: Option<&str>,
 ) -> Result<Request, UsageError> {
     let [old, new] = args else {
@@ -82,6 +85,9 @@ pub fn parse_request(
     if let Some(b) = base {
         check_rev("--base", b)?;
     }
+    if let Some(b) = old_parent {
+        check_rev("--old-parent", b)?;
+    }
     let pr = match pr {
         Some(p) => carryover::parse_pr(p)?,
         None => PrRef::None,
@@ -90,6 +96,7 @@ pub fn parse_request(
         old_rev: old.clone(),
         new_rev: new.clone(),
         base_rev: base.map(str::to_string),
+        old_parent_rev: old_parent.map(str::to_string),
         pr,
     })
 }
@@ -165,6 +172,8 @@ pub struct Ends {
     pub new_base: String,
     /// `merge-base` or `flag`: where the new base came from.
     pub base_source: &'static str,
+    /// `merge-base` or `flag` (`--old-parent`): where the old base came from.
+    pub old_base_source: &'static str,
 }
 
 /// The result: the source of the JSON and the text.
@@ -588,10 +597,14 @@ pub fn prove(dir: &Path, runner: &Runner, req: &Request) -> Proof {
     let old = resolve_one("ALT", &req.old_rev);
     let new = resolve_one("NEU", &req.new_rev);
     let base = req.base_rev.as_deref().map(|b| resolve_one("--base", b));
+    let old_parent = req
+        .old_parent_rev
+        .as_deref()
+        .map(|b| resolve_one("--old-parent", b));
     let (Some(old), Some(new)) = (old, new) else {
         return finish(p);
     };
-    if matches!(base, Some(None)) {
+    if matches!(base, Some(None)) || matches!(old_parent, Some(None)) {
         return finish(p);
     }
     if old == new {
@@ -602,20 +615,51 @@ pub fn prove(dir: &Path, runner: &Runner, req: &Request) -> Proof {
         ));
         return finish(p);
     }
-    let old_base = match repo.merge_base(old, new) {
-        Ok(Some(id)) => id.detach(),
-        Ok(None) | Err(_) => {
-            p.input.push(input_problem(
-                "revision",
-                "no-merge-base",
-                "ALT and NEU have no common history".into(),
-            ));
-            return finish(p);
+    let (old_base, old_source) = match old_parent {
+        // the old parent of ALT: REV..ALT is the old range (a child branch whose parent was rebased)
+        Some(Some(par)) => {
+            match repo::is_ancestor(&repo, par, old) {
+                Ok(true) if par == old => {
+                    p.input.push(input_problem(
+                        "revision",
+                        "old-range-empty",
+                        "--old-parent is ALT itself: the old range is empty".into(),
+                    ));
+                    return finish(p);
+                }
+                Ok(true) => {}
+                Ok(false) => {
+                    p.input.push(input_problem(
+                        "revision",
+                        "old-parent-not-ancestor",
+                        "--old-parent is not an ancestor of ALT".into(),
+                    ));
+                    return finish(p);
+                }
+                Err(e) => {
+                    p.input.push(
+                        Check::new("revision", "gix").unknown("read-failed", esc(&e.to_string())),
+                    );
+                    return finish(p);
+                }
+            }
+            (par, "flag")
         }
+        _ => match repo.merge_base(old, new) {
+            Ok(Some(id)) => (id.detach(), "merge-base"),
+            Ok(None) | Err(_) => {
+                p.input.push(input_problem(
+                    "revision",
+                    "no-merge-base",
+                    "ALT and NEU have no common history".into(),
+                ));
+                return finish(p);
+            }
+        },
     };
     let (new_base, source) = match base {
         Some(Some(b)) => (b, "flag"),
-        _ => (old_base, "merge-base"),
+        _ => (old_base, old_source),
     };
     match repo::is_ancestor(&repo, new_base, new) {
         Ok(true) => {}
@@ -639,6 +683,7 @@ pub fn prove(dir: &Path, runner: &Runner, req: &Request) -> Proof {
         old_base: old_base.to_string(),
         new_base: new_base.to_string(),
         base_source: source,
+        old_base_source: old_source,
     };
     // 1 to 3: the machine of `stw review carry-over`
     let creq = carryover::Request {
@@ -673,13 +718,13 @@ pub fn prove(dir: &Path, runner: &Runner, req: &Request) -> Proof {
             }
         }
     }
-    if source == "merge-base"
+    if (source == "merge-base" || old_source == "merge-base")
         && p.checks
             .iter()
             .any(|c| c.id == "range-diff" && c.state != CheckState::Ok)
     {
         p.hint = Some(
-            "if NEU was rebased onto a new base, name it with --base BASE (without it the base is the merge base of ALT and NEU)"
+            "if NEU was rebased onto a new base, name it with --base BASE; if ALT sat on a parent that was rebased (git rebase --onto NEWPARENT OLDPARENT ALT), name the old parent with --old-parent OLDPARENT (without them the base is the merge base of ALT and NEU)"
                 .into(),
         );
     }
@@ -738,7 +783,8 @@ impl Proof {
         };
         let ends = self.ends.as_ref().map_or(Value::Null, |e| {
             json!({"old_head": e.old_head, "new_head": e.new_head, "old_base": e.old_base,
-                "new_base": e.new_base, "base_source": e.base_source})
+                "new_base": e.new_base, "base_source": e.base_source,
+                "old_base_source": e.old_base_source})
         });
         json!({
             "schema_version": SCHEMA_VERSION,
@@ -747,7 +793,8 @@ impl Proof {
             "proved": self.proved,
             "pr": pr,
             "request": {"old": esc(&self.req.old_rev), "new": esc(&self.req.new_rev),
-                "base": self.req.base_rev.as_deref().map(esc)},
+                "base": self.req.base_rev.as_deref().map(esc),
+                "old_parent": self.req.old_parent_rev.as_deref().map(esc)},
             "ends": ends,
             "input": self.input.iter().map(check).collect::<Vec<_>>(),
             "checks": self.checks.iter().map(check).collect::<Vec<_>>(),
@@ -773,7 +820,11 @@ impl Proof {
                 .map_or(String::new(), |r| format!(" --base {}", esc(r)))
         );
         if let Some(e) = &self.ends {
-            let _ = writeln!(b, "from  base {}  head {}", e.old_base, e.old_head);
+            let _ = writeln!(
+                b,
+                "from  base {}  head {}  (base from {})",
+                e.old_base, e.old_head, e.old_base_source
+            );
             let _ = writeln!(
                 b,
                 "to    base {}  head {}  (base from {})",

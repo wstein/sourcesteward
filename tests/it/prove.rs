@@ -193,6 +193,7 @@ fn json_has_the_keys_and_the_line() {
     assert_eq!(v["ends"]["old_base"], s(p.m1));
     assert_eq!(v["ends"]["new_base"], base);
     assert_eq!(v["ends"]["base_source"], "flag");
+    assert_eq!(v["ends"]["old_base_source"], "merge-base");
     let ids: Vec<&str> = v["checks"]
         .as_array()
         .unwrap()
@@ -561,6 +562,8 @@ fn usage_errors_exit_two_before_any_read() {
         vec![h.as_str(), h.as_str(), "--pr", "0"],
         vec![h.as_str(), h.as_str(), "--pr", "x"],
         vec![h.as_str(), h.as_str(), "--base", "-x"],
+        vec![h.as_str(), h.as_str(), "--old-parent", "-x"],
+        vec![h.as_str(), h.as_str(), "--old-parent", "a..b"],
         vec![h.as_str(), h.as_str(), "--repo", "no-such-repo"],
     ] {
         let r = run(&p.fx, &args);
@@ -737,4 +740,137 @@ fn a_merge_in_the_old_range_is_left_out_of_the_pairing_and_named() {
         "{}",
         r.text
     );
+}
+
+/// Child branch whose parent was rebased: `git rebase --onto P' P C`.
+struct Child {
+    fx: Fx,
+    m1: ObjectId,
+    p: ObjectId,
+    c: ObjectId,
+    p2: ObjectId,
+    c2: ObjectId,
+}
+
+fn child() -> Child {
+    let fx = Fx::new();
+    let m1 = fx.commit(
+        None,
+        &[("a.txt", Some("a\n")), ("img.bin", Some("\0X"))],
+        "m1",
+    );
+    let p = fx.commit(Some(m1), &[("p.txt", Some("p\n"))], &msg("feat: parent"));
+    let c = fx.commit(Some(p), &[("c.txt", Some("c\n"))], &msg("feat: child"));
+    let m2 = fx.commit(Some(m1), &[("a.txt", Some("a\nm\n"))], "m2");
+    let p2 = fx.commit(Some(m2), &[("p.txt", Some("p\n"))], &msg("feat: parent"));
+    let c2 = fx.commit(Some(p2), &[("c.txt", Some("c\n"))], &msg("feat: child"));
+    Child {
+        fx,
+        m1,
+        p,
+        c,
+        p2,
+        c2,
+    }
+}
+
+#[test]
+fn a_child_branch_restack_is_proved_with_the_old_parent() {
+    if skip() {
+        return;
+    }
+    let k = child();
+    let (alt, neu, par, base) = (s(k.c), s(k.c2), s(k.p), s(k.p2));
+    let r = run(
+        &k.fx,
+        &[&alt, &neu, "--old-parent", &par, "--base", &base, "--json"],
+    );
+    assert_eq!(r.code, 0, "{}", r.text);
+    let v = serde_json::from_str::<serde_json::Value>(&r.text).unwrap();
+    assert_eq!(v["verdict"], "proved");
+    assert_eq!(v["ends"]["old_base"], par);
+    assert_eq!(v["ends"]["old_base_source"], "flag");
+    assert_eq!(v["request"]["old_parent"], par);
+    assert!(v["line"]
+        .as_str()
+        .unwrap()
+        .starts_with(&format!("Carried-over: from={alt} to={neu} ")));
+    // without the option the old range holds the parent's commit too: not proved, with a hint for the option
+    let r = run(&k.fx, &[&alt, &neu, "--base", &base]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert_eq!(r.first(), "not proved");
+    assert!(r.text.contains("--old-parent OLDPARENT"), "{}", r.text);
+    assert!(r.text.contains("(base from merge-base)"), "{}", r.text);
+}
+
+#[test]
+fn an_old_parent_that_is_no_ancestor_the_alt_itself_or_too_far_down_is_not_proved() {
+    if skip() {
+        return;
+    }
+    let k = child();
+    let (alt, neu, base) = (s(k.c), s(k.c2), s(k.p2));
+    // not an ancestor of ALT
+    let r = run(&k.fx, &[&alt, &neu, "--old-parent", &base, "--base", &base]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("old-parent-not-ancestor"), "{}", r.text);
+    assert!(!r.text.contains("Carried-over:"));
+    // ALT itself: empty old range
+    let r = run(&k.fx, &[&alt, &neu, "--old-parent", &alt, "--base", &base]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("old-range-empty"), "{}", r.text);
+    // one parent too far down: the old range has an extra commit
+    let r = run(
+        &k.fx,
+        &[&alt, &neu, "--old-parent", &s(k.m1), "--base", &base],
+    );
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.check_line("range-diff").contains("failed"), "{}", r.text);
+    assert!(!r.text.contains("Carried-over:"));
+    // unknown revision
+    let r = run(
+        &k.fx,
+        &[&alt, &neu, "--old-parent", "no-such-rev", "--base", &base],
+    );
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("unknown-revision"), "{}", r.text);
+}
+
+#[test]
+fn a_binary_intermediate_difference_is_not_proved_with_the_old_parent_either() {
+    if skip() {
+        return;
+    }
+    let fx = Fx::new();
+    let m1 = fx.commit(
+        None,
+        &[("img.bin", Some("\0X")), ("a.txt", Some("a\n"))],
+        "m1",
+    );
+    let p = fx.commit(Some(m1), &[("p.txt", Some("p\n"))], &msg("feat: parent"));
+    let c1 = fx.commit(
+        Some(p),
+        &[("img.bin", Some("\0Y")), ("a.txt", Some("a2\n"))],
+        &msg("feat: one"),
+    );
+    let c2 = fx.commit(Some(c1), &[("img.bin", Some("\0Z"))], &msg("feat: two"));
+    let m2 = fx.commit(Some(m1), &[("m.txt", Some("m\n"))], "m2");
+    let p2 = fx.commit(Some(m2), &[("p.txt", Some("p\n"))], &msg("feat: parent"));
+    let n1 = fx.commit(
+        Some(p2),
+        &[("img.bin", Some("\0W")), ("a.txt", Some("a2\n"))],
+        &msg("feat: one"),
+    );
+    let n2 = fx.commit(Some(n1), &[("img.bin", Some("\0Z"))], &msg("feat: two"));
+    let r = run(
+        &fx,
+        &[&s(c2), &s(n2), "--old-parent", &s(p), "--base", &s(p2)],
+    );
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(
+        r.check_line("commit-patches").contains("failed"),
+        "{}",
+        r.text
+    );
+    assert!(!r.text.contains("Carried-over:"));
 }

@@ -1722,6 +1722,16 @@ m PV19 'prove: the per-commit patch-id check does not stop a proof' src/prove.rs
         State::NotChecked => CheckState::NotRun,' \
   prove a_binary_file_with_other_contents_in_an_intermediate_commit_is_not_proved
 
+m PV20 'prove: --old-parent is ignored' src/prove.rs \
+  'Some(Some(par)) => {' 'Some(Some(par)) if false => {' \
+  prove a_child_branch_restack_is_proved_with_the_old_parent
+m PV21 'prove: an old parent that is no ancestor is accepted' src/prove.rs \
+  'repo::is_ancestor(&repo, par, old) {' 'repo::is_ancestor(&repo, par, old).map(|_| true) {' \
+  prove an_old_parent_that_is_no_ancestor_the_alt_itself_or_too_far_down_is_not_proved
+m PV22 'prove: an empty old range is accepted' src/prove.rs \
+  'Ok(true) if par == old => {' 'Ok(true) if false => {' \
+  prove an_old_parent_that_is_no_ancestor_the_alt_itself_or_too_far_down_is_not_proved
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

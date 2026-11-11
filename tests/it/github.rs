@@ -392,6 +392,8 @@ fn readme_mentions_every_documented_field() {
         "line",
         "request",
         "input",
+        "old_base_source",
+        "old_parent",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }
