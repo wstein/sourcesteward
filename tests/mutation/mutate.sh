@@ -1298,6 +1298,32 @@ m SR20 'the merge state is printed unescaped' src/status.rs \
   'fl += &format!(", {}", esc(m));' 'fl += &format!(", {}", m);' \
   status_review head_branch_and_merge_state_are_escaped_in_the_pull_request_line
 
+m SR21 'clear-not-ready for a CLEAR that is no draft' src/status_review.rs \
+  'if clear && p.draft {' 'if clear {' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR22 'a carried CLEAR is no CLEAR for clear-not-ready' src/status_review.rs \
+  'Status::Clear | Status::ClearCarried));' 'Status::Clear));' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR23 'base-not-default without known base and default branch' src/status_review.rs \
+  'if !p.base.is_empty() && !p.default_branch.is_empty() && p.base != p.default_branch {' \
+  'if p.base != p.default_branch {' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR24 'base and default branch compared case-insensitively' src/status_review.rs \
+  '&& p.base != p.default_branch {' '&& !p.base.eq_ignore_ascii_case(&p.default_branch) {' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR25 'the base branch is printed unescaped in the hint line' src/status_review.rs \
+  'esc_cut(&p.base, 100),' 'p.base.clone(),' \
+  status_review branch_names_in_hints_are_escaped_and_cut
+m SR26 'the base branch is put unescaped into the JSON' src/status.rs \
+  'status_review::esc_opt_cut(&p.base, 200),' 'json!(p.base),' \
+  status_review branch_names_in_hints_are_escaped_and_cut
+m SR27 'base-not-default is not counted' src/status_review.rs \
+  '_ => t.base_not_default += 1,' '_ => {}' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR28 'a failed read still gives clear-not-ready' src/status_review.rs \
+  'Status::Clear | Status::ClearCarried));' 'Status::Clear | Status::ClearCarried | Status::Unknown));' \
+  status_review a_clear_that_could_not_be_read_gives_no_clear_not_ready
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

@@ -27,6 +27,10 @@ pub struct OpenPr {
     pub head: String,
     /// The commit id of the head (`head.sha`); empty when the answer had none.
     pub head_sha: String,
+    /// The target branch (`base.ref`); empty when the answer had none.
+    pub base: String,
+    /// The default branch of the target repository (`base.repo.default_branch`); empty when the answer had none.
+    pub default_branch: String,
     pub draft: bool,
     pub author: String,
     /// The author is an app/bot account (`user.type == "Bot"` or a `[bot]` login).
@@ -344,6 +348,11 @@ impl Client {
                 title: p["title"].as_str().unwrap_or("").to_string(),
                 head: p["head"]["ref"].as_str().unwrap_or("").to_string(),
                 head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
+                base: p["base"]["ref"].as_str().unwrap_or("").to_string(),
+                default_branch: p["base"]["repo"]["default_branch"]
+                    .as_str()
+                    .unwrap_or("")
+                    .to_string(),
                 draft: p["draft"].as_bool().unwrap_or(false),
                 author: p["user"]["login"].as_str().unwrap_or("").to_string(),
                 bot: p["user"]["type"].as_str() == Some("Bot")

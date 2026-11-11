@@ -764,6 +764,9 @@ pub fn to_json(
                     json!({"number": p.number, "title": p.title, "head": p.head, "draft": p.draft,
                            "author": p.author, "review": jopt(p.review.as_ref().map(|r| r.label())),
                            "review_state": p.review.as_ref().map_or(Value::Null, status_review::state_json),
+                           "hints": status_review::hints_json(p, s.review_read),
+                           "base": status_review::esc_opt_cut(&p.base, 200),
+                           "default_branch": status_review::esc_opt_cut(&p.default_branch, 200),
                            "merge_state": jopt(p.merge_state.as_deref())})
                 })
                 .collect();
@@ -1171,16 +1174,30 @@ pub fn render_human(
                 if let Some(m) = &p.merge_state {
                     fl += &format!(", {}", esc(m));
                 }
+                let hints = match s.review_read {
+                    true => status_review::hints(p),
+                    false => vec![],
+                };
                 out += &format!(
-                    "      #{} {} [{}{}]\n",
+                    "      #{} {} [{}{}]{}\n",
                     p.number,
                     esc(&p.title),
                     esc(&p.head),
-                    fl
+                    fl,
+                    if hints.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" {{{}}}", hints.join(", "))
+                    }
                 );
                 if view.long {
                     for l in p.review.iter().flat_map(status_review::evidence_lines) {
                         out += &format!("        {l}\n");
+                    }
+                    if s.review_read {
+                        for l in status_review::hint_lines(p) {
+                            out += &format!("        {l}\n");
+                        }
                     }
                 }
             }

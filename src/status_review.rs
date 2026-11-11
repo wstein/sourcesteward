@@ -7,6 +7,8 @@
 //! logins of the comments whose `author_association` is OWNER, MEMBER or COLLABORATOR (the trust rule of Go);
 //! the comments of other authors are findings and never decide.
 //!
+//! Hints (`clear-not-ready`, `base-not-default`): derived from the pull request list and the state, no further read.
+//!
 //! Text from the forge (logins, the cut line of a variant) is escaped before it is printed or put into JSON.
 use serde_json::{json, Value};
 
@@ -16,6 +18,11 @@ use crate::output::jopt;
 use crate::repo::{par_map, MAX_PARALLEL};
 use crate::review::{self, Evidence, Line, PrRef, ReviewState, Scope, Status, Verdict};
 use crate::status::{escape_for_text, RepoStatus};
+
+/// Hint: CLEAR (or carried) for the head, but the pull request is a draft (Go `clear-not-ready`).
+pub const HINT_CLEAR_NOT_READY: &str = "clear-not-ready";
+/// Hint: the target branch is not the default branch of the repository (Go `base-not-default`).
+pub const HINT_BASE_NOT_DEFAULT: &str = "base-not-default";
 
 /// Pull requests whose comments are read in one run (Go: `--limit` of the pulls cycle, default 200).
 pub const REVIEW_LIMIT: usize = 200;
@@ -77,6 +84,43 @@ pub fn evaluate(number: u64, head: &str, read: &Read<Comment>) -> PrReview {
         state: review::evaluate_read(Scope::Pr(number), head, read, &trusted),
         problem: read_problem(read),
     }
+}
+
+/// The hints of one pull request, in the order of Go (`reviewstate.Hints`), from data of the pull request list and its
+/// review state; no further read. `clear-not-ready`: the state is `clear` or `clear-carried` and the pull request is a
+/// draft. `base-not-default`: base and default branch are both known and differ (exact comparison, as in Go).
+pub fn hints(p: &OpenPr) -> Vec<&'static str> {
+    let mut v = Vec::new();
+    let clear = p
+        .review
+        .as_ref()
+        .is_some_and(|r| matches!(r.state.status, Status::Clear | Status::ClearCarried));
+    if clear && p.draft {
+        v.push(HINT_CLEAR_NOT_READY);
+    }
+    if !p.base.is_empty() && !p.default_branch.is_empty() && p.base != p.default_branch {
+        v.push(HINT_BASE_NOT_DEFAULT);
+    }
+    v
+}
+
+/// The `--long` explanation of each hint, one line each; every branch name from the forge is escaped and cut.
+pub fn hint_lines(p: &OpenPr) -> Vec<String> {
+    hints(p)
+        .into_iter()
+        .map(|h| match h {
+            HINT_CLEAR_NOT_READY => {
+                format!(
+                    "hint {h}: the review is CLEAR for the head, but the pull request is a draft"
+                )
+            }
+            _ => format!(
+                "hint {h}: the base is {}, the default branch is {}",
+                esc_cut(&p.base, 100),
+                esc_cut(&p.default_branch, 100)
+            ),
+        })
+        .collect()
 }
 
 struct Job {
@@ -141,6 +185,10 @@ pub struct Tally {
     pub unverified_author: usize,
     pub unknown: usize,
     pub not_read: usize,
+    /// Pull requests with the hint `clear-not-ready`.
+    pub clear_not_ready: usize,
+    /// Pull requests with the hint `base-not-default`.
+    pub base_not_default: usize,
 }
 
 pub fn tally(prs: &[OpenPr]) -> Tally {
@@ -155,6 +203,12 @@ pub fn tally(prs: &[OpenPr]) -> Tally {
             Some(Status::Unknown) => t.unknown += 1,
             None => t.not_read += 1,
         }
+        for h in hints(p) {
+            match h {
+                HINT_CLEAR_NOT_READY => t.clear_not_ready += 1,
+                _ => t.base_not_default += 1,
+            }
+        }
     }
     t
 }
@@ -164,10 +218,11 @@ impl Tally {
         json!({"states": {"clear": self.clear, "clear_carried": self.clear_carried, "findings": self.findings,
                           "no_review": self.no_review, "unverified_author": self.unverified_author,
                           "unknown": self.unknown},
+               "hints": {"clear_not_ready": self.clear_not_ready, "base_not_default": self.base_not_default},
                "not_read": self.not_read, "limit": REVIEW_LIMIT})
     }
 
-    /// `reviews: 1 clear, 2 no-review, 1 ?, 3 not read`; None without pull requests.
+    /// `reviews: 1 clear, 2 no-review, 1 ?, 3 not read (hints: 1 clear-not-ready)`; None without pull requests.
     pub fn text(&self) -> Option<String> {
         let parts: Vec<String> = [
             (self.clear, "clear"),
@@ -182,13 +237,44 @@ impl Tally {
         .filter(|(n, _)| *n > 0)
         .map(|(n, l)| format!("{n} {l}"))
         .collect();
-        (!parts.is_empty()).then(|| format!("reviews: {}", parts.join(", ")))
+        let hints: Vec<String> = [
+            (self.clear_not_ready, HINT_CLEAR_NOT_READY),
+            (self.base_not_default, HINT_BASE_NOT_DEFAULT),
+        ]
+        .iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, l)| format!("{n} {l}"))
+        .collect();
+        let hints = if hints.is_empty() {
+            String::new()
+        } else {
+            format!(" (hints: {})", hints.join(", "))
+        };
+        (!parts.is_empty()).then(|| format!("reviews: {}{hints}", parts.join(", ")))
     }
 }
 
 /// `escape_untrusted` cut at `max` characters.
 fn esc_cut(s: &str, max: usize) -> String {
     escape_untrusted(s, max).0
+}
+
+/// A branch name for the JSON: escaped and cut, null when empty.
+pub fn esc_opt_cut(s: &str, max: usize) -> Value {
+    if s.is_empty() {
+        Value::Null
+    } else {
+        Value::String(esc_cut(s, max))
+    }
+}
+
+/// The JSON of `pull_requests.open[].hints`: the hint names, null when the review state was not asked for.
+pub fn hints_json(p: &OpenPr, review_read: bool) -> Value {
+    if review_read {
+        json!(hints(p))
+    } else {
+        Value::Null
+    }
 }
 
 /// The JSON of `pull_requests.open[].review_state`: the M3 state (version 1) with the text of the forge escaped and

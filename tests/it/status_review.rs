@@ -707,6 +707,8 @@ fn at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read() 
             title: format!("pr {n}"),
             head: format!("b{n}"),
             head_sha: HEAD.into(),
+            base: String::new(),
+            default_branch: String::new(),
             draft: false,
             author: "me".into(),
             bot: false,
@@ -751,4 +753,232 @@ fn head_branch_and_merge_state_are_escaped_in_the_pull_request_line() {
         t.contains("[br\\u{1b}[2J\\rx\\u{202e}y, review no-review, CLEAN\\u{1b}[31M]"),
         "{t}"
     );
+}
+
+/// A pull request of the list for the hint tests: `(number, draft, base ref, default branch)`; an empty text is
+/// a missing field.
+type HintPr = (u64, bool, &'static str, &'static str);
+
+fn forge_hints(prs: Vec<HintPr>, answers: Vec<(u64, Answer)>) -> FakeRoutes {
+    let answers: Arc<BTreeMap<u64, Answer>> = Arc::new(answers.into_iter().collect());
+    FakeRoutes::start(move |path, _| {
+        let ok = |v: Value| (200, vec![], v.to_string());
+        match path {
+            "/repos/test/fixture/pulls" => ok(Value::Array(
+                prs.iter()
+                    .map(|(n, draft, base, def)| {
+                        let mut b = json!({});
+                        if !base.is_empty() {
+                            b["ref"] = json!(base);
+                        }
+                        if !def.is_empty() {
+                            b["repo"] = json!({"default_branch": def});
+                        }
+                        json!({"number": n, "title": format!("pr {n}"), "draft": draft,
+                               "user": {"login": "me", "type": "User"},
+                               "head": {"ref": format!("b{n}"), "sha": HEAD}, "base": b})
+                    })
+                    .collect(),
+            )),
+            "/repos/test/fixture/issues" => ok(json!([])),
+            p if p.starts_with("/repos/test/fixture/pulls/") => {
+                ok(json!({"mergeable_state": "clean"}))
+            }
+            p if p.starts_with("/repos/test/fixture/issues/") && p.ends_with("/comments") => {
+                let n: u64 = p
+                    .trim_start_matches("/repos/test/fixture/issues/")
+                    .trim_end_matches("/comments")
+                    .parse()
+                    .unwrap();
+                match answers.get(&n) {
+                    Some(Answer::Comments(c)) => ok(Value::Array(c.clone())),
+                    Some(Answer::Status(code, h)) => (*code, h.clone(), "{}".into()),
+                    _ => ok(json!([])),
+                }
+            }
+            _ => (404, vec![], "{}".into()),
+        }
+    })
+}
+
+fn clear_for(n: u64) -> Answer {
+    Answer::Comments(vec![owner(1, &review("CLEAR", HEAD, PATCH, n))])
+}
+
+fn hints_of(prs: &[Value], n: u64) -> Vec<String> {
+    by_number(prs, n)["hints"]
+        .as_array()
+        .unwrap_or_else(|| panic!("hints of #{n}: {}", by_number(prs, n)))
+        .iter()
+        .map(|h| h.as_str().unwrap().to_string())
+        .collect()
+}
+
+/// Go `reviewstate/hints.go` (`clear-not-ready`, `base-not-default`) with the data of the pull request list.
+#[test]
+fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
+    let api = forge_hints(
+        vec![
+            (1, true, "main", "main"),
+            (2, false, "main", "main"),
+            (3, true, "main", "main"),
+            (4, false, "feat/x", "main"),
+            (5, true, "feat/x", "main"),
+            (6, false, "", ""),
+            (7, false, "feat/x", ""),
+            (8, false, "Main", "main"),
+            (9, true, "main", "main"),
+        ],
+        vec![
+            (1, clear_for(1)),
+            (2, clear_for(2)),
+            (
+                4,
+                Answer::Comments(vec![owner(1, &review("FINDINGS", HEAD, PATCH, 4))]),
+            ),
+            (
+                5,
+                Answer::Comments(vec![
+                    owner(1, &review("CLEAR", OLD, PATCH, 5)),
+                    owner(2, &carried(OLD, HEAD, PATCH, 5)),
+                ]),
+            ),
+            (
+                9,
+                Answer::Comments(vec![owner(1, &review("FINDINGS", HEAD, PATCH, 9))]),
+            ),
+        ],
+    );
+    let o = run_review(&api, &["--json"]);
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    let prs = prs_json(&o);
+    assert_eq!(hints_of(&prs, 1), ["clear-not-ready"], "CLEAR and draft");
+    assert!(
+        hints_of(&prs, 2).is_empty(),
+        "CLEAR, not a draft, default base"
+    );
+    assert!(hints_of(&prs, 3).is_empty(), "a draft without CLEAR");
+    assert_eq!(hints_of(&prs, 4), ["base-not-default"]);
+    assert_eq!(
+        hints_of(&prs, 5),
+        ["clear-not-ready", "base-not-default"],
+        "carried CLEAR counts, document order"
+    );
+    assert!(
+        hints_of(&prs, 6).is_empty(),
+        "no base data: unknown, no hint"
+    );
+    assert!(
+        hints_of(&prs, 7).is_empty(),
+        "no default branch: unknown, no hint"
+    );
+    assert_eq!(
+        hints_of(&prs, 8),
+        ["base-not-default"],
+        "branch names compare exactly"
+    );
+    assert!(
+        hints_of(&prs, 9).is_empty(),
+        "a draft with FINDINGS is not clear-not-ready"
+    );
+    assert_eq!(by_number(&prs, 4)["base"], "feat/x");
+    assert_eq!(by_number(&prs, 4)["default_branch"], "main");
+    assert!(by_number(&prs, 6)["base"].is_null());
+    let rv = &json_of(&o)["repos"][0]["pull_requests"]["review"];
+    assert_eq!(
+        rv["hints"],
+        json!({"clear_not_ready": 2, "base_not_default": 3})
+    );
+    let t = out(&run_review(&api, &[]));
+    assert!(
+        t.contains("#1 pr 1 [b1 draft, review clear, CLEAN] {clear-not-ready}\n"),
+        "{t}"
+    );
+    assert!(t.contains("#2 pr 2 [b2, review clear, CLEAN]\n"), "{t}");
+    assert!(
+        t.contains("#4 pr 4 [b4, review findings, CLEAN] {base-not-default}\n"),
+        "{t}"
+    );
+    assert!(
+        t.contains(
+            "#5 pr 5 [b5 draft, review clear-carried, CLEAN] {clear-not-ready, base-not-default}\n"
+        ),
+        "{t}"
+    );
+    assert!(
+        flat(&t).contains(
+            "\nreviews: 2 clear, 1 clear-carried, 2 findings, 4 no-review (hints: 2 clear-not-ready, 3 base-not-default)\n"
+        ),
+        "{t}"
+    );
+    // no read besides the list, the merge state and the comments: the hints cost nothing
+    for h in api.hits() {
+        assert!(
+            h.contains("/pulls?")
+                || h.contains("/pulls/")
+                || h.contains("/comments?")
+                || h.contains("/issues?"),
+            "{h}"
+        );
+    }
+}
+
+#[test]
+fn hints_are_explained_in_the_long_text_and_absent_without_review() {
+    let api = forge_hints(vec![(1, true, "feat/x", "main")], vec![(1, clear_for(1))]);
+    let t = out(&run_review(&api, &["--long"]));
+    assert!(
+        t.contains("        hint clear-not-ready: the review is CLEAR for the head, but the pull request is a draft\n"),
+        "{t}"
+    );
+    assert!(
+        t.contains(
+            "        hint base-not-default: the base is feat/x, the default branch is main\n"
+        ),
+        "{t}"
+    );
+    assert!(
+        !out(&run_review(&api, &[])).contains("hint "),
+        "the short text has no explanation"
+    );
+    // a plain run: no hint in text or JSON
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let plain = stw(Some(&api.url), &["status", "--root", &r, "--long"]);
+    assert!(!out(&plain).contains("hint"), "{}", out(&plain));
+    let pj = stw(Some(&api.url), &["status", "--root", &r, "--json"]);
+    let prs = prs_json(&pj);
+    assert!(prs[0]["hints"].is_null(), "{}", prs[0]);
+}
+
+#[test]
+fn a_clear_that_could_not_be_read_gives_no_clear_not_ready() {
+    let api = forge_hints(
+        vec![(1, true, "main", "main"), (2, true, "main", "main")],
+        vec![(1, Answer::Status(500, vec![])), (2, clear_for(2))],
+    );
+    let prs = prs_json(&run_review(&api, &["--json"]));
+    assert!(hints_of(&prs, 1).is_empty(), "? is no CLEAR");
+    assert_eq!(hints_of(&prs, 2), ["clear-not-ready"]);
+}
+
+#[test]
+fn branch_names_in_hints_are_escaped_and_cut() {
+    let api = forge_hints(vec![(1, false, "ev\u{1b}[2J\u{202e}il", "ma\rin")], vec![]);
+    let t = out(&run_review(&api, &["--long"]));
+    for c in t.chars() {
+        assert!(
+            c == '\n' || !c.is_control(),
+            "raw control character {c:?} in {t}"
+        );
+        assert!(!matches!(c as u32, 0x202A..=0x202E), "{t}");
+    }
+    assert!(
+        t.contains("hint base-not-default: the base is ev\\u{1b}[2J\\u{202e}il, the default branch is ma\\rin\n"),
+        "{t}"
+    );
+    let j = json_of(&run_review(&api, &["--json"]));
+    let p = &j["repos"][0]["pull_requests"]["open"][0];
+    assert_eq!(p["base"], "ev\\u{1b}[2J\\u{202e}il");
+    assert_eq!(p["default_branch"], "ma\\rin");
 }

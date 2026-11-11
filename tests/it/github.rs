@@ -219,6 +219,9 @@ fn json_field_names_are_the_documented_ones() {
             "author",
             "review",
             "review_state",
+            "hints",
+            "base",
+            "default_branch",
             "merge_state"
         ])
     );
