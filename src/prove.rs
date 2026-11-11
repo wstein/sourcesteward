@@ -811,9 +811,13 @@ impl Proof {
         let _ = writeln!(b, "{}", self.verdict());
         let _ = writeln!(
             b,
-            "stw prove {} -> {}{}",
+            "stw prove {} -> {}{}{}",
             esc(&self.req.old_rev),
             esc(&self.req.new_rev),
+            self.req
+                .old_parent_rev
+                .as_deref()
+                .map_or(String::new(), |r| format!(" --old-parent {}", esc(r))),
             self.req
                 .base_rev
                 .as_deref()

@@ -788,6 +788,16 @@ fn a_child_branch_restack_is_proved_with_the_old_parent() {
     assert_eq!(r.code, 0, "{}", r.text);
     let v = serde_json::from_str::<serde_json::Value>(&r.text).unwrap();
     assert_eq!(v["verdict"], "proved");
+    let t = run(&k.fx, &[&alt, &neu, "--old-parent", &par, "--base", &base]);
+    assert!(
+        t.text
+            .lines()
+            .nth(1)
+            .unwrap()
+            .contains(&format!("--old-parent {par} --base {base}")),
+        "{}",
+        t.text
+    );
     assert_eq!(v["ends"]["old_base"], par);
     assert_eq!(v["ends"]["old_base_source"], "flag");
     assert_eq!(v["request"]["old_parent"], par);
