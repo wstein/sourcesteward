@@ -35,6 +35,7 @@ stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
+stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 ```
 
@@ -47,6 +48,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy history` | lists the stored manifests (the journals of `tidy apply`), newest first, with the branches each recorded and how many `tidy restore` could create now | nothing |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
+| `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
@@ -633,6 +635,83 @@ JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr`
 `ends{old_head,new_head,old_base,new_base,base_source,old_base_source}` (`old_base_source`: `merge-base` or `flag`; `base_source`: `merge-base`, `flag` or `old-parent`; null when the revisions did not
 resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]}`), `reasons[]` (all reasons that apply),
 `hint` (the `--base` hint or null) and `line` (the `Carried-over:` line for `proved`, else null).
+
+## Stack preview: `stw restack plan` (M1/M2: port plus new)
+
+`stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]` (read-only: no ref, no file,
+no object on disk, no network, no `git` process; a test compares the whole directory including `.git` before and after). It says
+before a rebase of a stack which level goes through cleanly, where a conflict arises (the files) and which level only inherits it.
+Two parts:
+
+* **Port** (single branch): the prediction of the hidden Go `restack plan --branch --old-parent --new-parent`, here
+  `stw restack plan BRANCH --old-parent REV --onto BASIS`: the commits of `REV..BRANCH` are replayed in memory onto `BASIS` (the M1
+  engine, `src/replay.rs`, gix `merge_trees`); predicted conflicts with the paths and kinds, commits that become empty, a merge or root commit refused,
+  an old parent that is no ancestor refused, unrelated histories refused. Go cases: `go_*` in `tests/it/restack_plan.rs`.
+* **New** (no Go counterpart; owner go, live acceptance open): the whole stack. `A B C` are local branches, bottom to top, each sits on
+  the one before (`not-stacked` otherwise); level n is replayed onto the new tip of level n-1. **Without a branch the chain is derived
+  from the local branches** (owner decision "explicit plus auto-detection"): it starts at the checked-out branch and goes down; the
+  branches whose tip is already part of the base are no levels; below each branch the nearest local branch is the next level. Anything
+  ambiguous is refused, never guessed, and the explicit spelling is suggested (`instead: stw restack plan b b2 --onto main`):
+  two names at one commit, a fork (two candidates, none below the other), a detached `HEAD` (`detached-head`), the checked-out branch
+  already in the base (`nothing-to-restack`), no common history with the base (`no-merge-base`). Branches above the starting branch
+  are not in the plan; a note names them.
+
+`--onto` is the new base (any revision); default: the default branch of the repository (`origin/HEAD`, else `origin/main`,
+`origin/master`), else a usage error. The old base of the bottom level is `--old-parent` or the merge base of the bottom branch and the base;
+the old base of the next level is the old tip of the one below.
+
+Output: the first line is the verdict, `plan: clean` or `plan: conflicts at A (files x, y)` (also `plan: refused at B (...)`,
+`plan: unknown at B (...)`, `plan: refused (code: ...)` for an input that stops before any level), then per level the branch, the old
+and new base, the number of commits and the state:
+
+| state | meaning |
+| --- | --- |
+| `clean` | every commit replays without conflict (commits that become empty are dropped, as `git rebase` does) |
+| `conflict` | a commit conflicts; the files and kinds are listed; the replay stops there |
+| `inherited-conflict` | a level below has a conflict; this level depends on how it is resolved and is not computed (a deviation from the spike, which went on with conflict-marker commits) |
+| `already-upstream` | every commit is empty after the replay and its patch-id is in the base: `git rebase` drops them |
+| `became-empty` | every commit is empty after the replay, the base has the change in another form |
+| `refused` | a merge or root commit in the level |
+| `unknown` | the result would be clean but the replay is not safe here (below), or a bound (500 commits) was reached |
+| `not-computed` | above a level that is `refused` or `unknown` |
+
+Exit 0 for `plan: clean` (the states `clean`, `already-upstream`, `became-empty` only), 1 for conflicts, refused or unknown (the plan is
+printed), 2 usage (also: no `--onto` and no default branch, a branch that does not exist). JSON (schema 2, `command: "restack-plan"`):
+`read_only`, `plan` (the first line), `verdict` (`clean`, `conflicts`, `refused`, `unknown`), `source` (`explicit`, `auto-detected`),
+`onto{rev,commit}`, `levels[]` (`branch`, `tip`, `old_base`, `new_base` or null, `commits`, `state`, `reasons[]`, `files[]`,
+`conflicts[{commit,path,kind}]`, `dropped`, `steps[{commit,status,subject}]`), `summary{levels,clean,conflict,inherited_conflict,became_empty,already_upstream,refused,unknown,not_computed}`,
+`refusal{code,message,suggestion}` or null and `notes[]`. Branch names, paths, subjects and reasons come from the repository and are
+escaped (`escape_untrusted`) in text and JSON.
+
+**Limits of the replay, and the difference to a real `git rebase`.** The plan is a prediction by an in-memory approximation (M1,
+header of `src/replay.rs`), tested against `git rebase` as the oracle in disposable repositories (`tests/it/restack_plan.rs`: the plan says
+clean exactly when `git rebase` succeeds, and a predicted conflict names the files git leaves unmerged). It is not a run of `git rebase`:
+* Directory renames: gix has none; the engine reports a conflict where git renames a directory silently or conflicts (conservative:
+  it may say conflict where git succeeds, never clean where git conflicts, in the cases tested).
+* Rename detection and diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=1000`, myers). A repository configuration
+  with another `merge.renames`, `diff.renames`, `merge.renameLimit`, `diff.renameLimit` or `diff.algorithm` makes a level that would be clean `unknown`.
+* Binary files: both sides changed is a conflict, as in git; no binary merge driver runs.
+* Submodules: a level with a commit that changes a gitlink is `unknown` unless it conflicts.
+* Merge drivers and attributes: no driver runs. A `merge` attribute in any `.gitattributes` of the new base or of a branch tip, or in
+  `info/attributes`, makes a level that would be clean `unknown`. Attribute files of the user (`core.attributesFile`) and of the work tree
+  that are not committed are not read.
+* rerere is unknown to the plan: a conflict that `rerere` could resolve is still reported as a conflict.
+* `git rebase` drops a commit whose patch-id is in the base (`--cherry-pick`); the engine drops a commit only when its merge leaves the
+  base unchanged. A patch that the base made and later reverted comes through here and is skipped by git.
+* Not looked at: a dirty work tree or a running operation (git refuses a rebase there), hooks, `rebase.*` and `pull.rebase` settings,
+  line-ending conversion (`merge.renormalize`, `core.autocrlf`), sparse checkout, a branch checked out in another worktree.
+The plan never says `clean` when one of the listed uncertainties applies and the result would be clean (`unknown` with the reason).
+
+**Deviations from the Go `restack plan`** (the Go command is hidden until its conformance evidence exists), one by one: (1) visible,
+with the form `BRANCH... --onto BASIS [--old-parent REV]`; branches are short names of local branches (Go: fully qualified `refs/heads/...`),
+`--onto` is any revision (Go: 40-hex id or qualified ref), the old parent is optional (default: the merge base); (2) not ported: the
+range pairing (needs `git range-diff`; this command runs no git), the cherry classification of the parent's commits, the own-diff
+equality, the identities (`--identity`) and the outcome table (`evidence-clean`), the overlap risk, the affected refs, worktrees and
+hooks, the lease-push and resync texts (stw prints no commands), `--expect-head`, `--remote`, the `PATH` argument (here `--root`/`--repo`), the
+attribute and repository hazard refusals (replaced by `unknown`), the refusal of a dirty target, an operation in progress and a bare
+repository, the jj and GitButler refusal (decision 8), the exit status 3 (incomplete) and the result byte bound; (3) the replay is the
+gix engine, not `git merge-tree`: the kinds agree with git, the paths of `rename/rename`, `rename/delete`, `file/directory` and
+`directory-rename` differ (header of `src/replay.rs`); (4) exit codes: 0 only for `plan: clean` (Go: 0 for every complete plan); (5) own output and JSON layout (Go: its own schema).
 
 ## PR lint: `stw lint pr` (M8)
 

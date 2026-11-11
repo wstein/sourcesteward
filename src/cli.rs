@@ -12,8 +12,8 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, prove, status, status_review, status_stats, sync,
-    tidy, tidy_apply, tidy_history,
+    add, carryover, dev, git_runner, lint_pr_cmd, prove, restack_plan, status, status_review,
+    status_stats, sync, tidy, tidy_apply, tidy_history,
 };
 
 const EXIT_CODES: &str = "\
@@ -66,6 +66,12 @@ enum Command {
     /// Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
     #[command(after_help = PROVE_HELP)]
     Prove(ProveArgs),
+    /// Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
+    Restack {
+        #[command(subcommand)]
+        command: RestackCommand,
+    },
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Lint {
@@ -101,6 +107,13 @@ enum ReviewCommand {
     /// May the review of a pull request head be carried over to a rewritten head? Prints the `Carried-over:` line for a yes; posts nothing
     #[command(after_help = CARRY_OVER_HELP)]
     CarryOver(CarryOverArgs),
+}
+
+#[derive(Subcommand)]
+enum RestackCommand {
+    /// Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
+    #[command(after_help = RESTACK_PLAN_HELP)]
+    Plan(RestackPlanArgs),
 }
 
 #[derive(Subcommand)]
@@ -353,6 +366,64 @@ fn run_prove(a: ProveArgs) -> Result<u8> {
         print!("{}", proof.render_human());
     }
     Ok(if proof.proved { exit::OK } else { exit::FAILED })
+}
+
+const RESTACK_PLAN_HELP: &str = "\
+Port of the single-branch prediction of the Go `restack plan` (BRANCH --old-parent REV --onto BASIS) plus a whole-stack
+preview that is new in stw. BRANCH... are local branches, bottom to top; each sits on the one before. Without any branch
+the chain is derived from the local branches: it starts at the checked-out branch and goes down to the base, each branch
+the nearest one below the previous; anything ambiguous (two candidates, two branches at one commit, a detached head) is
+refused and the explicit spelling is suggested. --onto is the new base [default: the default branch of the repository
+(origin/HEAD), else a usage error]. Each level is replayed in memory onto the new tip of the level below (gix merge); a
+level above a conflict only inherits it and is not computed. The first line is the verdict: `plan: clean` or `plan:
+conflicts at A (files ...)` (also `refused`, `unknown`). The replay approximates `git rebase`: directory renames, rename
+detection, binary files, submodules and merge drivers are covered in README.md; a case the replay cannot judge is
+`unknown` with the reason, never `clean`; rerere is not considered. Nothing is written (no ref, file or object), no
+network, no `git` process.
+
+Exit codes:
+  0  plan: clean
+  1  conflicts, refused or unknown (the plan is printed)
+  2  usage error (also: no --onto and no default branch, a branch that does not exist)";
+
+#[derive(Args)]
+struct RestackPlanArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// The new base: a revision [default: the default branch of the repository (origin/HEAD)]
+    #[arg(long, value_name = "BASIS")]
+    onto: Option<String>,
+    /// Old parent of the bottom branch, an ancestor of it (one branch only) [default: the merge base of the bottom branch and the base]
+    #[arg(long, value_name = "REV")]
+    old_parent: Option<String>,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// Local branches, bottom to top [default: derived from the local branches]
+    #[arg(value_name = "BRANCH")]
+    branches: Vec<String>,
+}
+
+fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
+    let req = restack_plan::parse_request(&a.branches, a.onto.as_deref(), a.old_parent.as_deref())
+        .map_err(|e| Error::usage(e.to_string()))?;
+    let r = selected_repo(a.root.as_deref(), a.repo.as_deref())?;
+    let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
+    let plan = restack_plan::plan(&dir, &req)?;
+    if a.json {
+        print_json(&plan.to_json());
+    } else {
+        print!("{}", plan.render_human());
+    }
+    Ok(if plan.is_clean() {
+        exit::OK
+    } else {
+        exit::FAILED
+    })
 }
 
 #[derive(Subcommand)]
@@ -1135,6 +1206,9 @@ fn run(command: Command) -> Result<u8> {
             command: ReviewCommand::CarryOver(a),
         } => run_carry_over(a),
         Command::Prove(a) => run_prove(a),
+        Command::Restack {
+            command: RestackCommand::Plan(a),
+        } => run_restack_plan(a),
         Command::Lint {
             command: LintCommand::Pr(a),
         } => run_lint_pr(a),

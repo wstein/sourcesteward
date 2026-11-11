@@ -28,6 +28,7 @@ mod patchid_props;
 mod prove;
 mod remote_kinds;
 mod replay;
+mod restack_plan;
 mod review_go_corpus;
 mod review_lines;
 mod review_read;

@@ -14,6 +14,7 @@ pub mod patch_id;
 pub mod prove;
 pub mod replay;
 pub mod repo;
+pub mod restack_plan;
 pub mod review;
 pub mod status;
 pub mod status_review;

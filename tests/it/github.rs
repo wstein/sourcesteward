@@ -394,6 +394,21 @@ fn readme_mentions_every_documented_field() {
         "input",
         "old_base_source",
         "old_parent",
+        "levels",
+        "onto",
+        "source",
+        "refusal",
+        "notes",
+        "steps",
+        "new_base",
+        "old_base",
+        "dropped",
+        "suggestion",
+        "inherited_conflict",
+        "already_upstream",
+        "became_empty",
+        "not_computed",
+        "restack-plan",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }
