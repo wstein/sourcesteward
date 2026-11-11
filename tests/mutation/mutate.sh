@@ -1016,6 +1016,9 @@ m SM16 "a submodule path with spaces is accepted" src/add.rs \
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))" \
   sync_flags a_submodule_path_that_is_not_a_plain_path_is_unreachable
+m SM17 "a pinned submodule whose reason has a suffix (--prune note) is skipped by the pass" src/sync/submodules.rs \
+  'rec.reason.starts_with("detached HEAD")' 'rec.reason == "detached HEAD"' \
+  sync_flags the_dry_run_with_prune_still_names_the_submodule_move
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

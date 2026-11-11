@@ -379,7 +379,10 @@ pub fn submodule_pass(
 ) {
     for rec in list.iter_mut() {
         let is_root = std::path::Path::new(&rec.path) == root;
-        if !is_root && rec.branch.is_none() && rec.result == "skip" && rec.reason == "detached HEAD"
+        if !is_root
+            && rec.branch.is_none()
+            && rec.result == "skip"
+            && rec.reason.starts_with("detached HEAD")
         {
             step(root, rec, o);
         }

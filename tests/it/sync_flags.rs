@@ -505,6 +505,16 @@ fn the_dry_run_names_the_move_and_writes_nothing() {
 }
 
 #[test]
+fn the_dry_run_with_prune_still_names_the_submodule_move() {
+    let s = sub_setup();
+    s.pin_ahead();
+    let (code, v, err) = s.w.stw(&s.ws, &["--prune", "--submodules", "--offline"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(repo(&v, "c")["submodule"]["state"], "would-move", "{v}");
+    assert_eq!(s.head(), s.c1);
+}
+
+#[test]
 fn without_the_flag_a_pinned_submodule_is_left_alone() {
     let s = sub_setup();
     s.pin_ahead();
