@@ -83,6 +83,26 @@ The blocks follow in this order, each after a blank line: `Needs action (N)` (N 
 none), `Repositories (N)`, `Notices (N)` (`none` when there are none), the `agent-rules` line with `--rules`, then the summary
 line. `--offline` and the run without a token print the Counts block followed by the Spec 033 screen.
 
+## Deviations from the Rust port
+
+The Go output matches the Rust port in the counters, the blocks and the exit code, with these differences (the Go lines of
+the repositories, items and notices predate the port):
+
+1. `Needs action (N)`: N is the number of items (Rust: repositories with an attention reason); the lines keep the Go format.
+2. Repository lines, the summary line and the notice texts keep the Go wording.
+3. `--offline` and the run without a token print the Counts block and then the unchanged Spec 033 screen, without the
+   blocks Needs action and Repositories (Rust prints all blocks offline).
+4. The Notices block is always printed online, `none` when empty (as in Rust).
+5. PR counts are exact (all pages, at most 2000), so `100+` never appears for PRs; the issues listing shows `n+` at its limit of
+   10 pages (Rust: one page of 100).
+6. Uninitialized submodules appear as a line with `n/a` (Rust does not list them); their state is `not-applicable` in the JSON and
+   the totals leave them out, so `All` stays a sum.
+7. Disabled issues show `Issues n/a`, state `not-applicable`, and are left out of the issue total (Rust: 403 gives `?`).
+8. Worktrees are the linked worktrees minus those whose directory is missing.
+9. `--offline --json` stays the byte-frozen schema 1 document without `counts` and `totals` (Rust has them offline).
+10. The JSON states are `ok`, `not-read`, `no-remote`, `failed` as in Rust, plus `not-applicable` (Go only).
+11. The `agent-rules` block (only with `--rules`) has a blank line before it.
+
 ## Needs action
 
 Items are ordered by priority, then category, then repository and subject, so the order does not depend on timing.
@@ -159,7 +179,7 @@ unreadable repository, a usage error); the report itself, notices included, is o
 
 `stw status --json` prints one [schema 2](../schemas/v2/status.schema.json) document (unpublished and byte-frozen until the
 feature is accepted): `actions`, `repos` (every v1 member plus `remote` and `counts`), `sources`, `notices`, `summary`, `totals` and the run-level
-`error`. `counts` and `totals` (`{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees, stash}`) are additive: the numbers are null unless the state is `ok` (`not-read`, `no-remote` or `failed` otherwise). `--offline --json` stays the schema 1 document and has no counts. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the `pulls` data gains the optional member `review`
+`error`. `counts` and `totals` (`{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees, stash}`) are additive: the numbers are null unless the state is `ok` (`not-read`, `no-remote`, `not-applicable` or `failed` otherwise). `--offline --json` stays the schema 1 document and has no counts. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the `pulls` data gains the optional member `review`
 (`states` and `hints` counts, Spec 046) when review states were read (`--review`); the `issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. `pulls_dropped` is the number of pull
 requests that the GitHub issues list returned (the endpoint lists pull requests with the issues) and that `stw` dropped, so
 that `open`, the counts and the rows are issues only; it counts only the pages that were read (see `truncated`). It is

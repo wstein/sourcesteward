@@ -116,7 +116,7 @@ case-insensitively with `assignees[].login`. Outcomes:
 
 - `ok`: the login is known; the rule "assigned to you" is active.
 - **Order of evaluation (no overlapping branches).** (1) A 403 or 429 **with rate-limit evidence** (as defined in Spec 037, "Rate
-  limit") is `rate-limited`: source `viewer` `error`, all further requests of the run stop, exit 1. (2) Otherwise a **403 or 404 without
+  limit") is `rate-limited`: source `viewer` `error`, all further requests of the run stop, exit 1 for `stw issues` only (for `stw status` a notice and exit 0, Spec 037 amendment 2026-11-11). (2) Otherwise a **403 or 404 without
   rate-limit evidence** is the **user-lookup exception**: source `viewer` `skipped`, reason `no-identity`, a notice, exit 0. A token class
   that cannot read `user` (an Actions `GITHUB_TOKEN`, an App installation token, which gets 403 on `GET /user`, a fine-grained token
   without the permission) is not a retryable fault; 404 is kept as a candidate for the same reason. (3) Any other failure (401, network,
@@ -187,7 +187,7 @@ each GitHub repository with local state `ok` (the other Spec 037 sources and the
 - **Failure inside the source**: a failed or rate-skipped issue read is **no issue item**; the repository gets one `read-error` item
   (row 5 of Spec 037, subject `issues`, hint `stw issues --repo OWNER/NAME`). A deadline skip is not an item.
 - **Deadline, exit and skip semantics: inherited from Spec 037 by reference.** Requests prevented or cancelled by the deadline are
-  `skipped`/`deadline` (exit 0), a failed attempted request is an error (exit 1), rate-limit exhaustion stops all remaining reads
+  `skipped`/`deadline` (exit 0), a failed attempted request is an error (exit 1 for `stw issues`; for `stw status` a notice and exit 0 since the Spec 037 amendment 2026-11-11), rate-limit exhaustion stops all remaining reads
   without sleeping, no usable token means no request. The only additions are the `viewer` source and the reasons `issues-disabled` and
   `no-identity` above. **No new exit code.** Items and priorities never affect the status.
 - **`--owner` in status: not in this spec.** Status has no owner or filter flags (Spec 037) and the issue search is a separate, small
