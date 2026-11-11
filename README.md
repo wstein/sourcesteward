@@ -5,10 +5,10 @@ Implementation scope, feature decisions, dependencies, and acceptance gates: [Ru
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
-nowhere else): today for the fetch of `sync --apply` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
+nowhere else): today for the fetch of `sync` with ssh and local-path remotes. `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
-driver such as git-lfs can make it look modified, and `sync --apply` refuses, before any write, a fast-forward that
+driver such as git-lfs can make it look modified, and `sync` refuses, before any write, a fast-forward that
 would write such a path), https fetch uses no credential helper, and an empty `PATH` still serves
 every gix read. There is no `gh` and no `ssh` of stw's own. Later `push`,
 `range-diff` and conflict resolution in a worktree use the same runner. Each step that ran through it carries `"via": "git"`
@@ -26,7 +26,7 @@ stw status    [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|ne
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
-stw sync      [--apply] [--prune | --no-prune] [--submodules] [--json] [--offline] [--root PATH] [--repo NAME]...
+stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
@@ -41,9 +41,9 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
-| `sync` | dry run: what would be fast-forwarded and why not. `--apply`: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included | only with `--apply` |
+| `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
 
-`sync --apply` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
+`sync` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
 tracked local change overlaps a file the update touches, when untracked files are in the way, when the branch
 diverged, or when a merge, rebase or similar operation is running. Local changes elsewhere are kept.
 
@@ -55,23 +55,23 @@ is a symbolic link, and the real path of the directory is below the real path of
 never listed and nothing there is read or written (no fetch, no fast-forward, no PR lookup). The repository name is the
 normalized path (no trailing `/`); a directory named twice is listed once. The refusal is reported once per path, escaped,
 as `submodule path not accepted: <path>: <reason>` (a path with a space or other character outside the set: `rename with git
-mv; stw handles only [A-Za-z0-9._/-]`), and never changes the exit code, except `sync --apply --submodules` (see below):
+mv; stw handles only [A-Za-z0-9._/-]`), and never changes the exit code, except `sync --submodules` in a run (see below):
 
 - `status`, `tidy plan`, `tidy apply`: a line in the notices (`status`: `Notices`; `tidy`: a parenthesized line at the end), exit
   unchanged; in JSON the additive top-level field `rejected_paths` `[{path (escaped), reason}]` (`schema_version` stays 2).
   No entry in `repos`, nothing in the counts or the repository total. `tidy apply` never touches such a path.
-- `sync`: dry run and `--apply` without `--submodules`: an entry in `repos` with result `skip` and the text as `reason` (exit
-  unchanged). `sync --apply --submodules`: result `error` ("unreachable: ..."), exit 1, like Go's `unreachable`, which arises
-  only there; the dry run with `--submodules` shows `skip` ("would be unreachable").
+- `sync`: `--plan`/`--dry-run`, and a run without `--submodules`: an entry in `repos` with result `skip` and the text as `reason` (exit
+  unchanged). A run with `--submodules`: result `error` ("unreachable: ..."), exit 1, like Go's `unreachable`, which arises
+  only there; `--plan --submodules` shows `skip` ("would be unreachable").
 - Not reported when `--repo` names repositories; an unknown `--repo` (also a refused path) is a usage error.
 
 Deviation from Go: Go lists the gitlinks of the index (`ls-files --stage`, `sync.go:262-276`; absolute paths and `..` are
-filtered there, nested submodules are walked) and checks charset and symbolic links only for `sync --submodules --apply`
+filtered there, nested submodules are walked) and checks charset and symbolic links only for a `sync --submodules` run
 (`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust lists the paths of `.gitmodules` and checks them in every command.
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
-Ported from the Go flags; like everything in `sync` they act only with `--apply`. The dry run says what they would do and
+Ported from the Go flags; like everything in `sync` they act in a run, not with `--plan`/`--dry-run`. The plan says what they would do and
 writes nothing (it never fetches).
 
 - `--prune`: the fetch of `origin` runs `git fetch --prune --no-prune-tags`, so remote-tracking refs that are gone on
@@ -98,21 +98,25 @@ writes nothing (it never fetches).
   The differences from Go are listed below.
 
 Deviations from Go in these flags:
-1. Rust is dry-run by default and the flags act only with `--apply` (Go acts by default, and its `--plan` fetches). The dry
-   run shows the prune scope and `would-move` for the submodules instead of nothing. The dry run predicts a move from the
-   gitlink in the index before the superproject's own fast-forward; `--apply` takes the gitlink after it, so the two can differ.
+1. Like Go, `stw sync` acts by default and `--plan` and `--dry-run` (the same flag, in any combination) only report (owner
+   decision 2026-11-11; until then Rust was dry-run by default). Differences: (a) Go's `--plan` fetches the remote-tracking refs, the
+   Rust plan never fetches and writes nothing (not even FETCH_HEAD), so it knows only what was fetched before
+   (`remote_moved` asks GitHub read-only); (b) `--apply` is accepted as a hidden alias without effect (it is no Go flag; it is
+   kept so that earlier calls work) and is not in the help; with `--plan` or `--dry-run` it is a usage error (exit 2); (c) the plan
+   shows the prune scope and `would-move` for the submodules. It predicts a move from the gitlink in the index before the
+   superproject's own fast-forward; a run takes the gitlink after it, so the two can differ.
 2. `--prune` is always done by the installed git, also for an `https://` remote (gix cannot prune, and stw deletes refs
    through git's own fetch only). That git gets no GitHub token from stw: a private https repository needs a git credential
    helper (the error says so). Without a flag gix never prunes an `https://` remote; Go always used git and so `fetch.prune`.
-3. `--prune` refuses, in the apply, a `remote.origin.fetch` that writes outside `refs/remotes/origin/` (`refused-refspec`,
+3. `--prune` refuses, in a run, a `remote.origin.fetch` that writes outside `refs/remotes/origin/` (`refused-refspec`,
    nothing fetched); Go checked it in the plan only. Tags are never pruned (`--no-prune-tags` wins over `remote.origin.pruneTags`).
 4. Only `origin` is fetched and pruned; Go prunes the remote of the branch.
 5. JSON `pruned` is a list of ref names (Go: a number); `summary.pruned` is the total.
 6. Rust visits the top-level submodules of `.gitmodules` only (its repository list is flat); Go walks nested ones depth-first.
 7. A submodule path outside `[A-Za-z0-9._/-]` or through a symbolic link is `unreachable` (Go: only absolute, `..`,
    option-like and control characters). Paths from `.gitmodules` are reported escaped.
-8. `unreachable` is result `error` (apply) or `skip` ("would be unreachable", dry run); Go has the result `unreachable`.
-9. `--apply` fetches `origin` of a pinned submodule too (Rust fetches every repository; Go fetches branch repositories only).
+8. `unreachable` is result `error` (run) or `skip` ("would be unreachable", `--plan`); Go has the result `unreachable`.
+9. A run fetches `origin` of a pinned submodule too (Rust fetches every repository; Go fetches branch repositories only).
    A recorded commit that `origin` has is then present before the move, where Go says `unreachable`. If that fetch fails
    (private https without token, `unsupported-remote`, `refused-refspec` with `--prune`), the result is `error` and the
    submodule is not moved; Go would still move it. Chosen because a move after a failed fetch would act on a state the
@@ -123,7 +127,7 @@ Deviations from Go in these flags:
     `--repo`. The submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a
     change inside a nested submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
 12. `--no-prune` also passes `--no-prune-tags`; Go gives `--no-prune-tags` not along, so with `fetch.pruneTags` or
-    `remote.origin.pruneTags` configured Go's fetch creates tags there. (`sync --apply` without a prune flag keeps the Go
+    `remote.origin.pruneTags` configured Go's fetch creates tags there. (`sync` without a prune flag keeps the Go
     behavior, see "Status flags".)
 
 ## agent-rules
@@ -134,9 +138,9 @@ In a whr workspace the checkout is the git submodule `.agents` (normally a detac
 records); a plain checkout on the default branch works too. It is `--rules-path PATH` (`sync` and `status`), else
 `<workspace>/.agents`; nothing else is searched. The line reads the local `origin/<default>` ("as of last fetch").
 
-`sync --rules` handles that checkout like `sync` handles the repositories. Without `--apply` it changes nothing and fetches
+`sync --rules` handles that checkout like `sync` handles the repositories. With `--plan` or `--dry-run` it changes nothing and fetches
 nothing: it prints the current rules commit and what it would do from what is already fetched (how far `origin/<default>`
-is ahead, the new commits and files). With `--apply` it fetches `origin` (not with `--offline`) and fast-forwards HEAD to
+is ahead, the new commits and files). Otherwise it fetches `origin` (not with `--offline`) and fast-forwards HEAD to
 `origin/<default>`: the branch of a plain checkout, or the detached HEAD of a submodule. A checkout that is only ahead of
 `origin/<default>` (or already current) is not an error: nothing to fast-forward, exit 0. The rules checkout is never part
 of the generic repository loop: `sync` and `status` leave it out of the repositories list (the resolved `--rules-path` or
@@ -167,7 +171,7 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 | Code | Meaning |
 | --- | --- |
 | 0 | everything asked for worked (also when repositories need attention, and in `status` also when a GitHub read failed: that is a notice, Go exits 1 there) |
-| 1 | the command ran, but a repository could not be read; `sync --apply` failed in one; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
+| 1 | the command ran, but a repository could not be read; `sync` failed in one; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
 | 2 | usage error or unusable workspace; nothing was done |
 | 3 | `lint pr` only: an error finding, or a list cut at its bound (the result is printed and is not a pass) |
 
@@ -180,7 +184,7 @@ and `sync`; there is no `next_steps` any more); fields are only added within a v
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
 `tidy-plan`, `tidy-apply`, `tidy-restore`, `sync`), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
 `github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read).
-Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` or `apply`).
+Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
 `summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep} (`delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
 would_fast_forward, skipped, errors}.
@@ -206,7 +210,7 @@ would_fast_forward, skipped, errors}.
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
   Additive: `prune` (`on`/`off`, only with `--prune`/`--no-prune`), `pruned` (names deleted by the fetch; with a flag, or when a ref was pruned),
-  `tracking_refs` (dry run with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules}
+  `tracking_refs` (`--plan` with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules, dry_run (additive: true for `--plan`/`--dry-run`)}
   and in `summary` `submodules_moved`, `would_move_submodules`, `pruned`.
 
 ## Status text
@@ -252,7 +256,7 @@ with `--offline`.
   `fetch.pruneTags` or `remote.origin.pruneTags` Go's fetch creates tags; Rust's does not), the `agent-rules` checkout is not
   fetched, and the GitHub token is offered for github.com https unless `--offline` is given. At most 16 repositories are worked on
   at once, as in Go; this bound is shared by `sync` and `tidy`, whose results keep the repository order.
-- Correction candidate, not changed: `sync --apply` without `--prune`/`--no-prune` runs `git fetch --no-tags` without
+- Correction candidate, not changed: `sync` without `--prune`/`--no-prune` runs `git fetch --no-tags` without
   `--no-prune-tags` (as Go `stwsync` does), so `fetch.pruneTags=true` or `remote.origin.pruneTags=true` makes it create tags.
   `sync` is a mutating command and keeps the Go behavior until the owner decides.
 - `--timeout`: Go's deadline also covers its other sources (repo, releases, tags, CI, viewer) and cuts a request at 15 s; Rust cuts
@@ -399,7 +403,7 @@ dry run. A clone error masks the token; an unknown repository and a refused toke
 
 ## Remote kinds and the git runner
 
-`sync --apply` fetches `origin` by remote kind:
+`sync` (a run) fetches `origin` by remote kind:
 
 | Remote | Fetched by | `via` | On failure |
 | --- | --- | --- | --- |
@@ -577,7 +581,7 @@ Rule for the environment variables: they count only when `GIT_COMMITTER_NAME` an
 set and non-empty. Otherwise both are ignored (and the `EMAIL` variable with them) and the Git configuration, then
 the fallback, decides; a name from the environment is never combined with an email from elsewhere.
 
-`sync --apply` writes in this order: all checks first (dirty paths, overlap, untracked files in the way), then the
+A `sync` run writes in this order: all checks first (dirty paths, overlap, untracked files in the way), then the
 index lock (`.git/index.lock`, taken here and held until the index is committed), then the branch ref (the write
 that can still fail for reasons no check sees: permissions, locks, reflog), then working tree files, then the
 index (written into the lock, which is renamed over the index last). There is no transaction across ref, files
@@ -605,7 +609,7 @@ and index:
   did not match"; tested). To go back: `git reset --hard <old commit>` (same caveat; not tested), where the old
   commit is the second-to-last entry of `git reflog show <branch>`.
 
-## Known limits of `sync --apply`
+## Known limits of a `sync` run
 
 It refuses, and changes nothing, in a few cases where git would proceed: a file that is deleted locally and
 upstream, a rename that only changes the case of a path, and a tracked file that upstream replaces by a
@@ -639,5 +643,5 @@ trusted for the workspace (its `text`/`eol`/`working-tree-encoding` effects on `
 it (no `dirfd`/`O_NOFOLLOW`).
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
-index during `--apply`; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
+index during a `sync` run; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
 during fast-forward; Windows, and Linux beyond the test suite (the original measurements ran on macOS arm64; the M0 review and tests ran on Linux aarch64; keychain code is macOS-only); cold-cache timings.
