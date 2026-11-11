@@ -1029,6 +1029,50 @@ m RA "the prune scope has no trailing slash (origin-mirror/ passes)" src/sync/fe
   'pub const PRUNE_SCOPE: &str = "refs/remotes/origin/";' 'pub const PRUNE_SCOPE: &str = "refs/remotes/origin";' \
   sync_flags a_refspec_into_a_sibling_namespace_of_origin_refuses_prune
 
+m SH1 "list_repos lists a refused path as a repository" src/repo/mod.rs \
+  "        if path_rejection(root, &p).is_some() {
+            continue;
+        }
+        let path = root.join(&p);" \
+  "        let path = root.join(&p);" \
+  submodule_paths sync_apply_fails_on_refused_paths_and_leaves_their_repositories_alone
+m SH2 "the path rules of stw add are not applied to .gitmodules paths" src/repo/mod.rs \
+  "    if let Err(e) = crate::add::SubPath::parse(p) {
+        return Some(e);
+    }" "" \
+  submodule_paths path_rejection_rules
+m SH3 "a symbolic link among the components is accepted" src/repo/mod.rs \
+  "if std::fs::symlink_metadata(&cur).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Some(\"a component is a symbolic link\".into());" \
+  "if false {
+            return Some(\"a component is a symbolic link\".into());" \
+  submodule_paths path_rejection_rules
+m SH4 "the real path may leave or equal the workspace root" src/repo/mod.rs \
+  "real.starts_with(base) && real != base" "true" \
+  submodule_paths below_means_strictly_below
+m SH5 "refused paths are not reported by sync" src/sync/submodules.rs \
+  "    for (p, why) in rejected {" "    for (p, why) in rejected.iter().take(0) {" \
+  submodule_paths sync_dry_run_reports_refused_paths_and_touches_nothing
+m SH6 "refused paths are not reported by status" src/cli.rs \
+  "            for p in &ws.rejected {
+                list.push(status::rejected_entry" "            for p in ws.rejected.iter().take(0) {
+                list.push(status::rejected_entry" \
+  submodule_paths status_reports_refused_paths_and_does_not_read_them
+m SH7 "refused paths are not reported by tidy plan" src/cli.rs \
+  "            for p in &ws.rejected {
+                plans.push" "            for p in ws.rejected.iter().take(0) {
+                plans.push" \
+  submodule_paths tidy_plan_reports_refused_paths_and_does_not_read_them
+m SH8 "a refused path in a dry run counts as an error (exit 1)" src/sync/submodules.rs \
+  "    let (result, reason) = if o.apply {" "    let (result, reason) = if o.apply || why.contains(\"not accepted\") {" \
+  submodule_paths sync_dry_run_reports_refused_paths_and_touches_nothing
+
+m SH9 "refused paths are not reported by tidy apply" src/cli.rs \
+  "    for p in &ws.rejected {
+        list.push(tidy_apply::ApplyRepo {" "    for p in ws.rejected.iter().take(0) {
+        list.push(tidy_apply::ApplyRepo {" \
+  submodule_paths tidy_apply_reports_refused_paths_and_does_not_touch_them
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

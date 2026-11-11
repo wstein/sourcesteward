@@ -24,7 +24,7 @@ use crate::repo::{self, RepoRef};
 use crate::status::{self, HeadFacts};
 use fast_forward::fast_forward;
 use fetch::Prune;
-pub use submodules::{submodule_pass, SubRec};
+pub use submodules::{rejected_pass, submodule_pass, SubRec};
 
 #[derive(Clone, Debug, Default)]
 pub struct SyncRec {

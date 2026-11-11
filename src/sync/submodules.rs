@@ -366,6 +366,30 @@ fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
     );
 }
 
+/// Adds one record per `.gitmodules` path that is not accepted (`repo::rejected_paths`): with `--apply` an error
+/// (like `unreachable`), in a dry run a skip. The path is untrusted: no file system access, escaped in the text.
+/// The record is not synced, whatever the flags.
+pub fn rejected_pass(rejected: &[(String, String)], list: &mut Vec<SyncRec>, o: &Opts) {
+    for (p, why) in rejected {
+        if list.iter().any(|r| r.name == *p) {
+            continue;
+        }
+        let mut rec = SyncRec {
+            name: p.clone(),
+            path: String::new(),
+            fetch: "not-run".into(),
+            ..Default::default()
+        };
+        let why = format!(
+            "submodule path not accepted: {}: {}; not a plain directory path inside the workspace, stw leaves it alone",
+            esc(p),
+            esc(why)
+        );
+        unreachable_rec(&mut rec, o, &why, SubRec::default());
+        list.push(rec);
+    }
+}
+
 /// The `--submodules` pass over the synced `list` of the superproject at `root`: each pinned submodule (checked
 /// out, detached HEAD, nothing else wrong with it) gets its step; with `include_uninitialized`, a submodule of
 /// `.gitmodules` without a checkout is added as unreachable (never cloned). `skip` is the rules checkout, which
@@ -387,24 +411,8 @@ pub fn submodule_pass(
         return;
     }
     for p in repo::submodule_paths(root) {
-        if SubPath::parse(&p).is_err() {
-            // a path from `.gitmodules` is untrusted: no file system access, reported by its escaped name
-            if !list.iter().any(|r| r.name == p) {
-                let mut rec = SyncRec {
-                    name: p.clone(),
-                    path: String::new(),
-                    fetch: "not-run".into(),
-                    ..Default::default()
-                };
-                unreachable_rec(
-                    &mut rec,
-                    o,
-                    "the submodule path is not a plain directory path; stw leaves it alone",
-                    SubRec::default(),
-                );
-                list.push(rec);
-            }
-            continue;
+        if repo::path_rejection(root, &p).is_some() {
+            continue; // reported by `rejected_pass`
         }
         let dir = root.join(&p);
         let canon = std::fs::canonicalize(&dir).unwrap_or(dir.clone());

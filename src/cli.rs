@@ -333,7 +333,15 @@ struct StatusArgs {
 struct Workspace {
     root: String,
     repos: Vec<RepoRef>,
+    /// `.gitmodules` paths that are not accepted (never in `repos`); empty when repositories were named.
+    rejected: Vec<(String, String)>,
     github: GithubState,
+}
+
+/// The text of a refused `.gitmodules` path in a report: escaped, since the path is untrusted.
+fn rejected_text((p, why): &(String, String)) -> String {
+    let esc = |s: &str| crate::github::reads::escape_untrusted(s, 200).0;
+    format!("submodule path not accepted: {}: {}", esc(p), esc(why))
 }
 
 fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
@@ -368,9 +376,15 @@ fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
         }
         repos.retain(|r| c.repos.contains(&r.name));
     }
+    let rejected = if c.repos.is_empty() {
+        repo::rejected_paths(&root)
+    } else {
+        Vec::new()
+    };
     Ok(Workspace {
         root: root.to_string_lossy().into_owned(),
         repos,
+        rejected,
         github: GithubState::discover(c.offline),
     })
 }
@@ -488,6 +502,13 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
         };
         list.push(tidy_apply::apply_repo(r, plan, w, &aopts));
     }
+    for p in &ws.rejected {
+        list.push(tidy_apply::ApplyRepo {
+            name: escape_name(&p.0),
+            error: Some(rejected_text(p)),
+            ..Default::default()
+        });
+    }
     if let Some(all) = &wanted {
         for (p, _) in all {
             if !ws.repos.iter().any(|r| same_path(p, &r.path)) {
@@ -512,6 +533,10 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
     })
 }
 
+fn escape_name(p: &str) -> String {
+    crate::github::reads::escape_untrusted(p, 200).0
+}
+
 fn same_path(a: &str, b: &std::path::Path) -> bool {
     let (a, b) = (std::path::Path::new(a), b);
     a == b
@@ -525,9 +550,12 @@ fn run(command: Command) -> Result<u8> {
             let c = a.common;
             let ws = workspace(&c, a.rules_path.as_deref())?;
             let root = PathBuf::from(&ws.root);
-            let list = repo::for_each(&ws.repos, |r| {
+            let mut list = repo::for_each(&ws.repos, |r| {
                 status::collect_one(r, &root, ws.github.client())
             });
+            for p in &ws.rejected {
+                list.push(status::rejected_entry(&p.0, rejected_text(p)));
+            }
             let rules = sync::rules::agent_rules(
                 &root,
                 None,
@@ -562,9 +590,12 @@ fn run(command: Command) -> Result<u8> {
                 backup_days: a.backup_days,
                 now: tidy::now_secs(),
             };
-            let plans = repo::for_each(&ws.repos, |r| {
+            let mut plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)
             });
+            for p in &ws.rejected {
+                plans.push(tidy::rejected_plan(&p.0, rejected_text(p)));
+            }
             if a.common.json {
                 print_json(&tidy::to_json(&ws.root, &ws.github, &plans));
             } else {
@@ -607,6 +638,7 @@ fn run(command: Command) -> Result<u8> {
             };
             let mut list =
                 repo::for_each(&ws.repos, |r| sync::sync_repo(r, ws.github.client(), &opts));
+            sync::rejected_pass(&ws.rejected, &mut list, &opts);
             if a.submodules {
                 let root = PathBuf::from(&ws.root);
                 let rules_dir = sync::rules::checkout_path(&root, a.rules_path.as_deref());

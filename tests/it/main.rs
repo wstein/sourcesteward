@@ -32,6 +32,7 @@ mod review_lines;
 mod review_read;
 mod slug;
 mod status_counts;
+mod submodule_paths;
 mod sync;
 mod sync_flags;
 mod sync_rules;

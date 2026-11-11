@@ -238,10 +238,10 @@ pub fn remote_branch_count(repo: &gix::Repository) -> Result<usize> {
     Ok(n)
 }
 
-pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
-    let mut s = RepoStatus {
-        name: r.name.clone(),
-        path: p2s(&r.path),
+fn blank(name: String, path: String) -> RepoStatus {
+    RepoStatus {
+        name,
+        path,
         error: None,
         facts: HeadFacts::default(),
         changes: Changes::default(),
@@ -258,7 +258,18 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
         branches_local: None,
         branches_remote: None,
         worktrees: None,
-    };
+    }
+}
+
+/// The entry of a `.gitmodules` path that is not accepted as a repository: nothing is read from disk.
+pub fn rejected_entry(name: &str, error: String) -> RepoStatus {
+    let mut s = blank(name.to_string(), String::new());
+    s.error = Some(error);
+    s
+}
+
+pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
+    let mut s = blank(r.name.clone(), p2s(&r.path));
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
         s.facts = head_facts(&repo)?;

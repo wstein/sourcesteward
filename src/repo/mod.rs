@@ -77,7 +77,50 @@ pub fn submodule_paths(root: &Path) -> Vec<String> {
     out
 }
 
-/// The root and every checked-out submodule (a `.git` entry must exist), in `.gitmodules` order.
+/// Why a `.gitmodules` path is not accepted as a repository of the workspace; None when it is. The text of the
+/// path is untrusted: the rules of `stw add` (`SubPath::parse`: `[A-Za-z0-9._/-]`, relative, no `..`, no `-x`
+/// component, no git-special name), no symbolic link among its components, and the real path of an existing
+/// directory stays below the real path of the root.
+pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
+    if let Err(e) = crate::add::SubPath::parse(p) {
+        return Some(e);
+    }
+    let mut cur = root.to_path_buf();
+    for seg in p.trim_end_matches('/').split('/') {
+        cur.push(seg);
+        if std::fs::symlink_metadata(&cur).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Some("a component is a symbolic link".into());
+        }
+    }
+    if let (Ok(real), Ok(base)) = (std::fs::canonicalize(&cur), std::fs::canonicalize(root)) {
+        if !is_below(&real, &base) {
+            return Some("the directory is not below the workspace".into());
+        }
+    }
+    None
+}
+
+/// `real` lies strictly below `base` (both real paths).
+pub fn is_below(real: &Path, base: &Path) -> bool {
+    real.starts_with(base) && real != base
+}
+
+/// The `.gitmodules` paths of `root` that `path_rejection` refuses, with the reason (each path once, in file
+/// order). They are never listed as repositories; the commands report them.
+pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for p in submodule_paths(root) {
+        if let Some(why) = path_rejection(root, &p) {
+            if !out.iter().any(|(q, _)| *q == p) {
+                out.push((p, why));
+            }
+        }
+    }
+    out
+}
+
+/// The root and every checked-out submodule (a `.git` entry must exist), in `.gitmodules` order. A path that
+/// `path_rejection` refuses is left out (see `rejected_paths`).
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {
     let name = root
         .file_name()
@@ -88,8 +131,11 @@ pub fn list_repos(root: &Path) -> Vec<RepoRef> {
         path: root.to_path_buf(),
     }];
     for p in submodule_paths(root) {
+        if path_rejection(root, &p).is_some() {
+            continue;
+        }
         let path = root.join(&p);
-        if path.join(".git").exists() {
+        if path.join(".git").exists() && !v.iter().any(|r| r.name == p) {
             v.push(RepoRef { name: p, path });
         }
     }
