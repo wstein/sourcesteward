@@ -332,7 +332,7 @@ impl Client {
             }
         };
         let status = resp.status().as_u16();
-        let limited = super::is_rate_limit(status, resp.headers());
+        let limited = super::is_rate_limit(&mut resp);
         if limited {
             self.note_rate_limit();
         }

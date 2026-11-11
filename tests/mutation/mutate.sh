@@ -1350,6 +1350,25 @@ m SR35 'skipped reads are also named in the repository notice' src/status_review
   '(!r.skipped).then_some((p, r.problem.as_deref()?))' 'Some((p, r.problem.as_deref()?))' \
   status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
 
+m SR36 'a 403 with the rate limit only in the body does not stop' src/github.rs \
+  'text.contains("rate limit") || text.contains("abuse detection")' 'false' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR37 'the abuse detection body is no rate limit' src/github.rs \
+  'text.contains("rate limit") || text.contains("abuse detection")' 'text.contains("rate limit")' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR38 'a limited read does not say rate limit reached' src/github/reads.rs \
+  'rate limit reached; retry later' 'retry later' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR39 'a rate limit on another read does not set the stop' src/github.rs \
+  'if is_rate_limit(&mut resp) {' 'if false {' \
+  status_review a_rate_limit_on_another_read_stops_the_comment_reads
+m SR40 'base-not-default without a base branch' src/status_review.rs \
+  '!p.base.is_empty() && ' '' \
+  status_review hints_clear_not_ready_and_base_not_default_in_json_text_and_counts
+m SR41 'hints on the pull request line without --review' src/status.rs \
+  'false => vec![],' 'false => status_review::hints(p),' \
+  status_review hints_are_explained_in_the_long_text_and_absent_without_review
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

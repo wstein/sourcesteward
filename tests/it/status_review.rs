@@ -814,6 +814,7 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
             (7, false, "feat/x", ""),
             (8, false, "Main", "main"),
             (9, true, "main", "main"),
+            (10, false, "", "main"),
         ],
         vec![
             (1, clear_for(1)),
@@ -867,6 +868,10 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
         hints_of(&prs, 9).is_empty(),
         "a draft with FINDINGS is not clear-not-ready"
     );
+    assert!(
+        hints_of(&prs, 10).is_empty(),
+        "no base.ref, default branch known: no hint"
+    );
     assert_eq!(by_number(&prs, 4)["base"], "feat/x");
     assert_eq!(by_number(&prs, 4)["default_branch"], "main");
     assert!(by_number(&prs, 6)["base"].is_null());
@@ -893,7 +898,7 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
     );
     assert!(
         flat(&t).contains(
-            "\nreviews: 2 clear, 1 clear-carried, 2 findings, 4 no-review (hints: 2 clear-not-ready, 3 base-not-default)\n"
+            "\nreviews: 2 clear, 1 clear-carried, 2 findings, 5 no-review (hints: 2 clear-not-ready, 3 base-not-default)\n"
         ),
         "{t}"
     );
@@ -931,7 +936,14 @@ fn hints_are_explained_in_the_long_text_and_absent_without_review() {
     let fx = status_fixture();
     let r = path_str(&fx.path);
     let plain = stw(Some(&api.url), &["status", "--root", &r, "--long"]);
-    assert!(!out(&plain).contains("hint"), "{}", out(&plain));
+    let pt = out(&plain);
+    assert!(
+        !pt.contains("hint") && !pt.contains("base-not-default"),
+        "{pt}"
+    );
+    for l in pt.lines().filter(|l| l.trim_start().starts_with('#')) {
+        assert!(!l.contains('{'), "no hints without --review: {l}");
+    }
     let pj = stw(Some(&api.url), &["status", "--root", &r, "--json"]);
     let prs = prs_json(&pj);
     assert!(prs[0]["hints"].is_null(), "{}", prs[0]);
@@ -977,6 +989,7 @@ fn forge_rate(
     k: usize,
     status: u16,
     headers: Vec<(String, String)>,
+    body: &'static str,
     delay: bool,
 ) -> FakeRoutes {
     let seen = std::sync::atomic::AtomicUsize::new(0);
@@ -1001,7 +1014,7 @@ fn forge_rate(
                     if delay && i > k {
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
-                    (status, headers.clone(), "{}".into())
+                    (status, headers.clone(), body.into())
                 }
             }
             p if p.starts_with("/repos/test/fixture/pulls/") => {
@@ -1027,13 +1040,29 @@ const SKIP_TEXT: &str = "no further comment read was started";
 fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
     const N: u64 = 60;
     const K: usize = 3;
-    let variants: Vec<(u16, Vec<(String, String)>)> = vec![
-        (429, vec![]),
-        (403, vec![("retry-after".into(), "60".into())]),
-        (403, vec![("x-ratelimit-remaining".into(), "0".into())]),
+    type Variant = (u16, Vec<(String, String)>, &'static str);
+    let variants: Vec<Variant> = vec![
+        (429, vec![], "{}"),
+        (403, vec![("retry-after".into(), "60".into())], "{}"),
+        (
+            403,
+            vec![("x-ratelimit-remaining".into(), "0".into())],
+            "{}",
+        ),
+        // a secondary limit without headers: only the body says so (as in Go)
+        (
+            403,
+            vec![],
+            r#"{"message":"You have exceeded a secondary Rate Limit. Please wait."}"#,
+        ),
+        (
+            403,
+            vec![],
+            r#"{"message":"You have triggered an abuse detection mechanism."}"#,
+        ),
     ];
-    for (status, headers) in variants {
-        let api = forge_rate(N, K, status, headers.clone(), true);
+    for (status, headers, body) in variants {
+        let api = forge_rate(N, K, status, headers.clone(), body, true);
         let o = run_review(&api, &["--json"]);
         assert_eq!(
             o.status.code(),
@@ -1073,11 +1102,23 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
             "every read that was not sent is skipped: {h} sent"
         );
         assert!(skipped > 0);
+        for p in unknown.iter().filter(|p| {
+            !p["review_state"]["read_error"]
+                .as_str()
+                .unwrap()
+                .contains(SKIP_TEXT)
+        }) {
+            let e = p["review_state"]["read_error"].as_str().unwrap();
+            assert!(
+                e.contains("rate limit reached"),
+                "a limited read says so: {e}"
+            );
+        }
         assert!(unknown
             .iter()
             .all(|p| p["review_state"]["decisive"].is_null()));
         // the text: `?`, one notice for the run, one for the repository with the reads that did fail
-        let api = forge_rate(N, K, status, headers.clone(), true);
+        let api = forge_rate(N, K, status, headers.clone(), body, true);
         let o = run_review(&api, &[]);
         assert_eq!(o.status.code(), Some(0));
         let t = out(&o);
@@ -1118,7 +1159,8 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
 
 #[test]
 fn a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads() {
-    let api = forge_rate(20, 1, 403, vec![], false);
+    let plain = r#"{"message":"Resource not accessible by integration"}"#;
+    let api = forge_rate(20, 1, 403, vec![], plain, false);
     let o = run_review(&api, &["--json"]);
     assert_eq!(o.status.code(), Some(0));
     assert_eq!(all_comment_hits(&api), 20, "every pull request is read");
@@ -1126,7 +1168,10 @@ fn a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads() {
         let e = p["review_state"]["read_error"].as_str().unwrap();
         assert!(e.contains("permission") && !e.contains(SKIP_TEXT), "{e}");
     }
-    let t = out(&run_review(&forge_rate(20, 1, 403, vec![], false), &[]));
+    let t = out(&run_review(
+        &forge_rate(20, 1, 403, vec![], plain, false),
+        &[],
+    ));
     assert!(!t.contains("rate limit"), "{t}");
 }
 
@@ -1200,4 +1245,49 @@ fn forge_rate_any() -> FakeRoutes {
         }
         (429, vec![], "{}".into())
     })
+}
+
+/// A rate limit seen by any other request of the run (the merge state of a pull request, the issue list) stops the
+/// comment reads too: none starts and every pull request is `?`, skipped.
+#[test]
+fn a_rate_limit_on_another_read_stops_the_comment_reads() {
+    for limited in ["/repos/test/fixture/pulls/", "/repos/test/fixture/issues"] {
+        let api = FakeRoutes::start(move |path, _| {
+            if path.starts_with(limited) && !path.ends_with("/comments") {
+                return (429, vec![], "{}".into());
+            }
+            let body = match path {
+                "/repos/test/fixture/pulls" => json!([
+                    {"number": 1, "title": "one", "draft": false, "user": {"login": "me", "type": "User"},
+                     "head": {"ref": "b1", "sha": HEAD}},
+                    {"number": 2, "title": "two", "draft": false, "user": {"login": "me", "type": "User"},
+                     "head": {"ref": "b2", "sha": HEAD}}]),
+                "/repos/test/fixture/issues" => json!([]),
+                p if p.ends_with("/comments") => json!([]),
+                _ => json!({"mergeable_state": "clean"}),
+            };
+            (200, vec![], body.to_string())
+        });
+        let o = run_review(&api, &["--json"]);
+        assert_eq!(
+            o.status.code(),
+            Some(0),
+            "{limited}: {}{}",
+            out(&o),
+            err(&o)
+        );
+        assert_eq!(all_comment_hits(&api), 0, "{limited}: {:?}", api.hits());
+        for p in prs_json(&o) {
+            assert_eq!(p["review"], "unknown", "{limited}: {p}");
+            assert!(p["review_state"]["read_error"]
+                .as_str()
+                .unwrap()
+                .contains(SKIP_TEXT));
+        }
+        let t = out(&run_review(&api, &[]));
+        assert!(
+            t.contains("rate limit reached, 2 reads skipped"),
+            "{limited}: {t}"
+        );
+    }
 }

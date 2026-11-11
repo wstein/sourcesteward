@@ -162,15 +162,34 @@ fn classify(path: &str) -> (String, &'static str) {
     (format!("{owner}/{name}"), source)
 }
 
-/// The answer is a rate limit: 429, or 403 with an exhausted `X-RateLimit-Remaining` or a `Retry-After` header.
-fn is_rate_limit(status: u16, headers: &ureq::http::HeaderMap) -> bool {
-    status == 429
-        || (status == 403
-            && (headers
-                .get("x-ratelimit-remaining")
-                .and_then(|v| v.to_str().ok())
-                .is_some_and(|v| v.trim() == "0")
-                || headers.contains_key("retry-after")))
+/// The answer is a rate limit: 429, or 403 with an exhausted `X-RateLimit-Remaining`, a `Retry-After` header, or
+/// (secondary limits can come without headers) "rate limit" or "abuse detection" in the first 4096 bytes of the body,
+/// as in Go (`hosting/watch_reader.go`). Reads the body of a 403 without those headers.
+fn is_rate_limit(resp: &mut ureq::http::Response<ureq::Body>) -> bool {
+    let status = resp.status().as_u16();
+    if status == 429 {
+        return true;
+    }
+    if status != 403 {
+        return false;
+    }
+    let headers = resp.headers();
+    if headers
+        .get("x-ratelimit-remaining")
+        .and_then(|v| v.to_str().ok())
+        .is_some_and(|v| v.trim() == "0")
+        || headers.contains_key("retry-after")
+    {
+        return true;
+    }
+    let text = resp
+        .body_mut()
+        .with_config()
+        .limit(4096)
+        .read_to_string()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    text.contains("rate limit") || text.contains("abuse detection")
 }
 
 /// The `X-RateLimit-*` headers of an answer, when all three are there.
@@ -333,7 +352,7 @@ impl Client {
         let rate = sent.as_ref().ok().and_then(|r| rate_from(r.headers()));
         self.record(path, started.elapsed(), rate);
         let mut resp = sent?;
-        if is_rate_limit(resp.status().as_u16(), resp.headers()) {
+        if is_rate_limit(&mut resp) {
             self.note_rate_limit();
         }
         match resp.status().as_u16() {
