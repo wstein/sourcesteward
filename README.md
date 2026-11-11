@@ -19,6 +19,10 @@ SourceSteward is a pre-release Go/Cobra toolkit inspired by the convenience of
 evidence-based local cleanup and worktree-aware operations, with native Git/jj support and separately planned GitButler integration.
 No implementation code is copied from those projects.
 
+**Status (2026-11-11):** jj (Jujutsu) support is not pursued. The Rust successor (`projects/sourcesteward`) supports Git only
+and adds the functions jj offers (undo/oplog, conflict resolution) to stw itself. The jj text below describes the existing
+Go implementation, which is not developed further in this respect.
+
 **Implemented:** native Git/jj inspection and inventory (also across several repositories with `stw repos`), a read-only, action-first workspace overview with `stw status` (local state plus open pull requests, release drafts, unreleased tags and CI from GitHub, with optional `--stats` and `--verbose`), workspace synchronization with undo (`stw sync` and `stw sync restore`), submodule alignment (`stw sync --submodules`), an interactive terminal cleanup wizard and narrow registration pruning (`stw tidy`), a live pull request watcher with `stw watch`, pull request snapshots with `stw pulls`, issue snapshots with `stw issues`, PR Ready precondition evaluation with `stw ready-check`, review carry-over validation with `stw review carry-over`, isolated task workspace creation and owned-workspace handoff/retirement (`stw workspace`), and read-only GitHub repository/PR/CI inspection (`stw hosting`). Git and jj are Tier 1 peers; colocated repositories use native jj. All data commands have human and versioned JSON output.
 
 **Planned:** a read-only Git submodule pin audit (`stw pins`,
