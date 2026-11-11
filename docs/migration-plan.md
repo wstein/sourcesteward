@@ -167,7 +167,8 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
    identity, as `git rebase` does. A dotagents rule change for this is in progress.
 7. **Defer in-memory rerere prediction (native jj: see decision 8).** Rerere reuse during Git resolution works without
    reimplementing Git's conflict-ID algorithm. jj-style structured conflict persistence needs another design, not
-   merely commits containing marker text. Benefit 2, effort 5, risk 4 for native parity at this stage (historical; not pursued, decision 8).
+   merely commits containing marker text. Benefit 2, effort 5, risk 4 for native parity at this stage (historical; not
+   pursued, decision 8).
 8. **Recorded decision (owner, 2026-11-11): jj (Jujutsu) is not supported.** Git is the standard. Functions that jj
    offers (undo/oplog, conflict resolution) are added to stw instead of maintaining a second repository model. jj is an
    officially unsupported tool: it may work in a colocated Git repository, without a test and without a promise. There is
@@ -196,7 +197,7 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | Go command | Rust today | M | Proposal | Test source in Go |
 | --- | --- | --- | --- | --- |
 | `status` | present; review column stays `null` (README, M3) | M4 | **port**: core command; the comment-based review state is not wired in. Deviation: Go refuses jj-owned paths (`status-unsupported-backend`); Rust has no jj detection (decision 8). | `internal/statuscmd` (40), `statusremote` (109), `cli/status_*_test.go`; goldens pin Go text and schema v1, reuse inputs not goldens |
-| `sync` | partial: dry run by default, `--apply` fast-forwards (Go acts by default) | - | **port** (done): fast-forward of every repository. Deviation: Rust is dry-run by default. Deviation: Go refuses jj-owned paths ("jj-owned paths are not supported (Git only)"); Rust has no jj detection (decision 8). | `internal/stwsync` (162), `cli/sync_test.go` |
+| `sync` | partial: dry run by default, `--apply` fast-forwards (Go acts by default) | - | **port** (done): fast-forward of every repository. Deviation: Rust is dry-run by default. Deviation: Go refuses jj-owned paths (`sync-unsupported-backend`); Rust has no jj detection (decision 8). | `internal/stwsync` (162), `cli/sync_test.go` |
 | `sync --plan`, `--dry-run` (flag) | covered: dry run is the default | - | **drop**: replaced by the default dry run and `--apply`. | same |
 | `sync --ff-only` (flag) | the Rust behavior | - | **port** (done). | same |
 | `sync --rebase`, `--merge`, `--autostash`, `--no-autostash` (flag) | absent; Rust never merges, rebases or stashes | - | **drop** (matrix: no automatic stash, reset, merge, rebase). Deviation: Go follows the Git configuration (`pull.rebase`, `rebase.autoStash`, `merge.autoStash`, `fetch.prune`; `sync.go:33-35`), Rust ignores it. | same |
@@ -283,9 +284,10 @@ Owner decisions of 2026-11-10 (chosen by selection):
 - Still deferred: M7, M11, M12, M13.
 - **Open: the `drop` proposals.** Criterion (b) needs an explicit owner decision per `drop`: 9 command rows, the (flag) rows
   marked drop and the two extra binaries. Until then they are proposals. Confirmed by the owner (2026-11-11, jj is not
-  supported): `tidy` with jj (bookmarks, owned-workspace/task retirement), `cmd/gh-jj`. Deviation, not a drop: Go `status` and `sync` refuse
-  jj-owned paths; Rust has no jj detection (decision 8). All other `drop` rows (hosting, inspect, inventory, repos, pins, version, `cmd/stw-docs`,
-  the sync flags, site/docs) are not yet confirmed individually.
+  supported): `tidy` with jj (bookmarks, owned-workspace/task retirement), `cmd/gh-jj`. Deviation, not a drop: Go `status`,
+  `sync` (and `sync restore`, watch, tidy via the same check) refuse jj-owned paths; Rust has no jj detection
+  (decision 8). All other `drop` rows (hosting, inspect, inventory, repos, pins, version, `cmd/stw-docs`, the sync flags,
+  site/docs) are not yet confirmed individually.
 
 ### Next slice
 
