@@ -1227,6 +1227,66 @@ m SF37 'the parallel helper ignores its limit' src/repo/mod.rs \
   'for _ in 0..limit.max(1).min(items.len()) {' 'for _ in 0..items.len() {' \
   status_flags the_repositories_are_worked_on_at_most_16_at_a_time_and_in_order
 
+# stw status --review (src/status_review.rs, tests/it/status_review.rs)
+m SR1 'every comment author is trusted' src/status_review.rs \
+  '.filter(|c| matches!(c.association.as_str(), "OWNER" | "MEMBER" | "COLLABORATOR"))' \
+  '.filter(|_| true)' \
+  status_review the_states_of_a_mixed_set_of_pull_requests
+m SR2 'the review is evaluated for a local scope, not the pull request' src/status_review.rs \
+  'state: review::evaluate_read(Scope::Pr(number), head, read, &trusted),' \
+  'state: review::evaluate_read(Scope::Local, head, read, &trusted),' \
+  status_review a_clear_at_the_head_is_shown_in_the_text_and_in_the_json
+m SR3 'a failed comment read leaves no reason' src/status_review.rs \
+  'Read::Failed(m) => Some(m.clone()),' 'Read::Failed(_) => None,' \
+  status_review a_comment_read_that_is_denied_missing_or_broken_is_a_question_mark_and_a_notice_never_a_state
+m SR4 'one pull request more than the limit is read' src/status_review.rs \
+  'if jobs.len() < REVIEW_LIMIT {' 'if jobs.len() <= REVIEW_LIMIT {' \
+  status_review at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read
+m SR5 'a head that is no full commit id is still read' src/status_review.rs \
+  'if !is_hex40(&j.head) {' 'if false && !is_hex40(&j.head) {' \
+  status_review a_pull_request_with_a_head_that_is_not_a_full_commit_id_is_unknown
+m SR6 'the detail of a finding is not escaped in the JSON' src/status_review.rs \
+  'if let Some(d) = f["detail"].as_str().map(|d| esc_cut(d, 120)) {' \
+  'if let Some(d) = f["detail"].as_str().map(|d| d.to_string()) {' \
+  status_review text_of_the_forge_is_escaped_and_cut_in_text_and_json
+m SR7 'comment reads are counted as issues, not pulls' src/github.rs \
+  '&& n.bytes().all(|b| b.is_ascii_digit())' '&& n.bytes().all(|b| b == b'"'"'x'"'"')' \
+  status_review the_comment_reads_are_counted_in_the_stats_as_pulls_requests
+m SR8 'a list read starts after the overall deadline' src/github/reads.rs \
+  'Err(m) => return Page::Failed(m),' 'Err(_) => timeout,' \
+  github_reads a_list_read_obeys_the_overall_deadline
+m SR9 'list read requests are not counted' src/github/reads.rs \
+  'self.record(&path, started.elapsed(), rate);' 'let _ = rate;' \
+  github_reads list_reads_are_counted_in_the_stats_and_comments_belong_to_the_pulls_source
+m SR10 'the text label of an unknown state is not a question mark' src/status_review.rs \
+  'Status::Unknown => "?",' 'Status::Unknown => "unknown",' \
+  status_review a_comment_read_that_is_denied_missing_or_broken_is_a_question_mark_and_a_notice_never_a_state
+m SR11 'options.review is always false' src/status.rs \
+  '"icons": null, "review": opts.review}' '"icons": null, "review": false}' \
+  status_review a_clear_at_the_head_is_shown_in_the_text_and_in_the_json
+m SR12 'comments are read without --review' src/cli.rs \
+  'if let (true, Some(cl)) = (a.review, ws.github.client()) {' \
+  'if let (true, Some(cl)) = (true, ws.github.client()) {' \
+  status_review each_pull_request_costs_one_comment_read_and_the_counts_do_not_change
+m SR13 'the title of a pull request is printed unescaped' src/status.rs \
+  'esc(&p.title),' 'p.title.clone(),' \
+  status_review text_of_the_forge_is_escaped_and_cut_in_text_and_json
+m SR14 'the evidence lines are never printed' src/status.rs \
+  'for l in p.review.iter().flat_map(status_review::evidence_lines) {' \
+  'for l in p.review.iter().take(0).flat_map(status_review::evidence_lines) {' \
+  status_review long_text_shows_the_evidence_of_each_state
+m SR15 'the notice of unread reviews is dropped' src/status_review.rs \
+  'if let Some((p, why)) = bad.first() {' 'if let Some((p, why)) = bad.first().filter(|_| false) {' \
+  status_review a_comment_read_that_is_denied_missing_or_broken_is_a_question_mark_and_a_notice_never_a_state
+m SR16 '--review is allowed with --offline' src/cli.rs \
+  '    #[arg(long, conflicts_with = "offline")]
+    review: bool,' '    #[arg(long)]
+    review: bool,' \
+  status_review review_is_a_usage_error_with_offline_and_nothing_is_read
+m SR17 'a read that hit its bound still decides' src/status_review.rs \
+  'Read::Observed(o) => o.incomplete.clone(),' 'Read::Observed(_) => None,' \
+  status_review a_comment_list_that_hits_the_read_budget_is_unknown
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
