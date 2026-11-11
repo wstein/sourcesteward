@@ -1655,12 +1655,62 @@ m TH14 'entries that are no manifest do not count for the scan bound' src/tidy_h
   '                looked += 1;' '                let _ = looked;' \
   tidy_history every_bound_is_a_visible_marker
 
+# stw prove (new): every check of the proof and the verdict
+m PV1 'prove: the committer identity is not checked' src/prove.rs \
+  'for (role, who) in [("author", &m.author), ("committer", &m.committer)] {' 'for (role, who) in [("author", &m.author)] {' \
+  prove a_foreign_committer_is_not_proved
+m PV2 'prove: the author identity is not checked' src/prove.rs \
+  'for (role, who) in [("author", &m.author), ("committer", &m.committer)] {' 'for (role, who) in [("committer", &m.committer)] {' \
+  prove a_foreign_identity_is_not_proved
+m PV3 'prove: a lost Co-Authored-By line passes' src/prove.rs \
+  'if !have.contains(&line.trim_end().to_string()) {' 'if false {' \
+  prove a_missing_co_authored_by_trailer_is_not_proved
+m PV4 'prove: session links are not looked for' src/prove.rs \
+  '.filter(|m| lint_pr::has_session_link(&m.message))' '.filter(|_| false)' \
+  prove a_session_link_in_a_new_commit_text_is_not_proved
+m PV5 'prove: the file sets always count as equal' src/prove.rs \
+  'if only_old.is_empty() && only_new.is_empty() {' 'if true {' \
+  prove an_additional_commit_is_not_proved
+m PV6 'prove: ALT equal to NEU is not named' src/prove.rs \
+  'if old == new {' 'if false {' \
+  prove neu_equal_to_alt_proves_nothing
+m PV7 'prove: a base that is no ancestor of NEU is accepted' src/prove.rs \
+  'match repo::is_ancestor(&repo, new_base, new) {' 'match repo::is_ancestor(&repo, new_base, new).map(|_| true) {' \
+  prove a_rebase_without_base_says_so_and_a_base_that_is_no_ancestor_is_refused
+m PV8 'prove: one ok check is enough for the verdict' src/prove.rs \
+  '&& p.checks.iter().all(|c| c.state == CheckState::Ok);' '&& p.checks.iter().any(|c| c.state == CheckState::Ok);' \
+  prove a_merge_commit_in_the_new_range_is_not_proved
+m PV9 'prove: the Carried-over line is printed for not proved too' src/prove.rs \
+  'if p.proved {' 'if true {' \
+  prove reordered_commits_are_not_proved_although_the_patch_id_is_equal
+m PV10 'prove: a missing identity is replaced by the fixture identity' src/prove.rs \
+  'let Some((name, email)) = replay::configured_user(repo) else {' \
+  'let Some((name, email)) = replay::configured_user(repo).or(Some((gix::bstr::BString::from("T"), gix::bstr::BString::from("t@example.com")))) else {' \
+  prove no_configured_identity_is_unknown_never_a_pass
+m PV11 'prove: commit subjects are printed raw' src/prove.rs \
+  'format!("{} {}", m.id, esc(&m.subject))' 'format!("{} {}", m.id, m.subject)' \
+  prove a_session_link_in_a_new_commit_text_is_not_proved
+m PV12 'prove: --base is ignored for the new base' src/prove.rs \
+  'Some(Some(b)) => (b, "flag"),' 'Some(Some(_)) => (old_base, "merge-base"),' \
+  prove a_pure_rebase_is_proved_and_ends_with_the_line
+m PV13 'prove: the pull request defaults to number 1' src/prove.rs \
+  '        None => PrRef::None,' '        None => PrRef::Number(1),' \
+  prove a_pure_rebase_is_proved_and_ends_with_the_line
+m PV14 'prove: a repository outside the workspace is used' src/cli.rs \
+  '.find(|r| real(&r.path) == top)' '.next()' \
+  prove the_repository_comes_from_the_workspace_only
+m PV15 'prove: a range is accepted as a revision' src/prove.rs \
+  'if rev.contains("..") {' 'if false {' \
+  prove usage_errors_exit_two_before_any_read
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
   if [ -n "${ONLY// /}" ] && [[ "$ONLY" != *" $id "* ]]; then continue; fi
   rm -rf "$WORK"; mkdir -p "$WORK"
   (cd "$SRC" && tar --exclude=target -cf - .) | (cd "$WORK" && tar -xf -)
+  # a copy keeps old modification times: cargo would take a restored file for unchanged, so touch every file
+  (cd "$WORK" && find . -type f -exec touch {} +)
   f=$WORK/${FILES[$i]}
   # perl instead of bash string replacement: that is quadratic and hangs under macOS bash 3.2 on large files
   old=${OLDS[$i]}
