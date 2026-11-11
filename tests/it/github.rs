@@ -151,6 +151,7 @@ fn json_field_names_are_the_documented_ones() {
             "github_auth",
             "agent_rules",
             "github_note",
+            "rejected_paths",
             "repos",
             "summary",
             "totals"
@@ -226,6 +227,7 @@ fn json_field_names_are_the_documented_ones() {
             "github",
             "github_auth",
             "github_note",
+            "rejected_paths",
             "repos",
             "summary"
         ])

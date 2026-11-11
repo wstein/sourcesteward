@@ -80,13 +80,21 @@ pub fn submodule_paths(root: &Path) -> Vec<String> {
 /// Why a `.gitmodules` path is not accepted as a repository of the workspace; None when it is. The text of the
 /// path is untrusted: the rules of `stw add` (`SubPath::parse`: `[A-Za-z0-9._/-]`, relative, no `..`, no `-x`
 /// component, no git-special name), no symbolic link among its components, and the real path of an existing
-/// directory stays below the real path of the root.
+/// directory stays below the real path of the root. The reason does not repeat the path.
 pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
-    if let Err(e) = crate::add::SubPath::parse(p) {
-        return Some(e);
+    if p.bytes()
+        .any(|b| !(b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/')))
+    {
+        return Some("rename with git mv; stw handles only [A-Za-z0-9._/-]".into());
     }
+    let Ok(sub) = crate::add::SubPath::parse(p) else {
+        return Some(
+            "not a plain relative path (no empty, '.', '..' or '-x' component, no git-special name)"
+                .into(),
+        );
+    };
     let mut cur = root.to_path_buf();
-    for seg in p.trim_end_matches('/').split('/') {
+    for seg in sub.as_str().split('/') {
         cur.push(seg);
         if std::fs::symlink_metadata(&cur).is_ok_and(|m| m.file_type().is_symlink()) {
             return Some("a component is a symbolic link".into());
@@ -100,18 +108,17 @@ pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
     None
 }
 
-/// `real` lies strictly below `base` (both real paths).
-pub fn is_below(real: &Path, base: &Path) -> bool {
-    real.starts_with(base) && real != base
-}
-
-/// The `.gitmodules` paths of `root` that `path_rejection` refuses, with the reason (each path once, in file
-/// order). They are never listed as repositories; the commands report them.
+/// The `.gitmodules` paths of `root` that `path_rejection` refuses, with the reason (each path once, a trailing
+/// `/` ignored, in file order). They are never listed as repositories; the commands report them.
 pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
     for p in submodule_paths(root) {
         if let Some(why) = path_rejection(root, &p) {
-            if !out.iter().any(|(q, _)| *q == p) {
+            let key = p.strip_suffix('/').unwrap_or(&p);
+            if !out
+                .iter()
+                .any(|(q, _)| q.strip_suffix('/').unwrap_or(q) == key)
+            {
                 out.push((p, why));
             }
         }
@@ -119,27 +126,46 @@ pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
     out
 }
 
+/// The normalized name of an accepted `.gitmodules` path (no trailing `/`), else None.
+pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
+    if path_rejection(root, p).is_some() {
+        return None;
+    }
+    crate::add::SubPath::parse(p)
+        .ok()
+        .map(|s| s.as_str().to_string())
+}
+
 /// The root and every checked-out submodule (a `.git` entry must exist), in `.gitmodules` order. A path that
-/// `path_rejection` refuses is left out (see `rejected_paths`).
+/// `path_rejection` refuses is left out (see `rejected_paths`). The name is the normalized path; a directory
+/// named twice (`a`, `a/`) is listed once, and never twice with the root.
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "root".into());
+    let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let mut seen = vec![real(root)];
     let mut v = vec![RepoRef {
         name,
         path: root.to_path_buf(),
     }];
     for p in submodule_paths(root) {
-        if path_rejection(root, &p).is_some() {
+        let Some(name) = accepted_name(root, &p) else {
             continue;
-        }
-        let path = root.join(&p);
-        if path.join(".git").exists() && !v.iter().any(|r| r.name == p) {
-            v.push(RepoRef { name: p, path });
+        };
+        let path = root.join(&name);
+        if path.join(".git").exists() && !seen.contains(&real(&path)) {
+            seen.push(real(&path));
+            v.push(RepoRef { name, path });
         }
     }
     v
+}
+
+/// `real` lies strictly below `base` (both real paths).
+pub fn is_below(real: &Path, base: &Path) -> bool {
+    real.starts_with(base) && real != base
 }
 
 /// Name and email written to reflogs when neither the environment nor the Git config names a committer.

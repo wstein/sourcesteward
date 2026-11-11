@@ -747,7 +747,7 @@ fn a_submodule_path_that_is_not_a_plain_path_is_unreachable() {
         r["reason"]
             .as_str()
             .unwrap()
-            .contains("not a plain directory path"),
+            .contains("submodule path not accepted"),
         "{r}"
     );
 }
@@ -818,7 +818,7 @@ fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
             r["reason"]
                 .as_str()
                 .unwrap()
-                .contains("not a plain directory path"),
+                .contains("submodule path not accepted"),
             "{r}"
         );
     }

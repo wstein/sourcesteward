@@ -1030,16 +1030,13 @@ m RA "the prune scope has no trailing slash (origin-mirror/ passes)" src/sync/fe
   sync_flags a_refspec_into_a_sibling_namespace_of_origin_refuses_prune
 
 m SH1 "list_repos lists a refused path as a repository" src/repo/mod.rs \
-  "        if path_rejection(root, &p).is_some() {
+  "        let Some(name) = accepted_name(root, &p) else {
             continue;
-        }
-        let path = root.join(&p);" \
-  "        let path = root.join(&p);" \
-  submodule_paths sync_apply_fails_on_refused_paths_and_leaves_their_repositories_alone
+        };" \
+  "        let name = p.clone();" \
+  submodule_paths sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone
 m SH2 "the path rules of stw add are not applied to .gitmodules paths" src/repo/mod.rs \
-  "    if let Err(e) = crate::add::SubPath::parse(p) {
-        return Some(e);
-    }" "" \
+  "let Ok(sub) = crate::add::SubPath::parse(p) else {" "let Ok(sub) = crate::add::SubPath::parse(\"x\") else {" \
   submodule_paths path_rejection_rules
 m SH3 "a symbolic link among the components is accepted" src/repo/mod.rs \
   "if std::fs::symlink_metadata(&cur).is_ok_and(|m| m.file_type().is_symlink()) {
@@ -1053,25 +1050,63 @@ m SH4 "the real path may leave or equal the workspace root" src/repo/mod.rs \
 m SH5 "refused paths are not reported by sync" src/sync/submodules.rs \
   "    for (p, why) in rejected {" "    for (p, why) in rejected.iter().take(0) {" \
   submodule_paths sync_dry_run_reports_refused_paths_and_touches_nothing
-m SH6 "refused paths are not reported by status" src/cli.rs \
-  "            for p in &ws.rejected {
-                list.push(status::rejected_entry" "            for p in ws.rejected.iter().take(0) {
-                list.push(status::rejected_entry" \
-  submodule_paths status_reports_refused_paths_and_does_not_read_them
-m SH7 "refused paths are not reported by tidy plan" src/cli.rs \
-  "            for p in &ws.rejected {
-                plans.push" "            for p in ws.rejected.iter().take(0) {
-                plans.push" \
-  submodule_paths tidy_plan_reports_refused_paths_and_does_not_read_them
-m SH8 "a refused path in a dry run counts as an error (exit 1)" src/sync/submodules.rs \
+m SH6 "refused paths are not a notice of status" src/cli.rs \
+  "                        &rejected_notices(&ws.rejected)," "                        &[]," \
+  submodule_paths status_notes_refused_paths_without_a_repository_entry
+m SH7 "refused paths are not a notice of tidy plan" src/cli.rs \
+  "print!(\"{}\", tidy::render_human(&plans, a.all));
+                print_notices(&ws.rejected);" "print!(\"{}\", tidy::render_human(&plans, a.all));" \
+  submodule_paths tidy_plan_notes_refused_paths_without_a_repository_entry
+m SH8 "a refused path in a dry run with --submodules counts as an error" src/sync/submodules.rs \
   "    let (result, reason) = if o.apply {" "    let (result, reason) = if o.apply || why.contains(\"not accepted\") {" \
-  submodule_paths sync_dry_run_reports_refused_paths_and_touches_nothing
-
-m SH9 "refused paths are not reported by tidy apply" src/cli.rs \
-  "    for p in &ws.rejected {
-        list.push(tidy_apply::ApplyRepo {" "    for p in ws.rejected.iter().take(0) {
-        list.push(tidy_apply::ApplyRepo {" \
-  submodule_paths tidy_apply_reports_refused_paths_and_does_not_touch_them
+  submodule_paths sync_submodules_dry_run_predicts_unreachable_as_a_skip
+m SH9 "refused paths are not a notice of tidy apply" src/cli.rs \
+  "print!(\"{}\", tidy_apply::apply_render_human(&aopts.run_id, &list));
+        print_notices(&ws.rejected);" "print!(\"{}\", tidy_apply::apply_render_human(&aopts.run_id, &list));" \
+  submodule_paths tidy_apply_notes_refused_paths_and_does_not_touch_them
+m SH10 "a refused path makes status exit 1" src/cli.rs \
+  "Ok(failed(list.iter().any(|s| s.error.is_some())))" "Ok(failed(list.iter().any(|s| s.error.is_some()) || !ws.rejected.is_empty()))" \
+  submodule_paths status_notes_refused_paths_without_a_repository_entry
+m SH11 "sync --apply without --submodules fails on a refused path" src/sync/submodules.rs \
+  "        if o.submodules {
+            unreachable_rec" "        if o.submodules || o.apply {
+            unreachable_rec" \
+  submodule_paths sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone
+m SH12 "status JSON has no rejected_paths" src/cli.rs \
+  "                    m.insert(\"rejected_paths\".into(), rejected_json(&ws.rejected));
+                }
+                print_json(&v);
+            } else {
+                print!(
+                    \"{}\"," "                }
+                print_json(&v);
+            } else {
+                print!(
+                    \"{}\"," \
+  submodule_paths status_notes_refused_paths_without_a_repository_entry
+m SH13 "a directory named twice is listed twice" src/repo/mod.rs \
+  "path.join(\".git\").exists() && !seen.contains(&real(&path))" "path.join(\".git\").exists()" \
+  submodule_paths a_directory_named_twice_is_listed_and_synced_once
+m SH14 "the name keeps the trailing slash" src/repo/mod.rs \
+  ".map(|s| s.as_str().to_string())" ".map(|_| p.to_string())" \
+  submodule_paths a_directory_named_twice_is_listed_and_synced_once
+m SH15 "a submodule named like the root is dropped (dedup by name)" src/repo/mod.rs \
+  "path.join(\".git\").exists() && !seen.contains(&real(&path))" "path.join(\".git\").exists() && !v.iter().any(|r| r.name == name)" \
+  submodule_paths a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported
+m SH16 "sync skips a refused path whose name is already in the list" src/sync/submodules.rs \
+  "    for (p, why) in rejected {" "    for (p, why) in rejected {
+        if list.iter().any(|r| r.name == *p) {
+            continue;
+        }" \
+  submodule_paths a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported
+m SH17 "refused paths are reported although --repo names repositories" src/cli.rs \
+  "    let rejected = if c.repos.is_empty() {" "    let rejected = if true {" \
+  submodule_paths repo_names_decide_whether_refused_paths_are_reported
+m SH18 "the uninitialized pass visits refused paths too" src/sync/submodules.rs \
+  "        let Some(p) = repo::accepted_name(root, &p) else {
+            continue;
+        };" "        let p = p;" \
+  submodule_paths sync_with_submodules_names_each_refused_path_once
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

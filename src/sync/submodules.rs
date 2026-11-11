@@ -366,26 +366,25 @@ fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
     );
 }
 
-/// Adds one record per `.gitmodules` path that is not accepted (`repo::rejected_paths`): with `--apply` an error
-/// (like `unreachable`), in a dry run a skip. The path is untrusted: no file system access, escaped in the text.
-/// The record is not synced, whatever the flags.
+/// Adds one record per `.gitmodules` path that is not accepted (`repo::rejected_paths`), never synced, whatever
+/// the flags. Only `--apply --submodules` makes it an error (Go's `unreachable` arises only there; a dry run
+/// predicts it as a skip); `--apply` alone shows a skip with the same text, a hint that does not fail the run.
+/// The path is untrusted: no file system access, escaped in the text.
 pub fn rejected_pass(rejected: &[(String, String)], list: &mut Vec<SyncRec>, o: &Opts) {
     for (p, why) in rejected {
-        if list.iter().any(|r| r.name == *p) {
-            continue;
-        }
         let mut rec = SyncRec {
             name: p.clone(),
             path: String::new(),
             fetch: "not-run".into(),
             ..Default::default()
         };
-        let why = format!(
-            "submodule path not accepted: {}: {}; not a plain directory path inside the workspace, stw leaves it alone",
-            esc(p),
-            esc(why)
-        );
-        unreachable_rec(&mut rec, o, &why, SubRec::default());
+        let why = format!("submodule path not accepted: {}: {why}", esc(p));
+        if o.submodules {
+            unreachable_rec(&mut rec, o, &why, SubRec::default());
+        } else {
+            put(&mut rec, "skip", why, SubRec::default());
+            rec.submodule = None;
+        }
         list.push(rec);
     }
 }
@@ -411,12 +410,16 @@ pub fn submodule_pass(
         return;
     }
     for p in repo::submodule_paths(root) {
-        if repo::path_rejection(root, &p).is_some() {
-            continue; // reported by `rejected_pass`
-        }
+        // a refused path is reported by `rejected_pass`; the name is the normalized path, as in the list
+        let Some(p) = repo::accepted_name(root, &p) else {
+            continue;
+        };
         let dir = root.join(&p);
         let canon = std::fs::canonicalize(&dir).unwrap_or(dir.clone());
-        if dir.join(".git").exists() || canon == skip || list.iter().any(|r| r.name == p) {
+        if dir.join(".git").exists()
+            || canon == skip
+            || list.iter().any(|r| Path::new(&r.path) == dir)
+        {
             continue;
         }
         let mut rec = SyncRec {

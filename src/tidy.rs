@@ -59,16 +59,6 @@ pub struct RepoPlan {
     pub error: Option<String>,
 }
 
-/// The entry of a `.gitmodules` path that is not accepted as a repository: nothing is read from disk. The
-/// name is the escaped text of the untrusted path.
-pub fn rejected_plan(path: &str, error: String) -> RepoPlan {
-    RepoPlan {
-        name: crate::github::reads::escape_untrusted(path, 200).0,
-        error: Some(error),
-        ..Default::default()
-    }
-}
-
 /// Settings of one plan run.
 #[derive(Clone, Debug)]
 pub struct PlanOpts {

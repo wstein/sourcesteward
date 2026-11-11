@@ -261,13 +261,6 @@ fn blank(name: String, path: String) -> RepoStatus {
     }
 }
 
-/// The entry of a `.gitmodules` path that is not accepted as a repository: nothing is read from disk.
-pub fn rejected_entry(name: &str, error: String) -> RepoStatus {
-    let mut s = blank(name.to_string(), String::new());
-    s.error = Some(error);
-    s
-}
-
 pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
     let mut s = blank(r.name.clone(), p2s(&r.path));
     let mut run = || -> Result<()> {
@@ -630,7 +623,12 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
 
 /// Blocks, each followed by a blank line: `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)`, the
 /// rules block `rules` (already rendered, may be empty), then the summary line.
-pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &str) -> String {
+pub fn render_human(
+    github_note: Option<String>,
+    extra_notices: &[String],
+    list: &[RepoStatus],
+    rules: &str,
+) -> String {
     let mut out = counts_block(list);
     out.push('\n');
     let mut attention = 0;
@@ -755,6 +753,7 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
             notices.push(format!("{}: issues not read ({})", esc(&s.name), esc(e)));
         }
     }
+    notices.extend(extra_notices.iter().cloned());
     out += &format!("Notices ({})\n", notices.len());
     if notices.is_empty() {
         out += "  none\n";

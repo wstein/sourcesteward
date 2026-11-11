@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::{Args, Parser, Subcommand};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 use crate::error::{exit, Error, Kind, Result};
 use crate::github::GithubState;
@@ -338,10 +338,22 @@ struct Workspace {
     github: GithubState,
 }
 
-/// The text of a refused `.gitmodules` path in a report: escaped, since the path is untrusted.
-fn rejected_text((p, why): &(String, String)) -> String {
-    let esc = |s: &str| crate::github::reads::escape_untrusted(s, 200).0;
-    format!("submodule path not accepted: {}: {}", esc(p), esc(why))
+/// Notices for the paths of `.gitmodules` that are not accepted: text lines and the JSON field
+/// `rejected_paths` (`[{path (escaped), reason}]`).
+fn rejected_notices(rejected: &[(String, String)]) -> Vec<String> {
+    rejected
+        .iter()
+        .map(|(p, why)| format!("submodule path not accepted: {}: {why}", escape_name(p)))
+        .collect()
+}
+
+fn rejected_json(rejected: &[(String, String)]) -> Value {
+    Value::Array(
+        rejected
+            .iter()
+            .map(|(p, why)| json!({"path": escape_name(p), "reason": why}))
+            .collect(),
+    )
 }
 
 fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
@@ -502,13 +514,6 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
         };
         list.push(tidy_apply::apply_repo(r, plan, w, &aopts));
     }
-    for p in &ws.rejected {
-        list.push(tidy_apply::ApplyRepo {
-            name: escape_name(&p.0),
-            error: Some(rejected_text(p)),
-            ..Default::default()
-        });
-    }
     if let Some(all) = &wanted {
         for (p, _) in all {
             if !ws.repos.iter().any(|r| same_path(p, &r.path)) {
@@ -522,15 +527,26 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
         }
     }
     if a.common.json {
-        print_json(&tidy_apply::apply_to_json(&ws.root, &aopts.run_id, &list));
+        let mut v = tidy_apply::apply_to_json(&ws.root, &aopts.run_id, &list);
+        if let Value::Object(m) = &mut v {
+            m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+        }
+        print_json(&v);
     } else {
         print!("{}", tidy_apply::apply_render_human(&aopts.run_id, &list));
+        print_notices(&ws.rejected);
     }
     Ok(if list.iter().any(|r| r.failed()) {
         exit::FAILED
     } else {
         exit::OK
     })
+}
+
+fn print_notices(rejected: &[(String, String)]) {
+    for n in rejected_notices(rejected) {
+        println!("({n})");
+    }
 }
 
 fn escape_name(p: &str) -> String {
@@ -550,12 +566,9 @@ fn run(command: Command) -> Result<u8> {
             let c = a.common;
             let ws = workspace(&c, a.rules_path.as_deref())?;
             let root = PathBuf::from(&ws.root);
-            let mut list = repo::for_each(&ws.repos, |r| {
+            let list = repo::for_each(&ws.repos, |r| {
                 status::collect_one(r, &root, ws.github.client())
             });
-            for p in &ws.rejected {
-                list.push(status::rejected_entry(&p.0, rejected_text(p)));
-            }
             let rules = sync::rules::agent_rules(
                 &root,
                 None,
@@ -568,6 +581,7 @@ fn run(command: Command) -> Result<u8> {
                 let mut v = status::to_json(&ws.root, &ws.github, &list);
                 if let Value::Object(m) = &mut v {
                     m.insert("agent_rules".into(), sync::rules::to_json(&rules));
+                    m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
                 }
                 print_json(&v);
             } else {
@@ -575,6 +589,7 @@ fn run(command: Command) -> Result<u8> {
                     "{}",
                     status::render_human(
                         ws.github.note.clone(),
+                        &rejected_notices(&ws.rejected),
                         &list,
                         &sync::rules::render_human(&rules)
                     )
@@ -590,16 +605,18 @@ fn run(command: Command) -> Result<u8> {
                 backup_days: a.backup_days,
                 now: tidy::now_secs(),
             };
-            let mut plans = repo::for_each(&ws.repos, |r| {
+            let plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)
             });
-            for p in &ws.rejected {
-                plans.push(tidy::rejected_plan(&p.0, rejected_text(p)));
-            }
             if a.common.json {
-                print_json(&tidy::to_json(&ws.root, &ws.github, &plans));
+                let mut v = tidy::to_json(&ws.root, &ws.github, &plans);
+                if let Value::Object(m) = &mut v {
+                    m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+                }
+                print_json(&v);
             } else {
                 print!("{}", tidy::render_human(&plans, a.all));
+                print_notices(&ws.rejected);
                 if let Some(n) = &ws.github.note {
                     println!("({n})");
                 }

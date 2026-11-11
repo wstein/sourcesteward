@@ -75,6 +75,8 @@ fn hostile(t: &Ws) -> Vec<(String, String)> {
         (ESC_NAME.into(), ESC_NAME.into()),
         ("nl\nINJECTED".into(), "\"nl\\nINJECTED\"".into()),
         ("sp ace".into(), "sp ace".into()),
+        // no directory: only the report of the refused path may name it (not "not initialized")
+        ("no checkout".into(), "no checkout".into()),
     ]
 }
 
@@ -209,13 +211,14 @@ fn sync_dry_run_reports_refused_paths_and_touches_nothing() {
 }
 
 #[test]
-fn sync_apply_fails_on_refused_paths_and_leaves_their_repositories_alone() {
+fn sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone() {
     let (t, h) = setup_hostile();
     let (code, text, v) = stw(&t, &["sync", "--apply"]);
-    assert_eq!(code, 1, "{text}");
+    // without --submodules a refused path is a hint, not a failure (Go's `unreachable` arises only there)
+    assert_eq!(code, 0, "{text}");
     for (name, _) in &h {
         let r = entry(&v, name);
-        assert_eq!(r["result"], "error", "{r}");
+        assert_eq!(r["result"], "skip", "{r}");
         assert!(
             r["reason"]
                 .as_str()
@@ -241,6 +244,7 @@ fn sync_with_submodules_names_each_refused_path_once() {
     let (code, text, v) = stw(&t, &["sync", "--apply", "--submodules", "--offline"]);
     assert_eq!(code, 1, "{text}");
     for (name, _) in &h {
+        assert_eq!(entry(&v, name)["result"], "error");
         let n = v["repos"]
             .as_array()
             .unwrap()
@@ -252,27 +256,79 @@ fn sync_with_submodules_names_each_refused_path_once() {
     outside_unchanged(&t);
 }
 
+/// The refused paths of a JSON document: `rejected_paths` [{path, reason}], one per hostile path, escaped.
+fn assert_rejected_field(v: &Value, n: usize) {
+    let r = v["rejected_paths"]
+        .as_array()
+        .unwrap_or_else(|| panic!("no rejected_paths in {v}"));
+    assert_eq!(r.len(), n, "{v}");
+    for e in r {
+        no_raw_controls(e["path"].as_str().unwrap());
+        assert!(!e["reason"].as_str().unwrap().is_empty());
+    }
+    assert!(r.iter().any(|e| e["path"] == "../outside"), "{v}");
+}
+
 #[test]
-fn status_reports_refused_paths_and_does_not_read_them() {
+fn sync_submodules_dry_run_predicts_unreachable_as_a_skip() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["status", "--offline"]);
-    assert_eq!(code, 1, "{text}");
+    let (code, text, v) = stw(&t, &["sync", "--submodules", "--offline"]);
+    assert_eq!(code, 0, "{text}");
     for (name, _) in &h {
         let r = entry(&v, name);
-        assert_eq!(r["state"], "error", "{r}");
-        assert_eq!(r["path"], "", "{r}");
+        assert_eq!(r["result"], "skip", "{r}");
         assert!(
-            r["error"]
+            r["reason"]
                 .as_str()
                 .unwrap()
-                .contains("submodule path not accepted"),
+                .starts_with("would be unreachable: "),
             "{r}"
         );
-        assert_eq!(r["branch"], Value::Null, "{r}");
     }
-    assert_eq!(entry(&v, "a/b")["state"], "ok");
+    outside_unchanged(&t);
+}
+
+#[test]
+fn status_notes_refused_paths_without_a_repository_entry() {
+    let (t, h) = setup_hostile();
+    let (code, text, v) = stw(&t, &["status", "--offline"]);
+    assert_eq!(code, 0, "{text}");
+    let names: Vec<&str> = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["ws", "a/b"], "{v}");
+    assert_eq!(v["summary"]["total"], 2, "{v}");
+    assert_rejected_field(&v, h.len());
+    assert_eq!(
+        text.matches("  submodule path not accepted: ").count(),
+        h.len(),
+        "{text}"
+    );
     assert!(
         text.contains("submodule path not accepted: ../outside"),
+        "{text}"
+    );
+    assert!(
+        text.contains("rename with git mv; stw handles only [A-Za-z0-9._/-]"),
+        "{text}"
+    );
+    assert!(text.contains("Repositories (2)"), "{text}");
+    no_raw_controls(&text);
+    outside_unchanged(&t);
+}
+
+#[test]
+fn tidy_plan_notes_refused_paths_without_a_repository_entry() {
+    let (t, h) = setup_hostile();
+    let (code, text, v) = stw(&t, &["tidy", "plan", "--offline"]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
+    assert_rejected_field(&v, h.len());
+    assert!(
+        text.contains("(submodule path not accepted: ../outside"),
         "{text}"
     );
     no_raw_controls(&text);
@@ -280,32 +336,99 @@ fn status_reports_refused_paths_and_does_not_read_them() {
 }
 
 #[test]
-fn tidy_plan_reports_refused_paths_and_does_not_read_them() {
+fn tidy_apply_notes_refused_paths_and_does_not_touch_them() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["tidy", "plan", "--offline"]);
-    assert_eq!(code, 1, "{text}");
-    // the name of such an entry is the escaped text of the path
-    let refused: Vec<&Value> = v["repos"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|r| {
-            r["error"]
-                .as_str()
-                .is_some_and(|e| e.contains("submodule path not accepted"))
-        })
-        .collect();
-    assert_eq!(refused.len(), h.len(), "{v}");
-    for r in refused {
-        assert_eq!(r["path"], "", "{r}");
-        no_raw_controls(r["name"].as_str().unwrap());
-    }
-    assert!(entry(&v, "a/b")["error"].is_null());
+    let dir = t.w.p("manifests");
+    let (code, text, v) = stw(
+        &t,
+        &[
+            "tidy",
+            "apply",
+            "--offline",
+            "--manifest-dir",
+            dir.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
+    assert_rejected_field(&v, h.len());
     assert!(
-        text.contains("submodule path not accepted: ../outside"),
+        text.contains("(submodule path not accepted: ../outside"),
         "{text}"
     );
     no_raw_controls(&text);
+    outside_unchanged(&t);
+}
+
+#[test]
+fn repo_names_decide_whether_refused_paths_are_reported() {
+    let (t, _) = setup_hostile();
+    let (code, text, v) = stw(&t, &["status", "--offline", "--repo", "a/b"]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["rejected_paths"].as_array().map(Vec::len), Some(0), "{v}");
+    assert!(!text.contains("not accepted"), "{text}");
+    let (code, text, _) = stw(&t, &["status", "--offline", "--repo", "../outside"]);
+    assert_eq!(code, 2, "{text}");
+}
+
+#[test]
+fn a_directory_named_twice_is_listed_and_synced_once() {
+    let t = setup();
+    write_gitmodules(&t.ws, &["a/b", "a/b/", "a/b"]);
+    let names: Vec<String> = stw::repo::list_repos(&t.ws)
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+    assert_eq!(names, ["ws", "a/b"]);
+    // the name is the normalized path
+    write_gitmodules(&t.ws, &["a/b/"]);
+    assert_eq!(stw::repo::list_repos(&t.ws)[1].name, "a/b");
+    write_gitmodules(&t.ws, &["a/b", "a/b/", "a/b"]);
+    let (code, text, v) = stw(&t, &["sync", "--offline"]);
+    assert_eq!(code, 0, "{text}");
+    assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
+    let (code, text, _) = stw(&t, &["sync", "--offline", "--repo", "a/b"]);
+    assert_eq!(code, 0, "{text}");
+    // a refused path named twice is reported once
+    write_gitmodules(&t.ws, &["../x", "../x/"]);
+    assert_eq!(stw::repo::rejected_paths(&t.ws).len(), 1);
+}
+
+#[test]
+fn a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported() {
+    let t = setup();
+    t.w.git(&t.w.base, &["clone", "-q", "o.git", "ws/ws"]);
+    write_gitmodules(&t.ws, &["ws"]);
+    let names: Vec<(String, bool)> = stw::repo::list_repos(&t.ws)
+        .into_iter()
+        .map(|r| (r.name, r.path == t.ws))
+        .collect();
+    assert_eq!(names, [("ws".into(), true), ("ws".into(), false)]);
+    // the same name, but through a symbolic link to the outside: refused, and shown the same way everywhere
+    std::fs::remove_dir_all(t.ws.join("ws")).unwrap();
+    std::os::unix::fs::symlink(&t.outside, t.ws.join("ws")).unwrap();
+    assert_eq!(stw::repo::list_repos(&t.ws).len(), 1);
+    let (code, text, v) = stw(&t, &["sync", "--apply"]);
+    assert_eq!(code, 0, "{text}");
+    assert!(
+        v["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|r| r["result"] == "skip"
+                && r["reason"]
+                    .as_str()
+                    .is_some_and(|x| x.contains("symbolic link"))),
+        "{v}"
+    );
+    let (code, text, v) = stw(&t, &["status", "--offline"]);
+    assert_eq!(code, 0, "{text}");
+    let r = v["rejected_paths"].as_array().unwrap();
+    assert_eq!(r.len(), 1, "{v}");
+    assert!(
+        r[0]["reason"].as_str().unwrap().contains("symbolic link"),
+        "{v}"
+    );
     outside_unchanged(&t);
 }
 
@@ -329,38 +452,4 @@ fn below_means_strictly_below() {
     assert!(!below("/w/outside", "/w/root"));
     assert!(!below("/w/root-x", "/w/root"));
     assert!(!below("/w", "/w/root"));
-}
-
-#[test]
-fn tidy_apply_reports_refused_paths_and_does_not_touch_them() {
-    let (t, h) = setup_hostile();
-    let dir = t.w.p("manifests");
-    let (code, text, v) = stw(
-        &t,
-        &[
-            "tidy",
-            "apply",
-            "--offline",
-            "--manifest-dir",
-            dir.to_str().unwrap(),
-        ],
-    );
-    assert_eq!(code, 1, "{text}");
-    let refused = v["repos"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .filter(|r| {
-            r["error"]
-                .as_str()
-                .is_some_and(|e| e.contains("submodule path not accepted"))
-        })
-        .count();
-    assert_eq!(refused, h.len(), "{v}");
-    assert!(
-        text.contains("submodule path not accepted: ../outside"),
-        "{text}"
-    );
-    no_raw_controls(&text);
-    outside_unchanged(&t);
 }

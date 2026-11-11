@@ -110,5 +110,6 @@ expression: pretty
     "files": [],
     "flagged_files": [],
     "updated": false
-  }
+  },
+  "rejected_paths": []
 }
