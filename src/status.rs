@@ -10,6 +10,7 @@ use crate::error::Result;
 use crate::github::{Client, GithubState, IssueCounts, OpenPr, PAGE};
 use crate::output::*;
 use crate::repo::{self, RepoRef, Upstream};
+use crate::status_review;
 
 /// Counts like `git status --porcelain=v2`: a path counts once per kind.
 #[derive(Clone, Debug, Default)]
@@ -208,6 +209,8 @@ pub struct StatusOpts {
     pub worktrees: bool,
     /// `--fetch`: fetch `origin` first (remote-tracking refs only, no prune); the one thing that is not read-only.
     pub fetch: bool,
+    /// `--review`: read the review state of the open pull requests from their comments.
+    pub review: bool,
 }
 
 /// What `--fetch` did for one repository.
@@ -344,6 +347,8 @@ pub struct RepoStatus {
     pub prs: Vec<OpenPr>,
     pub pr_error: Option<String>,
     pub pr_read: bool,
+    /// `--review` took part in this repository: its pull requests have a review state or are counted as not read.
+    pub review_read: bool,
     pub issues: Option<IssueCounts>,
     pub issue_error: Option<String>,
     pub branches_local: Option<usize>,
@@ -385,6 +390,7 @@ fn blank(name: String, path: String) -> RepoStatus {
         prs: vec![],
         pr_error: None,
         pr_read: false,
+        review_read: false,
         issues: None,
         issue_error: None,
         branches_local: None,
@@ -756,7 +762,8 @@ pub fn to_json(
                 .iter()
                 .map(|p| {
                     json!({"number": p.number, "title": p.title, "head": p.head, "draft": p.draft,
-                           "author": p.author, "review": jopt(p.review.as_deref()),
+                           "author": p.author, "review": jopt(p.review.as_ref().map(|r| r.label())),
+                           "review_state": p.review.as_ref().map_or(Value::Null, status_review::state_json),
                            "merge_state": jopt(p.merge_state.as_deref())})
                 })
                 .collect();
@@ -781,14 +788,15 @@ pub fn to_json(
                 "fetch": s.fetch.json(),
                 "fetch_error": jopt(s.fetch.error.as_deref()),
                 "worktree_list": s.worktree_list.as_ref().map_or(Value::Null, |l| Value::Array(l.iter().map(WorktreeInfo::json).collect())),
-                "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs},
+                "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs,
+                                  "review": if s.review_read { status_review::tally(&s.prs).json() } else { Value::Null }},
                 "error": jopt(s.error.as_deref()),
             })
         })
         .collect();
     let mut doc = json!({
         "schema_version": 2, "command": "status", "root": root,
-        "options": {"fetch": opts.fetch, "worktrees": opts.worktrees, "icons": null},
+        "options": {"fetch": opts.fetch, "worktrees": opts.worktrees, "icons": null, "review": opts.review},
         "engine": engine(),
         "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()),
         "repos": repos,
@@ -1154,13 +1162,32 @@ pub fn render_human(
                 if p.draft {
                     fl += " draft";
                 }
-                if let Some(r) = &p.review {
-                    fl += &format!(", {r}");
+                if s.review_read {
+                    fl += &format!(
+                        ", review {}",
+                        p.review.as_ref().map_or("not read", |r| r.text_label())
+                    );
                 }
                 if let Some(m) = &p.merge_state {
                     fl += &format!(", {m}");
                 }
-                out += &format!("      #{} {} [{}{}]\n", p.number, p.title, p.head, fl);
+                out += &format!(
+                    "      #{} {} [{}{}]\n",
+                    p.number,
+                    esc(&p.title),
+                    esc(&p.head),
+                    fl
+                );
+                if view.long {
+                    for l in p.review.iter().flat_map(status_review::evidence_lines) {
+                        out += &format!("        {l}\n");
+                    }
+                }
+            }
+            if s.review_read {
+                out += &status_review::tally(&s.prs)
+                    .text()
+                    .map_or(String::new(), |t| format!("    {t}\n"));
             }
         }
     }
@@ -1180,6 +1207,7 @@ pub fn render_human(
         if let Some(e) = &s.issue_error {
             notices.push(format!("{}: issues not read ({})", esc(&s.name), esc(e)));
         }
+        notices.extend(status_review::notices(s));
     }
     notices.extend(extra_notices.iter().cloned());
     out += &format!("Notices ({})\n", notices.len());

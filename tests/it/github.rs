@@ -195,7 +195,10 @@ fn json_field_names_are_the_documented_ones() {
             "error"
         ])
     );
-    assert_eq!(keys(&st["options"]), doc(&["fetch", "worktrees", "icons"]));
+    assert_eq!(
+        keys(&st["options"]),
+        doc(&["fetch", "worktrees", "icons", "review"])
+    );
     assert_eq!(keys(&repo["fetch"]), doc(&["state", "via", "error"]));
     assert_eq!(
         keys(&repo["changes"]),
@@ -204,7 +207,7 @@ fn json_field_names_are_the_documented_ones() {
     assert_eq!(keys(&repo["gitlink"]), doc(&["recorded", "state"]));
     assert_eq!(
         keys(&repo["pull_requests"]),
-        doc(&["read", "error", "open"])
+        doc(&["read", "error", "open", "review"])
     );
     assert_eq!(
         keys(&repo["pull_requests"]["open"][0]),
@@ -215,6 +218,7 @@ fn json_field_names_are_the_documented_ones() {
             "draft",
             "author",
             "review",
+            "review_state",
             "merge_state"
         ])
     );
@@ -348,6 +352,7 @@ fn readme_mentions_every_documented_field() {
         "reasons",
         "pull_requests",
         "merge_state",
+        "review_state",
         "base_commit",
         "unique_commits",
         "upstream_track",

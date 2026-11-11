@@ -21,7 +21,7 @@ tool: it may work in a colocated Git repository, without a test and without a pr
 detection, no warning, no test).
 
 ```
-stw status    [--long|-l] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
+stw status    [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
               [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
@@ -187,8 +187,8 @@ would_fast_forward, skipped, errors}.
 
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
   `changes{staged,unstaged,untracked,conflicts}`, `stash`, `operation`, `gitlink{recorded,state}`, `slug`,
-  `attention`, `reasons`, `pull_requests{read,error,open[{number,title,head,draft,author,review,merge_state}]}`. `review` of a pull request is always null (REST has no `reviewDecision`); `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
-  Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons}` (`icons` is always null: the JSON carries no glyphs) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
+  `attention`, `reasons`, `pull_requests{read,error,open[{number,title,head,draft,author,review,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
+  Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons,review}` (`icons` is always null: the JSON carries no glyphs), per repository `pull_requests.review` (null without `--review`, else `{states{clear,clear_carried,findings,no_review,unverified_author,unknown},not_read,limit}`), per pull request `review_state` (below) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
 - `status` counts: per repository `counts`, in total the top-level `totals`, same shape: `pull_requests{state,open,bot,truncated}`,
   `issues{state,open,bug,truncated}`, `branches{local,remote}`, `worktrees`, `stash` (all numbers or null). `state` is `ok`,
   `not-read` (`--offline` or no token), `no-remote` (no GitHub origin; left out of a total) or `failed` (the read failed or the
@@ -220,7 +220,7 @@ a notice: exit 0. Exit 1 stays for a repository that cannot be read locally.
 ## Status flags
 
 Ports of the flags of the Go `stw status` (`legacy/sourcesteward/internal/cli/status.go`). Without a flag nothing changes, and
-`--json` is the same document plus the additive fields above. `--timeout`, `--stats` and `--verbose` are a usage error (exit 2)
+`--json` is the same document plus the additive fields above. `--review`, `--timeout`, `--stats` and `--verbose` are a usage error (exit 2)
 with `--offline`.
 
 | Flag | What it does |
@@ -228,10 +228,11 @@ with `--offline`.
 | `--long`, `-l` | The text only: under `Needs action` every reason is explained from the facts of the repository (what is staged, how far behind, which operation), under `Repositories` each repository gets a card (`path`, `remote`, `head`, `upstream`, `changes` by kind, `branches`, linked worktrees, `stash`, `gitlink`). The blocks stay in their order, `Notices` and the summary line stay last. The JSON is the same as without it. No command is printed for someone else to run. |
 | `--fetch` | `git fetch origin` of every repository before it is read, so that ahead/behind and `Branches` are current. The one thing that is not read-only, and it changes remote-tracking refs only (`refs/remotes/origin/*`, FETCH_HEAD, objects). It goes through the same fetch as `sync --apply` (ssh and local-path remotes: the installed `git` through the runner, `"via": "git"`, fixed argv, no hook, `gc.auto=0`; https: gix, no program, the GitHub token only for github.com), always with `--no-prune` (wins over `fetch.prune`) and `--no-prune-tags` (so `pruneTags` creates no tag), no tags, no submodules. A repository whose configured fetch refspec writes outside `refs/remotes/origin/` is not fetched (it would write branches). A failed fetch is a detail line, a notice and `fetch.state` `failed`, exit 0; the status of that repository is still shown. It works with `--offline`: `--offline` stops the GitHub reads and the token, not the fetch. The `agent-rules` checkout is not fetched (`sync --rules --apply` does that). |
 | `--worktrees` | One line per linked worktree under its repository: path, branch or `detached`, then `dirty`, `locked` (with `: reason`), `prunable`, `missing`. `dirty` is any tracked change or untracked file in that worktree (a worktree that cannot be read counts as dirty). Registrations whose checkout is gone are listed too (`missing`, and `prunable` unless locked); the main checkout is never listed. The `Worktrees` count keeps its meaning (existing linked checkouts, no stale registration, no main checkout). Sorted by path. |
+| `--review` | Also reads the review state of the open pull requests from their comments: one comment read per pull request (a list read of at most 5 pages of 100, at most 500 comments, none after the `--timeout`), at most 16 reads at a time, at most 200 pull requests per run (repository order, newest pull request first; the rest is `not read` with a notice). Each pull request line gets `review <state>` (`clear`, `clear-carried`, `findings`, `no-review`, `unverified-author`, `?`), each repository a line `reviews: 1 clear, 2 ?` and, with `--long`, the evidence per pull request. See "Review state in `stw status --review`". `Counts` do not change. Not with `--offline` (usage error, exit 2). |
 | `--icons unicode\|nerd\|ascii` | The marker in front of a repository line: attention `▲`, cannot be read `✖` (unicode), `U+F071` and `U+F057` of Font Awesome (nerd, needs a Nerd Font), `!` for both (ascii). Default: unicode when stdout is a terminal, the locale is UTF-8 (the first of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides) and `TERM` is not `dumb`; ascii otherwise (a pipe, a file). An explicit value always wins. Text only. |
 | `--timeout DURATION` | The overall deadline of the GitHub reads, 1s to 10m, default 90s, written as Go does (`90s`, `2m`, `1m30s`, `1.5s`). Every request is cut at the deadline and none starts after it (one request also takes at most 30 s). The cut reads are notices (`pull requests not read (deadline: ...)`), their counters `?`, exit 0. The fetch of `--fetch` and the local reads are not part of it. |
 | `--stats` | One line after the summary: `stats: API: 4 reqs (4,896/5,000 left, reset 22:13 UTC) \| 1.4s elapsed (local 110ms, remote 1.3s)`. `local` includes the fetch of `--fetch`; `elapsed` ends before the `agent-rules` read. With `--json` the member `stats`. |
-| `--verbose` | Implies `--stats`. Before the stats line: `Diagnostic breakdown:` with the requests and the summed request time per repository and source (`pulls`, `issues`). With `--json` the breakdown and the stats line go to stderr, so stdout stays one document. |
+| `--verbose` | Implies `--stats`. Before the stats line: `Diagnostic breakdown:` with the requests and the summed request time per repository and source (`pulls`, `issues`; the comment reads of `--review` count as `pulls`). With `--json` the breakdown and the stats line go to stderr, so stdout stays one document. |
 
 ### Differences from the Go `stw status` flags
 
@@ -267,6 +268,7 @@ with `--offline`.
   Rust sorted by path. A relative link (a `..` in its path) is listed and `missing` is checked, `prunable` is not evaluated for it.
 - Before this change `status` had no equivalent of `--worktrees`: only the number in `Worktrees` and, in `tidy plan`, the worktree
   of a kept branch and the stale registrations. The list of linked worktrees with their state is new.
+- `--review`: see "Review state in `stw status --review`" for the differences.
 - JSON: Go's schema 2 differs from the Rust one as a whole (see the migration plan); the new fields here are only additive to
   the Rust document, `schema_version` stays `2`.
 
@@ -441,7 +443,7 @@ Runner rules (`src/git_runner.rs`):
 
 ## GitHub reads for review and readiness (internal API)
 
-`stw::github::reads` (no command uses it yet): `Client::issue_comments`, `pr_reviews`, `check_runs`, `commit_statuses`.
+`stw::github::reads` (`stw status --review` uses `issue_comments`): `Client::issue_comments`, `pr_reviews`, `check_runs`, `commit_statuses`. Every request is counted in the stats (`stw status --stats`) and none starts after the `--timeout`.
 REST GET, 100 per page, under a `Budget` (10 pages, 500 items, 16 KiB text per body, 60 s). A list that hit a bound, lost a
 page or had a malformed entry is `Observed` with `incomplete: Some(reason)`; `Read::is_complete()` is true only for a fully
 read list, so partial or unreadable evidence cannot make a pull request Ready. 401, 403 (no permission, for example Checks)
@@ -452,8 +454,7 @@ characters). Slug and SHA are validated before they enter a path. Tests: `tests/
 
 ## Review state from comments (internal API, M3)
 
-`stw::review` (no command uses it yet; `stw status` keeps `review: null`, because that field is GitHub's `reviewDecision`,
-not the comment-based state, and its JSON contract is unchanged). Pure functions on the comments read by
+`stw::review` (used by `stw status --review`, below). Pure functions on the comments read by
 `github::reads`; nothing is posted and nothing is marked Ready.
 
 - Grammar (first line of the comment, nothing else on it): `Review: <CLEAR|FINDINGS> head=<40 lower-case hex> patch-id=<40 hex> pr=<n|none>` and
@@ -484,9 +485,31 @@ not the comment-based state, and its JSON contract is unchanged). Pure functions
   there is no decision). It is never read as `no-review`.
 - Provenance per line: comment id, author, `created_at`, `updated_at`, `edited`. An edited comment is only flagged: a decisive or
   chain comment with `edited` counts normally and the flag is in the result. `ReviewState::to_json()` is the stable JSON
-  (version 1), not yet part of any command.
+  (version 1); `stw status --review` prints it as `review_state`.
 - Tests: the dotagents corpus `tests/review_corpus/review-line-examples.md` (copy of `docs/review-line-examples.md`, dotagents
   c7c343c), `tests/it/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/it/review_read.rs`.
+
+## Review state in `stw status --review`
+
+`stw status --review` reads, for each open pull request, its conversation comments (one list read of `GET /repos/OWNER/NAME/issues/N/comments`, 100 per page) and derives the state with `review::evaluate_read` for the exact head commit of the pull request (`head.sha`). Nothing is posted. Trust: the logins of the comments whose `author_association` is OWNER, MEMBER or COLLABORATOR (as in Go) are the trusted authors; lines of anybody else are findings and never decide.
+
+- Text: the pull request line ends `[<head branch>, review <state>, <merge state>]`; the states are `clear`, `clear-carried`, `findings`, `no-review`, `unverified-author` and `?` (`unknown`); `review not read` for a pull request beyond the limit. Under the pull requests of a repository one line counts them (`reviews: 1 clear, 2 no-review, 1 ?`, zero counts left out). `--long` adds under each pull request the decisive comment (`decided by comment ID of LOGIN at TIME: <the parsed line>`), `carried through N links, from ...`, the findings (at most 5: `finding <kind>: comment ID of LOGIN`, with the cut and escaped line for an unparsed variant) and why a state is `?` (`unknown because: ...`). Only the parsed line, validated hex and numbers, is ever printed from a comment; any other comment text is not. Logins, titles and every other text from outside are escaped and cut.
+- A comment read that failed (401, 403, 404, 429, other status, unreadable answer), hit its bound (page budget, 500 comments, time) or the `--timeout` gives `review: "unknown"` (`?`), never a verdict, and one notice per repository: `NAME: review state not read for N pull requests (#NUMBER: reason)`. Pull requests beyond the limit of 200 give `review: null` and a notice. Exit stays 0 (as for the other failed remote reads). `Counts` and `totals` do not change.
+- JSON (additive, `schema_version` stays 2): per pull request `review` (the status label or null) and `review_state` (null, or `ReviewState::to_json()` version 1: `pr`, `head`, `status`, `decisive`, `chain`, `findings[{kind,comment_id,author,detail}]`, `reasons`; plus `read_error`, null for a complete read; `detail` and every text from the forge are escaped and cut at 120 characters); per repository `pull_requests.review` (`{states, not_read, limit}`) and top level `options.review`.
+- Requests: one read per pull request (up to 5 requests for a very long thread), at most 16 at a time, at most 200 pull requests per run; with `--stats` or `--verbose` they count as `pulls`.
+
+Deviations from the Go `--review` (`internal/pulls/review.go`, `internal/reviewstate`; Go cases `state_test.go`):
+
+1. States: Go has `none`, `findings`, `clear`, `clear-carried`, `clear-stale`, `unparsed`; Rust has the M3 states `no-review`, `findings`, `clear`, `clear-carried`, `unverified-author`, `unknown`. A CLEAR of another head is `no-review` with the finding `stale-head` (Go: `clear-stale`); an unparsable or wrong-pull-request line is `unknown` or a finding (Go: `unparsed`); a failed read is `unknown` (Go: the review stays unset and the source of the repository is an error).
+2. Grammar: the M3 parser, not the Go regular expression (exactly 40 hex patch-ids, no CR, `pr=` of any width from 1 without leading zeros; see `docs/migration-plan.md`, deviations D1 to D8). A line for another pull request is the finding `wrong-pr`, not `unparsed`.
+3. The commit date of the head is not read: Go reads one commit per pull request whose comments name the head and ignores comments older than that commit. Rust has no second read; the verdict is bound to the exact head id instead (M3), so a comment from before a commit cannot name its id.
+4. Carry-over: the chain rules of M3 (up to 16 links, patch-ids of all links equal, a `FINDINGS` of a chain head ends the chain) instead of Go's up to 8 links; the patch-ids are compared as declared (`stw review carry-over` proves them from git, `stw status` does not).
+5. Trust is per login: a login is trusted when one of its comments has the association OWNER, MEMBER or COLLABORATOR (Go: per comment). Go's `ignored` count and the hint `foreign-review-ignored` are the findings `untrusted-author` and the state `unverified-author`.
+6. Long threads: Go reads the first page and the last five pages and marks the state `truncated` (hint `truncated-review-unknown`); Rust reads from the first page up to the budget (500 comments) and then says `unknown` with the reason. A verdict on a page that was not read is never guessed.
+7. The hints (`clear-not-ready`, `no-final-review`, `base-not-default`, `parent-merged-retarget`, `truncated-review-unknown`, `foreign-review-ignored`, `ready-mergeable`) and the reads they need (the default branch, the closed pull requests) are not ported. `--review` has no verdict-group input (`ready`, `blocked`), so the Go counts per group do not exist.
+8. Output: Go prints one count line per repository (`reviews: 1 clear, 2 none (hints: ...)`) and the JSON `pulls.data.review{states,hints}`; Rust prints the same kind of count line, the state of every pull request in the text and in the JSON (`review`, `review_state`) and `pull_requests.review{states,not_read,limit}`. The JSON documents are not the Go ones (see the migration plan).
+9. Limit: Go reads the rows of the pulls cycle within `--limit` (default 200, drafts included, newest first); Rust reads at most 200 pull requests per run, in repository order, each repository newest first (a repository has at most 100 open pull requests in the list), with no `--limit` flag. Go reads four repositories at a time and the comments of a repository one after the other; Rust reads at most 16 comment lists at a time. Go stops after a rate limit; Rust lets the remaining reads fail on their own (each is `?`).
+10. Go exits 1 when a review read failed (a failed remote source); Rust prints the notice and exits 0, as for the other remote reads.
 
 ## Carry-over check: `stw review carry-over` (M4)
 

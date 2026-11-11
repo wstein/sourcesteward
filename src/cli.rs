@@ -12,7 +12,8 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, status, status_stats, sync, tidy, tidy_apply,
+    add, carryover, dev, git_runner, lint_pr_cmd, status, status_review, status_stats, sync, tidy,
+    tidy_apply,
 };
 
 const EXIT_CODES: &str = "\
@@ -353,6 +354,10 @@ struct StatusArgs {
     /// List the linked worktrees of each repository (the main checkout is not listed)
     #[arg(long)]
     worktrees: bool,
+    /// Also read the review state of the open pull requests from their comments (one comment read per pull
+    /// request, at most 200 per run; not with --offline)
+    #[arg(long, conflicts_with = "offline")]
+    review: bool,
     /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
     #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
     icons: Option<String>,
@@ -641,6 +646,7 @@ fn run_status(a: StatusArgs) -> Result<u8> {
     let opts = status::StatusOpts {
         worktrees: a.worktrees,
         fetch: a.fetch,
+        review: a.review,
     };
     let mut list = repo::for_each(&ws.repos, |r| {
         status::collect_local(r, &root, &opts, ws.github.client())
@@ -650,6 +656,9 @@ fn run_status(a: StatusArgs) -> Result<u8> {
         cl.arm_deadline(a.timeout);
     }
     list = repo::for_each_mut(list, |s| status::read_remote(s, ws.github.client()));
+    if let (true, Some(cl)) = (a.review, ws.github.client()) {
+        list = status_review::read_reviews(list, cl);
+    }
     let timings = status_stats::Timings {
         total: started.elapsed(),
         local: local_done,

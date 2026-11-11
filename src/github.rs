@@ -25,12 +25,15 @@ pub struct OpenPr {
     pub number: u64,
     pub title: String,
     pub head: String,
+    /// The commit id of the head (`head.sha`); empty when the answer had none.
+    pub head_sha: String,
     pub draft: bool,
     pub author: String,
     /// The author is an app/bot account (`user.type == "Bot"` or a `[bot]` login).
     pub bot: bool,
-    /// REST has no `reviewDecision`; always None (documented gap).
-    pub review: Option<String>,
+    /// The review state from the comments: None unless `stw status --review` read it (REST has no
+    /// `reviewDecision`, so there is no other source).
+    pub review: Option<crate::status_review::PrReview>,
     /// From `mergeable_state` of the single-PR endpoint, upper-cased like gh's `mergeStateStatus`.
     pub merge_state: Option<String>,
 }
@@ -340,6 +343,7 @@ impl Client {
                 number: p["number"].as_u64().unwrap_or(0),
                 title: p["title"].as_str().unwrap_or("").to_string(),
                 head: p["head"]["ref"].as_str().unwrap_or("").to_string(),
+                head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
                 draft: p["draft"].as_bool().unwrap_or(false),
                 author: p["user"]["login"].as_str().unwrap_or("").to_string(),
                 bot: p["user"]["type"].as_str() == Some("Bot")

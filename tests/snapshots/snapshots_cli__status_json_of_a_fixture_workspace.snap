@@ -9,7 +9,8 @@ expression: pretty
   "options": {
     "fetch": false,
     "worktrees": false,
-    "icons": null
+    "icons": null,
+    "review": false
   },
   "engine": "[ENGINE]",
   "github": false,
@@ -72,7 +73,8 @@ expression: pretty
       "pull_requests": {
         "read": false,
         "error": null,
-        "open": []
+        "open": [],
+        "review": null
       },
       "error": null
     }
