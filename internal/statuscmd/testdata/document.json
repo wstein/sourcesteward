@@ -310,6 +310,28 @@
       "hint": null
     },
     {
+      "id": "local-stash:workharbor:stash",
+      "priority": "blue",
+      "category": "local-stash",
+      "repo": "workharbor",
+      "path": "/ws/workharbor",
+      "title": "4 stashes",
+      "url": null,
+      "subject": {
+        "kind": "fact",
+        "number": null,
+        "tag": null,
+        "sha": null,
+        "name": "stash"
+      },
+      "evidence": {
+        "stash": 4
+      },
+      "command": "git -C /ws/workharbor stash list",
+      "effect": "read",
+      "hint": null
+    },
+    {
       "id": "pr-bot:wstein/workharbor:3",
       "priority": "violet",
       "category": "pr-bot",
@@ -560,6 +582,26 @@
             }
           }
         }
+      },
+      "counts": {
+        "pull_requests": {
+          "state": "ok",
+          "open": 3,
+          "bot": 0,
+          "truncated": false
+        },
+        "issues": {
+          "state": "ok",
+          "open": 5,
+          "bug": 2,
+          "truncated": true
+        },
+        "branches": {
+          "local": 0,
+          "remote": 2
+        },
+        "worktrees": 0,
+        "stash": 1
       }
     },
     {
@@ -681,6 +723,26 @@
             "data": null
           }
         }
+      },
+      "counts": {
+        "pull_requests": {
+          "state": "ok",
+          "open": 1,
+          "bot": 0,
+          "truncated": false
+        },
+        "issues": {
+          "state": "not-read",
+          "open": null,
+          "bug": null,
+          "truncated": false
+        },
+        "branches": {
+          "local": 0,
+          "remote": 1
+        },
+        "worktrees": 0,
+        "stash": 0
       }
     },
     {
@@ -702,7 +764,7 @@
         "conflicts": 0
       },
       "operation": null,
-      "stash": 0,
+      "stash": 4,
       "branches": {
         "local": 0,
         "base": null,
@@ -803,6 +865,26 @@
             }
           }
         }
+      },
+      "counts": {
+        "pull_requests": {
+          "state": "ok",
+          "open": 2,
+          "bot": 2,
+          "truncated": false
+        },
+        "issues": {
+          "state": "ok",
+          "open": 0,
+          "bug": 0,
+          "truncated": false
+        },
+        "branches": {
+          "local": 0,
+          "remote": 1
+        },
+        "worktrees": 0,
+        "stash": 4
       }
     },
     {
@@ -900,6 +982,26 @@
             "data": null
           }
         }
+      },
+      "counts": {
+        "pull_requests": {
+          "state": "failed",
+          "open": null,
+          "bot": null,
+          "truncated": false
+        },
+        "issues": {
+          "state": "failed",
+          "open": null,
+          "bug": null,
+          "truncated": false
+        },
+        "branches": {
+          "local": null,
+          "remote": null
+        },
+        "worktrees": null,
+        "stash": null
       }
     }
   ],
@@ -1002,12 +1104,32 @@
       "red": 4,
       "yellow": 6,
       "green": 2,
-      "blue": 1,
+      "blue": 2,
       "violet": 2
     },
     "degraded": true,
     "failed": false,
     "notices": 3
   },
-  "error": null
+  "error": null,
+  "totals": {
+    "pull_requests": {
+      "state": "failed",
+      "open": null,
+      "bot": null,
+      "truncated": false
+    },
+    "issues": {
+      "state": "failed",
+      "open": null,
+      "bug": null,
+      "truncated": false
+    },
+    "branches": {
+      "local": null,
+      "remote": null
+    },
+    "worktrees": null,
+    "stash": null
+  }
 }
