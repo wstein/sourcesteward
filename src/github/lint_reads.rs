@@ -110,7 +110,8 @@ impl Client {
                     fail("network", "HTTP read failed")
                 }
             })?;
-        // like Go (`io.LimitReader(body, max+1)`): exactly one MiB is accepted, one byte more is not
+        // Go reads max+1 bytes and refuses a longer body: exactly one MiB is accepted, one byte more is not. ureq already
+        // refuses at limit + 1 (above), so this check only guards against a change of that behavior.
         if body.len() as u64 > BODY_LIMIT {
             return Err(too_large(size_is_too_large));
         }

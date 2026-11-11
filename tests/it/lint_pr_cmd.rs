@@ -32,8 +32,8 @@
 //!   (`stw::github::lint_reads`).
 //! - D8 the `page` of a `Link` header is not percent-decoded: Go reads `page=%32` as 2, Rust takes the page as
 //!   malformed (`Link header`). `page=+2` is malformed in both.
-//! - D9 a body of more than one MiB (exactly one MiB is read) is `page-too-large` for comments and `malformed-response` for `pulls/N` and commits,
-//!   as in Go; a 304 is `malformed-response` (`unsolicited 304 response`).
+//! - D9 a body of more than one MiB (exactly one MiB is read) is `page-too-large` for comments and
+//!   `malformed-response` for `pulls/N` and commits, as in Go; a 304 is `malformed-response` (`unsolicited 304 response`).
 use std::cell::RefCell;
 use std::process::{Command, Output};
 
@@ -1358,29 +1358,40 @@ fn oversized_bodies_and_304_map_to_the_go_codes() {
         });
         let args = ["7", "--repo", "o/r", "--owner-identity", "A <a@b.c>"];
         let o = stw(&api.url, cwd.path(), &args);
-        text(&o).1
+        let (out, err) = text(&o);
+        (o.status.code(), out, err)
+    };
+    // a refused read is a runtime error: exit 1, nothing on stdout
+    let refused = |target: &'static str, status: u16, body: String| {
+        let (code, out, err) = run(target, status, body);
+        assert_eq!((code, out.as_str()), (Some(1), ""), "{target}: {err}");
+        err
     };
     let comment_msg = "page-too-large: list page exceeds the one MiB body limit";
     let other_msg = "malformed-response: response exceeds the one MiB body limit";
     // exactly one MiB is accepted
-    for (target, body) in [("comments", comments(MAX)), ("pull", pull(MAX))] {
-        let e = run(target, 200, body);
+    for (target, body) in [
+        ("comments", comments(MAX)),
+        ("commits", comments(MAX)),
+        ("pull", pull(MAX)),
+    ] {
+        let e = run(target, 200, body).2;
         assert!(!e.contains("MiB"), "{target}: {e}");
     }
     // one byte more is not
-    let e = run("comments", 200, comments(MAX + 1));
+    let e = refused("comments", 200, comments(MAX + 1));
     assert!(e.contains(comment_msg), "{e}");
-    let e = run("commits", 200, comments(MAX + 1));
+    let e = refused("commits", 200, comments(MAX + 1));
     assert!(
         e.contains(other_msg) && !e.contains("page-too-large"),
         "{e}"
     );
-    let e = run("pull", 200, pull(MAX + 1));
+    let e = refused("pull", 200, pull(MAX + 1));
     assert!(
         e.contains(other_msg) && !e.contains("page-too-large"),
         "{e}"
     );
-    let e = run("pull", 304, String::new());
+    let e = refused("pull", 304, String::new());
     assert!(
         e.contains("malformed-response") && e.contains("unsolicited 304 response"),
         "{e}"
