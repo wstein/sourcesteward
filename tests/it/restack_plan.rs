@@ -742,11 +742,18 @@ fn two_branches_at_one_commit_are_ambiguous_and_the_explicit_spelling_is_suggest
     let v = run(&s.fx, &["--onto", "main", "--json"]).json();
     assert_eq!(v["refusal"]["code"], "ambiguous");
     assert_eq!(v["levels"].as_array().unwrap().len(), 0);
-    // equal tips directly under the starting branch
+    // a second name for the starting branch itself, in a stack without the b2 case
+    let s = clean_stack();
     s.fx.branch("c2", s.tips[2]);
     let r = run(&s.fx, &["--onto", "main"]);
-    assert_eq!(r.code, 1);
+    assert_eq!(r.code, 1, "{}", r.text);
     assert!(r.first().contains("ambiguous"), "{}", r.text);
+    assert!(
+        r.text
+            .contains("instead: stw restack plan c c2 --onto main"),
+        "{}",
+        r.text
+    );
 }
 
 #[test]
@@ -934,4 +941,24 @@ fn the_repository_comes_from_the_workspace_only() {
     );
     assert_eq!(o.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&o.stderr).contains("not part of the workspace"));
+}
+
+#[test]
+fn a_level_is_replayed_onto_the_rebased_level_below_not_onto_the_base() {
+    if skip() {
+        return;
+    }
+    // a changes a line of shared.txt, b changes it again, main does not touch the file: b merges cleanly onto the
+    // rebased a, but would conflict onto main alone (where the line is still the old one)
+    let s = build(
+        vec![("m.txt", Some("m1\nMAIN\nm3\n"))],
+        &[vec![("shared.txt", Some("s1\nAAA\ns3\n"))]],
+        &[vec![("shared.txt", Some("s1\nBBB\ns3\n"))]],
+        &[],
+    );
+    let r = run(&s.fx, &["a", "b", "--onto", "main", "--json"]);
+    assert_eq!(r.code, 0, "{}", r.text);
+    let v = r.json();
+    assert_eq!(v["levels"][1]["state"], "clean");
+    assert_matches_git(&s, &["a", "b"], &v);
 }

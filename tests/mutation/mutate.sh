@@ -1731,6 +1731,59 @@ m PV21 'prove: an old parent that is no ancestor is accepted' src/prove.rs \
 m PV22 'prove: an empty old range is accepted' src/prove.rs \
   'Ok(true) if par == old => {' 'Ok(true) if false => {' \
   prove an_old_parent_that_is_no_ancestor_the_alt_itself_or_too_far_down_is_not_proved
+# stw restack plan (port and whole-stack preview): levels, chain detection, fail closed
+m RK1 'restack plan: a level above a conflict is not marked as inheriting it' src/restack_plan.rs \
+  'l.state = LevelState::InheritedConflict;' 'l.state = LevelState::NotComputed;' \
+  restack_plan a_conflict_at_level_two_is_inherited_by_level_three_like_git_rebase
+m RK2 'restack plan: a level is replayed onto the base, not onto the level below' src/restack_plan.rs \
+  '        new_tip = tip_after;' '        let _ = tip_after;' \
+  restack_plan a_level_is_replayed_onto_the_rebased_level_below_not_onto_the_base
+m RK3 'restack plan: a branch that is not on the one before is accepted' src/restack_plan.rs \
+  'if !repo::is_ancestor(&repo, prev.1, *tip)? {' 'if false {' \
+  restack_plan a_branch_that_is_not_on_the_one_before_is_refused_with_the_reason
+m RK4 'restack plan: an old parent that is no ancestor is accepted' src/restack_plan.rs \
+  'if !ok {' 'if false && !ok {' \
+  restack_plan go_the_old_parent_must_be_an_ancestor_of_the_branch
+m RK5 'restack plan: a differing rename setting does not make the result unknown' src/restack_plan.rs \
+  'if !defaults.contains(&v.as_str()) {' 'if false {' \
+  restack_plan a_rename_setting_that_differs_from_the_replay_makes_a_clean_result_unknown
+m RK6 'restack plan: a merge attribute in a .gitattributes file is not seen' src/restack_plan.rs \
+  'Ok(b) => found |= mentions_merge(&b.data),' 'Ok(b) => found |= { let _ = b; false },' \
+  restack_plan a_merge_attribute_makes_a_clean_result_unknown
+m RK7 'restack plan: an added submodule is not seen' src/restack_plan.rs \
+  '{
+            entry_mode.is_commit()
+        }' '{
+            false
+        }' \
+  restack_plan a_commit_that_changes_a_submodule_makes_a_clean_result_unknown
+m RK8 'restack plan: the replay goes on after a conflict' src/restack_plan.rs \
+  '            block = Block::Conflict;' '            block = Block::None;' \
+  restack_plan a_conflict_at_level_two_is_inherited_by_level_three_like_git_rebase
+m RK9 'restack plan: two branches at one commit are not ambiguous' src/restack_plan.rs \
+  'if !same.is_empty() {' 'if false {' \
+  restack_plan two_branches_at_one_commit_are_ambiguous_and_the_explicit_spelling_is_suggested
+m RK10 'restack plan: every branch below counts as the nearest one' src/restack_plan.rs \
+  'if m != n && *t != *u && ancestor(*t, *u)? {' 'if false {' \
+  restack_plan the_chain_is_derived_from_the_checked_out_branch
+m RK11 'restack plan: a level that main already has is only became-empty' src/restack_plan.rs \
+  'if all_found {' 'if false {' \
+  restack_plan a_level_that_main_already_has_is_already_upstream_like_git_rebase
+m RK12 'restack plan: a merge commit is unknown, not refused' src/restack_plan.rs \
+  'l.state = LevelState::Refused;' 'l.state = LevelState::Unknown;' \
+  restack_plan a_merge_commit_in_a_level_is_refused_and_the_levels_above_are_not_computed
+m RK13 'restack plan: conflicted paths are printed raw' src/restack_plan.rs \
+  'l.conflicts.iter().map(|c| esc(&c.path)).collect();' 'l.conflicts.iter().map(|c| c.path.clone()).collect();' \
+  restack_plan a_hostile_path_and_subject_are_escaped
+m RK14 'restack plan: branches above the starting point are not noted' src/restack_plan.rs \
+  'if *t != top.1 && ancestor(top.1, *t)? {' 'if false {' \
+  restack_plan the_chain_is_derived_from_the_checked_out_branch
+m RK15 'restack plan: a level that became empty is clean' src/restack_plan.rs \
+  '} else if l.dropped == steps.len() {' '} else if false {' \
+  restack_plan a_level_whose_change_main_made_differently_is_became_empty
+m RK16 'restack plan: the exit code is 0 for a conflict' src/cli.rs \
+  'Ok(if plan.is_clean() {' 'Ok(if true || plan.is_clean() {' \
+  restack_plan a_conflict_at_level_two_is_inherited_by_level_three_like_git_rebase
 
 m PV23 'prove: an empty range goes on to range-diff' src/prove.rs \
   '        if from == to {' '        if false {' \
