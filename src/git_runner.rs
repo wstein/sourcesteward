@@ -87,6 +87,19 @@ const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 pub enum Op {
     /// `git fetch origin` for an ssh or local-path remote (no tags, no submodules).
     FetchOrigin,
+    /// `FetchOrigin` with an explicit prune choice (`stw sync --prune` / `--no-prune`): `prune: true` adds `--prune`
+    /// and `--no-prune-tags` (a tag is never pruned, whatever `fetch.pruneTags` says), `prune: false` adds
+    /// `--no-prune` (it wins over `fetch.prune`). The caller has checked that every configured fetch refspec writes
+    /// below `refs/remotes/origin/`. Same transports as `FetchOrigin`.
+    FetchOriginPrune { prune: bool },
+    /// `git submodule sync -- <path>` in the superproject: rewrites the submodule's `remote.origin.url` and the
+    /// superproject's `submodule.<name>.url` from `.gitmodules`. Local, no network (`stw sync --submodules`).
+    SubmoduleSync { path: crate::add::SubPath },
+    /// `git submodule update --no-fetch --checkout -- <path>` in the superproject: the initialized submodule goes to
+    /// the commit the superproject records. No fetch, no init, no clone, no recursion; `--checkout` wins over a
+    /// configured `submodule.<name>.update`. The submodule's own config is checked like the superproject's, and
+    /// refused when it names a `filter.*` driver (a checkout would start it).
+    SubmoduleUpdate { path: crate::add::SubPath },
     /// `git check-attr filter diff merge -- .gitmodules` (`cached`: from the index only): what git itself would
     /// apply to `.gitmodules` when `stw add` commits it. Prints one `path: attribute: value` line per attribute.
     CheckAttrGitmodules { cached: bool },
@@ -154,6 +167,32 @@ impl Op {
                 "--upload-pack=git-upload-pack",
                 "origin",
             ]),
+            Op::FetchOriginPrune { prune } => {
+                let mut a = v(&[
+                    "fetch",
+                    "--quiet",
+                    "--no-tags",
+                    "--no-recurse-submodules",
+                    "--upload-pack=git-upload-pack",
+                ]);
+                if *prune {
+                    a.extend(v(&["--prune", "--no-prune-tags"]));
+                } else {
+                    a.push("--no-prune".to_string());
+                }
+                a.extend(v(&["--", "origin"]));
+                a
+            }
+            Op::SubmoduleSync { path } => {
+                let mut a = v(&["submodule", "sync", "--"]);
+                a.push(path.as_str().to_string());
+                a
+            }
+            Op::SubmoduleUpdate { path } => {
+                let mut a = v(&["submodule", "update", "--no-fetch", "--checkout", "--"]);
+                a.push(path.as_str().to_string());
+                a
+            }
             Op::FetchPullHead { pr } => {
                 let mut a = v(&[
                     "fetch",
@@ -216,7 +255,7 @@ impl Op {
     /// a configured or global attributes file (it would attach filter drivers) and never use a pager.
     fn extra_leading(&self) -> &'static [&'static str] {
         match self {
-            Op::FetchOrigin | Op::FetchPullHead { .. } => &[],
+            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchPullHead { .. } => &[],
             // a patch comparison pins what hides or reshapes a change: `diff.ignoreSubmodules=all` hides a
             // gitlink, a size limit turns a file into "Binary files differ", context and algorithm reshape the
             // inner `git log -p` patches
@@ -264,7 +303,7 @@ impl Op {
     /// Value of `GIT_ALLOW_PROTOCOL` of the child. The `stw add` operations are local: no transport at all.
     fn allow_protocol(&self) -> &'static str {
         match self {
-            Op::FetchOrigin => "file:ssh:git:http:https",
+            Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https",
             // ssh and local only: a `url.<base>.insteadOf` of the user's config cannot turn the remote into http(s)
             Op::FetchPullHead { .. } => "file:ssh",
             _ => "none",
@@ -677,7 +716,10 @@ impl Runner {
         set("GIT_EDITOR", "true".into());
         set("GIT_ALLOW_PROTOCOL", op.allow_protocol().into());
         // the operations of `stw add` evaluate attributes: no system attributes file (`/etc/gitattributes`)
-        if !matches!(op, Op::FetchOrigin | Op::FetchPullHead { .. }) {
+        if !matches!(
+            op,
+            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchPullHead { .. }
+        ) {
             set("GIT_ATTR_NOSYSTEM", "1".into());
         }
         if matches!(op, Op::RangeDiff { .. }) {
@@ -720,6 +762,13 @@ impl Runner {
             check_fetch_transport(repo)?;
         }
         refuse_local_command_config(repo, &op)?;
+        if let Op::SubmoduleUpdate { path } = &op {
+            // the checkout runs in the submodule: its own config must not name a program either
+            let sub = repo.join(path.as_str());
+            refuse_config(&sub, &|section, sub_name, key| {
+                runs_a_command(section, sub_name, key) || section == "filter"
+            })?;
+        }
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
         self.apply_env(&mut cmd, Some(repo), &op);
