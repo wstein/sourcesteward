@@ -439,6 +439,10 @@ fn run_ids_are_distinct_and_follow_the_clock() {
     let a = RunId::parse("20261111T123456Z-00000000").unwrap();
     let b = RunId::parse("20261111T123456000001Z-00000000").unwrap();
     assert!(a.order_key() < b.order_key());
+    // the same second, microsecond zero: the suffix decides, as if the ID had six zero digits
+    let c = RunId::parse("20261111T123456Z-ffffffff").unwrap();
+    let d = RunId::parse("20261111T123456000000Z-00000000").unwrap();
+    assert!(c.order_key() > d.order_key());
 }
 
 #[test]

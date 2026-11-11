@@ -1510,6 +1510,143 @@ m NO14 "the repository name is not escaped in the notices" src/status.rs \
   '        let name = esc(&s.name);' '        let name = s.name.clone();' \
   status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
 
+# sync journal, sync restore and tidy history (tests/it/sync_journal.rs, sync_restore.rs, tidy_history.rs)
+m JR1 'the recovery ref is not create-only' src/git_runner.rs \
+  '                a.push("0".repeat(40));
+' '' \
+  sync_journal a_run_id_is_never_used_twice
+m JR2 'the journal step before the move is never called' src/sync/fast_forward.rs \
+  '    before(head, target).map_err(FfError::Other)?;' '    let _ = &before;' \
+  sync_journal a_run_that_moves_two_repositories_journals_both
+m JR3 'a failed journal step does not stop the move' src/sync/fast_forward.rs \
+  '    before(head, target).map_err(FfError::Other)?;' '    let _ = before(head, target);' \
+  sync_journal when_the_record_cannot_be_written_the_branch_does_not_move
+m JR4 'a plan fetches and moves, so it journals' src/sync/mod.rs \
+  '    if o.apply {
+        if o.offline {' '    if true {
+        if o.offline {' \
+  sync_journal a_plan_writes_no_journal_and_no_refs
+m JR5 'retention keeps eleven runs' src/sync/journal.rs \
+  'while done.len() > RETAINED_RUNS - 1 {' 'while done.len() > RETAINED_RUNS {' \
+  sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
+m JR6 'retention deletes a recovery ref whatever it holds' src/git_runner.rs \
+  '                let mut a = v(&["update-ref", "--no-deref", "-d"]);
+                a.push(recovery_ref(run, *n));
+                a.push(oid.as_str().to_string());
+' '                let _ = oid;
+                let mut a = v(&["update-ref", "--no-deref", "-d"]);
+                a.push(recovery_ref(run, *n));
+' \
+  sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
+m JR7 'retention drops a record that is not finished' src/sync/journal.rs \
+  'self.entries.iter().all(|e| e.state != STATE_PREPARED)' 'self.entries.iter().all(|_| true)' \
+  sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
+m JR8 'a symbolic link as the journal directory is followed' src/sync/journal.rs \
+  '            Ok(m) if m.is_dir() => {}' '            Ok(m) if m.is_dir() || m.file_type().is_symlink() => {}' \
+  sync_journal a_symbolic_link_as_the_journal_directory_is_refused
+m JR9 'the record file is world readable' src/sync/journal.rs \
+  'OpenOptionsExt::mode(&mut opts, 0o600);' 'OpenOptionsExt::mode(&mut opts, 0o644);' \
+  sync_journal the_record_is_private_to_the_user
+m JR10 'the journal directory is world readable' src/sync/journal.rs \
+  'DirBuilderExt::mode(&mut b, 0o700);' 'DirBuilderExt::mode(&mut b, 0o755);' \
+  sync_journal the_record_is_private_to_the_user
+m JR11 'a run ID without microseconds is not padded' src/git_runner.rs \
+  '        if k.len() == 15 {' '        if false {' \
+  sync_journal run_ids_are_distinct_and_follow_the_clock
+m JR12 'a branch name that looks like an option reaches git' src/git_runner.rs \
+  '            || short.starts_with('\''-'\'')
+' '' \
+  sync_journal only_a_well_formed_run_id_or_branch_reaches_an_argument_vector
+m JR13 'a record that is a symbolic link is read' src/sync/journal.rs \
+  '        Ok(m) if m.is_file() => {}' '        Ok(_) => {}' \
+  sync_restore a_manipulated_record_fails_before_git_sees_it
+m XR1 'the latest run is the lowest run ID' src/sync/restore.rs \
+  '.max_by_key(|i| i.order_key());' '.min_by_key(|i| i.order_key());' \
+  sync_restore the_highest_run_is_the_default_and_an_older_one_is_named_with_run
+m XR2 'a branch that moved since the run is moved back' src/sync/restore.rs \
+  '    if expected.map(|e| e.as_str().to_string()) != Some(cur.to_string()) {' '    if false {' \
+  sync_restore a_branch_with_a_new_commit_is_changed_since_and_not_touched
+m XR3 'a restored branch is not recognized as already restored' src/sync/restore.rs \
+  '    if cur == old_id {' '    if false {' \
+  sync_restore a_second_restore_says_already_restored
+m XR4 'the check of the worktree for local changes is left out' src/sync/restore.rs \
+  '            Ok(c) if c.dirty_paths == 0 && c.conflicts == 0 => {}' '            Ok(_) => {}' \
+  sync_restore local_changes_in_the_checked_out_worktree_stop_the_restore
+m XR5 'a moved submodule counts as a local change of the superproject' src/status.rs \
+  ') if ignore_submodule_changes => {}' ') if false => {}' \
+  sync_restore a_run_that_moved_two_repositories_is_restored_in_both
+m XR6 'an operation in progress does not stop the restore' src/sync/restore.rs \
+  '    if let Some(op) = status::operation(repo) {' '    if let Some(op) = status::operation(repo).filter(|_| false) {' \
+  sync_restore an_operation_in_progress_stops_the_restore
+m XR7 'a branch checked out in another worktree is moved' src/sync/restore.rs \
+  '    if held_elsewhere(repo, &en.reference) {' '    if false && held_elsewhere(repo, &en.reference) {' \
+  sync_restore a_branch_checked_out_in_a_linked_worktree_is_left_alone
+m XR8 'an unusable tip in the record is not refused' src/sync/restore.rs \
+  '    if matches!(expected, Some(None)) {' '    if false {' \
+  sync_restore a_manipulated_record_fails_before_git_sees_it
+m XR9 'a sync option together with restore is accepted' src/cli.rs \
+  '        .find(|(_, on)| *on)' '        .find(|_| false)' \
+  sync_restore a_sync_option_with_restore_is_a_usage_error
+m XR10 'an unusable journal directory is skipped silently' src/sync/restore.rs \
+  '        if let Err(e) = &s.ids {' '        if let (Err(e), false) = (&s.ids, true) {' \
+  sync_restore a_journal_directory_that_is_a_symbolic_link_is_reported
+m XR11 'the branch name is not escaped in the restore text' src/sync/restore.rs \
+  '            escape_untrusted(x.branch.as_deref().unwrap_or("-"), 200).0,' '            x.branch.as_deref().unwrap_or("-"),' \
+  sync_restore a_hostile_branch_name_is_escaped_in_the_text
+m XR12 'the expected tip is not part of the compare and swap' src/git_runner.rs \
+  '                a.push(expected.as_str().to_string());
+' '' \
+  sync_journal the_argument_vectors_of_the_journal_operations_are_fixed
+m XR13 'an old tip that is gone is not noticed' src/sync/restore.rs \
+  '    if repo.find_commit(old_id).is_err() {' '    if false {' \
+  sync_restore an_old_tip_that_is_gone_fails_and_nothing_moves
+m XR14 'a malformed run ID is accepted by the command line' src/cli.rs \
+  '        if git_runner::RunId::parse(id).is_none() {' '        if false {' \
+  sync_restore an_unknown_run_and_a_workspace_without_a_journal_are_refused_and_nothing_changes
+m TH1 'the history runs oldest first' src/tidy_history.rs \
+  'found.sort_by(|a, b| b.0.cmp(&a.0));' 'found.sort_by(|a, b| a.0.cmp(&b.0));' \
+  tidy_history journals_come_newest_first_and_the_limit_is_a_visible_truncation
+m TH2 'the limit is ignored' src/tidy_history.rs \
+  'let shown = &found[..total.min(limit)];' 'let shown = &found[..total];' \
+  tidy_history journals_come_newest_first_and_the_limit_is_a_visible_truncation
+m TH3 'an existing branch is restorable' src/tidy_history.rs \
+  '    let free = matches!(repo.try_find_reference(branch.as_str()), Ok(None));' '    let free = true;' \
+  tidy_history a_run_of_tidy_apply_is_listed_with_its_counts_and_restore_reads_the_same_file
+m TH4 'a missing commit is restorable' src/tidy_history.rs \
+  '    free && repo.has_object(id)' '    let _ = id;
+    free' \
+  tidy_history the_counts_follow_the_repository
+m TH5 'a relative repository path is opened' src/tidy_history.rs \
+  '        (p.is_absolute() && p.is_dir())' '        (p.is_dir())' \
+  tidy_history the_counts_follow_the_repository
+m TH6 'a link or a directory under a manifest name is listed' src/tidy_history.rs \
+  '                if !m.is_file() {' '                if false && !m.is_file() {' \
+  tidy_history an_unreadable_manifest_is_listed_and_foreign_files_are_not
+m TH7 'a hidden file is a manifest' src/tidy_history.rs \
+  '        && !s.starts_with('\''.'\'')
+' '' \
+  tidy_history an_unreadable_manifest_is_listed_and_foreign_files_are_not
+m TH8 'the directory name is not escaped in the text' src/tidy_history.rs \
+  '    let dir = escape_untrusted(&p2s(&h.manifest_dir), 300).0;' '    let dir = p2s(&h.manifest_dir);' \
+  tidy_history an_escape_sequence_in_the_directory_name_is_escaped_in_the_text
+m TH9 'the scan bound is ignored' src/tidy_history.rs \
+  '                if found.len() >= scan_limit {' '                if false {' \
+  tidy_history every_bound_is_a_visible_marker
+m TH10 'the entry bound shows no marker' src/tidy_history.rs \
+  '    if wanted > counted {' '    if false {' \
+  tidy_history every_bound_is_a_visible_marker
+m TH11 'the time bound is ignored' src/tidy_history.rs \
+  '        if started.elapsed() > budget {
+            rows.push(row);' '        if false && started.elapsed() > budget {
+            rows.push(row);' \
+  tidy_history every_bound_is_a_visible_marker
+m TH12 'an unreadable manifest is complete' src/tidy_history.rs \
+  '            Err(_) => row.entry.status = "unreadable",' '            Err(_) => row.entry.status = "complete",' \
+  tidy_history an_unreadable_manifest_is_listed_and_foreign_files_are_not
+m TH13 'a limit of 0 is accepted' src/cli.rs \
+  'range(1..=tidy_history::MAX_LIMIT as i64)' 'range(0..=tidy_history::MAX_LIMIT as i64)' \
+  tidy_history a_bad_limit_or_a_repeated_flag_is_a_usage_error
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

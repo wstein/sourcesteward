@@ -329,11 +329,28 @@ fn the_counts_follow_the_repository() {
             line(&fx.path, "UPPER", &c0.to_uppercase()),           // not lower-case hex
         ],
     );
-    let v = json(&history(home.path(), &md, &[]));
+    // a relative path that does exist from the working directory of the process is no better: it is refused as well
+    let mut lines = std::fs::read_to_string(md.join("0000000000001-1-0.jsonl")).unwrap();
+    lines += &(line(Path::new("repo"), "rel-exists", &c0) + "\n");
+    std::fs::write(md.join("0000000000001-1-0.jsonl"), lines).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", home.path())
+        .current_dir(fx.path.parent().unwrap())
+        .args([
+            "tidy",
+            "history",
+            "--json",
+            "--manifest-dir",
+            md.to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    let v = json(&o);
     let e = entry(&v, "0000000000001-1-0");
     assert_eq!(
         (e["deleted"].as_u64(), e["restorable"].as_u64()),
-        (Some(9), Some(1)),
+        (Some(10), Some(1)),
         "{e}"
     );
     assert_eq!(e["status"], "complete");
