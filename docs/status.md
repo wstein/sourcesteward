@@ -73,10 +73,10 @@ Counts
 `PRs` are the open pull requests (of them the bot pull requests), `Issues` the open issues without pull requests (of them
 those with the label `bug`), `Branches` the local branches and the remote-tracking branches of `origin` as of the last fetch (`HEAD`
 excluded), `Worktrees` the linked worktrees whose directory exists (the main checkout excluded) and `Stash` the entries of the
-stash reflog. `n/a` is not read (`--offline`, no token, the deadline, issues disabled, an uninitialized submodule, a repository that is not on
+stash reflog. `n/a` is not read (`--offline`, no token, the deadline) or does not apply (issues disabled, an uninitialized submodule, a repository that is not on
 GitHub), `?` is a read that failed (or a repository that cannot be read locally) and `n+` is a lower bound (an issues listing that hit its limit of 10 pages).
-A number is never 0 for something that was not read. `All` is a sum only when every repository gave a number: repositories without a
-GitHub origin are left out of the PR and issue sums, otherwise `?` wins over `n/a`. The block adds no request: the numbers come
+A number is never 0 for something that was not read. `All` is a sum of the repositories that gave a number: repositories without a
+GitHub origin, repositories with disabled issues (issues only) and uninitialized submodules are left out of the sums (their own line says `n/a`), while a repository that was not read makes the sum `n/a` and a failed one `?` (`?` wins over `n/a`). The block adds no request: the numbers come
 from the pull request and issue reads that the status run makes anyway, and from the local reads.
 
 The blocks follow in this order, each after a blank line: `Needs action (N)` (N is the number of items; `nothing` when there are

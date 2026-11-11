@@ -227,8 +227,8 @@ summary line. The local half marks a repository `!` when an operation is in prog
 or untracked files, it is behind its upstream or diverged, a branch has no upstream, HEAD is detached or a gitlink is behind
 or unrelated; commits ahead, stashes, unmerged branches, linked worktrees and a merely *ahead* gitlink are shown but do not
 count. The remote half reads pull requests, release drafts, unreleased tags and CI for each GitHub repository, with 15 s per
-request and 90 s overall (`--timeout`). Exit status 0 also when there is something to do, when no token is available or
-the deadline cut a read; 1 when a request that was made failed, a repository cannot be read or the run fails; 2 for usage
+request and 90 s overall (`--timeout`). Exit status 0 also when there is something to do, when no token is available,
+the deadline cut a read or a remote read failed (a notice); 1 when a repository cannot be read locally or the run fails; 2 for usage
 errors.
 
 ```
