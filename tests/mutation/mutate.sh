@@ -835,6 +835,9 @@ m RP22 'replay: only files added by the replayed commit are checked' src/replay.
 m RP23 'replay: a new subdirectory entry is listed as a conflict path' src/replay.rs \
   '        if entry_mode.is_tree() {' '        if false {' \
   replay a_new_subdirectory_in_a_renamed_directory_lists_the_file_only
+m RP24 'replay: renames are tracked on the adding side as well' src/replay.rs \
+  '    for change in diff(adder, None)? {' '    for change in diff(adder, Some(Default::default()))? {' \
+  replay a_file_moved_into_a_directory_that_onto_renamed_is_a_conflict_like_git
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

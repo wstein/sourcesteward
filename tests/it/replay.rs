@@ -739,6 +739,49 @@ fn a_new_subdirectory_in_a_renamed_directory_lists_the_file_only() {
     assert_eq!(conflict_paths(&r.steps[0]), ["dir/sub/new.txt"]);
 }
 
+#[test]
+fn a_file_moved_into_a_directory_that_onto_renamed_is_a_conflict_like_git() {
+    // The addition dir/z.txt is the other half of a rename (z.txt moved): it has to be seen as an addition, not
+    // as a rename target, or the old directory would come back without a conflict.
+    let fx = Fx::new();
+    let a = lines(30, "a");
+    let b = lines(30, "b");
+    let z = lines(30, "z");
+    let base = fx.commit(
+        None,
+        &[
+            ("dir/a.txt", Some(&a)),
+            ("dir/b.txt", Some(&b)),
+            ("z.txt", Some(&z)),
+        ],
+        "base",
+    );
+    let onto = rename_dir(
+        &fx,
+        "dir",
+        "newdir",
+        base,
+        &[("a.txt", a.clone()), ("b.txt", b.clone())],
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("z.txt", None), ("dir/z.txt", Some(&z))],
+        "git mv z.txt dir/z.txt",
+    );
+    let (code, theirs) = oracle_merge_tree(&fx, base, onto, side);
+    assert_eq!(code, 1, "git sees a conflict: {theirs:?}");
+    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
+    assert!(r.conflicted(), "{:?}", r.steps);
+    assert!(
+        r.steps[0]
+            .conflicts
+            .iter()
+            .any(|c| c.kind == "directory-rename"),
+        "{:?}",
+        r.steps[0].conflicts
+    );
+}
+
 /// Every file under `.git` with its bytes, to compare before and after.
 fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
