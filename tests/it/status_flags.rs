@@ -157,6 +157,10 @@ fn icons_never_reach_the_json_and_a_bad_value_is_a_usage_error() {
     let fx = attention_and_failed();
     let r = path_str(&fx.path);
     let base = out(&stw(None, &["status", "--root", &r, "--offline", "--json"]));
+    assert!(
+        serde_json::from_str::<Value>(&base).unwrap()["options"]["icons"].is_null(),
+        "{base}"
+    );
     for set in ["unicode", "nerd", "ascii"] {
         let o = stw(
             None,
@@ -207,6 +211,11 @@ fn with_worktrees() -> Fx {
     assert!(detached.is_dir());
     add_worktree(&fx, "gone", "gone", false, false);
     add_worktree(&fx, "lockedgone", "gonelocked", false, true);
+    // a relative link (a `..` in the checkout path): listed like the others
+    let base = fx.path.parent().unwrap();
+    std::fs::create_dir_all(base.join("x")).unwrap();
+    fx.branch("relbr", c0);
+    real_worktree_at(&fx, "rel", "relbr", &base.join("x/../wt-rel"));
     fx
 }
 
@@ -231,7 +240,7 @@ fn worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout() 
     let v = json_of(&o);
     assert_eq!(v["options"]["worktrees"], true);
     let list = v["repos"][0]["worktree_list"].as_array().unwrap();
-    assert_eq!(list.len(), 6, "{list:?}: no main checkout");
+    assert_eq!(list.len(), 7, "{list:?}: no main checkout");
     let clean = wt(&v, "/wt-clean");
     assert_eq!(clean["branch"], "topic");
     assert_eq!(
@@ -248,6 +257,16 @@ fn worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout() 
         "{clean}"
     );
     assert_eq!(wt(&v, "/wt-dirty")["dirty"], true);
+    let rel = wt(&v, "/wt-rel");
+    assert_eq!(
+        (rel["branch"].clone(), rel["dirty"].clone()),
+        ("relbr".into(), false.into()),
+        "{rel}"
+    );
+    assert!(
+        !rel["path"].as_str().unwrap().contains(".."),
+        "shown without the `..`: {rel}"
+    );
     let locked = wt(&v, "/wt-locked");
     assert_eq!(locked["locked"], "test lock", "{locked}");
     assert_eq!(locked["dirty"], false);
@@ -274,7 +293,7 @@ fn worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout() 
         "a locked registration is never prunable: {lg}"
     );
     // the count keeps its convention: existing linked checkouts, no stale registrations, no main checkout
-    assert_eq!(v["repos"][0]["counts"]["worktrees"], 4);
+    assert_eq!(v["repos"][0]["counts"]["worktrees"], 5);
     // without the flag the field is null and everything else is the same
     let plain = json_of(&stw(None, &["status", "--root", &r, "--offline", "--json"]));
     assert!(plain["repos"][0]["worktree_list"].is_null());
@@ -296,7 +315,7 @@ fn worktrees_text_has_one_line_per_linked_worktree_under_its_repository() {
         .lines()
         .filter(|l| l.starts_with("    worktree "))
         .collect();
-    assert_eq!(lines.len(), 6, "{t}");
+    assert_eq!(lines.len(), 7, "{t}");
     let find = |s: &str| {
         lines
             .iter()
@@ -623,18 +642,28 @@ fn a_fetch_refspec_that_writes_outside_the_remote_tracking_namespace_is_refused_
 #[test]
 fn a_failed_fetch_is_a_detail_line_and_a_notice_and_exit_0() {
     let f = fetch_setup();
-    std::fs::rename(&f.origin, f.w.p("origin-moved.git")).unwrap();
-    let o = status_of(&f, &["--offline", "--fetch"]);
-    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
-    let t = out(&o);
-    assert!(t.contains("\n    fetch failed: "), "{t}");
-    let notices = t
-        .split("\n\n")
-        .find(|b| b.starts_with("Notices ("))
-        .unwrap();
-    assert!(notices.contains("ws: fetch failed ("), "{notices}");
-    assert!(!t.contains('\u{1b}'), "{t:?}");
-    assert!(t.contains("clean"), "the local half is still shown: {t}");
+    // an origin that is not there (git fails), and a transport stw does not run, whose URL carries a control
+    // sequence into the error text (git itself replaces the escape character in its messages)
+    for url in ["/nonexistent/stw/gone", "ext::sh -c \u{1b}[31mx"] {
+        f.w.git(&f.ws, &["remote", "set-url", "origin", url]);
+        let o = status_of(&f, &["--offline", "--fetch"]);
+        assert_eq!(o.status.code(), Some(0), "{url}: {}{}", out(&o), err(&o));
+        let t = out(&o);
+        assert!(t.contains("\n    fetch failed: "), "{url}: {t}");
+        let notices = t
+            .split("\n\n")
+            .find(|b| b.starts_with("Notices ("))
+            .unwrap();
+        assert!(notices.contains("ws: fetch failed ("), "{url}: {notices}");
+        assert!(!t.contains('\u{1b}'), "raw ESC: {t:?}");
+        assert!(t.contains("clean"), "the local half is still shown: {t}");
+        if url.starts_with("ext::") {
+            assert!(
+                t.contains("    fetch failed: ") && t.contains("\\u{1b}[31mx"),
+                "{t}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -766,13 +795,17 @@ fn timeout_cuts_the_github_reads_with_notices_and_question_marks() {
 // --stats and --verbose (Go: docs/status.md "Diagnostics", cli/status_online.go statusStatsLine/writeStatusVerbose)
 // ---------------------------------------------------------------------------------------------------------
 
-/// test/fixture: two open PRs, one issue; every answer carries the rate-limit headers (reset 2023-11-14 22:13:20 UTC).
+/// test/fixture: two open PRs, one issue; every answer carries the rate-limit headers (reset 2023-11-14 22:13:20 UTC,
+/// 4900 minus the number of answers so far remaining).
 fn rate_api() -> FakeRoutes {
-    FakeRoutes::start(|path, _| {
+    let served = std::sync::atomic::AtomicU64::new(0);
+    FakeRoutes::start(move |path, _| {
         let h = |k: &str, v: &str| (k.to_string(), v.to_string());
+        // the remaining count falls with every answer: the last one (the smallest) is the one reported
+        let n = served.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
         let headers = vec![
             h("X-RateLimit-Limit", "5000"),
-            h("X-RateLimit-Remaining", "4892"),
+            h("X-RateLimit-Remaining", &(4900 - n).to_string()),
             h("X-RateLimit-Reset", "1700000000"),
         ];
         let pr = |n: u64| {
@@ -825,7 +858,7 @@ fn stats_text_is_one_line_at_the_very_end_with_the_requests_and_the_rate_limit()
         api.hits()
     );
     let last = t.trim_end().lines().last().unwrap();
-    let want = format!("stats: API: {n} reqs (4,892/5,000 left, reset 22:13 UTC) | ");
+    let want = format!("stats: API: {n} reqs (4,896/5,000 left, reset 22:13 UTC) | ");
     assert!(last.starts_with(&want), "{last}");
     let rest = &last[want.len()..];
     assert!(
@@ -863,7 +896,7 @@ fn stats_json_adds_the_stats_member_and_stays_one_document() {
     let s = &v["stats"];
     assert_eq!(s["requests"], 4, "{s}");
     assert_eq!(s["rate_limit_limit"], 5000);
-    assert_eq!(s["rate_limit_remaining"], 4892);
+    assert_eq!(s["rate_limit_remaining"], 4896);
     assert_eq!(s["rate_limit_reset"], "2023-11-14T22:13:20Z");
     assert!(s["duration_ms"].is_u64(), "{s}");
     assert!(

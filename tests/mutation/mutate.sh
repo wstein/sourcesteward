@@ -1108,6 +1108,115 @@ m SH18 "the uninitialized pass visits refused paths too" src/sync/submodules.rs 
         };" "        let p = p;" \
   submodule_paths sync_with_submodules_names_each_refused_path_once
 
+m SF1 'the unreadable-repository marker is the attention marker' src/status.rs \
+  'Icons::Unicode => "\u{2716} ",' 'Icons::Unicode => "\u{25b2} ",' \
+  status_flags icons_change_only_the_markers_of_the_repository_lines
+m SF2 'the icon default ignores whether stdout is a terminal' src/status.rs \
+  'None if t.stdout && t.utf8 && !t.dumb => Icons::Unicode,' 'None if t.utf8 && !t.dumb => Icons::Unicode,' \
+  status_flags icons_default_is_unicode_only_on_a_utf8_terminal
+m SF3 'a UTF-8 LANG wins over LC_ALL=C' src/status.rs \
+  '.find(|v| !v.is_empty());' '.find(|v| v.to_ascii_lowercase().contains("utf"));' \
+  status_flags icons_default_is_unicode_only_on_a_utf8_terminal
+m SF4 'the icon default ignores TERM=dumb' src/status.rs \
+  'None if t.stdout && t.utf8 && !t.dumb => Icons::Unicode,' 'None if t.stdout && t.utf8 => Icons::Unicode,' \
+  status_flags icons_default_is_unicode_only_on_a_utf8_terminal
+m SF5 'the nerd attention glyph is the ascii one' src/status.rs \
+  'Icons::Nerd => "\u{f071} ",' 'Icons::Nerd => "! ",' \
+  status_flags icons_change_only_the_markers_of_the_repository_lines
+m SF6 'the JSON names an icon set' src/status.rs \
+  '"icons": null}' '"icons": "unicode"}' \
+  status_flags icons_never_reach_the_json_and_a_bad_value_is_a_usage_error
+m SF7 'a registration whose checkout is gone is not prunable' src/status.rs \
+  'prunable: !st.locked,' 'prunable: false,' \
+  status_flags worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout
+m SF8 'the lock reason is dropped from the worktree list' src/status.rs \
+  'locked: l.locked.then(|| l.lock_reason.clone().unwrap_or_default()),' 'locked: None,' \
+  status_flags worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout
+m SF9 'a worktree is never dirty' src/status.rs \
+  '.map(|c| c.staged + c.unstaged + c.untracked + c.conflicts > 0)' '.map(|c| c.staged + c.unstaged + c.untracked + c.conflicts > 1000)' \
+  status_flags worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout
+m SF10 'the worktree path is printed unescaped' src/status.rs \
+  '                esc(&wt.path),' '                wt.path,' \
+  status_flags worktree_text_from_the_repository_is_escaped
+m SF11 'relative worktree links are not listed' src/status.rs \
+  'for l in w.linked.iter().chain(&w.relative) {' 'for l in w.linked.iter() {' \
+  status_flags worktrees_lists_the_linked_ones_with_their_state_and_not_the_main_checkout
+m SF12 '--fetch uses fetch.prune of the configuration' src/status.rs \
+  'fetch_origin_with(&repo, gh, Prune::Off)' 'fetch_origin_with(&repo, gh, Prune::Unset)' \
+  status_flags fetch_never_prunes_not_even_with_fetch_prune_configured
+m SF13 '--fetch does not check the fetch refspecs' src/status.rs \
+  'if let Err(m) = check_prune_scope(&repo) {' 'if let Err(m) = check_prune_scope(&repo).or(Ok::<(), String>(())) {' \
+  status_flags a_fetch_refspec_that_writes_outside_the_remote_tracking_namespace_is_refused_before_any_fetch
+m SF14 '--fetch fetches nothing' src/status.rs \
+  '    if opts.fetch {' '    if false && opts.fetch {' \
+  status_flags fetch_updates_the_remote_tracking_refs_and_nothing_else
+m SF15 'a failed fetch is not a notice' src/status.rs \
+  '"{}: fetch failed ({})"' '"{}: fetch ({})"' \
+  status_flags a_failed_fetch_is_a_detail_line_and_a_notice_and_exit_0
+m SF16 'the error of a failed fetch is printed unescaped' src/status.rs \
+  'out += &format!("    fetch failed: {}\n", esc(e));' 'out += &format!("    fetch failed: {}\n", e);' \
+  status_flags a_failed_fetch_is_a_detail_line_and_a_notice_and_exit_0
+m SF17 'the deadline of --timeout is never armed' src/cli.rs \
+  '        cl.arm_deadline(a.timeout);' '        let _ = cl;' \
+  status_flags timeout_cuts_the_github_reads_with_notices_and_question_marks
+m SF18 '--timeout accepts values below 1s' src/cli.rs \
+  'pub const MIN_TIMEOUT: Duration = Duration::from_secs(1);' 'pub const MIN_TIMEOUT: Duration = Duration::from_millis(1);' \
+  status_flags timeout_values_are_go_durations_within_1s_to_10m
+m SF19 '--timeout accepts more than 10m' src/cli.rs \
+  'pub const MAX_TIMEOUT: Duration = Duration::from_secs(600);' 'pub const MAX_TIMEOUT: Duration = Duration::from_secs(3600);' \
+  status_flags timeout_values_are_go_durations_within_1s_to_10m
+m SF20 '--timeout is allowed with --offline' src/cli.rs \
+  'value_parser = parse_timeout, conflicts_with = "offline")]' 'value_parser = parse_timeout)]' \
+  status_flags timeout_out_of_range_or_with_offline_is_a_usage_error_and_nothing_runs
+m SF21 'the requests are not counted' src/github.rs \
+  '        st.requests += 1;' '        st.requests += 0;' \
+  status_flags stats_json_adds_the_stats_member_and_stays_one_document
+m SF22 'the rate limit reported is the largest remaining count' src/github.rs \
+  'r.remaining <= old.remaining' 'r.remaining > old.remaining' \
+  status_flags stats_json_adds_the_stats_member_and_stays_one_document
+m SF23 '--verbose with --json prints the stats line to stdout' src/cli.rs \
+  'eprintln!("{}", status_stats::stats_line(&stats, &timings));' 'println!("{}", status_stats::stats_line(&stats, &timings));' \
+  status_flags verbose_with_json_keeps_stdout_a_document_and_writes_the_breakdown_to_stderr
+m SF24 '--verbose does not imply --stats' src/cli.rs \
+  'let diag = a.stats || a.verbose;' 'let diag = a.stats;' \
+  status_flags verbose_with_json_keeps_stdout_a_document_and_writes_the_breakdown_to_stderr
+m SF25 'the reset time shows the wrong minutes' src/status_stats.rs \
+  '            &h[..5]' '            &h[..4]' \
+  status_flags stats_text_is_one_line_at_the_very_end_with_the_requests_and_the_rate_limit
+m SF26 'the civil date of January and February is off' src/status_stats.rs \
+  'let m = if mp < 10 { mp + 3 } else { mp - 9 };' 'let m = mp + 3;' \
+  status_flags stats_formatting_helpers_follow_the_go_ones
+m SF27 'the thousands separator is placed every two digits' src/status_stats.rs \
+  '(s.len() - i).is_multiple_of(3)' '(s.len() - i).is_multiple_of(2)' \
+  status_flags stats_formatting_helpers_follow_the_go_ones
+m SF28 '--verbose is allowed with --offline' src/cli.rs \
+  '    #[arg(long, conflicts_with = "offline")]
+    verbose: bool,' '    #[arg(long)]
+    verbose: bool,' \
+  status_flags stats_and_verbose_are_usage_errors_with_offline
+m SF29 'the explanation of untracked paths is cut' src/status.rs \
+  '"{} untracked: add them, ignore them or remove them",' '"{} untracked",' \
+  status_flags long_explains_every_reason_from_the_facts
+m SF30 'the card shows no facts' src/status.rs \
+  '        if view.long {
+            for l in card(s) {' '        if false && view.long {
+            for l in card(s) {' \
+  status_flags long_adds_cards_and_explanations_and_nothing_is_taken_away
+m SF31 'Needs action has no explanations' src/status.rs \
+  '            if view.long {
+                for r in &rs {' '            if false && view.long {
+                for r in &rs {' \
+  status_flags long_adds_cards_and_explanations_and_nothing_is_taken_away
+m SF32 'the slug of the card is printed unescaped' src/status.rs \
+  's.slug.as_deref().map_or("none".to_string(), esc)' 's.slug.as_deref().map_or("none".to_string(), |x| x.to_string())' \
+  status_flags long_shows_text_from_the_repository_escaped
+m SF33 'the error in an explanation is printed unescaped' src/status.rs \
+  'esc(s.error.as_deref().unwrap_or("unknown error"))' 's.error.clone().unwrap_or_default()' \
+  status_flags long_explains_every_reason_from_the_facts
+m SF34 'the card counts differ from the Counts block' src/status.rs \
+  'branches: {} local, {} remote; linked worktrees: {}; stash: {}' 'branches: {} local, {} remote; worktrees: {}; stash: {}' \
+  status_flags long_adds_cards_and_explanations_and_nothing_is_taken_away
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
