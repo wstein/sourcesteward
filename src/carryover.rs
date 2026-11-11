@@ -1,7 +1,7 @@
 //! Carry-over check (M4): may the review of an old pull request head be carried over to a rewritten head?
 //!
 //! Read-only: nothing is posted and no review state is read (`from` must be CLEAR; `stw` does not check that here).
-//! The rule is the carry-over rule of the dotagents skill `agent-workflow`; all three conditions must hold:
+//! The rule is the carry-over rule of the dotagents skill `agent-workflow`; all four conditions must hold:
 //! 1. equal patch-id of the cumulative diff `BASE...HEAD`, old and new (each against its own base);
 //! 2. no merge commit in `NEW_BASE..NEW_HEAD`;
 //! 3. `git range-diff OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` shows `=` for every commit, at the same position;

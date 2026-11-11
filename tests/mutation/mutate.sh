@@ -1732,6 +1732,16 @@ m PV22 'prove: an empty old range is accepted' src/prove.rs \
   'Ok(true) if par == old => {' 'Ok(true) if false => {' \
   prove an_old_parent_that_is_no_ancestor_the_alt_itself_or_too_far_down_is_not_proved
 
+m PV23 'prove: an empty range goes on to range-diff' src/prove.rs \
+  '        if from == to {' '        if false {' \
+  prove an_empty_new_range_is_range_empty_and_not_an_unsupported_git
+m PV24 'prove: no hint to name the new parent' src/prove.rs \
+  'if source == "old-parent" {' 'if false {' \
+  prove an_old_parent_without_base_is_named_as_the_source_of_the_new_base_and_hints
+m PV25 'prove: the new base from --old-parent is called flag' src/prove.rs \
+  'if old_source == "flag" {' 'if false {' \
+  prove an_old_parent_without_base_is_named_as_the_source_of_the_new_base_and_hints
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

@@ -616,9 +616,9 @@ its reason and `via`; for `proved` the last line is the finished line
 Checks 1 to 4 are the machine of `stw review carry-over` (`carryover::check`: range-diff, per-commit patch-ids, cumulative patch-id, merge commits), not a second implementation. The old base is
 the merge base of `ALT` and `NEU`. Without `--base` the new base is the same commit (a rewrite on the same base: amend, reword,
 reorder, squash); with `--base BASIS` it is `BASIS`, the base `NEU` was rebased onto, which must be an ancestor of `NEU`
-(`base-not-below-new`). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff
+(`base-not-below-new`, with a hint to name the new parent with `--base` when `--old-parent` made the old base the new base too; `ends.base_source` is then `old-parent`). An empty old or new range is `range-empty` (git range-diff needs two non-empty ranges). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff
 fails and a hint names `--base`. Problems before any check: `unknown-revision` (a revision that names nothing or no commit),
-`old-parent-not-ancestor`, `old-range-empty`, `no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
+`old-parent-not-ancestor`, `old-range-empty`, `range-empty`, `no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
 accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. Merge commits of the old range are left out of the pairing (range-diff and the per-commit patch-ids leave them out too); a linearized `NEU` can be proved, and the trailer line says how many were left out. A step that could not run is `unknown`
 and the verdict is `not proved`; there is never a line then. `identity-unknown`: no `user.name` and `user.email` in the Git
 configuration; stw never sets them. The identity check is as strict as `lint pr`: a rebased commit of another author is not proved.
@@ -630,7 +630,7 @@ superproject of the current directory, else `$STW_ROOT`; the root and its checke
 path that `.gitmodules` names outside the root), or `--repo NAME`; without a repository around the current directory the workspace must
 have exactly one. Exit 0 `proved`, 1 `not proved` (result printed), 2 usage.
 JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr` (number or `"none"`), `request{old,new,base,old_parent}`,
-`ends{old_head,new_head,old_base,new_base,base_source,old_base_source}` (`base_source`, `old_base_source`: `merge-base` or `flag`; null when the revisions did not
+`ends{old_head,new_head,old_base,new_base,base_source,old_base_source}` (`old_base_source`: `merge-base` or `flag`; `base_source`: `merge-base`, `flag` or `old-parent`; null when the revisions did not
 resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]}`), `reasons[]` (all reasons that apply),
 `hint` (the `--base` hint or null) and `line` (the `Carried-over:` line for `proved`, else null).
 

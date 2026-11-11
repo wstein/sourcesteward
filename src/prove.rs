@@ -659,21 +659,42 @@ pub fn prove(dir: &Path, runner: &Runner, req: &Request) -> Proof {
     };
     let (new_base, source) = match base {
         Some(Some(b)) => (b, "flag"),
-        _ => (old_base, old_source),
+        // no --base: the old base is the new base too; named by where it came from
+        _ => (
+            old_base,
+            if old_source == "flag" {
+                "old-parent"
+            } else {
+                "merge-base"
+            },
+        ),
     };
     match repo::is_ancestor(&repo, new_base, new) {
         Ok(true) => {}
         Ok(false) => {
-            p.input.push(input_problem(
-                "revision",
-                "base-not-below-new",
-                "the base is not an ancestor of NEU: NEU is not a rebase onto it".into(),
-            ));
+            let mut why =
+                String::from("the base is not an ancestor of NEU: NEU is not a rebase onto it");
+            if source == "old-parent" {
+                why.push_str(" (without --base the old parent is the new base too: name the new parent with --base)");
+            }
+            p.input
+                .push(input_problem("revision", "base-not-below-new", why));
             return finish(p);
         }
         Err(e) => {
             p.input
                 .push(Check::new("revision", "gix").unknown("read-failed", esc(&e.to_string())));
+            return finish(p);
+        }
+    }
+    // git range-diff needs two non-empty ranges; an empty one proves nothing
+    for (rng, from, to) in [("old", old_base, old), ("new", new_base, new)] {
+        if from == to {
+            p.input.push(input_problem(
+                "revision",
+                "range-empty",
+                format!("the {rng} range is empty: there is no commit to compare"),
+            ));
             return finish(p);
         }
     }

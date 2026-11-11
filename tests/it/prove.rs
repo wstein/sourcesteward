@@ -884,3 +884,48 @@ fn a_binary_intermediate_difference_is_not_proved_with_the_old_parent_either() {
     );
     assert!(!r.text.contains("Carried-over:"));
 }
+
+#[test]
+fn an_old_parent_without_base_is_named_as_the_source_of_the_new_base_and_hints() {
+    if skip() {
+        return;
+    }
+    let k = child();
+    // a rewrite of the child on the same parent: the old parent is the new base too
+    let again =
+        k.fx.commit(Some(k.p), &[("c.txt", Some("c\n"))], &msg("feat: child"));
+    let r = run(
+        &k.fx,
+        &[&s(k.c), &s(again), "--old-parent", &s(k.p), "--json"],
+    );
+    assert_eq!(r.code, 0, "{}", r.text);
+    let v: serde_json::Value = serde_json::from_str(&r.text).unwrap();
+    assert_eq!(v["ends"]["base_source"], "old-parent");
+    assert_eq!(v["ends"]["old_base_source"], "flag");
+    // NEU on a rebased parent, no --base: the old parent is no base of NEU
+    let r = run(&k.fx, &[&s(k.c), &s(k.c2), "--old-parent", &s(k.p)]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("base-not-below-new"), "{}", r.text);
+    assert!(
+        r.text.contains("name the new parent with --base"),
+        "{}",
+        r.text
+    );
+}
+
+#[test]
+fn an_empty_new_range_is_range_empty_and_not_an_unsupported_git() {
+    if skip() {
+        return;
+    }
+    let k = child();
+    let (alt, neu) = (s(k.c), s(k.c2));
+    let r = run(
+        &k.fx,
+        &[&alt, &neu, "--old-parent", &s(k.p), "--base", &neu],
+    );
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("range-empty"), "{}", r.text);
+    assert!(r.text.contains("the new range is empty"), "{}", r.text);
+    assert!(!r.text.contains("unsupported"), "{}", r.text);
+}
