@@ -989,7 +989,7 @@ fn forge_rate(
     k: usize,
     status: u16,
     headers: Vec<(String, String)>,
-    body: &'static str,
+    body: String,
     delay: bool,
 ) -> FakeRoutes {
     let seen = std::sync::atomic::AtomicUsize::new(0);
@@ -1014,7 +1014,7 @@ fn forge_rate(
                     if delay && i > k {
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
-                    (status, headers.clone(), body.into())
+                    (status, headers.clone(), body.clone())
                 }
             }
             p if p.starts_with("/repos/test/fixture/pulls/") => {
@@ -1023,6 +1023,11 @@ fn forge_rate(
             _ => (404, vec![], "{}".into()),
         }
     })
+}
+
+/// A body that starts with `text` and is padded with `x` up to `len` bytes.
+fn padded(text: &str, len: usize) -> String {
+    format!("{text}{}", "x".repeat(len - text.len()))
 }
 
 fn all_comment_hits(api: &FakeRoutes) -> usize {
@@ -1040,29 +1045,38 @@ const SKIP_TEXT: &str = "no further comment read was started";
 fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
     const N: u64 = 60;
     const K: usize = 3;
-    type Variant = (u16, Vec<(String, String)>, &'static str);
+    type Variant = (u16, Vec<(String, String)>, String);
+    let h = |k: &str, v: &str| vec![(k.to_string(), v.to_string())];
     let variants: Vec<Variant> = vec![
-        (429, vec![], "{}"),
-        (403, vec![("retry-after".into(), "60".into())], "{}"),
-        (
-            403,
-            vec![("x-ratelimit-remaining".into(), "0".into())],
-            "{}",
-        ),
+        (429, vec![], "{}".into()),
+        (403, h("retry-after", "60"), "{}".into()),
+        (403, h("x-ratelimit-remaining", "0"), "{}".into()),
         // a secondary limit without headers: only the body says so (as in Go)
         (
             403,
             vec![],
-            r#"{"message":"You have exceeded a secondary Rate Limit. Please wait."}"#,
+            r#"{"message":"You have exceeded a secondary Rate Limit. Please wait."}"#.into(),
         ),
         (
             403,
             vec![],
-            r#"{"message":"You have triggered an abuse detection mechanism."}"#,
+            r#"{"message":"You have triggered an abuse detection mechanism."}"#.into(),
+        ),
+        // bodies of 4096 bytes and more: the first 4096 bytes decide (no cut, no drop), also inside a multibyte character
+        (403, vec![], padded("rate limit", 5063)),
+        (403, vec![], padded("rate limit", 4096)),
+        (
+            403,
+            vec![],
+            format!(
+                "{}{}",
+                padded("abuse detection", 4093),
+                "\u{e9}".repeat(300)
+            ),
         ),
     ];
     for (status, headers, body) in variants {
-        let api = forge_rate(N, K, status, headers.clone(), body, true);
+        let api = forge_rate(N, K, status, headers.clone(), body.clone(), true);
         let o = run_review(&api, &["--json"]);
         assert_eq!(
             o.status.code(),
@@ -1118,7 +1132,7 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
             .iter()
             .all(|p| p["review_state"]["decisive"].is_null()));
         // the text: `?`, one notice for the run, one for the repository with the reads that did fail
-        let api = forge_rate(N, K, status, headers.clone(), body, true);
+        let api = forge_rate(N, K, status, headers.clone(), body.clone(), true);
         let o = run_review(&api, &[]);
         assert_eq!(o.status.code(), Some(0));
         let t = out(&o);
@@ -1159,20 +1173,26 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
 
 #[test]
 fn a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads() {
-    let plain = r#"{"message":"Resource not accessible by integration"}"#;
-    let api = forge_rate(20, 1, 403, vec![], plain, false);
-    let o = run_review(&api, &["--json"]);
-    assert_eq!(o.status.code(), Some(0));
-    assert_eq!(all_comment_hits(&api), 20, "every pull request is read");
-    for p in prs_json(&o) {
-        let e = p["review_state"]["read_error"].as_str().unwrap();
-        assert!(e.contains("permission") && !e.contains(SKIP_TEXT), "{e}");
+    let bodies = [
+        r#"{"message":"Resource not accessible by integration"}"#.to_string(),
+        // the words come after the first 4096 bytes: not seen (as in Go)
+        format!("{}rate limit", padded("{", 4096)),
+    ];
+    for plain in bodies {
+        let api = forge_rate(20, 1, 403, vec![], plain.clone(), false);
+        let o = run_review(&api, &["--json"]);
+        assert_eq!(o.status.code(), Some(0));
+        assert_eq!(all_comment_hits(&api), 20, "every pull request is read");
+        for p in prs_json(&o) {
+            let e = p["review_state"]["read_error"].as_str().unwrap();
+            assert!(e.contains("permission") && !e.contains(SKIP_TEXT), "{e}");
+        }
+        let t = out(&run_review(
+            &forge_rate(20, 1, 403, vec![], plain, false),
+            &[],
+        ));
+        assert!(!t.contains("rate limit"), "{t}");
     }
-    let t = out(&run_review(
-        &forge_rate(20, 1, 403, vec![], plain, false),
-        &[],
-    ));
-    assert!(!t.contains("rate limit"), "{t}");
 }
 
 /// The stop is for the whole run: reads of other repositories do not start either.

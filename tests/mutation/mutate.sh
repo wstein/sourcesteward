@@ -1369,6 +1369,25 @@ m SR41 'hints on the pull request line without --review' src/status.rs \
   'false => vec![],' 'false => status_review::hints(p),' \
   status_review hints_are_explained_in_the_long_text_and_absent_without_review
 
+m SR42 'the error body is cut too short' src/github.rs \
+  '.take(4096)' '.take(8)' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR43 'the error body is read beyond 4096 bytes' src/github.rs \
+  '.take(4096)' '.take(8192)' \
+  status_review a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads
+m SR44 'the lint read ignores a long error body' src/github/lint_reads.rs \
+  'super::mentions_rate_limit(&super::error_body_head(&mut resp))' 'super::mentions_rate_limit("")' \
+  lint_pr_cmd lint_pr_status_codes_of_the_api
+m SR45 'a long error body is dropped instead of cut' src/github.rs \
+  '    let _ = resp
+        .body_mut()
+        .as_reader()
+        .take(4096)
+        .read_to_end(&mut bytes);' '    if resp.body_mut().with_config().limit(4096).read_to_vec().map(|v| bytes = v).is_err() {
+        bytes.clear();
+    }' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

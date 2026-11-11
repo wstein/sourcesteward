@@ -73,14 +73,7 @@ impl Client {
                 429 => fail("rate-limited", "rate limit reached"),
                 403 if exhausted => fail("rate-limited", "rate limit reached"),
                 403 => {
-                    let text = resp
-                        .body_mut()
-                        .with_config()
-                        .limit(4096)
-                        .read_to_string()
-                        .unwrap_or_default()
-                        .to_ascii_lowercase();
-                    if text.contains("rate limit") || text.contains("abuse detection") {
+                    if super::mentions_rate_limit(&super::error_body_head(&mut resp)) {
                         fail("rate-limited", "rate limit reached")
                     } else {
                         fail("forbidden", "access was refused")

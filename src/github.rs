@@ -182,14 +182,25 @@ fn is_rate_limit(resp: &mut ureq::http::Response<ureq::Body>) -> bool {
     {
         return true;
     }
-    let text = resp
-        .body_mut()
-        .with_config()
-        .limit(4096)
-        .read_to_string()
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+    mentions_rate_limit(&error_body_head(resp))
+}
+
+/// "rate limit" or "abuse detection" in the (lower-case) text of an error body.
+pub(crate) fn mentions_rate_limit(text: &str) -> bool {
     text.contains("rate limit") || text.contains("abuse detection")
+}
+
+/// The first 4096 bytes of the body of an error answer, lower-cased; longer bodies are cut (not dropped), invalid
+/// UTF-8 is replaced, a read error ends the text.
+pub(crate) fn error_body_head(resp: &mut ureq::http::Response<ureq::Body>) -> String {
+    use std::io::Read;
+    let mut bytes = Vec::new();
+    let _ = resp
+        .body_mut()
+        .as_reader()
+        .take(4096)
+        .read_to_end(&mut bytes);
+    String::from_utf8_lossy(&bytes).to_ascii_lowercase()
 }
 
 /// The `X-RateLimit-*` headers of an answer, when all three are there.

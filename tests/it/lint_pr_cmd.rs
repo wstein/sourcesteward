@@ -1272,6 +1272,11 @@ fn lint_pr_status_codes_of_the_api() {
         r#"{"message":"You have exceeded a secondary rate limit"}"#
     )
     .contains("rate-limited"));
+    // a long body is cut at 4096 bytes, not dropped
+    let long = format!(r#"{{"message":"rate limit","pad":"{}"}}"#, "x".repeat(5000));
+    assert!(run(403, vec![], Box::leak(long.into_boxed_str())).contains("rate-limited"));
+    let late = format!(r#"{{"pad":"{}","message":"rate limit"}}"#, "x".repeat(5000));
+    assert!(run(403, vec![], Box::leak(late.into_boxed_str())).contains("forbidden"));
     assert!(run(429, vec![], "{}").contains("rate-limited"));
     assert!(run(500, vec![], "{}").contains("http-5xx"));
     assert!(run(
