@@ -1287,6 +1287,17 @@ m SR17 'a read that hit its bound still decides' src/status_review.rs \
   'Read::Observed(o) => o.incomplete.clone(),' 'Read::Observed(_) => None,' \
   status_review a_comment_list_that_hits_the_read_budget_is_unknown
 
+m SR18 'only OWNER is trusted' src/status_review.rs \
+  '.filter(|c| matches!(c.association.as_str(), "OWNER" | "MEMBER" | "COLLABORATOR"))' \
+  '.filter(|c| c.association == "OWNER")' \
+  status_review the_states_of_a_mixed_set_of_pull_requests
+m SR19 'the head branch is printed unescaped' src/status.rs \
+  'esc(&p.head),' 'p.head.clone(),' \
+  status_review head_branch_and_merge_state_are_escaped_in_the_pull_request_line
+m SR20 'the merge state is printed unescaped' src/status.rs \
+  'fl += &format!(", {}", esc(m));' 'fl += &format!(", {}", m);' \
+  status_review head_branch_and_merge_state_are_escaped_in_the_pull_request_line
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
