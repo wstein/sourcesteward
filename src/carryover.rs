@@ -4,7 +4,9 @@
 //! The rule is the carry-over rule of the dotagents skill `agent-workflow`; all three conditions must hold:
 //! 1. equal patch-id of the cumulative diff `BASE...HEAD`, old and new (each against its own base);
 //! 2. no merge commit in `NEW_BASE..NEW_HEAD`;
-//! 3. `git range-diff OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` shows `=` for every commit, at the same position.
+//! 3. `git range-diff OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` shows `=` for every commit, at the same position;
+//! 4. (asked when 1 to 3 held) the patch-id of every commit is equal, old against new at the same position: range-diff
+//!    shows only "Binary files differ" for a binary change.
 //!
 //! A step that could not run is `unknown` and the answer is no: a read failure never becomes a yes. Only for a yes
 //! the output ends with the exact `Carried-over:` line (the grammar of `review.rs`, 40-hex patch-id, `pr=<n|none>`).
@@ -67,6 +69,7 @@ pub enum Reason {
     MergeCommits,
     RangeDiffNotEqual,
     RangeEmpty,
+    CommitPatchDiffers,
     HeadMismatch,
 }
 
@@ -80,6 +83,7 @@ impl Reason {
             Reason::MergeCommits => "merge-commits",
             Reason::RangeDiffNotEqual => "range-diff-not-equal",
             Reason::RangeEmpty => "range-empty",
+            Reason::CommitPatchDiffers => "commit-patch-differs",
             Reason::HeadMismatch => "pr-head-mismatch",
         }
     }
@@ -282,6 +286,8 @@ pub trait Git {
     fn patch_id(&self, base: &str, head: &str) -> Result<String, ReadError>;
     /// Merge commits of `base..head`.
     fn merges(&self, base: &str, head: &str) -> Result<Vec<String>, ReadError>;
+    /// Patch-id of every commit of `base..head`, oldest first (empty for a commit without a patch).
+    fn commit_patch_ids(&self, base: &str, head: &str) -> Result<Vec<String>, ReadError>;
     /// Rows of `git range-diff old_base old_head new_base new_head`.
     fn range_rows(&self, r: &Request) -> Result<Vec<Row>, ReadError>;
 }
@@ -308,6 +314,16 @@ pub struct RangeCheck {
     pub truncated: bool,
 }
 
+/// The patch-id of each commit, old against new at the same position. `git range-diff` shows only
+/// "Binary files differ" for a binary change, so two commits that change a binary file to different contents
+/// look equal there; the per-commit patch-id sees the content.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitPatchCheck {
+    pub state: State,
+    /// 1-based positions whose patch-ids differ.
+    pub differing: Vec<u32>,
+}
+
 /// The result: the source of the JSON and the human output.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CarryOver {
@@ -319,6 +335,7 @@ pub struct CarryOver {
     pub patch_id: PatchIdCheck,
     pub merge_commits: MergeCheck,
     pub range_diff: RangeCheck,
+    pub commit_patches: CommitPatchCheck,
     pub pr_head: State,
     pub carry_over: bool,
     pub reasons: Vec<Reason>,
@@ -359,6 +376,10 @@ pub fn check(g: &dyn Git, req: &Request) -> CarryOver {
             not_equal: 0,
             deviations: vec![],
             truncated: false,
+        },
+        commit_patches: CommitPatchCheck {
+            state: State::Unknown,
+            differing: vec![],
         },
         pr_head: State::NotChecked,
         carry_over: false,
@@ -401,6 +422,17 @@ pub fn check(g: &dyn Git, req: &Request) -> CarryOver {
     res.check_patch_id(g, req);
     res.check_merges(g, req);
     res.check_range(g, req);
+    // a refinement of a would-be yes: asked only when the three conditions held, so the reasons of every other
+    // refusal stay exactly as they were
+    if res.reasons.is_empty()
+        && res.patch_id.state == State::Equal
+        && res.merge_commits.state == State::None
+        && res.range_diff.state == State::Equal
+    {
+        res.check_commit_patches(g, req);
+    } else {
+        res.commit_patches.state = State::NotChecked;
+    }
     res.finish()
 }
 
@@ -417,6 +449,7 @@ impl CarryOver {
             && self.patch_id.state == State::Equal
             && self.merge_commits.state == State::None
             && self.range_diff.state == State::Equal
+            && self.commit_patches.state == State::Equal
             && !matches!(self.pr_head, State::Mismatch | State::Unknown);
         if self.carry_over {
             self.line = Some(line(
@@ -464,6 +497,37 @@ impl CarryOver {
                 };
                 self.fail(Reason::MergeCommits, None);
             }
+        }
+    }
+
+    fn check_commit_patches(&mut self, g: &dyn Git, req: &Request) {
+        let old = g.commit_patch_ids(&req.old_base, &req.old_head);
+        let new = g.commit_patch_ids(&req.new_base, &req.new_head);
+        let (old, new) = match (old, new) {
+            (Ok(o), Ok(n)) => (o, n),
+            (o, n) => {
+                self.fail(Reason::ReadFailed, None);
+                self.read_errors.extend(o.err());
+                self.read_errors.extend(n.err());
+                return;
+            }
+        };
+        let mut differing: Vec<u32> = old
+            .iter()
+            .zip(&new)
+            .enumerate()
+            .filter(|(_, (a, b))| a != b)
+            .map(|(i, _)| i as u32 + 1)
+            .collect();
+        if old.len() != new.len() {
+            differing.push(old.len().min(new.len()) as u32 + 1);
+        }
+        if differing.is_empty() {
+            self.commit_patches.state = State::Equal;
+        } else {
+            self.commit_patches.state = State::Differs;
+            self.commit_patches.differing = differing;
+            self.fail(Reason::CommitPatchDiffers, None);
         }
     }
 
@@ -528,6 +592,8 @@ impl CarryOver {
                     .map(|d| json!({"old": pos(d.old), "new": pos(d.new), "mark": d.mark.to_string()}))
                     .collect::<Vec<_>>(),
                 "truncated": self.range_diff.truncated, "via": git_runner::VIA},
+            "commit_patches": {"state": self.commit_patches.state.label(),
+                "differing": self.commit_patches.differing, "via": "gix"},
             "pr_head": {"state": self.pr_head.label(), "via": git_runner::VIA},
             "carry_over": self.carry_over,
             "reasons": self.reasons.iter().map(|r| r.label()).collect::<Vec<_>>(),
@@ -584,6 +650,24 @@ impl CarryOver {
         if self.range_diff.truncated {
             let _ = writeln!(b, "    (more rows not listed)");
         }
+        let _ = writeln!(
+            b,
+            "  commit patches {:<8} per commit patch-id, old against new{}",
+            self.commit_patches.state.label(),
+            if self.commit_patches.differing.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    ", differing at {}",
+                    self.commit_patches
+                        .differing
+                        .iter()
+                        .map(u32::to_string)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        );
         let _ = writeln!(
             b,
             "  pr head       {} (via {})",
@@ -721,6 +805,38 @@ impl Git for RepoGit<'_> {
             }
         }
         Ok(merges)
+    }
+
+    fn commit_patch_ids(&self, base: &str, head: &str) -> Result<Vec<String>, ReadError> {
+        let step = "commit-patch-ids";
+        let repo = self.open(step)?;
+        let walk = repo
+            .rev_walk([oid(step, head)?])
+            .with_hidden([oid(step, base)?])
+            .sorting(gix::revision::walk::Sorting::ByCommitTime(
+                Default::default(),
+            ))
+            .all()
+            .map_err(|e| ReadError::gix(step, e))?;
+        let mut ids = Vec::new();
+        for info in walk {
+            if ids.len() >= MAX_COMMITS {
+                return Err(ReadError::gix(
+                    step,
+                    format!("more than {MAX_COMMITS} commits in the range"),
+                ));
+            }
+            let info = info.map_err(|e| ReadError::gix(step, e))?;
+            // range-diff does not list merge commits either; the merge check of the new range is separate
+            if info.parent_ids.len() > 1 {
+                continue;
+            }
+            let id = info.id;
+            let p = patch_id::commit_patch_id(&repo, id).map_err(|e| ReadError::gix(step, e))?;
+            ids.push(p.map(|p| p.to_string()).unwrap_or_default());
+        }
+        ids.reverse();
+        Ok(ids)
     }
 
     fn range_rows(&self, r: &Request) -> Result<Vec<Row>, ReadError> {

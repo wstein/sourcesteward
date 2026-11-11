@@ -46,7 +46,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
 | `tidy history` | lists the stored manifests (the journals of `tidy apply`), newest first, with the branches each recorded and how many `tidy restore` could create now | nothing |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
-| `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (seven checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
+| `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
@@ -580,7 +580,7 @@ Deviations from the Go `--review` (`internal/pulls/review.go`, `internal/reviews
 nothing; `stw` does not read the review it is about). Full lower-case 40-hex ids. All three conditions must hold: (1) equal patch-id of
 `BASE...HEAD`, old and new, each against its own base (in process, `via: gix`); (2) no merge commit in `NEW_BASE..NEW_HEAD` (gix);
 (3) `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit at the same position (`via: git`, Git 2.40+).
-A step that could not run is `unknown`; the answer is then no. Only for a yes the output ends with
+A fourth condition, added with `stw prove` and checked only when the three held: the patch-id of every commit is equal, old against new at the same position (`range-diff` shows only "Binary files differ" for a binary change, so a binary file with other contents in an intermediate commit passed the three; Go compares the commits themselves, so this is nearer to Go; JSON `commit_patches{state,differing,via}`, reason `commit-patch-differs`). A step that could not run is `unknown`; the answer is then no. Only for a yes the output ends with
 `Carried-over: from=<old head> to=<new head> patch-id=<40 hex> pr=<n|none>` (a line of the M3 grammar). Exit 0 yes, 1 no or a
 step could not run (result printed), 2 usage. `--fetch` fetches `refs/pull/N/head` of `origin` into `refs/stw/carry-over/pr-N`
 (`via: git`, for an ssh (also `ssh+git://`, `git+ssh://`), scp-like, `file://` or local-path `origin` only, with `GIT_ALLOW_PROTOCOL=file:ssh` so that a `url.<base>.insteadOf` of the user's config cannot turn it into https; an http, https or git:// `origin` is refused typed (`transport`, exit 1, answer no) before git starts, because the https fetch stays with gix and is not built for this refspec; a `core.sshCommand` of the user's config runs as with `FetchOrigin`; no tags, no FETCH_HEAD, empty refmap) and requires it to equal `NEW_HEAD`.
@@ -603,14 +603,15 @@ its reason and `via`; for `proved` the last line is the finished line
 | # | Check | Reason when not `ok` | via |
 | --- | --- | --- | --- |
 | 1 | `range-diff`: `git range-diff OLD_BASE..ALT NEW_BASE..NEU` shows `=` for every commit at the same position | `range-diff-not-equal`, `range-empty` | `git` |
-| 2 | `patch-id`: equal patch-id of `BASE...HEAD`, old and new | `patch-id-differs`, `patch-id-empty` | `gix` |
-| 3 | `merge-commits`: no merge commit in `NEW_BASE..NEU` | `merge-commits` | `gix` |
-| 4 | `files`: the same set of changed paths (name-only, without rename detection, both sides the same way) | `files-differ` | `gix` |
-| 5 | `identity`: author and committer of every new commit are `user.name <user.email>` of the Git configuration (read only; the email is compared without regard to case) | `identity-mismatch`, `identity-unknown` | `gix` |
-| 6 | `trailers`: every `Co-Authored-By` line of an old commit is in the new commit at the same position | `trailer-missing` | `gix` |
-| 7 | `session-links`: no session link in the text of a new commit (the rule of `lint pr`) | `session-link` | `gix` |
+| 2 | `commit-patches`: the patch-id of every commit is equal, old against new at the same position (`range-diff` shows only "Binary files differ" for a binary change, so it cannot tell two binary contents apart); asked only when checks 1, 3 and 4 held, else `not-run` | `commit-patch-differs` | `gix` |
+| 3 | `patch-id`: equal patch-id of `BASE...HEAD`, old and new | `patch-id-differs`, `patch-id-empty` | `gix` |
+| 4 | `merge-commits`: no merge commit in `NEW_BASE..NEU` | `merge-commits` | `gix` |
+| 5 | `files`: the same set of changed paths (name-only, without rename detection, both sides the same way) | `files-differ` | `gix` |
+| 6 | `identity`: author and committer of every new commit are `user.name <user.email>` of the Git configuration (read only; the email is compared without regard to case) | `identity-mismatch`, `identity-unknown` | `gix` |
+| 7 | `trailers`: every `Co-Authored-By` line of an old commit is in the new commit at the same position | `trailer-missing` | `gix` |
+| 8 | `session-links`: no session link in the text of a new commit (the rule of `lint pr`) | `session-link` | `gix` |
 
-Checks 1 to 3 are the machine of `stw review carry-over` (`carryover::check`), not a second implementation. The old base is
+Checks 1 to 4 are the machine of `stw review carry-over` (`carryover::check`: range-diff, per-commit patch-ids, cumulative patch-id, merge commits), not a second implementation. The old base is
 the merge base of `ALT` and `NEU`. Without `--base` the new base is the same commit (a rewrite on the same base: amend, reword,
 reorder, squash); with `--base BASIS` it is `BASIS`, the base `NEU` was rebased onto, which must be an ancestor of `NEU`
 (`base-not-below-new`). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff

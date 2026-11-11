@@ -1703,6 +1703,25 @@ m PV15 'prove: a range is accepted as a revision' src/prove.rs \
   'if rev.contains("..") {' 'if false {' \
   prove usage_errors_exit_two_before_any_read
 
+m PV16 'carry-over: the per-commit patch-ids are not asked' src/carryover.rs \
+  '        res.check_commit_patches(g, req);' '        let _ = req;' \
+  carryover_cli a_binary_file_with_other_contents_in_an_intermediate_commit_is_no
+m PV17 'prove: merge commits of the old range are not named' src/prove.rs \
+  'let old_merges = old.iter().filter(|m| m.parents > 1).count();' 'let old_merges = 0;' \
+  prove a_merge_in_the_old_range_is_left_out_of_the_pairing_and_named
+m PV18 'carry-over: merge commits count in the per-commit patch-ids' src/carryover.rs \
+  '            if info.parent_ids.len() > 1 {
+                continue;
+            }' '            if false {
+                continue;
+            }' \
+  prove a_merge_in_the_old_range_is_left_out_of_the_pairing_and_named
+m PV19 'prove: the per-commit patch-id check does not stop a proof' src/prove.rs \
+  '        State::Differs => CheckState::Failed,
+        State::NotChecked => CheckState::NotRun,' '        State::Differs => CheckState::Ok,
+        State::NotChecked => CheckState::NotRun,' \
+  prove a_binary_file_with_other_contents_in_an_intermediate_commit_is_not_proved
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

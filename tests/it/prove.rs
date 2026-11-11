@@ -125,6 +125,7 @@ fn a_pure_rebase_is_proved_and_ends_with_the_line() {
     assert_eq!(r.first(), "proved", "{}", r.text);
     for id in [
         "range-diff",
+        "commit-patches",
         "patch-id",
         "merge-commits",
         "files",
@@ -202,6 +203,7 @@ fn json_has_the_keys_and_the_line() {
         ids,
         [
             "range-diff",
+            "commit-patches",
             "patch-id",
             "merge-commits",
             "files",
@@ -212,6 +214,7 @@ fn json_has_the_keys_and_the_line() {
     );
     assert_eq!(v["checks"][0]["via"], "git");
     assert_eq!(v["checks"][1]["via"], "gix");
+    assert_eq!(v["checks"][1]["id"], "commit-patches");
     assert!(v["line"]
         .as_str()
         .unwrap()
@@ -310,7 +313,7 @@ fn a_changed_commit_text_is_a_range_diff_bang() {
     assert_eq!(rd["id"], "range-diff");
     assert_eq!(rd["state"], "failed");
     assert!(rd["items"][0].as_str().unwrap().contains(" ! "), "{rd}");
-    assert_eq!(v["checks"][1]["state"], "ok", "patch-id still equal");
+    assert_eq!(v["checks"][2]["state"], "ok", "patch-id still equal");
     assert!(v["line"].is_null());
 }
 
@@ -641,5 +644,97 @@ fn a_proof_writes_nothing_to_the_repository() {
     assert!(
         before == tree_snapshot(&p.fx.path),
         "the repository changed"
+    );
+}
+
+/// range-diff shows only "Binary files differ" for a binary change: two commits that change a binary file to
+/// other contents in between look equal there. Cumulative patch-id and path set are equal as well.
+fn binary_intermediate() -> (Fx, [ObjectId; 4]) {
+    let fx = Fx::new();
+    let m1 = fx.commit(
+        None,
+        &[
+            ("img.bin", Some("\0X")),
+            ("a.txt", Some("a\n")),
+            ("b.txt", Some("b\n")),
+        ],
+        "m1",
+    );
+    let c1 = fx.commit(
+        Some(m1),
+        &[("img.bin", Some("\0Y")), ("a.txt", Some("a2\n"))],
+        &msg("feat: one"),
+    );
+    let c2 = fx.commit(
+        Some(c1),
+        &[("img.bin", Some("\0Z")), ("b.txt", Some("b2\n"))],
+        &msg("feat: two"),
+    );
+    let m2 = fx.commit(Some(m1), &[("m.txt", Some("m\n"))], "m2");
+    let n1 = fx.commit(
+        Some(m2),
+        &[("img.bin", Some("\0W")), ("a.txt", Some("a2\n"))],
+        &msg("feat: one"),
+    );
+    let n2 = fx.commit(
+        Some(n1),
+        &[("img.bin", Some("\0Z")), ("b.txt", Some("b2\n"))],
+        &msg("feat: two"),
+    );
+    (fx, [c2, m2, n2, m1])
+}
+
+#[test]
+fn a_binary_file_with_other_contents_in_an_intermediate_commit_is_not_proved() {
+    if skip() {
+        return;
+    }
+    let (fx, [alt, m2, neu, _]) = binary_intermediate();
+    let r = run(&fx, &[&s(alt), &s(neu), "--base", &s(m2)]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert_eq!(r.first(), "not proved");
+    assert!(r.check_line("range-diff").contains(" ok "), "{}", r.text);
+    assert!(r.check_line("patch-id").contains(" ok "), "{}", r.text);
+    assert!(r.check_line("files").contains(" ok "), "{}", r.text);
+    assert!(
+        r.check_line("commit-patches").contains("failed"),
+        "{}",
+        r.text
+    );
+    assert!(r.text.contains("commit-patch-differs"), "{}", r.text);
+    assert!(r.text.contains("position 1"), "{}", r.text);
+    assert!(!r.text.contains("Carried-over:"));
+}
+
+#[test]
+fn a_merge_in_the_old_range_is_left_out_of_the_pairing_and_named() {
+    if skip() {
+        return;
+    }
+    let fx = Fx::new();
+    let m1 = fx.commit(
+        None,
+        &[("a.txt", Some("a\n")), ("s.txt", Some("s\n"))],
+        "m1",
+    );
+    let c1 = fx.commit(Some(m1), &[("a.txt", Some("a1\n"))], &msg("feat: one"));
+    let side = fx.commit(Some(m1), &[("s.txt", Some("s1\n"))], &msg("feat: side"));
+    let merge = fx.commit_with_parents(
+        vec![c1, side],
+        Some(c1),
+        &[("s.txt", Some("s1\n"))],
+        &msg("merge side"),
+    );
+    let m2 = fx.commit(Some(m1), &[("m.txt", Some("m\n"))], "m2");
+    let n1 = fx.commit(Some(m2), &[("a.txt", Some("a1\n"))], &msg("feat: one"));
+    let n2 = fx.commit(Some(n1), &[("s.txt", Some("s1\n"))], &msg("feat: side"));
+    let r = run(&fx, &[&s(merge), &s(n2), "--base", &s(m2)]);
+    assert_eq!(r.code, 0, "{}", r.text);
+    assert_eq!(r.first(), "proved");
+    assert!(
+        r.check_line("trailers")
+            .contains("the old range had 1 merge commits"),
+        "{}",
+        r.text
     );
 }

@@ -544,6 +544,9 @@ impl Git for Fake {
         }
         Ok(self.merges.clone())
     }
+    fn commit_patch_ids(&self, _b: &str, _h: &str) -> Result<Vec<String>, ReadError> {
+        Ok(vec![])
+    }
     fn range_rows(&self, _r: &Request) -> Result<Vec<Row>, ReadError> {
         if self.err_rows {
             return Err(boom("range-diff"));

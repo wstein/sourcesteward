@@ -151,3 +151,57 @@ fn usage_errors_exit_two_before_any_git() {
         assert!(out.stdout.is_empty(), "{args:?}");
     }
 }
+
+#[test]
+fn a_binary_file_with_other_contents_in_an_intermediate_commit_is_no() {
+    if !git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    // range-diff shows "Binary files differ" only; the cumulative patch-id is equal; the per-commit patch-id is not
+    let fx = Fx::new();
+    let m1 = fx.commit(
+        None,
+        &[
+            ("img.bin", Some("\0X")),
+            ("a.txt", Some("a\n")),
+            ("b.txt", Some("b\n")),
+        ],
+        "m1",
+    );
+    let c1 = fx.commit(
+        Some(m1),
+        &[("img.bin", Some("\0Y")), ("a.txt", Some("a2\n"))],
+        "c1",
+    );
+    let c2 = fx.commit(
+        Some(c1),
+        &[("img.bin", Some("\0Z")), ("b.txt", Some("b2\n"))],
+        "c2",
+    );
+    let m2 = fx.commit(Some(m1), &[("m.txt", Some("m\n"))], "m2");
+    let n1 = fx.commit(
+        Some(m2),
+        &[("img.bin", Some("\0W")), ("a.txt", Some("a2\n"))],
+        "c1",
+    );
+    let n2 = fx.commit(
+        Some(n1),
+        &[("img.bin", Some("\0Z")), ("b.txt", Some("b2\n"))],
+        "c2",
+    );
+    let home = tempfile::tempdir().unwrap();
+    let ids = [m1, c2, m2, n2].map(|i| i.to_string());
+    let mut args: Vec<&str> = ids.iter().map(String::as_str).collect();
+    args.extend(["--pr", "none", "--json"]);
+    let out = stw(&fx.path, home.path(), &args);
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    let v: serde_json::Value = serde_json::from_str(&text).unwrap();
+    assert_eq!(v["range_diff"]["state"], "equal", "{text}");
+    assert_eq!(v["patch_id"]["state"], "equal", "{text}");
+    assert_eq!(v["commit_patches"]["state"], "differs", "{text}");
+    assert_eq!(v["commit_patches"]["differing"][0], 1);
+    assert_eq!(v["carry_over"], false);
+    assert!(v["line"].is_null());
+}

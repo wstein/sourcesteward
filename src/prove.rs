@@ -99,6 +99,8 @@ pub enum CheckState {
     Ok,
     Failed,
     Unknown,
+    /// Not asked because an earlier check already failed.
+    NotRun,
 }
 
 impl CheckState {
@@ -107,6 +109,7 @@ impl CheckState {
             CheckState::Ok => "ok",
             CheckState::Failed => "failed",
             CheckState::Unknown => "unknown",
+            CheckState::NotRun => "not-run",
         }
     }
 }
@@ -208,6 +211,9 @@ fn commits(
     let walk = repo
         .rev_walk([head])
         .with_hidden([base])
+        .sorting(gix::revision::walk::Sorting::ByCommitTime(
+            Default::default(),
+        ))
         .all()
         .map_err(|e| e.to_string())?;
     let mut out = Vec::new();
@@ -251,6 +257,7 @@ fn changed_paths(
 
 struct Msg {
     id: ObjectId,
+    parents: usize,
     subject: String,
     message: String,
     author: (String, String),
@@ -264,6 +271,7 @@ fn read_commit(repo: &gix::Repository, id: ObjectId) -> Result<Msg, String> {
     let sig = |s: gix::actor::SignatureRef<'_>| (lossy(s.name), lossy(s.email));
     Ok(Msg {
         id,
+        parents: c.parent_ids().count(),
         subject: message.lines().next().unwrap_or("").to_string(),
         message,
         author: sig(decoded.author().map_err(|e| e.to_string())?),
@@ -356,6 +364,15 @@ fn identity_check(repo: &gix::Repository, new: &[Msg]) -> Check {
 
 fn trailer_check(old: &[Msg], new: &[Msg]) -> Check {
     let c = Check::new("trailers", "gix");
+    // range-diff and the per-commit patch-ids leave merge commits out; so does the pairing by position. A
+    // linearized NEU of an old range with merges can be proved, and the check says how many were left out.
+    let old_merges = old.iter().filter(|m| m.parents > 1).count();
+    let old: Vec<&Msg> = old.iter().filter(|m| m.parents <= 1).collect();
+    let skipped = if old_merges == 0 {
+        String::new()
+    } else {
+        format!("; the old range had {old_merges} merge commits, left out of the pairing")
+    };
     let mut lost = Vec::new();
     let mut seen = 0usize;
     for (o, n) in old.iter().zip(new) {
@@ -372,13 +389,13 @@ fn trailer_check(old: &[Msg], new: &[Msg]) -> Check {
     }
     if lost.is_empty() {
         return c.ok(format!(
-            "{seen} Co-Authored-By lines of the old commits are in the new commits"
+            "{seen} Co-Authored-By lines of the old commits are in the new commits{skipped}"
         ));
     }
     let mut c = c.fail(
         "trailer-missing",
         format!(
-            "{} Co-Authored-By lines of the old commits are gone",
+            "{} Co-Authored-By lines of the old commits are gone{skipped}",
             lost.len()
         ),
     );
@@ -442,6 +459,33 @@ fn carry_checks(c: &CarryOver) -> Vec<Check> {
     }
     out.push(rd);
 
+    let mut cp = Check::new("commit-patches", "gix");
+    cp.state = match c.commit_patches.state {
+        State::Equal => CheckState::Ok,
+        State::Differs => CheckState::Failed,
+        State::NotChecked => CheckState::NotRun,
+        _ => CheckState::Unknown,
+    };
+    cp.detail = match c.commit_patches.state {
+        State::Equal => "the patch-id of every commit is equal, old against new".into(),
+        State::Differs => format!(
+            "{} commit positions differ in their patch-id (binary contents show only as \"Binary files differ\" in range-diff)",
+            c.commit_patches.differing.len()
+        ),
+        State::NotChecked => "not asked: an earlier check failed".into(),
+        _ => "the per-commit patch-ids could not be read".into(),
+    };
+    if reason_of(Reason::CommitPatchDiffers) {
+        cp.reasons.push(Reason::CommitPatchDiffers.label());
+    }
+    cp.items = c
+        .commit_patches
+        .differing
+        .iter()
+        .map(|n| format!("position {n}"))
+        .collect();
+    out.push(cp);
+
     let mut pid = Check::new("patch-id", "gix");
     pid.state = match c.patch_id.state {
         State::Equal => CheckState::Ok,
@@ -482,6 +526,7 @@ fn carry_checks(c: &CarryOver) -> Vec<Check> {
     for e in &c.read_errors {
         let target = match e.step {
             "range-diff" => "range-diff",
+            "commit-patch-ids" => "commit-patches",
             "patch-id" => "patch-id",
             "merge-commits" => "merge-commits",
             _ => continue,
@@ -646,7 +691,7 @@ fn finish(mut p: Proof) -> Proof {
     let mut reasons: Vec<&'static str> = Vec::new();
     for c in p.input.iter().chain(&p.checks) {
         if c.state != CheckState::Ok {
-            if c.reasons.is_empty() {
+            if c.reasons.is_empty() && c.state != CheckState::NotRun {
                 reasons.push("read-failed");
             }
             for r in &c.reasons {
@@ -657,7 +702,7 @@ fn finish(mut p: Proof) -> Proof {
         }
     }
     p.proved = p.input.is_empty()
-        && p.checks.len() == 7
+        && p.checks.len() == 8
         && p.checks.iter().all(|c| c.state == CheckState::Ok);
     p.reasons = reasons;
     if p.proved {
@@ -741,6 +786,7 @@ impl Proof {
             } else {
                 let order = [
                     "range-diff",
+                    "commit-patches",
                     "patch-id",
                     "merge-commits",
                     "files",

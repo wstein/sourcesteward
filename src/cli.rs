@@ -223,10 +223,11 @@ fn run_carry_over(a: CarryOverArgs) -> Result<u8> {
 
 const PROVE_HELP: &str = "\
 New in stw (no Go counterpart). ALT is the old branch or head, NEU the new one (one revision each, not a range).
-Seven checks, all must hold: (1) `git range-diff` shows `=` for every commit at the same position; (2) the patch-id of
-`BASE...HEAD` is equal; (3) no merge commit in the new range; (4) the same set of changed paths; (5) author and committer
-of every new commit are user.name <user.email> of the Git configuration (read only); (6) every Co-Authored-By line of an
-old commit is in the new commit at the same position; (7) no session link in the new commit texts. The old base is the
+Eight checks, all must hold: (1) `git range-diff` shows `=` for every commit at the same position; (2) the patch-id of
+every commit is equal, old against new; (3) the patch-id of `BASE...HEAD` is equal; (4) no merge commit in the new range;
+(5) the same set of changed paths; (6) author and committer of every new commit are user.name <user.email> of the Git
+configuration (read only); (7) every Co-Authored-By line of an old commit is in the new commit at the same position;
+(8) no session link in the new commit texts. The old base is the
 merge base of ALT and NEU. The new base is the same commit (a rewrite on the same base) or, with --base BASIS, BASIS
 (a rebase onto it; BASIS must be an ancestor of NEU). A step that could not run is `unknown` and the verdict is `not
 proved`. Only for `proved` the last line is `Carried-over: from=<ALT> to=<NEU> patch-id=<hex> pr=<n|none>`. Nothing is
