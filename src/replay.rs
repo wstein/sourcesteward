@@ -71,6 +71,11 @@ pub enum Status {
 
 /// A conflicted path with a coarse kind (`content`, `add/add`, `modify/delete`, `rename/rename`, `rename/delete`,
 /// `submodule`, `file/directory`, `directory-rename`, `unknown`).
+///
+/// Paths equal those of `git merge-tree --name-only` for `content`, `add/add` and `modify/delete`. For the other
+/// kinds the kind agrees with git and the paths differ: `rename/rename` lists the two new names (git also the
+/// source), `rename/delete` the source and the new name (git the new name), `file/directory` both `d` and `d/f` (git
+/// `d~HEAD`), `directory-rename` the path the commit added (git the path in the new directory).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
     pub path: BString,

@@ -545,6 +545,79 @@ fn a_file_added_to_a_directory_that_onto_deleted_is_not_a_conflict_like_git() {
     assert_eq!(statuses(&r), [Status::Clean]);
 }
 
+/// Like `conflict_case`, for kinds whose paths differ from `git merge-tree` (named in the module doc): git sees a
+/// conflict, the kind is the expected one and the engine's paths are exactly `want`.
+fn conflict_kind_case(
+    fx: &Fx,
+    base: ObjectId,
+    onto: ObjectId,
+    side: ObjectId,
+    kind: &str,
+    want: &[&str],
+) {
+    let (code, theirs) = oracle_merge_tree(fx, base, onto, side);
+    assert_eq!(code, 1, "git sees a conflict: {theirs:?}");
+    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
+    assert!(r.conflicted(), "{:?}", r.steps);
+    let step = &r.steps[0];
+    assert!(
+        step.conflicts.iter().all(|c| c.kind == kind),
+        "{:?}",
+        step.conflicts
+    );
+    let mut got = conflict_paths(step);
+    got.sort();
+    assert_eq!(got, want, "git says {theirs:?}");
+}
+
+#[test]
+fn rename_rename_conflict_is_reported_like_git() {
+    let fx = Fx::new();
+    let base = base_repo(&fx);
+    let a = lines(30, "x");
+    let onto = fx.commit(
+        Some(base),
+        &[("a.txt", None), ("x.txt", Some(&a))],
+        "onto renames to x",
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("a.txt", None), ("y.txt", Some(&a))],
+        "side renames to y",
+    );
+    conflict_kind_case(&fx, base, onto, side, "rename/rename", &["x.txt", "y.txt"]);
+}
+
+#[test]
+fn rename_delete_conflict_is_reported_like_git() {
+    let fx = Fx::new();
+    let base = base_repo(&fx);
+    let onto = fx.commit(Some(base), &[("a.txt", None)], "onto deletes a");
+    let side = fx.commit(
+        Some(base),
+        &[("a.txt", None), ("y.txt", Some(&lines(30, "x")))],
+        "side renames a to y",
+    );
+    conflict_kind_case(&fx, base, onto, side, "rename/delete", &["a.txt", "y.txt"]);
+}
+
+#[test]
+fn file_directory_conflict_is_reported_like_git() {
+    let fx = Fx::new();
+    let base = base_repo(&fx);
+    let onto = fx.commit(
+        Some(base),
+        &[("d", Some("a file\n"))],
+        "onto adds the file d",
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("d/f", Some("in a directory\n"))],
+        "side adds d/f",
+    );
+    conflict_kind_case(&fx, base, onto, side, "file/directory", &["d", "d/f"]);
+}
+
 /// Every file under `.git` with its bytes, to compare before and after.
 fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {
@@ -782,8 +855,7 @@ fn env_child() {
         "the environment beat the config"
     );
     let e = configured_committer(&gix::open(without).unwrap(), now)
-        .err()
-        .expect("the environment is not a configured identity");
+        .expect_err("the environment is not a configured identity");
     assert!(matches!(e, ReplayError::NoIdentity), "{e}");
 }
 
