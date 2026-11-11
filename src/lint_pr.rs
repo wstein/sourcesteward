@@ -307,10 +307,11 @@ fn same_identity(owners: &[Identity], name: &str, email: &str) -> bool {
         .any(|o| o.name == name && fold(&o.email) == fold(email))
 }
 
-/// `claude-session:|claude\.ai/code/session_`, case-insensitive, on one line.
+/// The session trailer or the code-session URL of the Claude web host (see the `anchor` of the table), case-insensitive,
+/// on one line.
 fn session_pattern(line: &str) -> bool {
     let f = fold(line);
-    f.contains(concat!("claude", "-session:")) || f.contains("claude.ai/code/session_")
+    f.contains(concat!("claude", "-session:")) || f.contains(concat!("claude", ".ai/code/session_"))
 }
 
 /// `(?im)^co-authored-by:[ \t]*[^<\r\n]+<[^<>\s]+@[^<>\s]+>[ \t]*\r?$` on one line (no line feed in it).
