@@ -50,6 +50,7 @@ fn the_new_operations_have_fixed_argument_vectors() {
             "--no-recurse-submodules",
             "--upload-pack=git-upload-pack",
             "--no-prune",
+            "--no-prune-tags",
             "--",
             "origin"
         ]

@@ -178,7 +178,9 @@ impl Op {
                 if *prune {
                     a.extend(v(&["--prune", "--no-prune-tags"]));
                 } else {
-                    a.push("--no-prune".to_string());
+                    // `--no-prune-tags` too: `fetch.pruneTags` / `remote.origin.pruneTags` append the refspec
+                    // `refs/tags/*:refs/tags/*` even without prune, and `--no-tags` does not stop that
+                    a.extend(v(&["--no-prune", "--no-prune-tags"]));
                 }
                 a.extend(v(&["--", "origin"]));
                 a

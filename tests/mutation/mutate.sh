@@ -1217,6 +1217,9 @@ m SF34 'the card counts differ from the Counts block' src/status.rs \
   'branches: {} local, {} remote; linked worktrees: {}; stash: {}' 'branches: {} local, {} remote; worktrees: {}; stash: {}' \
   status_flags long_adds_cards_and_explanations_and_nothing_is_taken_away
 
+m SF35 'status --fetch lets git create tags when pruneTags is configured' src/git_runner.rs \
+  'a.extend(v(&["--no-prune", "--no-prune-tags"]));' 'a.extend(v(&["--no-prune"]));' \
+  status_flags fetch_creates_no_tag_even_with_prune_tags_configured
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

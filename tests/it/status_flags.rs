@@ -1253,3 +1253,30 @@ fn long_shows_text_from_the_repository_escaped() {
     assert!(!t.contains('\u{1b}'), "raw ESC: {t:?}");
     assert!(t.contains("    remote: own/\\u{1b}[31mRED"), "{t}");
 }
+
+#[test]
+fn fetch_creates_no_tag_even_with_prune_tags_configured() {
+    // `fetch.pruneTags` and `remote.origin.pruneTags` make git append `refs/tags/*:refs/tags/*` to the refspecs,
+    // also without prune and with `--no-tags`: a tag of the remote would appear locally
+    for (key, value) in [
+        ("fetch.pruneTags", "true"),
+        ("remote.origin.pruneTags", "true"),
+    ] {
+        let f = fetch_setup();
+        f.w.git(&f.origin, &["tag", "newtag", "main"]);
+        f.w.git(&f.ws, &["config", key, value]);
+        let o = status_of(&f, &["--offline", "--json", "--fetch"]);
+        assert_eq!(o.status.code(), Some(0), "{key}: {}{}", out(&o), err(&o));
+        assert_eq!(json_of(&o)["repos"][0]["fetch"]["state"], "ok", "{key}");
+        assert_eq!(
+            f.w.git(&f.ws, &["tag", "--list"]),
+            "",
+            "{key}: a tag was created by status --fetch"
+        );
+        assert_eq!(
+            f.w.git(&f.ws, &["rev-parse", "origin/main"]),
+            f.w.git(&f.origin, &["rev-parse", "main"]),
+            "{key}: the fetch itself ran"
+        );
+    }
+}
