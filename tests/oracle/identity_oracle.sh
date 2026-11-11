@@ -1,5 +1,5 @@
 #!/bin/bash
-# Oracle for the reflog identity of `stw sync --apply` WITH a fetch: git (reference only, also the
+# Oracle for the reflog identity of `stw sync` WITH a fetch: git (reference only, also the
 # git-upload-pack that gix starts for a file:// remote) builds an upstream and a clone one commit behind;
 # stw runs with no identity anywhere (empty HOME, no GIT_* variables, no config) and git then reads the
 # reflogs. Usage: identity_oracle.sh STW_BINARY SCRATCH_DIR
@@ -11,7 +11,7 @@ git init -q -b main up; cd up; echo a > a.txt; git add -A; git commit -q -m c0; 
 git clone -q "file://$T/up" clone; cd clone; git reset -q --hard HEAD~1; git update-ref -d refs/remotes/origin/main; git update-ref refs/remotes/origin/main HEAD
 git config --unset user.name 2>/dev/null || true; git config --unset user.email 2>/dev/null || true
 cd ..; mkdir home
-run() { env -i HOME="$T/home" PATH=/usr/bin:/bin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null "$STW" sync --apply --json --root "$T/clone" "$@"; }
+run() { env -i HOME="$T/home" PATH=/usr/bin:/bin GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null "$STW" sync --json --root "$T/clone" "$@"; }
 out=$(run)
 echo "$out" | grep -q '"fetch":"ok"' || { echo "FAIL: fetch not ok: $out"; exit 1; }
 echo "$out" | grep -q '"result":"fast-forwarded"' || { echo "FAIL: not fast-forwarded: $out"; exit 1; }

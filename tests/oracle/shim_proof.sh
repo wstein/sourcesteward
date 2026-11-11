@@ -8,8 +8,8 @@ D=$(mktemp -d "$SCRATCH/shim.XXXXXX"); LOG=$D/calls.log; : > "$LOG"
 for t in git gh ssh git-upload-pack; do printf '#!/bin/sh\necho "%s $*" >> "%s"\nexit 99\n' "$t" "$LOG" > "$D/$t"; chmod +x "$D/$t"; done
 run() { env -i HOME="$HOME" PATH="$1" "$STW" "${@:2}" > /dev/null 2>&1; echo "  exit $? : stw ${*:2}"; }
 echo "fake git/gh first on PATH:"
-for a in "status --root $ROOT" "tidy plan --root $ROOT" "sync --root $ROOT" "status --root $ROOT --json" "tidy apply --root $ROOT --manifest-dir $D/m" "tidy restore --manifest-dir $D/none"; do run "$D:/usr/bin:/bin" $a; done
+for a in "status --root $ROOT" "tidy plan --root $ROOT" "sync --plan --root $ROOT" "status --root $ROOT --json" "tidy apply --root $ROOT --manifest-dir $D/m" "tidy restore --manifest-dir $D/none"; do run "$D:/usr/bin:/bin" $a; done
 echo "PATH=/nonexistent:"
-for a in "status --root $ROOT" "tidy plan --root $ROOT" "sync --root $ROOT" "tidy apply --root $ROOT --manifest-dir $D/m"; do run /nonexistent $a; done
+for a in "status --root $ROOT" "tidy plan --root $ROOT" "sync --plan --root $ROOT" "tidy apply --root $ROOT --manifest-dir $D/m"; do run /nonexistent $a; done
 echo "calls to fake git/gh/ssh: $(wc -l < "$LOG" | tr -d ' ')"
 [ ! -s "$LOG" ]

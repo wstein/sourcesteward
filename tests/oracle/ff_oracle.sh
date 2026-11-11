@@ -1,5 +1,5 @@
 #!/bin/bash
-# Oracle check of `stw sync --apply`: git (reference only) builds a throwaway repository, stw fast-forwards
+# Oracle check of `stw sync`: git (reference only) builds a throwaway repository, stw fast-forwards
 # it, and git then verifies index, working tree, objects and reflog. Usage: ff_oracle.sh STW_BINARY SCRATCH_DIR
 set -eu
 STW=$1 SCRATCH=$2
@@ -16,7 +16,7 @@ git update-ref refs/remotes/origin/main "$UP"; git symbolic-ref refs/remotes/ori
 git remote add origin https://github.com/test/fixture; git config branch.main.remote origin; git config branch.main.merge refs/heads/main
 echo "local edit" >> keep.txt; echo "staged edit" >> staged.txt; git add staged.txt
 BEFORE=$(git rev-parse HEAD)
-"$STW" sync --offline --apply --root "$T/repo"
+"$STW" sync --offline --root "$T/repo"
 echo "--- git verifies"
 [ "$(git rev-parse HEAD)" = "$UP" ] || { echo "FAIL: HEAD not at upstream"; exit 1; }
 git fsck --no-dangling 2>&1 | grep -v '^Checking' || true
