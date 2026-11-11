@@ -264,7 +264,9 @@ impl Op {
     /// Value of `GIT_ALLOW_PROTOCOL` of the child. The `stw add` operations are local: no transport at all.
     fn allow_protocol(&self) -> &'static str {
         match self {
-            Op::FetchOrigin | Op::FetchPullHead { .. } => "file:ssh:git:http:https",
+            Op::FetchOrigin => "file:ssh:git:http:https",
+            // ssh and local only: a `url.<base>.insteadOf` of the user's config cannot turn the remote into http(s)
+            Op::FetchPullHead { .. } => "file:ssh",
             _ => "none",
         }
     }

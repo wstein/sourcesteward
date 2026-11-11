@@ -334,7 +334,8 @@ Slice 1 as built (branch `feat/stw-port-m4`): deviations from Go found by the co
   replaces `unparsed`. `NeedsHeadTime` and `Hints` are not ported (M9).
 - M4: `git range-diff` replaces the Go commit comparison, so a reorder is `=` for git and refused by position here; `--fetch` fetches
   `origin` only (Go: `--remote NAME`); `--pr none`; a repository config that starts a diff program is refused (Go ignores it);
-  schema 2; no `refs/replace` protection in process; the fetch of the PR head runs through the installed git for an ssh, scp-like, `file://` or local-path `origin` only
+  schema 2; no `refs/replace` protection in process; the fetch of the PR head runs through the installed git for an ssh (also `ssh+git://`, `git+ssh://`), scp-like, `file://` or local-path `origin` only
+  (`GIT_ALLOW_PROTOCOL=file:ssh`, so a user `insteadOf` to https fails in git)
   (git boundary); an http, https or git:// `origin` is refused typed (`transport`, answer no) before git starts, the https path through
   gix is not built (owner decides); a `core.sshCommand` of the user's config runs as with `FetchOrigin`. Conservative differences
   (no where Go says yes): only the author of a commit changed (range-diff names the author), an identical patch twice in a range

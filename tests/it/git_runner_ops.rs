@@ -493,3 +493,43 @@ fn pull_head_fetch_refuses_http_https_git_and_unknown_transports_before_git_star
     let fx = Fx::new();
     r.run(&fx.path, Op::FetchOrigin).unwrap();
 }
+
+#[test]
+fn pull_head_fetch_allows_only_the_file_and_ssh_transports_even_through_a_user_rewrite() {
+    // The URL check reads the repository's own config; a `url.<base>.insteadOf` of the user's config can still
+    // rewrite an ssh-looking origin to https. GIT_ALLOW_PROTOCOL stops that: no http, https or git transport.
+    let t = tmp();
+    let r = Runner::from_env(osv(&[("PATH", "/usr/bin")]));
+    let env = r
+        .child_env_for(t.path(), &Op::FetchPullHead { pr: 1 })
+        .unwrap();
+    let allow = env
+        .iter()
+        .rev()
+        .find(|(k, _)| k == "GIT_ALLOW_PROTOCOL")
+        .map(|(_, v)| v.to_string_lossy().into_owned());
+    assert_eq!(allow.as_deref(), Some("file:ssh"));
+    // real git: the rewrite to https is refused by git itself, no lookup happens
+    if !real_git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let home = tmp();
+    std::fs::write(
+        home.path().join(".gitconfig"),
+        "[url \"https://evil.invalid/\"]\n\tinsteadOf = git@h:\n",
+    )
+    .unwrap();
+    let fx = Fx::new();
+    fx.set_origin_url("git@h:o/r");
+    let e = real_runner(home.path())
+        .run(&fx.path, Op::FetchPullHead { pr: 7 })
+        .unwrap_err();
+    match &e {
+        GitError::Exit { stderr, .. } => assert!(
+            stderr.contains("not allowed"),
+            "git must refuse the https transport: {stderr}"
+        ),
+        other => panic!("{other:?}"),
+    }
+}
