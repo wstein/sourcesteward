@@ -1,5 +1,6 @@
 //! Go corpus check for M8, rules: every case of `legacy/sourcesteward/internal/lintpr/lintpr_test.go` is one Rust
-//! case here (same scenario, same name in snake case). The command part (`lintprcmd`, `cli/lint_test.go`) is in
+//! case here (same scenario, same name in snake case, except one rename:
+//! `TestParseReviewLine` is `parse_review_line_fields`). The command part (`lintprcmd`, `cli/lint_test.go`) is in
 //! `lint_pr_cmd.rs`. Plan: docs/migration-plan.md, M8.
 //!
 //! Deviations of Rust from Go, rules (each is tested below where marked `DEVIATION`):
@@ -10,7 +11,8 @@
 //!   Go: `pr=` is a number of 1 to 9 digits without leading zero; `pr=none` is no review line here (as in Go).
 //! - D3 the author/committer message quotes the name with Rust's `{:?}`, Go uses `%q`; they differ for non-ASCII
 //!   and control characters only.
-//! - D4 not ported: `TestRulesTableAnchorsInAgentRules` runs only with AGENT_RULES_DIR set, as in Go.
+//! - D4 `TestRulesTableAnchorsInAgentRules` is ported (`rules_table_anchors_in_agent_rules`); it runs only with
+//!   AGENT_RULES_DIR set, as in Go.
 use stw::lint_pr::{
     self, lint, parse_review_line, Comment, Commit, Finding, Identity, Input, Severity,
 };

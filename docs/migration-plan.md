@@ -346,12 +346,16 @@ Slice 2: `ready-check` (M4) from `internal/readycheck`.
 
 Slice 3 (M8, branch `stw-m8-lint-pr`): `lint pr` from `internal/lintpr`, `internal/lintprcmd`, `cli/lint_test.go`. The 15 rule tests are
 `tests/it/lint_pr.rs`, the 17 command tests and the 3 CLI tests are `tests/it/lint_pr_cmd.rs` (one Rust case per Go case, same name
-in snake case; the CLI cases run the binary against a fake GitHub API). The hand-written regular expressions were also compared with
+in snake case, except three renames: `TestParseReviewLine` -> `parse_review_line_fields`,
+`TestViolationsExitOneAndAreLocated` -> `violations_exit_three_and_are_located`, `TestLintPREndToEndOverTheGuardedReader` ->
+`lint_pr_end_to_end_over_the_rest_client`; the CLI cases run the binary against a fake GitHub API). The hand-written regular expressions were also compared with
 the Go originals on 140000 generated cases (rules and messages; 0 differences; the harness is not in the repository). Deviations
 from Go:
 - Output default: text, as every Rust command; Go prints text only on a terminal. `--human` stays and conflicts with `--json`.
 - No `--host`: `api.github.com` or `STW_GITHUB_API_URL` only; `host` of the document is `github.com`.
-- Document: schema 1 as in Go, no `engine`; the schema file stays in the Go tree; `time` is UTC seconds.
+- Document: schema 1 as in Go, no `engine`; the schema file stays in the Go tree; `time` is UTC seconds. The JSON text is raw: Go's
+  `json.Encoder` escapes `<`, `>` and `&` as `\u003c`, `\u003e`, `\u0026`, Rust does not (same value after decoding).
+- The `page` of a `Link` header is not percent-decoded (Go reads `page=%32` as 2, Rust rejects it); `page=+2` is rejected in both.
 - Workspace: the single GitHub `origin` among the repository of PATH (default: current directory; a plain repository is a workspace of
   one) and its checked-out submodules; the Git identity is read with gix, not with `git config --get`.
 - Human output escapes with `escape_untrusted` (also the backslash, `\u{hex}`), Go with `untrusted.Esc` (`\xNN`, `\uNNNN`); the
@@ -361,7 +365,7 @@ from Go:
   takes `Title`).
 - The review line is the M3 parser (`review::parse_strict`) restricted to the Go lint grammar: `pr=` is 1 to 9 digits, no `pr=none`.
 - Redirects are not followed (as in Go); 404 reads as `forbidden`, a 301 or 308 as `repo-moved`, as in Go. Pages are cut at one MiB
-  (`page-too-large`); every read has a 30 s timeout (Go: the request timeout of the reader).
+  (`page-too-large` for comments, `malformed-response` for `pulls/N` and commits, as in Go; a 304 is `malformed-response`); every read has a 30 s timeout (Go: the request timeout of the reader).
 - Not ported: the Go guard that admits only the three lint endpoints and the call accounting of the reader (the Rust client has GET
   methods only and three endpoint builders in `src/github/lint_reads.rs`).
 - Rules table: the anchors cite `claude/CLAUDE.md` and `claude/skills/agent-workflow/SKILL.md` of agent-rules. The test
