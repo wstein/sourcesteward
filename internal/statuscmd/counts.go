@@ -14,6 +14,9 @@ const (
 	CountNotRead  = "not-read"  // not read on purpose or not at all: offline, no token, the deadline, issues disabled, an uninitialized submodule
 	CountNoRemote = "no-remote" // the repository has no GitHub origin: a total leaves it out
 	CountFailed   = "failed"    // the read failed (a notice says why) or the repository cannot be read locally
+	// CountNotApplicable is a fact of the repository, not a gap: its issues are disabled, or it is an uninitialized
+	// submodule (nothing there to count). A total leaves it out, like no-remote; the repository line shows n/a.
+	CountNotApplicable = "not-applicable"
 )
 
 // SourceCount is a hosting count of one repository or of all: the open pull requests with how many are bot
@@ -45,7 +48,7 @@ func CountsOf(rp stwsync.RepoStatus, rr *statusremote.RepoResult) Counts {
 		return all(CountFailed)
 	case "ok":
 	default: // uninitialized: nothing was there to read
-		return all(CountNotRead)
+		return all(CountNotApplicable)
 	}
 	c := Counts{
 		BranchesLocal: Number{CountOK, rp.Branches.Local}, BranchesRemote: Number{State: CountFailed},
@@ -71,6 +74,9 @@ func CountsOf(rp stwsync.RepoStatus, rr *statusremote.RepoResult) Counts {
 		c.Issues = SourceCount{State: CountOK, Open: rr.Issues.Open, Sub: rr.Issues.Bugs, Truncated: rr.Issues.Truncated}
 	} else {
 		c.Issues.State = unreadState(st)
+		if st.FactOfRepository(overview.SourceIssues) {
+			c.Issues.State = CountNotApplicable
+		}
 	}
 	return c
 }
@@ -93,7 +99,7 @@ func unreadState(st overview.SourceState) string {
 }
 
 // SumCounts are the totals. A hosting count is a number when at least one repository gave one and none failed
-// or was not read (a repository without a GitHub origin is left out); a local figure is a number only when every
+// or was not read (a repository without a GitHub origin, with disabled issues or uninitialized is left out); a local figure is a number only when every
 // repository gave one. A failed read wins over not read.
 func SumCounts(cs []Counts) Counts {
 	var t Counts
@@ -108,7 +114,7 @@ func SumCounts(cs []Counts) Counts {
 
 func sumSource(n int, at func(int) SourceCount) SourceCount {
 	var sum SourceCount
-	failed, notRead, read := false, false, false
+	failed, notRead, read, na := false, false, false, false
 	for i := range n {
 		s := at(i)
 		switch s.State {
@@ -116,6 +122,8 @@ func sumSource(n int, at func(int) SourceCount) SourceCount {
 			failed = true
 		case CountNotRead:
 			notRead = true
+		case CountNotApplicable:
+			na = true
 		case CountOK:
 			read = true
 			sum.Open, sum.Sub, sum.Truncated = sum.Open+s.Open, sum.Sub+s.Sub, sum.Truncated || s.Truncated
@@ -130,6 +138,9 @@ func sumSource(n int, at func(int) SourceCount) SourceCount {
 		sum.State = CountOK
 		return sum
 	}
+	if na { // only repositories for which it does not apply
+		return SourceCount{State: CountNotApplicable}
+	}
 	return SourceCount{State: CountNoRemote}
 }
 
@@ -141,6 +152,7 @@ func sumNumber(n int, at func(int) Number) Number {
 			failed = true
 		case CountNotRead:
 			notRead = true
+		case CountNotApplicable: // left out of the sum
 		default:
 			sum += v.N
 		}

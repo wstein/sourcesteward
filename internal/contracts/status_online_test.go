@@ -301,3 +301,40 @@ func TestOnlineAndOfflineStatusDocumentsStayApart(t *testing.T) {
 		t.Error("the schema 1 accepted a schema 2 document")
 	}
 }
+
+// The counters of the schema 2 document: a number exactly in the state ok, truncated only with it, only the
+// four published states, and the state not-applicable (a fact of the repository) is accepted.
+func TestOnlineStatusSchemaRejectsBrokenCounters(t *testing.T) {
+	s := schemaAt(t, "v2", "status")
+	counts := func(m map[string]any) map[string]any { return jobj(jobj(m["repos"].([]any)[0])["counts"]) }
+	mutate := func(f func(c map[string]any)) []byte {
+		m := onlineStatus(t)
+		f(counts(m))
+		raw, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	valid(t, s, mutate(func(c map[string]any) {
+		x := jobj(c["issues"])
+		x["state"], x["open"], x["bug"], x["truncated"] = "not-applicable", nil, nil, false
+	}))
+	for name, f := range map[string]func(c map[string]any){
+		"ok with a null number": func(c map[string]any) { jobj(c["pull_requests"])["open"] = nil },
+		"not ok with a number":  func(c map[string]any) { jobj(c["issues"])["state"] = "not-read" },
+		"truncated while not ok": func(c map[string]any) {
+			x := jobj(c["issues"])
+			x["state"], x["open"], x["bug"], x["truncated"] = "failed", nil, nil, true
+		},
+		"an unknown state":             func(c map[string]any) { jobj(c["issues"])["state"] = "unknown" },
+		"a negative number":            func(c map[string]any) { jobj(c["pull_requests"])["bot"] = -1 },
+		"a missing key":                func(c map[string]any) { delete(c, "stash") },
+		"an additional key":            func(c map[string]any) { c["extra"] = 1 },
+		"a string where a number goes": func(c map[string]any) { c["worktrees"] = "1" },
+	} {
+		if s.Validate(value(t, mutate(f))) == nil {
+			t.Errorf("accepted: %s", name)
+		}
+	}
+}

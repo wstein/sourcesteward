@@ -56,8 +56,8 @@ func TestStatusCountsTotalIsASumAndATruncatedListingIsALowerBound(t *testing.T) 
 	if !strings.Contains(counts[1], "Issues 5+ (bug 2+)") {
 		t.Errorf("a truncated listing is a lower bound: %s", counts[1])
 	}
-	// crewbook has its issues disabled: not read, so the total of the issues is n/a, the others are sums
-	if want := "  All         PRs 6 (bot 2) | Issues n/a         | Branches 6/3 | Worktrees 1 | Stash 5"; counts[4] != want {
+	// crewbook has its issues disabled: that does not apply and is left out, so the total is a sum of the others
+	if want := "  All         PRs 6 (bot 2) | Issues 5+ (bug 2+) | Branches 6/3 | Worktrees 1 | Stash 5"; counts[4] != want {
 		t.Errorf("got  %q\nwant %q", counts[4], want)
 	}
 }
@@ -116,8 +116,8 @@ func TestStatusOfflineCountsAreNotAvailableAndNeverZero(t *testing.T) {
 		"Counts",
 		`. PRs n/a | Issues n/a | Branches 0/1 | Worktrees 0 | Stash 0`,
 		`sub\x1b[31m PRs n/a | Issues n/a | Branches 4/2 | Worktrees 2 | Stash 2`,
-		`gone PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a`,
-		`All PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a`,
+		`gone PRs n/a | Issues n/a | Branches n/a/n/a | Worktrees n/a | Stash n/a`, // uninitialized: the line says n/a, the total leaves it out
+		`All PRs n/a | Issues n/a | Branches 4/3 | Worktrees 2 | Stash 2`,
 	} {
 		if flat(counts[i]) != w {
 			t.Errorf("line %d: %q, want %q", i, flat(counts[i]), w)
