@@ -113,6 +113,29 @@ impl Replay {
     }
 }
 
+/// A `Metadata` filter: true for the Git configuration files only (no `GIT_COMMITTER_*` or other override).
+fn from_config_files(m: &gix::config::file::Metadata) -> bool {
+    use gix::config::Source;
+    matches!(
+        m.source,
+        Source::GitInstallation
+            | Source::System
+            | Source::Git
+            | Source::User
+            | Source::Local
+            | Source::Worktree
+    )
+}
+
+/// The first non-blank value of `keys` in the configuration files, in the order given.
+fn config_value(repo: &gix::Repository, keys: &[&str]) -> Option<BString> {
+    let snapshot = repo.config_snapshot();
+    let cfg = snapshot.plumbing();
+    keys.iter()
+        .find_map(|k| cfg.string_filter(*k, from_config_files))
+        .filter(|v| !v.trim().is_empty())
+}
+
 /// The committer from the Git config: `committer.name`/`committer.email`, then `user.name`/`user.email`. The
 /// in-memory fallback of `repo::open`, `GIT_COMMITTER_*` and every other override do not count: only the
 /// configuration files do. Read-only.
@@ -120,30 +143,9 @@ pub fn configured_committer(
     repo: &gix::Repository,
     now: gix::date::Time,
 ) -> Result<Signature, ReplayError> {
-    use gix::config::Source;
-    let snapshot = repo.config_snapshot();
-    let cfg = snapshot.plumbing();
-    // Only the Git configuration files count; GIT_COMMITTER_* and other overrides come as another source.
-    let from_files = |m: &gix::config::file::Metadata| {
-        matches!(
-            m.source,
-            Source::GitInstallation
-                | Source::System
-                | Source::Git
-                | Source::User
-                | Source::Local
-                | Source::Worktree
-        )
-    };
-    let get = |a: &str, b: &str| {
-        let v = cfg
-            .string_filter(a, from_files)
-            .or_else(|| cfg.string_filter(b, from_files));
-        v.filter(|v| !v.trim().is_empty())
-    };
     match (
-        get("committer.name", "user.name"),
-        get("committer.email", "user.email"),
+        config_value(repo, &["committer.name", "user.name"]),
+        config_value(repo, &["committer.email", "user.email"]),
     ) {
         (Some(name), Some(email)) => Ok(Signature {
             name,
@@ -152,6 +154,15 @@ pub fn configured_committer(
         }),
         _ => Err(ReplayError::NoIdentity),
     }
+}
+
+/// `user.name` and `user.email` of the Git configuration files (the identity of the working rules: author and
+/// committer of every commit). Read-only; `None` when one of them is missing or blank.
+pub fn configured_user(repo: &gix::Repository) -> Option<(BString, BString)> {
+    Some((
+        config_value(repo, &["user.name"])?,
+        config_value(repo, &["user.email"])?,
+    ))
 }
 
 /// A clone of `repo` whose object writes stay in memory and whose merge configuration is pinned.

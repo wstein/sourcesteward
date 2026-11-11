@@ -131,16 +131,8 @@ pub fn parse_request(
         }
     }
     let pr = match pr {
-        Some("none") => PrRef::None,
-        Some(n)
-            if !n.is_empty()
-                && !n.starts_with('0')
-                && n.bytes().all(|b| b.is_ascii_digit())
-                && n.parse::<u64>().is_ok() =>
-        {
-            PrRef::Number(n.parse().expect("checked"))
-        }
-        _ => {
+        Some(p) => parse_pr(p)?,
+        None => {
             return Err(UsageError(
                 "--pr NUMBER|none is required (a number from 1, or none for a local review)".into(),
             ))
@@ -159,6 +151,23 @@ pub fn parse_request(
         new_head: args[3].clone(),
         fetch,
     })
+}
+
+/// A pull request number from 1 without leading zeros, or `none` for a local review. Shared with `stw prove`.
+pub fn parse_pr(text: &str) -> Result<PrRef, UsageError> {
+    match text {
+        "none" => Ok(PrRef::None),
+        n if !n.is_empty()
+            && !n.starts_with('0')
+            && n.bytes().all(|b| b.is_ascii_digit())
+            && n.parse::<u64>().is_ok() =>
+        {
+            Ok(PrRef::Number(n.parse().expect("checked")))
+        }
+        _ => Err(UsageError(
+            "--pr NUMBER|none is required (a number from 1, or none for a local review)".into(),
+        )),
+    }
 }
 
 /// One row of `git range-diff --no-patch`: positions (1-based) and the mark.

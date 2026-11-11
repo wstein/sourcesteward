@@ -314,6 +314,22 @@ fn session_pattern(line: &str) -> bool {
     f.contains(concat!("claude", "-session:")) || f.contains(concat!("claude", ".ai/code/session_"))
 }
 
+/// The session-link rule applied to a whole text (line endings normalized, one line at a time): true when any
+/// line holds a session trailer or a code-session URL. Shared with `stw prove`.
+pub fn has_session_link(text: &str) -> bool {
+    normalize(text).split('\n').any(session_pattern)
+}
+
+/// The Co-Authored-By trailer lines of a message, in order, as the Co-Authored-By rule reads them (key in any
+/// case, a name and an address in angle brackets). Shared with `stw prove`.
+pub fn co_authored_lines(message: &str) -> Vec<String> {
+    normalize(message)
+        .split('\n')
+        .filter(|l| co_authored_line(l))
+        .map(str::to_string)
+        .collect()
+}
+
 /// `(?im)^co-authored-by:[ \t]*[^<\r\n]+<[^<>\s]+@[^<>\s]+>[ \t]*\r?$` on one line (no line feed in it).
 fn co_authored_line(line: &str) -> bool {
     const KEY: &str = "co-authored-by:";
