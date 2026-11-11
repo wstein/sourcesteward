@@ -225,7 +225,7 @@ fn an_unknown_run_and_a_workspace_without_a_journal_are_refused_and_nothing_chan
         "",
     ] {
         let (code, v, err) = restore(&j, &["--run", bad]);
-        assert!(code == 1 || code == 2, "{bad}: {code} {v} {err}");
+        assert_eq!(code, 2, "{bad}: {v} {err}");
         assert_eq!(j.tip(&j.ws), j.ws_new, "{bad}");
     }
 }

@@ -721,7 +721,7 @@ Output: text `sync restore of run <id>`, one line per entry (`name`, `branch`, r
 `schema_version` 2, `command` `sync`, `mode` `restore`, `root`, `engine`, `run_id` (null when refused), `repos[{name, path, branch,
 result, old_oid, new_oid, reason, via}]` (`old_oid`: where the branch stood before the restore, `new_oid`: where it stands after a
 `restored`/`already-restored`, null otherwise; `via` only when a git step ran), `summary{total, restored, already_restored,
-changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`: `sync-restore-no-run`, `sync-invalid-options`),
+changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`: `sync-restore-no-run`),
 `rejected_paths`. Exit 1 when `error` is set or an entry is `changed-since`, `journal-incomplete` or `failed`; a refusal in text mode prints
 `stw: sync: <code>: <message>` to stderr. `restore` together with any sync option (`--plan`, `--dry-run`, `--apply`, `--prune`,
 `--no-prune`, `--submodules`, `--rules`, `--rules-path`, `--offline`, `--repo`) is a usage error (exit 2, nothing done).

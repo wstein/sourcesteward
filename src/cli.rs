@@ -636,6 +636,13 @@ fn run_sync_restore(
             "{name} does not apply to stw sync restore"
         )));
     }
+    if let Some(id) = &r.run {
+        if git_runner::RunId::parse(id).is_none() {
+            return Err(Error::usage(
+                "--run needs a run ID as printed by stw sync (YYYYMMDDTHHMMSS[uuuuuu]Z-xxxxxxxx)",
+            ));
+        }
+    }
     let roots = [r.path.clone(), r.root.clone(), common.root.clone()];
     if roots.iter().flatten().count() > 1 {
         return Err(Error::usage(
