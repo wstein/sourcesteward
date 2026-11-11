@@ -114,14 +114,13 @@ Decisions taken while implementing the work packages; they refine the text above
   the number of items), `Repositories (N)` and `Notices (N)` follow, each after a blank line; the summary line stays last.
   The schema 2 document gains, additively and without a version change, `repos[].counts` and `totals`, both
   `{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees,
-  stash}`. `state` is `ok`, `not-read` (offline, no token, the deadline, issues disabled, an uninitialized submodule),
-  `no-remote` (no GitHub origin; a total leaves such a repository out) or `failed` (the read failed, or the repository cannot be
+  stash}`. `state` is `ok`, `not-read` (offline, no token, the deadline),
+  `not-applicable` (a fact of the repository: its issues are disabled, or it is an uninitialized submodule; a total leaves it out like `no-remote`) or `failed` (the read failed, or the repository cannot be
   read locally); every number is null unless its state is `ok`, and what was not read is never 0. `open` of the pull requests is
   the number the forge listed (all pages, at most 2000) and `bot` the bot pull requests among them; `open` of the issues leaves
   the pull request entries out and `bug` counts the issues with the label `bug` (ASCII case folded, whatever their priority);
   `truncated` marks both as lower bounds when the issues listing hit its limit of 10 pages. `worktrees` are the linked ones whose
-  directory exists, `branches.remote` is `refs/remotes/origin/*` without `HEAD` as of the last fetch. A total is a number only
-  when every repository gave one; a failed read wins over not read. `--offline` keeps the schema 1 document as published and adds
+  directory exists, `branches.remote` is `refs/remotes/origin/*` without `HEAD` as of the last fetch. A total is the sum of the repositories that gave a number, so one uninitialized submodule or a repository with disabled issues does not turn `All` into `n/a`; a failed read wins over not read. `--offline` keeps the schema 1 document as published and adds
   the `Counts` block to its text only.
 - **Exit status after a failed remote read (amendment 2026-11-11).** A failed remote read is a notice and exit 0; the text shows
   `?` in the counts it hit.

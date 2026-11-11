@@ -120,7 +120,7 @@ case-insensitively with `assignees[].login`. Outcomes:
   rate-limit evidence** is the **user-lookup exception**: source `viewer` `skipped`, reason `no-identity`, a notice, exit 0. A token class
   that cannot read `user` (an Actions `GITHUB_TOKEN`, an App installation token, which gets 403 on `GET /user`, a fine-grained token
   without the permission) is not a retryable fault; 404 is kept as a candidate for the same reason. (3) Any other failure (401, network,
-  5xx, malformed answer) is source `viewer` `error`, exit 1 (the generic Spec 037 rule: an attempted request failed). In (1) and (3) the
+  5xx, malformed answer) is source `viewer` `error`, exit 1 for `stw issues` (the generic Spec 037 rule: an attempted request failed; for `stw status` a failed read is a notice and exit 0 since the 2026-11-11 amendment of Spec 037). In (1) and (3) the
   rule "assigned to you" is inactive for the run and a notice (`viewer-unknown`) says so; issues are still read and classified by the
   other rules, except after a rate-limit stop. Spec 037's exit table lists 401/403 as exit 1; **the user-lookup exception is the only
   deviation of this spec** from it (Spec 037 has its own, separate `not-found` skip for the release workflow). In case (2) the rule is

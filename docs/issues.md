@@ -58,7 +58,7 @@ is attempted. Its outcomes:
 | `ok` | rule 2 is active |
 | 403 or 404 **without** rate-limit evidence | `viewer` is `skipped` with reason `no-identity`, rule 2 is off, exit 0. Tokens such as an Actions `GITHUB_TOKEN`, an App installation token or a fine-grained token without the permission cannot read `user`; that is not a fault |
 | 403 or 429 with rate-limit evidence | `viewer` is `error` `rate-limited`, the run stops reading, exit 1 |
-| any other failure (401, network, 5xx, malformed answer) | `viewer` is `error`, rule 2 is off, the issues are still read, exit 1 |
+| any other failure (401, network, 5xx, malformed answer) | `viewer` is `error`, rule 2 is off, the issues are still read, exit 1 for `stw issues` (`stw status` prints a notice and exits 0) |
 | no repository to read | no request is made, `viewer` is `skipped` with reason `not-github-origin` |
 
 After a `no-identity` skip and after a failed viewer read, stderr carries one line, `notice no-identity: ...` or
