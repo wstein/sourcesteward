@@ -324,49 +324,49 @@ fn commit_that_became_empty_is_dropped_like_git() {
 }
 
 #[test]
-fn patch_already_upstream_is_skipped_like_git() {
+fn patch_already_in_onto_is_dropped_as_empty_like_git() {
+    // The same patch is in onto: git skips the commit by patch ID, the engine drops it because the merge
+    // changes nothing. Both end with the same tree and commits.
     let fx = Fx::new();
     let base = base_repo(&fx);
     let change = edit(&lines(30, "x"), 20, "SAME");
     let o1 = fx.commit(Some(base), &[("c.txt", Some("c\n"))], "onto 1");
-    let onto = fx.commit(
-        Some(o1),
-        &[("a.txt", Some(&change)), ("c.txt", Some("c\nmore\n"))],
-        "onto 2 carries the same patch plus another",
-    );
-    // same patch alone on the side: patch-id equal only when the whole commit patch is equal
-    let onto_same = fx.commit(Some(o1), &[("a.txt", Some(&change))], "same patch on onto");
+    let onto = fx.commit(Some(o1), &[("a.txt", Some(&change))], "same patch on onto");
     let side = fx.commit(Some(base), &[("a.txt", Some(&change))], "same patch");
     let s2 = fx.commit(
         Some(side),
         &[("b.txt", Some(&edit(&lines(30, "y"), 25, "S2")))],
         "side 2",
     );
-    let r = assert_matches_git(&fx, onto_same, base, s2);
-    assert_eq!(statuses(&r), [Status::Skipped, Status::Clean]);
-    // the other onto holds a different patch (two files): nothing is skipped, and the result still equals git's
-    let r2 = assert_matches_git(&fx, onto, base, s2);
-    assert_eq!(statuses(&r2), [Status::Empty, Status::Clean]);
+    let r = assert_matches_git(&fx, onto, base, s2);
+    assert_eq!(statuses(&r), [Status::Empty, Status::Clean]);
 }
 
 #[test]
-fn whitespace_variant_of_an_upstream_patch_is_not_skipped() {
-    // Deviation from git, which compares the patch ID alone and would skip this commit.
+fn a_patch_that_onto_made_and_later_reverted_is_applied_like_git() {
+    // onto holds the patch and, later, its revert. The change is not in onto any more, so it has to come
+    // through (a skip by patch ID would lose it).
     let fx = Fx::new();
     let base = base_repo(&fx);
+    let change = edit(&lines(30, "x"), 20, "SAME");
+    let o1 = fx.commit(Some(base), &[("a.txt", Some(&change))], "onto: the patch");
     let onto = fx.commit(
-        Some(base),
-        &[("a.txt", Some(&edit(&lines(30, "x"), 20, "S  AME")))],
-        "onto",
+        Some(o1),
+        &[("a.txt", Some(&lines(30, "x")))],
+        "onto: revert",
     );
-    let side = fx.commit(
-        Some(base),
-        &[("a.txt", Some(&edit(&lines(30, "x"), 20, "S AME")))],
-        "side",
-    );
-    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
-    assert_ne!(r.steps[0].status, Status::Skipped);
-    assert_eq!(r.steps[0].status, Status::Conflicted);
+    let side = fx.commit(Some(base), &[("a.txt", Some(&change))], "side: the patch");
+    let r = assert_matches_git(&fx, onto, base, side);
+    assert_eq!(statuses(&r), [Status::Clean]);
+    let tree = r.repo.find_commit(r.tip).unwrap().tree().unwrap();
+    let blob = tree
+        .find_entry("a.txt")
+        .unwrap()
+        .object()
+        .unwrap()
+        .data
+        .clone();
+    assert!(blob.to_str_lossy().contains("SAME"), "the change was lost");
 }
 
 #[test]

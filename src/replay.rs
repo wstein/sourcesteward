@@ -9,12 +9,11 @@
 //! encoding of the original; the committer is the identity the caller passes (`configured_committer` reads it from
 //! the Git config, read-only). A commit whose tree and parent do not change is returned as it is.
 //!
-//! Differences from Git, named: a patch counts as already upstream only when the patch ID and the
-//! white-space-preserving digest are equal (Git compares the patch ID alone, which also ignores white space); merge
-//! drivers of the configuration are never started, a driver named by an attribute is unknown to the merge; rename
+//! Differences from Git, named: there is no skip by patch ID (`git rebase` drops a commit whose patch is in
+//! `onto`); a commit is dropped only when its merge leaves the new parent's tree unchanged (`Empty`), as in the Go
+//! restack. A patch that `onto` made and later reverted therefore comes through, as with `git rebase --onto`. Merge drivers of the configuration are never started, a driver named by an attribute is unknown to the merge; rename
 //! detection and the diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=1000`, myers). Attributes
 //! come from the index of the repository, as for `git merge-tree`. The replay stops at the first conflict.
-use std::collections::HashSet;
 use std::fmt;
 
 use gix::actor::Signature;
@@ -22,8 +21,6 @@ use gix::bstr::{BString, ByteSlice};
 use gix::merge::plumbing::tree::TreatAsUnresolved;
 use gix::merge::plumbing::tree::{Resolution, ResolutionFailure};
 use gix::ObjectId;
-
-use crate::patch_id::{commit_patch_key, PatchKey};
 
 /// Why a replay is refused or failed. Conflicts are results, not errors.
 #[derive(Debug)]
@@ -70,8 +67,6 @@ pub enum Status {
     Empty,
     /// Empty before the replay (tree equals the parent's tree): kept as an empty commit, as `git rebase` does.
     EmptyStart,
-    /// The patch is already in the new base: dropped, no commit.
-    Skipped,
 }
 
 /// A conflicted path with a coarse kind (`content`, `add/add`, `modify/delete`, `rename/rename`, `rename/delete`,
@@ -86,7 +81,7 @@ pub struct Conflict {
 #[derive(Debug, Clone)]
 pub struct Step {
     pub old: ObjectId,
-    /// The replayed commit; `None` for `Conflicted`, `Empty` and `Skipped`.
+    /// The replayed commit; `None` for `Conflicted` and `Empty`.
     pub new: Option<ObjectId>,
     pub status: Status,
     /// Set for `Conflicted` only.
@@ -171,7 +166,7 @@ fn sandbox(repo: &gix::Repository) -> Result<gix::Repository, ReplayError> {
 }
 
 /// Replays `old_base..tip` onto `onto`, oldest commit first. Refuses root and merge commits before anything is
-/// replayed. Commits whose patch is already in `onto` (patch present in `onto` but not in `tip`) are skipped.
+/// replayed.
 pub fn replay_range(
     repo: &gix::Repository,
     onto: ObjectId,
@@ -181,23 +176,9 @@ pub fn replay_range(
 ) -> Result<Replay, ReplayError> {
     let mem = sandbox(repo)?;
     let chain = chain(&mem, old_base, tip)?;
-    let upstream = upstream_patches(&mem, onto, tip)?;
     let mut steps = Vec::with_capacity(chain.len());
     let mut new_tip = onto;
     for c in chain {
-        if !upstream.is_empty() {
-            if let Some(key) = commit_patch_key(&mem, c).map_err(git_err)? {
-                if upstream.contains(&key) {
-                    steps.push(Step {
-                        old: c,
-                        new: None,
-                        status: Status::Skipped,
-                        conflicts: vec![],
-                    });
-                    continue;
-                }
-            }
-        }
         let step = replay_commit(&mem, c, new_tip, committer)?;
         let stop = step.status == Status::Conflicted;
         if let Some(n) = step.new {
@@ -246,27 +227,6 @@ fn chain(
     }
     out.reverse();
     Ok(out)
-}
-
-/// Patch keys of the commits that are in `onto` and not in `tip` (the left side of `onto...tip`).
-fn upstream_patches(
-    repo: &gix::Repository,
-    onto: ObjectId,
-    tip: ObjectId,
-) -> Result<HashSet<PatchKey>, ReplayError> {
-    let mut set = HashSet::new();
-    for info in repo
-        .rev_walk([onto])
-        .with_hidden([tip])
-        .all()
-        .map_err(git_err)?
-    {
-        let info = info.map_err(git_err)?;
-        if let Some(key) = commit_patch_key(repo, info.id).map_err(git_err)? {
-            set.insert(key);
-        }
-    }
-    Ok(set)
 }
 
 /// Replays one commit onto `new_parent`. `repo` should be the handle of `replay_range` (object memory enabled);

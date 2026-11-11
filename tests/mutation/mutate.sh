@@ -769,12 +769,6 @@ m RP1 'replay: an empty-start commit is not kept' src/replay.rs \
 m RP2 'replay: a commit that became empty is kept' src/replay.rs \
   '    if merged == new_tree {' '    if false && merged == new_tree {' \
   replay commit_that_became_empty_is_dropped_like_git
-m RP3 'replay: a patch already upstream is not skipped' src/replay.rs \
-  '                if upstream.contains(&key) {' '                if false && upstream.contains(&key) {' \
-  replay patch_already_upstream_is_skipped_like_git
-m RP4 'replay: upstream patches compare by patch ID alone' src/replay.rs \
-  '                if upstream.contains(&key) {' '                if upstream.iter().any(|k| k.0 == key.0) {' \
-  replay whitespace_variant_of_an_upstream_patch_is_not_skipped
 m RP5 'replay: a root commit is accepted' src/replay.rs \
   '            0 => return Err(ReplayError::RootCommit(info.id)),' '            0 => {}' \
   replay root_commit_in_the_range_is_refused
