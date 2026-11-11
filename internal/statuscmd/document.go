@@ -33,6 +33,8 @@ type Document struct {
 	Notices       []DocNotice      `json:"notices"`
 	Summary       DocSummary       `json:"summary"`
 	Error         *stwsync.Failure `json:"error"`
+	// Totals are the counters of all repositories (Spec 037 amendment): a number only when every repository gave one.
+	Totals DocCounters `json:"totals"`
 	// Rules is the agent-rules checkout; present only with --rules.
 	Rules *stwsync.Rules `json:"rules,omitempty"`
 	// Stats is the diagnostic timing and API usage; present only with --stats.
@@ -86,6 +88,43 @@ type DocSubject struct {
 type DocRepo struct {
 	stwsync.RepoStatus
 	Remote DocRemote `json:"remote"`
+	// Counts are the counters of the repository: the pull requests and issues the forge reported, the branches,
+	// the linked worktrees and the stashes (Spec 037 amendment).
+	Counts DocCounters `json:"counts"`
+}
+
+// DocCounters are the counters of one repository or the totals of all. Every number is null unless its state is
+// `ok`; `not-read` is not read on purpose or at all (never 0), `no-remote` a repository that is not on GitHub and
+// `failed` a read that failed.
+type DocCounters struct {
+	PullRequests DocPullCount   `json:"pull_requests"`
+	Issues       DocIssueCount  `json:"issues"`
+	Branches     DocBranchCount `json:"branches"`
+	Worktrees    *int           `json:"worktrees"`
+	Stash        *int           `json:"stash"`
+}
+
+// DocPullCount counts the open pull requests and, of them, the bot pull requests.
+type DocPullCount struct {
+	State     string `json:"state"`
+	Open      *int   `json:"open"`
+	Bot       *int   `json:"bot"`
+	Truncated bool   `json:"truncated"`
+}
+
+// DocIssueCount counts the open issues (pull requests excluded) and, of them, those with the label bug; Truncated
+// says that both are lower bounds.
+type DocIssueCount struct {
+	State     string `json:"state"`
+	Open      *int   `json:"open"`
+	Bug       *int   `json:"bug"`
+	Truncated bool   `json:"truncated"`
+}
+
+// DocBranchCount counts the local branches and the remote-tracking branches of origin.
+type DocBranchCount struct {
+	Local  *int `json:"local"`
+	Remote *int `json:"remote"`
 }
 
 // DocRemote is what the remote sources read for one repository.
@@ -300,8 +339,10 @@ func (r Report) Document() Document {
 	for i, it := range r.Overview.Items {
 		d.Actions[i] = action(it)
 	}
+	repoCounts, total := r.Counts()
+	d.Totals = counters(total)
 	for i, rp := range r.Local.Repos {
-		d.Repos[i] = DocRepo{RepoStatus: rp, Remote: remote(r.Remote.Repos[i])}
+		d.Repos[i] = DocRepo{RepoStatus: rp, Remote: remote(r.Remote.Repos[i]), Counts: counters(repoCounts[i])}
 	}
 	for i, n := range r.Overview.Notices {
 		d.Notices[i] = DocNotice{Code: cut(n.Code, maxString), Source: n.Source, Repos: n.Repos, Message: cut(n.Message, maxMessage)}
@@ -313,6 +354,30 @@ func (r Report) Document() Document {
 		d.Stats = r.DocStats()
 	}
 	return d
+}
+
+// counters is the document form of Counts: a number only in the state ok.
+func counters(c Counts) DocCounters {
+	open := func(s SourceCount) (*int, *int) {
+		if s.State != CountOK {
+			return nil, nil
+		}
+		return &s.Open, &s.Sub
+	}
+	num := func(n Number) *int {
+		if n.State != CountOK {
+			return nil
+		}
+		return &n.N
+	}
+	prOpen, prBot := open(c.PRs)
+	isOpen, isBug := open(c.Issues)
+	return DocCounters{
+		PullRequests: DocPullCount{State: c.PRs.State, Open: prOpen, Bot: prBot, Truncated: c.PRs.Truncated},
+		Issues:       DocIssueCount{State: c.Issues.State, Open: isOpen, Bug: isBug, Truncated: c.Issues.Truncated},
+		Branches:     DocBranchCount{Local: num(c.BranchesLocal), Remote: num(c.BranchesRemote)},
+		Worktrees:    num(c.Worktrees), Stash: num(c.Stash),
+	}
 }
 
 // DocStats extracts the diagnostic timing and API usage stats for JSON serialization.

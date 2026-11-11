@@ -39,9 +39,9 @@ func fixtureReport() Report {
 		SchemaVersion: 1, Command: "status", Root: ptr("/ws"), Options: stwsync.StatusEcho{Worktrees: true},
 		Repos: []stwsync.RepoStatus{
 			{Name: ".", Path: "/ws", Kind: "root", State: "ok", Branch: ptr("main"), Upstream: ptr("origin/main"), Ahead: ptr(0), Behind: ptr(2),
-				Changes: stwsync.Changes{Unstaged: 2}, Stash: 1, Attention: true, Reasons: []string{"unstaged", "behind"}},
-			{Name: "crewbook", Path: "/ws/crewbook", Kind: "submodule", State: "ok", Branch: ptr("main"), Upstream: ptr("origin/main"), Ahead: ptr(0), Behind: ptr(0), Reasons: []string{}},
-			{Name: "workharbor", Path: "/ws/workharbor", Kind: "submodule", State: "ok", Branch: ptr("main"), Upstream: ptr("origin/main"), Ahead: ptr(0), Behind: ptr(0), Reasons: []string{}},
+				Changes: stwsync.Changes{Unstaged: 2}, Stash: 1, Attention: true, Reasons: []string{"unstaged", "behind"}, RemoteBranches: ptr(2)},
+			{Name: "crewbook", Path: "/ws/crewbook", Kind: "submodule", State: "ok", Branch: ptr("main"), Upstream: ptr("origin/main"), Ahead: ptr(0), Behind: ptr(0), Reasons: []string{}, RemoteBranches: ptr(1)},
+			{Name: "workharbor", Path: "/ws/workharbor", Kind: "submodule", State: "ok", Branch: ptr("main"), Upstream: ptr("origin/main"), Ahead: ptr(0), Behind: ptr(0), Reasons: []string{}, RemoteBranches: ptr(1), Stash: 4},
 			{Name: "gone", Path: "/ws/gone", Kind: "submodule", State: "error", Reasons: []string{}, Error: &stwsync.Failure{Code: "status-read-failed", Message: "cannot read the repository status"}},
 		},
 		Summary: stwsync.StatusSummary{Total: 4, Attention: 1, Errors: 1},
@@ -75,7 +75,7 @@ func fixtureReport() Report {
 				{Number: 13, Title: "review me", URL: "https://github.com/wstein/sourcesteward/issues/13", Author: "bob", Reason: overview.IssueReasonAssigned, Labels: []string{}, Assignees: []string{"wstein"}},
 			},
 		},
-		Issues: &statusremote.Issues{State: okSource, Open: 5, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}, Dropped: 2, Truncated: true,
+		Issues: &statusremote.Issues{State: okSource, Open: 5, Bugs: 2, Counts: issues.Counts{Red: 1, Yellow: 2, Blue: 1, Violet: 1}, Dropped: 2, Truncated: true,
 			Rows: []overview.Issue{{Number: 12}, {Number: 13}}},
 		Pulls: &statusremote.Pulls{State: okSource, Open: ptr(3), ReviewRead: true, Counts: pulls.Summary{Total: 3, Ready: 1, Draft: 1, Blocked: 1,
 			Review: pulls.ReviewCounts{Clear: 1, Findings: 1, None: 1}, Hints: pulls.HintCounts{ClearNotReady: 1, ForeignReviewIgnored: 2, TruncatedReviewUnknown: 3, ReadyMergeable: 1}},
@@ -179,7 +179,7 @@ func requireKeys(t *testing.T, what string, m map[string]any, want ...string) {
 
 func TestDocumentNeverOmitsAKey(t *testing.T) {
 	m := decode(t, fixtureReport().Document())
-	requireKeys(t, "document", m, "schema_version", "command", "time", "host", "options", "root", "note", "actions", "repos", "sources", "notices", "summary", "error")
+	requireKeys(t, "document", m, "schema_version", "command", "time", "host", "options", "root", "note", "actions", "repos", "sources", "notices", "summary", "error", "totals")
 	if m["schema_version"] != float64(2) || m["command"] != "status" || m["host"] != "github.com" || m["time"] != "2026-10-22T09:30:00Z" {
 		t.Fatalf("%v", m)
 	}
@@ -201,7 +201,7 @@ func TestDocumentNeverOmitsAKey(t *testing.T) {
 	for _, r := range m["repos"].([]any) {
 		repo := r.(map[string]any)
 		requireKeys(t, "repo", repo, "name", "path", "kind", "state", "branch", "detached", "head", "upstream", "upstream_gone", "ahead", "behind", "changes", "operation",
-			"stash", "branches", "worktrees", "gitlink", "fetch_error", "attention", "reasons", "error", "remote")
+			"stash", "branches", "worktrees", "gitlink", "fetch_error", "attention", "reasons", "error", "remote", "counts")
 		remote := repo["remote"].(map[string]any)
 		requireKeys(t, "remote", remote, "repo", "state", "reason", "sources")
 		sources := remote["sources"].(map[string]any)
@@ -324,6 +324,7 @@ func TestDocumentKeepsTheV1RepositoryMembersUnchanged(t *testing.T) {
 	for i, r := range repos {
 		repo := r.(map[string]any)
 		delete(repo, "remote")
+		delete(repo, "counts") // the additive member of the Counts amendment; the v1 members are all the others
 		if !bytes.Equal(mustJSON(t, repo), mustJSON(t, v1[i])) {
 			t.Errorf("repository %d changed:\n%s\n%s", i, mustJSON(t, repo), mustJSON(t, v1[i]))
 		}
