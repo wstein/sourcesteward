@@ -23,6 +23,8 @@ stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw sync      [--apply] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
+stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
+stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 ```
 
 | Command | What it does | Writes |
@@ -32,6 +34,7 @@ stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 | `tidy apply` | carries the plan out: deletes the local branches it marks `delete`, removes clean linked worktrees of such branches and dead worktree registrations. No confirmation flag; `--yes` is an unknown flag | local branches, worktrees, a manifest outside the repository |
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
+| `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync` | dry run: what would be fast-forwarded and why not. `--apply`: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included | only with `--apply` |
 
 `sync --apply` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
@@ -81,6 +84,7 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 | 0 | everything asked for worked (also when repositories need attention) |
 | 1 | the command ran, but a repository could not be read; `sync --apply` failed in one; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
 | 2 | usage error or unusable workspace; nothing was done |
+| 3 | `lint pr` only: an error finding, or a list cut at its bound (the result is printed and is not a pass) |
 
 ## Output for agents
 
@@ -340,13 +344,33 @@ typed unsupported, a repository config with `diff.external`, `diff.<driver>.text
 identical patch twice in a range (range-diff pairs it across). JSON schema 2 (`pr`: number or `"none"`; `via` per step; `read_errors`). Deviations from the Go command and the mapping of its 46
 tests: header of `tests/it/carryover.rs`; plan: `docs/migration-plan.md`, "Next slice".
 
+## PR lint: `stw lint pr` (M8)
+
+`stw lint pr PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]` (read-only, GET only). Reads the
+pull request, its commits (3 pages of 100; the pull request's own commit count must not be above the commits read) and its
+conversation comments (10 pages of 30) and reports one finding per violated rule with rule ID, severity and location (PR title or
+text, comment ID, commit SHA, line). The rule table is `src/lint_pr.rs` (`RULES`; `--json` lists it): no session link in commit
+messages, title, text and comments; author and committer of every commit are an owner identity (`--owner-identity`, repeatable,
+else `user.name`/`user.email` of the Git configuration of the workspace; none: usage); a `Co-Authored-By:` trailer with name and
+email; Conventional Commit subjects; the PR text about 25 lines (warning above 25, error above 30), a `Blocker` line and an
+`Author agent` line; the first line of a comment that claims to be a review is `Review: <CLEAR|FINDINGS> head=<40 hex>
+patch-id=<40 hex> pr=<n>` (or the Carried-over form) for this pull request, and such a comment has at most 15 lines. The repository
+is `--repo` or the single GitHub `origin` of the workspace of PATH (default: the current directory). Text of the forge is untrusted:
+the human list escapes control, invisible and direction-changing characters and cuts each message at 120 characters.
+Exit 0: no error finding (warnings do not fail). Exit 3: an error finding, or a list cut at its bound
+(`truncated.commits` / `truncated.comments`; `summary.passed` is false). Exit 1: a failed read or no token (no output). Exit 2: usage.
+`--json` is the document of schema 1 of the Go command (`schema_version`, `command: "lint pr"`, `time`, `host`, `repo`,
+`pull_request`, `head`, `options`, `rules`, `findings`, `summary`, `truncated`; keys are never omitted). Deviations from the Go
+command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.rs` and `tests/it/lint_pr_cmd.rs`; plan:
+`docs/migration-plan.md`, "Slice 3".
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 169 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 239 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 

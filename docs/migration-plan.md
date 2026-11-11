@@ -205,7 +205,7 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `tidy history` | absent | M5 | **owner decides** (open): lists stored journals; Rust `restore` takes `--run` or the newest. Tied to the slimmed M5 (decision 2026-11-10). | `cli/tidy_prune_v4_history_test.go` |
 | `review carry-over` | absent | M4 | **port**: reuses a CLEAR after a rebase; proof is equal patch-id, no merge commits, range-diff all `=`. Needs `range-diff` in the runner. | `internal/carryover` (46; repositories are built in `fixture_test.go`, no data files), `cli/review_test.go` |
 | `ready-check` | absent | M4 | **port**: pure `Evaluate` over seven conditions (open, review, checks, base, blocker, conflict, rebaseable). Review condition comes from the Rust M3 state. | `internal/readycheck` (25), `cli/readycheck_test.go` |
-| `lint pr` | absent | M8 | **port**: PR text rules. | `internal/lintpr` (15), `lintprcmd` (17), `cli/lint_test.go` |
+| `lint pr` | present (`src/lint_pr.rs`, `src/lint_pr_cmd.rs`) | M8 | **port** (done): PR text rules; deviations in "Slice 3". | `internal/lintpr` (15), `lintprcmd` (17), `cli/lint_test.go` |
 | `pulls` | absent | M9 | **port** as read-only queue after M2/M3/M4; Rust has open-PR reads only. | `internal/pulls` (85), `pullscmd` (65), `prviews` (17), `cli/pulls_test.go` |
 | `restack plan` (h) | absent | M1/M2 | **port** the single-branch prediction (`--branch --old-parent --new-parent`); whole-stack preview is new behavior (spike A). | `internal/restack` (54), `conflicts` (24), `cli/testdata/restack-plan-*.json` |
 | `land` | absent | M11 | **defer**: `internal/land/shapes.json` lists no measured shape, so the Go apply path cannot run today (`cli/land.go` help). | `internal/land` (42), `landcmd` (25); v0.2.1 fixtures as in M11 |
@@ -342,4 +342,29 @@ Slice 1 as built (branch `feat/stw-port-m4`): deviations from Go found by the co
   (range-diff pairs it across, the position rule refuses). Notes are ignored (`--no-notes`), as in Go.
 - `Op::RangeDiff` has no four-argument form in git; the argv is the two-range form.
 
-Slice 2: `ready-check` (M4) from `internal/readycheck`. Then M8 (`lint pr`), M9 (`pulls`).
+Slice 2: `ready-check` (M4) from `internal/readycheck`.
+
+Slice 3 (M8, branch `stw-m8-lint-pr`): `lint pr` from `internal/lintpr`, `internal/lintprcmd`, `cli/lint_test.go`. The 15 rule tests are
+`tests/it/lint_pr.rs`, the 17 command tests and the 3 CLI tests are `tests/it/lint_pr_cmd.rs` (one Rust case per Go case, same name
+in snake case; the CLI cases run the binary against a fake GitHub API). The hand-written regular expressions were also compared with
+the Go originals on 140000 generated cases (rules and messages; 0 differences; the harness is not in the repository). Deviations
+from Go:
+- Output default: text, as every Rust command; Go prints text only on a terminal. `--human` stays and conflicts with `--json`.
+- No `--host`: `api.github.com` or `STW_GITHUB_API_URL` only; `host` of the document is `github.com`.
+- Document: schema 1 as in Go, no `engine`; the schema file stays in the Go tree; `time` is UTC seconds.
+- Workspace: the single GitHub `origin` among the repository of PATH (default: current directory; a plain repository is a workspace of
+  one) and its checked-out submodules; the Git identity is read with gix, not with `git config --get`.
+- Human output escapes with `escape_untrusted` (also the backslash, `\u{hex}`), Go with `untrusted.Esc` (`\xNN`, `\uNNNN`); the
+  author and committer message quotes the name with Rust's `{:?}`, Go with `%q` (they differ for non-ASCII and control characters).
+- No regex crate: the expressions are written out by hand; case folding is lower case plus U+017F and U+212A (Go's simple folding for the
+  letters that occur); other Unicode folds Go knows are not applied. JSON keys are matched case-sensitively (Go's `encoding/json` also
+  takes `Title`).
+- The review line is the M3 parser (`review::parse_strict`) restricted to the Go lint grammar: `pr=` is 1 to 9 digits, no `pr=none`.
+- Redirects are not followed (as in Go); 404 reads as `forbidden`, a 301 or 308 as `repo-moved`, as in Go. Pages are cut at one MiB
+  (`page-too-large`); every read has a 30 s timeout (Go: the request timeout of the reader).
+- Not ported: the Go guard that admits only the three lint endpoints and the call accounting of the reader (the Rust client has GET
+  methods only and three endpoint builders in `src/github/lint_reads.rs`).
+- Rules table: the anchors cite `claude/CLAUDE.md` and `claude/skills/agent-workflow/SKILL.md` of agent-rules. The test
+  `rules_table_anchors_in_agent_rules` runs only with `AGENT_RULES_DIR` (as in Go). The current `.agents` checkout of this workspace has
+  no `claude/` directory, so the anchors are UNKNOWN against the current dotagents layout (see the "PR lint" line in "Test corpus").
+Then M9 (`pulls`).
