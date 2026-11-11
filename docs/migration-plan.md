@@ -127,7 +127,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M10 | Rust push/workflow from accepted scripts. Needs M0/M4/M5, repository policy and local CLEAR evidence contract. | Existing `scripts/test-stw-push` behaviors translated after script acceptance; ff-only default branch, submodules first, no tags/force, exact-head CLEAR; partial remote effects reported and never described as undoable. Pending guard from M12 before deferred flow enabled. | 4 / 3 / 5 |
 | M11 | Owner-invoked land stack. Needs M2/M4/M5/M6/M10 and explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
 | M12 | Deferred conflicts D and owned resolve worktrees. Needs M1/M2/M5/M6/M7/M0 and accepted D spike. | Real conflicted branches stay at old tips; pending metadata/ref transaction; parent-first resolve; abort preserves pending; stale CAS; binary/delete conflicts; undo; push/land/ready refuse pending state. | 4 / 5 / 5 |
-| M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof, native jj opt-in. | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
+| M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof. | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
 
 Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a separate workstream,
 **accepted A → M1 → M2 → M5 (slim) → M6** for local stacks. M8 is independent after M3.
@@ -171,8 +171,7 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
 8. **Recorded decision (owner, 2026-11-11): jj (Jujutsu) is not supported.** Git is the standard. Functions that jj
    offers (undo/oplog, conflict resolution) are added to stw instead of maintaining a second repository model. jj is an
    officially unsupported tool: it may work in a colocated Git repository, without a test and without a promise. There is
-   no jj special code in stw (no detection, no warning, no test). This replaces "defer native jj" in the matrix, M13
-   ("native jj opt-in") and decision 7.
+   no jj special code in stw (no detection, no warning, no test). This replaces "defer native jj" in the matrix and decision 7; the M13 item "native jj opt-in" is removed.
 
 Known limits from the Rust README remain relevant: patch-ID oracle mismatches, partial checkout/rollback crash
 windows, platform/filter/sparse-checkout uncertainty, and restore missing-object after pruning. Their historical
@@ -204,7 +203,7 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `sync --submodules` (flag) | absent in `src/sync/` (grep) | - | **defer**: Go moves detached pinned submodules to the recorded commit. | same |
 | `sync --rules` (flag) | present with `--rules-path` | - | **port** (done); **drop** `--owner-identity`, `--allowed-committer`: Go refuses on foreign identities, Rust prints an info line (README: no owner or author check). | same |
 | `sync restore` (mode) | absent | M5 | **owner decides** (open): Go journals each change with recovery refs `refs/stw/recovery/sync/RUN_ID/N` and `restore` resets branches back. Tied to the slimmed M5 (backup ref) as `tidy history` is. | `internal/stwsync/restore_test.go`, `cli/sync_test.go` |
-| `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (native jj deferred). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
+| `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (owner confirmed 2026-11-11: jj is not supported). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
 | `tidy apply` | present, Git only | M5 | **port** (done); backup ref is M5 (slim). | same as `tidy plan` |
 | `tidy restore` | present; no journal listing | M5 | **port** (done). | `cli/tidy_v3_restore_test.go`, `tidy_prune_v4_restore_test.go` |
 | `tidy history` | absent | M5 | **owner decides** (open): lists stored journals; Rust `restore` takes `--run` or the newest. Tied to the slimmed M5 (decision 2026-11-10). | `cli/tidy_prune_v4_history_test.go` |
@@ -237,7 +236,7 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `version` | `--version` | - | **drop** (matrix: no version subcommand). | `cmd/stw/main_test.go` |
 
 Also in the Go repository: `cmd/gh-jj` (gh extension wrapper) and `cmd/stw-docs`: **drop** (matrix: no brand/site/gh-jj
-wrappers).
+wrappers). Owner confirmed 2026-11-11 for `cmd/gh-jj` only (jj is not supported); `cmd/stw-docs` stays a proposal.
 Tally: 34 items = the 33 commands plus the mode `sync restore`. Rows marked (flag) are proposals inside their command and
 are not counted. Port 10 (5 of them present in Rust: status, sync, tidy plan, apply, restore), drop 9, defer 13, owner
 decides 2 (`tidy history`, `sync restore`).
@@ -282,7 +281,10 @@ Owner decisions of 2026-11-10 (chosen by selection):
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
 - Still deferred: M7, M11, M12, M13.
 - **Open: the `drop` proposals.** Criterion (b) needs an explicit owner decision per `drop`: 9 command rows, the (flag) rows
-  marked drop and the two extra binaries. Until then they are proposals.
+  marked drop and the two extra binaries. Until then they are proposals. Confirmed by the owner (2026-11-11, jj is not
+  supported): `tidy` with jj (bookmarks, owned-workspace/task retirement), `cmd/gh-jj`; the Go inventory has no
+  separate (hidden) jj flag row. All other `drop` rows (hosting, inspect, inventory, repos, pins, version, `cmd/stw-docs`,
+  the sync flags, site/docs) are not yet confirmed individually.
 
 ### Next slice
 
