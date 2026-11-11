@@ -814,6 +814,8 @@ fn run(command: Command) -> Result<u8> {
                     sync::fetch::Prune::Unset
                 },
                 submodules: a.submodules,
+                // one ID for the whole run; a plan journals nothing
+                run_id: execute.then(sync::journal::new_run_id),
             };
             let mut list =
                 repo::for_each(&ws.repos, |r| sync::sync_repo(r, ws.github.client(), &opts));

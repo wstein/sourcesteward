@@ -24,6 +24,8 @@ fn apply(fx: &Fx, env: &[(&str, &str)]) -> Value {
     let home = tempfile::tempdir().unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
+        // the journal of the run creates a recovery ref through the installed git
+        .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home.path())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")

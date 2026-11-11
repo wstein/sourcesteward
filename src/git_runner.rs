@@ -73,6 +73,85 @@ impl Hex40 {
     }
 }
 
+/// The ref namespace of the recovery refs of a `stw sync` run: `<ROOT><run id>/<n>`.
+pub const RECOVERY_NAMESPACE: &str = "refs/stw/recovery/sync/";
+
+/// The ID of a `stw sync` run, `YYYYMMDDTHHMMSS[uuuuuu]Z-xxxxxxxx` (UTC time stamp, optional microseconds, 8 lower-case
+/// hex digits): the file name of its journal record and the name of its recovery refs. Only this form reaches an
+/// argument vector, so a journal file cannot smuggle an option or another ref name into one.
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub struct RunId(String);
+
+impl RunId {
+    pub fn parse(s: &str) -> Option<RunId> {
+        let b = s.as_bytes();
+        let (stamp, suffix) = s.split_once("Z-")?;
+        let digits = |t: &str| t.bytes().all(|c| c.is_ascii_digit());
+        let stamp_ok = match stamp.len() {
+            15 | 21 => {
+                stamp.as_bytes().get(8) == Some(&b'T') && digits(&stamp[..8]) && digits(&stamp[9..])
+            }
+            _ => false,
+        };
+        let suffix_ok = suffix.len() == 8
+            && suffix
+                .bytes()
+                .all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'));
+        (b.len() <= 31 && stamp_ok && suffix_ok).then(|| RunId(s.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Order key: the time stamp with microseconds (an ID without them counts as microsecond zero), then the suffix.
+    /// "The latest run" is the highest key, never a modification time.
+    pub fn order_key(&self) -> String {
+        let (stamp, suffix) = self.0.split_once("Z-").unwrap_or((&self.0, ""));
+        let mut k = stamp.to_string();
+        if k.len() == 15 {
+            k.push_str("000000");
+        }
+        format!("{k}-{suffix}")
+    }
+}
+
+impl std::fmt::Display for RunId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// The name of a recovery ref: `refs/stw/recovery/sync/<run>/<n>`.
+pub fn recovery_ref(run: &RunId, n: u32) -> String {
+    format!("{RECOVERY_NAMESPACE}{run}/{n}")
+}
+
+/// A full branch name `refs/heads/<name>` that passes the ref-name rules of git (no `..`, no control character, no
+/// trailing `.lock`, ...) and whose short part does not start with `-`. The only free-form ref name in an argument
+/// vector, and only in this form.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BranchRef(String);
+
+impl BranchRef {
+    pub fn parse(full: &str) -> Option<BranchRef> {
+        let short = full.strip_prefix("refs/heads/")?;
+        if short.is_empty()
+            || short.starts_with('-')
+            || full.len() > 255
+            || full.bytes().any(|b| b < 0x20 || b == 0x7f || b == b' ')
+        {
+            return None;
+        }
+        gix::refs::FullName::try_from(full).ok()?;
+        Some(BranchRef(full.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// The ref namespace of `Op::FetchPullHead`; the only ref it writes is `<ROOT>pr-<n>`.
 pub const PULL_HEAD_NAMESPACE: &str = "refs/stw/carry-over/";
 
@@ -129,6 +208,25 @@ pub enum Op {
     /// Fetch `+refs/pull/<pr>/head` of `origin` into `refs/stw/carry-over/pr-<pr>`: objects and that private
     /// ref only (no tags, no FETCH_HEAD, no configured refmap). For an ssh or local-path remote, as `FetchOrigin`.
     FetchPullHead { pr: u64 },
+    /// `git update-ref --create-reflog <recovery ref> <oid> <zeros>`: the recovery ref of a `stw sync` run holds the old
+    /// tip of a branch before the run moves it. Create-only (the expected old value is the null id), so a ref of the
+    /// same name is never overwritten.
+    RecoveryRefCreate { run: RunId, n: u32, oid: Hex40 },
+    /// `git update-ref --no-deref -d <recovery ref> <oid>`: delete one recovery ref, only while it still holds `oid`
+    /// (retention of old runs).
+    RecoveryRefDelete { run: RunId, n: u32, oid: Hex40 },
+    /// `git update-ref --no-deref refs/heads/<name> <new> <expected>`: move a branch that is checked out nowhere, only
+    /// while it still points at `expected` (compare and swap; `stw sync restore`). Never forced.
+    UpdateBranchCas {
+        run: RunId,
+        branch: BranchRef,
+        new: Hex40,
+        expected: Hex40,
+    },
+    /// `git reset --keep <target> --`: move the checked-out branch and its worktree to `target`; refuses when a local
+    /// change would be lost (`stw sync restore`, after the caller found the tracked tree clean). The repository's own
+    /// config must not name a `filter.*` driver (the checkout would start it).
+    ResetKeep { target: Hex40 },
 }
 
 impl Op {
@@ -150,6 +248,9 @@ impl Op {
             Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
                 "a pull request number starts at 1".into(),
             )),
+            Op::RecoveryRefCreate { n: 0, .. } | Op::RecoveryRefDelete { n: 0, .. } => Err(
+                GitError::Argument("a recovery ref number starts at 1".into()),
+            ),
             _ => Ok(()),
         }
     }
@@ -209,6 +310,39 @@ impl Op {
                     "origin",
                 ]);
                 a.push(format!("+refs/pull/{pr}/head:{PULL_HEAD_NAMESPACE}pr-{pr}"));
+                a
+            }
+            Op::RecoveryRefCreate { run, n, oid } => {
+                let mut a = v(&["update-ref", "--create-reflog", "-m"]);
+                a.push(format!("stw sync {run}"));
+                a.push(recovery_ref(run, *n));
+                a.push(oid.as_str().to_string());
+                a.push("0".repeat(40));
+                a
+            }
+            Op::RecoveryRefDelete { run, n, oid } => {
+                let mut a = v(&["update-ref", "--no-deref", "-d"]);
+                a.push(recovery_ref(run, *n));
+                a.push(oid.as_str().to_string());
+                a
+            }
+            Op::UpdateBranchCas {
+                run,
+                branch,
+                new,
+                expected,
+            } => {
+                let mut a = v(&["update-ref", "--no-deref", "-m"]);
+                a.push(format!("stw: sync restore {run}"));
+                a.push(branch.as_str().to_string());
+                a.push(new.as_str().to_string());
+                a.push(expected.as_str().to_string());
+                a
+            }
+            Op::ResetKeep { target } => {
+                let mut a = v(&["reset", "--keep", "--quiet"]);
+                a.push(target.as_str().to_string());
+                a.push("--".to_string());
                 a
             }
             Op::RangeDiff {
@@ -764,6 +898,12 @@ impl Runner {
             check_fetch_transport(repo)?;
         }
         refuse_local_command_config(repo, &op)?;
+        if matches!(op, Op::ResetKeep { .. }) {
+            // the checkout of a reset runs the clean/smudge filters of the repository
+            refuse_config(repo, &|section, sub_name, key| {
+                runs_a_command(section, sub_name, key) || section == "filter"
+            })?;
+        }
         if let Op::SubmoduleUpdate { path } = &op {
             // the checkout runs in the submodule: its own config must not name a program either
             let sub = repo.join(path.as_str());

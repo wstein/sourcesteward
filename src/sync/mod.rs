@@ -8,6 +8,10 @@
 //! `refs/remotes/origin/*` can be deleted (`fetch::check_prune_scope`), by the installed git's own fetch, before
 //! any fast-forward. `--submodules` then moves each pinned (detached) submodule to the commit the superproject
 //! records, when that is a fast-forward (`submodules.rs`). Both act only in a run, not with `--plan`.
+//!
+//! Every branch a run moves is journaled first (`journal.rs`): a recovery ref `refs/stw/recovery/sync/<run id>/<n>` holds
+//! the old tip and a record `<git common dir>/stw/sync/<run id>.json` names it; `stw sync restore` moves the branches
+//! back (`restore.rs`). `--plan` / `--dry-run` write neither.
 use std::collections::BTreeSet;
 
 use serde_json::{json, Value};
@@ -16,15 +20,17 @@ use crate::github::Client;
 
 pub mod fast_forward;
 pub mod fetch;
+pub mod journal;
 pub mod rules;
 pub mod submodules;
 
 use crate::error::Result;
+use crate::git_runner::{Hex40, RunId};
 use crate::github::reads::escape_untrusted;
 use crate::output::*;
 use crate::repo::{self, RepoRef};
 use crate::status::{self, HeadFacts};
-use fast_forward::fast_forward;
+use fast_forward::fast_forward_with;
 use fetch::Prune;
 pub use submodules::{rejected_pass, submodule_pass, SubRec};
 
@@ -57,6 +63,9 @@ pub struct SyncRec {
     pub tracking_refs: Option<usize>,
     /// `--submodules`: what happened to this pinned submodule.
     pub submodule: Option<SubRec>,
+    /// The journal entry of the branch change of a run (recovery ref and record); None when this repository was not
+    /// changed, and always in a dry run.
+    pub journal: Option<journal::Note>,
 }
 
 /// The names of the remote-tracking refs of `origin` (`refs/remotes/origin/*`) except `origin/HEAD`, which a fetch
@@ -121,6 +130,8 @@ pub struct Opts {
     pub offline: bool,
     pub prune: Prune,
     pub submodules: bool,
+    /// The ID of this run, shared by all repositories (a run). None: a repository that is changed gets an ID of its own.
+    pub run_id: Option<RunId>,
 }
 
 pub fn sync_repo(r: &RepoRef, gh: Option<&Client>, o: &Opts) -> SyncRec {
@@ -241,16 +252,50 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         }
         if result == "fast-forward" {
             let up = facts.upstream.short.clone().unwrap_or_default();
-            match fast_forward(&repo, facts.upstream.tip.expect("behind implies tip"), &up) {
+            let tip = facts.upstream.tip.expect("behind implies tip");
+            let branch = facts.branch.clone().expect("a fast-forward has a branch");
+            let run = o.run_id.clone().unwrap_or_else(journal::new_run_id);
+            let mut entry: Option<(journal::Journal, usize)> = None;
+            // after every check and before the first write: the recovery ref, then the record (`prepared`)
+            let outcome = fast_forward_with(&repo, tip, &up, &mut |old, new| {
+                let ids = Hex40::parse(&old.to_string()).zip(Hex40::parse(&new.to_string()));
+                let (old, new) = ids.ok_or("journal-failed: not a 40 digit object id")?;
+                let mut j = journal::Journal::new(&repo, run.clone());
+                let i = j
+                    .prepare(
+                        &r.path,
+                        &format!("refs/heads/{branch}"),
+                        &p2s(&r.path),
+                        old,
+                        new,
+                    )
+                    .map_err(|e| format!("journal-failed: {e}"))?;
+                entry = Some((j, i));
+                Ok(())
+            });
+            match outcome {
                 Ok((a, b)) => {
                     result = "fast-forwarded".into();
                     reason = format!("{a}..{b}");
                     err = None;
+                    if let Some((mut j, i)) = entry {
+                        match j.finish(i, journal::STATE_COMPLETED, &b.to_string(), "") {
+                            Ok(()) => j.retain(&repo, &r.path),
+                            Err(e) => {
+                                reason += &format!("; the journal record stays incomplete: {e}")
+                            }
+                        }
+                        rec.journal = Some(j.note(i));
+                    }
                 }
                 Err(e) => {
                     result = "error".into();
                     reason = "fast-forward refused".into();
                     err = Some(e.to_string());
+                    if let Some((mut j, i)) = entry {
+                        let _ = j.finish(i, journal::STATE_FAILED, "", &e.to_string());
+                        rec.journal = Some(j.note(i));
+                    }
                 }
             }
         }
@@ -296,6 +341,13 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
     Ok(())
 }
 
+/// The run ID, when this run journaled a change in any repository (Go: `run_id` is null otherwise).
+pub fn run_id_of(list: &[SyncRec]) -> Option<&str> {
+    list.iter()
+        .find_map(|s| s.journal.as_ref())
+        .map(|n| n.run_id.as_str())
+}
+
 pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
     let count = |r: &str| list.iter().filter(|x| x.result == r).count();
     let repos: Vec<Value> = list
@@ -325,11 +377,15 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
             if let Some(m) = &s.submodule {
                 v["submodule"] = m.to_json();
             }
+            // additive: the journal entry of a branch change
+            if let Some(n) = &s.journal {
+                v["journal"] = json!({"n": n.n, "recovery_ref": n.recovery_ref, "state": n.state});
+            }
             v
         })
         .collect();
     json!({"schema_version": 2, "command": "sync", "mode": if apply {"apply"} else {"dry-run"}, "root": root,
-           "engine": engine(), "repos": repos,
+           "engine": engine(), "run_id": jopt(run_id_of(list)), "repos": repos,
            "options": {"prune": match o.prune { Prune::Unset => Value::Null, Prune::On => json!(true), Prune::Off => json!(false) },
                        "submodules": o.submodules, "dry_run": !apply},
            "summary": {"total": list.len(), "fast_forwarded": count("fast-forwarded"),
@@ -379,6 +435,12 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
             );
         }
         out += "\n";
+        if let Some(id) = run_id_of(list) {
+            out += &format!(
+                "journal: run {id}, recovery refs under {}{id}\n",
+                crate::git_runner::RECOVERY_NAMESPACE
+            );
+        }
     } else {
         out += &format!(
             "dry run: {} would fast-forward, {} skipped",

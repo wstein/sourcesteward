@@ -153,6 +153,17 @@ fn every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run() {
                 "{args:?} wrote into the repository (FETCH_HEAD, index, refs or files)"
             );
             assert!(snapshot(&d.origin) == origin_before, "{args:?}");
+            // no journal and no recovery ref (also covered by the snapshot; named here so that the reason is clear)
+            assert!(
+                !d.ws.join(".git/stw").exists(),
+                "{args:?}: journal directory"
+            );
+            assert_eq!(
+                d.w.git(&d.ws, &["for-each-ref", "refs/stw"]),
+                "",
+                "{args:?}: refs/stw"
+            );
+            assert!(v["run_id"].is_null(), "{args:?}: {v}");
         }
         // a plan never creates FETCH_HEAD (it fetches nothing); a run does
         let d = setup();

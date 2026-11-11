@@ -295,6 +295,7 @@ fn json_field_names_are_the_documented_ones() {
             "mode",
             "root",
             "engine",
+            "run_id",
             "agent_rules",
             "options",
             "repos",
@@ -373,6 +374,8 @@ fn readme_mentions_every_documented_field() {
         "remote_moved",
         "would_fast_forward",
         "fast_forwarded",
+        "run_id",
+        "recovery_ref",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }

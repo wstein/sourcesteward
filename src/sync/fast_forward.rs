@@ -247,6 +247,19 @@ pub fn fast_forward(
     target: ObjectId,
     reflog_label: &str,
 ) -> Result<(ObjectId, ObjectId), FfError> {
+    fast_forward_with(repo, target, reflog_label, &mut |_, _| Ok(()))
+}
+
+/// `fast_forward` with a step before the first write: `before(old, new)` runs after every check passed and the index
+/// lock is held, and before the branch ref moves. `stw sync` records the change in its journal there (recovery ref, then
+/// record), so that no ref moves without them. An `Err` from `before` stops the fast-forward with
+/// `FfError::Other(message)`; nothing was written by then (the lock is released).
+pub fn fast_forward_with(
+    repo: &gix::Repository,
+    target: ObjectId,
+    reflog_label: &str,
+    before: &mut dyn FnMut(ObjectId, ObjectId) -> Result<(), String>,
+) -> Result<(ObjectId, ObjectId), FfError> {
     let workdir = repo
         .workdir()
         .ok_or_else(|| FfError::Other("bare repository".into()))?
@@ -332,6 +345,8 @@ pub fn fast_forward(
         0,
     )
     .map_err(|e| FfError::Other(format!("index lock {}: {e}", repo.index_path().display())))?;
+    // 4b. the caller's record of the change, before the first write
+    before(head, target).map_err(FfError::Other)?;
     // 5. the ref next, expecting the old value (HEAD log and branch log). It is the write that can fail for
     //    reasons no earlier check sees (permissions, locks, reflog); when it does, nothing else was touched.
     move_head(

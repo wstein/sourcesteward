@@ -230,7 +230,7 @@ would_fast_forward, skipped, errors}.
 - `sync` repo: `branch`, `upstream`, `ahead`, `behind`, `dirty_files`, `fetch` (`not-run`, `skipped-offline`,
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
-  Additive: `prune` (`on`/`off`, only with `--prune`/`--no-prune`), `pruned` (names deleted by the fetch; with a flag, or when a ref was pruned),
+  Additive: top-level `run_id` (the ID of the run when it moved a branch, else null; always null with `--plan`/`--dry-run`) and per repository `journal` {n, recovery_ref, state} (only for a branch the run changed or tried to change after the checks: see "The journal of a `sync` run"), `prune` (`on`/`off`, only with `--prune`/`--no-prune`), `pruned` (names deleted by the fetch; with a flag, or when a ref was pruned),
   `tracking_refs` (`--plan` with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules, dry_run (additive: true for `--plan`/`--dry-run`)}
   and in `summary` `submodules_moved`, `would_move_submodules`, `pruned`.
 
@@ -629,6 +629,31 @@ and index:
   `--diff-filter=D`. A plain `git checkout HEAD -- <path>` fails for a path that the update deleted ("pathspec
   did not match"; tested). To go back: `git reset --hard <old commit>` (same caveat; not tested), where the old
   commit is the second-to-last entry of `git reflog show <branch>`.
+
+## The journal of a `sync` run
+
+Every branch a run moves is journaled first, like in Go (`internal/stwsync/journal.go`; the record is the same format
+and a record of either tool is read by the other). After all checks passed and the index lock is held, and before the
+branch ref moves, `sync` creates the recovery ref `refs/stw/recovery/sync/<run id>/<n>` (create-only, it holds the old
+tip, so the objects stay reachable) and then writes the record `<git common dir>/stw/sync/<run id>.json` (state `prepared`,
+with the planned new tip); after the move the record says `completed` (or `failed`). The record is replaced atomically
+(temporary file, fsync, rename, fsync of the directory); the first write refuses an existing file. Directories are `0700`, files
+`0600`; a symbolic link as `stw`, `sync` or a record is refused. If the recovery ref or the record cannot be written, the
+branch is not moved (`journal-failed`, `result: error`, exit 1). A refused check (local change on a touched file,
+untracked file in the way) leaves neither record nor recovery ref, and so does a repository that was not changed: a run
+without a change writes no journal and has `run_id: null`. `--plan`/`--dry-run` write neither (the test covers the file tree and
+`refs/stw`).
+
+Run ID: `YYYYMMDDTHHMMSS` + 6 digits of microseconds + `Z-` + 8 hex digits (UTC time and a random suffix, like Go); one ID for
+all repositories of a run. The latest run is the highest ID in this order. Record (`schema_version` 1): `type` `sync`, `run_id`,
+`remote`, `started`, `entries[{n, ref, worktree, old_oid, planned_new_oid, new_oid, orig_head, stash_oid, recovery_ref,
+state, reason}]`.
+
+Retention (as in Go): after a run that completed a change in a repository, only the ten most recent completed runs of that
+repository keep record and recovery refs. A recovery ref is deleted only when the record names it inside its own run
+(`refs/stw/recovery/sync/<run id>/<n>`), it is not symbolic and still points at the recorded old tip; if one stays, so does
+its record. A record with a `prepared` entry (a killed run) is kept until a restore has dealt with it. Files in the directory
+that are not run records are ignored. Not undone and not journaled: pruned remote-tracking refs and submodule moves.
 
 ## Known limits of a `sync` run
 

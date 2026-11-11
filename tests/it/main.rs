@@ -39,6 +39,7 @@ mod submodule_paths;
 mod sync;
 mod sync_default;
 mod sync_flags;
+mod sync_journal;
 mod sync_rules;
 mod tidy;
 mod tidy_apply;
