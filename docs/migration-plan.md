@@ -365,7 +365,7 @@ from Go:
   takes `Title`).
 - The review line is the M3 parser (`review::parse_strict`) restricted to the Go lint grammar: `pr=` is 1 to 9 digits, no `pr=none`.
 - Redirects are not followed (as in Go); 404 reads as `forbidden`, a 301 or 308 as `repo-moved`, as in Go. Pages are cut at one MiB
-  (`page-too-large` for comments, `malformed-response` for `pulls/N` and commits, as in Go; a 304 is `malformed-response`); every read has a 30 s timeout (Go: the request timeout of the reader).
+  (a body of exactly one MiB is read, one byte more is not; `page-too-large` for comments, `malformed-response` for `pulls/N` and commits, as in Go; a 304 is `malformed-response`); every read has a 30 s timeout (Go: the request timeout of the reader).
 - Not ported: the Go guard that admits only the three lint endpoints and the call accounting of the reader (the Rust client has GET
   methods only and three endpoint builders in `src/github/lint_reads.rs`).
 - Rules table: the anchors cite `claude/CLAUDE.md` and `claude/skills/agent-workflow/SKILL.md` of agent-rules. The test

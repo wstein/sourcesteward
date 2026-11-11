@@ -28,6 +28,19 @@ fn fail(code: &str, message: &str) -> Error {
     Error::github(format!("{code}: {message}"))
 }
 
+/// Go: `page-too-large` ("list page exceeds the one MiB body limit") for comment pages, `malformed-response`
+/// ("response exceeds the one MiB body limit") for the other reads.
+fn too_large(comment_page: bool) -> Error {
+    if comment_page {
+        fail("page-too-large", "list page exceeds the one MiB body limit")
+    } else {
+        fail(
+            "malformed-response",
+            "response exceeds the one MiB body limit",
+        )
+    }
+}
+
 impl Client {
     /// `size_is_too_large`: as in Go, only comment pages report an oversized body as `page-too-large`; the other reads
     /// report `malformed-response`.
@@ -88,20 +101,19 @@ impl Client {
         let body = resp
             .body_mut()
             .with_config()
-            .limit(BODY_LIMIT)
+            .limit(BODY_LIMIT + 1)
             .read_to_vec()
             .map_err(|e| {
-                if !matches!(e, ureq::Error::BodyExceedsLimit(_)) {
-                    fail("network", "HTTP read failed")
-                } else if size_is_too_large {
-                    fail("page-too-large", "page exceeds the one MiB body limit")
+                if matches!(e, ureq::Error::BodyExceedsLimit(_)) {
+                    too_large(size_is_too_large)
                 } else {
-                    fail(
-                        "malformed-response",
-                        "response exceeds the one MiB body limit",
-                    )
+                    fail("network", "HTTP read failed")
                 }
             })?;
+        // like Go (`io.LimitReader(body, max+1)`): exactly one MiB is accepted, one byte more is not
+        if body.len() as u64 > BODY_LIMIT {
+            return Err(too_large(size_is_too_large));
+        }
         let body: Value = serde_json::from_slice(&body)
             .map_err(|_| fail("malformed-response", "unexpected document shape"))?;
         Ok(LintPage { body, link })
