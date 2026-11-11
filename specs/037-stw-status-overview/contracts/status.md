@@ -114,7 +114,7 @@ Decisions taken while implementing the work packages; they refine the text above
   the number of items), `Repositories (N)` and `Notices (N)` follow, each after a blank line; the summary line stays last.
   The schema 2 document gains, additively and without a version change, `repos[].counts` and `totals`, both
   `{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees,
-  stash}`. `state` is `ok`, `not-read` (offline, no token, the deadline),
+  stash}`. `state` is `ok`, `not-read` (offline, no token, the deadline), `no-remote` (no GitHub origin; a total leaves it out),
   `not-applicable` (a fact of the repository: its issues are disabled, or it is an uninitialized submodule; a total leaves it out like `no-remote`) or `failed` (the read failed, or the repository cannot be
   read locally); every number is null unless its state is `ok`, and what was not read is never 0. `open` of the pull requests is
   the number the forge listed (all pages, at most 2000) and `bot` the bot pull requests among them; `open` of the issues leaves

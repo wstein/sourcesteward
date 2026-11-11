@@ -103,7 +103,7 @@ func TestStatusOnlineRulesBlockIsBetweenTheNoticesAndTheSummary(t *testing.T) {
 }
 
 // Offline nothing is read from the forge: PRs and Issues are n/a (never 0) and the local counters are numbers;
-// an uninitialized submodule is not read at all.
+// an uninitialized submodule is not applicable: its line says n/a and the total leaves it out.
 func TestStatusOfflineCountsAreNotAvailableAndNeverZero(t *testing.T) {
 	forge := &statusForge{err: fmt.Errorf("no request may be sent")}
 	run := runOnline(t, statusCLIResult(), forge, nil, "--offline")

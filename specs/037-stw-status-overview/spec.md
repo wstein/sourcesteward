@@ -274,7 +274,7 @@ one item per id and no grouping. The human section shows at most 10 lines per pr
 
 ## Issues (WP-G, specified in Spec 038)
 
-The issue source (per-repository `issues: N open (R red, Y yellow)` line, the `issue-security`, `issue-assigned` and `issue-bug` items as categories 26 to 28 of the action table, the `viewer` read, the two new request shapes admitted by guard mode `status` and the additive JSON keys) is specified in [Spec 038](../038-stw-issues/spec.md#integration-into-stw-status-wp-g-of-spec-037); the deadline, skip, exit and rate-limit rules of this spec apply to it, with exactly one deviation, the user-lookup exception: a `GET user` answering 403 or 404 **without** rate-limit evidence is a skip (reason `no-identity`, exit 0), whereas this spec's exit table treats 401/403 as exit 1 (a 403 with rate-limit evidence stays `rate-limited`, exit 1); this is separate from the `not-found` skip of the release workflow. No exit code is added.
+The issue source (per-repository `issues: N open (R red, Y yellow)` line, the `issue-security`, `issue-assigned` and `issue-bug` items as categories 26 to 28 of the action table, the `viewer` read, the two new request shapes admitted by guard mode `status` and the additive JSON keys) is specified in [Spec 038](../038-stw-issues/spec.md#integration-into-stw-status-wp-g-of-spec-037); the deadline, skip, exit and rate-limit rules of this spec apply to it, with exactly one deviation, the user-lookup exception: a `GET user` answering 403 or 404 **without** rate-limit evidence is a skip (reason `no-identity`, exit 0), whereas this spec's exit table treats 401/403 as exit 1 (a 403 with rate-limit evidence stays `rate-limited`, exit 1 before the 2026-11-11 amendment, now a notice and exit 0); this is separate from the `not-found` skip of the release workflow. No exit code is added.
 
 ## Required seams (WP-0)
 
@@ -369,9 +369,9 @@ Residual points to verify during implementation (not owner questions): the Nerd 
 ## Amendment 2026-11-11: Counts block, counted blocks, exit 0 for failed remote reads
 
 Supersedes the exit status 1 for an attempted request that failed (the places above that say so: option C, the notice
-`network error`, the exit-status rule, the releases page over 1 MiB, refined exit codes). The reason: the owner reads
+`network error`, the exit-status rule, the releases page over 1 MiB, refined exit codes, the exit statuses of the issue source in the last paragraph of the issues section). The reason: the owner reads
 `stw status` many times a day and a forbidden or oversized read of one source is information for the notices, not a failed
-run. Exit 1 stays for a repository that cannot be read locally and for a failed run; 2 for usage errors.
+run. Exit 1 stays for a repository that cannot be read locally and for a failed run; 2 for usage errors. The same statements in `plan.md` of this spec and in Spec 038 (`spec.md`, `plan.md`, `contracts/issues.md`: failed attempted request, rate limit, viewer error, exit 1) hold for `stw issues` only; `stw status` prints a notice and exits 0.
 
 The text gains the block `Counts` (first) and counts in the headings `Needs action (N)`, `Repositories (N)` and `Notices
 (N)`; the JSON schema 2 gains `repos[].counts` and `totals` (additive, `schema_version` stays 2). The normative text is

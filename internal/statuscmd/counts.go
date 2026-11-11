@@ -11,7 +11,7 @@ import (
 // The states of a count. A count is a number only in the state ok: what was not read is never 0.
 const (
 	CountOK       = "ok"        // read: the figures are numbers
-	CountNotRead  = "not-read"  // not read on purpose or not at all: offline, no token, the deadline, issues disabled, an uninitialized submodule
+	CountNotRead  = "not-read"  // not read on purpose or not at all: offline, no token, the deadline
 	CountNoRemote = "no-remote" // the repository has no GitHub origin: a total leaves it out
 	CountFailed   = "failed"    // the read failed (a notice says why) or the repository cannot be read locally
 	// CountNotApplicable is a fact of the repository, not a gap: its issues are disabled, or it is an uninitialized
@@ -100,7 +100,7 @@ func unreadState(st overview.SourceState) string {
 
 // SumCounts are the totals. A hosting count is a number when at least one repository gave one and none failed
 // or was not read (a repository without a GitHub origin, with disabled issues or uninitialized is left out); a local figure is a number only when every
-// repository gave one. A failed read wins over not read.
+// repository that applies gave one (not-applicable is left out). A failed read wins over not read.
 func SumCounts(cs []Counts) Counts {
 	var t Counts
 	t.PRs = sumSource(len(cs), func(i int) SourceCount { return cs[i].PRs })
