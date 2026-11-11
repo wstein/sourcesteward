@@ -279,10 +279,12 @@ fn json_field_names_are_the_documented_ones() {
             "root",
             "engine",
             "agent_rules",
+            "options",
             "repos",
             "summary"
         ])
     );
+    assert_eq!(keys(&sy["options"]), doc(&["prune", "submodules"]));
     assert_eq!(
         keys(&sy["summary"]),
         doc(&[
@@ -290,7 +292,10 @@ fn json_field_names_are_the_documented_ones() {
             "fast_forwarded",
             "would_fast_forward",
             "skipped",
-            "errors"
+            "errors",
+            "submodules_moved",
+            "would_move_submodules",
+            "pruned"
         ])
     );
     assert_eq!(
