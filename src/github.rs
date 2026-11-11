@@ -1,4 +1,5 @@
 //! GitHub access over the REST API (ureq, blocking). No `gh` binary. Tokens come from `auth`.
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -161,6 +162,17 @@ fn classify(path: &str) -> (String, &'static str) {
     (format!("{owner}/{name}"), source)
 }
 
+/// The answer is a rate limit: 429, or 403 with an exhausted `X-RateLimit-Remaining` or a `Retry-After` header.
+fn is_rate_limit(status: u16, headers: &ureq::http::HeaderMap) -> bool {
+    status == 429
+        || (status == 403
+            && (headers
+                .get("x-ratelimit-remaining")
+                .and_then(|v| v.to_str().ok())
+                .is_some_and(|v| v.trim() == "0")
+                || headers.contains_key("retry-after")))
+}
+
 /// The `X-RateLimit-*` headers of an answer, when all three are there.
 fn rate_from(headers: &ureq::http::HeaderMap) -> Option<RateInfo> {
     let h = |k: &str| headers.get(k)?.to_str().ok()?.trim().parse::<u64>().ok();
@@ -179,6 +191,8 @@ pub struct Client {
     /// The overall deadline of the reads (`stw status --timeout`): its end and its length (for the message).
     deadline: Mutex<Option<(Instant, Duration)>>,
     stats: Mutex<Stats>,
+    /// GitHub answered with a rate limit (429, or 403 with an exhausted limit or `Retry-After`) once in this run.
+    rate_limited: AtomicBool,
 }
 
 impl std::fmt::Debug for Client {
@@ -218,7 +232,18 @@ impl Client {
             source,
             deadline: Mutex::new(None),
             stats: Mutex::new(Stats::default()),
+            rate_limited: AtomicBool::new(false),
         }
+    }
+
+    /// A rate limit answer was seen in this run: the reads that are optional (`stw status --review`) start no more
+    /// requests (Go: the gate of `statusremote` stops every further request after the first rate-limit evidence).
+    pub fn rate_limited(&self) -> bool {
+        self.rate_limited.load(Ordering::SeqCst)
+    }
+
+    fn note_rate_limit(&self) {
+        self.rate_limited.store(true, Ordering::SeqCst);
     }
 
     /// The requests sent so far.
@@ -308,6 +333,9 @@ impl Client {
         let rate = sent.as_ref().ok().and_then(|r| rate_from(r.headers()));
         self.record(path, started.elapsed(), rate);
         let mut resp = sent?;
+        if is_rate_limit(resp.status().as_u16(), resp.headers()) {
+            self.note_rate_limit();
+        }
         match resp.status().as_u16() {
             200 => Ok(Some(resp.body_mut().read_json::<Value>().map_err(|e| {
                 Error::github(format!("GitHub API sent unreadable JSON for {path}: {e}"))

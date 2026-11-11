@@ -392,44 +392,31 @@ fn each_pull_request_costs_one_comment_read_and_the_counts_do_not_change() {
 fn a_comment_read_that_is_denied_missing_or_broken_is_a_question_mark_and_a_notice_never_a_state() {
     let st = |c: u16| Answer::Status(c, vec![]);
     let api = forge(
-        vec![
-            (1, HEAD, "one"),
-            (2, HEAD, "two"),
-            (3, HEAD, "three"),
-            (4, HEAD, "four"),
-        ],
-        vec![
-            (1, st(403)),
-            (2, st(404)),
-            (3, st(500)),
-            (
-                4,
-                Answer::Status(429, vec![("x-ratelimit-remaining".into(), "0".into())]),
-            ),
-        ],
+        vec![(1, HEAD, "one"), (2, HEAD, "two"), (3, HEAD, "three")],
+        vec![(1, st(403)), (2, st(404)), (3, st(500))],
     );
     let o = run_review(&api, &[]);
     assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
     let t = out(&o);
-    for n in 1..=4 {
+    for n in 1..=3 {
         assert!(
             t.contains(&format!("#{n} ")) && t.contains(&format!("b{n}, review ?, CLEAN]")),
             "{t}"
         );
     }
-    assert!(flat(&t).contains("\nreviews: 4 ?\n"), "{t}");
+    assert!(flat(&t).contains("\nreviews: 3 ?\n"), "{t}");
     let notices = t
         .split("\n\n")
         .find(|b| b.starts_with("Notices ("))
         .unwrap();
     assert!(
-        notices.contains("repo: review state not read for 4 pull requests (#1:"),
+        notices.contains("repo: review state not read for 3 pull requests (#1:"),
         "{notices}"
     );
-    assert!(flat(&t).contains("PRs 4 (bot 0)"), "the counts stay: {t}");
+    assert!(flat(&t).contains("PRs 3 (bot 0)"), "the counts stay: {t}");
     let o = run_review(&api, &["--json"]);
     let prs = prs_json(&o);
-    for n in 1..=4 {
+    for n in 1..=3 {
         let p = by_number(&prs, n);
         assert_eq!(p["review"], "unknown", "{p}");
         assert!(p["review_state"]["decisive"].is_null());
@@ -448,7 +435,6 @@ fn a_comment_read_that_is_denied_missing_or_broken_is_a_question_mark_and_a_noti
     );
     assert!(err_of(2).contains("404"), "{}", err_of(2));
     assert!(err_of(3).contains("500"), "{}", err_of(3));
-    assert!(err_of(4).contains("rate limit"), "{}", err_of(4));
 }
 
 #[test]
@@ -981,4 +967,237 @@ fn branch_names_in_hints_are_escaped_and_cut() {
     let p = &j["repos"][0]["pull_requests"]["open"][0];
     assert_eq!(p["base"], "ev\\u{1b}[2J\\u{202e}il");
     assert_eq!(p["default_branch"], "ma\\rin");
+}
+
+/// A forge whose k-th comment read (in the order the server sees them) and every later one answer `status` with
+/// `headers`; the reads before answer with an empty thread. `delay` slows the answers after the k-th, so that no
+/// read can start after the first rate limit answer has been seen by the client (the fake server is serial).
+fn forge_rate(
+    n: u64,
+    k: usize,
+    status: u16,
+    headers: Vec<(String, String)>,
+    delay: bool,
+) -> FakeRoutes {
+    let seen = std::sync::atomic::AtomicUsize::new(0);
+    FakeRoutes::start(move |path, _| {
+        let ok = |v: Value| (200, vec![], v.to_string());
+        match path {
+            "/repos/test/fixture/pulls" => ok(Value::Array(
+                (1..=n)
+                    .map(|i| {
+                        json!({"number": i, "title": format!("pr {i}"), "draft": false,
+                               "user": {"login": "me", "type": "User"},
+                               "head": {"ref": format!("b{i}"), "sha": HEAD}})
+                    })
+                    .collect(),
+            )),
+            "/repos/test/fixture/issues" => ok(json!([])),
+            p if p.ends_with("/comments") => {
+                let i = seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+                if i < k {
+                    ok(json!([]))
+                } else {
+                    if delay && i > k {
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    (status, headers.clone(), "{}".into())
+                }
+            }
+            p if p.starts_with("/repos/test/fixture/pulls/") => {
+                ok(json!({"mergeable_state": "clean"}))
+            }
+            _ => (404, vec![], "{}".into()),
+        }
+    })
+}
+
+fn all_comment_hits(api: &FakeRoutes) -> usize {
+    api.hits()
+        .iter()
+        .filter(|h| h.contains("/comments?"))
+        .count()
+}
+
+const SKIP_TEXT: &str = "no further comment read was started";
+
+/// A rate limit answer (429; 403 with `Retry-After`; 403 with an exhausted limit) stops every comment read that has
+/// not started: at most `k` plus the 15 other reads in flight (16 in parallel) reach the server, the rest is `?`.
+#[test]
+fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
+    const N: u64 = 60;
+    const K: usize = 3;
+    let variants: Vec<(u16, Vec<(String, String)>)> = vec![
+        (429, vec![]),
+        (403, vec![("retry-after".into(), "60".into())]),
+        (403, vec![("x-ratelimit-remaining".into(), "0".into())]),
+    ];
+    for (status, headers) in variants {
+        let api = forge_rate(N, K, status, headers.clone(), true);
+        let o = run_review(&api, &["--json"]);
+        assert_eq!(
+            o.status.code(),
+            Some(0),
+            "{status} {headers:?}: {}{}",
+            out(&o),
+            err(&o)
+        );
+        let h = all_comment_hits(&api);
+        assert!(
+            (K..=K + 15).contains(&h),
+            "{status} {headers:?}: {h} comment reads reached the server"
+        );
+        let prs = prs_json(&o);
+        assert_eq!(prs.len() as u64, N);
+        let label = |p: &Value| p["review"].as_str().unwrap().to_string();
+        let no_review = prs.iter().filter(|p| label(p) == "no-review").count();
+        let unknown: Vec<&Value> = prs.iter().filter(|p| label(p) == "unknown").collect();
+        assert_eq!(
+            no_review,
+            K - 1,
+            "the reads answered before the rate limit keep their state"
+        );
+        assert_eq!(no_review + unknown.len(), N as usize, "never another state");
+        let skipped = unknown
+            .iter()
+            .filter(|p| {
+                p["review_state"]["read_error"]
+                    .as_str()
+                    .unwrap()
+                    .contains(SKIP_TEXT)
+            })
+            .count();
+        assert_eq!(
+            skipped,
+            N as usize - h,
+            "every read that was not sent is skipped: {h} sent"
+        );
+        assert!(skipped > 0);
+        assert!(unknown
+            .iter()
+            .all(|p| p["review_state"]["decisive"].is_null()));
+        // the text: `?`, one notice for the run, one for the repository with the reads that did fail
+        let api = forge_rate(N, K, status, headers.clone(), true);
+        let o = run_review(&api, &[]);
+        assert_eq!(o.status.code(), Some(0));
+        let t = out(&o);
+        let h = all_comment_hits(&api);
+        let notices = t
+            .split("\n\n")
+            .find(|b| b.starts_with("Notices ("))
+            .unwrap();
+        assert!(notices.starts_with("Notices (2)\n"), "{notices}");
+        assert!(
+            notices.contains(&format!(
+                "rate limit reached, {} reads skipped",
+                N as usize - h
+            )),
+            "{h}: {notices}"
+        );
+        assert!(
+            notices.contains(&format!(
+                "repo: review state not read for {} pull requests (#",
+                h - (K - 1)
+            )),
+            "{h}: {notices}"
+        );
+        assert!(
+            !notices.contains(SKIP_TEXT),
+            "the skipped reads are named once: {notices}"
+        );
+        assert!(
+            flat(&t).contains(&format!(
+                "\nreviews: {} no-review, {} ?\n",
+                K - 1,
+                N as usize - (K - 1)
+            )),
+            "{t}"
+        );
+    }
+}
+
+#[test]
+fn a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads() {
+    let api = forge_rate(20, 1, 403, vec![], false);
+    let o = run_review(&api, &["--json"]);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(all_comment_hits(&api), 20, "every pull request is read");
+    for p in prs_json(&o) {
+        let e = p["review_state"]["read_error"].as_str().unwrap();
+        assert!(e.contains("permission") && !e.contains(SKIP_TEXT), "{e}");
+    }
+    let t = out(&run_review(&forge_rate(20, 1, 403, vec![], false), &[]));
+    assert!(!t.contains("rate limit"), "{t}");
+}
+
+/// The stop is for the whole run: reads of other repositories do not start either.
+#[test]
+fn the_rate_limit_stop_covers_every_repository_of_the_run() {
+    use stw::auth::TokenSource;
+    use stw::github::OpenPr;
+    use stw::status::{collect_local, StatusOpts};
+    use stw::status_review::{rate_limit_notice, read_reviews};
+    let fx = status_fixture();
+    let root = fx.path.clone();
+    let api = forge_rate_any();
+    let client = stw::github::Client::with_base(TOKEN.into(), TokenSource::Env, api.url.clone());
+    let repo = |name: &str, slug: &str| {
+        let rr = stw::repo::RepoRef {
+            name: name.into(),
+            path: root.clone(),
+        };
+        let mut s = collect_local(&rr, &root, &StatusOpts::default(), None);
+        s.slug = Some(slug.into());
+        s.pr_read = true;
+        s.prs = (1..=20u64)
+            .map(|n| OpenPr {
+                number: n,
+                title: format!("pr {n}"),
+                head: format!("b{n}"),
+                head_sha: HEAD.into(),
+                base: String::new(),
+                default_branch: String::new(),
+                draft: false,
+                author: "me".into(),
+                bot: false,
+                review: None,
+                merge_state: None,
+            })
+            .collect();
+        s
+    };
+    let list = read_reviews(
+        vec![repo("one", "test/one"), repo("two", "test/two")],
+        &client,
+    );
+    assert!(client.rate_limited());
+    let h = api.hits();
+    assert!(h.len() <= 16 && !h.is_empty(), "{h:?}");
+    assert!(
+        h.iter().all(|l| l.contains("/repos/test/one/")),
+        "no read of the second repository started: {h:?}"
+    );
+    assert!(list[1]
+        .prs
+        .iter()
+        .all(|p| p.review.as_ref().unwrap().skipped));
+    assert!(list[0].prs.iter().all(|p| p.review.is_some()));
+    assert_eq!(
+        rate_limit_notice(&list),
+        Some(format!(
+            "rate limit reached, {} reads skipped (review state ?)",
+            40 - h.len()
+        ))
+    );
+}
+
+/// Every comment read answers 429; the later ones wait so that the stop is seen before a read can start.
+fn forge_rate_any() -> FakeRoutes {
+    let seen = std::sync::atomic::AtomicUsize::new(0);
+    FakeRoutes::start(move |_, _| {
+        if seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst) > 0 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+        (429, vec![], "{}".into())
+    })
 }

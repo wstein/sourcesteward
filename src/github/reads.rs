@@ -332,12 +332,10 @@ impl Client {
             }
         };
         let status = resp.status().as_u16();
-        let exhausted = resp
-            .headers()
-            .get("x-ratelimit-remaining")
-            .and_then(|v| v.to_str().ok())
-            .is_some_and(|v| v.trim() == "0")
-            || resp.headers().contains_key("retry-after");
+        let limited = super::is_rate_limit(status, resp.headers());
+        if limited {
+            self.note_rate_limit();
+        }
         match status {
             200 => match resp.body_mut().with_config().limit(8 << 20).read_json::<Value>() {
                 Ok(v) => Page::Json(v),
@@ -349,7 +347,7 @@ impl Client {
                 401,
                 format!("GitHub API HTTP 401 for {path}: token rejected"),
             ),
-            403 | 429 if exhausted || status == 429 => Page::Denied(
+            403 | 429 if limited => Page::Denied(
                 Denial::RateLimited,
                 status,
                 format!("GitHub API HTTP {status} for {path}: rate limit reached; retry later"),

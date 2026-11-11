@@ -36,6 +36,8 @@ pub struct PrReview {
     pub state: ReviewState,
     /// None for a complete read; otherwise what was wrong (denied, not found, failed, cut, deadline).
     pub problem: Option<String>,
+    /// The read was not started because GitHub had answered with a rate limit before (`problem` says so).
+    pub skipped: bool,
 }
 
 impl PrReview {
@@ -83,8 +85,19 @@ pub fn evaluate(number: u64, head: &str, read: &Read<Comment>) -> PrReview {
     PrReview {
         state: review::evaluate_read(Scope::Pr(number), head, read, &trusted),
         problem: read_problem(read),
+        skipped: false,
     }
 }
+
+/// The result of a read that was not started after a rate limit: `unknown`, never a verdict.
+fn skipped(number: u64, head: &str) -> PrReview {
+    let mut r = evaluate(number, head, &Read::Failed(RATE_LIMIT_SKIP.into()));
+    r.skipped = true;
+    r
+}
+
+const RATE_LIMIT_SKIP: &str =
+    "not read: GitHub had reached the rate limit, no further comment read was started";
 
 /// The hints of one pull request, in the order of Go (`reviewstate.Hints`), from data of the pull request list and its
 /// review state; no further read. `clear-not-ready`: the state is `clear` or `clear-carried` and the pull request is a
@@ -161,6 +174,10 @@ pub fn read_reviews(list: Vec<RepoStatus>, gh: &Client) -> Vec<RepoStatus> {
 }
 
 fn read_one(gh: &Client, j: &Job) -> PrReview {
+    // after a rate limit (any repository, any source) no further read starts; reads in flight end on their own
+    if gh.rate_limited() {
+        return skipped(j.number, &j.head);
+    }
     if !is_hex40(&j.head) {
         return evaluate(
             j.number,
@@ -384,6 +401,21 @@ pub fn evidence_lines(r: &PrReview) -> Vec<String> {
     v
 }
 
+/// The notice of the whole run for the reads that were not started after a rate limit.
+pub fn rate_limit_notice(list: &[RepoStatus]) -> Option<String> {
+    let n = list
+        .iter()
+        .flat_map(|s| &s.prs)
+        .filter(|p| p.review.as_ref().is_some_and(|r| r.skipped))
+        .count();
+    (n > 0).then(|| {
+        format!(
+            "rate limit reached, {n} read{} skipped (review state ?)",
+            if n == 1 { "" } else { "s" }
+        )
+    })
+}
+
 /// The notices of one repository: pull requests whose comments could not be read completely and pull requests
 /// beyond the limit.
 pub fn notices(s: &RepoStatus) -> Vec<String> {
@@ -395,7 +427,10 @@ pub fn notices(s: &RepoStatus) -> Vec<String> {
     let bad: Vec<(&OpenPr, &str)> = s
         .prs
         .iter()
-        .filter_map(|p| Some((p, p.review.as_ref()?.problem.as_deref()?)))
+        .filter_map(|p| {
+            let r = p.review.as_ref()?;
+            (!r.skipped).then_some((p, r.problem.as_deref()?))
+        })
         .collect();
     if let Some((p, why)) = bad.first() {
         out.push(format!(

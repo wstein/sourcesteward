@@ -1324,6 +1324,32 @@ m SR28 'a failed read still gives clear-not-ready' src/status_review.rs \
   'Status::Clear | Status::ClearCarried));' 'Status::Clear | Status::ClearCarried | Status::Unknown));' \
   status_review a_clear_that_could_not_be_read_gives_no_clear_not_ready
 
+m SR29 'comment reads start after a rate limit' src/status_review.rs \
+  'if gh.rate_limited() {' 'if false {' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR30 'a rate limit answer does not set the stop' src/github/reads.rs \
+  'if limited {
+            self.note_rate_limit();' 'if false {
+            self.note_rate_limit();' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR31 'Retry-After is no rate limit evidence' src/github.rs \
+  '|| headers.contains_key("retry-after")))' '|| false))' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR32 'every 403 counts as a rate limit' src/github.rs \
+  '    status == 429
+        || (status == 403' '    status == 429 || status == 403
+        || (status == 403' \
+  status_review a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads
+m SR33 'the stop covers only the first repository' src/status_review.rs \
+  'if gh.rate_limited() {' 'if gh.rate_limited() && j.repo == 0 {' \
+  status_review the_rate_limit_stop_covers_every_repository_of_the_run
+m SR34 'the notice of skipped reads is dropped' src/status_review.rs \
+  '(n > 0).then(|| {' '(n > 100_000).then(|| {' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+m SR35 'skipped reads are also named in the repository notice' src/status_review.rs \
+  '(!r.skipped).then_some((p, r.problem.as_deref()?))' 'Some((p, r.problem.as_deref()?))' \
+  status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

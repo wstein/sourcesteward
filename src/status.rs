@@ -1226,6 +1226,7 @@ pub fn render_human(
         }
         notices.extend(status_review::notices(s));
     }
+    notices.extend(status_review::rate_limit_notice(list));
     notices.extend(extra_notices.iter().cloned());
     out += &format!("Notices ({})\n", notices.len());
     if notices.is_empty() {
