@@ -788,7 +788,11 @@ m RP10 'replay: merge drivers of the configuration stay configured' src/replay.r
   '            while file.remove_section("merge", Some(sub.as_ref())).is_some() {}' '            let _ = &sub;' \
   replay a_merge_driver_of_the_configuration_is_never_started
 m RP11 'replay: an unchanged commit is reported as clean' src/replay.rs \
-  '    let status = if new == commit { Status::Unchanged } else { Status::Clean };' '    let status = Status::Clean;' \
+  '    let status = if new == commit {
+        Status::Unchanged
+    } else {
+        Status::Clean
+    };' '    let status = Status::Clean;' \
   replay rerun_over_a_replayed_range_returns_the_original_commits
 m RP12 'replay: an unchanged commit is rewritten' src/replay.rs \
   '    if tree == old_tree && parent == old_parent {' '    if false && tree == old_tree && parent == old_parent {' \
@@ -800,7 +804,9 @@ m RP14 'replay: conflicts are not detected' src/replay.rs \
   '    if outcome.has_unresolved_conflicts(how) {' '    if false && outcome.has_unresolved_conflicts(how) {' \
   replay content_conflict_matches_git
 m RP15 'replay: user.* beats committer.* for the identity' src/replay.rs \
-  '        let v = cfg.string(a).or_else(|| cfg.string(b)).map(|v| v.to_owned());' '        let v = cfg.string(b).or_else(|| cfg.string(a)).map(|v| v.to_owned());' \
+  '            .string_filter(a, from_files)
+            .or_else(|| cfg.string_filter(b, from_files));' '            .string_filter(b, from_files)
+            .or_else(|| cfg.string_filter(a, from_files));' \
   replay committer_comes_from_the_config_only
 m RP16 'replay: rename detection is off' src/replay.rs \
   '            ("renames", "true"),' '            ("renames", "false"),' \
