@@ -46,6 +46,18 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 tracked local change overlaps a file the update touches, when untracked files are in the way, when the branch
 diverged, or when a merge, rebase or similar operation is running. Local changes elsewhere are kept.
 
+### Submodule paths of `.gitmodules`
+
+A path in `.gitmodules` is untrusted. It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
+passes the rules of `stw add` (`[A-Za-z0-9._/-]`, relative, no `..`, no `-x` component, no git-special name), no component
+is a symbolic link, and the real path of the directory is below the real path of the workspace root. Any other path is
+never listed and nothing there is read or written (no fetch, no fast-forward). It shows as an entry of its own with the
+text `submodule path not accepted: <escaped path>: <reason>`: in `sync --apply` result `error` (exit 1), in a `sync` dry
+run result `skip` (exit 0), in `status` and `tidy plan`/`tidy apply` an entry with `error` (exit 1, `path` empty; in
+`tidy` the entry name is the escaped path). Not reported when `--repo` names repositories. Deviation from Go: Go checks the
+path only for `sync --submodules --apply` (valid path and no symbolic link); everything else lists whatever `.gitmodules`
+names. Paths with spaces or other characters outside the set are refused too.
+
 ### `sync --prune`, `--no-prune`, `--submodules`
 
 Ported from the Go flags; like everything in `sync` they act only with `--apply`. The dry run says what they would do and
