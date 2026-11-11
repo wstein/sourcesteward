@@ -608,3 +608,27 @@ pub fn page_of(query: &str) -> (usize, usize) {
     };
     (get("page", 1), get("per_page", 30))
 }
+
+/// Every file under `dir` (the `.git` directory included) with its bytes, and every directory, to compare before and
+/// after a read-only command. Keys are paths relative to `dir`; a directory has `None`.
+pub fn tree_snapshot(dir: &Path) -> std::collections::BTreeMap<PathBuf, Option<Vec<u8>>> {
+    fn walk(
+        root: &Path,
+        dir: &Path,
+        out: &mut std::collections::BTreeMap<PathBuf, Option<Vec<u8>>>,
+    ) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            let rel = p.strip_prefix(root).unwrap().to_path_buf();
+            if p.is_dir() {
+                out.insert(rel, None);
+                walk(root, &p, out);
+            } else {
+                out.insert(rel, Some(std::fs::read(&p).unwrap()));
+            }
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}

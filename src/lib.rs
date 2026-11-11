@@ -11,6 +11,7 @@ pub mod lint_pr;
 pub mod lint_pr_cmd;
 pub mod output;
 pub mod patch_id;
+pub mod prove;
 pub mod replay;
 pub mod repo;
 pub mod review;

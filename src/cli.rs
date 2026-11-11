@@ -12,8 +12,8 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, status, status_review, status_stats, sync, tidy,
-    tidy_apply, tidy_history,
+    add, carryover, dev, git_runner, lint_pr_cmd, prove, status, status_review, status_stats, sync,
+    tidy, tidy_apply, tidy_history,
 };
 
 const EXIT_CODES: &str = "\
@@ -63,6 +63,9 @@ enum Command {
         #[command(subcommand)]
         command: ReviewCommand,
     },
+    /// Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
+    #[command(after_help = PROVE_HELP)]
+    Prove(ProveArgs),
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Lint {
@@ -216,6 +219,130 @@ fn run_carry_over(a: CarryOverArgs) -> Result<u8> {
     } else {
         exit::FAILED
     })
+}
+
+const PROVE_HELP: &str = "\
+New in stw (no Go counterpart). ALT is the old branch or head, NEU the new one (one revision each, not a range).
+Seven checks, all must hold: (1) `git range-diff` shows `=` for every commit at the same position; (2) the patch-id of
+`BASE...HEAD` is equal; (3) no merge commit in the new range; (4) the same set of changed paths; (5) author and committer
+of every new commit are user.name <user.email> of the Git configuration (read only); (6) every Co-Authored-By line of an
+old commit is in the new commit at the same position; (7) no session link in the new commit texts. The old base is the
+merge base of ALT and NEU. The new base is the same commit (a rewrite on the same base) or, with --base BASIS, BASIS
+(a rebase onto it; BASIS must be an ancestor of NEU). A step that could not run is `unknown` and the verdict is `not
+proved`. Only for `proved` the last line is `Carried-over: from=<ALT> to=<NEU> patch-id=<hex> pr=<n|none>`. Nothing is
+posted and nothing is written; `git` runs for `range-diff` only, everything else is read in process.
+The repository is the one of the current directory (it must belong to the workspace), or --repo NAME.
+
+Exit codes:
+  0  proved
+  1  not proved, or a step could not run (the result is still printed)
+  2  usage error";
+
+#[derive(Args)]
+struct ProveArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// The base NEU was rebased onto (an ancestor of NEU) [default: the merge base of ALT and NEU, a rewrite on the same base]
+    #[arg(long, value_name = "BASIS")]
+    base: Option<String>,
+    /// Pull request number written into the line, or `none` [default: none]
+    #[arg(long, value_name = "NUMBER|none")]
+    pr: Option<String>,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// ALT NEU
+    #[arg(value_name = "REV", num_args = 0..)]
+    revs: Vec<String>,
+}
+
+/// The one repository a command works in: `--repo NAME` of the workspace, else the repository of the current
+/// directory, which must be one of the workspace (`list_repos`: the root and its accepted submodules; a path that
+/// `rejected_paths` names never is). A repository outside the workspace is never used. Without a repository
+/// around the current directory the workspace must have exactly one repository.
+fn selected_repo(root: Option<&Path>, name: Option<&str>) -> Result<RepoRef> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    let top = repo::top_level(&cwd);
+    let root = root
+        .map(Path::to_path_buf)
+        .or_else(|| repo::default_root(&cwd))
+        .or_else(|| top.clone())
+        .ok_or_else(|| {
+            Error::usage(
+                "no workspace root: pass --root PATH, run inside a repository, or set STW_ROOT",
+            )
+        })?;
+    if !root.is_dir() {
+        return Err(Error::usage(format!(
+            "workspace root is not a directory: {}",
+            escape_name(&root.to_string_lossy())
+        )));
+    }
+    let root = std::fs::canonicalize(&root).unwrap_or(root);
+    let repos = repo::list_repos(&root);
+    let known = || {
+        repos
+            .iter()
+            .map(|r| escape_name(&r.name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if let Some(n) = name {
+        if let Some(r) = repos.iter().find(|r| r.name == n) {
+            return Ok(r.clone());
+        }
+        let rejected = repo::rejected_paths(&root)
+            .into_iter()
+            .find(|(p, _)| p.trim_end_matches('/') == n)
+            .map(|(p, why)| format!(" ({})", rejected_message(&p, &why)))
+            .unwrap_or_default();
+        return Err(Error::usage(format!(
+            "unknown repository {}{rejected}; the workspace has: {}",
+            escape_name(n),
+            known()
+        )));
+    }
+    let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    match top {
+        Some(top) => {
+            let top = real(&top);
+            repos
+                .iter()
+                .find(|r| real(&r.path) == top)
+                .cloned()
+                .ok_or_else(|| {
+                    Error::usage(format!(
+                        "the repository of the current directory is not part of the workspace {}: pass --repo NAME (the workspace has: {}) or --root PATH",
+                        escape_name(&root.to_string_lossy()),
+                        known()
+                    ))
+                })
+        }
+        None if repos.len() == 1 => Ok(repos[0].clone()),
+        None => Err(Error::usage(format!(
+            "not inside a repository: pass --repo NAME (the workspace has: {})",
+            known()
+        ))),
+    }
+}
+
+fn run_prove(a: ProveArgs) -> Result<u8> {
+    let req = prove::parse_request(&a.revs, a.base.as_deref(), a.pr.as_deref())
+        .map_err(|e| Error::usage(e.to_string()))?;
+    let r = selected_repo(a.root.as_deref(), a.repo.as_deref())?;
+    let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
+    let proof = prove::prove(&dir, git_runner::shared(), &req);
+    if a.json {
+        print_json(&proof.to_json());
+    } else {
+        print!("{}", proof.render_human());
+    }
+    Ok(if proof.proved { exit::OK } else { exit::FAILED })
 }
 
 #[derive(Subcommand)]
@@ -997,6 +1124,7 @@ fn run(command: Command) -> Result<u8> {
         Command::Review {
             command: ReviewCommand::CarryOver(a),
         } => run_carry_over(a),
+        Command::Prove(a) => run_prove(a),
         Command::Lint {
             command: LintCommand::Pr(a),
         } => run_lint_pr(a),

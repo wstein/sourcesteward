@@ -382,6 +382,16 @@ fn readme_mentions_every_documented_field() {
         "scan_truncated",
         "restorable",
         "checked-journals",
+        "verdict",
+        "proved",
+        "base_source",
+        "ends",
+        "checks",
+        "items",
+        "hint",
+        "line",
+        "request",
+        "input",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }

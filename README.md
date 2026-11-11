@@ -34,6 +34,7 @@ stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json
 stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
+stw prove     ALT NEU [--base BASIS] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 ```
 
@@ -45,6 +46,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
 | `tidy history` | lists the stored manifests (the journals of `tidy apply`), newest first, with the branches each recorded and how many `tidy restore` could create now | nothing |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
+| `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (seven checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
@@ -193,7 +195,7 @@ and no `next_steps` field in JSON. Notes say what happened or why something was 
 `--json` prints one compact JSON object. `schema_version` is `2` (version 1 had `next_steps` in `status`, `tidy-plan`
 and `sync`; there is no `next_steps` any more); fields are only added within a version, a
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
-`tidy-plan`, `tidy-apply`, `tidy-restore`, `tidy-history`, `sync`), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
+`tidy-plan`, `tidy-apply`, `tidy-restore`, `tidy-history`, `sync`; `prove` has its own layout, see "Local rebase proof"), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
 `github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
@@ -587,6 +589,47 @@ typed unsupported, a repository config with `diff.external`, `diff.<driver>.text
 `git range-diff` is told `--no-notes`. It also says no where Go says yes when only the author of a commit changed, and for an
 identical patch twice in a range (range-diff pairs it across). JSON schema 2 (`pr`: number or `"none"`; `via` per step; `read_errors`). Deviations from the Go command and the mapping of its 46
 tests: header of `tests/it/carryover.rs`; plan: `docs/migration-plan.md`, "Next slice".
+
+## Local rebase proof: `stw prove` (new)
+
+New behavior without a Go counterpart (AGENTS.md "Scripts first, then product": the owner accepts it live; recipe in the
+scratch directory of the workspace). `stw prove ALT NEU [--base BASIS] [--pr N|none] [--json] [--root PATH] [--repo NAME]`
+(read-only, local, no pull request and no network). `ALT` is the old branch or head, `NEU` the new one: one revision each (a
+branch name, a tag, a commit id; not a range). It proves that `NEU` is `ALT` moved by a rebase and nothing else. The first line
+of the output is the verdict, `proved` or `not proved`; then one line per check with its state (`ok`, `failed`, `unknown`),
+its reason and `via`; for `proved` the last line is the finished line
+`Carried-over: from=<ALT head> to=<NEU head> patch-id=<40 hex> pr=<n|none>` (`--pr N`; default `none`).
+
+| # | Check | Reason when not `ok` | via |
+| --- | --- | --- | --- |
+| 1 | `range-diff`: `git range-diff OLD_BASE..ALT NEW_BASE..NEU` shows `=` for every commit at the same position | `range-diff-not-equal`, `range-empty` | `git` |
+| 2 | `patch-id`: equal patch-id of `BASE...HEAD`, old and new | `patch-id-differs`, `patch-id-empty` | `gix` |
+| 3 | `merge-commits`: no merge commit in `NEW_BASE..NEU` | `merge-commits` | `gix` |
+| 4 | `files`: the same set of changed paths (name-only, without rename detection, both sides the same way) | `files-differ` | `gix` |
+| 5 | `identity`: author and committer of every new commit are `user.name <user.email>` of the Git configuration (read only; the email is compared without regard to case) | `identity-mismatch`, `identity-unknown` | `gix` |
+| 6 | `trailers`: every `Co-Authored-By` line of an old commit is in the new commit at the same position | `trailer-missing` | `gix` |
+| 7 | `session-links`: no session link in the text of a new commit (the rule of `lint pr`) | `session-link` | `gix` |
+
+Checks 1 to 3 are the machine of `stw review carry-over` (`carryover::check`), not a second implementation. The old base is
+the merge base of `ALT` and `NEU`. Without `--base` the new base is the same commit (a rewrite on the same base: amend, reword,
+reorder, squash); with `--base BASIS` it is `BASIS`, the base `NEU` was rebased onto, which must be an ancestor of `NEU`
+(`base-not-below-new`). Without `--base` for a rebase onto a new base the new range holds the commits of the new base, the range-diff
+fails and a hint names `--base`. Problems before any check: `unknown-revision` (a revision that names nothing or no commit),
+`no-merge-base`, `same-commit` (`ALT` and `NEU` are one commit: nothing to prove, a deviation from the Go carry-over, which
+accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. A step that could not run is `unknown`
+and the verdict is `not proved`; there is never a line then. `identity-unknown`: no `user.name` and `user.email` in the Git
+configuration; stw never sets them. The identity check is as strict as `lint pr`: a rebased commit of another author is not proved.
+Git boundary: only `range-diff` runs through the installed git (`Op::RangeDiff`, Git 2.40+, `via: git`; gix has no range-diff);
+revisions, merge base, commit walk, trees, patch-id (`src/patch_id.rs`), identity and trailers are read in process. Commit
+subjects, names and paths from the repository are untrusted: text and JSON carry them escaped (`escape_untrusted`).
+The repository is the one of the current directory, which must belong to the workspace (`--root`, else the repository or
+superproject of the current directory, else `$STW_ROOT`; the root and its checked-out submodules that `list_repos` accepts, never a
+path that `.gitmodules` names outside the root), or `--repo NAME`; without a repository around the current directory the workspace must
+have exactly one. Exit 0 `proved`, 1 `not proved` (result printed), 2 usage.
+JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr` (number or `"none"`), `request{old,new,base}`,
+`ends{old_head,new_head,old_base,new_base,base_source}` (`base_source`: `merge-base` or `flag`; null when the revisions did not
+resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]}`), `reasons[]` (all reasons that apply),
+`hint` (the `--base` hint or null) and `line` (the `Carried-over:` line for `proved`, else null).
 
 ## PR lint: `stw lint pr` (M8)
 

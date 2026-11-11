@@ -25,6 +25,7 @@ mod network;
 mod no_binaries;
 mod patchid;
 mod patchid_props;
+mod prove;
 mod remote_kinds;
 mod replay;
 mod review_go_corpus;
