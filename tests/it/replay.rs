@@ -677,6 +677,46 @@ fn a_directory_renamed_by_the_replayed_commit_and_a_file_added_by_onto_is_a_conf
 }
 
 #[test]
+fn a_file_moved_out_of_a_directory_that_stays_is_not_a_directory_rename() {
+    let fx = Fx::new();
+    let base = dir_base(&fx);
+    let onto = fx.commit(
+        Some(base),
+        &[("dir/x.txt", None), ("other/x.txt", Some(&lines(10, "x")))],
+        "onto moves one file out",
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("dir/new.txt", Some("new\n"))],
+        "add dir/new.txt",
+    );
+    let r = assert_matches_git(&fx, onto, base, side);
+    assert_eq!(statuses(&r), [Status::Clean]);
+}
+
+#[test]
+fn a_renamed_neighbour_directory_does_not_make_a_directory_rename() {
+    // dir/ is deleted by onto, dir2/ is renamed: "dir" is a prefix of "dir2/..." but not a directory of it
+    let fx = Fx::new();
+    let base = dir_base(&fx);
+    let onto = {
+        let moved = rename_dir(&fx, "dir2", "newdir2", base, &[("z.txt", lines(10, "z"))]);
+        fx.commit(
+            Some(moved),
+            &[("dir/x.txt", None), ("dir/y.txt", None)],
+            "onto deletes dir",
+        )
+    };
+    let side = fx.commit(
+        Some(base),
+        &[("dir/new.txt", Some("new\n"))],
+        "add dir/new.txt",
+    );
+    let r = assert_matches_git(&fx, onto, base, side);
+    assert_eq!(statuses(&r), [Status::Clean]);
+}
+
+#[test]
 fn a_new_subdirectory_in_a_renamed_directory_lists_the_file_only() {
     // git moves dir/sub/new.txt into newdir/; the engine reports a conflict (conservative), at the file and not at
     // the directory entry

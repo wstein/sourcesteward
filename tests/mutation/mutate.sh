@@ -823,6 +823,12 @@ m RP18 'replay: the environment counts as the configured identity' src/replay.rs
                 | Source::Api
         )' \
   replay committer_ignores_the_environment
+m RP20 'replay: a directory that still exists counts as renamed' src/replay.rs \
+  '            if moved && exists(base, dir)? && !exists(renamer, dir)? {' '            if moved && exists(base, dir)? {' \
+  replay a_file_moved_out_of_a_directory_that_stays_is_not_a_directory_rename
+m RP21 'replay: a directory name prefix counts as the directory' src/replay.rs \
+  "                .any(|s| s.starts_with(dir) && s.get(dir.len()) == Some(&b'/'));" '                .any(|s| s.starts_with(dir));' \
+  replay a_renamed_neighbour_directory_does_not_make_a_directory_rename
 m RP22 'replay: only files added by the replayed commit are checked' src/replay.rs \
   '    for c in one_way(repo, &base, &own, &new)? {' '    for c in Vec::<Conflict>::new() {' \
   replay a_directory_renamed_by_the_replayed_commit_and_a_file_added_by_onto_is_a_conflict_like_git
