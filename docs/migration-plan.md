@@ -14,7 +14,7 @@ These are workspace issues; legacy issues remain historical references and are n
 
 Build the Git/GitHub workflow subset in Rust. Treat `legacy/sourcesteward` as the source of ports and as a test
 reference, not a parity target: every Go command gets a decision (see "Cutover and archive of legacy/sourcesteward"). Keep the existing Rust status/tidy/sync usable while adding workflow reads
-and recovery before new history mutations. Native jj support is deferred; jj inspires the operation model.
+and recovery before new history mutations. jj is not supported (owner decision 2026-11-11, decision 8); jj inspires the operation model.
 
 Every new user-facing function without a Go counterpart starts as a script under `spikes/stw/<feature>/`; the owner
 accepts it live before product implementation. Ports of existing Go behavior skip spike and live acceptance: they are
@@ -165,9 +165,14 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
 6. **Recorded decision: replay attribution.** New commits carry the configured Git identity as author and committer.
    Commits rewritten by restack, rebase, or cherry-pick keep their original author; the committer is the configured
    identity, as `git rebase` does. A dotagents rule change for this is in progress.
-7. **Defer native jj and in-memory rerere prediction.** Rerere reuse during Git resolution works without
+7. **Defer in-memory rerere prediction (native jj: see decision 8).** Rerere reuse during Git resolution works without
    reimplementing Git's conflict-ID algorithm. jj-style structured conflict persistence needs another design, not
    merely commits containing marker text. Benefit 2, effort 5, risk 4 for native parity at this stage.
+8. **Recorded decision (owner, 2026-11-11): jj (Jujutsu) is not supported.** Git is the standard. Functions that jj
+   offers (undo/oplog, conflict resolution) are added to stw instead of maintaining a second repository model. jj is an
+   officially unsupported tool: it may work in a colocated Git repository, without a test and without a promise. There is
+   no jj special code in stw (no detection, no warning, no test). This replaces "defer native jj" in the matrix, M13
+   ("native jj opt-in") and decision 7.
 
 Known limits from the Rust README remain relevant: patch-ID oracle mismatches, partial checkout/rollback crash
 windows, platform/filter/sparse-checkout uncertainty, and restore missing-object after pruning. Their historical

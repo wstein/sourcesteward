@@ -15,6 +15,11 @@ every gix read. There is no `gh` and no `ssh` of stw's own. Later `push`,
 in the JSON output; without a usable `git` (missing, older than the step needs, unknown option) the step reports
 `unsupported` (exit 1, typed). See `chartroom/notes/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
 
+jj (Jujutsu) is not supported (owner decision 2026-11-11). Git is the standard; functions that jj offers (undo/oplog,
+conflict resolution) are added to stw instead of maintaining a second repository model. jj is an officially unsupported
+tool: it may work in a colocated Git repository, without a test and without a promise. stw has no jj special code (no
+detection, no warning, no test).
+
 ```
 stw status    [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
