@@ -8,7 +8,7 @@ Start with [knowledge map](docs/README.md), [progress](docs/progress.md),
 Read .specify/memory/constitution.md before implementation.
 Use the installed Spec Kit flow: constitution → specify → plan → tasks → implement → analyze.
 Implemented scope includes CLI help/version, bounded read-only native Git identity inspection and qualified workspace/state/reference inventory, reviewable isolated native Git workspace creation and evidence-based local reference/workspace tidy, source checks, specs and the Pages website.
-Git is the only supported VCS (owner decision 2026-11-11); jj is not supported. The jj text of the older specs describes the existing Go implementation only.
+Git is the only supported VCS (owner decision 2026-11-11); jj is not supported. The jj text of the older specs, the constitution and the docs describes the existing Go implementation only. The owner decision overrides principle V of the constitution for all new work; the constitution stays unchanged because the Go implementation is archived.
 Final integrated review/CI and PR handoff remain recorded in its verification evidence.
 Inventory and tidy capability limits and acceptance evidence remain explicit. Recovery roots preserve selected committed history within documented limits; do not imply automatic restoration or native GitButler integration.
 Declare supported versions/capabilities, preserve backend-specific identities and published
