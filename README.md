@@ -188,7 +188,7 @@ and no `next_steps` field in JSON. Notes say what happened or why something was 
 and `sync`; there is no `next_steps` any more); fields are only added within a version, a
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
 `tidy-plan`, `tidy-apply`, `tidy-restore`, `sync`), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
-`github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read).
+`github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
 `summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep} (`delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
@@ -198,6 +198,22 @@ would_fast_forward, skipped, errors}.
   `changes{staged,unstaged,untracked,conflicts}`, `stash`, `operation`, `gitlink{recorded,state}`, `slug`,
   `attention`, `reasons`, `pull_requests{read,error,open[{number,title,head,draft,author,review,review_state,hints,base,default_branch,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
   Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons,review}` (`icons` is always null: the JSON carries no glyphs), per repository `pull_requests.review` (null without `--review`, and also with it when the pull request list of the repository was not read; else `{states{clear,clear_carried,findings,no_review,unverified_author,unknown},hints{clear_not_ready,base_not_default},not_read,limit}`), per pull request `review_state`, `hints`, `base` and `default_branch` (below) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
+- `status` notices: top level `notices`, an array that is always present (`[]` when there is nothing to say), additive in schema 2. It is made from the same list as the text block `Notices (N)`: N is its length, element i is line i, the order is fixed (the GitHub note; then per repository in list order `fetch-failed`, `prs-not-read`, `issues-not-read`, `review-not-read`, `review-limit`; then `rate-limited` of the run; then `rejected-path`). Element: `code` (string, below), `source` (string: `github`, `fetch`, `pulls`, `issues`, `reviews`, `submodules`), `repos` (array of repository names the notice is about, escaped and cut to 300 characters like in the text; `[]` for a notice of the run), `message` (string, the text line without its two leading spaces, text from outside escaped like in the text: no control character, no bidi override), `count` (integer, at least 1: the pull requests or reads the notice names; 1 for the others). `github_note`, `pull_requests.error`, `fetch_error` and the issues `state` stay as they are. Codes (a closed list; a new code is an additive change):
+
+  | `code` | `source` | `repos` | `count` | meaning (Go: same meaning) |
+  |---|---|---|---|---|
+  | `offline` | `github` | none | 1 | `--offline`: GitHub not read (Go reason `offline`) |
+  | `no-token` | `github` | none | 1 | no token found: GitHub not read (Go reason `no-token`) |
+  | `github-not-read` | `github` | none | 1 | GitHub not read for another reason (not produced today) |
+  | `fetch-failed` | `fetch` | the repository | 1 | `--fetch` failed for it; the cause is in `message` |
+  | `prs-not-read` | `pulls` | the repository | 1 | the open pull requests could not be read (401, 403, 404, 429, 5xx, unreadable answer, `deadline:` of `--timeout`); the cause is in `message` |
+  | `issues-not-read` | `issues` | the repository | 1 | the open issues could not be read; same causes |
+  | `review-not-read` | `reviews` | the repository | pull requests whose comments were not read | `--review`: review state `?` for them (denied, missing, over a bound, `--timeout`); first cause in `message` |
+  | `review-limit` | `reviews` | the repository | pull requests beyond the limit of 200 | `--review`: not read because of the limit |
+  | `rate-limited` | `reviews` | none | reads not started | `--review`: a rate limit stopped the comment reads (Go reason `rate-limited`) |
+  | `rejected-path` | `submodules` | none | 1 | a `.gitmodules` path that is not a plain directory below the root was not used; the path is in `message` |
+
+  The cause of a failed read (rate limit, 401, 403, `deadline`) is not a code of its own: it is part of `message` (Rust has no typed error there; Go's `unauthorized`, `forbidden`, `deadline` reasons have no counterpart as codes). A repository that cannot be read locally has no notice: its `error` is set and the exit code is 1. Go's notice also has `source` and `repos` (same meaning); `count` is Rust only.
 - `status` counts: per repository `counts`, in total the top-level `totals`, same shape: `pull_requests{state,open,bot,truncated}`,
   `issues{state,open,bug,truncated}`, `branches{local,remote}`, `worktrees`, `stash` (all numbers or null). `state` is `ok`,
   `not-read` (`--offline` or no token), `no-remote` (no GitHub origin; left out of a total) or `failed` (the read failed or the
@@ -223,7 +239,7 @@ would_fast_forward, skipped, errors}.
 `stw status` prints blocks separated by a blank line: `Counts` (one aligned line per repository, then `All`:
 `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`; `n/a` is not read, `?` is failed, `n+` is a
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
-(why GitHub was not read, failed reads per repository; text from outside is shown with escapes), the `agent-rules` block, then the summary line. A failed GitHub read is
+(why GitHub was not read, failed reads per repository; text from outside is shown with escapes; the JSON `notices` has the same list, see "Output for agents"), the `agent-rules` block, then the summary line. A failed GitHub read is
 a notice: exit 0. Exit 1 stays for a repository that cannot be read locally.
 
 ## Status flags

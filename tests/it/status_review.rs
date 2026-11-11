@@ -711,10 +711,15 @@ fn at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read() 
     let notices = stw::status_review::notices(&list[0]);
     assert_eq!(
         notices,
-        vec![
-            "fixture: review state not read for 5 pull requests beyond the limit of 200 per run"
-                .to_string()
-        ]
+        vec![stw::status::Notice {
+            code: "review-limit",
+            source: "reviews",
+            repos: vec!["fixture".to_string()],
+            message:
+                "fixture: review state not read for 5 pull requests beyond the limit of 200 per run"
+                    .to_string(),
+            count: 5,
+        }]
     );
 }
 
@@ -1247,12 +1252,16 @@ fn the_rate_limit_stop_covers_every_repository_of_the_run() {
         .iter()
         .all(|p| p.review.as_ref().unwrap().skipped));
     assert!(list[0].prs.iter().all(|p| p.review.is_some()));
+    let n = 40 - h.len();
     assert_eq!(
         rate_limit_notice(&list),
-        Some(format!(
-            "rate limit reached, {} reads skipped (review state ?)",
-            40 - h.len()
-        ))
+        Some(stw::status::Notice {
+            code: "rate-limited",
+            source: "reviews",
+            repos: vec![],
+            message: format!("rate limit reached, {n} reads skipped (review state ?)"),
+            count: n,
+        })
     );
 }
 
@@ -1310,4 +1319,76 @@ fn a_rate_limit_on_another_read_stops_the_comment_reads() {
             "{limited}: {t}"
         );
     }
+}
+
+/// The notices of `--review` in the JSON: a failed comment read (`review-not-read`, count = pull requests, cause in
+/// the message) and the stop after a rate limit (`rate-limited`, count = reads skipped), in the order of the text.
+#[test]
+fn the_review_notices_are_in_the_json_with_code_count_and_the_text_order() {
+    let st = |c: u16| Answer::Status(c, vec![]);
+    let api = forge(
+        vec![(1, HEAD, "one"), (2, HEAD, "two"), (3, HEAD, "three")],
+        vec![(1, st(403)), (2, st(404)), (3, st(500))],
+    );
+    let o = run_review(&api, &["--json"]);
+    let v = json_of(&o);
+    let n = v["notices"].as_array().unwrap();
+    assert_eq!(n.len(), 1, "{v}");
+    assert_eq!(n[0]["code"], "review-not-read");
+    assert_eq!(n[0]["source"], "reviews");
+    assert_eq!(n[0]["count"], 3);
+    let name = v["repos"][0]["name"].as_str().unwrap();
+    assert_eq!(n[0]["repos"], json!([name]));
+    let text = out(&run_review(&api, &[]));
+    let block = text
+        .split("\n\n")
+        .find(|b| b.starts_with("Notices ("))
+        .unwrap();
+    assert_eq!(
+        block,
+        format!("Notices (1)\n  {}", n[0]["message"].as_str().unwrap())
+    );
+    // the rate limit: the repository notice first, the run notice after it
+    let api = forge_rate(60, 3, 429, vec![], "{}".into(), true);
+    let v = json_of(&run_review(&api, &["--json"]));
+    let n = v["notices"].as_array().unwrap();
+    let codes: Vec<&str> = n.iter().map(|x| x["code"].as_str().unwrap()).collect();
+    assert_eq!(codes, ["review-not-read", "rate-limited"], "{v}");
+    assert_eq!(n[1]["repos"], json!([]));
+    let skipped = n[1]["count"].as_u64().unwrap();
+    assert!(
+        n[1]["message"]
+            .as_str()
+            .unwrap()
+            .contains(&format!("{skipped} reads skipped")),
+        "{}",
+        n[1]
+    );
+    let text = out(&run_review(
+        &forge_rate(60, 3, 429, vec![], "{}".into(), true),
+        &[],
+    ));
+    assert!(text.contains("Notices (2)\n"), "{text}");
+    // the timeout names the cause in the message of the same code
+    let api = FakeRoutes::start(|path, _| {
+        if path.ends_with("/comments") {
+            std::thread::sleep(std::time::Duration::from_secs(3));
+            return (200, vec![], "[]".into());
+        }
+        let body = match path {
+            "/repos/test/fixture/pulls" => json!([
+                {"number": 1, "title": "one", "draft": false, "user": {"login": "me", "type": "User"},
+                 "head": {"ref": "b1", "sha": HEAD}}]),
+            "/repos/test/fixture/issues" => json!([]),
+            _ => json!({"mergeable_state": "clean"}),
+        };
+        (200, vec![], body.to_string())
+    });
+    let v = json_of(&run_review(&api, &["--json", "--timeout", "1s"]));
+    let n = v["notices"].as_array().unwrap();
+    assert_eq!(n[0]["code"], "review-not-read", "{v}");
+    assert!(n[0]["message"]
+        .as_str()
+        .unwrap()
+        .contains("--timeout of 1s"));
 }

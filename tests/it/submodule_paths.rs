@@ -453,3 +453,39 @@ fn below_means_strictly_below() {
     assert!(!below("/w/root-x", "/w/root"));
     assert!(!below("/w", "/w/root"));
 }
+
+/// A refused path is a notice `rejected-path` (source `submodules`, no repository) in the text and the JSON: same
+/// list, same order, no raw control character or bidi override in either.
+#[test]
+fn refused_paths_are_notices_in_the_json_too_with_hostile_characters_escaped() {
+    let t = setup();
+    write_gitmodules(
+        &t.ws,
+        &["../outside", "\"nl\\nx\"", "rtl\u{202e}x", ESC_NAME],
+    );
+    let (code, text, v) = stw(&t, &["status", "--offline"]);
+    assert_eq!(code, 0, "{text}");
+    let n = v["notices"].as_array().unwrap();
+    assert_eq!(n.len(), 1 + 4, "{v}");
+    assert_eq!(n[0]["code"], "offline");
+    let lines: Vec<&str> = text
+        .lines()
+        .filter(|l| l.starts_with("  submodule path not accepted: "))
+        .map(|l| l.trim_start())
+        .collect();
+    assert_eq!(lines.len(), 4, "{text}");
+    for (x, l) in n[1..].iter().zip(&lines) {
+        assert_eq!(x["code"], "rejected-path");
+        assert_eq!(x["source"], "submodules");
+        assert_eq!(x["repos"], serde_json::json!([]));
+        assert_eq!(x["count"], 1);
+        assert_eq!(x["message"].as_str().unwrap(), *l);
+        let m = x["message"].as_str().unwrap();
+        assert!(
+            !m.chars().any(|c| c.is_control() || c == '\u{202e}'),
+            "{m:?}"
+        );
+    }
+    assert!(text.contains("Notices (5)\n"), "{text}");
+    assert!(!text.contains('\u{202e}') && !text.contains('\u{1b}'));
+}

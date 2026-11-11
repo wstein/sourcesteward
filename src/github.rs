@@ -73,12 +73,30 @@ pub struct GithubState {
     pub note: Option<String>,
 }
 
+/// The note of a run with `--offline`.
+pub const NOTE_OFFLINE: &str = "GitHub not read: --offline";
+/// The start of the note of a run without a token.
+pub const NOTE_NO_TOKEN: &str = "GitHub not read: no GitHub token found";
+
 impl GithubState {
+    /// The stable code of the note (`stw status --json`, `notices`): `offline`, `no-token` (the Go reasons) or
+    /// `github-not-read` for any other note; None without a note.
+    pub fn note_code(&self) -> Option<&'static str> {
+        let n = self.note.as_deref()?;
+        Some(if n == NOTE_OFFLINE {
+            "offline"
+        } else if n.starts_with(NOTE_NO_TOKEN) {
+            "no-token"
+        } else {
+            "github-not-read"
+        })
+    }
+
     pub fn discover(offline: bool) -> GithubState {
         if offline {
             return GithubState {
                 client: None,
-                note: Some("GitHub not read: --offline".into()),
+                note: Some(NOTE_OFFLINE.into()),
             };
         }
         match Client::from_env() {
@@ -88,12 +106,11 @@ impl GithubState {
             },
             None => GithubState {
                 client: None,
-                note: Some(
-                    "GitHub not read: no GitHub token found (looked at GH_TOKEN, GITHUB_TOKEN, \
+                note: Some(format!(
+                    "{NOTE_NO_TOKEN} (looked at GH_TOKEN, GITHUB_TOKEN, \
                      ~/.config/gh/hosts.yml and the macOS keychain); set GH_TOKEN to a token that can read \
                      the repositories, or pass --offline"
-                        .into(),
-                ),
+                )),
             },
         }
     }

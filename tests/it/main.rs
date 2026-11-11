@@ -33,6 +33,7 @@ mod review_read;
 mod slug;
 mod status_counts;
 mod status_flags;
+mod status_notices;
 mod status_review;
 mod submodule_paths;
 mod sync;

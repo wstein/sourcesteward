@@ -16,6 +16,15 @@ expression: pretty
   "github": false,
   "github_auth": null,
   "github_note": "GitHub not read: --offline",
+  "notices": [
+    {
+      "code": "offline",
+      "source": "github",
+      "repos": [],
+      "message": "GitHub not read: --offline",
+      "count": 1
+    }
+  ],
   "repos": [
     {
       "name": "repo",

@@ -741,10 +741,87 @@ pub fn reasons(s: &RepoStatus) -> Vec<String> {
     v
 }
 
+/// One notice of a run: what could not be read or done. The text block `Notices (N)` and the JSON array `notices`
+/// are both made from the one list that `collect_notices` returns.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Notice {
+    /// Stable identifier (see the README, "Notices").
+    pub code: &'static str,
+    /// The kind of read the notice is about: `github`, `fetch`, `pulls`, `issues`, `reviews`, `submodules`.
+    pub source: &'static str,
+    /// The repositories named, escaped like in the text.
+    pub repos: Vec<String>,
+    /// The line of the text block, escaped.
+    pub message: String,
+    /// How many items the notice names (pull requests, skipped reads; 1 otherwise).
+    pub count: usize,
+}
+
+impl Notice {
+    fn json(&self) -> Value {
+        json!({"code": self.code, "source": self.source, "repos": self.repos, "message": self.message,
+               "count": self.count})
+    }
+}
+
+/// The notices of a status run, in this order: the GitHub note, then per repository (in list order) fetch, pull
+/// requests, issues and review notices, then the rate-limit notice of the run, then `extra` (rejected submodule
+/// paths).
+pub fn collect_notices(gh: &GithubState, extra: &[Notice], list: &[RepoStatus]) -> Vec<Notice> {
+    let mut notices: Vec<Notice> = gh
+        .note
+        .iter()
+        .zip(gh.note_code())
+        .map(|(note, code)| Notice {
+            code,
+            source: "github",
+            repos: Vec::new(),
+            message: note.clone(),
+            count: 1,
+        })
+        .collect();
+    for s in list {
+        let name = esc(&s.name);
+        let one = |code, source, message: String| Notice {
+            code,
+            source,
+            repos: vec![name.clone()],
+            message,
+            count: 1,
+        };
+        if let Some(e) = &s.fetch.error {
+            notices.push(one(
+                "fetch-failed",
+                "fetch",
+                format!("{name}: fetch failed ({})", esc(e)),
+            ));
+        }
+        if let Some(e) = &s.pr_error {
+            notices.push(one(
+                "prs-not-read",
+                "pulls",
+                format!("{name}: pull requests not read ({})", esc(e)),
+            ));
+        }
+        if let Some(e) = &s.issue_error {
+            notices.push(one(
+                "issues-not-read",
+                "issues",
+                format!("{name}: issues not read ({})", esc(e)),
+            ));
+        }
+        notices.extend(status_review::notices(s));
+    }
+    notices.extend(status_review::rate_limit_notice(list));
+    notices.extend(extra.iter().cloned());
+    notices
+}
+
 pub fn to_json(
     root: &str,
     gh: &GithubState,
     list: &[RepoStatus],
+    notices: &[Notice],
     opts: &StatusOpts,
     stats: Option<Value>,
 ) -> Value {
@@ -802,6 +879,7 @@ pub fn to_json(
         "options": {"fetch": opts.fetch, "worktrees": opts.worktrees, "icons": null, "review": opts.review},
         "engine": engine(),
         "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()),
+        "notices": notices.iter().map(Notice::json).collect::<Vec<_>>(),
         "repos": repos,
         "summary": {"total": list.len(), "attention": attention},
         "totals": counts_json(&totals(list)),
@@ -1015,13 +1093,7 @@ fn card(s: &RepoStatus) -> Vec<String> {
 
 /// Blocks, each followed by a blank line: `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)`, the
 /// rules block `rules` (already rendered, may be empty), then the summary line.
-pub fn render_human(
-    github_note: Option<String>,
-    extra_notices: &[String],
-    list: &[RepoStatus],
-    rules: &str,
-    view: &View,
-) -> String {
+pub fn render_human(notices: &[Notice], list: &[RepoStatus], rules: &str, view: &View) -> String {
     let icons = view.icons;
     let mut out = counts_block(list);
     out.push('\n');
@@ -1209,31 +1281,12 @@ pub fn render_human(
         }
     }
     out.push('\n');
-    let mut notices: Vec<String> = github_note.into_iter().collect();
-    for s in list {
-        if let Some(e) = &s.fetch.error {
-            notices.push(format!("{}: fetch failed ({})", esc(&s.name), esc(e)));
-        }
-        if let Some(e) = &s.pr_error {
-            notices.push(format!(
-                "{}: pull requests not read ({})",
-                esc(&s.name),
-                esc(e)
-            ));
-        }
-        if let Some(e) = &s.issue_error {
-            notices.push(format!("{}: issues not read ({})", esc(&s.name), esc(e)));
-        }
-        notices.extend(status_review::notices(s));
-    }
-    notices.extend(status_review::rate_limit_notice(list));
-    notices.extend(extra_notices.iter().cloned());
     out += &format!("Notices ({})\n", notices.len());
     if notices.is_empty() {
         out += "  none\n";
     }
-    for n in &notices {
-        out += &format!("  {n}\n");
+    for n in notices {
+        out += &format!("  {}\n", n.message);
     }
     out.push('\n');
     if !rules.is_empty() {

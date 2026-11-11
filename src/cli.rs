@@ -425,10 +425,27 @@ struct Workspace {
 
 /// Notices for the paths of `.gitmodules` that are not accepted: text lines and the JSON field
 /// `rejected_paths` (`[{path (escaped), reason}]`).
+fn rejected_message(p: &str, why: &str) -> String {
+    format!("submodule path not accepted: {}: {why}", escape_name(p))
+}
+
 fn rejected_notices(rejected: &[(String, String)]) -> Vec<String> {
     rejected
         .iter()
-        .map(|(p, why)| format!("submodule path not accepted: {}: {why}", escape_name(p)))
+        .map(|(p, why)| rejected_message(p, why))
+        .collect()
+}
+
+fn rejected_status_notices(rejected: &[(String, String)]) -> Vec<status::Notice> {
+    rejected
+        .iter()
+        .map(|(p, why)| status::Notice {
+            code: "rejected-path",
+            source: "submodules",
+            repos: Vec::new(),
+            message: rejected_message(p, why),
+            count: 1,
+        })
         .collect()
 }
 
@@ -680,11 +697,14 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             ..Default::default()
         },
     );
+    let notices =
+        status::collect_notices(&ws.github, &rejected_status_notices(&ws.rejected), &list);
     if c.json {
         let mut v = status::to_json(
             &ws.root,
             &ws.github,
             &list,
+            &notices,
             &opts,
             diag.then(|| status_stats::to_json(&stats, &timings)),
         );
@@ -715,8 +735,7 @@ fn run_status(a: StatusArgs) -> Result<u8> {
         print!(
             "{}",
             status::render_human(
-                ws.github.note.clone(),
-                &rejected_notices(&ws.rejected),
+                &notices,
                 &list,
                 &sync::rules::render_human(&rules),
                 &status::View {

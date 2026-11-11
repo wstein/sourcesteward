@@ -1051,7 +1051,7 @@ m SH5 "refused paths are not reported by sync" src/sync/submodules.rs \
   "    for (p, why) in rejected {" "    for (p, why) in rejected.iter().take(0) {" \
   submodule_paths sync_dry_run_reports_refused_paths_and_touches_nothing
 m SH6 "refused paths are not a notice of status" src/cli.rs \
-  "                        &rejected_notices(&ws.rejected)," "                        &[]," \
+  "status::collect_notices(&ws.github, &rejected_status_notices(&ws.rejected), &list);" "status::collect_notices(&ws.github, &[], &list);" \
   submodule_paths status_notes_refused_paths_without_a_repository_entry
 m SH7 "refused paths are not a notice of tidy plan" src/cli.rs \
   "print!(\"{}\", tidy::render_human(&plans, a.all));
@@ -1461,6 +1461,45 @@ m SD18 "a repeated --plan is a usage error" src/cli.rs \
 m SD19 "a repeated --dry-run is a usage error" src/cli.rs \
   '#[arg(long, conflicts_with = "apply", overrides_with = "dry_run")]' '#[arg(long, conflicts_with = "apply")]' \
   sync_default a_repeated_plan_or_dry_run_flag_is_accepted
+
+m NO1 "the JSON has no notices (always an empty array)" src/status.rs \
+  '"notices": notices.iter().map(Notice::json).collect::<Vec<_>>(),' '"notices": Vec::<Value>::new(),' \
+  status_notices offline_and_no_token_have_the_go_codes_and_the_github_note_as_message
+m NO2 "the text block prints no message" src/status.rs \
+  '        out += &format!("  {}\n", n.message);' '        out += &format!("  {}\n", "");' \
+  status_notices a_failed_pull_request_or_issue_read_is_one_notice_per_source_and_the_old_fields_stay
+m NO3 "--offline has the code of no token" src/github.rs \
+  '"offline"
+        } else if' '"no-token"
+        } else if' \
+  status_notices offline_and_no_token_have_the_go_codes_and_the_github_note_as_message
+m NO4 "a pull request notice has the code of the issues notice" src/status.rs \
+  '"prs-not-read",' '"issues-not-read",' \
+  status_notices a_failed_pull_request_or_issue_read_is_one_notice_per_source_and_the_old_fields_stay
+m NO5 "a repository notice names no repository" src/status.rs \
+  '            repos: vec![name.clone()],' '            repos: Vec::new(),' \
+  status_notices a_failed_pull_request_or_issue_read_is_one_notice_per_source_and_the_old_fields_stay
+m NO6 "the fetch error is not escaped in the notice" src/status.rs \
+  'format!("{name}: fetch failed ({})", esc(e)),' 'format!("{name}: fetch failed ({})", e),' \
+  status_notices a_failed_fetch_is_a_notice_and_hostile_characters_stay_escaped
+m NO7 "the rejected paths come first" src/status.rs \
+  '    notices.extend(extra.iter().cloned());' '    notices.splice(0..0, extra.iter().cloned());' \
+  submodule_paths refused_paths_are_notices_in_the_json_too_with_hostile_characters_escaped
+m NO8 "a rejected path is not escaped in the notice" src/cli.rs \
+  'format!("submodule path not accepted: {}: {why}", escape_name(p))' 'format!("submodule path not accepted: {}: {why}", p)' \
+  submodule_paths refused_paths_are_notices_in_the_json_too_with_hostile_characters_escaped
+m NO9 "review-not-read counts one" src/status_review.rs \
+  '            count: bad.len(),' '            count: 1,' \
+  status_review the_review_notices_are_in_the_json_with_code_count_and_the_text_order
+m NO10 "rate-limited counts one" src/status_review.rs \
+  '        count: n,' '        count: 1,' \
+  status_review the_review_notices_are_in_the_json_with_code_count_and_the_text_order
+m NO11 "review-limit counts one" src/status_review.rs \
+  '            count: t.not_read,' '            count: 1,' \
+  status_review at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read
+m NO12 "the rate-limit notice comes before the review notices" src/status.rs \
+  '    notices.extend(status_review::rate_limit_notice(list));' '    notices.splice(0..0, status_review::rate_limit_notice(list));' \
+  status_review the_review_notices_are_in_the_json_with_code_count_and_the_text_order
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

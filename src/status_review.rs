@@ -17,7 +17,7 @@ use crate::github::{Client, OpenPr};
 use crate::output::jopt;
 use crate::repo::{par_map, MAX_PARALLEL};
 use crate::review::{self, Evidence, Line, PrRef, ReviewState, Scope, Status, Verdict};
-use crate::status::{escape_for_text, RepoStatus};
+use crate::status::{escape_for_text, Notice, RepoStatus};
 
 /// Hint: CLEAR (or carried) for the head, but the pull request is a draft (Go `clear-not-ready`).
 pub const HINT_CLEAR_NOT_READY: &str = "clear-not-ready";
@@ -402,23 +402,27 @@ pub fn evidence_lines(r: &PrReview) -> Vec<String> {
 }
 
 /// The notice of the whole run for the reads that were not started after a rate limit.
-pub fn rate_limit_notice(list: &[RepoStatus]) -> Option<String> {
+pub fn rate_limit_notice(list: &[RepoStatus]) -> Option<Notice> {
     let n = list
         .iter()
         .flat_map(|s| &s.prs)
         .filter(|p| p.review.as_ref().is_some_and(|r| r.skipped))
         .count();
-    (n > 0).then(|| {
-        format!(
+    (n > 0).then(|| Notice {
+        code: "rate-limited",
+        source: "reviews",
+        repos: Vec::new(),
+        message: format!(
             "rate limit reached, {n} read{} skipped (review state ?)",
             if n == 1 { "" } else { "s" }
-        )
+        ),
+        count: n,
     })
 }
 
 /// The notices of one repository: pull requests whose comments could not be read completely and pull requests
 /// beyond the limit.
-pub fn notices(s: &RepoStatus) -> Vec<String> {
+pub fn notices(s: &RepoStatus) -> Vec<Notice> {
     let mut out = Vec::new();
     if !s.review_read {
         return out;
@@ -433,21 +437,33 @@ pub fn notices(s: &RepoStatus) -> Vec<String> {
         })
         .collect();
     if let Some((p, why)) = bad.first() {
-        out.push(format!(
-            "{name}: review state not read for {} pull request{} (#{}: {})",
-            bad.len(),
-            if bad.len() == 1 { "" } else { "s" },
-            p.number,
-            esc_cut(why, 200)
-        ));
+        out.push(Notice {
+            code: "review-not-read",
+            source: "reviews",
+            repos: vec![name.clone()],
+            message: format!(
+                "{name}: review state not read for {} pull request{} (#{}: {})",
+                bad.len(),
+                if bad.len() == 1 { "" } else { "s" },
+                p.number,
+                esc_cut(why, 200)
+            ),
+            count: bad.len(),
+        });
     }
     let t = tally(&s.prs);
     if t.not_read > 0 {
-        out.push(format!(
-            "{name}: review state not read for {} pull request{} beyond the limit of {REVIEW_LIMIT} per run",
-            t.not_read,
-            if t.not_read == 1 { "" } else { "s" }
-        ));
+        out.push(Notice {
+            code: "review-limit",
+            source: "reviews",
+            repos: vec![name.clone()],
+            message: format!(
+                "{name}: review state not read for {} pull request{} beyond the limit of {REVIEW_LIMIT} per run",
+                t.not_read,
+                if t.not_read == 1 { "" } else { "s" }
+            ),
+            count: t.not_read,
+        });
     }
     out
 }
