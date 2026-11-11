@@ -289,6 +289,12 @@ fn a_clean_stack_is_clean_like_git_rebase() {
     assert_eq!(r.first(), "plan: clean", "{}", r.text);
     assert!(r.text.contains("level 1  a  base "), "{}", r.text);
     assert!(r.text.contains("2 commits  clean"), "{}", r.text);
+    assert!(
+        r.text.contains("level 2  b  base ") && r.text.contains("1 commit  clean"),
+        "{}",
+        r.text
+    );
+    assert!(r.text.contains("3 levels, stack explicit"), "{}", r.text);
 }
 
 #[test]
@@ -792,7 +798,8 @@ fn a_detached_head_or_a_branch_in_the_base_has_no_starting_point() {
     let r = run(&s.fx, &["--onto", "main"]);
     assert_eq!(r.code, 1, "{}", r.text);
     assert!(r.first().contains("detached-head"), "{}", r.text);
-    s.fx.set_head("main");
+    s.fx.branch("old", s.m1);
+    s.fx.set_head("old");
     let r = run(&s.fx, &["--onto", "main"]);
     assert_eq!(r.code, 1);
     assert!(r.first().contains("nothing-to-restack"), "{}", r.text);
@@ -961,4 +968,197 @@ fn a_level_is_replayed_onto_the_rebased_level_below_not_onto_the_base() {
     let v = r.json();
     assert_eq!(v["levels"][1]["state"], "clean");
     assert_matches_git(&s, &["a", "b"], &v);
+}
+
+#[test]
+fn a_refusal_without_levels_prints_no_level_count_and_the_singular_is_used() {
+    let s = clean_stack();
+    s.fx.branch("b2", s.tips[1]);
+    let r = run(&s.fx, &["--onto", "main"]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.text.contains("\nonto main ("), "{}", r.text);
+    assert!(!r.text.contains("levels"), "{}", r.text);
+    // one level: "1 level", "1 commit"
+    let s = clean_stack();
+    let r = run(&s.fx, &["b", "--old-parent", "a", "--onto", "main"]);
+    assert_eq!(r.code, 0, "{}", r.text);
+    assert!(r.text.contains(", 1 level, stack explicit"), "{}", r.text);
+    assert!(r.text.contains("  1 commit  clean"), "{}", r.text);
+}
+
+#[test]
+fn a_local_default_branch_that_is_ahead_of_origin_is_not_a_level() {
+    let s = clean_stack();
+    // local main has an unpushed commit on top of origin/main
+    let ahead =
+        s.fx.commit(Some(s.m2), &[("m.txt", Some("m1\nAHEAD\nm3\n"))], "ahead");
+    s.fx.branch("main", ahead);
+    let r = run(&s.fx, &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    let v = r.json();
+    let names: Vec<&str> = v["levels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|l| l["branch"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["a", "b", "c"], "{v}");
+    // c is not below the ahead commit, but even a stack on top of it must not make main a level
+    let c2 =
+        s.fx.commit(Some(ahead), &[("y.txt", Some("y1\ny2\nZ\n"))], "on main");
+    s.fx.branch("d", c2);
+    s.fx.set_head("d");
+    let v = run(&s.fx, &["--json"]).json();
+    assert!(
+        v["levels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|l| l["branch"] != "main"),
+        "{v}"
+    );
+    assert!(
+        v["notes"][0]
+            .as_str()
+            .unwrap()
+            .contains("local default branch main is ahead"),
+        "{v}"
+    );
+    // checked out on the default branch itself: nothing to derive
+    s.fx.set_head("main");
+    let r = run(&s.fx, &[]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert!(r.first().contains("default-branch"), "{}", r.text);
+}
+
+#[test]
+fn a_merge_attribute_in_info_attributes_of_the_common_dir_is_seen_from_a_linked_worktree() {
+    if skip() {
+        return;
+    }
+    let s = clean_stack();
+    s.fx.checkout_head();
+    let scratch = scratch();
+    let wt = scratch.path().join("wt");
+    let out = Command::new("git")
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(&s.fx.path)
+        .args(["worktree", "add", "-q", "--detach"])
+        .arg(&wt)
+        .arg("a")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    std::fs::create_dir_all(s.fx.path.join(".git/info")).unwrap();
+    std::fs::write(s.fx.path.join(".git/info/attributes"), "*.txt merge=foo\n").unwrap();
+    // from the main checkout and from the linked worktree: the file lives in the common directory
+    let o = stw(
+        &wt,
+        &[
+            "a",
+            "b",
+            "c",
+            "--onto",
+            "main",
+            "--json",
+            "--root",
+            wt.to_str().unwrap(),
+        ],
+    );
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&o.stderr)));
+    assert_eq!(v["verdict"], "unknown", "{v}");
+    assert!(
+        v["levels"][0]["reasons"][0]
+            .as_str()
+            .unwrap()
+            .contains("merge attribute"),
+        "{v}"
+    );
+    assert_eq!(o.status.code(), Some(1));
+}
+
+#[test]
+fn a_commit_in_the_range_that_adds_a_merge_attribute_makes_a_clean_result_unknown() {
+    // the attribute is added in the first commit of a and removed in the second: no tip or base tree shows it
+    let s = build(
+        vec![("m.txt", Some("m1\nMAIN\nm3\n"))],
+        &[
+            vec![(".gitattributes", Some("*.txt merge=union\n"))],
+            vec![(".gitattributes", None), ("a-new.txt", Some("n\n"))],
+        ],
+        &[],
+        &[],
+    );
+    let v = run(&s.fx, &["a", "--onto", "main", "--json"]).json();
+    assert_eq!(v["levels"][0]["state"], "unknown", "{v}");
+    assert!(
+        v["levels"][0]["reasons"][0]
+            .as_str()
+            .unwrap()
+            .contains("changes a .gitattributes file"),
+        "{v}"
+    );
+}
+
+fn to_edits(v: &[(String, Option<String>)]) -> Edits<'_> {
+    v.iter().map(|(p, c)| (p.as_str(), c.as_deref())).collect()
+}
+
+#[test]
+fn the_rename_limit_is_the_one_of_git_for_a_merge() {
+    if skip() {
+        return;
+    }
+    // 1050 files renamed with a change on main and edited on the branch: git (default merge.renameLimit 7000, measured
+    // here with merge-tree) pairs them, a limit of 1000 would not (1050 x 1050 > 1000 x 1000)
+    let n = 1050;
+    let base: Vec<(String, String)> = (0..n)
+        .map(|i| {
+            (
+                format!("f{i}.txt"),
+                (0..10)
+                    .map(|j| format!("line {i} {j}\n"))
+                    .collect::<String>(),
+            )
+        })
+        .collect();
+    let mut main_edits: Vec<(String, Option<String>)> = Vec::new();
+    let mut branch_edits: Vec<(String, Option<String>)> = Vec::new();
+    for (name, text) in &base {
+        main_edits.push((name.clone(), None));
+        main_edits.push((name.replace('f', "g"), Some(format!("{text}main\n"))));
+        branch_edits.push((name.clone(), Some(format!("{text}extra\n"))));
+    }
+    let fx = Fx::new();
+    let base_edits: Vec<(String, Option<String>)> = base
+        .iter()
+        .map(|(p, c)| (p.clone(), Some(c.clone())))
+        .collect();
+    let m1 = fx.commit(None, &to_edits(&base_edits), "m1");
+    let m2 = fx.commit(Some(m1), &to_edits(&main_edits), "m2");
+    let a = fx.commit(Some(m1), &to_edits(&branch_edits), "feat: a");
+    fx.branch("a", a);
+    fx.branch("main", m2);
+    fx.remote("main", m2);
+    fx.origin_head("main");
+    fx.set_head("a");
+    let v = run(&fx, &["a", "--onto", "main", "--json"]).json();
+    assert_eq!(v["levels"][0]["state"], "conflict", "{v}");
+    // paired renames give content conflicts; without the pairing (limit 1000) they would be modify/delete
+    let kinds: std::collections::BTreeSet<&str> = v["levels"][0]["conflicts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["content"].into(), "{kinds:?}");
 }

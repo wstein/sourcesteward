@@ -288,12 +288,40 @@ fn detect(repo: &gix::Repository, onto: ObjectId, onto_rev: &str) -> Result<Dete
     let ancestor = |a: ObjectId, b: ObjectId| {
         repo::is_ancestor(repo, a, b).map_err(|e| refuse("read-failed", esc(&e.to_string()), None))
     };
+    // the local default branch (main) is the trunk, never a level, also when it is ahead of origin/main
+    let default_name = repo::base_ref(repo).and_then(|full| {
+        full.strip_prefix("refs/remotes/")
+            .and_then(|r| r.split_once('/'))
+            .map(|(_, b)| b.to_string())
+    });
+    if default_name.as_deref() == Some(name.as_str()) {
+        return Err(refuse(
+            "default-branch",
+            format!(
+                "the checked-out branch {} is the default branch: it is the trunk, not a stack",
+                esc(&name)
+            ),
+            Some(format!(
+                "stw restack plan BRANCH... --onto {}",
+                esc(onto_rev)
+            )),
+        ));
+    }
     // branches that already are part of the base are not part of a stack
     let mut open = Vec::new();
+    let mut notes = Vec::new();
     for (n, t) in all {
-        if !ancestor(t, onto)? {
-            open.push((n, t));
+        if ancestor(t, onto)? {
+            continue;
         }
+        if default_name.as_deref() == Some(n.as_str()) {
+            notes.push(format!(
+                "the local default branch {} is ahead of the base and is not part of the chain",
+                esc(&n)
+            ));
+            continue;
+        }
+        open.push((n, t));
     }
     let Some(top) = open.iter().find(|(n, _)| *n == name).cloned() else {
         return Err(refuse(
@@ -388,7 +416,6 @@ fn detect(repo: &gix::Repository, onto: ObjectId, onto_rev: &str) -> Result<Dete
     chain.reverse();
     // branches above the starting point are not part of the plan
     let top = chain.last().expect("not empty").clone();
-    let mut notes = Vec::new();
     let mut above = Vec::new();
     for (n, t) in &open {
         if chain.iter().any(|(c, _)| c == n) {
@@ -411,6 +438,53 @@ fn detect(repo: &gix::Repository, onto: ObjectId, onto_rev: &str) -> Result<Dete
 
 /// Settings and files that make the replay differ from `git rebase` in the dangerous direction (the plan says clean,
 /// git conflicts): the reasons, empty when there are none. The pinned values of the engine are the defaults.
+/// Whether the text of an attributes file sets, unsets or resets the `merge` attribute on some pattern.
+fn mentions_merge(text: &[u8]) -> bool {
+    text.lines().any(|l| {
+        let l = l.trim();
+        if l.starts_with(b"#") {
+            return false;
+        }
+        l.fields()
+            .skip(1)
+            .any(|t| matches!(t, b"merge" | b"-merge" | b"!merge") || t.starts_with(b"merge="))
+    })
+}
+
+/// The blobs of the `.gitattributes` files that `commit` adds or changes (the version after the commit).
+fn changed_attribute_blobs(
+    repo: &gix::Repository,
+    commit: ObjectId,
+) -> Result<Vec<ObjectId>, String> {
+    use gix::diff::tree_with_rewrites::Change;
+    let c = repo.find_commit(commit).map_err(|e| e.to_string())?;
+    let Some(parent) = c.parent_ids().next() else {
+        return Ok(vec![]);
+    };
+    let parent = repo
+        .find_commit(parent.detach())
+        .map_err(|e| e.to_string())?
+        .tree()
+        .map_err(|e| e.to_string())?;
+    let tree = c.tree().map_err(|e| e.to_string())?;
+    let options = gix::diff::Options::default().with_rewrites(None);
+    let changes = repo
+        .diff_tree_to_tree(&parent, &tree, options)
+        .map_err(|e| e.to_string())?;
+    let is_attr = |l: &gix::bstr::BStr| l.rsplit(|b| *b == b'/').next() == Some(b".gitattributes");
+    Ok(changes
+        .iter()
+        .filter_map(|ch| match ch {
+            Change::Addition { location, id, .. } | Change::Modification { location, id, .. }
+                if is_attr(location.as_ref()) =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        })
+        .collect())
+}
+
 fn merge_uncertainty(repo: &gix::Repository, trees: &[ObjectId]) -> Vec<String> {
     let mut out = Vec::new();
     let snapshot = repo.config_snapshot();
@@ -418,8 +492,8 @@ fn merge_uncertainty(repo: &gix::Repository, trees: &[ObjectId]) -> Vec<String> 
     for (key, defaults) in [
         ("merge.renames", &["true"][..]),
         ("diff.renames", &["true"][..]),
-        ("merge.renameLimit", &["1000"][..]),
-        ("diff.renameLimit", &["1000"][..]),
+        ("merge.renameLimit", &["7000"][..]),
+        ("diff.renameLimit", &["7000"][..]),
         ("diff.algorithm", &["myers", "default"][..]),
     ] {
         if let Some(v) = cfg.string(key) {
@@ -434,19 +508,8 @@ fn merge_uncertainty(repo: &gix::Repository, trees: &[ObjectId]) -> Vec<String> 
         }
     }
     // `merge` attribute of any .gitattributes of the trees involved or of info/attributes
-    let mentions_merge = |text: &[u8]| {
-        text.lines().any(|l| {
-            let l = l.trim();
-            if l.starts_with(b"#") {
-                return false;
-            }
-            l.fields()
-                .skip(1)
-                .any(|t| matches!(t, b"merge" | b"-merge" | b"!merge") || t.starts_with(b"merge="))
-        })
-    };
     let mut found = false;
-    if let Ok(text) = std::fs::read(repo.git_dir().join("info/attributes")) {
+    if let Ok(text) = std::fs::read(repo.common_dir().join("info/attributes")) {
         found |= mentions_merge(&text);
     }
     for tree in trees {
@@ -811,6 +874,25 @@ pub fn plan(dir: &Path, req: &Request) -> Result<Plan, crate::error::Error> {
         // the result would be clean: is the replay to be trusted here?
         let mut why = uncertainty.clone();
         for s in &steps {
+            match changed_attribute_blobs(&repo, s.old) {
+                Ok(blobs) => {
+                    for b in blobs {
+                        match repo.find_blob(b) {
+                            Ok(blob) if mentions_merge(&blob.data) => why.push(format!(
+                                "commit {} changes a .gitattributes file that sets a merge attribute",
+                                s.old
+                            )),
+                            Ok(_) => {}
+                            Err(e) => why.push(format!(
+                                "a .gitattributes file of commit {} could not be read: {}",
+                                s.old,
+                                esc(&e.to_string())
+                            )),
+                        }
+                    }
+                }
+                Err(m) => why.push(format!("commit {} could not be read: {}", s.old, esc(&m))),
+            }
             match touches_gitlink(&repo, s.old) {
                 Ok(true) => why.push(format!(
                     "commit {} changes a submodule; the replay does not share git's rules for those",
@@ -990,12 +1072,18 @@ impl Plan {
         use std::fmt::Write;
         let mut b = String::new();
         let _ = writeln!(b, "{}", self.headline());
+        // an input that stopped the plan has no levels: no count then
+        let count = if self.levels.is_empty() {
+            String::new()
+        } else {
+            let n = self.levels.len();
+            format!(", {n} {}", if n == 1 { "level" } else { "levels" })
+        };
         let _ = writeln!(
             b,
-            "onto {} ({}), {} levels, stack {}",
+            "onto {} ({}){count}, stack {}",
             esc(&self.onto_rev),
             short(&self.onto.to_string()),
-            self.levels.len(),
             self.source.label()
         );
         if let Some(r) = &self.refusal {
@@ -1019,12 +1107,17 @@ impl Plan {
             let n = l.commits.map_or("?".to_string(), |n| n.to_string());
             let _ = writeln!(
                 b,
-                "level {}  {}  base {} -> {}  {} commits  {}",
+                "level {}  {}  base {} -> {}  {} {}  {}",
                 i + 1,
                 esc(&l.branch),
                 short(&l.old_base.to_string()),
                 base(l.new_base),
                 n,
+                if l.commits == Some(1) {
+                    "commit"
+                } else {
+                    "commits"
+                },
                 state
             );
             if !matches!(
@@ -1047,8 +1140,9 @@ impl Plan {
             if l.state != LevelState::Conflict && l.dropped > 0 {
                 let _ = writeln!(
                     b,
-                    "    {} commits dropped (empty after the replay)",
-                    l.dropped
+                    "    {} {} dropped (empty after the replay)",
+                    l.dropped,
+                    if l.dropped == 1 { "commit" } else { "commits" }
                 );
             }
         }

@@ -654,7 +654,8 @@ Two parts:
   ambiguous is refused, never guessed, and the explicit spelling is suggested (`instead: stw restack plan b b2 --onto main`):
   two names at one commit, a fork (two candidates, none below the other), a detached `HEAD` (`detached-head`), the checked-out branch
   already in the base (`nothing-to-restack`), no common history with the base (`no-merge-base`). Branches above the starting branch
-  are not in the plan; a note names them.
+  are not in the plan; a note names them. The local default branch (`main`, from `origin/HEAD`) is never a level, also when it is ahead of `origin/main` (a note says so);
+  checked out, it is refused (`default-branch`).
 
 `--onto` is the new base (any revision); default: the default branch of the repository (`origin/HEAD`, else `origin/main`,
 `origin/master`), else a usage error. The old base of the bottom level is `--old-parent` or the merge base of the bottom branch and the base;
@@ -675,6 +676,7 @@ and new base, the number of commits and the state:
 | `unknown` | the result would be clean but the replay is not safe here (below), or a bound (500 commits) was reached |
 | `not-computed` | above a level that is `refused` or `unknown` |
 
+A refusal before any level (no levels computed) prints no level count.
 Exit 0 for `plan: clean` (the states `clean`, `already-upstream`, `became-empty` only), 1 for conflicts, refused or unknown (the plan is
 printed), 2 usage (also: no `--onto` and no default branch, a branch that does not exist). JSON (schema 2, `command: "restack-plan"`):
 `read_only`, `plan` (the first line), `verdict` (`clean`, `conflicts`, `refused`, `unknown`), `source` (`explicit`, `auto-detected`),
@@ -688,12 +690,14 @@ header of `src/replay.rs`), tested against `git rebase` as the oracle in disposa
 clean exactly when `git rebase` succeeds, and a predicted conflict names the files git leaves unmerged). It is not a run of `git rebase`:
 * Directory renames: gix has none; the engine reports a conflict where git renames a directory silently or conflicts (conservative:
   it may say conflict where git succeeds, never clean where git conflicts, in the cases tested).
-* Rename detection and diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=1000`, myers). A repository configuration
-  with another `merge.renames`, `diff.renames`, `merge.renameLimit`, `diff.renameLimit` or `diff.algorithm` makes a level that would be clean `unknown`.
+* Rename detection and diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=7000`, myers). 7000 is the default of git for a merge (documented, and measured
+  with `git merge-tree` on 1050 inexactly renamed files: git pairs them, a limit of 1000 does not); gix counts like git (sources times destinations
+  above the limit squared skips the inexact pairing). A repository configuration with another `merge.renames`, `diff.renames`,
+  `merge.renameLimit`, `diff.renameLimit` (any value but 7000) or `diff.algorithm` makes a level that would be clean `unknown`.
 * Binary files: both sides changed is a conflict, as in git; no binary merge driver runs.
 * Submodules: a level with a commit that changes a gitlink is `unknown` unless it conflicts.
-* Merge drivers and attributes: no driver runs. A `merge` attribute in any `.gitattributes` of the new base or of a branch tip, or in
-  `info/attributes`, makes a level that would be clean `unknown`. Attribute files of the user (`core.attributesFile`) and of the work tree
+* Merge drivers and attributes: no driver runs. A `merge` attribute in any `.gitattributes` of the new base, of a branch tip or added or changed by a commit of the
+  replayed range, or in `info/attributes` of the common git directory (also seen from a linked worktree), makes a level that would be clean `unknown`. Attribute files of the user (`core.attributesFile`) and of the work tree
   that are not committed are not read.
 * rerere is unknown to the plan: a conflict that `rerere` could resolve is still reported as a conflict.
 * `git rebase` drops a commit whose patch-id is in the base (`--cherry-pick`); the engine drops a commit only when its merge leaves the

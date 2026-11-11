@@ -12,7 +12,7 @@
 //! Differences from Git, named: there is no skip by patch ID (`git rebase` drops a commit whose patch is in
 //! `onto`); a commit is dropped only when its merge leaves the new parent's tree unchanged (`Empty`), as in the Go
 //! restack. A patch that `onto` made and later reverted therefore comes through, as with `git rebase --onto`. Merge drivers of the configuration are never started, a driver named by an attribute is unknown to the merge; rename
-//! detection and the diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=1000`, myers). Attributes
+//! detection and the diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=7000`, myers). Attributes
 //! come from the index of the repository, as for `git merge-tree`. The replay stops at the first conflict.
 //! Open: `TreatAsUnresolved::git()` is used to decide what a conflict is; no fixture tells it from `undecidable()`
 //! (every conflict case of the tests is one under both), so the difference is untested.
@@ -185,7 +185,7 @@ pub fn sandbox(repo: &gix::Repository) -> Result<gix::Repository, ReplayError> {
         for (key, value) in [
             ("renormalize", "false"),
             ("renames", "true"),
-            ("renameLimit", "1000"),
+            ("renameLimit", "7000"),
             ("conflictStyle", "merge"),
         ] {
             file.set_raw_value_by("merge", None, key, value)
