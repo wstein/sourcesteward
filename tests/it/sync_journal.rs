@@ -19,8 +19,8 @@ pub struct J {
     pub ws_new: String,
     pub sub_old: String,
     pub sub_new: String,
-    ws_up: PathBuf,
-    ws_origin: PathBuf,
+    pub ws_up: PathBuf,
+    pub ws_origin: PathBuf,
     sub_up: PathBuf,
     sub_origin: PathBuf,
 }

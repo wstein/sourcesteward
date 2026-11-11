@@ -21,6 +21,7 @@ use crate::github::Client;
 pub mod fast_forward;
 pub mod fetch;
 pub mod journal;
+pub mod restore;
 pub mod rules;
 pub mod submodules;
 

@@ -28,6 +28,7 @@ stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
+stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
@@ -41,6 +42,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
+| `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
 
 `sync` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
@@ -176,7 +178,7 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 | Code | Meaning |
 | --- | --- |
 | 0 | everything asked for worked (also when repositories need attention, and in `status` also when a GitHub read failed: that is a notice, Go exits 1 there) |
-| 1 | the command ran, but a repository could not be read; `sync` failed in one; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
+| 1 | the command ran, but a repository could not be read; `sync` failed in one; `sync restore` found no run or left an entry `changed-since`, `journal-incomplete` or `failed`; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
 | 2 | usage error or unusable workspace; nothing was done |
 | 3 | `lint pr` only: an error finding, or a list cut at its bound (the result is printed and is not a pass) |
 
@@ -654,6 +656,55 @@ repository keep record and recovery refs. A recovery ref is deleted only when th
 (`refs/stw/recovery/sync/<run id>/<n>`), it is not symbolic and still points at the recorded old tip; if one stays, so does
 its record. A record with a `prepared` entry (a killed run) is kept until a restore has dealt with it. Files in the directory
 that are not run records are ignored. Not undone and not journaled: pruned remote-tracking refs and submodule moves.
+
+## `sync restore`
+
+`stw sync restore [PATH] [--run ID]` undoes the branch moves of one run (port of `internal/stwsync/restore.go`). The run is
+`--run ID`, else the highest run ID found in the journals of the workspace (the order of the IDs, never a modification time).
+For every entry of the record in every repository of the workspace the result is one of:
+
+- `restored`: the branch stood on the tip the run left and is back on the journaled old tip. A branch that is checked out in the
+  main worktree moves with `git reset --keep <old tip>` (index and files with it) and only when that worktree has no tracked
+  change (an untracked file does not count, nor does a submodule that moved: the `--ignore-submodules` rule of Go); a branch that
+  is checked out nowhere moves with `git update-ref --no-deref <ref> <old tip> <expected tip>` (compare and swap). Never forced.
+- `already-restored`: the branch is on the old tip already (a second restore; a run that stopped before it moved the branch).
+- `changed-since`: anything else that is not the tip the run left, and nothing is touched: a new commit (`the branch moved since the
+  run`), the branch is gone, symbolic or checked out in another worktree (linked, relative or dead registration), a local change
+  in the checked-out worktree, an operation (merge, rebase, ...) in progress in it, or git refused the expected value.
+- `journal-incomplete`: a record that was never completed and names no planned new tip (the reason names the recovery ref for a manual reset).
+- `failed`: `bad-record` (a ref that is not a valid `refs/heads/<name>`, an old or new tip that is not 40 lower-case hex
+  digits), `old-object-missing`, `raced` (the branch was not on the old tip after the reset), `git-failed: ...`, or a record or
+  journal directory that cannot be used (not JSON, another run's or type's record, a symbolic link, too large).
+
+A record that a crash left in state `prepared` is dealt with: a branch that did not move is `already-restored`, one that moved to the
+planned tip is `restored`; either way the entry becomes `restored` in the record. A restore never deletes a recovery ref or a record
+(retention of the next run does).
+
+The record is data and is not trusted: the repository to work in is the one whose git directory holds the record, taken from the
+workspace (`.gitmodules` paths that are not accepted are never used, see "Submodule paths"; they are listed as `rejected_paths`), the
+`worktree` field is never read, a ref and an OID are checked before any git argument is built, and every git step runs through the runner
+(`"via": "git"`, hooks off, fixed argument vector, `reset --keep` refused when the repository's own config names a `filter.*`
+driver). Not undone, because not journaled: pruned remote-tracking refs, stash reapplies, submodule moves. At most 16 repositories at a time.
+
+Output: text `sync restore of run <id>`, one line per entry (`name`, `branch`, result, reason), then the counts. `--json`:
+`schema_version` 2, `command` `sync`, `mode` `restore`, `root`, `engine`, `run_id` (null when refused), `repos[{name, path, branch,
+result, old_oid, new_oid, reason, via}]` (`old_oid`: where the branch stood before the restore, `new_oid`: where it stands after a
+`restored`/`already-restored`, null otherwise; `via` only when a git step ran), `summary{total, restored, already_restored,
+changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`: `sync-restore-no-run`, `sync-invalid-options`),
+`rejected_paths`. Exit 1 when `error` is set or an entry is `changed-since`, `journal-incomplete` or `failed`; a refusal in text mode prints
+`stw: sync: <code>: <message>` to stderr. `restore` together with any sync option (`--plan`, `--dry-run`, `--apply`, `--prune`,
+`--no-prune`, `--submodules`, `--rules`, `--rules-path`, `--offline`, `--repo`) is a usage error (exit 2, nothing done).
+
+Deviations from Go: (1) the workspace is `PATH` or `--root` (both is a usage error), and the repositories are the root and the top-level
+submodules of `.gitmodules` (Go walks the index gitlinks, nested ones too); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
+result, exit 1); (3) a record is also refused when a `ref` is not a valid branch name by the rules of git, an OID is not 40 digits
+(a 64 digit OID of a SHA-256 repository is `bad-record`: stw has no SHA-256 support) or the file is a symbolic link; (4) any merge, rebase or similar
+operation in the main worktree stops the restore of that repository (Go: only an operation that involves the branch, also in linked
+worktrees); (5) a branch ref that is symbolic is `changed-since` before the tips are compared; (6) an unusable journal
+directory or record is reported as a `failed` entry of that repository, never skipped; (7) the JSON layout is the Rust one (`repos[]` as in
+`sync`, `summary` keys with underscores, `rejected_paths`), the text has no per-branch `moved` arrows but the abbreviated tips in the reason;
+(8) `git reset --keep` is not a compare and swap: between the check and the reset a commit could be added to the branch; the result is then
+`raced` or the commit is only in the reflog (Go has the same window).
 
 ## Known limits of a `sync` run
 

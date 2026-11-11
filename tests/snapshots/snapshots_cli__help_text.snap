@@ -22,8 +22,8 @@ Options:
 Exit codes:
   0  everything asked for worked
   1  the command ran, but a repository could not be read, `sync` failed in one, `tidy apply`
-     failed a step (a branch, worktree, registration or the exclude file), or `tidy restore` left an
-     entry not restored
+     failed a step (a branch, worktree, registration or the exclude file), `tidy restore` left an
+     entry not restored, or `sync restore` found no run or left an entry unrestored
   2  usage error or unusable workspace (nothing was done)
 
 --json prints one JSON object with "schema_version" (see README.md).

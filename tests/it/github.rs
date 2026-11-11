@@ -376,6 +376,9 @@ fn readme_mentions_every_documented_field() {
         "fast_forwarded",
         "run_id",
         "recovery_ref",
+        "already_restored",
+        "changed_since",
+        "journal_incomplete",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }

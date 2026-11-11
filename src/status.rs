@@ -27,6 +27,18 @@ pub struct Changes {
 
 /// Run the index/worktree/HEAD status of `repo` through gix.
 pub fn changes(repo: &gix::Repository, with_untracked: bool) -> Result<Changes> {
+    changes_opts(repo, with_untracked, false)
+}
+
+/// `changes`, optionally without the unstaged change of a submodule (its HEAD or work tree differs from the gitlink
+/// of the index: what `git status --ignore-submodules=all` leaves out of the work tree side). `stw sync restore` asks
+/// this way: a run that moved the superproject and a submodule makes the gitlink of the submodule look modified, which
+/// is no local work of the superproject.
+pub fn changes_opts(
+    repo: &gix::Repository,
+    with_untracked: bool,
+    ignore_submodule_changes: bool,
+) -> Result<Changes> {
     use gix::status::index_worktree::Item as W;
     use gix::status::Item;
     let mut staged: BTreeSet<BString> = BTreeSet::new();
@@ -60,6 +72,9 @@ pub fn changes(repo: &gix::Repository, with_untracked: bool) -> Result<Changes> 
                     S::Conflict { .. } => {
                         conflicts.insert(rela_path);
                     }
+                    S::Change(
+                        gix::status::plumbing::index_as_worktree::Change::SubmoduleModification(_),
+                    ) if ignore_submodule_changes => {}
                     S::Change(_) => {
                         unstaged.insert(rela_path);
                     }

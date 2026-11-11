@@ -20,8 +20,8 @@ const EXIT_CODES: &str = "\
 Exit codes:
   0  everything asked for worked
   1  the command ran, but a repository could not be read, `sync` failed in one, `tidy apply`
-     failed a step (a branch, worktree, registration or the exclude file), or `tidy restore` left an
-     entry not restored
+     failed a step (a branch, worktree, registration or the exclude file), `tidy restore` left an
+     entry not restored, or `sync restore` found no run or left an entry unrestored
   2  usage error or unusable workspace (nothing was done)
 
 --json prints one JSON object with \"schema_version\" (see README.md).";
@@ -279,8 +279,34 @@ struct RestoreArgs {
     manifest_dir: Option<PathBuf>,
 }
 
+#[derive(Subcommand)]
+enum SyncCommand {
+    /// Move the branches of a sync run back to the tips they had before it: only where a branch still stands on the tip
+    /// the run left (else `changed-since`, nothing touched). Pruned refs, stash reapplies and submodule moves stay
+    #[command(after_help = EXIT_CODES)]
+    Restore(SyncRestoreArgs),
+}
+
+#[derive(Args)]
+struct SyncRestoreArgs {
+    /// Workspace root (same as --root)
+    #[arg(value_name = "PATH")]
+    path: Option<PathBuf>,
+    /// Run ID printed by `sync` [default: the highest run ID found in the workspace]
+    #[arg(long, value_name = "ID")]
+    run: Option<String>,
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+}
+
 #[derive(Args)]
 struct SyncArgs {
+    #[command(subcommand)]
+    sub: Option<SyncCommand>,
     #[command(flatten)]
     common: Common,
     /// Print what a run would do and change nothing: no fetch, no write (alias: --dry-run)
@@ -575,6 +601,59 @@ fn run_add(a: AddArgs) -> Result<u8> {
     Ok(exit::OK)
 }
 
+/// `stw sync restore`: any sync option given with it is a usage error (nothing is done).
+fn run_sync_restore(
+    r: SyncRestoreArgs,
+    common: &Common,
+    sync_flags: [(&str, bool); 8],
+) -> Result<u8> {
+    let given = sync_flags
+        .iter()
+        .find(|(_, on)| *on)
+        .map(|(n, _)| *n)
+        .or(common.offline.then_some("--offline"))
+        .or((!common.repos.is_empty()).then_some("--repo"));
+    if let Some(name) = given {
+        return Err(Error::usage(format!(
+            "{name} does not apply to stw sync restore"
+        )));
+    }
+    let roots = [r.path.clone(), r.root.clone(), common.root.clone()];
+    if roots.iter().flatten().count() > 1 {
+        return Err(Error::usage(
+            "name the workspace once: PATH or --root, not both",
+        ));
+    }
+    let json = r.json || common.json;
+    let c = Common {
+        json,
+        offline: true,
+        root: roots.into_iter().flatten().next(),
+        repos: Vec::new(),
+    };
+    let ws = workspace(&c, None)?;
+    let result = sync::restore::restore(&ws.repos, r.run.as_deref());
+    if json {
+        print_json(&sync::restore::to_json(
+            &ws.root,
+            &result,
+            rejected_json(&ws.rejected),
+        ));
+    } else if let Some((code, message)) = &result.error {
+        return Err(Error::repository(format!("sync: {code}: {message}")));
+    } else {
+        print!("{}", sync::restore::render_human(&result));
+        for n in rejected_notices(&ws.rejected) {
+            println!("({n})");
+        }
+    }
+    Ok(if result.failed() {
+        exit::FAILED
+    } else {
+        exit::OK
+    })
+}
+
 fn manifest_dir(given: Option<PathBuf>) -> Result<PathBuf> {
     given
         .or_else(tidy_apply::default_manifest_dir)
@@ -799,6 +878,31 @@ fn run(command: Command) -> Result<u8> {
             Ok(failed(!r.complete()))
         }
         Command::Add(a) => run_add(a),
+        Command::Sync(SyncArgs {
+            sub: Some(SyncCommand::Restore(r)),
+            common,
+            plan,
+            dry_run,
+            apply,
+            prune,
+            no_prune,
+            submodules,
+            rules,
+            rules_path,
+        }) => run_sync_restore(
+            r,
+            &common,
+            [
+                ("--plan", plan),
+                ("--dry-run", dry_run),
+                ("--apply", apply),
+                ("--prune", prune),
+                ("--no-prune", no_prune),
+                ("--submodules", submodules),
+                ("--rules", rules),
+                ("--rules-path", rules_path.is_some()),
+            ],
+        ),
         Command::Sync(a) => {
             let ws = workspace(&a.common, a.rules_path.as_deref())?;
             // sync acts unless --plan or --dry-run asks for the preview; --apply is an ignored alias

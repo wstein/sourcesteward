@@ -197,8 +197,7 @@ fn ensure_dir(dir: &Path, create: bool) -> std::io::Result<bool> {
     Ok(true)
 }
 
-/// The run IDs that have a record file in `dir` (names only, not read): files named `<run id>.json`, no directory, no
-/// symbolic link. A missing directory is an empty list; a directory that cannot be read is an error.
+/// The run IDs that have a record file in `dir` (names only, not read): entries named `<run id>.json` that are no directory. A missing directory is an empty list; a directory that cannot be read is an error.
 pub fn list_ids(dir: &Path) -> Result<Vec<RunId>, String> {
     match ensure_dir(dir, false) {
         Ok(true) => {}
@@ -216,7 +215,8 @@ pub fn list_ids(dir: &Path) -> Result<Vec<RunId>, String> {
         else {
             continue;
         };
-        if e.file_type().is_ok_and(|t| t.is_file()) {
+        // a symbolic link under a record's name is listed too (and refused by `load`), so that it is reported
+        if e.file_type().is_ok_and(|t| !t.is_dir()) {
             ids.push(id);
         }
     }
@@ -283,6 +283,16 @@ impl Journal {
             },
             id,
             written: false,
+        }
+    }
+
+    /// The journal of an existing record (a restore rewrites the state of an entry it dealt with).
+    pub fn from_record(repo: &gix::Repository, id: RunId, rec: Record) -> Journal {
+        Journal {
+            dir: dir_of(repo),
+            id,
+            rec,
+            written: true,
         }
     }
 
