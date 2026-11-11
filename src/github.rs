@@ -21,11 +21,26 @@ pub struct OpenPr {
     pub head: String,
     pub draft: bool,
     pub author: String,
+    /// The author is an app/bot account (`user.type == "Bot"` or a `[bot]` login).
+    pub bot: bool,
     /// REST has no `reviewDecision`; always None (documented gap).
     pub review: Option<String>,
     /// From `mergeable_state` of the single-PR endpoint, upper-cased like gh's `mergeStateStatus`.
     pub merge_state: Option<String>,
 }
+
+/// Open issues of one repository, from one page of the issues list.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IssueCounts {
+    pub open: usize,
+    /// Open issues with a label named `bug` (case-insensitive).
+    pub bug: usize,
+    /// The page was full (`PAGE` entries, pull requests included): more issues may exist.
+    pub truncated: bool,
+}
+
+/// Page size of the list reads of `stw status` (the REST maximum).
+pub const PAGE: usize = 100;
 
 /// One PR of any state, for the merged-head proof of `stw tidy plan`.
 #[derive(Clone, Debug)]
@@ -174,6 +189,10 @@ impl Client {
                 head: p["head"]["ref"].as_str().unwrap_or("").to_string(),
                 draft: p["draft"].as_bool().unwrap_or(false),
                 author: p["user"]["login"].as_str().unwrap_or("").to_string(),
+                bot: p["user"]["type"].as_str() == Some("Bot")
+                    || p["user"]["login"]
+                        .as_str()
+                        .is_some_and(|l| l.ends_with("[bot]")),
                 review: None,
                 merge_state: None,
             })
@@ -204,6 +223,39 @@ impl Client {
             }
         });
         Ok(prs)
+    }
+
+    /// Open issues (the issues endpoint also lists pull requests; those are skipped). One page of `PAGE`
+    /// entries: a full page sets `truncated`, no further pages are read.
+    pub fn open_issues(&self, slug: &str) -> Result<IssueCounts> {
+        let api = &self.base;
+        let v = self.get(&format!(
+            "{api}/repos/{slug}/issues?state=open&per_page={PAGE}"
+        ))?;
+        let items = v
+            .as_array()
+            .ok_or_else(|| Error::github("GitHub API sent an unexpected issues response"))?;
+        let issues: Vec<&Value> = items
+            .iter()
+            .filter(|i| i.get("pull_request").is_none())
+            .collect();
+        let bug = issues
+            .iter()
+            .filter(|i| {
+                i["labels"].as_array().is_some_and(|l| {
+                    l.iter().any(|x| {
+                        x["name"]
+                            .as_str()
+                            .is_some_and(|n| n.eq_ignore_ascii_case("bug"))
+                    })
+                })
+            })
+            .count();
+        Ok(IssueCounts {
+            open: issues.len(),
+            bug,
+            truncated: items.len() >= PAGE,
+        })
     }
 
     /// Newest `limit` PRs of every state (the prototype used `gh pr list --state all --limit 500`).

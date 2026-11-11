@@ -531,8 +531,14 @@ fn run(command: Command) -> Result<u8> {
                 }
                 print_json(&v);
             } else {
-                print!("{}", status::render_human(ws.github.note.clone(), &list));
-                print!("{}", sync::rules::render_human(&rules));
+                print!(
+                    "{}",
+                    status::render_human(
+                        ws.github.note.clone(),
+                        &list,
+                        &sync::rules::render_human(&rules)
+                    )
+                );
             }
             Ok(failed(list.iter().any(|s| s.error.is_some())))
         }

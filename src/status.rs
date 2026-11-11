@@ -7,7 +7,7 @@ use gix::state::InProgress;
 use serde_json::{json, Value};
 
 use crate::error::Result;
-use crate::github::{Client, GithubState, OpenPr};
+use crate::github::{Client, GithubState, IssueCounts, OpenPr, PAGE};
 use crate::output::*;
 use crate::repo::{self, RepoRef, Upstream};
 
@@ -216,6 +216,26 @@ pub struct RepoStatus {
     pub prs: Vec<OpenPr>,
     pub pr_error: Option<String>,
     pub pr_read: bool,
+    pub issues: Option<IssueCounts>,
+    pub issue_error: Option<String>,
+    pub branches_local: Option<usize>,
+    pub branches_remote: Option<usize>,
+    pub worktrees: Option<usize>,
+}
+
+/// Remote-tracking branches of `origin` (`refs/remotes/origin/*` without `HEAD`), as of the last fetch.
+pub fn remote_branch_count(repo: &gix::Repository) -> Result<usize> {
+    let mut n = 0;
+    for r in repo.references()?.remote_branches()? {
+        let r = r?;
+        let name = r.name().as_bstr().to_string();
+        if let Some(b) = name.strip_prefix("refs/remotes/origin/") {
+            if b != "HEAD" {
+                n += 1;
+            }
+        }
+    }
+    Ok(n)
 }
 
 pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
@@ -233,12 +253,22 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
         prs: vec![],
         pr_error: None,
         pr_read: false,
+        issues: None,
+        issue_error: None,
+        branches_local: None,
+        branches_remote: None,
+        worktrees: None,
     };
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
         s.facts = head_facts(&repo)?;
         s.changes = changes(&repo, true)?;
         s.stash = stash_count(&repo);
+        s.branches_local = repo::local_branches(&repo).ok().map(|b| b.len());
+        s.branches_remote = remote_branch_count(&repo).ok();
+        s.worktrees = crate::repo::worktrees::scan(&repo)
+            .ok()
+            .map(|w| w.linked.len() + w.relative.len());
         s.op = operation(&repo);
         s.slug = repo::slug(&repo);
         if r.path != root {
@@ -263,8 +293,241 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
             }
             Err(e) => s.pr_error = Some(e.to_string().chars().take(200).collect()),
         }
+        match c.open_issues(slug) {
+            Ok(i) => s.issues = Some(i),
+            Err(e) => s.issue_error = Some(e.to_string().chars().take(200).collect()),
+        }
     }
     s
+}
+
+/// One remote-read counter of a repository (or of all): what the hosting said, or why there is no number.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Source {
+    /// `open` of `sub` (bot PRs, bug issues); `truncated`: a full page was read, the true number may be higher.
+    Read {
+        open: usize,
+        sub: usize,
+        truncated: bool,
+    },
+    /// Not read on purpose: `--offline` or no token.
+    NotRead,
+    /// The repository has no GitHub origin (a total ignores it).
+    NoRemote,
+    /// The read failed (a notice says why) or the repository could not be read locally.
+    Failed,
+}
+
+impl Source {
+    fn state(self) -> &'static str {
+        match self {
+            Source::Read { .. } => "ok",
+            Source::NotRead => "not-read",
+            Source::NoRemote => "no-remote",
+            Source::Failed => "failed",
+        }
+    }
+
+    fn json(self, sub_name: &str) -> Value {
+        let (open, sub, truncated) = match self {
+            Source::Read {
+                open,
+                sub,
+                truncated,
+            } => (json!(open), json!(sub), truncated),
+            _ => (Value::Null, Value::Null, false),
+        };
+        json!({"state": self.state(), "open": open, sub_name: sub, "truncated": truncated})
+    }
+
+    fn text(self, label: &str, sub_label: &str) -> String {
+        match self {
+            Source::Read {
+                open,
+                sub,
+                truncated,
+            } => {
+                let plus = if truncated { "+" } else { "" };
+                format!("{label} {open}{plus} ({sub_label} {sub}{plus})")
+            }
+            Source::Failed => format!("{label} ?"),
+            Source::NotRead | Source::NoRemote => format!("{label} n/a"),
+        }
+    }
+}
+
+/// The counters of one repository, or the totals of all.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Counts {
+    pub prs: Source,
+    pub issues: Source,
+    pub branches_local: Option<usize>,
+    pub branches_remote: Option<usize>,
+    pub worktrees: Option<usize>,
+    pub stash: Option<usize>,
+}
+
+pub fn counts_of(s: &RepoStatus) -> Counts {
+    if s.error.is_some() {
+        return Counts {
+            prs: Source::Failed,
+            issues: Source::Failed,
+            branches_local: None,
+            branches_remote: None,
+            worktrees: None,
+            stash: None,
+        };
+    }
+    let remote = |read: Option<(usize, usize, bool)>, failed: bool| match read {
+        Some((open, sub, truncated)) => Source::Read {
+            open,
+            sub,
+            truncated,
+        },
+        None if failed => Source::Failed,
+        None if s.slug.is_none() => Source::NoRemote,
+        None => Source::NotRead,
+    };
+    Counts {
+        prs: remote(
+            s.pr_read.then(|| {
+                (
+                    s.prs.len(),
+                    s.prs.iter().filter(|p| p.bot).count(),
+                    s.prs.len() >= PAGE,
+                )
+            }),
+            s.pr_error.is_some(),
+        ),
+        issues: remote(
+            s.issues.map(|i| (i.open, i.bug, i.truncated)),
+            s.issue_error.is_some(),
+        ),
+        branches_local: s.branches_local,
+        branches_remote: s.branches_remote,
+        worktrees: s.worktrees,
+        stash: Some(s.stash),
+    }
+}
+
+fn sum_source(all: impl Iterator<Item = Source>) -> Source {
+    let all: Vec<Source> = all.collect();
+    if all.contains(&Source::Failed) {
+        return Source::Failed;
+    }
+    let (mut open, mut sub, mut truncated, mut any) = (0, 0, false, false);
+    for s in &all {
+        if let Source::Read {
+            open: o,
+            sub: b,
+            truncated: t,
+        } = s
+        {
+            (open, sub, truncated, any) = (open + o, sub + b, truncated || *t, true);
+        }
+    }
+    if any && !all.contains(&Source::NotRead) {
+        Source::Read {
+            open,
+            sub,
+            truncated,
+        }
+    } else {
+        Source::NotRead
+    }
+}
+
+fn sum_opt(all: impl Iterator<Item = Option<usize>>) -> Option<usize> {
+    all.sum::<Option<usize>>()
+}
+
+/// Totals: a counter is a number only when every repository gave one (repositories without a GitHub origin
+/// are left out of the PR and issue totals); otherwise `?` (a read failed) or `n/a` (not read).
+pub fn totals(list: &[RepoStatus]) -> Counts {
+    let c: Vec<Counts> = list.iter().map(counts_of).collect();
+    Counts {
+        prs: sum_source(c.iter().map(|c| c.prs)),
+        issues: sum_source(c.iter().map(|c| c.issues)),
+        branches_local: sum_opt(c.iter().map(|c| c.branches_local)),
+        branches_remote: sum_opt(c.iter().map(|c| c.branches_remote)),
+        worktrees: sum_opt(c.iter().map(|c| c.worktrees)),
+        stash: sum_opt(c.iter().map(|c| c.stash)),
+    }
+}
+
+fn counts_json(c: &Counts) -> Value {
+    json!({
+        "pull_requests": c.prs.json("bot"),
+        "issues": c.issues.json("bug"),
+        "branches": {"local": c.branches_local, "remote": c.branches_remote},
+        "worktrees": c.worktrees,
+        "stash": c.stash,
+    })
+}
+
+fn num(n: Option<usize>) -> String {
+    n.map_or("?".into(), |n| n.to_string())
+}
+
+/// The `Counts` block: one aligned line per repository, then `All`.
+fn counts_block(list: &[RepoStatus]) -> String {
+    let mut rows: Vec<(String, Counts)> = list
+        .iter()
+        .map(|s| {
+            (
+                s.slug.clone().unwrap_or_else(|| s.name.clone()),
+                counts_of(s),
+            )
+        })
+        .collect();
+    rows.push(("All".into(), totals(list)));
+    let cells: Vec<Vec<String>> = rows
+        .iter()
+        .map(|(_, c)| {
+            vec![
+                c.prs.text("PRs", "bot"),
+                c.issues.text("Issues", "bug"),
+                format!(
+                    "Branches {}/{}",
+                    num(c.branches_local),
+                    num(c.branches_remote)
+                ),
+                format!("Worktrees {}", num(c.worktrees)),
+                format!("Stash {}", num(c.stash)),
+            ]
+        })
+        .collect();
+    let name_w = rows
+        .iter()
+        .map(|(n, _)| n.chars().count())
+        .max()
+        .unwrap_or(0);
+    let widths: Vec<usize> = (0..5)
+        .map(|i| {
+            cells
+                .iter()
+                .map(|r| r[i].chars().count())
+                .max()
+                .unwrap_or(0)
+        })
+        .collect();
+    let mut out = String::from("Counts\n");
+    for ((name, _), row) in rows.iter().zip(&cells) {
+        let mut line = format!("  {name:<name_w$}  ");
+        for (i, cell) in row.iter().enumerate() {
+            if i > 0 {
+                line += " | ";
+            }
+            if i + 1 < row.len() {
+                line += &format!("{cell:<w$}", w = widths[i]);
+            } else {
+                line += cell;
+            }
+        }
+        out += &line;
+        out.push('\n');
+    }
+    out
 }
 
 /// Attention reasons, in the prototype's order.
@@ -336,6 +599,7 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
                 "slug": jopt(s.slug.as_deref()),
                 "attention": attn,
                 "reasons": rs,
+                "counts": counts_json(&counts_of(s)),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs},
                 "error": jopt(s.error.as_deref()),
             })
@@ -347,18 +611,35 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
         "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()),
         "repos": repos,
         "summary": {"total": list.len(), "attention": attention},
+        "totals": counts_json(&totals(list)),
     })
 }
 
-pub fn render_human(github_note: Option<String>, list: &[RepoStatus]) -> String {
-    let mut out = String::new();
+/// Blocks, each followed by a blank line: `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)`, the
+/// rules block `rules` (already rendered, may be empty), then the summary line.
+pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &str) -> String {
+    let mut out = counts_block(list);
+    out.push('\n');
     let mut attention = 0;
+    let mut todo = String::new();
+    for s in list {
+        let rs = reasons(s);
+        if !rs.is_empty() {
+            attention += 1;
+            todo += &format!("  {:<18} {}\n", s.name, rs.join(", "));
+        }
+    }
+    out += &format!("Needs action ({attention})\n");
+    out += &if todo.is_empty() {
+        "  nothing\n".to_string()
+    } else {
+        todo
+    };
+    out.push('\n');
+    out += &format!("Repositories ({})\n", list.len());
     for s in list {
         let rs = reasons(s);
         let attn = !rs.is_empty();
-        if attn {
-            attention += 1;
-        }
         let mark = if attn { '!' } else { ' ' };
         let where_ = match &s.facts.branch {
             Some(b) => b.clone(),
@@ -447,8 +728,27 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus]) -> String 
             }
         }
     }
-    if let Some(n) = github_note {
-        out += &format!("({n})\n");
+    out.push('\n');
+    let mut notices: Vec<String> = github_note.into_iter().collect();
+    for s in list {
+        if let Some(e) = &s.pr_error {
+            notices.push(format!("{}: pull requests not read ({e})", s.name));
+        }
+        if let Some(e) = &s.issue_error {
+            notices.push(format!("{}: issues not read ({e})", s.name));
+        }
+    }
+    out += &format!("Notices ({})\n", notices.len());
+    if notices.is_empty() {
+        out += "  none\n";
+    }
+    for n in &notices {
+        out += &format!("  {n}\n");
+    }
+    out.push('\n');
+    if !rules.is_empty() {
+        out += rules;
+        out.push('\n');
     }
     if attention > 0 {
         out += &format!(

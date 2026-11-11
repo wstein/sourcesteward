@@ -18,3 +18,15 @@ fn status_json_of_a_fixture_workspace() {
         insta::assert_snapshot!(pretty);
     });
 }
+
+#[test]
+fn status_text_of_a_fixture_workspace() {
+    let fx = status_fixture();
+    fx.write("untracked.txt", "x\n");
+    insta::assert_snapshot!(stw_stdout(&[
+        "status",
+        "--root",
+        &path_str(&fx.path),
+        "--offline"
+    ]));
+}

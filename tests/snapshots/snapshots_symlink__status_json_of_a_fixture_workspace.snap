@@ -37,6 +37,26 @@ expression: pretty
       "slug": "test/fixture",
       "attention": false,
       "reasons": [],
+      "counts": {
+        "pull_requests": {
+          "state": "not-read",
+          "open": null,
+          "bot": null,
+          "truncated": false
+        },
+        "issues": {
+          "state": "not-read",
+          "open": null,
+          "bug": null,
+          "truncated": false
+        },
+        "branches": {
+          "local": 1,
+          "remote": 1
+        },
+        "worktrees": 0,
+        "stash": 0
+      },
       "pull_requests": {
         "read": false,
         "error": null,
@@ -48,6 +68,26 @@ expression: pretty
   "summary": {
     "total": 1,
     "attention": 0
+  },
+  "totals": {
+    "pull_requests": {
+      "state": "not-read",
+      "open": null,
+      "bot": null,
+      "truncated": false
+    },
+    "issues": {
+      "state": "not-read",
+      "open": null,
+      "bug": null,
+      "truncated": false
+    },
+    "branches": {
+      "local": 1,
+      "remote": 1
+    },
+    "worktrees": 0,
+    "stash": 0
   },
   "agent_rules": {
     "path": null,

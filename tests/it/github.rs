@@ -152,10 +152,18 @@ fn json_field_names_are_the_documented_ones() {
             "agent_rules",
             "github_note",
             "repos",
-            "summary"
+            "summary",
+            "totals"
         ])
     );
     assert_eq!(keys(&st["summary"]), doc(&["total", "attention"]));
+    let counts = doc(&["pull_requests", "issues", "branches", "worktrees", "stash"]);
+    assert_eq!(keys(&st["totals"]), counts);
+    assert_eq!(keys(&st["repos"][0]["counts"]), counts);
+    let src = |sub: &str| doc(&["state", "open", sub, "truncated"]);
+    assert_eq!(keys(&st["totals"]["pull_requests"]), src("bot"));
+    assert_eq!(keys(&st["totals"]["issues"]), src("bug"));
+    assert_eq!(keys(&st["totals"]["branches"]), doc(&["local", "remote"]));
     let repo = &st["repos"][0];
     assert_eq!(
         keys(repo),
@@ -177,6 +185,7 @@ fn json_field_names_are_the_documented_ones() {
             "slug",
             "attention",
             "reasons",
+            "counts",
             "pull_requests",
             "error"
         ])

@@ -30,6 +30,7 @@ mod review_go_corpus;
 mod review_lines;
 mod review_read;
 mod slug;
+mod status_counts;
 mod sync;
 mod sync_rules;
 mod tidy;
