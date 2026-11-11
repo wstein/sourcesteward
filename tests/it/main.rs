@@ -7,6 +7,8 @@ mod common;
 
 mod add;
 mod auth;
+mod carryover;
+mod carryover_cli;
 mod cli;
 mod credentials;
 mod git_runner;

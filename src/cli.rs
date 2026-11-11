@@ -10,7 +10,7 @@ use crate::error::{exit, Error, Kind, Result};
 use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
-use crate::{add, dev, git_runner, status, sync, tidy, tidy_apply};
+use crate::{add, carryover, dev, git_runner, status, sync, tidy, tidy_apply};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -53,6 +53,12 @@ enum Command {
     /// Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
     #[command(after_help = EXIT_CODES)]
     Add(AddArgs),
+    /// Review helpers (read-only)
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
+    Review {
+        #[command(subcommand)]
+        command: ReviewCommand,
+    },
     #[command(hide = true)]
     Dev {
         #[command(subcommand)]
@@ -71,6 +77,71 @@ enum TidyCommand {
     /// Re-create branches deleted by `apply` from the manifest (never overwrites)
     #[command(after_help = EXIT_CODES)]
     Restore(RestoreArgs),
+}
+
+#[derive(Subcommand)]
+enum ReviewCommand {
+    /// May the review of a pull request head be carried over to a rewritten head? Prints the `Carried-over:` line for a yes; posts nothing
+    #[command(after_help = CARRY_OVER_HELP)]
+    CarryOver(CarryOverArgs),
+}
+
+const CARRY_OVER_HELP: &str = "\
+All three conditions must hold: (1) the patch-id of `BASE...HEAD` is equal for the old and the new head, each
+against its own base; (2) there is no merge commit in NEW_BASE..NEW_HEAD; (3) `git range-diff OLD_BASE OLD_HEAD
+NEW_BASE NEW_HEAD` shows `=` for every commit, at the same position. The four arguments are full 40-hex commit ids.
+A step that could not run is `unknown` and the answer is no. Only for a yes the output ends with the line
+`Carried-over: from=<40-hex> to=<40-hex> patch-id=<40-hex> pr=<n|none>`. A carry-over also needs `from` to be
+CLEAR; stw does not read reviews here. --fetch fetches refs/pull/N/head of origin into refs/stw/carry-over/pr-N
+(objects and that private ref only) and requires it to equal NEW_HEAD.
+
+Exit codes:
+  0  carry-over allowed
+  1  not allowed, or a step could not run (the result is still printed)
+  2  usage error";
+
+#[derive(Args)]
+struct CarryOverArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Pull request number written into the line, or `none` for a local review
+    #[arg(long, value_name = "NUMBER|none")]
+    pr: Option<String>,
+    /// Fetch the head of the pull request from origin and require it to equal NEW_HEAD (needs a number)
+    #[arg(long)]
+    fetch: bool,
+    /// Repository or worktree that holds the objects [default: the repository of the current directory]
+    #[arg(long, value_name = "PATH")]
+    checkout: Option<PathBuf>,
+    /// OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
+    #[arg(value_name = "ID", num_args = 0..)]
+    ids: Vec<String>,
+}
+
+fn run_carry_over(a: CarryOverArgs) -> Result<u8> {
+    let req = carryover::parse_request(&a.ids, a.pr.as_deref(), a.fetch)
+        .map_err(|e| Error::usage(e.to_string()))?;
+    let start = match &a.checkout {
+        Some(p) => p.clone(),
+        None => std::env::current_dir()
+            .map_err(|e| Error::usage(format!("no current directory: {e}")))?,
+    };
+    let start = std::fs::canonicalize(&start).unwrap_or(start);
+    // the root of the repository or worktree around `start`; a directory that is none is checked as it is and
+    // answers with a read failure
+    let dir = repo::top_level(&start).unwrap_or(start);
+    let res = carryover::check(&carryover::RepoGit::new(&dir, git_runner::shared()), &req);
+    if a.json {
+        print_json(&res.to_json());
+    } else {
+        print!("{}", res.render_human());
+    }
+    Ok(if res.carry_over {
+        exit::OK
+    } else {
+        exit::FAILED
+    })
 }
 
 #[derive(Subcommand)]
@@ -465,6 +536,9 @@ fn run(command: Command) -> Result<u8> {
                 list.iter().any(|s| s.result == "error") || rules.action == "refused",
             ))
         }
+        Command::Review {
+            command: ReviewCommand::CarryOver(a),
+        } => run_carry_over(a),
         Command::Dev {
             command: DevCommand::PatchId { repo, revs },
         } => {

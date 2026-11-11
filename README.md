@@ -324,6 +324,21 @@ not the comment-based state, and its JSON contract is unchanged). Pure functions
 - Tests: the dotagents corpus `tests/review_corpus/review-line-examples.md` (copy of `docs/review-line-examples.md`, dotagents
   c7c343c), `tests/it/review_lines.rs`, data-driven cases `tests/review_states/*.json` (`tests/review_states.rs`), `tests/it/review_read.rs`.
 
+## Carry-over check: `stw review carry-over` (M4)
+
+`stw review carry-over --pr <N|none> [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` (read-only; posts
+nothing; `stw` does not read the review it is about). Full lower-case 40-hex ids. All three conditions must hold: (1) equal patch-id of
+`BASE...HEAD`, old and new, each against its own base (in process, `via: gix`); (2) no merge commit in `NEW_BASE..NEW_HEAD` (gix);
+(3) `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit at the same position (`via: git`, Git 2.40+).
+A step that could not run is `unknown`; the answer is then no. Only for a yes the output ends with
+`Carried-over: from=<old head> to=<new head> patch-id=<40 hex> pr=<n|none>` (a line of the M3 grammar). Exit 0 yes, 1 no or a
+step could not run (result printed), 2 usage. `--fetch` fetches `refs/pull/N/head` of `origin` into `refs/stw/carry-over/pr-N`
+(`via: git`, any remote kind git supports; no tags, no FETCH_HEAD, empty refmap) and requires it to equal `NEW_HEAD`.
+The range-diff step pins what could hide a change (empty attribute source, no `diff.ignoreSubmodules`, size limit, context) and refuses,
+typed unsupported, a repository config with `diff.external`, `diff.<driver>.textconv|command` or an active `info/attributes`.
+JSON schema 2 (`pr`: number or `"none"`; `via` per step; `read_errors`). Deviations from the Go command and the mapping of its 46
+tests: header of `tests/carryover.rs`; plan: `docs/migration-plan.md`, "Next slice".
+
 ## Build and test
 
 ```
