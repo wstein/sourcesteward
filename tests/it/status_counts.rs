@@ -194,11 +194,11 @@ fn counts_per_repository_and_in_total_with_question_marks_for_unreadable_values(
     let norm = |l: &str| l.split_whitespace().collect::<Vec<_>>().join(" ");
     assert_eq!(
         norm(counts[0]),
-        "test/fixture PRs 3 (bot 2) | Issues 3 (bug 2) | Branches 3/2 | Worktrees 1 | Stash 2"
+        "repo PRs 3 (bot 2) | Issues 3 (bug 2) | Branches 3/2 | Worktrees 1 | Stash 2"
     );
     assert_eq!(
         norm(counts[1]),
-        "test/sub PRs 1 (bot 0) | Issues ? | Branches 0/0 | Worktrees 0 | Stash 0"
+        "sub PRs 1 (bot 0) | Issues ? | Branches 0/0 | Worktrees 0 | Stash 0"
     );
     assert_eq!(
         norm(counts[2]),
@@ -251,7 +251,7 @@ fn only_notices_exit_0_and_stay_in_the_notices_block() {
             .unwrap_or_else(|| panic!("no Notices block: {t}"));
         assert!(notices.contains(expect), "{notices}");
         assert!(
-            notices.contains("test/fixture") && notices.contains("test/sub"),
+            notices.contains("repo") && notices.contains("sub"),
             "{notices}"
         );
         assert!(flat(&t).contains("PRs ? | Issues ?"), "{t}");
@@ -283,9 +283,18 @@ fn a_full_page_marks_the_count_as_a_lower_bound() {
     let fx = workspace();
     let api = FakeRoutes::start(|path, _| {
         let body = match path {
-            "/repos/test/fixture/issues" => {
-                Value::Array((1..=100).map(|n| issue(n, &["bug"])).collect())
-            }
+            // a full raw page: 90 issues and 10 pull requests, which are not issues
+            "/repos/test/fixture/issues" => Value::Array(
+                (1..=100)
+                    .map(|n| {
+                        if n <= 90 {
+                            issue(n, &["bug"])
+                        } else {
+                            pull_in_issues(n)
+                        }
+                    })
+                    .collect(),
+            ),
             "/repos/test/fixture/pulls" => {
                 Value::Array((1..=100).map(|n| pr(n, "me", "User")).collect())
             }
@@ -300,11 +309,11 @@ fn a_full_page_marks_the_count_as_a_lower_bound() {
     ));
     let f = flat(&t);
     assert!(
-        f.contains("test/fixture PRs 100+ (bot 0+) | Issues 100+ (bug 100+)"),
+        f.contains("repo PRs 100+ (bot 0+) | Issues 90+ (bug 90+)"),
         "{t}"
     );
     assert!(
-        f.contains("All PRs 100+ (bot 0+) | Issues 100+ (bug 100+)"),
+        f.contains("All PRs 100+ (bot 0+) | Issues 90+ (bug 90+)"),
         "{t}"
     );
     let v: Value = serde_json::from_slice(
@@ -392,4 +401,101 @@ fn status_writes_nothing_with_or_without_the_network() {
         before,
         "status changed files of the workspace"
     );
+}
+
+#[test]
+fn a_repository_without_a_github_origin_is_left_out_of_the_totals() {
+    let fx = workspace();
+    fx.write(
+        ".gitmodules",
+        "[submodule \"sub\"]\n\tpath = sub\n\turl = https://github.com/test/sub.git\n[submodule \"plain\"]\n\tpath = plain\n\turl = x\n",
+    );
+    gix::init(fx.path.join("plain")).unwrap();
+    let api = FakeRoutes::start(|path, _| {
+        let body = match path {
+            "/repos/test/fixture/pulls" => json!([pr(1, "a", "Bot"), pr(2, "b", "User")]),
+            "/repos/test/fixture/issues" => json!([issue(4, &["bug"])]),
+            p if p.contains("/pulls/") => json!({"mergeable_state": "clean"}),
+            _ => json!([]),
+        };
+        (200, vec![], body.to_string())
+    });
+    let t = flat(&out(&stw(
+        Some(&api.url),
+        &["status", "--root", &path_str(&fx.path)],
+    )));
+    assert!(
+        t.contains("plain PRs n/a | Issues n/a | Branches 0/0"),
+        "{t}"
+    );
+    assert!(t.contains("All PRs 2 (bot 1) | Issues 1 (bug 1)"), "{t}");
+}
+
+#[test]
+fn without_any_github_origin_the_totals_say_no_remote_not_not_read() {
+    let tmp = tempfile::tempdir().unwrap();
+    let root = tmp.path().join("plain");
+    gix::init(&root).unwrap();
+    let api = api();
+    let o = stw(
+        Some(&api.url),
+        &["status", "--root", &path_str(&root), "--json"],
+    );
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["totals"]["pull_requests"]["state"], "no-remote", "{v}");
+    assert_eq!(v["totals"]["issues"]["state"], "no-remote", "{v}");
+    assert!(api.hits().is_empty());
+}
+
+#[test]
+fn worktrees_count_existing_linked_checkouts_including_relative_links_but_not_missing_ones() {
+    let fx = workspace();
+    let base = fx.path.parent().unwrap();
+    std::fs::create_dir_all(base.join("x")).unwrap();
+    add_worktree_at(
+        &fx,
+        "rel-ok",
+        "topic",
+        &base.join("x/../wt-rel-ok"),
+        true,
+        false,
+    );
+    add_worktree_at(
+        &fx,
+        "rel-gone",
+        "other",
+        &base.join("x/../wt-rel-gone"),
+        false,
+        false,
+    );
+    let t = flat(&out(&stw(
+        None,
+        &["status", "--root", &path_str(&fx.path), "--offline"],
+    )));
+    assert!(t.contains("Worktrees 2 |"), "{t}");
+}
+
+#[test]
+fn text_output_never_contains_raw_escape_sequences_from_slugs_or_names() {
+    let fx = workspace();
+    fx.set_origin_url("https://github.com/own/\u{1b}[31mRED\u{1b}[0m");
+    fx.write(
+        ".gitmodules",
+        "[submodule \"s\"]\n\tpath = s\u{1b}[1mB\n\turl = x\n",
+    );
+    gix::init(fx.path.join("s\u{1b}[1mB")).unwrap();
+    let r = path_str(&fx.path);
+    let api = FakeRoutes::start(|_, _| (403, vec![], "{}".into()));
+    for (a, args) in [
+        (None, vec!["status", "--root", &r, "--offline"]),
+        (Some(api.url.as_str()), vec!["status", "--root", &r]),
+    ] {
+        let o = stw(a, &args);
+        let t = out(&o);
+        assert!(!t.contains('\u{1b}'), "raw ESC in {args:?}: {t:?}");
+        assert!(t.contains("Counts"), "{t}");
+    }
+    // the escaped slug is visible as text, in the notice of the online run
+    let t = out(&stw(Some(&api.url), &["status", "--root", &r]));
+    assert!(t.contains("\\u{1b}[31mRED"), "{t}");
 }

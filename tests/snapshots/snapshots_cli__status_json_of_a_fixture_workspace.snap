@@ -9,7 +9,7 @@ expression: pretty
   "engine": "[ENGINE]",
   "github": false,
   "github_auth": null,
-  "github_note": "pull requests not read: --offline",
+  "github_note": "GitHub not read: --offline",
   "repos": [
     {
       "name": "repo",

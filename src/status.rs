@@ -268,7 +268,7 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
         s.branches_remote = remote_branch_count(&repo).ok();
         s.worktrees = crate::repo::worktrees::scan(&repo)
             .ok()
-            .map(|w| w.linked.len() + w.relative.len());
+            .map(|w| w.linked.len() + w.relative.iter().filter(|l| l.dir.is_dir()).count());
         s.op = operation(&repo);
         s.slug = repo::slug(&repo);
         if r.path != root {
@@ -410,6 +410,12 @@ pub fn counts_of(s: &RepoStatus) -> Counts {
     }
 }
 
+/// Text from outside (repository names, GitHub error messages with the slug from the origin URL) for the
+/// human output: control and invisible characters are shown as escapes, never sent to the terminal.
+fn esc(s: &str) -> String {
+    crate::github::reads::escape_untrusted(s, 300).0
+}
+
 fn sum_source(all: impl Iterator<Item = Source>) -> Source {
     let all: Vec<Source> = all.collect();
     if all.contains(&Source::Failed) {
@@ -426,14 +432,17 @@ fn sum_source(all: impl Iterator<Item = Source>) -> Source {
             (open, sub, truncated, any) = (open + o, sub + b, truncated || *t, true);
         }
     }
-    if any && !all.contains(&Source::NotRead) {
+    if all.contains(&Source::NotRead) {
+        Source::NotRead
+    } else if any {
         Source::Read {
             open,
             sub,
             truncated,
         }
     } else {
-        Source::NotRead
+        // no repository (or none with a GitHub origin): nothing to read
+        Source::NoRemote
     }
 }
 
@@ -471,15 +480,8 @@ fn num(n: Option<usize>) -> String {
 
 /// The `Counts` block: one aligned line per repository, then `All`.
 fn counts_block(list: &[RepoStatus]) -> String {
-    let mut rows: Vec<(String, Counts)> = list
-        .iter()
-        .map(|s| {
-            (
-                s.slug.clone().unwrap_or_else(|| s.name.clone()),
-                counts_of(s),
-            )
-        })
-        .collect();
+    let mut rows: Vec<(String, Counts)> =
+        list.iter().map(|s| (esc(&s.name), counts_of(s))).collect();
     rows.push(("All".into(), totals(list)));
     let cells: Vec<Vec<String>> = rows
         .iter()
@@ -626,7 +628,7 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
         let rs = reasons(s);
         if !rs.is_empty() {
             attention += 1;
-            todo += &format!("  {:<18} {}\n", s.name, rs.join(", "));
+            todo += &format!("  {:<18} {}\n", esc(&s.name), rs.join(", "));
         }
     }
     out += &format!("Needs action ({attention})\n");
@@ -652,7 +654,7 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
             ),
         };
         let line = if let Some(e) = &s.error {
-            format!("error: {e}")
+            format!("error: {}", esc(e))
         } else {
             let (ahead, behind) = (s.facts.ahead.unwrap_or(0), s.facts.behind.unwrap_or(0));
             let mut l = if let Some(u) = &s.facts.upstream.short {
@@ -691,7 +693,7 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
             l += &format!("  {ch}");
             l
         };
-        out += &format!("{mark} {:<18} {:<30} {line}\n", s.name, where_);
+        out += &format!("{mark} {:<18} {:<30} {line}\n", esc(&s.name), esc(&where_));
         if let Some(op) = s.op {
             out += &format!("    operation in progress: {op}\n");
         }
@@ -706,7 +708,7 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
             out += &format!("    submodule: checked-out commit is {ps} the recorded gitlink\n");
         }
         if let Some(e) = &s.pr_error {
-            out += &format!("    pull requests: not read ({e})\n");
+            out += &format!("    pull requests: not read ({})\n", esc(e));
         } else if !s.prs.is_empty() {
             out += &format!(
                 "    {} open pull request{}:\n",
@@ -732,10 +734,14 @@ pub fn render_human(github_note: Option<String>, list: &[RepoStatus], rules: &st
     let mut notices: Vec<String> = github_note.into_iter().collect();
     for s in list {
         if let Some(e) = &s.pr_error {
-            notices.push(format!("{}: pull requests not read ({e})", s.name));
+            notices.push(format!(
+                "{}: pull requests not read ({})",
+                esc(&s.name),
+                esc(e)
+            ));
         }
         if let Some(e) = &s.issue_error {
-            notices.push(format!("{}: issues not read ({e})", s.name));
+            notices.push(format!("{}: issues not read ({})", esc(&s.name), esc(e)));
         }
     }
     out += &format!("Notices ({})\n", notices.len());

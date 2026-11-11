@@ -3,8 +3,8 @@ source: tests/snapshots_cli.rs
 expression: "stw_stdout(&[\"status\", \"--root\", &path_str(&fx.path), \"--offline\"])"
 ---
 Counts
-  test/fixture  PRs n/a | Issues n/a | Branches 1/1 | Worktrees 0 | Stash 0
-  All           PRs n/a | Issues n/a | Branches 1/1 | Worktrees 0 | Stash 0
+  repo  PRs n/a | Issues n/a | Branches 1/1 | Worktrees 0 | Stash 0
+  All   PRs n/a | Issues n/a | Branches 1/1 | Worktrees 0 | Stash 0
 
 Needs action (1)
   repo               untracked
@@ -13,7 +13,7 @@ Repositories (1)
 ! repo               main                           origin/main up to date   1 untracked
 
 Notices (1)
-  pull requests not read: --offline
+  GitHub not read: --offline
 
 agent-rules: not found
 

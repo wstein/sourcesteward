@@ -114,8 +114,8 @@ would_fast_forward, skipped, errors}.
   repository cannot be read; a notice says why); `open` and `bot`/`bug` are null unless `ok`, never 0 for a missing read.
   `truncated` is true when one page of 100 was full: the numbers are lower bounds. `bot`: author type `Bot` or a `[bot]`
   login; `bug`: a label named `bug`, case-insensitive; issues exclude pull requests. `branches.remote` counts
-  `refs/remotes/origin/*` without `HEAD` as of the last fetch; `worktrees` counts linked worktrees (not the main checkout).
-  A total is a number only when every repository gave one, else null with `state` `failed` (any) or `not-read`. Schema rule:
+  `refs/remotes/origin/*` without `HEAD` as of the last fetch; `worktrees` counts linked worktrees whose directory exists, relative links included (not the main checkout, no stale registrations).
+  A total is a number only when every repository with a GitHub origin gave one, else null with `state` `failed` (any), `not-read`, or `no-remote` (no repository has a GitHub origin). Schema rule:
   `counts` and `totals` are additive, `schema_version` stays `2`; `day briefing` reads this contract, so a removal or a changed
   meaning raises the version.
 - `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree}]` (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
@@ -130,7 +130,7 @@ would_fast_forward, skipped, errors}.
 `stw status` prints blocks separated by a blank line: `Counts` (one aligned line per repository, then `All`:
 `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`; `n/a` is not read, `?` is failed, `n+` is a
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
-(why GitHub was not read, failed reads per repository), the `agent-rules` block, then the summary line. A failed GitHub read is
+(why GitHub was not read, failed reads per repository; text from outside is shown with escapes), the `agent-rules` block, then the summary line. A failed GitHub read is
 a notice: exit 0. Exit 1 stays for a repository that cannot be read locally.
 
 ## Backup branches

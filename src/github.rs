@@ -64,7 +64,7 @@ impl GithubState {
         if offline {
             return GithubState {
                 client: None,
-                note: Some("pull requests not read: --offline".into()),
+                note: Some("GitHub not read: --offline".into()),
             };
         }
         match Client::from_env() {
@@ -75,7 +75,7 @@ impl GithubState {
             None => GithubState {
                 client: None,
                 note: Some(
-                    "pull requests not read: no GitHub token found (looked at GH_TOKEN, GITHUB_TOKEN, \
+                    "GitHub not read: no GitHub token found (looked at GH_TOKEN, GITHUB_TOKEN, \
                      ~/.config/gh/hosts.yml and the macOS keychain); set GH_TOKEN to a token that can read \
                      the repositories, or pass --offline"
                         .into(),
@@ -177,7 +177,9 @@ impl Client {
     /// Open PRs, newest first (limit 100 like the prototype), with merge state from the per-PR endpoint.
     pub fn open_prs(&self, slug: &str) -> Result<Vec<OpenPr>> {
         let api = &self.base;
-        let list = self.get(&format!("{api}/repos/{slug}/pulls?state=open&per_page=100"))?;
+        let list = self.get(&format!(
+            "{api}/repos/{slug}/pulls?state=open&per_page={PAGE}"
+        ))?;
         let items = list
             .as_array()
             .ok_or_else(|| Error::github("GitHub API sent an unexpected pulls response"))?;
