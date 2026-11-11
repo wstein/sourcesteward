@@ -21,6 +21,7 @@ mod patchid;
 mod patchid_props;
 mod remote_kinds;
 mod replay;
+mod review_go_corpus;
 mod review_lines;
 mod review_read;
 mod slug;
