@@ -889,6 +889,119 @@ pub fn resolve_icons(flag: Option<&str>, t: &Terminal) -> Icons {
     }
 }
 
+/// How the text is laid out.
+#[derive(Clone, Copy, Debug)]
+pub struct View<'a> {
+    pub icons: Icons,
+    /// `--long`: a card per repository and the full explanation of every attention reason.
+    pub long: bool,
+    /// Text that follows the summary line (`--stats`, `--verbose`), newline-terminated; may be empty.
+    pub diagnostics: &'a str,
+}
+
+/// What an attention reason means for this repository, in a sentence that ends the thought (it names no command
+/// to run: stw never prints one for someone else). Text from outside is escaped.
+pub fn explain(s: &RepoStatus, reason: &str) -> String {
+    let c = &s.changes;
+    let paths = |n: usize| format!("{n} path{}", if n == 1 { "" } else { "s" });
+    let behind = s.facts.behind.unwrap_or(0);
+    match reason {
+        r if r.starts_with("operation:") => format!(
+            "a {} is in progress: finish or abort it before anything else changes this checkout",
+            &r["operation:".len()..]
+        ),
+        "conflicts" => format!(
+            "{} with merge conflicts: resolve them and stage the result",
+            paths(c.conflicts)
+        ),
+        "staged" => format!(
+            "{} staged but not committed: commit them or unstage them",
+            paths(c.staged)
+        ),
+        "unstaged" => format!(
+            "{} with tracked changes in the working tree that are not staged: stage and commit them or discard them",
+            paths(c.unstaged)
+        ),
+        "untracked" => format!(
+            "{} untracked: add them, ignore them or remove them",
+            paths(c.untracked)
+        ),
+        "behind" => format!(
+            "{} is {behind} commit{} ahead of this branch: the branch can be fast-forwarded to it unless local changes are in the way",
+            esc(s.facts.upstream.short.as_deref().unwrap_or("the upstream")),
+            if behind == 1 { "" } else { "s" }
+        ),
+        "no-upstream" => format!(
+            "the branch {} has no upstream: nothing says what it is compared with; push it with an upstream or set one",
+            esc(s.facts.branch.as_deref().unwrap_or("?"))
+        ),
+        "detached" => format!(
+            "HEAD is detached{}: switch to a branch before committing, or the commits are easy to lose",
+            s.facts
+                .head
+                .map_or(String::new(), |h| format!(" at {}", short(&h.to_string())))
+        ),
+        "error" => format!(
+            "the repository could not be read: {}",
+            esc(s.error.as_deref().unwrap_or("unknown error"))
+        ),
+        other => esc(other),
+    }
+}
+
+/// The facts of one repository, one per line (`--long`): where it is, what HEAD and the upstream are, the changes by
+/// kind, the counts of branches, worktrees and stashes.
+fn card(s: &RepoStatus) -> Vec<String> {
+    if s.error.is_some() {
+        return vec![format!("path: {}", esc(&s.path))];
+    }
+    let mut v = vec![format!("path: {}", esc(&s.path))];
+    v.push(format!(
+        "remote: {}",
+        s.slug.as_deref().map_or("none".to_string(), esc)
+    ));
+    v.push(format!(
+        "head: {}",
+        s.facts
+            .head
+            .map_or("none (no commit yet)".to_string(), |h| short(
+                &h.to_string()
+            )
+            .to_string())
+    ));
+    v.push(match (&s.facts.upstream.short, s.facts.upstream.gone) {
+        (Some(u), _) => format!(
+            "upstream: {} (ahead {}, behind {})",
+            esc(u),
+            s.facts.ahead.unwrap_or(0),
+            s.facts.behind.unwrap_or(0)
+        ),
+        (None, true) => "upstream: gone".to_string(),
+        (None, false) => "upstream: none".to_string(),
+    });
+    let c = &s.changes;
+    v.push(format!(
+        "changes: {} staged, {} unstaged, {} untracked, {} conflicts",
+        c.staged, c.unstaged, c.untracked, c.conflicts
+    ));
+    let n = |o: Option<usize>| o.map_or("?".to_string(), |n| n.to_string());
+    v.push(format!(
+        "branches: {} local, {} remote; linked worktrees: {}; stash: {}",
+        n(s.branches_local),
+        n(s.branches_remote),
+        n(s.worktrees),
+        s.stash
+    ));
+    if let Some(pin) = &s.pin {
+        v.push(format!(
+            "gitlink: recorded {}, {}",
+            short(pin),
+            s.pinstate.unwrap_or("checked-out commit unknown")
+        ));
+    }
+    v
+}
+
 /// Blocks, each followed by a blank line: `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)`, the
 /// rules block `rules` (already rendered, may be empty), then the summary line.
 pub fn render_human(
@@ -896,9 +1009,9 @@ pub fn render_human(
     extra_notices: &[String],
     list: &[RepoStatus],
     rules: &str,
-    icons: Icons,
-    diagnostics: &str,
+    view: &View,
 ) -> String {
+    let icons = view.icons;
     let mut out = counts_block(list);
     out.push('\n');
     let mut attention = 0;
@@ -908,6 +1021,11 @@ pub fn render_human(
         if !rs.is_empty() {
             attention += 1;
             todo += &format!("  {:<18} {}\n", esc(&s.name), rs.join(", "));
+            if view.long {
+                for r in &rs {
+                    todo += &format!("    - {r}: {}\n", explain(s, r));
+                }
+            }
         }
     }
     out += &format!("Needs action ({attention})\n");
@@ -979,6 +1097,11 @@ pub fn render_human(
             l
         };
         out += &format!("{mark}{:<18} {:<30} {line}\n", esc(&s.name), esc(&where_));
+        if view.long {
+            for l in card(s) {
+                out += &format!("    {l}\n");
+            }
+        }
         if let Some(op) = s.op {
             out += &format!("    operation in progress: {op}\n");
         }
@@ -1079,6 +1202,6 @@ pub fn render_human(
     } else {
         out += &format!("{} repositories, nothing needs attention\n", list.len());
     }
-    out += diagnostics;
+    out += view.diagnostics;
     out
 }

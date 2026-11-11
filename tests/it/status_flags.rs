@@ -1032,3 +1032,191 @@ fn stats_formatting_helpers_follow_the_go_ones() {
         "stats: API: 0 reqs | 1.4s elapsed (local 110ms, remote 1.3s)"
     );
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// --long / -l (Go: status_command_test.go --long cases, status_online_test.go long goldens)
+// ---------------------------------------------------------------------------------------------------------
+
+/// Root on main, behind origin/main by one, with a staged, an unstaged and an untracked path and a merge in
+/// progress; a detached submodule `det`; a submodule `broken` that cannot be read.
+fn long_fixture() -> Fx {
+    let fx = status_fixture();
+    let c0 = fx.tip("main");
+    let c1 = fx.commit(Some(c0), &[("a.txt", Some("a\n"))], "c1");
+    fx.remote("main", c1);
+    fx.write("staged.txt", "s\n");
+    fx.stage("staged.txt");
+    fx.write("a.txt", "changed\n");
+    fx.write("untracked.txt", "u\n");
+    fx.write(".git/MERGE_HEAD", &format!("{c0}\n"));
+    fx.write(
+        ".gitmodules",
+        "[submodule \"det\"]\n\tpath = det\n\turl = x\n[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+    );
+    fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
+    let det = std::path::Path::new(&fx.path).join("det");
+    std::fs::create_dir_all(&det).unwrap();
+    let sub = gix::init(&det).unwrap();
+    let sig = gix::actor::SignatureRef {
+        name: "T".into(),
+        email: "t@example.com".into(),
+        time: "1700000000 +0000",
+    };
+    let id = sub
+        .commit_as(
+            sig,
+            sig,
+            "refs/heads/tmp",
+            "m",
+            sub.empty_tree().id,
+            gix::commit::NO_PARENT_IDS,
+        )
+        .unwrap();
+    // HEAD on the commit itself: detached
+    fx.write("det/.git/HEAD", &format!("{id}\n"));
+    fx
+}
+
+#[test]
+fn long_adds_cards_and_explanations_and_nothing_is_taken_away() {
+    let fx = long_fixture();
+    let r = path_str(&fx.path);
+    let plain = stw(None, &["status", "--root", &r, "--offline"]);
+    let long = stw(None, &["status", "--root", &r, "--offline", "--long"]);
+    let short = stw(None, &["status", "--root", &r, "--offline", "-l"]);
+    assert_eq!(plain.status.code(), Some(1), "{}", out(&plain)); // the broken submodule
+    assert_eq!(out(&long), out(&short), "-l is --long");
+    assert_eq!(long.status.code(), Some(1));
+    let (p, l) = (out(&plain), out(&long));
+    assert!(l.len() > p.len());
+    // taking the added lines away leaves the default text
+    let added = |line: &&str| {
+        [
+            "path: ",
+            "remote: ",
+            "head: ",
+            "upstream: ",
+            "changes: ",
+            "branches: ",
+            "gitlink: ",
+            "- ",
+        ]
+        .iter()
+        .any(|k| line.strip_prefix("    ").is_some_and(|r| r.starts_with(k)))
+    };
+    assert_eq!(
+        l.lines()
+            .filter(|x| !added(x))
+            .collect::<Vec<_>>()
+            .join("\n"),
+        p.lines().collect::<Vec<_>>().join("\n")
+    );
+    // the blocks stay in order and the summary stays last
+    let at = |t: &str, h: &str| t.find(h).unwrap_or_else(|| panic!("{h} in {t}"));
+    assert!(
+        at(&l, "Counts\n") < at(&l, "Needs action (")
+            && at(&l, "Needs action (") < at(&l, "Repositories (")
+            && at(&l, "Repositories (") < at(&l, "Notices (")
+    );
+    assert!(
+        l.trim_end()
+            .lines()
+            .last()
+            .unwrap()
+            .contains("need attention"),
+        "{l}"
+    );
+    // the explanations, under "Needs action", for every reason of the root
+    let needs = l
+        .split("\n\n")
+        .find(|b| b.starts_with("Needs action ("))
+        .unwrap();
+    for want in [
+        "- operation:merge: a merge is in progress: finish or abort it",
+        "- staged: 1 path staged but not committed",
+        "- unstaged: 1 path with tracked changes in the working tree that are not staged",
+        "- untracked: ",
+        "- behind: origin/main is 1 commit ahead of this branch",
+        "- detached: HEAD is detached at ",
+        "- error: the repository could not be read: ",
+    ] {
+        assert!(needs.contains(want), "{want:?} in\n{needs}");
+    }
+    // the card of the root
+    for want in [
+        "    remote: test/fixture\n",
+        "    upstream: origin/main (ahead 0, behind 1)\n",
+        "    changes: 1 staged, 1 unstaged, 3 untracked, 0 conflicts\n",
+        "    branches: 1 local, 1 remote; linked worktrees: 0; stash: 0\n",
+    ] {
+        assert!(l.contains(want), "{want:?} in\n{l}");
+    }
+    assert!(l.contains("    head: ") && l.contains("    path: "), "{l}");
+    // stw prints no command for someone else to run
+    assert!(!l.contains("run:") && !l.contains("next:"), "{l}");
+}
+
+#[test]
+fn long_does_not_change_the_json() {
+    let fx = long_fixture();
+    let r = path_str(&fx.path);
+    let a = stw(None, &["status", "--root", &r, "--offline", "--json"]);
+    for flag in ["--long", "-l"] {
+        let b = stw(None, &["status", "--root", &r, "--offline", "--json", flag]);
+        assert_eq!(out(&a), out(&b), "{flag}");
+    }
+}
+
+#[test]
+fn long_explains_every_reason_from_the_facts() {
+    use stw::status::{collect_local, explain, reasons, StatusOpts};
+    let fx = long_fixture();
+    let root = std::fs::canonicalize(&fx.path).unwrap();
+    let rr = stw::repo::RepoRef {
+        name: "repo".into(),
+        path: root.clone(),
+    };
+    let mut s = collect_local(&rr, &root, &StatusOpts::default(), None);
+    s.changes.conflicts = 2;
+    s.changes.staged = 3;
+    s.changes.unstaged = 1;
+    s.changes.untracked = 4;
+    s.facts.upstream.short = None;
+    s.facts.upstream.gone = false;
+    s.facts.behind = None;
+    assert_eq!(
+        explain(&s, "conflicts"),
+        "2 paths with merge conflicts: resolve them and stage the result"
+    );
+    assert_eq!(
+        explain(&s, "staged"),
+        "3 paths staged but not committed: commit them or unstage them"
+    );
+    assert!(explain(&s, "unstaged").starts_with("1 path with tracked changes"));
+    assert_eq!(
+        explain(&s, "untracked"),
+        "4 paths untracked: add them, ignore them or remove them"
+    );
+    assert!(explain(&s, "no-upstream").starts_with("the branch main has no upstream"));
+    s.error = Some("boom \u{1b}[31m".into());
+    assert_eq!(
+        explain(&s, "error"),
+        "the repository could not be read: boom \\u{1b}[31m"
+    );
+    // every reason that `reasons` can give has its own text, none falls through to the generic one
+    let all = reasons(&s);
+    assert!(all.contains(&"error".to_string()));
+    s.error = None;
+    s.op = Some("rebase");
+    assert!(explain(&s, "operation:rebase").starts_with("a rebase is in progress"));
+}
+
+#[test]
+fn long_shows_text_from_the_repository_escaped() {
+    let fx = long_fixture();
+    fx.set_origin_url("https://github.com/own/\u{1b}[31mRED\u{1b}[0m");
+    let r = path_str(&fx.path);
+    let t = out(&stw(None, &["status", "--root", &r, "--offline", "--long"]));
+    assert!(!t.contains('\u{1b}'), "raw ESC: {t:?}");
+    assert!(t.contains("    remote: own/\\u{1b}[31mRED"), "{t}");
+}

@@ -331,6 +331,10 @@ struct StatusArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// Detailed text: a card of facts per repository and the full explanation of every reason it needs action (the JSON
+    /// is the same)
+    #[arg(short = 'l', long)]
+    long: bool,
     /// Overall deadline of the GitHub reads, 1s to 10m, like 90s or 2m (not with --offline)
     #[arg(long, value_name = "DURATION", default_value = "90s", value_parser = parse_timeout, conflicts_with = "offline")]
     timeout: Duration,
@@ -700,8 +704,11 @@ fn run_status(a: StatusArgs) -> Result<u8> {
                 &rejected_notices(&ws.rejected),
                 &list,
                 &sync::rules::render_human(&rules),
-                status::resolve_icons(a.icons.as_deref(), &status::Terminal::detect()),
-                &tail
+                &status::View {
+                    icons: status::resolve_icons(a.icons.as_deref(), &status::Terminal::detect()),
+                    long: a.long,
+                    diagnostics: &tail,
+                }
             )
         );
     }
