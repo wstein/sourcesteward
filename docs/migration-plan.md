@@ -201,8 +201,8 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `sync --plan`, `--dry-run` (flag) | covered: dry run is the default | - | **drop**: replaced by the default dry run and `--apply`. | same |
 | `sync --ff-only` (flag) | the Rust behavior | - | **port** (done). | same |
 | `sync --rebase`, `--merge`, `--autostash`, `--no-autostash` (flag) | absent; Rust never merges, rebases or stashes | - | **drop** (matrix: no automatic stash, reset, merge, rebase). Deviation: Go follows the Git configuration (`pull.rebase`, `rebase.autoStash`, `merge.autoStash`, `fetch.prune`; `sync.go:33-35`), Rust ignores it. | same |
-| `sync --prune`, `--no-prune` (flag) | absent (no prune in `src/sync/`, grep) | - | **defer**: no Rust behavior yet. | same |
-| `sync --submodules` (flag) | absent in `src/sync/` (grep) | - | **defer**: Go moves detached pinned submodules to the recorded commit. | same |
+| `sync --prune`, `--no-prune` (flag) | present (`src/sync/fetch.rs`, `src/git_runner.rs` `Op::FetchOriginPrune`) | - | **port** (done): `fetch --prune --no-prune-tags` / `--no-prune`, mutually exclusive, only with `--apply`; the dry run shows the scope. Deviations: always the installed git, also for `https://` (no GitHub token for it); refuses, in the apply, a `remote.origin.fetch` that writes outside `refs/remotes/origin/`; never prunes tags; reports the deleted refs (also after a failed fetch). README "sync --prune". | `internal/stwsync/pull_test.go`, `policy_test.go`, `cli/sync_test.go` |
+| `sync --submodules` (flag) | present (`src/sync/submodules.rs`; `Op::SubmoduleSync`, `Op::SubmoduleUpdate`) | - | **port** (done): moves detached pinned submodules to the recorded commit when that is a fast-forward; only with `--apply`, the dry run shows `would-move`. Deviations: top-level submodules only (no nested walk); stricter path charset; `unreachable` is `error` (dry run `skip`); `--apply` fetches the submodule's `origin` before the check; filter drivers in the submodule config are refused. README "sync --submodules". | `internal/stwsync/submodules_test.go` |
 | `sync --rules` (flag) | present with `--rules-path` | - | **port** (done); **drop** `--owner-identity`, `--allowed-committer`: Go refuses on foreign identities, Rust prints an info line (README: no owner or author check). | same |
 | `sync restore` (mode) | absent | M5 | **owner decides** (open): Go journals each change with recovery refs `refs/stw/recovery/sync/RUN_ID/N` and `restore` resets branches back. Tied to the slimmed M5 (backup ref) as `tidy history` is. | `internal/stwsync/restore_test.go`, `cli/sync_test.go` |
 | `tidy plan` | present, Git only | M5 | **port** (done); jj bookmarks and owned-workspace retirement **drop** (owner confirmed 2026-11-11: jj is not supported). | `internal/tidywizard` (97), `cli/tidy_*_test.go` |
@@ -278,7 +278,7 @@ Owner decisions of 2026-11-10 (chosen by selection):
 - **Ports without spike** apply as soon as AGENTS.md with that rule is on `main` (commit `docs(agents)` of this branch).
 - **Go pages job:** the job `pages` on `main` of `wstein/sourcesteward` is red (Pages not set up). Decided: do nothing,
   the legacy repository is archived. Noise until the archive.
-- **The 13 `defer` commands and the 2 `defer` flag rows (`--prune`, `--submodules`) stay open.** Before the archive the owner turns each into a port or a `drop`; agents do not
+- **The 13 `defer` commands stay open** (the two flag rows `--prune`/`--no-prune` and `--submodules` are ported, owner go 2026-11-11). Before the archive the owner turns each into a port or a `drop`; agents do not
   decide this.
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands.
 - Still deferred: M7, M11, M12, M13.

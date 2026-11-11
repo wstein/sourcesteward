@@ -25,7 +25,7 @@ stw status    [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path 
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
-stw sync      [--apply] [--json] [--offline] [--root PATH] [--repo NAME]...
+stw sync      [--apply] [--prune | --no-prune] [--submodules] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
@@ -45,6 +45,49 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 `sync --apply` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
 tracked local change overlaps a file the update touches, when untracked files are in the way, when the branch
 diverged, or when a merge, rebase or similar operation is running. Local changes elsewhere are kept.
+
+### `sync --prune`, `--no-prune`, `--submodules`
+
+Ported from the Go flags; like everything in `sync` they act only with `--apply`. The dry run says what they would do and
+writes nothing (it never fetches).
+
+- `--prune`: the fetch of `origin` runs `git fetch --prune --no-prune-tags`, so remote-tracking refs that are gone on
+  `origin` are deleted. `--no-prune` runs `git fetch --no-prune` (overrides `fetch.prune`). The two exclude each other (exit 2).
+  Without either flag no option is passed: for a remote fetched by git (ssh, local path) `fetch.prune` of the
+  configuration applies as it does for `git fetch`; gix, which fetches `https://`, never prunes.
+  Reach: only `refs/remotes/origin/*` (without `origin/HEAD`). `--prune` refuses (typed `refused-refspec`, nothing fetched,
+  `result: error`) when a configured `remote.origin.fetch` writes outside that namespace (for example `+refs/tags/*:refs/tags/*`);
+  tags are never pruned (`--no-prune-tags` wins over `remote.origin.pruneTags`); no local branch is touched. The prune is part of the
+  fetch, so it happens before the fast-forward: a branch whose upstream ref was pruned reads `skip: upstream branch is gone`.
+  The refs of `refs/remotes/origin/*` are listed before and after the fetch, also after a failed one: the entry carries
+  `pruned` (the deleted names, JSON), the reason says how many, and `summary.pruned` the total. Pruning is not undone.
+  Dry run: `prune` (`on`/`off`) and, with `--prune`, `tracking_refs` (how many refs could be reached); which of them are gone
+  is only known from the remote, so the dry run does not name them.
+- `--submodules`: after every repository was synced, each pinned submodule of `.gitmodules` (checked out, detached HEAD) is
+  moved to the commit the superproject's index records, when that is a fast-forward of its HEAD: `git submodule sync` and
+  `git submodule update --no-fetch --checkout` in the superproject, through the runner (`GIT_ALLOW_PROTOCOL=none`, hooks off,
+  no recursion, never `--init`, `--remote`, `--recursive` or `--force`). The submodule's own config is refused when it
+  names a `filter.*` driver or another key that runs a command (`refused-config`). No gitlink, index or superproject commit is
+  written. Entry: `result` `submodule-move` (dry run) or `submodule-moved`, JSON `submodule` {state, old, new, note}; states
+  `moved`, `would-move`, `up-to-date` (`none`), `skipped-dirty`, `not-fast-forward` (both `skip`), `unreachable`, `failed`
+  (both `error`, exit 1). A not initialized submodule (no checkout) and a recorded commit the submodule lacks are
+  `unreachable`; the move is not journaled and not undone; URL rewrites of `submodule sync` are reported in `note`.
+  The differences from Go are listed below.
+
+Deviations from Go in these flags: (1) Rust is dry-run by default and the flags act only with `--apply` (Go acts by
+default, and its `--plan` fetches); the dry run shows `would-move` and the prune scope instead of nothing for the
+submodules. (2) `--prune` is always done by the installed git, also for an `https://` remote (gix cannot prune and stw
+deletes refs through git's own fetch only); that git gets no GitHub token from stw, a private https repository needs a git
+credential helper (the error says so). Go always used git. (3) `--prune` refuses a `remote.origin.fetch` that writes outside
+`refs/remotes/origin/` in the apply, Go checked it in the plan only; and `--prune` never prunes tags. (4) Rust visits the top-level
+submodules of `.gitmodules` only (its repository list is flat); Go walks nested submodules depth-first. (5) A submodule
+path outside `[A-Za-z0-9._/-]` is `unreachable` (Go: only absolute, `..`, option-like and control characters). (6) `--apply`
+also fetches `origin` of a pinned submodule (Rust fetches every repository; Go fetched only branch repositories), so a
+recorded commit that `origin` has is present before the move; Go reports it `unreachable`. (7) `unreachable` is result
+`error` (apply) or `skip` ("would be unreachable", dry run); Go has the result `unreachable`. (8) The superproject's
+recorded commit comes from the index (as in Go); an uninitialized submodule is listed only without `--repo`. (9) The
+submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a change inside a nested
+submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
 
 ## agent-rules
 
@@ -123,7 +166,10 @@ would_fast_forward, skipped, errors}.
   `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
 - `sync` repo: `branch`, `upstream`, `ahead`, `behind`, `dirty_files`, `fetch` (`not-run`, `skipped-offline`,
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
-  (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`), `reason`.
+  (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
+  Additive: `prune` (`on`/`off`, only with `--prune`/`--no-prune`), `pruned` (names deleted by the fetch; with a flag, or when a ref was pruned),
+  `tracking_refs` (dry run with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules}
+  and in `summary` `submodules_moved`, `would_move_submodules`, `pruned`.
 
 ## Status text
 
@@ -265,7 +311,7 @@ dry run. A clone error masks the token; an unknown repository and a refused toke
 | Remote | Fetched by | `via` | On failure |
 | --- | --- | --- | --- |
 | `ssh://`, `user@host:path`, local path, `file://` | installed `git fetch` through the runner | `git` | `fetch: failed`; `fetch: unsupported` when git is missing, too old or lacks an option |
-| `https://` | gix, no program | `gix` | `fetch: failed` |
+| `https://` | gix, no program; with `sync --prune` the installed git through the runner (README "sync --prune") | `gix`, with `--prune` `git` | `fetch: failed` |
 | `http://`, `git://` | gix, no program | `gix` | `fetch: unsupported-remote` (message ends with `use git directly for it`) |
 | other transports (`ext::`, `fd::`) | nobody | none | `fetch: unsupported-remote` |
 
