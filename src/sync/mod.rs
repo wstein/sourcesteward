@@ -18,6 +18,7 @@ pub mod rules;
 pub mod submodules;
 
 use crate::error::Result;
+use crate::github::reads::escape_untrusted;
 use crate::output::*;
 use crate::repo::{self, RepoRef};
 use crate::status::{self, HeadFacts};
@@ -44,6 +45,8 @@ pub struct SyncRec {
     pub result: String,
     pub reason: String,
     pub err: Option<String>,
+    /// A pinned submodule candidate: detached HEAD with no operation in progress (the `--submodules` pass acts on it).
+    pub pinned: bool,
     /// `--prune` (`"on"`) or `--no-prune` (`"off"`) was given; None without either.
     pub prune: Option<&'static str>,
     /// Remote-tracking refs of `origin` that the fetch deleted (apply). Also set when the fetch failed afterwards.
@@ -150,6 +153,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         }
     }
     let (mut action, mut reason) = plan_of(&facts, op);
+    rec.pinned = op.is_none() && facts.branch.is_none();
     let mut result = action.to_string();
     let mut err = None;
     rec.prune = match o.prune {
@@ -196,7 +200,9 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         }
         facts = status::head_facts(&repo)?;
         dirty = status::changes(&repo, false)?.dirty_paths;
-        (action, reason) = plan_of(&facts, status::operation(&repo));
+        let op_now = status::operation(&repo);
+        rec.pinned = op_now.is_none() && facts.branch.is_none();
+        (action, reason) = plan_of(&facts, op_now);
         result = action.to_string();
         if rec.fetch == "failed" {
             result = "error".into();
@@ -319,14 +325,14 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
         }
         out += &format!(
             "{:<18} {:<26} {:<16} {}{}\n",
-            s.name,
-            s.branch.as_deref().unwrap_or("(detached)"),
+            escape_untrusted(&s.name, 200).0,
+            escape_untrusted(s.branch.as_deref().unwrap_or("(detached)"), 200).0,
             s.result,
             s.reason,
             note
         );
         if let Some(e) = &s.err {
-            out += &format!("    error: {e}\n");
+            out += &format!("    error: {}\n", escape_untrusted(e, 600).0);
         }
     }
     let count = |r: &str| list.iter().filter(|x| x.result == r).count();

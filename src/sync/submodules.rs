@@ -379,11 +379,7 @@ pub fn submodule_pass(
 ) {
     for rec in list.iter_mut() {
         let is_root = std::path::Path::new(&rec.path) == root;
-        if !is_root
-            && rec.branch.is_none()
-            && rec.result == "skip"
-            && rec.reason.starts_with("detached HEAD")
-        {
+        if !is_root && rec.pinned && rec.result == "skip" {
             step(root, rec, o);
         }
     }
@@ -391,6 +387,25 @@ pub fn submodule_pass(
         return;
     }
     for p in repo::submodule_paths(root) {
+        if SubPath::parse(&p).is_err() {
+            // a path from `.gitmodules` is untrusted: no file system access, reported by its escaped name
+            if !list.iter().any(|r| r.name == p) {
+                let mut rec = SyncRec {
+                    name: p.clone(),
+                    path: String::new(),
+                    fetch: "not-run".into(),
+                    ..Default::default()
+                };
+                unreachable_rec(
+                    &mut rec,
+                    o,
+                    "the submodule path is not a plain directory path; stw leaves it alone",
+                    SubRec::default(),
+                );
+                list.push(rec);
+            }
+            continue;
+        }
         let dir = root.join(&p);
         let canon = std::fs::canonicalize(&dir).unwrap_or(dir.clone());
         if dir.join(".git").exists() || canon == skip || list.iter().any(|r| r.name == p) {

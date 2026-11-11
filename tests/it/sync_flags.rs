@@ -799,6 +799,95 @@ fn a_move_that_git_did_not_do_is_a_failure_not_a_success() {
 }
 
 #[test]
+fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
+    let s = sub_setup();
+    let fresh = s.w.p("fresh");
+    s.w.git(&s.w.base, &["clone", "-q", s.ws.to_str().unwrap(), "fresh"]);
+    let mut gm = std::fs::read_to_string(fresh.join(".gitmodules")).unwrap();
+    gm.push_str("[submodule \"esc\"]\n\tpath = x\u{1b}[31mRED\u{1b}[0m\n\turl = ../c.git\n");
+    gm.push_str("[submodule \"up\"]\n\tpath = ../outside\n\turl = ../c.git\n");
+    gm.push_str("[submodule \"abs\"]\n\tpath = /abs/x\n\turl = ../c.git\n");
+    std::fs::write(fresh.join(".gitmodules"), gm).unwrap();
+    // JSON: the control character is escaped by the encoder, the reason is the plain-path refusal
+    let (code, v, _) = s.w.stw(&fresh, &["--apply", "--submodules", "--offline"]);
+    assert_eq!(code, 1, "{v}");
+    for name in ["x\u{1b}[31mRED\u{1b}[0m", "../outside", "/abs/x"] {
+        let r = repo(&v, name);
+        assert_eq!(r["submodule"]["state"], "unreachable", "{r}");
+        assert!(
+            r["reason"]
+                .as_str()
+                .unwrap()
+                .contains("not a plain directory path"),
+            "{r}"
+        );
+    }
+    // text: no raw control character reaches the terminal
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &s.w.home)
+        .args(["sync", "--submodules", "--offline", "--root"])
+        .arg(&fresh)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(!text.contains('\u{1b}'), "{text:?}");
+    assert!(text.contains("x\\u{1b}[31mRED"), "{text}");
+}
+
+#[test]
+fn the_pass_acts_on_the_typed_pinned_flag_not_on_the_reason_text() {
+    let s = sub_setup();
+    s.pin_ahead();
+    let o = stw::sync::Opts {
+        offline: true,
+        submodules: true,
+        ..Default::default()
+    };
+    let rec = |reason: &str, pinned: bool| {
+        let mut r = stw::sync::sync_repo(
+            &stw::repo::RepoRef {
+                name: "c".into(),
+                path: s.c.clone(),
+            },
+            None,
+            &o,
+        );
+        assert!(r.pinned, "a detached submodule is pinned: {r:?}");
+        r.reason = reason.into();
+        r.pinned = pinned;
+        r
+    };
+    let run = |mut r: Vec<stw::sync::SyncRec>| {
+        stw::sync::submodule_pass(&s.ws, &mut r, &o, false, std::path::Path::new("/none"));
+        r.remove(0)
+    };
+    let moved = run(vec![rec("any other text", true)]);
+    assert_eq!(moved.submodule.unwrap().state, "would-move");
+    let left = run(vec![rec("detached HEAD", false)]);
+    assert!(left.submodule.is_none(), "{left:?}");
+}
+
+#[test]
+fn a_refspec_into_a_sibling_namespace_of_origin_refuses_prune() {
+    let p = prune_setup();
+    p.w.git(
+        &p.ws,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/*:refs/remotes/origin-mirror/*",
+        ],
+    );
+    let (code, v, _) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    assert_eq!(code, 1, "{v}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["git_error"], "refused-refspec", "{r}");
+    assert!(has_tracking(&p, "gone"));
+}
+
+#[test]
 fn text_output_names_the_move_and_the_counts() {
     let s = sub_setup();
     s.pin_ahead();
