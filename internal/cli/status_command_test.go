@@ -212,8 +212,8 @@ func TestStatusUsageErrors(t *testing.T) {
 func TestStatusExitCodes(t *testing.T) {
 	network := &hosting.WatchError{Code: hosting.CodeNetwork, Message: "boom"}
 	failed := runOnline(t, rootOnly(), &statusForge{err: network}, nil)
-	if !isRuntimeFailure(failed.err) || !strings.Contains(failed.out, "Notices") || !strings.Contains(failed.out, "network error") {
-		t.Errorf("an attempted request that failed is exit 1 with the partial output: %v\n%s", failed.err, failed.out)
+	if failed.err != nil || !strings.Contains(failed.out, "Notices") || !strings.Contains(failed.out, "network error") || failed.errOut != "" {
+		t.Errorf("an attempted request that failed is a notice and exit 0 (it was exit 1 before the Counts amendment): %v\n%s", failed.err, failed.out)
 	}
 	forge := &statusForge{err: network}
 	noToken := runOnline(t, rootOnly(), forge, fmt.Errorf("gh: %w", hosting.ErrAuthentication))
@@ -337,8 +337,8 @@ func TestStatusOnlineNeverLeaksAToken(t *testing.T) {
 	const canary = "ghp_CANARY0123456789"
 	for _, args := range [][]string{{}, {"--json"}} {
 		run := runOnline(t, rootOnly(), &statusForge{}, errors.New("gh failed with token "+canary), args...)
-		if !isRuntimeFailure(run.err) {
-			t.Errorf("%v: a reader that cannot be opened is a failed attempt: %v", args, run.err)
+		if run.err != nil || (len(args) == 0 && !strings.Contains(run.out, "network error") && !strings.Contains(run.out, "hosting-api-unavailable")) {
+			t.Errorf("%v: a reader that cannot be opened is a failed attempt, which is a notice and exit 0: %v\n%s", args, run.err, run.out)
 		}
 		for what, text := range map[string]string{"stdout": run.out, "stderr": run.errOut, "error": fmt.Sprint(run.err)} {
 			if strings.Contains(text, canary) {

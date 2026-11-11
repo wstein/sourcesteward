@@ -61,9 +61,10 @@ type Report struct {
 	LongRequested    bool
 }
 
-// Failure is nil when the run succeeded and the reason of exit status 1 otherwise: the run failed, a
-// repository cannot be read locally, or an attempted remote request failed. A skipped source (no
-// token, the deadline, a missing workflow) and the items never are a failure.
+// Failure is nil when the run succeeded and the reason of exit status 1 otherwise: the run failed or a
+// repository cannot be read locally. A remote read that failed (forbidden, a page that is too large, the
+// network) is a notice and the exit status stays 0, as are a skipped source (no token, the deadline, a
+// missing workflow) and the items.
 func (r Report) Failure() error {
 	switch n := r.Local.Summary.Errors; {
 	case r.Local.Error != nil:
@@ -72,8 +73,6 @@ func (r Report) Failure() error {
 		return fmt.Errorf("status: 1 repository cannot be read")
 	case n > 1:
 		return fmt.Errorf("status: %d repositories cannot be read", n)
-	case r.Overview.Summary.Failed:
-		return fmt.Errorf("status: a remote read failed (see the notices)")
 	}
 	return nil
 }

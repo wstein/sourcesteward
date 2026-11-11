@@ -268,7 +268,9 @@ func TestRunWithoutAUsableTokenReadsNothing(t *testing.T) {
 	}
 }
 
-func TestFailureIsAnAttemptedRequestThatFailed(t *testing.T) {
+// A remote read that failed is a notice, not a failure of the run: the exit status stays 0 and summary.failed
+// keeps the fact for the JSON. Only what cannot be read locally fails the run.
+func TestAFailedRemoteReadIsANoticeAndNoFailure(t *testing.T) {
 	network := &hosting.WatchError{Code: hosting.CodeNetwork, Message: "boom"}
 	rep, _ := runWith(t, &forgeFake{err: network}, nil, nil)
 	if !rep.Overview.Summary.Failed {
@@ -277,7 +279,14 @@ func TestFailureIsAnAttemptedRequestThatFailed(t *testing.T) {
 	local := workspaceLocal()
 	local.Repos, local.Summary.Errors = local.Repos[:2], 0
 	rep.Local = local
-	if err := rep.Failure(); err == nil || !strings.Contains(err.Error(), "remote read failed") {
+	if err := rep.Failure(); err != nil {
+		t.Fatalf("a failed remote read is no failure: %v", err)
+	}
+	if len(rep.Overview.Notices) == 0 {
+		t.Fatal("the failed read must be a notice")
+	}
+	rep.Local = workspaceLocal() // one repository cannot be read locally: still exit 1
+	if err := rep.Failure(); err == nil || err.Error() != "status: 1 repository cannot be read" {
 		t.Fatalf("%v", err)
 	}
 	healthy, _ := runWith(t, &forgeFake{}, nil, nil)
