@@ -111,6 +111,11 @@ func (c *cycle) run(ctx context.Context, repos []string) {
 		default:
 			open := len(l.items)
 			status[i].State, status[i].Open, status[i].PullsDropped = StateOK, &open, &l.dropped
+			for _, it := range l.items {
+				if containsFold(it.Labels, "bug") {
+					status[i].Bugs++
+				}
+			}
 			lists[i] = l
 			if l.truncated {
 				status[i].State = StatePartial

@@ -17,6 +17,7 @@ import (
 type Issues struct {
 	State     overview.SourceState
 	Open      int
+	Bugs      int // the open issues read with the label bug, whatever their priority
 	Counts    issues.Counts
 	Dropped   int
 	Truncated bool
@@ -112,7 +113,7 @@ func fromStatus(ctx context.Context, st issues.RepoStatus, rows []overview.Issue
 		i.State = overview.SourceState{Outcome: overview.OutcomeError, Code: st.Error}
 		return i
 	}
-	i.Open, i.Counts, i.Truncated, i.Rows = *st.Open, st.Counts, st.State == issues.StatePartial, rows
+	i.Open, i.Bugs, i.Counts, i.Truncated, i.Rows = *st.Open, st.Bugs, st.Counts, st.State == issues.StatePartial, rows
 	if st.PullsDropped != nil {
 		i.Dropped = *st.PullsDropped
 	}

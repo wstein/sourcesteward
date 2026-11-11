@@ -108,6 +108,11 @@ type RepoStatus struct {
 	Attention    bool           `json:"attention"`
 	Reasons      []string       `json:"reasons"`
 	Error        *Failure       `json:"error"`
+
+	// RemoteBranches is the number of remote-tracking branches of origin (refs/remotes/origin/* without HEAD) as of
+	// the last fetch; nil when they could not be listed. It feeds the Counts block of `stw status` and is no member of
+	// the published schema 1 document.
+	RemoteBranches *int `json:"-"`
 }
 
 // StatusSummary counts the repositories and those with a non-empty attention list.
@@ -407,6 +412,15 @@ func (s *statusRun) branches(ctx context.Context, e env, rp *RepoStatus) bool {
 	}
 	local := splitLines(out.Out)
 	rp.Branches.Local = len(local)
+	if refs, err := s.g(ctx, e, e.dir, "for-each-ref", "--format=%(refname)", "refs/remotes/origin/"); err == nil && refs.Code == 0 {
+		n := 0
+		for _, ref := range splitLines(refs.Out) {
+			if ref != "refs/remotes/origin/HEAD" {
+				n++
+			}
+		}
+		rp.RemoteBranches = &n
+	}
 	remote := "origin"
 	if rp.Upstream != nil {
 		if r, _, ok := strings.Cut(*rp.Upstream, "/"); ok && remoteName.MatchString(r) {
