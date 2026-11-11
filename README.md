@@ -129,6 +129,11 @@ Deviations from Go in these flags:
 12. `--no-prune` also passes `--no-prune-tags`; Go gives `--no-prune-tags` not along, so with `fetch.pruneTags` or
     `remote.origin.pruneTags` configured Go's fetch creates tags there. (`sync` without a prune flag keeps the Go
     behavior, see "Status flags".)
+13. The Git configuration `pull.rebase`, `branch.<name>.rebase`, `pull.ff`, `rebase.autoStash` and `merge.autoStash` is not
+    followed (Go follows it: rebase, merge commit, autostash). A fast-forward stays a plain fast-forward, without stash and
+    merge commit; a diverged branch is skipped, and when `pull.rebase` or `branch.<name>.rebase` is set the reason adds
+    "stw sync never rebases (not ported)". `--rebase`, `--merge`, `--autostash`, `--no-autostash` are an open package.
+14. The plan line ends with "Nothing was fetched either: based on the last fetch": the plan never fetches (Go's `--plan` does).
 
 ## agent-rules
 
