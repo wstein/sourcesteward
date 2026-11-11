@@ -327,15 +327,18 @@ Slice 1 (port, no spike), in this order, each a reviewable commit:
      `TestPullHeadComparison`. Deviation: Go also takes a 64-hex patch-id; Rust takes 40 hex only.
    - `TestMain`: drop (Go harness; the Rust harness stays confined to scratch).
 Slice 1 as built (branch `feat/stw-port-m4`): deviations from Go found by the corpus check and the port. Cases are named in
-`tests/review_go_corpus.rs` (D1 to D8, M3) and `tests/carryover.rs` (D1 to D7, M4):
+`tests/it/review_go_corpus.rs` (D1 to D8, M3) and `tests/it/carryover.rs` (D1 to D7, M4):
 - M3: no head time (Go drops comments older than the head commit); trust by login list, not `author_association`; 16 links, not 8;
   a repeated head invalidates the chain; FINDINGS after a chain member invalidate every chain through it, also a carry-over posted
   before them; legacy words (`Verdict:`, `Urteil:`) are no review line; states: `no-review` includes Go `clear-stale`, `unknown`
   replaces `unparsed`. `NeedsHeadTime` and `Hints` are not ported (M9).
 - M4: `git range-diff` replaces the Go commit comparison, so a reorder is `=` for git and refused by position here; `--fetch` fetches
   `origin` only (Go: `--remote NAME`); `--pr none`; a repository config that starts a diff program is refused (Go ignores it);
-  schema 2; no `refs/replace` protection in process; the fetch of the PR head runs through the installed git for every remote kind,
-  https included (the git boundary says git only for ssh or local fetch; a gix fetch of an explicit refspec is not built; owner decides).
+  schema 2; no `refs/replace` protection in process; the fetch of the PR head runs through the installed git for an ssh, scp-like, `file://` or local-path `origin` only
+  (git boundary); an http, https or git:// `origin` is refused typed (`transport`, answer no) before git starts, the https path through
+  gix is not built (owner decides); a `core.sshCommand` of the user's config runs as with `FetchOrigin`. Conservative differences
+  (no where Go says yes): only the author of a commit changed (range-diff names the author), an identical patch twice in a range
+  (range-diff pairs it across, the position rule refuses). Notes are ignored (`--no-notes`), as in Go.
 - `Op::RangeDiff` has no four-argument form in git; the argv is the two-range form.
 
 Slice 2: `ready-check` (M4) from `internal/readycheck`. Then M8 (`lint pr`), M9 (`pulls`).

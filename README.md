@@ -333,11 +333,12 @@ nothing; `stw` does not read the review it is about). Full lower-case 40-hex ids
 A step that could not run is `unknown`; the answer is then no. Only for a yes the output ends with
 `Carried-over: from=<old head> to=<new head> patch-id=<40 hex> pr=<n|none>` (a line of the M3 grammar). Exit 0 yes, 1 no or a
 step could not run (result printed), 2 usage. `--fetch` fetches `refs/pull/N/head` of `origin` into `refs/stw/carry-over/pr-N`
-(`via: git`, any remote kind git supports; no tags, no FETCH_HEAD, empty refmap) and requires it to equal `NEW_HEAD`.
+(`via: git`, for an ssh, scp-like, `file://` or local-path `origin` only; an http, https or git:// `origin` is refused typed (`transport`, exit 1, answer no) before git starts, because the https fetch stays with gix and is not built for this refspec; a `core.sshCommand` of the user's config runs as with `FetchOrigin`; no tags, no FETCH_HEAD, empty refmap) and requires it to equal `NEW_HEAD`.
 The range-diff step pins what could hide a change (empty attribute source, no `diff.ignoreSubmodules`, size limit, context) and refuses,
 typed unsupported, a repository config with `diff.external`, `diff.<driver>.textconv|command` or an active `info/attributes`.
-JSON schema 2 (`pr`: number or `"none"`; `via` per step; `read_errors`). Deviations from the Go command and the mapping of its 46
-tests: header of `tests/carryover.rs`; plan: `docs/migration-plan.md`, "Next slice".
+`git range-diff` is told `--no-notes`. It also says no where Go says yes when only the author of a commit changed, and for an
+identical patch twice in a range (range-diff pairs it across). JSON schema 2 (`pr`: number or `"none"`; `via` per step; `read_errors`). Deviations from the Go command and the mapping of its 46
+tests: header of `tests/it/carryover.rs`; plan: `docs/migration-plan.md`, "Next slice".
 
 ## Build and test
 

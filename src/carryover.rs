@@ -12,7 +12,7 @@
 //! Git boundary: patch-id and merge commits are read in process (gix); `range-diff` and the fetch of the pull
 //! request head (`--fetch`, `origin` only) go through the installed git (`git_runner`, `"via": "git"`).
 //! Ported from `legacy/sourcesteward/internal/carryover`; deviations from the Go behavior are listed in the header of
-//! `tests/carryover.rs`.
+//! `tests/it/carryover.rs`.
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
