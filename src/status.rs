@@ -621,6 +621,94 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
     })
 }
 
+/// The glyph set of the text output (`--icons`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Icons {
+    Unicode,
+    Nerd,
+    Ascii,
+}
+
+impl Icons {
+    /// Marker of a repository that needs attention, with its trailing space (two columns, like the blank marker).
+    pub fn attention(self) -> &'static str {
+        match self {
+            Icons::Unicode => "\u{25b2} ",
+            Icons::Nerd => "\u{f071} ",
+            Icons::Ascii => "! ",
+        }
+    }
+
+    /// Marker of a repository that cannot be read, with its trailing space.
+    pub fn failed(self) -> &'static str {
+        match self {
+            Icons::Unicode => "\u{2716} ",
+            Icons::Nerd => "\u{f057} ",
+            Icons::Ascii => "! ",
+        }
+    }
+}
+
+/// What the output channels and the environment allow, as far as the icon default needs it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Terminal {
+    /// stdout is a terminal.
+    pub stdout: bool,
+    /// The effective locale names UTF-8: the first of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides.
+    pub utf8: bool,
+    /// `TERM` is `dumb`.
+    pub dumb: bool,
+}
+
+impl Terminal {
+    /// From the values of the environment variables (None: unset); `stdout_tty` is whether stdout is a terminal.
+    pub fn from_env_values(
+        stdout_tty: bool,
+        lc_all: Option<&str>,
+        lc_ctype: Option<&str>,
+        lang: Option<&str>,
+        term: Option<&str>,
+    ) -> Terminal {
+        let locale = [lc_all, lc_ctype, lang]
+            .into_iter()
+            .flatten()
+            .find(|v| !v.is_empty());
+        let utf8 = locale.is_some_and(|v| {
+            let v = v.to_ascii_lowercase();
+            v.contains("utf-8") || v.contains("utf8")
+        });
+        Terminal {
+            stdout: stdout_tty,
+            utf8,
+            dumb: term == Some("dumb"),
+        }
+    }
+
+    pub fn detect() -> Terminal {
+        use std::io::IsTerminal;
+        let var = |k: &str| std::env::var(k).ok();
+        Terminal::from_env_values(
+            std::io::stdout().is_terminal(),
+            var("LC_ALL").as_deref(),
+            var("LC_CTYPE").as_deref(),
+            var("LANG").as_deref(),
+            var("TERM").as_deref(),
+        )
+    }
+}
+
+/// The glyph set of `--icons`: an explicit value always wins; the default is unicode on a terminal with a UTF-8
+/// locale and ascii everywhere else (a pipe, a file, a locale that is not UTF-8, `TERM=dumb`).
+pub fn resolve_icons(flag: Option<&str>, t: &Terminal) -> Icons {
+    match flag {
+        Some("unicode") => Icons::Unicode,
+        Some("nerd") => Icons::Nerd,
+        Some(_) => Icons::Ascii,
+        None if t.stdout && t.utf8 && !t.dumb => Icons::Unicode,
+        None => Icons::Ascii,
+    }
+}
+
 /// Blocks, each followed by a blank line: `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)`, the
 /// rules block `rules` (already rendered, may be empty), then the summary line.
 pub fn render_human(
@@ -628,6 +716,7 @@ pub fn render_human(
     extra_notices: &[String],
     list: &[RepoStatus],
     rules: &str,
+    icons: Icons,
 ) -> String {
     let mut out = counts_block(list);
     out.push('\n');
@@ -651,7 +740,13 @@ pub fn render_human(
     for s in list {
         let rs = reasons(s);
         let attn = !rs.is_empty();
-        let mark = if attn { '!' } else { ' ' };
+        let mark = if s.error.is_some() {
+            icons.failed()
+        } else if attn {
+            icons.attention()
+        } else {
+            "  "
+        };
         let where_ = match &s.facts.branch {
             Some(b) => b.clone(),
             None => format!(
@@ -702,7 +797,7 @@ pub fn render_human(
             l += &format!("  {ch}");
             l
         };
-        out += &format!("{mark} {:<18} {:<30} {line}\n", esc(&s.name), esc(&where_));
+        out += &format!("{mark}{:<18} {:<30} {line}\n", esc(&s.name), esc(&where_));
         if let Some(op) = s.op {
             out += &format!("    operation in progress: {op}\n");
         }

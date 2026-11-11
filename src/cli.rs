@@ -328,6 +328,9 @@ struct StatusArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
+    #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
+    icons: Option<String>,
 }
 
 struct Workspace {
@@ -591,7 +594,8 @@ fn run(command: Command) -> Result<u8> {
                         ws.github.note.clone(),
                         &rejected_notices(&ws.rejected),
                         &list,
-                        &sync::rules::render_human(&rules)
+                        &sync::rules::render_human(&rules),
+                        status::resolve_icons(a.icons.as_deref(), &status::Terminal::detect())
                     )
                 );
             }
