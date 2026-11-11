@@ -315,3 +315,14 @@ func TestAFailureTheForgeAnsweredStaysAFailureWhenTheContextEndsAfterwards(t *te
 		cancel()
 	}
 }
+
+// The number of issues with the label bug travels with the source (it is the `bug N` of the Counts block),
+// whatever the priority the issue got.
+func TestIssuesCarryTheNumberOfBugLabels(t *testing.T) {
+	w := newWorld()
+	w.issues["o/a"] = []string{issueList(issue(1, []string{"security", "bug"}, nil), issue(2, []string{"Bug"}, nil), issue(3, nil, nil))}
+	res := Collect(context.Background(), []Repository{repository("o/a")}, (&opener{client: w}).options())
+	if i := res.Repos[0].Issues; i == nil || i.Open != 3 || i.Bugs != 2 {
+		t.Fatalf("%+v", i)
+	}
+}

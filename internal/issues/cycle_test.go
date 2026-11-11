@@ -323,3 +323,24 @@ func TestRunOrdersRepositoriesByASCIICaseInsensitiveName(t *testing.T) {
 		t.Errorf("repos %v", repos)
 	}
 }
+
+// Bugs counts the open issues with the label `bug` whatever their priority (a security or a bot issue that
+// is also a bug counts), never a pull request entry of the list, and before the filters: it is what
+// `stw status` shows as `bug N`, next to Open.
+func TestRunCountsTheBugLabelOfEveryOpenIssueBeforeTheFilters(t *testing.T) {
+	f := newForge()
+	f.pages["o/r"] = []string{body(
+		raw(1, withLabels("bug")),
+		raw(2, withLabels("Bug", "ui")),
+		raw(3, withLabels("Security", "bug")),
+		raw(4, withAuthor("renovate[bot]", "Bot"), withLabels("bug")),
+		raw(5, withLabels("docs")),
+		raw(6, withLabels("bug"), asPull),
+		raw(7, withLabels("ſecurity", "bugK")),
+	)}
+	res := run(t, f, Options{Repos: []string{"o/r"}, Labels: []string{"docs"}})
+	st := repoStatus(t, res, "o/r")
+	if *st.Open != 6 || st.Bugs != 4 {
+		t.Fatalf("open %d bugs %d, want 6 and 4 (pull request dropped, Unicode folds are no bug)", *st.Open, st.Bugs)
+	}
+}

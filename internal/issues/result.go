@@ -48,7 +48,10 @@ type RepoStatus struct {
 	Open         *int   // issues read, before the filters
 	Counts       Counts
 	PullsDropped *int
-	Error        string
+	// Bugs is the number of the open issues read that carry the label `bug` (ASCII case folded), whatever their
+	// priority and before the filters; zero unless the issues were read.
+	Bugs  int
+	Error string
 }
 
 // States of the viewer read and the reasons of a skipped one.

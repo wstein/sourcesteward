@@ -4,6 +4,7 @@ package stwsync
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -310,8 +311,14 @@ func TestStatusIsReadOnly(t *testing.T) {
 		return b.String()
 	}
 	before := snap()
-	statusOf(t, w.ws, StatusOptions{Worktrees: true})
+	read := statusRepos(statusOf(t, w.ws, StatusOptions{Worktrees: true}))
 	statusOf(t, w.dir("a/n"), StatusOptions{})
+	// the counts of the Counts block are read in this run too: the remote-tracking branches come from for-each-ref
+	for _, n := range []string{".", "a", "b", "c", "dev"} {
+		if read[n].RemoteBranches == nil {
+			t.Fatalf("%s: the remote-tracking branches were not counted, so this run did not exercise the count", n)
+		}
+	}
 	if after := snap(); after != before {
 		t.Fatalf("status changed the workspace:\n%s\n----\n%s", before, after)
 	}
@@ -367,5 +374,32 @@ func TestStatusLockedWorktreeWithMissingDirectoryIsNotDirty(t *testing.T) {
 	wt := statusRepos(r)["."].Worktrees
 	if wt.Missing != 1 || wt.Dirty != 0 || len(wt.List) != 1 || !wt.List[0].Missing || wt.List[0].Dirty || wt.Locked != 1 {
 		t.Fatalf("%+v", wt)
+	}
+}
+
+// RemoteBranches counts refs/remotes/origin/* without HEAD as of the last fetch: other remotes do not count.
+// It is a number for the Counts block of `stw status`, not a member of the published schema 1 document.
+func TestStatusCountsTheRemoteTrackingBranchesOfOrigin(t *testing.T) {
+	w := newWorkspace(t)
+	b := w.dir("b")
+	runGit(t, b, "push", "-q", "origin", "HEAD:refs/heads/topic", "HEAD:refs/heads/release/1")
+	runGit(t, b, "fetch", "-q", "origin")
+	runGit(t, b, "remote", "add", "other", w.bare["a"])
+	runGit(t, b, "fetch", "-q", "other")
+	if head := runGit(t, b, "symbolic-ref", "-q", "refs/remotes/origin/HEAD"); !strings.Contains(head, "origin/main") {
+		t.Fatalf("the fixture needs origin/HEAD: %q", head)
+	}
+	rp := statusRepos(statusOf(t, w.ws, StatusOptions{}))
+	if got := rp["b"].RemoteBranches; got == nil || *got != 3 {
+		t.Fatalf("remote branches of b: %v, want 3 (main, topic, release/1)", got)
+	}
+	// a repository without any fetched branch has none: a number, not unknown
+	runGit(t, w.dir("c"), "update-ref", "-d", "refs/remotes/origin/main")
+	if got := statusRepos(statusOf(t, w.ws, StatusOptions{}))["c"].RemoteBranches; got == nil || *got != 0 {
+		t.Fatalf("remote branches of c: %v, want 0", got)
+	}
+	raw, err := json.Marshal(rp["b"])
+	if err != nil || strings.Contains(string(raw), "remote_branches") || strings.Contains(string(raw), "RemoteBranches") {
+		t.Fatalf("the schema 1 repository object stays as published: %v %s", err, raw)
 	}
 }
