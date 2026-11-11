@@ -59,7 +59,7 @@ impl<E: std::error::Error + Send + Sync + 'static> From<E> for Error {
 pub mod exit {
     /// Everything that was asked for worked.
     pub const OK: u8 = 0;
-    /// The command ran, but at least one repository could not be read or `--apply` failed on one.
+    /// The command ran, but at least one repository could not be read or a `sync` run failed on one.
     pub const FAILED: u8 = 1;
     /// Usage error or unusable workspace; nothing was done.
     pub const USAGE: u8 = 2;

@@ -284,10 +284,10 @@ struct SyncArgs {
     #[command(flatten)]
     common: Common,
     /// Print what a run would do and change nothing: no fetch, no write (alias: --dry-run)
-    #[arg(long, conflicts_with = "apply")]
+    #[arg(long, conflicts_with = "apply", overrides_with = "plan")]
     plan: bool,
     /// Alias of --plan
-    #[arg(long, conflicts_with = "apply")]
+    #[arg(long, conflicts_with = "apply", overrides_with = "dry_run")]
     dry_run: bool,
     /// Accepted and ignored: sync runs by default (kept so that earlier calls still work); not in the help
     #[arg(long, hide = true)]

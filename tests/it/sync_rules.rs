@@ -660,3 +660,70 @@ fn the_rules_submodule_is_only_touched_by_rules_apply() {
     // (3) the superproject was not written: no commit
     assert!(gix::open(&root).unwrap().head_id().is_err());
 }
+
+#[test]
+fn plan_and_dry_run_with_rules_fetch_and_move_nothing_online() {
+    let (fx, origin, o1) = with_local_origin();
+    // origin is two commits ahead of the checkout
+    let o2 = origin.commit(Some(o1), &[("more.md", Some("more\n"))], "rules: more");
+    origin.branch("main", o2);
+    let root = fx.path.parent().unwrap().to_path_buf();
+    std::fs::rename(&fx.path, root.join(".agents")).unwrap();
+    gix::init(&root).unwrap();
+    let rs = root.to_str().unwrap();
+    let sub = root.join(".agents");
+    let c0 = gix::open(&sub).unwrap().head_id().unwrap().detach();
+    // the plan only knows what was fetched before
+    let f = std::process::Command::new("git")
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", "/nonexistent")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .args(["-c", "protocol.file.allow=always", "-C"])
+        .arg(&sub)
+        .args(["fetch", "-q", "origin"])
+        .output()
+        .unwrap();
+    assert!(f.status.success(), "{}", String::from_utf8_lossy(&f.stderr));
+    let fetch_head = std::fs::read(sub.join(".git/FETCH_HEAD")).unwrap();
+    let run = |args: &[&str]| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+            .env("HOME", "/nonexistent")
+            .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+            .env_remove("GH_CONFIG_DIR")
+            .env_remove("XDG_CONFIG_HOME")
+            .env_remove("GITHUB_TOKEN")
+            .env_remove("GH_TOKEN")
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    for flags in [
+        &["--dry-run"][..],
+        &["--plan"][..],
+        &["--plan", "--dry-run"][..],
+    ] {
+        let mut args = vec!["sync", "--rules", "--root", rs];
+        args.extend_from_slice(flags);
+        let text = String::from_utf8_lossy(&run(&args).stdout).into_owned();
+        assert!(text.contains("dry run (--plan)"), "{flags:?}: {text}");
+        args.push("--json");
+        let o = run(&args);
+        let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+        assert_eq!(v["agent_rules"]["fetch"], "not-run", "{flags:?}: {v}");
+        assert_eq!(v["agent_rules"]["action"], "would-update", "{flags:?}: {v}");
+        assert_eq!(gix::open(&sub).unwrap().head_id().unwrap(), c0, "{flags:?}");
+        assert_eq!(
+            std::fs::read(sub.join(".git/FETCH_HEAD")).unwrap(),
+            fetch_head,
+            "{flags:?}"
+        );
+        assert!(!sub.join("rules").exists(), "{flags:?}");
+    }
+    // without the flag the same checkout is fetched and moved to origin's tip
+    let o = run(&["sync", "--rules", "--root", rs, "--json"]);
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["agent_rules"]["fetch"], "ok", "{v}");
+    assert_eq!(gix::open(&sub).unwrap().head_id().unwrap(), o2);
+}

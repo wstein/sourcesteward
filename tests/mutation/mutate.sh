@@ -1441,6 +1441,27 @@ m SD13 "the plan does not report a failed fetch of a run as exit 1" src/cli.rs \
   'list.iter().any(|s| s.result == "error") || rules.action == "refused",' 'rules.action == "refused",' \
   sync_default a_run_without_network_is_exit_1_and_a_plan_is_exit_0
 
+m SD14 "--rules acts under --plan (R1)" src/cli.rs \
+  'update: a.rules,
+                apply: execute,' 'update: a.rules,
+                apply: !a.plan,' \
+  sync_rules plan_and_dry_run_with_rules_fetch_and_move_nothing_online
+m SD15 "the plan text loses the note about the last fetch" src/sync/mod.rs \
+  ' Nothing was fetched either: based on the last fetch.' '' \
+  sync_default the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it
+m SD16 "a diverged skip does not name the ignored rebase setting" src/sync/mod.rs \
+  '            if rebase_configured(&repo, b) {' '            if false && rebase_configured(&repo, b) {' \
+  sync_default rebase_merge_and_autostash_settings_are_not_followed_and_a_diverged_skip_says_so
+m SD17 "the rebase note is always added" src/sync/mod.rs \
+  '            if rebase_configured(&repo, b) {' '            if rebase_configured(&repo, b) || true {' \
+  sync_default rebase_merge_and_autostash_settings_are_not_followed_and_a_diverged_skip_says_so
+m SD18 "a repeated --plan is a usage error" src/cli.rs \
+  '#[arg(long, conflicts_with = "apply", overrides_with = "plan")]' '#[arg(long, conflicts_with = "apply")]' \
+  sync_default a_repeated_plan_or_dry_run_flag_is_accepted
+m SD19 "a repeated --dry-run is a usage error" src/cli.rs \
+  '#[arg(long, conflicts_with = "apply", overrides_with = "dry_run")]' '#[arg(long, conflicts_with = "apply")]' \
+  sync_default a_repeated_plan_or_dry_run_flag_is_accepted
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

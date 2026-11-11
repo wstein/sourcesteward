@@ -74,6 +74,22 @@ fn tracking_refs(path: &std::path::Path) -> Result<BTreeSet<String>> {
     Ok(out)
 }
 
+/// `pull.rebase` or `branch.<name>.rebase` asks for a rebase (any value but a false one). Go would rebase a diverged
+/// branch then; stw never does, and says so instead of ignoring the setting silently.
+fn rebase_configured(repo: &gix::Repository, branch: &str) -> bool {
+    let cfg = repo.config_snapshot();
+    ["pull.rebase".to_string(), format!("branch.{branch}.rebase")]
+        .iter()
+        .any(|k| {
+            cfg.string(k.as_str()).is_some_and(|v| {
+                !matches!(
+                    v.to_string().to_ascii_lowercase().as_str(),
+                    "false" | "no" | "off" | "0" | ""
+                )
+            })
+        })
+}
+
 fn plan_of(f: &HeadFacts, op: Option<&str>) -> (&'static str, String) {
     let (a, b) = (f.ahead.unwrap_or(0), f.behind.unwrap_or(0));
     if let Some(op) = op {
@@ -243,6 +259,13 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         reason += &format!("; working tree has {dirty} changed file(s), refused if they overlap");
     }
     reason += &prune_note;
+    if result == "skip" && reason.starts_with("diverged") {
+        if let Some(b) = &facts.branch {
+            if rebase_configured(&repo, b) {
+                reason += "; pull.rebase/branch.<name>.rebase is set: stw sync never rebases (not ported)";
+            }
+        }
+    }
     if !rec.pruned.is_empty() && rec.fetch == "ok" {
         let shown: Vec<String> = rec
             .pruned
@@ -365,7 +388,7 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
         if o.submodules {
             out += &format!(", {} submodule(s) would move", count("submodule-move"));
         }
-        out += ". Nothing was written.\n";
+        out += ". Nothing was written. Nothing was fetched either: based on the last fetch.\n";
     }
     out
 }

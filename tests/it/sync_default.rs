@@ -176,7 +176,9 @@ fn the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it() {
         .unwrap();
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(
-        text.contains("dry run: 1 would fast-forward, 0 skipped. Nothing was written."),
+        text.contains(
+            "dry run: 1 would fast-forward, 0 skipped. Nothing was written. Nothing was fetched either: based on the last fetch.\n"
+        ),
         "{text}"
     );
     assert_eq!(d.tip(), d.old);
@@ -314,4 +316,77 @@ fn a_run_without_network_is_exit_1_and_a_plan_is_exit_0() {
     let (code, v, _) = d.run(&["--offline"]);
     assert_eq!(code, 0, "{v}");
     assert_eq!(entry(&v, "ws")["fetch"], "skipped-offline");
+}
+
+#[test]
+fn a_repeated_plan_or_dry_run_flag_is_accepted() {
+    for rep in [
+        &["--plan", "--plan"][..],
+        &["--dry-run", "--dry-run"][..],
+        &["--plan", "--dry-run", "--plan"][..],
+    ] {
+        let d = setup_fetched();
+        let before = snapshot(&d.ws);
+        let (code, v, err) = d.run(rep);
+        assert_eq!(code, 0, "{rep:?}: {v} {err}");
+        assert_eq!(v["mode"], "dry-run", "{rep:?}");
+        assert!(snapshot(&d.ws) == before, "{rep:?}");
+    }
+}
+
+#[test]
+fn rebase_merge_and_autostash_settings_are_not_followed_and_a_diverged_skip_says_so() {
+    for cfg in [
+        &[("pull.rebase", "true")][..],
+        &[("branch.main.rebase", "merges")][..],
+        &[
+            ("pull.ff", "false"),
+            ("rebase.autoStash", "true"),
+            ("merge.autoStash", "true"),
+        ][..],
+    ] {
+        // behind and dirty elsewhere: a plain fast-forward, no stash, no merge commit
+        let d = setup();
+        for (k, v) in cfg {
+            d.w.git(&d.ws, &["config", k, v]);
+        }
+        std::fs::write(d.ws.join("untouched.txt"), "local\n").unwrap();
+        d.w.git(&d.ws, &["add", "untouched.txt"]);
+        let (code, v, err) = d.run(&[]);
+        assert_eq!(code, 0, "{cfg:?}: {v} {err}");
+        assert_eq!(entry(&v, "ws")["result"], "fast-forwarded", "{cfg:?}");
+        assert_eq!(d.tip(), d.new, "{cfg:?}");
+        assert_eq!(d.w.git(&d.ws, &["stash", "list"]), "", "{cfg:?}");
+        assert_eq!(
+            d.w.git(&d.ws, &["rev-list", "--merges", "--count", "main"]),
+            "0",
+            "{cfg:?}"
+        );
+        assert!(d.ws.join("untouched.txt").exists());
+        // diverged: skipped; the reason names the ignored rebase setting only when one is set
+        let d = setup();
+        for (k, v) in cfg {
+            d.w.git(&d.ws, &["config", k, v]);
+        }
+        d.w.commit(&d.ws, "local.txt", "l\n");
+        let local = d.tip();
+        let (code, v, _) = d.run(&[]);
+        assert_eq!(code, 0, "{cfg:?}: {v}");
+        let r = entry(&v, "ws");
+        assert_eq!(r["result"], "skip", "{cfg:?}: {r}");
+        let reason = r["reason"].as_str().unwrap();
+        let named = reason.contains("stw sync never rebases (not ported)");
+        let rebase_set = cfg.iter().any(|(k, _)| k.ends_with(".rebase"));
+        assert_eq!(named, rebase_set, "{cfg:?}: {reason}");
+        assert_eq!(d.tip(), local, "{cfg:?}");
+    }
+    // a false setting is not a request to rebase
+    let d = setup();
+    d.w.git(&d.ws, &["config", "pull.rebase", "false"]);
+    d.w.commit(&d.ws, "local.txt", "l\n");
+    let (_, v, _) = d.run(&[]);
+    assert!(!entry(&v, "ws")["reason"]
+        .as_str()
+        .unwrap()
+        .contains("never rebases"));
 }
