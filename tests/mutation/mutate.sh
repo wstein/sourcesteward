@@ -839,6 +839,99 @@ m RP24 'replay: renames are tracked on the adding side as well' src/replay.rs \
   '    for change in diff(adder, None)? {' '    for change in diff(adder, Some(Default::default()))? {' \
   replay a_file_moved_into_a_directory_that_onto_renamed_is_a_conflict_like_git
 
+m LP1 'lint pr: the session pattern does not match the trailer' src/lint_pr.rs \
+  'f.contains(concat!("claude", "-session:"))' 'f.contains(concat!("claude", "-sessionX:"))' \
+  lint_pr session_link_every_location
+m LP2 'lint pr: the email is compared case-sensitively' src/lint_pr.rs \
+  'fold(&o.email) == fold(email)' 'o.email == email' \
+  lint_pr identity
+m LP3 'lint pr: a trailer without a name passes' src/lint_pr.rs \
+  "if name.is_empty() || name.contains('\\r') {" "if name.contains('\\r') {" \
+  lint_pr co_authored_by_edges
+m LP4 'lint pr: an @ at the edge of the address passes' src/lint_pr.rs \
+  "c == '@' && i > 0 && i + 1 < addr.len()" "c == '@'" \
+  lint_pr co_authored_by_edges
+m LP5 'lint pr: an empty scope passes' src/lint_pr.rs \
+  'let ok = !scope.is_empty()' 'let ok = true' \
+  lint_pr conventional_commit
+m LP6 'lint pr: the hard limit of the PR text is one line higher' src/lint_pr.rs \
+  'if n > r.hard {' 'if n > r.hard + 1 {' \
+  lint_pr body_length
+m LP7 'lint pr: Blockers (plural) is no Blocker line' src/lint_pr.rs \
+  '    if optional_s {
+        if let Some((r2, l2))' '    if false {
+        if let Some((r2, l2))' \
+  lint_pr blocker_and_author_agent_edges
+m LP8 'lint pr: a keyword boundary ignores the character that was matched' src/lint_pr.rs \
+  'word(last) != rest.chars().next().is_some_and(word)' '!rest.chars().next().is_some_and(word)' \
+  lint_pr review_claim_case_folding_and_boundary
+m LP9 'lint pr: a # before the Blocker line is not allowed' src/lint_pr.rs \
+  "matches!(c, '*' | '_' | '#' | '>' | '-')" "matches!(c, '*' | '_' | '>' | '-')" \
+  lint_pr blocker_and_author_agent_edges
+m LP10 'lint pr: a review claim needs no boundary after the verdict word' src/lint_pr.rs \
+  '.any(|v| keyword_ci(rest, v, false))' '.any(|v| strip_prefix_ci(rest, v).is_some())' \
+  lint_pr review_line_format
+m LP11 'lint pr: blank lines before a review line are not skipped' src/lint_pr.rs \
+  "body.split('\\n').find(|l| !l.trim().is_empty())" "body.split('\\n').next()" \
+  lint_pr review_claim_case_folding_and_boundary
+m LP12 'lint pr: pr numbers have no digit limit' src/lint_pr.rs \
+  'PrRef::Number(n) if *n <= 999_999_999 => Some(l),' 'PrRef::Number(_) => Some(l),' \
+  lint_pr review_line_pr_field
+m LP13 'lint pr: pr=none is a review line' src/lint_pr.rs \
+  '        PrRef::Number(n) if *n <= 999_999_999 => Some(l),
+        _ => None,' '        PrRef::Number(n) if *n <= 999_999_999 => Some(l),
+        PrRef::None => Some(l),
+        _ => None,' \
+  lint_pr review_line_pr_field
+m LP14 'lint pr: a review comment of 16 lines is allowed' src/lint_pr.rs \
+  'let n = line_count(&c.body);
+                    if n > r.limit {' 'let n = line_count(&c.body);
+                    if n > r.limit + 1 {' \
+  lint_pr review_comment_length
+m LC1 'lint pr: a Link next that skips a page is followed' src/lint_pr_cmd.rs \
+  'Some(n) if n == page + 1 => Ok(true),' 'Some(_) => Ok(true),' \
+  lint_pr_cmd link_next_that_is_not_the_following_page_is_a_read_failure
+m LC2 'lint pr: a commit count equal to the commits read is incomplete' src/lint_pr_cmd.rs \
+  'if commit_count > input.commits.len() as i64 {' 'if commit_count >= input.commits.len() as i64 {' \
+  lint_pr_cmd commit_count_boundary
+m LC3 'lint pr: the comment page bound is not reported' src/lint_pr_cmd.rs \
+  'tr_comments = true;' 'tr_comments = false;' \
+  lint_pr_cmd each_truncation_alone_fails_closed
+m LC4 'lint pr: an incomplete read without an error finding exits 0' src/lint_pr_cmd.rs \
+  'let (stderr, code) = if report.errors() == 0 && !report.passed() {' 'let (stderr, code) = if false {' \
+  lint_pr_cmd truncation_at_the_page_bounds
+m LC5 'lint pr: a cut comment list still passes' src/lint_pr_cmd.rs \
+  'self.errors() == 0 && !self.truncated_commits && !self.truncated_comments' 'self.errors() == 0 && !self.truncated_commits' \
+  lint_pr_cmd each_truncation_alone_fails_closed
+m LC6 'lint pr: a warning exits 3' src/lint_pr_cmd.rs \
+  '} else if report.errors() > 0 {' '} else if report.errors() + report.warnings() > 0 {' \
+  lint_pr_cmd warning_only_exits_zero
+m LC7 'lint pr: the git identity is not the default owner' src/lint_pr_cmd.rs \
+  'if owners.is_empty() {
+        let dir' 'if false {
+        let dir' \
+  lint_pr_cmd prepare_default_identity_from_git_config
+m LC8 'lint pr: PATH and --repo may be combined' src/lint_pr_cmd.rs \
+  'if f.path.is_some() && f.repo.is_some() {' 'if false {' \
+  lint_pr_cmd prepare_usage_errors
+m LC9 'lint pr: the human list does not escape the message' src/lint_pr_cmd.rs \
+  'let (msg, cut) = escape_untrusted(&f.message, 120);' 'let (msg, cut) = (f.message.clone(), false);' \
+  lint_pr_cmd human_output_escapes_control_characters
+m LC10 'lint pr: a redirect is followed' src/github/lint_reads.rs \
+  '.max_redirects(0)' '.max_redirects(5)' \
+  lint_pr_cmd lint_pr_status_codes_of_the_api
+m LC11 'lint pr: a comment without an id is accepted' src/lint_pr_cmd.rs \
+  'if id < 1 {' 'if id < 0 {' \
+  lint_pr_cmd read_failures_exit_one_without_document
+m LC12 'lint pr: a short head SHA is accepted' src/lint_pr_cmd.rs \
+  's.len() == 40 && s.bytes().all' 's.bytes().all' \
+  lint_pr_cmd read_failures_exit_one_without_document
+m LC13 'lint pr: the commit page bound is not reported' src/lint_pr_cmd.rs \
+  '        if page == COMMITS_MAX_PAGE {
+            tr_commits = true;
+        }' '        if page == COMMITS_MAX_PAGE {}' \
+  lint_pr_cmd truncation_at_the_page_bounds
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
