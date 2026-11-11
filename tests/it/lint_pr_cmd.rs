@@ -1,6 +1,7 @@
 //! Go corpus check for M8, command: every case of `legacy/sourcesteward/internal/lintprcmd/command_test.go` and of
-//! `internal/cli/lint_test.go` is one Rust case here (same scenario, same name in snake case) or a named
-//! deviation. The rules are in `lint_pr.rs`. Plan: docs/migration-plan.md, M8.
+//! `internal/cli/lint_test.go` is one Rust case here (same scenario, same name in snake case, except two renames below) or a named
+//! deviation. Renames: `TestViolationsExitOneAndAreLocated` is `violations_exit_three_and_are_located`;
+//! `TestLintPREndToEndOverTheGuardedReader` is `lint_pr_end_to_end_over_the_rest_client`. The rules are in `lint_pr.rs`. Plan: docs/migration-plan.md, M8.
 //!
 //! The Go tests of the command run against a fake `Source`; so do the first group here (`stw::lint_pr_cmd::Source`).
 //! The second group runs the binary against a fake GitHub API (`cli/lint_test.go`: end to end over the guarded
@@ -16,7 +17,8 @@
 //! - D2 no `--host`: Go reads any GitHub host. Rust reads `api.github.com` or `STW_GITHUB_API_URL` only, like
 //!   the other commands; the `host` field of the document is `github.com`.
 //! - D3 the document keeps Go's schema 1 (`schema_version` 1, no `engine`); the schema file itself stays with
-//!   the Go tree. `time` is UTC `YYYY-MM-DDTHH:MM:SSZ`.
+//!   the Go tree. `time` is UTC `YYYY-MM-DDTHH:MM:SSZ`. The JSON text is written raw: Go's `json.Encoder` escapes
+//!   `<`, `>` and `&` as `\u003c`, `\u003e`, `\u0026`, Rust does not (same value after decoding).
 //! - D4 workspace: the repository comes from the single GitHub `origin` among the repository of PATH (default:
 //!   the current directory) and its checked-out submodules (`repo::add_root`; a plain repository is a workspace
 //!   of one). The git identity is read with gix (`user.name`, `user.email`), not with `git config --get`.
@@ -27,6 +29,10 @@
 //! - D7 not ported: the Go guard that refuses every endpoint but the three lint reads (`hosting` guard modes, call
 //!   accounting): the Rust client has no write method and the three endpoint builders are the only callers
 //!   (`stw::github::lint_reads`).
+//! - D8 the `page` of a `Link` header is not percent-decoded: Go reads `page=%32` as 2, Rust takes the page as
+//!   malformed (`Link header`). `page=+2` is malformed in both.
+//! - D9 a body over one MiB is `page-too-large` for comments and `malformed-response` for `pulls/N` and commits,
+//!   as in Go; a 304 is `malformed-response` (`unsolicited 304 response`).
 use std::cell::RefCell;
 use std::process::{Command, Output};
 
@@ -707,6 +713,9 @@ fn link_next_that_is_not_the_following_page_is_a_read_failure() {
         "<https://x/y>; rel=\"next\"",
         "<https://x/y?page=0>; rel=\"next\"",
         "<https://x/y?page=abc>; rel=\"next\"",
+        "<https://x/y?page=+2>; rel=\"next\"",
+        // DEVIATION D8: Go reads this as page 2
+        "<https://x/y?page=%32>; rel=\"next\"",
         "<https://x/y?page=1000001>; rel=\"next\"",
     ] {
         let mut src = clean_source();

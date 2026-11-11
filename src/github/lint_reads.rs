@@ -29,7 +29,9 @@ fn fail(code: &str, message: &str) -> Error {
 }
 
 impl Client {
-    fn lint_get(&self, path: &str) -> Result<LintPage> {
+    /// `size_is_too_large`: as in Go, only comment pages report an oversized body as `page-too-large`; the other reads
+    /// report `malformed-response`.
+    fn lint_get(&self, path: &str, size_is_too_large: bool) -> Result<LintPage> {
         let url = format!("{}{path}", self.base);
         let mut resp = self
             .agent
@@ -76,6 +78,7 @@ impl Client {
                     "repo-moved",
                     "repository moved; update the repository (redirect not followed)",
                 ),
+                304 => fail("malformed-response", "unsolicited 304 response"),
                 300..=399 => fail("malformed-response", "redirects are not followed"),
                 500..=599 => fail("http-5xx", "server error"),
                 _ => fail("malformed-response", "unexpected HTTP status"),
@@ -88,7 +91,7 @@ impl Client {
             .limit(BODY_LIMIT)
             .read_json::<Value>()
             .map_err(|e| {
-                if matches!(e, ureq::Error::BodyExceedsLimit(_)) {
+                if size_is_too_large && matches!(e, ureq::Error::BodyExceedsLimit(_)) {
                     fail("page-too-large", "page exceeds the one MiB body limit")
                 } else {
                     fail("malformed-response", "unexpected document shape")
@@ -100,7 +103,7 @@ impl Client {
     /// `pulls/N`: title, text, head and commit count.
     pub fn lint_pull(&self, slug: &str, number: u64) -> Result<LintPage> {
         Self::check_slug(slug)?;
-        self.lint_get(&format!("/repos/{slug}/pulls/{number}"))
+        self.lint_get(&format!("/repos/{slug}/pulls/{number}"), false)
     }
 
     /// One page (1..=3, 100 per page) of `pulls/N/commits`.
@@ -110,9 +113,12 @@ impl Client {
             (1..=COMMITS_MAX_PAGE).contains(&page),
             "commit page out of bounds"
         );
-        self.lint_get(&format!(
-            "/repos/{slug}/pulls/{number}/commits?per_page={COMMITS_PER_PAGE}&page={page}"
-        ))
+        self.lint_get(
+            &format!(
+                "/repos/{slug}/pulls/{number}/commits?per_page={COMMITS_PER_PAGE}&page={page}"
+            ),
+            false,
+        )
     }
 
     /// One page (1..=10, 30 per page) of `issues/N/comments`.
@@ -122,8 +128,11 @@ impl Client {
             (1..=COMMENTS_MAX_PAGE).contains(&page),
             "comment page out of bounds"
         );
-        self.lint_get(&format!(
-            "/repos/{slug}/issues/{number}/comments?per_page={COMMENTS_PER_PAGE}&page={page}"
-        ))
+        self.lint_get(
+            &format!(
+                "/repos/{slug}/issues/{number}/comments?per_page={COMMENTS_PER_PAGE}&page={page}"
+            ),
+            true,
+        )
     }
 }

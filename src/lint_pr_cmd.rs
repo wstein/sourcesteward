@@ -342,7 +342,8 @@ fn has_more(link: &str, page: usize) -> Result<bool> {
         next = query
             .split('&')
             .find_map(|kv| kv.strip_prefix("page="))
-            .and_then(|v| v.strip_prefix('+').unwrap_or(v).parse::<i64>().ok())
+            .filter(|v| v.bytes().all(|b| b.is_ascii_digit()))
+            .and_then(|v| v.parse::<i64>().ok())
             .filter(|p| (1..=1_000_000).contains(p))
             .map(|p| p as usize);
         // like Go: the first rel=next entry decides
