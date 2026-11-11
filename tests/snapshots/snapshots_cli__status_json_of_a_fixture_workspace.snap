@@ -6,6 +6,10 @@ expression: pretty
   "schema_version": 2,
   "command": "status",
   "root": "[ROOT]",
+  "options": {
+    "worktrees": false,
+    "icons": null
+  },
   "engine": "[ENGINE]",
   "github": false,
   "github_auth": null,
@@ -57,6 +61,7 @@ expression: pretty
         "worktrees": 0,
         "stash": 0
       },
+      "worktree_list": null,
       "pull_requests": {
         "read": false,
         "error": null,

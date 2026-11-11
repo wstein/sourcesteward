@@ -328,6 +328,9 @@ struct StatusArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// List the linked worktrees of each repository (the main checkout is not listed)
+    #[arg(long)]
+    worktrees: bool,
     /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
     #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
     icons: Option<String>,
@@ -569,8 +572,13 @@ fn run(command: Command) -> Result<u8> {
             let c = a.common;
             let ws = workspace(&c, a.rules_path.as_deref())?;
             let root = PathBuf::from(&ws.root);
+            let opts = status::StatusOpts {
+                worktrees: a.worktrees,
+            };
             let list = repo::for_each(&ws.repos, |r| {
-                status::collect_one(r, &root, ws.github.client())
+                let mut s = status::collect_local(r, &root, &opts);
+                status::read_remote(&mut s, ws.github.client());
+                s
             });
             let rules = sync::rules::agent_rules(
                 &root,
@@ -581,7 +589,7 @@ fn run(command: Command) -> Result<u8> {
                 },
             );
             if c.json {
-                let mut v = status::to_json(&ws.root, &ws.github, &list);
+                let mut v = status::to_json(&ws.root, &ws.github, &list, &opts);
                 if let Value::Object(m) = &mut v {
                     m.insert("agent_rules".into(), sync::rules::to_json(&rules));
                     m.insert("rejected_paths".into(), rejected_json(&ws.rejected));

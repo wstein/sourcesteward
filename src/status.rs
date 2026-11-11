@@ -201,6 +201,77 @@ pub fn gitlink_state(
     (Some(pin.to_string()), Some(state))
 }
 
+/// What a status run is asked to read beyond the default.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct StatusOpts {
+    /// `--worktrees`: list the linked worktrees of each repository.
+    pub worktrees: bool,
+}
+
+/// One linked worktree (`--worktrees`); the main checkout is never listed.
+#[derive(Clone, Debug)]
+pub struct WorktreeInfo {
+    pub path: String,
+    pub branch: Option<String>,
+    pub detached: bool,
+    /// Any tracked change or untracked file in it (a worktree that cannot be read counts as dirty).
+    pub dirty: bool,
+    /// The directory does not exist.
+    pub missing: bool,
+    /// Locked: the reason, empty when none was given.
+    pub locked: Option<String>,
+    /// git would prune the registration: its checkout is gone and it is not locked.
+    pub prunable: bool,
+}
+
+impl WorktreeInfo {
+    fn json(&self) -> Value {
+        json!({"path": self.path, "branch": jopt(self.branch.as_deref()), "detached": self.detached,
+               "dirty": self.dirty, "missing": self.missing, "locked": jopt(self.locked.as_deref()),
+               "prunable": self.prunable})
+    }
+}
+
+/// The linked worktrees of a repository, sorted by path: those whose directory exists (with the dirty check
+/// of their own), relative links, and the registrations whose checkout is gone (`missing`, and `prunable`
+/// unless locked).
+pub fn worktree_list(w: &crate::repo::worktrees::Worktrees) -> Vec<WorktreeInfo> {
+    use crate::repo::worktrees::show;
+    let mut v: Vec<WorktreeInfo> = Vec::new();
+    for l in w.linked.iter().chain(&w.relative) {
+        let missing = !l.dir.is_dir();
+        let dirty = !missing
+            && repo::open(&l.dir)
+                .and_then(|r| changes(&r, true))
+                .map(|c| c.staged + c.unstaged + c.untracked + c.conflicts > 0)
+                .unwrap_or(true);
+        v.push(WorktreeInfo {
+            path: show(&l.dir),
+            detached: l.branch.is_none(),
+            branch: l.branch.clone(),
+            dirty,
+            missing,
+            locked: l.locked.then(|| l.lock_reason.clone().unwrap_or_default()),
+            prunable: false,
+        });
+    }
+    for st in &w.stale {
+        v.push(WorktreeInfo {
+            path: show(&st.path),
+            detached: st.branch.is_none(),
+            branch: st.branch.clone(),
+            dirty: false,
+            missing: !st.path.is_dir(),
+            locked: st
+                .locked
+                .then(|| st.lock_reason.clone().unwrap_or_default()),
+            prunable: !st.locked,
+        });
+    }
+    v.sort_by(|a, b| a.path.cmp(&b.path));
+    v
+}
+
 #[derive(Clone, Debug)]
 pub struct RepoStatus {
     pub name: String,
@@ -221,6 +292,8 @@ pub struct RepoStatus {
     pub branches_local: Option<usize>,
     pub branches_remote: Option<usize>,
     pub worktrees: Option<usize>,
+    /// The linked worktrees, only with `--worktrees`.
+    pub worktree_list: Option<Vec<WorktreeInfo>>,
 }
 
 /// Remote-tracking branches of `origin` (`refs/remotes/origin/*` without `HEAD`), as of the last fetch.
@@ -258,10 +331,19 @@ fn blank(name: String, path: String) -> RepoStatus {
         branches_local: None,
         branches_remote: None,
         worktrees: None,
+        worktree_list: None,
     }
 }
 
+/// The local half and, with a client, the remote half of one repository.
 pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus {
+    let mut s = collect_local(r, root, &StatusOpts::default());
+    read_remote(&mut s, gh);
+    s
+}
+
+/// The local half: what git itself tells for the repository.
+pub fn collect_local(r: &RepoRef, root: &Path, opts: &StatusOpts) -> RepoStatus {
     let mut s = blank(r.name.clone(), p2s(&r.path));
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
@@ -270,9 +352,13 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
         s.stash = stash_count(&repo);
         s.branches_local = repo::local_branches(&repo).ok().map(|b| b.len());
         s.branches_remote = remote_branch_count(&repo).ok();
-        s.worktrees = crate::repo::worktrees::scan(&repo)
-            .ok()
+        let wts = crate::repo::worktrees::scan(&repo).ok();
+        s.worktrees = wts
+            .as_ref()
             .map(|w| w.linked.len() + w.relative.iter().filter(|l| l.dir.is_dir()).count());
+        if opts.worktrees {
+            s.worktree_list = wts.as_ref().map(worktree_list);
+        }
         s.op = operation(&repo);
         s.slug = repo::slug(&repo);
         if r.path != root {
@@ -287,22 +373,29 @@ pub fn collect_one(r: &RepoRef, root: &Path, gh: Option<&Client>) -> RepoStatus 
     };
     if let Err(e) = run() {
         s.error = Some(e.to_string());
-        return s;
     }
-    if let (Some(c), Some(slug)) = (gh, &s.slug) {
-        match c.open_prs(slug) {
+    s
+}
+
+/// The remote half: open pull requests and issues of the GitHub origin. A repository that could not be read
+/// locally has none.
+pub fn read_remote(s: &mut RepoStatus, gh: Option<&Client>) {
+    if s.error.is_some() {
+        return;
+    }
+    if let (Some(c), Some(slug)) = (gh, s.slug.clone()) {
+        match c.open_prs(&slug) {
             Ok(p) => {
                 s.prs = p;
                 s.pr_read = true;
             }
             Err(e) => s.pr_error = Some(e.to_string().chars().take(200).collect()),
         }
-        match c.open_issues(slug) {
+        match c.open_issues(&slug) {
             Ok(i) => s.issues = Some(i),
             Err(e) => s.issue_error = Some(e.to_string().chars().take(200).collect()),
         }
     }
-    s
 }
 
 /// One remote-read counter of a repository (or of all): what the hosting said, or why there is no number.
@@ -569,7 +662,7 @@ pub fn reasons(s: &RepoStatus) -> Vec<String> {
     v
 }
 
-pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
+pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus], opts: &StatusOpts) -> Value {
     let mut attention = 0;
     let repos: Vec<Value> = list
         .iter()
@@ -606,6 +699,7 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
                 "attention": attn,
                 "reasons": rs,
                 "counts": counts_json(&counts_of(s)),
+                "worktree_list": s.worktree_list.as_ref().map_or(Value::Null, |l| Value::Array(l.iter().map(WorktreeInfo::json).collect())),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs},
                 "error": jopt(s.error.as_deref()),
             })
@@ -613,6 +707,7 @@ pub fn to_json(root: &str, gh: &GithubState, list: &[RepoStatus]) -> Value {
         .collect();
     json!({
         "schema_version": 2, "command": "status", "root": root,
+        "options": {"worktrees": opts.worktrees, "icons": null},
         "engine": engine(),
         "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()),
         "repos": repos,
@@ -810,6 +905,29 @@ pub fn render_human(
         }
         if let Some(ps @ ("ahead" | "behind" | "diverged-or-unknown")) = s.pinstate {
             out += &format!("    submodule: checked-out commit is {ps} the recorded gitlink\n");
+        }
+        for wt in s.worktree_list.iter().flatten() {
+            out += &format!(
+                "    worktree {}  {}",
+                esc(&wt.path),
+                wt.branch.as_deref().map_or("detached".to_string(), esc)
+            );
+            if wt.dirty {
+                out += "  dirty";
+            }
+            if let Some(reason) = &wt.locked {
+                out += "  locked";
+                if !reason.is_empty() {
+                    out += &format!(": {}", esc(reason));
+                }
+            }
+            if wt.prunable {
+                out += "  prunable";
+            }
+            if wt.missing {
+                out += "  missing";
+            }
+            out.push('\n');
         }
         if let Some(e) = &s.pr_error {
             out += &format!("    pull requests: not read ({})\n", esc(e));
