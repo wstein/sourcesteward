@@ -14,6 +14,8 @@
 //! restack. A patch that `onto` made and later reverted therefore comes through, as with `git rebase --onto`. Merge drivers of the configuration are never started, a driver named by an attribute is unknown to the merge; rename
 //! detection and the diff algorithm are pinned (`merge.renames=true`, `merge.renameLimit=1000`, myers). Attributes
 //! come from the index of the repository, as for `git merge-tree`. The replay stops at the first conflict.
+//! Open: `TreatAsUnresolved::git()` is used to decide what a conflict is; no fixture tells it from `undecidable()`
+//! (every conflict case of the tests is one under both), so the difference is untested.
 use std::fmt;
 
 use gix::actor::Signature;
@@ -344,24 +346,43 @@ pub fn replay_commit(
     Ok(done(status, Some(new)))
 }
 
-/// Files that the commit (`base_tree` to `own_tree`) adds below a directory which exists in `base_tree`, is gone
-/// from `new_tree` and had a file renamed out of it (`base_tree` to `new_tree`): the directory was renamed.
-/// A directory that onto only deleted is not a conflict (git adds the file there). The reported path is the one
-/// the commit added; git names the path in the new directory.
+/// Directory renames that gix does not see, in both directions: files that the commit adds below a directory
+/// that onto renamed, and files that onto added below a directory that the commit renamed. A directory counts as
+/// renamed when it exists in the base tree, is gone from the renaming side and had a file renamed out of it. A
+/// directory that was only deleted is not a conflict (git adds the file there). The reported path is the one the
+/// adding side created; git names the path in the new directory. Conservative: a new subdirectory below a renamed
+/// directory is a conflict here, git moves it along.
 fn directory_rename_conflicts(
     repo: &gix::Repository,
     base_tree: ObjectId,
     own_tree: ObjectId,
     new_tree: ObjectId,
 ) -> Result<Vec<Conflict>, ReplayError> {
-    use gix::diff::tree_with_rewrites::Change;
     let tree = |id: ObjectId| repo.find_tree(id).map_err(git_err);
     let (base, own, new) = (tree(base_tree)?, tree(own_tree)?, tree(new_tree)?);
-    let diff = |a: &gix::Tree<'_>, b: &gix::Tree<'_>, renames| {
+    let mut out = one_way(repo, &base, &new, &own)?;
+    for c in one_way(repo, &base, &own, &new)? {
+        if !out.contains(&c) {
+            out.push(c);
+        }
+    }
+    out.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(out)
+}
+
+/// Files added by `adder` below a directory that `renamer` renamed (both relative to `base`).
+fn one_way(
+    repo: &gix::Repository,
+    base: &gix::Tree<'_>,
+    renamer: &gix::Tree<'_>,
+    adder: &gix::Tree<'_>,
+) -> Result<Vec<Conflict>, ReplayError> {
+    use gix::diff::tree_with_rewrites::Change;
+    let diff = |b: &gix::Tree<'_>, renames| {
         let options = gix::diff::Options::default().with_rewrites(renames);
-        repo.diff_tree_to_tree(a, b, options).map_err(git_err)
+        repo.diff_tree_to_tree(base, b, options).map_err(git_err)
     };
-    let renamed_from: Vec<BString> = diff(&base, &new, Some(Default::default()))?
+    let renamed_from: Vec<BString> = diff(renamer, Some(Default::default()))?
         .into_iter()
         .filter_map(|c| match c {
             Change::Rewrite {
@@ -379,10 +400,18 @@ fn directory_rename_conflicts(
             .map_err(git_err)
     };
     let mut out = Vec::new();
-    for change in diff(&base, &own, None)? {
-        let Change::Addition { location, .. } = change else {
+    for change in diff(adder, None)? {
+        let Change::Addition {
+            location,
+            entry_mode,
+            ..
+        } = change
+        else {
             continue;
         };
+        if entry_mode.is_tree() {
+            continue;
+        }
         let mut end = 0;
         while let Some(i) = location[end..].find_byte(b'/') {
             end += i;
@@ -391,7 +420,7 @@ fn directory_rename_conflicts(
             let moved = renamed_from
                 .iter()
                 .any(|s| s.starts_with(dir) && s.get(dir.len()) == Some(&b'/'));
-            if moved && exists(&base, dir)? && !exists(&new, dir)? {
+            if moved && exists(base, dir)? && !exists(renamer, dir)? {
                 out.push(Conflict {
                     path: location.clone(),
                     kind: "directory-rename",
@@ -400,7 +429,6 @@ fn directory_rename_conflicts(
             }
         }
     }
-    out.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(out)
 }
 

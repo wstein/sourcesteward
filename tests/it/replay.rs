@@ -618,6 +618,87 @@ fn file_directory_conflict_is_reported_like_git() {
     conflict_kind_case(&fx, base, onto, side, "file/directory", &["d", "d/f"]);
 }
 
+fn dir_base(fx: &Fx) -> ObjectId {
+    fx.commit(
+        None,
+        &[
+            ("dir/x.txt", Some(&lines(10, "x"))),
+            ("dir/y.txt", Some(&lines(10, "y"))),
+            ("dir2/z.txt", Some(&lines(10, "z"))),
+            ("keep.txt", Some("keep\n")),
+        ],
+        "base",
+    )
+}
+
+fn rename_dir(
+    fx: &Fx,
+    from: &str,
+    to: &str,
+    parent: ObjectId,
+    files: &[(&str, String)],
+) -> ObjectId {
+    let mut edits: Vec<(String, Option<String>)> = Vec::new();
+    for (name, text) in files {
+        edits.push((format!("{from}/{name}"), None));
+        edits.push((format!("{to}/{name}"), Some(text.clone())));
+    }
+    let refs: Vec<(&str, Option<&str>)> = edits
+        .iter()
+        .map(|(p, c)| (p.as_str(), c.as_deref()))
+        .collect();
+    fx.commit(Some(parent), &refs, "rename a directory")
+}
+
+#[test]
+fn a_directory_renamed_by_the_replayed_commit_and_a_file_added_by_onto_is_a_conflict_like_git() {
+    let fx = Fx::new();
+    let base = dir_base(&fx);
+    let onto = fx.commit(
+        Some(base),
+        &[("dir/new.txt", Some("new\n"))],
+        "onto adds dir/new.txt",
+    );
+    let side = rename_dir(
+        &fx,
+        "dir",
+        "newdir",
+        base,
+        &[("x.txt", lines(10, "x")), ("y.txt", lines(10, "y"))],
+    );
+    let (code, theirs) = oracle_merge_tree(&fx, base, onto, side);
+    assert_eq!(code, 1, "git sees a conflict: {theirs:?}");
+    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
+    assert!(r.conflicted(), "{:?}", r.steps);
+    let c = &r.steps[0].conflicts;
+    assert_eq!(c.len(), 1, "{c:?}");
+    assert_eq!(c[0].kind, "directory-rename");
+    assert!(c[0].path.ends_with(b"new.txt"), "{c:?}");
+}
+
+#[test]
+fn a_new_subdirectory_in_a_renamed_directory_lists_the_file_only() {
+    // git moves dir/sub/new.txt into newdir/; the engine reports a conflict (conservative), at the file and not at
+    // the directory entry
+    let fx = Fx::new();
+    let base = dir_base(&fx);
+    let onto = rename_dir(
+        &fx,
+        "dir",
+        "newdir",
+        base,
+        &[("x.txt", lines(10, "x")), ("y.txt", lines(10, "y"))],
+    );
+    let side = fx.commit(
+        Some(base),
+        &[("dir/sub/new.txt", Some("new\n"))],
+        "add dir/sub/new.txt",
+    );
+    let r = replay_range(&fx.repo(), onto, base, side, &committer()).unwrap();
+    assert!(r.conflicted(), "{:?}", r.steps);
+    assert_eq!(conflict_paths(&r.steps[0]), ["dir/sub/new.txt"]);
+}
+
 /// Every file under `.git` with its bytes, to compare before and after.
 fn snapshot(dir: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
     fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<PathBuf, Vec<u8>>) {

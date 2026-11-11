@@ -812,7 +812,7 @@ m RP16 'replay: rename detection is off' src/replay.rs \
   '            ("renames", "true"),' '            ("renames", "false"),' \
   replay rename_on_the_new_side_follows_the_edit
 m RP17 'replay: a file added to a renamed directory is not a conflict' src/replay.rs \
-  '            if moved && exists(&base, dir)? && !exists(&new, dir)? {' '            if false && moved && exists(&base, dir)? && !exists(&new, dir)? {' \
+  '            if moved && exists(base, dir)? && !exists(renamer, dir)? {' '            if false && moved && exists(base, dir)? && !exists(renamer, dir)? {' \
   replay a_file_added_to_a_directory_that_onto_renamed_is_a_conflict_like_git
 m RP18 'replay: the environment counts as the configured identity' src/replay.rs \
   '                | Source::Worktree
@@ -823,6 +823,12 @@ m RP18 'replay: the environment counts as the configured identity' src/replay.rs
                 | Source::Api
         )' \
   replay committer_ignores_the_environment
+m RP22 'replay: only files added by the replayed commit are checked' src/replay.rs \
+  '    for c in one_way(repo, &base, &own, &new)? {' '    for c in Vec::<Conflict>::new() {' \
+  replay a_directory_renamed_by_the_replayed_commit_and_a_file_added_by_onto_is_a_conflict_like_git
+m RP23 'replay: a new subdirectory entry is listed as a conflict path' src/replay.rs \
+  '        if entry_mode.is_tree() {' '        if false {' \
+  replay a_new_subdirectory_in_a_renamed_directory_lists_the_file_only
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
