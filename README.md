@@ -51,12 +51,22 @@ diverged, or when a merge, rebase or similar operation is running. Local changes
 A path in `.gitmodules` is untrusted. It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
 passes the rules of `stw add` (`[A-Za-z0-9._/-]`, relative, no `..`, no `-x` component, no git-special name), no component
 is a symbolic link, and the real path of the directory is below the real path of the workspace root. Any other path is
-never listed and nothing there is read or written (no fetch, no fast-forward). It shows as an entry of its own with the
-text `submodule path not accepted: <escaped path>: <reason>`: in `sync --apply` result `error` (exit 1), in a `sync` dry
-run result `skip` (exit 0), in `status` and `tidy plan`/`tidy apply` an entry with `error` (exit 1, `path` empty; in
-`tidy` the entry name is the escaped path). Not reported when `--repo` names repositories. Deviation from Go: Go checks the
-path only for `sync --submodules --apply` (valid path and no symbolic link); everything else lists whatever `.gitmodules`
-names. Paths with spaces or other characters outside the set are refused too.
+never listed and nothing there is read or written (no fetch, no fast-forward, no PR lookup). The repository name is the
+normalized path (no trailing `/`); a directory named twice is listed once. The refusal is reported once per path, escaped,
+as `submodule path not accepted: <path>: <reason>` (a path with a space or other character outside the set: `rename with git
+mv; stw handles only [A-Za-z0-9._/-]`), and never changes the exit code, except `sync --apply --submodules` (see below):
+
+- `status`, `tidy plan`, `tidy apply`: a line in the notices (`status`: `Notices`; `tidy`: a parenthesized line at the end), exit
+  unchanged; in JSON the additive top-level field `rejected_paths` `[{path (escaped), reason}]` (`schema_version` stays 2).
+  No entry in `repos`, nothing in the counts or the repository total. `tidy apply` never touches such a path.
+- `sync`: dry run and `--apply` without `--submodules`: an entry in `repos` with result `skip` and the text as `reason` (exit
+  unchanged). `sync --apply --submodules`: result `error` ("unreachable: ..."), exit 1, like Go's `unreachable`, which arises
+  only there; the dry run with `--submodules` shows `skip` ("would be unreachable").
+- Not reported when `--repo` names repositories; an unknown `--repo` (also a refused path) is a usage error.
+
+Deviation from Go: Go lists the gitlinks of the index (`ls-files --stage`, `sync.go:262-276`; absolute paths and `..` are
+filtered there, nested submodules are walked) and checks charset and symbolic links only for `sync --submodules --apply`
+(`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust lists the paths of `.gitmodules` and checks them in every command.
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
