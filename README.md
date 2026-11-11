@@ -75,7 +75,7 @@ Ported from the Go flags; like everything in `sync` they act only with `--apply`
 writes nothing (it never fetches).
 
 - `--prune`: the fetch of `origin` runs `git fetch --prune --no-prune-tags`, so remote-tracking refs that are gone on
-  `origin` are deleted. `--no-prune` runs `git fetch --no-prune` (overrides `fetch.prune`). The two exclude each other (exit 2).
+  `origin` are deleted. `--no-prune` runs `git fetch --no-prune --no-prune-tags` (overrides `fetch.prune`). The two exclude each other (exit 2).
   Without either flag no option is passed: for a remote fetched by git (ssh, local path) `fetch.prune` of the
   configuration applies as it does for `git fetch`; gix, which fetches `https://`, never prunes.
   Reach: only `refs/remotes/origin/*` (without `origin/HEAD`). `--prune` refuses (typed `refused-refspec`, nothing fetched,
@@ -122,6 +122,9 @@ Deviations from Go in these flags:
 11. The superproject's recorded commit comes from the index (as in Go); an uninitialized submodule is listed only without
     `--repo`. The submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a
     change inside a nested submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
+12. `--no-prune` also passes `--no-prune-tags`; Go gives `--no-prune-tags` not along, so with `fetch.pruneTags` or
+    `remote.origin.pruneTags` configured Go's fetch creates tags there. (`sync --apply` without a prune flag keeps the Go
+    behavior, see "Status flags".)
 
 ## agent-rules
 
