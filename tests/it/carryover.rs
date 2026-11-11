@@ -35,7 +35,13 @@
 //! Deviations from Go:
 //! - D1 range-diff: Go compares the commits itself (message and patch without index lines and hunk headers). Rust runs `git range-diff`
 //!   (plan M4, git boundary) and takes `=` at the same position; a reordered commit is `=` for git and a deviation here.
+//!   Three more cases where Rust says no and Go says yes: only the author of a commit changed (the metadata block of range-diff names
+//!   the author, Go compares message and patch: `only_the_author_changed_is_refused`); an identical patch twice in a range (range-diff pairs it
+//!   across and the position rule refuses: `an_identical_patch_twice_in_a_range_is_refused`); a note on the new commit is ignored as in Go
+//!   (`--no-notes`, `a_note_on_the_new_commit_does_not_matter`).
 //! - D2 `--fetch` fetches `origin` only; Go takes `--remote NAME`. `--pr none` is a local review (line `pr=none`); Go needs a number.
+//!   The fetch runs for an ssh, scp-like, `file://` or local-path `origin` only; http, https and git:// are refused typed before git starts
+//!   (the https fetch stays with gix); a `core.sshCommand` of the user's config runs as with `FetchOrigin`.
 //! - D3 argv: fixed per `Op` in `git_runner`; no guard over free vectors. Environment: allowlist (Go: all `GIT_*` but network ones dropped).
 //! - D4 hostile repository config: `diff.external`, `diff.<driver>.textconv|command` and active lines of `info/attributes` make the
 //!   range-diff step unsupported (typed, answer no); Go ignores them through flags and keeps the verdict. `.gitattributes`
@@ -1492,4 +1498,74 @@ fn line_format() {
             ..
         })
     ));
+}
+
+// ---- conservative differences to Go (answer no where Go says yes), see D1 ----
+
+#[test]
+fn a_note_on_the_new_commit_does_not_matter() {
+    need_git!();
+    // Go reads the log with `--no-notes`; range-diff shows a note as a change unless it is told not to
+    let s = stack();
+    let (_, head) = s.rebased();
+    let note =
+        s.fx.commit(None, &[(&head.to_string(), Some("a note\n"))], "notes");
+    s.fx.set_ref("refs/notes/commits", note);
+    let res = s.check(s.m2, head);
+    want_reasons(&res, &[]);
+    assert_eq!(res.range_diff.state, State::Equal, "{res:#?}");
+}
+
+#[test]
+fn only_the_author_changed_is_refused() {
+    need_git!();
+    // DEVIATION D1: Go compares message and patch; the metadata block of range-diff names the author
+    let s = stack();
+    let c1 = s.fx.commit_by(
+        Some(s.m2),
+        &[("a.txt", Some(C1_FILE))],
+        "c1",
+        ("Other", "other@example.com"),
+        ("T", "t@example.com"),
+    );
+    let c2 =
+        s.fx.commit(Some(c1), &[("b.txt", Some("x = 1\ny = 3\n"))], "c2");
+    let res = s.check(s.m2, c2);
+    assert_eq!(res.patch_id.state, State::Equal, "{res:#?}");
+    want_reasons(&res, &["range-diff-not-equal"]);
+    assert_eq!(res.range_diff.deviations[0].mark, '!');
+}
+
+#[test]
+fn an_identical_patch_twice_in_a_range_is_refused() {
+    need_git!();
+    // DEVIATION D1: Go pairs by position and says yes for a pure rebase; range-diff pairs identical patches
+    // across (1 with 3, 3 with 1) and the position rule refuses
+    let s = stack();
+    let chain = |base: ObjectId| {
+        let a = s.fx.commit(Some(base), &[("t.txt", Some("t\n"))], "add t");
+        let b = s.fx.commit(Some(a), &[("t.txt", None)], "del t");
+        s.fx.commit(Some(b), &[("t.txt", Some("t\n"))], "add t")
+    };
+    let old = chain(s.m1);
+    let new = chain(s.m2);
+    let res = run(&s.fx, &req(1, s.m1, old, s.m2, new));
+    assert!(!res.carry_over && res.line.is_none(), "{res:#?}");
+    assert_eq!(res.patch_id.state, State::Equal, "{res:#?}");
+    assert_eq!(res.range_diff.state, State::Differs, "{res:#?}");
+}
+
+#[test]
+fn a_gitattributes_that_hides_a_change_does_not_make_range_diff_equal() {
+    need_git!();
+    // Without the empty attribute source `* -diff` turns both patches into "Binary files differ", range-diff
+    // pairs the two commits with `=` and the check would see equal commits for different content.
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("f.txt", Some("a\n"))], "base");
+    let old = fx.commit(Some(base), &[("f.txt", Some("b\n"))], "change");
+    let new = fx.commit(Some(base), &[("f.txt", Some("c\n"))], "change");
+    std::fs::write(fx.path.join(".gitattributes"), "* -diff\n").unwrap();
+    let res = run(&fx, &req(1, base, old, base, new));
+    assert_eq!(res.range_diff.state, State::Differs, "{res:#?}");
+    assert!(!res.carry_over);
 }
