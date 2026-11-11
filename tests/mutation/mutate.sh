@@ -1511,9 +1511,8 @@ m NO14 "the repository name is not escaped in the notices" src/status.rs \
   status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
 
 # sync journal, sync restore and tidy history (tests/it/sync_journal.rs, sync_restore.rs, tidy_history.rs)
-m JR1 'the recovery ref is not create-only' src/git_runner.rs \
-  '                a.push("0".repeat(40));
-' '' \
+m JR1 'an existing recovery ref is not refused' src/sync/journal.rs \
+  '        return Err("the ref exists already".into());' '        return Ok(());' \
   sync_journal a_run_id_is_never_used_twice
 m JR2 'the journal step before the move is never called' src/sync/fast_forward.rs \
   '    before(head, target).map_err(FfError::Other)?;' '    let _ = &before;' \
@@ -1529,14 +1528,8 @@ m JR4 'a plan fetches and moves, so it journals' src/sync/mod.rs \
 m JR5 'retention keeps eleven runs' src/sync/journal.rs \
   'while done.len() > RETAINED_RUNS - 1 {' 'while done.len() > RETAINED_RUNS {' \
   sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
-m JR6 'retention deletes a recovery ref whatever it holds' src/git_runner.rs \
-  '                let mut a = v(&["update-ref", "--no-deref", "-d"]);
-                a.push(recovery_ref(run, *n));
-                a.push(oid.as_str().to_string());
-' '                let _ = oid;
-                let mut a = v(&["update-ref", "--no-deref", "-d"]);
-                a.push(recovery_ref(run, *n));
-' \
+m JR6 'retention deletes a recovery ref whatever it holds' src/sync/journal.rs \
+  '            expected: PreviousValue::MustExistAndMatch(Target::Object(id)),' '            expected: PreviousValue::Any,' \
   sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
 m JR7 'retention drops a record that is not finished' src/sync/journal.rs \
   'self.entries.iter().all(|e| e.state != STATE_PREPARED)' 'self.entries.iter().all(|_| true)' \
@@ -1646,6 +1639,21 @@ m TH12 'an unreadable manifest is complete' src/tidy_history.rs \
 m TH13 'a limit of 0 is accepted' src/cli.rs \
   'range(1..=tidy_history::MAX_LIMIT as i64)' 'range(0..=tidy_history::MAX_LIMIT as i64)' \
   tidy_history a_bad_limit_or_a_repeated_flag_is_a_usage_error
+m JR14 'retention deletes a recovery ref that is not the record'\''s own' src/sync/journal.rs \
+  'e.recovery_ref == own && seen.insert(e.n)' 'seen.insert(e.n)' \
+  sync_journal retention_keeps_ten_runs_and_spares_what_is_not_clean
+m JR15 'the recovery ref has no reflog' src/sync/journal.rs \
+  'force_create_reflog: true,' 'force_create_reflog: false,' \
+  sync_journal a_repository_config_that_names_a_program_stops_nothing_and_no_git_is_needed
+m XR15 'an operation in a linked worktree does not stop the restore' src/sync/restore.rs \
+  '.any(|n| std::fs::symlink_metadata(git_dir.join(n)).is_ok())' '.any(|_| false)' \
+  sync_restore a_rebase_of_the_branch_in_a_linked_worktree_stops_the_restore
+m XR16 'a reason is escaped twice' src/sync/restore.rs \
+  'let named = &en.recovery_ref;' 'let named = &escape_untrusted(&en.recovery_ref, 200).0;' \
+  sync_restore reasons_are_escaped_once_and_only_in_the_output
+m TH14 'entries that are no manifest do not count for the scan bound' src/tidy_history.rs \
+  '                looked += 1;' '                let _ = looked;' \
+  tidy_history every_bound_is_a_visible_marker
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
