@@ -74,20 +74,31 @@ writes nothing (it never fetches).
   `unreachable`; the move is not journaled and not undone; URL rewrites of `submodule sync` are reported in `note`.
   The differences from Go are listed below.
 
-Deviations from Go in these flags: (1) Rust is dry-run by default and the flags act only with `--apply` (Go acts by
-default, and its `--plan` fetches); the dry run shows `would-move` and the prune scope instead of nothing for the
-submodules. (2) `--prune` is always done by the installed git, also for an `https://` remote (gix cannot prune and stw
-deletes refs through git's own fetch only); that git gets no GitHub token from stw, a private https repository needs a git
-credential helper (the error says so). Go always used git. (3) `--prune` refuses a `remote.origin.fetch` that writes outside
-`refs/remotes/origin/` in the apply, Go checked it in the plan only; and `--prune` never prunes tags. (4) Rust visits the top-level
-submodules of `.gitmodules` only (its repository list is flat); Go walks nested submodules depth-first. (5) A submodule
-path outside `[A-Za-z0-9._/-]` is `unreachable` (Go: only absolute, `..`, option-like and control characters). (6) `--apply`
-also fetches `origin` of a pinned submodule (Rust fetches every repository; Go fetched only branch repositories), so a
-recorded commit that `origin` has is present before the move; Go reports it `unreachable`. (7) `unreachable` is result
-`error` (apply) or `skip` ("would be unreachable", dry run); Go has the result `unreachable`. (8) The superproject's
-recorded commit comes from the index (as in Go); an uninitialized submodule is listed only without `--repo`. (9) The
-submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a change inside a nested
-submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
+Deviations from Go in these flags:
+1. Rust is dry-run by default and the flags act only with `--apply` (Go acts by default, and its `--plan` fetches). The dry
+   run shows the prune scope and `would-move` for the submodules instead of nothing. The dry run predicts a move from the
+   gitlink in the index before the superproject's own fast-forward; `--apply` takes the gitlink after it, so the two can differ.
+2. `--prune` is always done by the installed git, also for an `https://` remote (gix cannot prune, and stw deletes refs
+   through git's own fetch only). That git gets no GitHub token from stw: a private https repository needs a git credential
+   helper (the error says so). Without a flag gix never prunes an `https://` remote; Go always used git and so `fetch.prune`.
+3. `--prune` refuses, in the apply, a `remote.origin.fetch` that writes outside `refs/remotes/origin/` (`refused-refspec`,
+   nothing fetched); Go checked it in the plan only. Tags are never pruned (`--no-prune-tags` wins over `remote.origin.pruneTags`).
+4. Only `origin` is fetched and pruned; Go prunes the remote of the branch.
+5. JSON `pruned` is a list of ref names (Go: a number); `summary.pruned` is the total.
+6. Rust visits the top-level submodules of `.gitmodules` only (its repository list is flat); Go walks nested ones depth-first.
+7. A submodule path outside `[A-Za-z0-9._/-]` or through a symbolic link is `unreachable` (Go: only absolute, `..`,
+   option-like and control characters). Paths from `.gitmodules` are reported escaped.
+8. `unreachable` is result `error` (apply) or `skip` ("would be unreachable", dry run); Go has the result `unreachable`.
+9. `--apply` fetches `origin` of a pinned submodule too (Rust fetches every repository; Go fetches branch repositories only).
+   A recorded commit that `origin` has is then present before the move, where Go says `unreachable`. If that fetch fails
+   (private https without token, `unsupported-remote`, `refused-refspec` with `--prune`), the result is `error` and the
+   submodule is not moved; Go would still move it. Chosen because a move after a failed fetch would act on a state the
+   run could not refresh, and the failure stays visible.
+10. A submodule config that names a `filter.*` driver or another key that starts a program is refused
+    (`refused-config`); nothing moves.
+11. The superproject's recorded commit comes from the index (as in Go); an uninitialized submodule is listed only without
+    `--repo`. The submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a
+    change inside a nested submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
 
 ## agent-rules
 

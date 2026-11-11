@@ -1016,9 +1016,18 @@ m SM16 "a submodule path with spaces is accepted" src/add.rs \
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))" \
   sync_flags a_submodule_path_that_is_not_a_plain_path_is_unreachable
-m SM17 "a pinned submodule whose reason has a suffix (--prune note) is skipped by the pass" src/sync/submodules.rs \
-  'rec.reason.starts_with("detached HEAD")' 'rec.reason == "detached HEAD"' \
-  sync_flags the_dry_run_with_prune_still_names_the_submodule_move
+m SM18 "an uninitialized submodule path from .gitmodules is not validated" src/sync/submodules.rs \
+  '        if SubPath::parse(&p).is_err() {' '        if false && SubPath::parse(&p).is_err() {' \
+  sync_flags hostile_submodule_paths_are_reported_escaped_and_never_touched
+m SM19 "the repository name is printed unescaped in the text output" src/sync/mod.rs \
+  '            escape_untrusted(&s.name, 200).0,' '            s.name,' \
+  sync_flags hostile_submodule_paths_are_reported_escaped_and_never_touched
+m SM20 "the pass recognizes a pinned submodule by the reason text" src/sync/submodules.rs \
+  'if !is_root && rec.pinned && rec.result == "skip" {' 'if !is_root && rec.reason.starts_with("detached HEAD") && rec.result == "skip" {' \
+  sync_flags the_pass_acts_on_the_typed_pinned_flag_not_on_the_reason_text
+m RA "the prune scope has no trailing slash (origin-mirror/ passes)" src/sync/fetch.rs \
+  'pub const PRUNE_SCOPE: &str = "refs/remotes/origin/";' 'pub const PRUNE_SCOPE: &str = "refs/remotes/origin";' \
+  sync_flags a_refspec_into_a_sibling_namespace_of_origin_refuses_prune
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
