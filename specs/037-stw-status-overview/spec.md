@@ -365,3 +365,15 @@ facts or to `--offline` output.
 
 Residual points to verify during implementation (not owner questions): the Nerd Font code points, and the exact reading of the
 `.stw/release.toml` tag grammar for the unreleased-tag rule.
+
+## Amendment 2026-11-11: Counts block, counted blocks, exit 0 for failed remote reads
+
+Supersedes the exit status 1 for an attempted request that failed (the places above that say so: option C, the notice
+`network error`, the exit-status rule, the releases page over 1 MiB, refined exit codes). The reason: the owner reads
+`stw status` many times a day and a forbidden or oversized read of one source is information for the notices, not a failed
+run. Exit 1 stays for a repository that cannot be read locally and for a failed run; 2 for usage errors.
+
+The text gains the block `Counts` (first) and counts in the headings `Needs action (N)`, `Repositories (N)` and `Notices
+(N)`; the JSON schema 2 gains `repos[].counts` and `totals` (additive, `schema_version` stays 2). The normative text is
+the amendment `Counts` and the exit status in [contracts/status.md](contracts/status.md). It matches the Rust port's output
+for the counters, the blocks and the exit code; the action lines, the repository lines and the notices keep their Go wording.

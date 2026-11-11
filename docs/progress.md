@@ -189,6 +189,18 @@ discovers other repositories through one fixed `search/issues` read. Work packag
 listed in `stw --help`; `schemas/v1/pulls.schema.json` is frozen and unpublished, and `stw pulls` has a guide ([pulls](pulls.md)). The tests
 use a fake forge only (no network, no build); independent review of the exact head and the owner's acceptance are pending.
 
+## Spec 037 stw status Counts block and exit 0 for failed remote reads (amendment, implemented in source, 2026-11-11)
+
+The [amendment](../specs/037-stw-status-overview/spec.md#amendment-2026-11-11-counts-block-counted-blocks-exit-0-for-failed-remote-reads) and
+the [contract](../specs/037-stw-status-overview/contracts/status.md) give `stw status` the same counters, blocks and exit code as the Rust port: the text
+starts with `Counts` (per repository and `All`: open PRs with the bot ones, open issues with the bug ones, local and remote branches, linked
+worktrees, stashes; `n/a` not read, `?` failed, `n+` lower bound), then `Needs action (N)`, `Repositories (N)` and `Notices (N)`; the schema 2 document
+gains `repos[].counts` and `totals` (additive, the frozen digest of `schemas/v2/status.schema.json` is updated, `schemas/v1` is untouched and
+`--offline --json` has no counts); a failed remote read is a notice and exit 0 (`summary.failed` keeps the fact), exit 1 stays for a repository that
+cannot be read locally or a failed run. Inputs: `issues.RepoStatus.Bugs` (label `bug`, ASCII case folded), `stwsync.RepoStatus.RemoteBranches` (one `git
+for-each-ref` on `refs/remotes/origin/`, no JSON member) and `statuscmd.CountsOf`/`SumCounts`. Tests use fakes and real temporary repositories; the
+goldens of the status text were regenerated. Not run here: the tidy, prune and workspace tests that need the native sandbox (they fail before and after on this host).
+
 ## Spec 037 stw status online (work package E, command and output implemented in source, 2026-10-22)
 
 `stw status` is online by default. `--offline` runs the unchanged Spec 033 code path (no discovery, no credential, no request; its text

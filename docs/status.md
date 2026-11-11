@@ -26,7 +26,7 @@ stw status --json | jq '.actions[] | select(.priority == "red") | .id'
 | --- | --- | --- |
 | Reads | local state and the GitHub sources below | local state only |
 | Requests | `GET` only, through the `gh` token of the other hosting commands | none; no credential is looked up |
-| Text | Needs action, Repositories, Notices, summary | the Spec 033 screen, byte for byte |
+| Text | Counts, Needs action (N), Repositories (N), Notices (N), summary | the Counts block (PRs and issues `n/a`), then the Spec 033 screen as before |
 | `--json` | [schema 2](json-contracts.md#status-schema-v2-unpublished) | [schema 1](json-contracts.md#status-schema-v1-unpublished), unchanged |
 | `--timeout` | overall deadline of the remote half | a usage error (exit 2) |
 | `--stats`, `--verbose` | diagnostic timing, API usage, and per-source breakdown | a usage error (exit 2) |
@@ -57,6 +57,31 @@ strict comment names the head, one `repos/OWNER/NAME` read per repository and on
 of a repository (at most 10) and one `user` read for the whole run; the list also returns the pull requests, which are dropped.
 Search is never used, so `stw status` knows only the repositories of the workspace (`stw issues --owner` discovers others). A run uses far fewer requests than the
 hourly limit of a personal token (5000) allows.
+
+## Counts
+
+The text starts with the block `Counts`: one aligned line per repository, then `All`.
+
+```text
+Counts
+  .           PRs 3 (bot 0) | Issues 5 (bug 2) | Branches 3/2 | Worktrees 1 | Stash 1
+  crewbook    PRs 1 (bot 0) | Issues n/a       | Branches 1/1 | Worktrees 0 | Stash 0
+  gone        PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+  All         PRs ?         | Issues ?         | Branches ?/? | Worktrees ? | Stash ?
+```
+
+`PRs` are the open pull requests (of them the bot pull requests), `Issues` the open issues without pull requests (of them
+those with the label `bug`), `Branches` the local branches and the remote-tracking branches of `origin` as of the last fetch (`HEAD`
+excluded), `Worktrees` the linked worktrees whose directory exists (the main checkout excluded) and `Stash` the entries of the
+stash reflog. `n/a` is not read (`--offline`, no token, the deadline, issues disabled, an uninitialized submodule, a repository that is not on
+GitHub), `?` is a read that failed (or a repository that cannot be read locally) and `n+` is a lower bound (an issues listing that hit its limit of 10 pages).
+A number is never 0 for something that was not read. `All` is a sum only when every repository gave a number: repositories without a
+GitHub origin are left out of the PR and issue sums, otherwise `?` wins over `n/a`. The block adds no request: the numbers come
+from the pull request and issue reads that the status run makes anyway, and from the local reads.
+
+The blocks follow in this order, each after a blank line: `Needs action (N)` (N is the number of items; `nothing` when there are
+none), `Repositories (N)`, `Notices (N)` (`none` when there are none), the `agent-rules` line with `--rules`, then the summary
+line. `--offline` and the run without a token print the Counts block followed by the Spec 033 screen.
 
 ## Needs action
 
@@ -89,7 +114,7 @@ with a skip reason (`deadline`, `no-token`) or an error code; a failed read is a
 `stw issues --repo OWNER/NAME`. When the token cannot read `user` (a 403 or 404 without rate-limit evidence) the rule "assigned to
 you" is off and a notice `no-identity` says so; the status run keeps at most 500 issue rows (the largest cap of `stw issues --limit`),
 the counts and `N` stay exact, and only the lowest-priority rows (blue and violet, never items) are dropped first, so an item is
-lost only beyond 500 red and yellow issues in the workspace; a failed `user` read is an error (exit 1) with the notice `viewer-unknown`.
+lost only beyond 500 red and yellow issues in the workspace; a failed `user` read is an error (a notice, exit 0) with the notice `viewer-unknown`.
 
 ## Notices, deadlines and rate limits
 
@@ -113,11 +138,12 @@ login`), with no Needs action section, no `remote:` lines and no second summary;
 
 | Exit | When |
 | --- | --- |
-| 0 | everything attempted succeeded; `--offline`; no usable token (nothing attempted); the deadline cut a read; a release workflow does not exist (404); items never matter |
-| 1 | a request that was attempted failed (any `error` source, including `network`, a rate-limit stop and `page-too-large`), a repository cannot be read locally, or the run fails; the output is still printed |
+| 0 | everything attempted succeeded; `--offline`; no usable token (nothing attempted); the deadline cut a read; a release workflow does not exist (404); a remote read that failed (any `error` source, including `network`, `forbidden`, a rate-limit stop and `page-too-large`: a notice, and the counts it hit show `?`); items never matter |
+| 1 | a repository cannot be read locally, or the run fails; the output is still printed |
 | 2 | usage error (for example `--timeout` with `--offline`, a value out of range) |
 
-The rule depends on what was attempted, never on timing.
+A failed remote read is a notice and never an exit status; the JSON keeps the fact in `summary.failed`. The rule depends on what
+could be read locally, never on timing.
 
 ## Colour, icons and progress
 
@@ -126,14 +152,14 @@ chooses the glyphs of the priorities and markers: `unicode` (default on a termin
 code points from the Font Awesome range) or `ascii` (default everywhere else: a pipe, a file, a non-UTF-8 locale,
 `TERM=dumb`). An explicit `--icons` always wins; the JSON carries no icons (`options.icons` is `null`). Progress is one
 rewritten line on **stderr** (`reading remote: N requests`), only when stderr is a terminal, and it is cleared when the run
-ends. Apart from it, stderr carries only the one-line `Error: ...` message of an exit status 1 or 2 (a failed request, an
+ends. Apart from it, stderr carries only the one-line `Error: ...` message of an exit status 1 or 2 (an
 unreadable repository, a usage error); the report itself, notices included, is on stdout. Text from the forge (titles, logins, tags) has control characters escaped.
 
 ## JSON
 
 `stw status --json` prints one [schema 2](../schemas/v2/status.schema.json) document (unpublished and byte-frozen until the
-feature is accepted): `actions`, `repos` (every v1 member plus `remote`), `sources`, `notices`, `summary` and the run-level
-`error`. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the `pulls` data gains the optional member `review`
+feature is accepted): `actions`, `repos` (every v1 member plus `remote` and `counts`), `sources`, `notices`, `summary`, `totals` and the run-level
+`error`. `counts` and `totals` (`{pull_requests: {state, open, bot, truncated}, issues: {state, open, bug, truncated}, branches: {local, remote}, worktrees, stash}`) are additive: the numbers are null unless the state is `ok` (`not-read`, `no-remote` or `failed` otherwise). `--offline --json` stays the schema 1 document and has no counts. Every source of a repository is `{state, error, reason, data}` and `data` is `null` unless the state is `ok`; the `pulls` data gains the optional member `review`
 (`states` and `hints` counts, Spec 046) when review states were read (`--review`); the `issues` data is `{open, red, yellow, blue, violet, pulls_dropped, truncated}`. `pulls_dropped` is the number of pull
 requests that the GitHub issues list returned (the endpoint lists pull requests with the issues) and that `stw` dropped, so
 that `open`, the counts and the rows are issues only; it counts only the pages that were read (see `truncated`). It is
