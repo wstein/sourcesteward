@@ -35,7 +35,7 @@ Primary jj references for the design comparison: [conflicts](https://www.jj-vcs.
 not establish that the Git pending prototype implements jj semantics or its workspace-scoped undo behavior.
 The jj subprocess comparison is recorded in the Chartroom decision
 `stw runs git only for push, fetch over ssh, range-diff and resolve`; its pinned upstream evidence was not
-independently rerun for this plan. No new dependency on native jj is proposed.
+independently rerun for this plan. No dependency on jj is proposed (decision 8).
 
 ## Feature matrix
 
@@ -45,14 +45,14 @@ command in `src/cli.rs`. Decisions are recommendations unless recorded in Chartr
 | Capability | Go evidence under `legacy/sourcesteward/` | Rust evidence under `projects/sourcesteward/` | Decision |
 | --- | --- | --- | --- |
 | CLI help/version | `internal/cli/root.go:182` command registration | `src/cli.rs` clap `Command`, `--version` | Keep flags; do not copy a version subcommand just for parity. |
-| Git/jj identity and ref inventory | `internal/inspection/{git,jj,inventory}.go` | `src/status.rs`, `src/repo/` (Git only) | Keep Git identity in status; defer native jj and inventory query language. |
+| Git/jj identity and ref inventory | `internal/inspection/{git,jj,inventory}.go` | `src/status.rs`, `src/repo/` (Git only) | Keep Git identity in status; jj is not supported (decision 8); defer the inventory query language. |
 | Workspace repository fanout | `internal/inspection/repos*.go` | `src/repo/`, workspace selection in `src/cli.rs` | Keep shared iteration instead of another `repos` command. |
 | Local status, worktrees, gitlinks | `internal/statuscmd/`, `internal/inspection/pins*.go` | `src/status.rs`, `src/repo/worktrees.rs` | Keep; expand only for demonstrated workflow needs. |
 | PR status/review state | `internal/reviewstate/parse.go`, `internal/prviews/` | `src/github.rs:154`, `src/status.rs:318`; review remains null | Port strict parser and verifiable comment author and head binding (M3). |
 | Sync and rules update | `internal/stwsync/` | `src/sync/`, `src/cli.rs` SyncArgs | Keep ff-only; no automatic stash, reset, merge, or rebase. |
 | Tidy plan/apply/restore | `internal/tidywizard/` | `src/tidy.rs`, `src/tidy_apply.rs:495,908` | Keep manifest-first and fresh-state checks; do not copy wizard/authorization ceremony. |
 | Tidy recovery retention/history | recovery and journals in `internal/tidywizard/` | `src/tidy_apply.rs:90,936`; JSONL stores OIDs, no retention refs | Add a backup ref per mutation (M5, slimmed 2026-11-10, see Cutover section); object IDs alone do not survive GC. |
-| Isolated workspace creation/retirement | `internal/inspection/jj_workspace.go`, `internal/workspace/` | worktree inspection/removal, no creation command | Defer general workspace wizard; add owned resolve worktree lifecycle in M12. |
+| Isolated workspace creation/retirement | `internal/inspection/jj_workspace.go`, `internal/workspace/` | worktree inspection/removal, no creation command | jj workspaces: not supported (decision 8). Defer general workspace wizard; add owned resolve worktree lifecycle in M12. |
 | Stack/conflict plan | `internal/restack/replay.go`, `internal/conflicts/` | absent | Redesign as whole-stack preview (M1/M2). |
 | Review carry-over | `internal/carryover/`, especially `git.go` guards | absent | Port proof semantics, not permissive grammar (M4). |
 | Ready check | `internal/readycheck/` | absent | Port read-only gates with exact-head evidence and pending guard (M4/M12). |
@@ -76,7 +76,7 @@ independent review, author trust, checked head, or CI results by itself.
 
 Recommendation score: 1 = defer, 2 = low priority, 3 = useful later, 4 = recommended after dependencies,
 5 = next priority. This is distinct from benefit, effort, and risk. A: **5/5**; B: **5/5**; C: **4/5**;
-D: **4/5**; full native jj parity: **2/5**. Scores order experiments, not approval to implement.
+D: **4/5**; full native jj parity: **2/5** (not pursued, decision 8). Scores order experiments, not approval to implement.
 
 | Option | Existing spike and evidence | Product recommendation | Acceptance still needed |
 | --- | --- | --- | --- |
