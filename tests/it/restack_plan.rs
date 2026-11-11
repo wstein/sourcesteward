@@ -52,7 +52,12 @@ impl Run {
         self.text.lines().next().unwrap_or("")
     }
     fn json(&self) -> serde_json::Value {
-        serde_json::from_str(&self.text).unwrap_or_else(|e| panic!("{e}: {}", self.text))
+        serde_json::from_str(&self.text).unwrap_or_else(|e| {
+            panic!(
+                "{e}: exit {}, stdout {:?}, stderr {:?}",
+                self.code, self.text, self.err
+            )
+        })
     }
 }
 
@@ -1161,4 +1166,92 @@ fn the_rename_limit_is_the_one_of_git_for_a_merge() {
         .map(|c| c["kind"].as_str().unwrap())
         .collect();
     assert_eq!(kinds, ["content"].into(), "{kinds:?}");
+}
+
+fn unknown_with_merge_attribute(s: &Stack) {
+    let r = run(&s.fx, &["a", "--onto", "main", "--json"]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    let v = r.json();
+    assert_eq!(v["levels"][0]["state"], "unknown", "{v}");
+    assert!(
+        v["levels"][0]["reasons"][0]
+            .as_str()
+            .unwrap()
+            .contains("merge attribute"),
+        "{v}"
+    );
+}
+
+#[test]
+fn the_binary_macro_makes_a_clean_result_unknown_like_a_merge_attribute() {
+    // the new base adds `shared.txt binary` (which sets -merge) and both sides change different lines of the text:
+    // git stops with "Cannot merge binary files", the replay would merge the lines
+    let s = build(
+        vec![
+            (".gitattributes", Some("shared.txt binary\n")),
+            ("shared.txt", Some("S1\ns2\ns3\n")),
+        ],
+        &[vec![("shared.txt", Some("s1\ns2\nS3\n"))]],
+        &[],
+        &[],
+    );
+    // with the work tree of `a` checked out (the engine reads attributes from the index) and not
+    s.fx.set_head("a");
+    s.fx.checkout_head();
+    let r = run(&s.fx, &["a", "--onto", "main", "--json"]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert_ne!(r.json()["levels"][0]["state"], "clean", "{}", r.text);
+    // the attribute on both sides (already in the old base)
+    let s = build_with(
+        vec![(".gitattributes", Some("shared.txt binary\n"))],
+        vec![("shared.txt", Some("S1\ns2\ns3\n"))],
+        &[vec![("shared.txt", Some("s1\ns2\nS3\n"))]],
+        &[],
+        &[],
+    );
+    let r = run(&s.fx, &["a", "--onto", "main", "--json"]);
+    assert_eq!(r.code, 1, "{}", r.text);
+    assert_ne!(r.json()["levels"][0]["state"], "clean", "{}", r.text);
+    // -binary and !binary
+    for text in ["shared.txt -binary\n", "shared.txt !binary\n"] {
+        let s = build_with(
+            vec![(".gitattributes", Some(text))],
+            vec![("m.txt", Some("m1\nMAIN\nm3\n"))],
+            &[vec![("a.txt", Some("A1\na2\na3\n"))]],
+            &[],
+            &[],
+        );
+        unknown_with_merge_attribute(&s);
+    }
+}
+
+#[test]
+fn a_macro_that_sets_binary_or_merge_makes_a_clean_result_unknown() {
+    for text in [
+        "[attr]mine binary\n*.txt mine\n",
+        "[attr]mine -merge\n*.txt mine\n",
+        "[attr]other mine\n[attr]mine binary\n",
+    ] {
+        let s = build_with(
+            vec![(".gitattributes", Some(text))],
+            vec![("m.txt", Some("m1\nMAIN\nm3\n"))],
+            &[vec![("a.txt", Some("A1\na2\na3\n"))]],
+            &[],
+            &[],
+        );
+        unknown_with_merge_attribute(&s);
+    }
+    // an attribute that does not touch merging stays clean
+    let s = build_with(
+        vec![(
+            ".gitattributes",
+            Some("*.txt text eol=lf\n[attr]mine -diff\n"),
+        )],
+        vec![("m.txt", Some("m1\nMAIN\nm3\n"))],
+        &[vec![("a.txt", Some("A1\na2\na3\n"))]],
+        &[],
+        &[],
+    );
+    let r = run(&s.fx, &["a", "--onto", "main", "--json"]);
+    assert_eq!(r.code, 0, "{}", r.text);
 }

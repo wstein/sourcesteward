@@ -436,18 +436,21 @@ fn detect(repo: &gix::Repository, onto: ObjectId, onto_rev: &str) -> Result<Dete
     Ok((chain, notes))
 }
 
-/// Settings and files that make the replay differ from `git rebase` in the dangerous direction (the plan says clean,
-/// git conflicts): the reasons, empty when there are none. The pinned values of the engine are the defaults.
-/// Whether the text of an attributes file sets, unsets or resets the `merge` attribute on some pattern.
+/// Whether the text of an attributes file sets, unsets or resets the `merge` attribute, or the built-in macro
+/// `binary` (which sets `-merge`), on some pattern, or defines a macro (`[attr]name ...`) that does. A macro definition
+/// that does is reported where it is defined, whether or not it is used: the conservative direction.
 fn mentions_merge(text: &[u8]) -> bool {
     text.lines().any(|l| {
         let l = l.trim();
         if l.starts_with(b"#") {
             return false;
         }
-        l.fields()
-            .skip(1)
-            .any(|t| matches!(t, b"merge" | b"-merge" | b"!merge") || t.starts_with(b"merge="))
+        l.fields().skip(1).any(|t| {
+            matches!(
+                t,
+                b"merge" | b"-merge" | b"!merge" | b"binary" | b"-binary" | b"!binary"
+            ) || t.starts_with(b"merge=")
+        })
     })
 }
 
@@ -485,6 +488,8 @@ fn changed_attribute_blobs(
         .collect())
 }
 
+/// Settings and files that make the replay differ from `git rebase` in the dangerous direction (the plan says clean,
+/// git conflicts): the reasons, empty when there are none. The pinned values of the engine are the defaults.
 fn merge_uncertainty(repo: &gix::Repository, trees: &[ObjectId]) -> Vec<String> {
     let mut out = Vec::new();
     let snapshot = repo.config_snapshot();

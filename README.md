@@ -696,7 +696,7 @@ clean exactly when `git rebase` succeeds, and a predicted conflict names the fil
   `merge.renameLimit`, `diff.renameLimit` (any value but 7000) or `diff.algorithm` makes a level that would be clean `unknown`.
 * Binary files: both sides changed is a conflict, as in git; no binary merge driver runs.
 * Submodules: a level with a commit that changes a gitlink is `unknown` unless it conflicts.
-* Merge drivers and attributes: no driver runs. A `merge` attribute in any `.gitattributes` of the new base, of a branch tip or added or changed by a commit of the
+* Merge drivers and attributes: no driver runs. A `merge` attribute, the built-in macro `binary` (it sets `-merge`; git stops with "Cannot merge binary files") or a macro definition (`[attr]name ...`, reported where it is defined, used or not) that sets either, in any `.gitattributes` of the new base, of a branch tip or added or changed by a commit of the
   replayed range, or in `info/attributes` of the common git directory (also seen from a linked worktree), makes a level that would be clean `unknown`. Attribute files of the user (`core.attributesFile`) and of the work tree
   that are not committed are not read.
 * rerere is unknown to the plan: a conflict that `rerere` could resolve is still reported as a conflict.
