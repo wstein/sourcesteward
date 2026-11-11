@@ -371,6 +371,16 @@ pub fn branch_short(full: &gix::refs::FullNameRef) -> Option<String> {
     }
 }
 
+/// Run `f` on every item of `list` in parallel and give the items back in order.
+pub fn for_each_mut<T: Send>(mut list: Vec<T>, f: impl Fn(&mut T) + Sync) -> Vec<T> {
+    std::thread::scope(|s| {
+        for item in list.iter_mut() {
+            s.spawn(|| f(item));
+        }
+    });
+    list
+}
+
 /// Run `f` for every repository in parallel; results keep the repository order.
 pub fn for_each<T: Send>(list: &[RepoRef], f: impl Fn(&RepoRef) -> T + Sync) -> Vec<T> {
     std::thread::scope(|s| {

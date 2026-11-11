@@ -1,5 +1,6 @@
 //! GitHub access over the REST API (ureq, blocking). No `gh` binary. Tokens come from `auth`.
-use std::time::Duration;
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use serde_json::Value;
 
@@ -12,6 +13,11 @@ pub mod reads;
 const API: &str = "https://api.github.com";
 /// Environment variable that points the REST calls elsewhere (GitHub Enterprise, tests); no trailing slash.
 pub const API_URL_ENV: &str = "STW_GITHUB_API_URL";
+
+/// Why a read did not happen or was cut: the overall deadline of `--timeout` passed.
+fn deadline_message(total: Duration) -> String {
+    format!("deadline: the --timeout of {total:?} passed before the read was done; raise --timeout")
+}
 
 /// One open pull request as shown by `stw status`.
 #[derive(Clone, Debug)]
@@ -89,11 +95,16 @@ impl GithubState {
     }
 }
 
+/// One request takes at most this long, whatever the overall deadline.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
 pub struct Client {
     agent: ureq::Agent,
     token: String,
     base: String,
     pub source: TokenSource,
+    /// The overall deadline of the reads (`stw status --timeout`): its end and its length (for the message).
+    deadline: Mutex<Option<(Instant, Duration)>>,
 }
 
 impl std::fmt::Debug for Client {
@@ -131,7 +142,32 @@ impl Client {
             token,
             base,
             source,
+            deadline: Mutex::new(None),
         }
+    }
+
+    /// Start the overall deadline: every request sent later is cut when `total` has passed since this call, and a
+    /// request that would start after it is not sent.
+    pub fn arm_deadline(&self, total: Duration) {
+        *self.deadline.lock().unwrap() = Some((Instant::now() + total, total));
+    }
+
+    /// Time left for a request: `Err` with the message once the deadline has passed.
+    fn time_left(&self) -> std::result::Result<Duration, String> {
+        let Some((end, total)) = *self.deadline.lock().unwrap() else {
+            return Ok(REQUEST_TIMEOUT);
+        };
+        let left = end.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return Err(deadline_message(total));
+        }
+        Ok(left.min(REQUEST_TIMEOUT))
+    }
+
+    /// The deadline has passed (it was armed and its end is behind us).
+    fn deadline_passed(&self) -> Option<Duration> {
+        let (end, total) = (*self.deadline.lock().unwrap())?;
+        (Instant::now() >= end).then_some(total)
     }
 
     /// Credentials for git-over-HTTPS against github.com (handed to gix's transport, never printed).
@@ -142,14 +178,21 @@ impl Client {
     /// GET returning the JSON body, or `None` for 404 (the one status callers treat as an answer).
     fn get_optional(&self, url: &str) -> Result<Option<Value>> {
         let path = url.trim_start_matches(self.base.as_str());
+        let timeout = self.time_left().map_err(Error::github)?;
         let mut resp = self
             .agent
             .get(url)
+            .config()
+            .timeout_global(Some(timeout))
+            .build()
             .header("Authorization", &format!("Bearer {}", self.token))
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .call()
-            .map_err(|e| Error::github(format!("GitHub API unreachable for {path}: {e}")))?;
+            .map_err(|e| match self.deadline_passed() {
+                Some(total) => Error::github(deadline_message(total)),
+                None => Error::github(format!("GitHub API unreachable for {path}: {e}")),
+            })?;
         match resp.status().as_u16() {
             200 => Ok(Some(resp.body_mut().read_json::<Value>().map_err(|e| {
                 Error::github(format!("GitHub API sent unreadable JSON for {path}: {e}"))

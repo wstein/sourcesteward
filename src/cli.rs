@@ -2,6 +2,7 @@
 //! the exit code of a run.
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::Duration;
 
 use clap::{Args, Parser, Subcommand};
 use serde_json::{json, Value};
@@ -328,6 +329,9 @@ struct StatusArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// Overall deadline of the GitHub reads, 1s to 10m, like 90s or 2m (not with --offline)
+    #[arg(long, value_name = "DURATION", default_value = "90s", value_parser = parse_timeout, conflicts_with = "offline")]
+    timeout: Duration,
     /// Fetch origin of every repository first: remote-tracking refs only, no prune, no tags, no submodules; the one
     /// thing that is not read-only
     #[arg(long)]
@@ -338,6 +342,52 @@ struct StatusArgs {
     /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
     #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
     icons: Option<String>,
+}
+
+/// The bounds of `--timeout`, the overall deadline of the remote half.
+pub const MIN_TIMEOUT: Duration = Duration::from_secs(1);
+pub const MAX_TIMEOUT: Duration = Duration::from_secs(600);
+
+/// A duration as Go writes it (`90s`, `2m`, `1m30s`, `1.5s`, `500ms`; units ns, us, ms, s, m, h) within 1s to 10m.
+pub fn parse_timeout(text: &str) -> std::result::Result<Duration, String> {
+    let bad = |why: &str| format!("{text:?} is not a duration: {why} (like 90s, 2m or 1m30s)");
+    let mut rest = text.strip_prefix('+').unwrap_or(text);
+    if rest.is_empty() {
+        return Err(bad("empty"));
+    }
+    let mut total_ns: f64 = 0.0;
+    while !rest.is_empty() {
+        let n_end = rest
+            .find(|c: char| !(c.is_ascii_digit() || c == '.'))
+            .unwrap_or(rest.len());
+        let (num, tail) = rest.split_at(n_end);
+        let n: f64 = num.parse().map_err(|_| bad("a number is missing"))?;
+        let u_end = tail
+            .find(|c: char| c.is_ascii_digit() || c == '.')
+            .unwrap_or(tail.len());
+        let (unit, next) = tail.split_at(u_end);
+        let ns = match unit {
+            "ns" => 1.0,
+            "us" | "\u{b5}s" | "\u{3bc}s" => 1e3,
+            "ms" => 1e6,
+            "s" => 1e9,
+            "m" => 60e9,
+            "h" => 3600e9,
+            "" => return Err(bad("the unit is missing")),
+            _ => return Err(bad("unknown unit")),
+        };
+        total_ns += n * ns;
+        rest = next;
+    }
+    let d = Duration::from_nanos(total_ns.round() as u64);
+    if !(MIN_TIMEOUT..=MAX_TIMEOUT).contains(&d) {
+        return Err(format!(
+            "{text} is outside {}s to {}m",
+            MIN_TIMEOUT.as_secs(),
+            MAX_TIMEOUT.as_secs() / 60
+        ));
+    }
+    Ok(d)
 }
 
 struct Workspace {
@@ -580,11 +630,13 @@ fn run(command: Command) -> Result<u8> {
                 worktrees: a.worktrees,
                 fetch: a.fetch,
             };
-            let list = repo::for_each(&ws.repos, |r| {
-                let mut s = status::collect_local(r, &root, &opts, ws.github.client());
-                status::read_remote(&mut s, ws.github.client());
-                s
+            let mut list = repo::for_each(&ws.repos, |r| {
+                status::collect_local(r, &root, &opts, ws.github.client())
             });
+            if let Some(c) = ws.github.client() {
+                c.arm_deadline(a.timeout);
+            }
+            list = repo::for_each_mut(list, |s| status::read_remote(s, ws.github.client()));
             let rules = sync::rules::agent_rules(
                 &root,
                 None,

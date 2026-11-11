@@ -667,3 +667,97 @@ fn fetch_sends_no_github_request_with_offline_and_does_not_leak_a_token() {
     assert!(api.hits().is_empty(), "{:?}", api.hits());
     assert!(!out(&o).contains(TOKEN) && !err(&o).contains(TOKEN));
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// --timeout (Go: status_command_test.go TestStatusUsageErrors, TestStatusTimeoutIsTheDeadlineOfTheRemoteHalf)
+// ---------------------------------------------------------------------------------------------------------
+
+#[test]
+fn timeout_values_are_go_durations_within_1s_to_10m() {
+    use std::time::Duration as D;
+    let ok = |s: &str| stw::cli::parse_timeout(s);
+    assert_eq!(ok("1s"), Ok(D::from_secs(1)));
+    assert_eq!(ok("90s"), Ok(D::from_secs(90)));
+    assert_eq!(ok("2m"), Ok(D::from_secs(120)));
+    assert_eq!(ok("1m30s"), Ok(D::from_secs(90)));
+    assert_eq!(ok("1.5s"), Ok(D::from_millis(1500)));
+    assert_eq!(ok("1000ms"), Ok(D::from_secs(1)));
+    assert_eq!(ok("10m"), Ok(D::from_secs(600)));
+    assert_eq!(ok("600s"), Ok(D::from_secs(600)));
+    for bad in [
+        "0s", "999ms", "10m1s", "11m", "1h", "", "90", "s", "1s2", "soon", "-1m", "1x", "1.2.3s",
+    ] {
+        assert!(ok(bad).is_err(), "{bad:?} must be refused");
+    }
+    assert!(ok("999ms").unwrap_err().contains("outside 1s to 10m"));
+}
+
+#[test]
+fn timeout_out_of_range_or_with_offline_is_a_usage_error_and_nothing_runs() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    for args in [
+        vec!["--timeout", "0s"],
+        vec!["--timeout", "999ms"],
+        vec!["--timeout", "11m"],
+        vec!["--timeout=-1m"],
+        vec!["--timeout", "soon"],
+        vec!["--offline", "--timeout", "30s"],
+        vec!["--offline", "--timeout=90s"],
+    ] {
+        let mut a = vec!["status", "--root", &r];
+        a.extend(args.iter());
+        let o = stw(Some(&api.url), &a);
+        assert_eq!(o.status.code(), Some(2), "{args:?}: {}", err(&o));
+        assert!(out(&o).is_empty(), "{args:?}");
+        assert!(err(&o).contains("--timeout"), "{args:?}: {}", err(&o));
+    }
+    assert!(api.hits().is_empty(), "a usage error sends no request");
+    for args in [
+        vec!["--timeout", "1s"],
+        vec!["--timeout", "10m"],
+        vec!["--timeout", "2m", "--icons", "ascii"],
+    ] {
+        let mut a = vec!["status", "--root", &r];
+        a.extend(args.iter());
+        assert_eq!(stw(Some(&api.url), &a).status.code(), Some(0), "{args:?}");
+    }
+}
+
+/// The deadline of the remote half: a forge that answers after 4 s is cut at 1 s; the counters are `?`, the
+/// notices say why, exit 0 (a failed GitHub read is a notice in Rust), the local half is intact.
+#[test]
+fn timeout_cuts_the_github_reads_with_notices_and_question_marks() {
+    let fx = status_fixture();
+    let r = path_str(&fx.path);
+    let api = FakeRoutes::start(|_, _| {
+        std::thread::sleep(std::time::Duration::from_secs(4));
+        (200, vec![], "[]".into())
+    });
+    let t0 = std::time::Instant::now();
+    let o = stw(Some(&api.url), &["status", "--root", &r, "--timeout", "1s"]);
+    let took = t0.elapsed();
+    assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
+    assert!(
+        took < std::time::Duration::from_secs(3),
+        "the deadline was not enforced: {took:?}"
+    );
+    let t = out(&o);
+    let flat: String = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(flat.contains("PRs ? | Issues ?"), "{t}");
+    let notices = t
+        .split("\n\n")
+        .find(|b| b.starts_with("Notices ("))
+        .unwrap();
+    assert!(
+        notices.contains("pull requests not read (deadline:"),
+        "{notices}"
+    );
+    assert!(notices.contains("issues not read (deadline:"), "{notices}");
+    assert!(notices.contains("--timeout of 1s"), "{notices}");
+    assert!(
+        t.contains("origin/main up to date") && t.contains("clean"),
+        "local half intact: {t}"
+    );
+}
