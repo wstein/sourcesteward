@@ -163,7 +163,7 @@ fn untouched_outside_scope(p: &P) {
 #[test]
 fn prune_deletes_a_gone_remote_tracking_ref_and_nothing_else() {
     let p = prune_setup();
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(r["fetch"], "ok", "{r}");
@@ -184,7 +184,7 @@ fn prune_deletes_a_gone_remote_tracking_ref_and_nothing_else() {
 #[test]
 fn without_a_flag_and_without_configuration_nothing_is_pruned() {
     let p = prune_setup();
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply"]);
+    let (code, v, err) = p.w.stw(&p.ws, &[]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(r["fetch"], "ok");
@@ -197,7 +197,7 @@ fn without_a_flag_and_without_configuration_nothing_is_pruned() {
 fn fetch_prune_from_the_configuration_applies_without_a_flag() {
     let p = prune_setup();
     p.w.git(&p.ws, &["config", "fetch.prune", "true"]);
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply"]);
+    let (code, v, err) = p.w.stw(&p.ws, &[]);
     assert_eq!(code, 0, "{v} {err}");
     assert!(
         !has_tracking(&p, "gone"),
@@ -213,7 +213,7 @@ fn fetch_prune_from_the_configuration_applies_without_a_flag() {
 fn no_prune_overrides_fetch_prune() {
     let p = prune_setup();
     p.w.git(&p.ws, &["config", "fetch.prune", "true"]);
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--no-prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--no-prune"]);
     assert_eq!(code, 0, "{v} {err}");
     assert!(has_tracking(&p, "gone"), "--no-prune keeps the ref");
     let r = repo(&v, "ws");
@@ -229,14 +229,14 @@ fn no_prune_overrides_fetch_prune() {
 fn prune_overrides_fetch_prune_false() {
     let p = prune_setup();
     p.w.git(&p.ws, &["config", "fetch.prune", "false"]);
-    p.w.stw(&p.ws, &["--apply", "--prune"]);
+    p.w.stw(&p.ws, &["--prune"]);
     assert!(!has_tracking(&p, "gone"));
 }
 
 #[test]
 fn prune_and_no_prune_exclude_each_other() {
     let p = prune_setup();
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--prune", "--no-prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--prune", "--no-prune"]);
     assert_eq!(code, 2, "{err}");
     assert!(v.is_null(), "usage error prints no result");
     assert!(
@@ -249,7 +249,7 @@ fn prune_and_no_prune_exclude_each_other() {
 #[test]
 fn the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do() {
     let p = prune_setup();
-    let (code, v, err) = p.w.stw(&p.ws, &["--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--plan", "--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(v["mode"], "dry-run");
@@ -266,7 +266,7 @@ fn the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do() {
         "{reason}"
     );
     assert!(has_tracking(&p, "gone"));
-    let (_, v, _) = p.w.stw(&p.ws, &["--no-prune"]);
+    let (_, v, _) = p.w.stw(&p.ws, &["--plan", "--no-prune"]);
     assert!(repo(&v, "ws")["reason"]
         .as_str()
         .unwrap()
@@ -285,7 +285,7 @@ fn a_refspec_that_writes_outside_the_namespace_refuses_prune_before_any_fetch() 
             "+refs/tags/*:refs/tags/*",
         ],
     );
-    let (code, v, _) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, _) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 1);
     let r = repo(&v, "ws");
     assert_eq!(r["result"], "error", "{r}");
@@ -299,7 +299,7 @@ fn a_refspec_that_writes_outside_the_namespace_refuses_prune_before_any_fetch() 
     );
     assert!(has_tracking(&p, "gone"), "nothing pruned");
     // without --prune the same configuration is fetched as before
-    let (code, v, _) = p.w.stw(&p.ws, &["--apply"]);
+    let (code, v, _) = p.w.stw(&p.ws, &[]);
     assert_eq!((code, repo(&v, "ws")["fetch"].as_str()), (0, Some("ok")));
 }
 
@@ -307,7 +307,7 @@ fn a_refspec_that_writes_outside_the_namespace_refuses_prune_before_any_fetch() 
 fn a_tag_is_never_pruned_even_with_prune_tags_configured() {
     let p = prune_setup();
     p.w.git(&p.ws, &["config", "remote.origin.pruneTags", "true"]);
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     p.w.git(&p.ws, &["rev-parse", "--verify", "-q", "refs/tags/t1"]);
     assert!(!has_tracking(&p, "gone"));
@@ -318,7 +318,7 @@ fn a_branch_whose_upstream_was_pruned_is_reported_and_kept() {
     let p = prune_setup();
     p.w.git(&p.ws, &["branch", "--set-upstream-to=origin/gone", "keep"]);
     p.w.git(&p.ws, &["checkout", "-q", "keep"]);
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(r["result"], "skip", "{r}");
@@ -338,7 +338,7 @@ fn prune_runs_before_the_fast_forward_and_both_are_reported() {
     let seed = p.w.p("seed");
     let tip = p.w.commit(&seed, "b.txt", "b\n");
     p.w.git(&seed, &["push", "-q", p.origin.to_str().unwrap(), "main"]);
-    let (code, v, err) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(r["result"], "fast-forwarded", "{r}");
@@ -353,7 +353,7 @@ fn prune_for_an_https_remote_goes_through_the_git_runner_and_no_prune_stays_with
         &p.ws,
         &["remote", "set-url", "origin", "https://127.0.0.1:1/x/y.git"],
     );
-    let (code, v, _) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, _) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 1);
     let r = repo(&v, "ws");
     assert_eq!(
@@ -365,7 +365,7 @@ fn prune_for_an_https_remote_goes_through_the_git_runner_and_no_prune_stays_with
         r["error"].as_str().unwrap().contains("credential helper"),
         "{r}"
     );
-    let (_, v, _) = p.w.stw(&p.ws, &["--apply", "--no-prune"]);
+    let (_, v, _) = p.w.stw(&p.ws, &["--no-prune"]);
     assert_eq!(repo(&v, "ws")["via"], "gix", "gix path as before: {v}");
 }
 
@@ -446,7 +446,7 @@ fn a_pinned_submodule_moves_to_the_recorded_commit_and_nothing_else_changes() {
     let s = sub_setup();
     s.pin_ahead();
     let before = s.super_state();
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(r["result"], "submodule-moved", "{r}");
@@ -487,7 +487,7 @@ fn the_dry_run_names_the_move_and_writes_nothing() {
         ],
     );
     let before = s.super_state();
-    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--plan", "--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(r["result"], "submodule-move", "{r}");
@@ -508,7 +508,8 @@ fn the_dry_run_names_the_move_and_writes_nothing() {
 fn the_dry_run_with_prune_still_names_the_submodule_move() {
     let s = sub_setup();
     s.pin_ahead();
-    let (code, v, err) = s.w.stw(&s.ws, &["--prune", "--submodules", "--offline"]);
+    let (code, v, err) =
+        s.w.stw(&s.ws, &["--plan", "--prune", "--submodules", "--offline"]);
     assert_eq!(code, 0, "{v} {err}");
     assert_eq!(repo(&v, "c")["submodule"]["state"], "would-move", "{v}");
     assert_eq!(s.head(), s.c1);
@@ -518,7 +519,7 @@ fn the_dry_run_with_prune_still_names_the_submodule_move() {
 fn without_the_flag_a_pinned_submodule_is_left_alone() {
     let s = sub_setup();
     s.pin_ahead();
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply"]);
+    let (code, v, err) = s.w.stw(&s.ws, &[]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -532,7 +533,7 @@ fn without_the_flag_a_pinned_submodule_is_left_alone() {
 #[test]
 fn a_submodule_at_the_recorded_commit_is_up_to_date() {
     let s = sub_setup();
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -548,7 +549,7 @@ fn local_changes_in_the_submodule_keep_it_where_it_is() {
     let s = sub_setup();
     s.pin_ahead();
     std::fs::write(s.c.join("c.txt"), "dirty\n").unwrap();
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -568,7 +569,7 @@ fn a_recorded_commit_that_is_not_a_fast_forward_is_not_applied() {
     let s = sub_setup();
     s.pin_ahead();
     let local = s.w.commit(&s.c, "local.txt", "l\n");
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -581,7 +582,7 @@ fn a_recorded_commit_that_is_not_a_fast_forward_is_not_applied() {
     let s = sub_setup();
     s.w.git(&s.c, &["fetch", "-q", "origin"]);
     s.w.git(&s.c, &["checkout", "-q", "--detach", &s.c2]);
-    let (_, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (_, v, _) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(
         repo(&v, "c")["submodule"]["state"],
         "not-fast-forward",
@@ -606,7 +607,7 @@ fn a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_f
             &format!("160000,{foreign},c"),
         ],
     );
-    let (code, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 1, "unreachable exits 1: {v}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -623,7 +624,7 @@ fn a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_f
     );
     assert_eq!(s.head(), s.c1);
     // the dry run only predicts
-    let (code, v, _) = s.w.stw(&s.ws, &["--submodules"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--plan", "--submodules"]);
     assert_eq!(code, 0);
     assert!(
         repo(&v, "c")["reason"]
@@ -640,7 +641,7 @@ fn an_uninitialized_submodule_is_unreachable_and_never_cloned() {
     let fresh = s.w.p("fresh");
     s.w.git(&s.w.base, &["clone", "-q", s.ws.to_str().unwrap(), "fresh"]);
     assert!(!fresh.join("c/.git").exists());
-    let (code, v, _) = s.w.stw(&fresh, &["--apply", "--submodules"]);
+    let (code, v, _) = s.w.stw(&fresh, &["--submodules"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -654,7 +655,7 @@ fn an_uninitialized_submodule_is_unreachable_and_never_cloned() {
     );
     assert!(!fresh.join("c/.git").exists(), "stw never clones");
     // without the flag the submodule is not listed at all, as before
-    let (code, v, _) = s.w.stw(&fresh, &["--apply"]);
+    let (code, v, _) = s.w.stw(&fresh, &[]);
     assert_eq!(code, 0);
     assert!(
         v["repos"]
@@ -665,7 +666,7 @@ fn an_uninitialized_submodule_is_unreachable_and_never_cloned() {
         "{v}"
     );
     // the dry run predicts
-    let (code, v, _) = s.w.stw(&fresh, &["--submodules"]);
+    let (code, v, _) = s.w.stw(&fresh, &["--plan", "--submodules"]);
     assert_eq!(code, 0);
     assert!(
         repo(&v, "c")["reason"]
@@ -687,7 +688,7 @@ fn hooks_of_the_submodule_do_not_run_during_the_move() {
     std::fs::write(&hook, format!("#!/bin/sh\ntouch '{}'\n", marker.display())).unwrap();
     use std::os::unix::fs::PermissionsExt;
     std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     assert_eq!(s.head(), s.c2, "the move happened");
     assert!(!marker.exists(), "a hook of the submodule ran");
@@ -698,7 +699,7 @@ fn a_filter_driver_in_the_submodule_config_refuses_the_move() {
     let s = sub_setup();
     s.pin_ahead();
     s.w.git(&s.c, &["config", "filter.x.smudge", "touch smudged"]);
-    let (code, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -725,7 +726,7 @@ fn a_changed_url_in_gitmodules_is_reported_without_credentials() {
             &format!("file://user:SECRETPW@/{}", new.trim_start_matches('/')),
         ],
     );
-    let (code, v, err) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, err) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "c");
     let note = r["submodule"]["note"].as_str().unwrap_or("");
@@ -739,7 +740,7 @@ fn a_changed_url_in_gitmodules_is_reported_without_credentials() {
 fn a_submodule_path_that_is_not_a_plain_path_is_unreachable() {
     let s = sub_setup();
     s.w.git(&s.ws, &["mv", "c", "dir with space"]);
-    let (code, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "dir with space");
     assert_eq!(r["submodule"]["state"], "unreachable", "{r}");
@@ -767,7 +768,7 @@ fn a_submodule_path_through_a_symbolic_link_is_left_alone() {
         ],
     );
     // offline: `dir/c` and `c` are one repository, which two fetches would lock against each other
-    let (code, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules", "--offline"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--submodules", "--offline"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "dir/c");
     assert_eq!(r["submodule"]["state"], "unreachable", "{r}");
@@ -783,7 +784,7 @@ fn a_move_that_git_did_not_do_is_a_failure_not_a_success() {
     s.pin_ahead();
     // an inactive submodule: `git submodule update` skips it without an error
     s.w.git(&s.ws, &["config", "submodule.c.active", "false"]);
-    let (code, v, _) = s.w.stw(&s.ws, &["--apply", "--submodules"]);
+    let (code, v, _) = s.w.stw(&s.ws, &["--submodules"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "c");
     assert_eq!(
@@ -809,7 +810,7 @@ fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
     gm.push_str("[submodule \"abs\"]\n\tpath = /abs/x\n\turl = ../c.git\n");
     std::fs::write(fresh.join(".gitmodules"), gm).unwrap();
     // JSON: the control character is escaped by the encoder, the reason is the plain-path refusal
-    let (code, v, _) = s.w.stw(&fresh, &["--apply", "--submodules", "--offline"]);
+    let (code, v, _) = s.w.stw(&fresh, &["--submodules", "--offline"]);
     assert_eq!(code, 1, "{v}");
     for name in ["x\u{1b}[31mRED\u{1b}[0m", "../outside", "/abs/x"] {
         let r = repo(&v, name);
@@ -827,7 +828,7 @@ fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
         .env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &s.w.home)
-        .args(["sync", "--submodules", "--offline", "--root"])
+        .args(["sync", "--plan", "--submodules", "--offline", "--root"])
         .arg(&fresh)
         .output()
         .unwrap();
@@ -880,7 +881,7 @@ fn a_refspec_into_a_sibling_namespace_of_origin_refuses_prune() {
             "+refs/heads/*:refs/remotes/origin-mirror/*",
         ],
     );
-    let (code, v, _) = p.w.stw(&p.ws, &["--apply", "--prune"]);
+    let (code, v, _) = p.w.stw(&p.ws, &["--prune"]);
     assert_eq!(code, 1, "{v}");
     let r = repo(&v, "ws");
     assert_eq!(r["git_error"], "refused-refspec", "{r}");
@@ -896,7 +897,7 @@ fn text_output_names_the_move_and_the_counts() {
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &s.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
-        .args(["sync", "--submodules", "--root"])
+        .args(["sync", "--plan", "--submodules", "--root"])
         .arg(&s.ws)
         .output()
         .unwrap();
@@ -916,7 +917,6 @@ fn the_rules_checkout_is_not_reported_as_an_uninitialized_submodule() {
     let (code, v, err) = s.w.stw(
         &fresh,
         &[
-            "--apply",
             "--submodules",
             "--rules-path",
             fresh.join("c").to_str().unwrap(),
@@ -938,8 +938,7 @@ fn a_repo_filter_does_not_add_uninitialized_submodules() {
     let s = sub_setup();
     let fresh = s.w.p("fresh");
     s.w.git(&s.w.base, &["clone", "-q", s.ws.to_str().unwrap(), "fresh"]);
-    let (code, v, err) =
-        s.w.stw(&fresh, &["--apply", "--submodules", "--repo", "fresh"]);
+    let (code, v, err) = s.w.stw(&fresh, &["--submodules", "--repo", "fresh"]);
     assert_eq!(code, 0, "{v} {err}");
     assert_eq!(v["repos"].as_array().unwrap().len(), 1, "{v}");
 }

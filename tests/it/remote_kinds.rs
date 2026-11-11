@@ -77,7 +77,7 @@ fn ssh_and_local_remotes_go_through_the_git_runner_only() {
     for url in urls {
         fx.set_origin_url(&url);
         let _ = std::fs::remove_file(&log);
-        let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+        let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
         let r = &v["repos"][0];
         assert_eq!(o.status.code(), Some(1), "{url}: {v}");
         assert_eq!(r["fetch"], "failed", "{url}: {r}");
@@ -117,7 +117,7 @@ fn unknown_transports_are_refused_typed_and_start_nothing() {
         "ssh::host/path",
     ] {
         fx.set_origin_url(url);
-        let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+        let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
         let r = &v["repos"][0];
         assert_eq!(o.status.code(), Some(1), "{url}: {v}");
         assert_eq!(r["fetch"], "unsupported-remote", "{url}: {r}");
@@ -136,7 +136,7 @@ fn network_remotes_of_gix_fail_typed_without_any_program() {
         "http://user:SECRETPW@127.0.0.1:1/x/y.git",
     ] {
         fx.set_origin_url(url);
-        let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+        let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
         let r = &v["repos"][0];
         assert_eq!(o.status.code(), Some(1), "{url}: {v}");
         assert_eq!(r["fetch"], "unsupported-remote", "{url}: {r}");
@@ -146,7 +146,7 @@ fn network_remotes_of_gix_fail_typed_without_any_program() {
         assert!(!log.exists(), "{url}: a program was started");
     }
     fx.set_origin_url("https://127.0.0.1:1/x/y.git");
-    let (_, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+    let (_, v) = run_stw(&fx, shim.path(), &["sync"]);
     assert_eq!(v["repos"][0]["fetch"], "failed");
     assert_eq!(v["repos"][0]["via"], "gix");
     assert!(!log.exists());
@@ -159,7 +159,7 @@ fn without_git_the_git_steps_are_unsupported_and_core_reads_still_work() {
     // delegated step: typed `unsupported`, exit 1, via git
     for url in ["ssh://git@127.0.0.1:1/x/y.git", "/some/local/path"] {
         fx.set_origin_url(url);
-        let (o, v) = run_stw(&fx, std::path::Path::new(""), &["sync", "--apply"]);
+        let (o, v) = run_stw(&fx, std::path::Path::new(""), &["sync"]);
         let r = &v["repos"][0];
         assert_eq!(o.status.code(), Some(1), "{url}: {v}");
         assert_eq!(r["fetch"], "unsupported", "{url}: {r}");
@@ -171,7 +171,7 @@ fn without_git_the_git_steps_are_unsupported_and_core_reads_still_work() {
         );
         assert_eq!(r["git_error"], "not-found");
         // an empty directory on PATH is the same
-        let (o2, v2) = run_stw(&fx, empty.path(), &["sync", "--apply"]);
+        let (o2, v2) = run_stw(&fx, empty.path(), &["sync"]);
         assert_eq!(o2.status.code(), Some(1));
         assert_eq!(v2["repos"][0]["fetch"], "unsupported");
     }
@@ -180,8 +180,8 @@ fn without_git_the_git_steps_are_unsupported_and_core_reads_still_work() {
     for args in [
         &["status", "--offline"][..],
         &["tidy", "plan", "--offline"][..],
-        &["sync"][..],
-        &["sync", "--offline"][..],
+        &["sync", "--plan"][..],
+        &["sync", "--plan", "--offline"][..],
     ] {
         let (o, v) = run_stw(&fx, std::path::Path::new(""), args);
         assert_eq!(o.status.code(), Some(0), "{args:?}: {v}");
@@ -200,7 +200,7 @@ fn a_too_old_git_is_unsupported_with_the_version_named() {
     )
     .unwrap();
     fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
-    let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+    let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
     let r = &v["repos"][0];
     assert_eq!(o.status.code(), Some(1));
     assert_eq!(r["fetch"], "unsupported");
@@ -234,7 +234,7 @@ fn a_local_path_remote_is_fetched_and_fast_forwarded_with_the_installed_git() {
     fx.checkout_head();
     fx.set_origin_url(&up.path.display().to_string());
     let path = std::env::var_os("PATH").unwrap();
-    let (o, v) = run_stw(&fx, std::path::Path::new(&path), &["sync", "--apply"]);
+    let (o, v) = run_stw(&fx, std::path::Path::new(&path), &["sync"]);
     let r = &v["repos"][0];
     assert_eq!(o.status.code(), Some(0), "{v}");
     assert_eq!(r["fetch"], "ok", "{r}");
@@ -247,7 +247,7 @@ fn a_local_path_remote_is_fetched_and_fast_forwarded_with_the_installed_git() {
 fn dry_run_and_offline_never_look_at_the_remote_kind() {
     let (fx, log, shim) = setup();
     fx.set_origin_url("ssh://git@example.invalid/x/y.git");
-    for extra in [&["--offline", "--apply"][..], &[][..]] {
+    for extra in [&["--offline"][..], &["--plan"][..]] {
         let o = Command::new(env!("CARGO_BIN_EXE_stw"))
             .env_clear()
             .env("PATH", shim.path())
@@ -297,7 +297,7 @@ fn a_repo_local_credential_helper_never_runs_when_there_is_no_token() {
     );
     // `sh` must be findable, or a helper could not start and the test would prove nothing
     let path = format!("{}:/usr/bin:/bin", shim.path().display());
-    let (o, v) = run_stw(&fx, std::path::Path::new(&path), &["sync", "--apply"]);
+    let (o, v) = run_stw(&fx, std::path::Path::new(&path), &["sync"]);
     let r = &v["repos"][0];
     assert_eq!(o.status.code(), Some(1), "{v}");
     assert!(!api.hits().is_empty(), "the 401 server was never asked");
@@ -326,7 +326,7 @@ fn git_gets_a_null_stdin_even_when_stw_has_a_pipe() {
         .env("PATH", shim.path())
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
-        .args(["sync", "--apply", "--json", "--root"])
+        .args(["sync", "--json", "--root"])
         .arg(&fx.path)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
@@ -344,7 +344,7 @@ fn a_local_config_key_that_runs_a_command_gives_unsupported_with_the_key_and_sta
     let (fx, log, shim) = setup();
     fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
     append_config(&fx, "[core]\n\tsshCommand = touch /nonexistent/never\n");
-    let (o, v) = run_stw(&fx, shim.path(), &["sync", "--apply"]);
+    let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
     let r = &v["repos"][0];
     assert_eq!(o.status.code(), Some(1), "{v}");
     assert_eq!(r["fetch"], "unsupported");
@@ -397,7 +397,7 @@ fn groups_of_run(terminal: bool) -> (String, String) {
         .env("PATH", format!("{}:/usr/bin:/bin", shim.path().display()))
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
-        .args(["sync", "--apply", "--json", "--root"])
+        .args(["sync", "--json", "--root"])
         .arg(&fx.path)
         .stdout(std::process::Stdio::piped());
     let _keep = if terminal {

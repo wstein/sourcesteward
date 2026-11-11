@@ -109,8 +109,8 @@ fn tidy_plan_starts_no_program_named_by_the_repository() {
 #[test]
 fn sync_dry_run_and_offline_start_no_program_named_by_the_repository() {
     let (fx, m) = hostile();
-    run(&fx, &["sync"]);
-    run(&fx, &["sync", "--offline", "--apply"]);
+    run(&fx, &["sync", "--plan"]);
+    run(&fx, &["sync", "--offline"]);
     assert_eq!(
         markers(m.path()),
         Vec::<String>::new(),
@@ -210,7 +210,7 @@ fn sync_apply(fx: &Fx) -> serde_json::Value {
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
-        .args(["sync", "--offline", "--apply", "--json", "--root"])
+        .args(["sync", "--offline", "--json", "--root"])
         .arg(&fx.path)
         .output()
         .unwrap();

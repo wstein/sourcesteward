@@ -58,7 +58,7 @@ fn the_token_is_sent_but_never_printed_on_any_status_path() {
             vec!["status", "--root", &r, "--json"],
             vec!["tidy", "plan", "--root", &r],
             vec!["tidy", "plan", "--root", &r, "--json"],
-            vec!["sync", "--root", &r, "--json"],
+            vec!["sync", "--plan", "--root", &r, "--json"],
         ] {
             let o = stw(&api.url, &cmd);
             let out = all_output(&o);
@@ -94,8 +94,8 @@ fn offline_makes_no_request_and_online_does() {
     for cmd in [
         vec!["status", "--root", &r, "--offline"],
         vec!["tidy", "plan", "--root", &r, "--offline"],
+        vec!["sync", "--plan", "--root", &r, "--offline"],
         vec!["sync", "--root", &r, "--offline"],
-        vec!["sync", "--root", &r, "--offline", "--apply"],
     ] {
         let o = stw(&api.url, &cmd);
         assert_eq!(o.status.code(), Some(0), "{cmd:?}: {}", all_output(&o));
@@ -284,7 +284,8 @@ fn json_field_names_are_the_documented_ones() {
     );
 
     let sy: Value =
-        serde_json::from_slice(&stw(&api.url, &["sync", "--root", &r, "--json"]).stdout).unwrap();
+        serde_json::from_slice(&stw(&api.url, &["sync", "--plan", "--root", &r, "--json"]).stdout)
+            .unwrap();
     assert_eq!(
         keys(&sy),
         doc(&[
@@ -299,7 +300,10 @@ fn json_field_names_are_the_documented_ones() {
             "summary"
         ])
     );
-    assert_eq!(keys(&sy["options"]), doc(&["prune", "submodules"]));
+    assert_eq!(
+        keys(&sy["options"]),
+        doc(&["prune", "submodules", "dry_run"])
+    );
     assert_eq!(
         keys(&sy["summary"]),
         doc(&[

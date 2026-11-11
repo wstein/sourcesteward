@@ -36,6 +36,7 @@ mod status_flags;
 mod status_review;
 mod submodule_paths;
 mod sync;
+mod sync_default;
 mod sync_flags;
 mod sync_rules;
 mod tidy;

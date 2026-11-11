@@ -1388,6 +1388,59 @@ m SR45 'a long error body is dropped instead of cut' src/github.rs \
     }' \
   status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
 
+# sync acts by default; --plan/--dry-run preview; --apply is a hidden alias (tests/it/sync_default.rs)
+m SD1 "sync does not act without a flag" src/cli.rs \
+  'let execute = !(a.plan || a.dry_run);' 'let execute = a.apply;' \
+  sync_default without_a_flag_sync_acts_and_the_refs_move
+m SD2 "--dry-run does not preview" src/cli.rs \
+  'let execute = !(a.plan || a.dry_run);' 'let execute = !a.plan;' \
+  sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
+m SD3 "--plan does not preview" src/cli.rs \
+  'let execute = !(a.plan || a.dry_run);' 'let execute = !a.dry_run;' \
+  sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
+m SD4 "--apply together with --plan is accepted" src/cli.rs \
+  '#[arg(long, conflicts_with = "apply")]
+    plan: bool,' '#[arg(long)]
+    plan: bool,' \
+  sync_default apply_together_with_plan_or_dry_run_is_a_usage_error_and_changes_nothing
+m SD5 "--apply together with --dry-run is accepted" src/cli.rs \
+  '#[arg(long, conflicts_with = "apply")]
+    dry_run: bool,' '#[arg(long)]
+    dry_run: bool,' \
+  sync_default apply_together_with_plan_or_dry_run_is_a_usage_error_and_changes_nothing
+m SD6 "--apply is shown in the help" src/cli.rs \
+  '#[arg(long, hide = true)]
+    apply: bool,' '#[arg(long)]
+    apply: bool,' \
+  sync_default the_help_names_plan_and_dry_run_and_hides_apply
+m SD7 "the JSON options carry the wrong mode" src/sync/mod.rs \
+  '"dry_run": !apply}' '"dry_run": apply}' \
+  sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
+m SD8 "a plan fetches" src/sync/mod.rs \
+  '    if o.apply {
+        if o.offline {' '    if true {
+        if o.offline {' \
+  sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
+m SD9 "the plan text loses its marker" src/sync/mod.rs \
+  '"dry run: {} would fast-forward, {} skipped"' '"preview: {} would fast-forward, {} skipped"' \
+  sync_default the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it
+m SD10 "the rules update does not act by default" src/cli.rs \
+  'update: a.rules,
+                apply: execute,' 'update: a.rules,
+                apply: a.apply,' \
+  sync_rules cli_json_carries_agent_rules_and_a_refusal_exits_1
+m SD11 "a run acts on a diverged branch" src/sync/mod.rs \
+  '} else if b > 0 && a > 0 {' '} else if false && a > 0 {' \
+  sync_default a_run_still_leaves_diverged_and_in_progress_repositories_alone
+m SD12 "a run ignores an operation in progress" src/sync/mod.rs \
+  'if let Some(op) = op {
+        ("skip"' 'if let Some(op) = op.filter(|_| false) {
+        ("skip"' \
+  sync_default a_run_still_leaves_diverged_and_in_progress_repositories_alone
+m SD13 "the plan does not report a failed fetch of a run as exit 1" src/cli.rs \
+  'list.iter().any(|s| s.result == "error") || rules.action == "refused",' 'rules.action == "refused",' \
+  sync_default a_run_without_network_is_exit_1_and_a_plan_is_exit_0
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

@@ -29,7 +29,7 @@ fn apply(fx: &Fx, env: &[(&str, &str)]) -> Value {
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .envs(env.iter().copied())
-        .args(["sync", "--apply", "--offline", "--json", "--root"])
+        .args(["sync", "--offline", "--json", "--root"])
         .arg(&fx.path)
         .output()
         .unwrap();

@@ -19,7 +19,7 @@ use crate::{
 const EXIT_CODES: &str = "\
 Exit codes:
   0  everything asked for worked
-  1  the command ran, but a repository could not be read, `sync --apply` failed in one, `tidy apply`
+  1  the command ran, but a repository could not be read, `sync` failed in one, `tidy apply`
      failed a step (a branch, worktree, registration or the exclude file), or `tidy restore` left an
      entry not restored
   2  usage error or unusable workspace (nothing was done)
@@ -51,7 +51,7 @@ enum Command {
         #[command(subcommand)]
         command: TidyCommand,
     },
-    /// Fast-forward every repository to its upstream (dry run unless --apply)
+    /// Fast-forward every repository to its upstream (--plan or --dry-run only shows what it would do)
     #[command(after_help = EXIT_CODES)]
     Sync(SyncArgs),
     /// Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
@@ -283,23 +283,29 @@ struct RestoreArgs {
 struct SyncArgs {
     #[command(flatten)]
     common: Common,
-    /// Fetch origin and fast-forward; never merges, rebases, stashes, resets or pushes
-    #[arg(long)]
+    /// Print what a run would do and change nothing: no fetch, no write (alias: --dry-run)
+    #[arg(long, conflicts_with = "apply")]
+    plan: bool,
+    /// Alias of --plan
+    #[arg(long, conflicts_with = "apply")]
+    dry_run: bool,
+    /// Accepted and ignored: sync runs by default (kept so that earlier calls still work); not in the help
+    #[arg(long, hide = true)]
     apply: bool,
-    /// With --apply, fetch with --prune: delete remote-tracking refs of origin (refs/remotes/origin/* only) that are
-    /// gone there. Overrides fetch.prune. Without --apply the dry run only says what it would do
+    /// Fetch with --prune: delete remote-tracking refs of origin (refs/remotes/origin/* only) that are gone there.
+    /// Overrides fetch.prune. With --plan it only says what it would do
     #[arg(long, conflicts_with = "no_prune")]
     prune: bool,
-    /// With --apply, fetch without pruning (overrides fetch.prune for a fetch by the installed git)
+    /// Fetch without pruning (overrides fetch.prune for a fetch by the installed git)
     #[arg(long)]
     no_prune: bool,
-    /// With --apply, also move each pinned (detached) submodule to the commit the superproject records when that is a
+    /// Also move each pinned (detached) submodule to the commit the superproject records when that is a
     /// fast-forward: git submodule sync and update --no-fetch --checkout; never a clone, init or extra fetch. An
-    /// uninitialized submodule or a missing commit is reported as unreachable. The dry run says what would move
+    /// uninitialized submodule or a missing commit is reported as unreachable. --plan says what would move
     #[arg(long)]
     submodules: bool,
-    /// Also handle the agent-rules checkout (the submodule .agents of a whr workspace): with --apply fetch it and
-    /// fast-forward HEAD to origin's default branch; without --apply only report. Refuses only to protect local
+    /// Also handle the agent-rules checkout (the submodule .agents of a whr workspace): fetch it and
+    /// fast-forward HEAD to origin's default branch; with --plan only report. Refuses only to protect local
     /// changes or local commits. Never runs install.sh
     #[arg(long)]
     rules: bool,
@@ -776,8 +782,10 @@ fn run(command: Command) -> Result<u8> {
         Command::Add(a) => run_add(a),
         Command::Sync(a) => {
             let ws = workspace(&a.common, a.rules_path.as_deref())?;
+            // sync acts unless --plan or --dry-run asks for the preview; --apply is an ignored alias
+            let execute = !(a.plan || a.dry_run);
             let opts = sync::Opts {
-                apply: a.apply,
+                apply: execute,
                 offline: a.common.offline,
                 prune: if a.prune {
                     sync::fetch::Prune::On
@@ -805,19 +813,19 @@ fn run(command: Command) -> Result<u8> {
             let ropts = sync::rules::RulesOpts {
                 path: a.rules_path.clone(),
                 update: a.rules,
-                apply: a.apply,
+                apply: execute,
                 offline: a.common.offline,
             };
             let rules =
                 sync::rules::agent_rules(&PathBuf::from(&ws.root), ws.github.client(), &ropts);
             if a.common.json {
-                let mut v = sync::to_json(&ws.root, a.apply, &list, &opts);
+                let mut v = sync::to_json(&ws.root, execute, &list, &opts);
                 if let Value::Object(m) = &mut v {
                     m.insert("agent_rules".into(), sync::rules::to_json(&rules));
                 }
                 print_json(&v);
             } else {
-                print!("{}", sync::render_human(a.apply, &list, &opts));
+                print!("{}", sync::render_human(execute, &list, &opts));
                 print!("{}", sync::rules::render_human(&rules));
             }
             Ok(failed(

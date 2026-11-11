@@ -9,7 +9,7 @@ Usage: stw <COMMAND>
 Commands:
   status  Where am I in every repository (read-only)
   tidy    Branch cleanup: `plan` shows it, `apply` carries it out, `restore` undoes it
-  sync    Fast-forward every repository to its upstream (dry run unless --apply)
+  sync    Fast-forward every repository to its upstream (--plan or --dry-run only shows what it would do)
   add     Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
   review  Review helpers (read-only)
   lint    Check work products against the working rules (read-only)
@@ -21,7 +21,7 @@ Options:
 
 Exit codes:
   0  everything asked for worked
-  1  the command ran, but a repository could not be read, `sync --apply` failed in one, `tidy apply`
+  1  the command ran, but a repository could not be read, `sync` failed in one, `tidy apply`
      failed a step (a branch, worktree, registration or the exclude file), or `tidy restore` left an
      entry not restored
   2  usage error or unusable workspace (nothing was done)

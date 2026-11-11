@@ -189,7 +189,7 @@ fn list_repos_leaves_out_refused_paths_and_keeps_valid_ones() {
 #[test]
 fn sync_dry_run_reports_refused_paths_and_touches_nothing() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["sync"]);
+    let (code, text, v) = stw(&t, &["sync", "--plan"]);
     assert_eq!(code, 0, "{text}");
     for (name, _) in &h {
         let r = entry(&v, name);
@@ -213,7 +213,7 @@ fn sync_dry_run_reports_refused_paths_and_touches_nothing() {
 #[test]
 fn sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["sync", "--apply"]);
+    let (code, text, v) = stw(&t, &["sync"]);
     // without --submodules a refused path is a hint, not a failure (Go's `unreachable` arises only there)
     assert_eq!(code, 0, "{text}");
     for (name, _) in &h {
@@ -241,7 +241,7 @@ fn sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone() {
 #[test]
 fn sync_with_submodules_names_each_refused_path_once() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["sync", "--apply", "--submodules", "--offline"]);
+    let (code, text, v) = stw(&t, &["sync", "--submodules", "--offline"]);
     assert_eq!(code, 1, "{text}");
     for (name, _) in &h {
         assert_eq!(entry(&v, name)["result"], "error");
@@ -272,7 +272,7 @@ fn assert_rejected_field(v: &Value, n: usize) {
 #[test]
 fn sync_submodules_dry_run_predicts_unreachable_as_a_skip() {
     let (t, h) = setup_hostile();
-    let (code, text, v) = stw(&t, &["sync", "--submodules", "--offline"]);
+    let (code, text, v) = stw(&t, &["sync", "--plan", "--submodules", "--offline"]);
     assert_eq!(code, 0, "{text}");
     for (name, _) in &h {
         let r = entry(&v, name);
@@ -384,10 +384,10 @@ fn a_directory_named_twice_is_listed_and_synced_once() {
     write_gitmodules(&t.ws, &["a/b/"]);
     assert_eq!(stw::repo::list_repos(&t.ws)[1].name, "a/b");
     write_gitmodules(&t.ws, &["a/b", "a/b/", "a/b"]);
-    let (code, text, v) = stw(&t, &["sync", "--offline"]);
+    let (code, text, v) = stw(&t, &["sync", "--plan", "--offline"]);
     assert_eq!(code, 0, "{text}");
     assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
-    let (code, text, _) = stw(&t, &["sync", "--offline", "--repo", "a/b"]);
+    let (code, text, _) = stw(&t, &["sync", "--plan", "--offline", "--repo", "a/b"]);
     assert_eq!(code, 0, "{text}");
     // a refused path named twice is reported once
     write_gitmodules(&t.ws, &["../x", "../x/"]);
@@ -408,7 +408,7 @@ fn a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported() {
     std::fs::remove_dir_all(t.ws.join("ws")).unwrap();
     std::os::unix::fs::symlink(&t.outside, t.ws.join("ws")).unwrap();
     assert_eq!(stw::repo::list_repos(&t.ws).len(), 1);
-    let (code, text, v) = stw(&t, &["sync", "--apply"]);
+    let (code, text, v) = stw(&t, &["sync"]);
     assert_eq!(code, 0, "{text}");
     assert!(
         v["repos"]
@@ -436,7 +436,7 @@ fn a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported() {
 fn a_workspace_of_plain_paths_has_no_refused_entry() {
     let t = setup();
     write_gitmodules(&t.ws, &["a/b"]);
-    let (code, text, v) = stw(&t, &["sync", "--offline"]);
+    let (code, text, v) = stw(&t, &["sync", "--plan", "--offline"]);
     assert_eq!(code, 0, "{text}");
     assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
     let (code, text, v) = stw(&t, &["status", "--offline"]);

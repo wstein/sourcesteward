@@ -4,8 +4,8 @@
 //! superproject records. A plain checkout on the default branch works too.
 //!
 //! Display (always, read-only): one line with the state of the checkout against `origin/<default>`.
-//! Update (`--rules`): with `--apply` fetch `origin` and fast-forward HEAD (the branch, or the detached HEAD) to
-//! `origin/<default>`; without `--apply` change nothing, fetch nothing, and report what would happen from what is
+//! Update (`--rules`): by default fetch `origin` and fast-forward HEAD (the branch, or the detached HEAD) to
+//! `origin/<default>`; with `--plan` change nothing, fetch nothing, and report what would happen from what is
 //! already fetched. The only refusals protect data: local changes in the working tree, local commits that are
 //! not in `origin/<default>`, a non-default branch, or a diverged branch. The superproject is never touched: for
 //! a submodule the new commit shows up there as a modified gitlink that the owner commits. New commits by other
@@ -36,7 +36,7 @@ pub struct RulesOpts {
     pub path: Option<PathBuf>,
     /// `--rules`: update the checkout
     pub update: bool,
-    /// `--apply`: fetch and fast-forward; without it `--rules` only reports
+    /// Execute (no `--plan`/`--dry-run`): fetch and fast-forward; otherwise `--rules` only reports
     pub apply: bool,
     pub offline: bool,
 }
@@ -453,8 +453,9 @@ pub fn render_human(r: &RulesRec) -> String {
                 out += &format!("    {name} has a new commit, recorded as modified in the workspace (not committed); the new commit is only kept once the workspace records it, git submodule update can restore the recorded commit (whr-up runs it when a submodule is not yet initialized)\n");
             }
         }
-        "would-update" => out +=
-            "    dry run (without --apply): would fast-forward; nothing was fetched or written\n",
+        "would-update" => {
+            out += "    dry run (--plan): would fast-forward; nothing was fetched or written\n"
+        }
         "refused" => out += &format!("    refused, nothing changed: {}\n", r.reason),
         _ => {}
     }

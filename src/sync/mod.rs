@@ -1,11 +1,13 @@
 //! `stw sync`: bring every repository up to date, like `git pull --ff-only`.
-//! Dry run by default. Never merges, rebases, stashes, resets or pushes. `--apply` fast-forwards the
-//! checked-out branch (index and working tree included) when no local change overlaps.
+//! Acts by default, like the Go tool; `--plan` / `--dry-run` only report. `Opts::apply` is the internal name of "act" (its
+//! default, false, is the dry run, so a caller that builds `Opts` by hand fails closed). Never merges, rebases, stashes,
+//! resets or pushes. A run fast-forwards the checked-out branch (index and working tree included) when no local change
+//! overlaps.
 //!
 //! `--prune` / `--no-prune` choose how the fetch treats remote-tracking refs that are gone on `origin`; only
 //! `refs/remotes/origin/*` can be deleted (`fetch::check_prune_scope`), by the installed git's own fetch, before
 //! any fast-forward. `--submodules` then moves each pinned (detached) submodule to the commit the superproject
-//! records, when that is a fast-forward (`submodules.rs`). Both act only with `--apply`.
+//! records, when that is a fast-forward (`submodules.rs`). Both act only in a run, not with `--plan`.
 use std::collections::BTreeSet;
 
 use serde_json::{json, Value};
@@ -98,6 +100,7 @@ fn plan_of(f: &HeadFacts, op: Option<&str>) -> (&'static str, String) {
 
 #[derive(Clone, Debug, Default)]
 pub struct Opts {
+    /// Act (fetch, fast-forward, prune, move submodules); false is the dry run (`--plan`, `--dry-run`).
     pub apply: bool,
     pub offline: bool,
     pub prune: Prune,
@@ -305,7 +308,7 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
     json!({"schema_version": 2, "command": "sync", "mode": if apply {"apply"} else {"dry-run"}, "root": root,
            "engine": engine(), "repos": repos,
            "options": {"prune": match o.prune { Prune::Unset => Value::Null, Prune::On => json!(true), Prune::Off => json!(false) },
-                       "submodules": o.submodules},
+                       "submodules": o.submodules, "dry_run": !apply},
            "summary": {"total": list.len(), "fast_forwarded": count("fast-forwarded"),
                        "would_fast_forward": count("fast-forward"), "skipped": count("skip"), "errors": count("error"),
                        "submodules_moved": count("submodule-moved"), "would_move_submodules": count("submodule-move"),

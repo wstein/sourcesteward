@@ -54,7 +54,7 @@ fn put(rec: &mut SyncRec, result: &str, reason: String, sub: SubRec) {
 }
 
 fn unreachable_rec(rec: &mut SyncRec, o: &Opts, why: &str, sub: SubRec) {
-    // a dry run only predicts; the fetch of `--apply` may still bring a missing commit
+    // a dry run only predicts; the fetch of a run may still bring a missing commit
     let (result, reason) = if o.apply {
         ("error", format!("unreachable: {why}"))
     } else {
@@ -231,7 +231,7 @@ fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
                 if o.apply {
                     ""
                 } else {
-                    " (--apply fetches origin first)"
+                    " (a run fetches origin first)"
                 }
             ),
             base,
@@ -367,8 +367,8 @@ fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
 }
 
 /// Adds one record per `.gitmodules` path that is not accepted (`repo::rejected_paths`), never synced, whatever
-/// the flags. Only `--apply --submodules` makes it an error (Go's `unreachable` arises only there; a dry run
-/// predicts it as a skip); `--apply` alone shows a skip with the same text, a hint that does not fail the run.
+/// the flags. Only a run with `--submodules` makes it an error (Go's `unreachable` arises only there; a dry run
+/// predicts it as a skip); a run without `--submodules` shows a skip with the same text, a hint that does not fail the run.
 /// The path is untrusted: no file system access, escaped in the text.
 pub fn rejected_pass(rejected: &[(String, String)], list: &mut Vec<SyncRec>, o: &Opts) {
     for (p, why) in rejected {

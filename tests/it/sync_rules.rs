@@ -263,7 +263,7 @@ fn dry_run_shows_the_result_and_changes_nothing() {
     assert!(text.contains("behind 2 commits of origin/main"), "{text}");
     assert!(text.contains("rules commit "), "{text}");
     assert!(
-        text.contains("dry run (without --apply): would fast-forward"),
+        text.contains("dry run (--plan): would fast-forward"),
         "{text}"
     );
     untouched(&r);
@@ -422,19 +422,19 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     std::fs::rename(&r.fx.path, root.join(".agents")).unwrap();
     gix::init(&root).unwrap();
     let rs = root.to_str().unwrap();
-    let o = stw(&["sync", "--root", rs, "--offline", "--json"]);
+    let o = stw(&["sync", "--plan", "--root", rs, "--offline", "--json"]);
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["agent_rules"]["state"], "behind");
     assert_eq!(o.status.code(), Some(0), "{v}");
-    // without --apply: reports, changes nothing
-    let o = stw(&["sync", "--root", rs, "--rules"]);
+    // with --plan: reports, changes nothing
+    let o = stw(&["sync", "--plan", "--root", rs, "--rules"]);
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
-    assert!(text.contains("dry run (without --apply)"), "{text}");
+    assert!(text.contains("dry run (--plan)"), "{text}");
     assert!(!root.join(".agents/rules").exists());
     // a refusal exits 1
     std::fs::write(root.join(".agents/README.md"), "edited\n").unwrap();
-    let o = stw(&["sync", "--root", rs, "--offline", "--rules", "--apply"]);
+    let o = stw(&["sync", "--root", rs, "--offline", "--rules"]);
     assert_eq!(o.status.code(), Some(1));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     let text = text[text.find("agent-rules:").unwrap()..].to_string();
@@ -442,7 +442,7 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     assert!(!text.contains("next:"), "{text}");
     std::fs::write(root.join(".agents/README.md"), "readme\n").unwrap();
     // updated
-    let o = stw(&["sync", "--root", rs, "--offline", "--rules", "--apply"]);
+    let o = stw(&["sync", "--root", rs, "--offline", "--rules"]);
     assert_eq!(
         o.status.code(),
         Some(0),
@@ -463,11 +463,9 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     ]);
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["agent_rules"]["state"], "current", "{v}");
-    // --dry-run no longer exists: dry run is the default without --apply
-    assert_eq!(
-        stw(&["sync", "--root", rs, "--dry-run"]).status.code(),
-        Some(2)
-    );
+    // --dry-run is the same as --plan
+    let o = stw(&["sync", "--root", rs, "--offline", "--dry-run", "--rules"]);
+    assert_eq!(o.status.code(), Some(0));
 }
 
 #[test]
@@ -643,16 +641,16 @@ fn the_rules_submodule_is_only_touched_by_rules_apply() {
     };
     let tip = || gix::open(&sub).unwrap().head_id().unwrap().detach();
     let old = tip();
-    // (1) plain sync --apply leaves it alone: not listed, not fetched, not moved
-    let o = run(&["sync", "--apply", "--root", rs]);
+    // (1) plain sync leaves it alone: not listed, not fetched, not moved
+    let o = run(&["sync", "--root", rs]);
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(!text.contains(".agents"), "{text}");
     assert_eq!(tip(), old, "{text}");
     assert!(!sub.join("rules").exists());
     let o = run(&["status", "--root", rs, "--offline"]);
     assert!(!String::from_utf8_lossy(&o.stdout).contains("  .agents"));
-    // (2) --rules --apply updates it once, with the preview
-    let o = run(&["sync", "--rules", "--apply", "--root", rs]);
+    // (2) --rules updates it once, with the preview
+    let o = run(&["sync", "--rules", "--root", rs]);
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert_eq!(o.status.code(), Some(0), "{text}");
     assert_eq!(tip(), o1);
