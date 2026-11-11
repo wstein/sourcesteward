@@ -89,14 +89,21 @@ impl Client {
             .body_mut()
             .with_config()
             .limit(BODY_LIMIT)
-            .read_json::<Value>()
+            .read_to_vec()
             .map_err(|e| {
-                if size_is_too_large && matches!(e, ureq::Error::BodyExceedsLimit(_)) {
+                if !matches!(e, ureq::Error::BodyExceedsLimit(_)) {
+                    fail("network", "HTTP read failed")
+                } else if size_is_too_large {
                     fail("page-too-large", "page exceeds the one MiB body limit")
                 } else {
-                    fail("malformed-response", "unexpected document shape")
+                    fail(
+                        "malformed-response",
+                        "response exceeds the one MiB body limit",
+                    )
                 }
             })?;
+        let body: Value = serde_json::from_slice(&body)
+            .map_err(|_| fail("malformed-response", "unexpected document shape"))?;
         Ok(LintPage { body, link })
     }
 

@@ -1,7 +1,8 @@
 //! Go corpus check for M8, command: every case of `legacy/sourcesteward/internal/lintprcmd/command_test.go` and of
-//! `internal/cli/lint_test.go` is one Rust case here (same scenario, same name in snake case, except two renames below) or a named
-//! deviation. Renames: `TestViolationsExitOneAndAreLocated` is `violations_exit_three_and_are_located`;
-//! `TestLintPREndToEndOverTheGuardedReader` is `lint_pr_end_to_end_over_the_rest_client`. The rules are in `lint_pr.rs`. Plan: docs/migration-plan.md, M8.
+//! `internal/cli/lint_test.go` is one Rust case here (same scenario, same name in snake case, except two
+//! renames below) or a named deviation. Renames: `TestViolationsExitOneAndAreLocated` is
+//! `violations_exit_three_and_are_located`; `TestLintPREndToEndOverTheGuardedReader` is
+//! `lint_pr_end_to_end_over_the_rest_client`. The rules are in `lint_pr.rs`. Plan: docs/migration-plan.md, M8.
 //!
 //! The Go tests of the command run against a fake `Source`; so do the first group here (`stw::lint_pr_cmd::Source`).
 //! The second group runs the binary against a fake GitHub API (`cli/lint_test.go`: end to end over the guarded
@@ -1315,4 +1316,62 @@ fn lint_pr_reads_the_repository_and_identity_of_the_workspace() {
     let (_, err) = text(&o);
     assert_eq!(o.status.code(), Some(2), "{err}");
     assert!(err.contains("--owner-identity"), "{err}");
+}
+
+// DEVIATION D9 is the Go behavior: only comment pages report an oversized body as page-too-large
+#[test]
+fn oversized_bodies_and_304_map_to_the_go_codes() {
+    let cwd = scratch();
+    let big = format!("[{{\"id\":5,\"body\":\"{}\"}}]", "x".repeat((1 << 20) + 16));
+    let big_pull = format!("{{\"title\":\"{}\"}}", "x".repeat((1 << 20) + 16));
+    let run = |target: &'static str, status: u16, body: String| {
+        let api = FakeRoutes::start(move |path, _| {
+            let hit = match target {
+                "pull" => path == "/repos/o/r/pulls/7",
+                "commits" => path == "/repos/o/r/pulls/7/commits",
+                _ => path == "/repos/o/r/issues/7/comments",
+            };
+            if hit {
+                return (status, vec![], body.clone());
+            }
+            match path {
+                "/repos/o/r/pulls/7" => (
+                    200,
+                    vec![],
+                    format!(
+                        "{{\"number\":7,\"title\":\"feat: x\",\"body\":\"b\",\"head\":{{\"sha\":\"{}\"}}}}",
+                        sha('a')
+                    ),
+                ),
+                "/repos/o/r/pulls/7/commits" => (200, vec![], "[]".into()),
+                _ => (404, vec![], "{}".into()),
+            }
+        });
+        let args = ["7", "--repo", "o/r", "--owner-identity", "A <a@b.c>"];
+        let o = stw(&api.url, cwd.path(), &args);
+        let (out, err) = text(&o);
+        assert_eq!(
+            (o.status.code(), out.as_str()),
+            (Some(1), ""),
+            "{target} {status}: {err}"
+        );
+        err
+    };
+    let e = run("comments", 200, big.clone());
+    assert!(e.contains("page-too-large"), "{e}");
+    let e = run("commits", 200, big);
+    assert!(
+        e.contains("malformed-response") && !e.contains("page-too-large"),
+        "{e}"
+    );
+    let e = run("pull", 200, big_pull);
+    assert!(
+        e.contains("malformed-response") && !e.contains("page-too-large"),
+        "{e}"
+    );
+    let e = run("pull", 304, String::new());
+    assert!(
+        e.contains("malformed-response") && e.contains("unsolicited 304"),
+        "{e}"
+    );
 }
