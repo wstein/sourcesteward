@@ -1794,6 +1794,27 @@ m PV24 'prove: no hint to name the new parent' src/prove.rs \
 m PV25 'prove: the new base from --old-parent is called flag' src/prove.rs \
   'if old_source == "flag" {' 'if false {' \
   prove an_old_parent_without_base_is_named_as_the_source_of_the_new_base_and_hints
+m RK17 'restack plan: info/attributes is read from the git dir of the worktree, not the common dir' src/restack_plan.rs \
+  'repo.common_dir().join("info/attributes")' 'repo.git_dir().join("info/attributes")' \
+  restack_plan a_merge_attribute_in_info_attributes_of_the_common_dir_is_seen_from_a_linked_worktree
+m RK18 'restack plan: a local default branch that is ahead becomes a level' src/restack_plan.rs \
+  'if default_name.as_deref() == Some(n.as_str()) {' 'if false {' \
+  restack_plan a_local_default_branch_that_is_ahead_of_origin_is_not_a_level
+m RK19 'restack plan: the checked-out default branch is a starting point' src/restack_plan.rs \
+  'if default_name.as_deref() == Some(name.as_str()) {' 'if false {' \
+  restack_plan a_local_default_branch_that_is_ahead_of_origin_is_not_a_level
+m RK20 'replay: the rename limit is 1000, not the 7000 of git' src/replay.rs \
+  '("renameLimit", "7000"),' '("renameLimit", "1000"),' \
+  restack_plan the_rename_limit_is_the_one_of_git_for_a_merge
+m RK21 'restack plan: a .gitattributes added inside the range is not scanned' src/restack_plan.rs \
+  'Ok(blob) if mentions_merge(&blob.data) => why.push(format!(' 'Ok(blob) if false && mentions_merge(&blob.data) => why.push(format!(' \
+  restack_plan a_commit_in_the_range_that_adds_a_merge_attribute_makes_a_clean_result_unknown
+m RK22 'restack plan: the singular of commit is not used' src/restack_plan.rs \
+  'if l.commits == Some(1) {' 'if false {' \
+  restack_plan a_refusal_without_levels_prints_no_level_count_and_the_singular_is_used
+m RK23 'restack plan: a refusal prints a level count' src/restack_plan.rs \
+  'let count = if self.levels.is_empty() {' 'let count = if false {' \
+  restack_plan a_refusal_without_levels_prints_no_level_count_and_the_singular_is_used
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
