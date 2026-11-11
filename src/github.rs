@@ -6,6 +6,7 @@ use serde_json::Value;
 use crate::auth::{self, TokenSource};
 use crate::error::{Error, Result};
 
+pub mod lint_reads;
 pub mod reads;
 
 const API: &str = "https://api.github.com";

@@ -429,7 +429,7 @@ impl Client {
         })
     }
 
-    fn check_slug(slug: &str) -> Result<()> {
+    pub(super) fn check_slug(slug: &str) -> Result<()> {
         if valid_slug(slug) {
             Ok(())
         } else {

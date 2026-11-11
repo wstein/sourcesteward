@@ -10,7 +10,7 @@ use crate::error::{exit, Error, Kind, Result};
 use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
-use crate::{add, carryover, dev, git_runner, status, sync, tidy, tidy_apply};
+use crate::{add, carryover, dev, git_runner, lint_pr_cmd, status, sync, tidy, tidy_apply};
 
 const EXIT_CODES: &str = "\
 Exit codes:
@@ -59,6 +59,12 @@ enum Command {
         #[command(subcommand)]
         command: ReviewCommand,
     },
+    /// Check work products against the working rules (read-only)
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
+    Lint {
+        #[command(subcommand)]
+        command: LintCommand,
+    },
     #[command(hide = true)]
     Dev {
         #[command(subcommand)]
@@ -84,6 +90,66 @@ enum ReviewCommand {
     /// May the review of a pull request head be carried over to a rewritten head? Prints the `Carried-over:` line for a yes; posts nothing
     #[command(after_help = CARRY_OVER_HELP)]
     CarryOver(CarryOverArgs),
+}
+
+#[derive(Subcommand)]
+enum LintCommand {
+    /// Check the commits, text and comments of a pull request against the machine-checkable working rules (read-only)
+    #[command(after_help = LINT_PR_HELP)]
+    Pr(LintPrArgs),
+}
+
+const LINT_PR_HELP: &str = "\
+Read-only (GET only). Reads one pull request, its commits (up to 300) and its conversation comments (up to 300) and
+reports one finding per violated rule with the rule ID, the severity and the location (PR title or text, comment ID,
+commit SHA, line). Rules: no session link (Claude session trailer or code-session URL) in commit messages, PR title, PR
+text and comments; author and committer of every commit is an owner identity; Co-Authored-By trailer; Conventional
+Commit subjects; PR text about 25 lines (warning above 25, error above 30), a Blocker line and an Author agent line; the
+first line of a review comment follows `Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n>` (or the
+Carried-over form) for this pull request; a review comment has at most 15 lines. `--json` lists the rule table.
+The repository is --repo or, without it, the single GitHub repository of the workspace of PATH (default: the current
+directory). Owner identities are --owner-identity (repeatable), else user.name and user.email of the Git configuration
+read from the workspace (or the current directory with --repo); without any, usage error. The token is the one of the
+other commands. Nothing is written to disk or to the forge.
+
+Exit codes:
+  0  no finding of severity error (warnings do not fail)
+  1  a read failed or there is no GitHub token (no output)
+  2  usage error
+  3  at least one error finding, or a list was cut at its bound (the output is printed; the result is not a pass)";
+
+#[derive(Args)]
+struct LintPrArgs {
+    /// Pull request number
+    #[arg(value_name = "PR")]
+    pr: String,
+    /// Workspace whose single GitHub repository is meant [default: the current directory]
+    #[arg(value_name = "PATH")]
+    path: Option<String>,
+    /// Pull request repository [default: the single GitHub repository of the workspace]
+    #[arg(long = "repo", value_name = "OWNER/NAME")]
+    repo: Option<String>,
+    /// Owner identity for the author and committer rules (repeatable) [default: user.name and user.email of the Git configuration]
+    #[arg(long = "owner-identity", value_name = "NAME <EMAIL>")]
+    owners: Vec<String>,
+    /// Print the human list (the default)
+    #[arg(long)]
+    human: bool,
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_lint_pr(a: LintPrArgs) -> Result<u8> {
+    let p = lint_pr_cmd::prepare(&lint_pr_cmd::Flags {
+        pr: a.pr,
+        repo: a.repo,
+        path: a.path,
+        owners: a.owners,
+        human: a.human,
+        json: a.json,
+    })?;
+    lint_pr_cmd::run(&p)
 }
 
 const CARRY_OVER_HELP: &str = "\
@@ -539,6 +605,9 @@ fn run(command: Command) -> Result<u8> {
         Command::Review {
             command: ReviewCommand::CarryOver(a),
         } => run_carry_over(a),
+        Command::Lint {
+            command: LintCommand::Pr(a),
+        } => run_lint_pr(a),
         Command::Dev {
             command: DevCommand::PatchId { repo, revs },
         } => {
