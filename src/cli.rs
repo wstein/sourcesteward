@@ -1,4 +1,4 @@
-//! Command line (clap): `stw status | tidy plan | tidy apply | tidy restore | sync`, the shared options, workspace selection and
+//! Command line (clap): `stw status | tidy plan | tidy apply | tidy restore | tidy history | sync`, the shared options, workspace selection and
 //! the exit code of a run.
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -13,7 +13,7 @@ use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
     add, carryover, dev, git_runner, lint_pr_cmd, status, status_review, status_stats, sync, tidy,
-    tidy_apply,
+    tidy_apply, tidy_history,
 };
 
 const EXIT_CODES: &str = "\
@@ -87,6 +87,10 @@ enum TidyCommand {
     /// Re-create branches deleted by `apply` from the manifest (never overwrites)
     #[command(after_help = EXIT_CODES)]
     Restore(RestoreArgs),
+    /// List the stored manifests (the journals of `apply`), newest first, with the number of branches each recorded and
+    /// how many `restore` could create now (read-only)
+    #[command(after_help = EXIT_CODES)]
+    History(HistoryArgs),
 }
 
 #[derive(Subcommand)]
@@ -301,6 +305,20 @@ struct SyncRestoreArgs {
     /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
     #[arg(long, value_name = "PATH")]
     root: Option<PathBuf>,
+}
+
+#[derive(Args)]
+struct HistoryArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Most journals listed, 1 to 1024
+    #[arg(long, value_name = "N", default_value_t = tidy_history::DEFAULT_LIMIT as u16,
+          value_parser = clap::value_parser!(u16).range(1..=tidy_history::MAX_LIMIT as i64))]
+    limit: u16,
+    /// Where the manifests are [default: the user's data directory, stw/manifests]
+    #[arg(long, value_name = "DIR")]
+    manifest_dir: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -876,6 +894,18 @@ fn run(command: Command) -> Result<u8> {
                 print!("{}", tidy_apply::restore_render_human(&r));
             }
             Ok(failed(!r.complete()))
+        }
+        Command::Tidy {
+            command: TidyCommand::History(a),
+        } => {
+            let dir = manifest_dir(a.manifest_dir.clone())?;
+            let h = tidy_history::history(&dir, usize::from(a.limit))?;
+            if a.json {
+                print_json(&tidy_history::to_json(&h));
+            } else {
+                print!("{}", tidy_history::render_human(&h));
+            }
+            Ok(exit::OK)
         }
         Command::Add(a) => run_add(a),
         Command::Sync(SyncArgs {

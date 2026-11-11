@@ -71,7 +71,7 @@ impl ManifestEntry {
                        "sha": self.sha, "proof": self.proof, "time": self.time, "worktree": jopt(self.worktree.as_deref())});
         serde_json::to_string(&v).expect("JSON value serializes")
     }
-    fn from_value(v: &Value) -> Option<ManifestEntry> {
+    pub fn from_value(v: &Value) -> Option<ManifestEntry> {
         let s = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_string);
         Some(ManifestEntry {
             run: s("run")?,

@@ -20,3 +20,4 @@ pub mod status_stats;
 pub mod sync;
 pub mod tidy;
 pub mod tidy_apply;
+pub mod tidy_history;

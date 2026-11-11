@@ -26,6 +26,7 @@ stw status    [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|ne
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
+stw tidy history [--limit N] [--manifest-dir DIR] [--json]
 stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json] [--offline] [--root PATH] [--repo NAME]...
               [--rules] [--rules-path PATH]
 stw sync restore [PATH] [--run ID] [--json] [--root PATH]
@@ -40,6 +41,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `tidy plan` | the plan only: per local branch `delete`, `review` or `keep`, with the proof. `tidy` alone prints the usage (exit 2) | nothing |
 | `tidy apply` | carries the plan out: deletes the local branches it marks `delete`, removes clean linked worktrees of such branches and dead worktree registrations. No confirmation flag; `--yes` is an unknown flag | local branches, worktrees, a manifest outside the repository |
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
+| `tidy history` | lists the stored manifests (the journals of `tidy apply`), newest first, with the branches each recorded and how many `tidy restore` could create now | nothing |
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
@@ -189,7 +191,7 @@ and no `next_steps` field in JSON. Notes say what happened or why something was 
 `--json` prints one compact JSON object. `schema_version` is `2` (version 1 had `next_steps` in `status`, `tidy-plan`
 and `sync`; there is no `next_steps` any more); fields are only added within a version, a
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
-`tidy-plan`, `tidy-apply`, `tidy-restore`, `sync`), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
+`tidy-plan`, `tidy-apply`, `tidy-restore`, `tidy-history`, `sync`), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
 `github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
@@ -370,6 +372,35 @@ Each line: `manifest_version` (1), `run`, `repo` (path), `branch`, `sha`, `proof
 every entry is restored or present. A run that was killed after the manifest and before the deletions restores
 as `already-present`. The reflog entry (`stw: tidy restore <run>`) uses the identity rules below. Left behind by
 a delete: `branch.<name>.*` configuration (upstream) stays, so a restored branch keeps its upstream.
+
+### tidy history
+
+`stw tidy history [--limit N] [--manifest-dir DIR] [--json]` is the port of the Go `tidy history` (read-only; Go lists the stored
+contract-3 journals). Here the journals are the manifests of `tidy apply` above, and their format is not changed: `tidy restore` reads
+the same files. One row per manifest, newest run first (run IDs sort by time, so the first row is the run `tidy restore` takes
+without `--run`): `run`, `time` (modification time of the file, `YYYY-MM-DDTHH:MM:SSZ`), `mode` (`local-refs`, `unknown` when not read),
+`deleted` (entries of the manifest: the branches the run recorded before it deleted them; a run killed before the deletions
+counts too), `restorable` (of those, how many `tidy restore` could create now: the repository opens, the branch does not exist, the commit
+is in it) and `status`: `complete`, `incomplete` (not checked because of a bound), `unreadable` (not JSON or not a manifest entry; listed with
+0 counts). The entries are data: `repo` must be an absolute path, the branch a valid `refs/heads/` name, `sha` 40 lower-case hex digits,
+otherwise the entry is not restorable. Files that are no manifests (other extension, a directory, a symbolic link, a hidden
+or unusual name) are not listed. A directory that does not exist is an empty history. Nothing is written and no repository is changed; no
+`git`, `gh` or `ssh` is started.
+
+Bounds, as in Go, each one visible: at most 4096 manifests are scanned (`scan_truncated`), `--limit N` (1 to 1024, default 256; a value
+outside it, a repeated flag or an unknown flag is a usage error, exit 2) rows are shown, at most 65536 entries are checked against the
+repositories, and the check stops after 30 seconds. A bound that was reached is a marker `{unit, shown, total}` with `unit` `journals`,
+`objects` or `checked-journals` (text: `truncated: <unit> <shown> of <total>`). `--json`: `schema_version` 2, `command` `tidy-history`,
+`read_only` true, `manifest_dir`, `engine`, `status` (`ok`), `total`, `scan_truncated`, `entries[{run, time, mode, deleted, restorable,
+status}]`, `truncated[]`. Text: `N journal(s) in <dir>, newest first`, one line per row, the markers; text from outside is escaped.
+
+Deviations from Go: (1) the journals are the `tidy apply` manifests (one JSON Lines file per run, outside the repository), not the plan and
+journal files of the contract-3 state directory; `--contract`, `--state-dir`, `PATH`, `tidy restore --list` and the contract-4
+(administrative registration prune) history are not ported, `--manifest-dir` is the state directory; (2) the fields `plan_id`, `retained`,
+`recovery_refs`, `decision_kinds` and `run_mode` have no counterpart (a manifest has no plan, no recovery refs, no reviewer decisions and no run
+mode); `run` is the run ID; (3) `status` cannot say `incomplete` for a killed run, since the manifest is written before the first deletion
+and has no completion mark; (4) the order is by run ID (Go: modification time); (5) a missing directory is an empty history (Go: an error);
+(6) the unit of the entry bound is named `objects` as in Go but counts manifest entries; the 30 second budget and the bounds are the Go values.
 
 Output: `--json` has `command` `tidy-apply` / `tidy-restore`, `run`, per branch `action`
 (`deleted`, `skipped`, `failed`) and `reason`, `manifest` (path), worktrees and registrations.
