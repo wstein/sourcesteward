@@ -21,7 +21,8 @@ tool: it may work in a colocated Git repository, without a test and without a pr
 detection, no warning, no test).
 
 ```
-stw status    [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
+stw status    [--long|-l] [--fetch] [--worktrees] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
+              [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
@@ -34,7 +35,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 
 | Command | What it does | Writes |
 | --- | --- | --- |
-| `status` | counts per repository and in total, then per repository: branch, upstream ahead/behind, staged/unstaged/untracked/conflicts, stash, running operation, submodule pin drift, open pull requests | nothing |
+| `status` | counts per repository and in total, then per repository: branch, upstream ahead/behind, staged/unstaged/untracked/conflicts, stash, running operation, submodule pin drift, open pull requests | nothing; with `--fetch` only the remote-tracking refs of `origin` (and FETCH_HEAD, objects) |
 | `tidy plan` | the plan only: per local branch `delete`, `review` or `keep`, with the proof. `tidy` alone prints the usage (exit 2) | nothing |
 | `tidy apply` | carries the plan out: deletes the local branches it marks `delete`, removes clean linked worktrees of such branches and dead worktree registrations. No confirmation flag; `--yes` is an unknown flag | local branches, worktrees, a manifest outside the repository |
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
@@ -184,6 +185,7 @@ would_fast_forward, skipped, errors}.
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
   `changes{staged,unstaged,untracked,conflicts}`, `stash`, `operation`, `gitlink{recorded,state}`, `slug`,
   `attention`, `reasons`, `pull_requests{read,error,open[{number,title,head,draft,author,review,merge_state}]}`. `review` of a pull request is always null (REST has no `reviewDecision`); `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
+  Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons}` (`icons` is always null: the JSON carries no glyphs) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
 - `status` counts: per repository `counts`, in total the top-level `totals`, same shape: `pull_requests{state,open,bot,truncated}`,
   `issues{state,open,bug,truncated}`, `branches{local,remote}`, `worktrees`, `stash` (all numbers or null). `state` is `ok`,
   `not-read` (`--offline` or no token), `no-remote` (no GitHub origin; left out of a total) or `failed` (the read failed or the
@@ -211,6 +213,54 @@ would_fast_forward, skipped, errors}.
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
 (why GitHub was not read, failed reads per repository; text from outside is shown with escapes), the `agent-rules` block, then the summary line. A failed GitHub read is
 a notice: exit 0. Exit 1 stays for a repository that cannot be read locally.
+
+## Status flags
+
+Ports of the flags of the Go `stw status` (`legacy/sourcesteward/internal/cli/status.go`). Without a flag nothing changes, and
+`--json` is the same document plus the additive fields above. `--timeout`, `--stats` and `--verbose` are a usage error (exit 2)
+with `--offline`.
+
+| Flag | What it does |
+| --- | --- |
+| `--long`, `-l` | The text only: under `Needs action` every reason is explained from the facts of the repository (what is staged, how far behind, which operation), under `Repositories` each repository gets a card (`path`, `remote`, `head`, `upstream`, `changes` by kind, `branches`, linked worktrees, `stash`, `gitlink`). The blocks stay in their order, `Notices` and the summary line stay last. The JSON is the same as without it. No command is printed for someone else to run. |
+| `--fetch` | `git fetch origin` of every repository before it is read, so that ahead/behind and `Branches` are current. The one thing that is not read-only, and it changes remote-tracking refs only (`refs/remotes/origin/*`, FETCH_HEAD, objects). It goes through the same fetch as `sync --apply` (ssh and local-path remotes: the installed `git` through the runner, `"via": "git"`, fixed argv, no hook, `gc.auto=0`; https: gix, no program, the GitHub token only for github.com), always with `--no-prune` (wins over `fetch.prune`), no tags, no submodules. A repository whose configured fetch refspec writes outside `refs/remotes/origin/` is not fetched (it would write branches). A failed fetch is a detail line, a notice and `fetch.state` `failed`, exit 0; the status of that repository is still shown. It works with `--offline`: `--offline` stops the GitHub reads and the token, not the fetch. The `agent-rules` checkout is not fetched (`sync --rules --apply` does that). |
+| `--worktrees` | One line per linked worktree under its repository: path, branch or `detached`, then `dirty`, `locked` (with `: reason`), `prunable`, `missing`. `dirty` is any tracked change or untracked file in that worktree (a worktree that cannot be read counts as dirty). Registrations whose checkout is gone are listed too (`missing`, and `prunable` unless locked); the main checkout is never listed. The `Worktrees` count keeps its meaning (existing linked checkouts, no stale registration, no main checkout). Sorted by path. |
+| `--icons unicode\|nerd\|ascii` | The marker in front of a repository line: attention `▲`, cannot be read `✖` (unicode), `U+F071` and `U+F057` of Font Awesome (nerd, needs a Nerd Font), `!` for both (ascii). Default: unicode when stdout is a terminal, the locale is UTF-8 (the first of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides) and `TERM` is not `dumb`; ascii otherwise (a pipe, a file). An explicit value always wins. Text only. |
+| `--timeout DURATION` | The overall deadline of the GitHub reads, 1s to 10m, default 90s, written as Go does (`90s`, `2m`, `1m30s`, `1.5s`). Every request is cut at the deadline and none starts after it (one request also takes at most 30 s). The cut reads are notices (`pull requests not read (deadline: ...)`), their counters `?`, exit 0. The fetch of `--fetch` and the local reads are not part of it. |
+| `--stats` | One line after the summary: `stats: API: 4 reqs (4,896/5,000 left, reset 22:13 UTC) \| 1.4s elapsed (local 110ms, remote 1.3s)`. `local` includes the fetch of `--fetch`; `elapsed` ends before the `agent-rules` read. With `--json` the member `stats`. |
+| `--verbose` | Implies `--stats`. Before the stats line: `Diagnostic breakdown:` with the requests and the summed request time per repository and source (`pulls`, `issues`). With `--json` the breakdown and the stats line go to stderr, so stdout stays one document. |
+
+### Differences from the Go `stw status` flags
+
+- `--long`: the Go default is a compact overview (one line per repository), `--long` the expanded one. The Rust default text is
+  not compact: it already prints the detail lines of Go's long layout (operation, stash, gitlink drift, pull requests), and
+  `--long` adds the card and the explanations on top. There is no compact mode. The explanations are sentences from the facts;
+  Go prints the suggested command (`run:`) and a `hint:` per item, Rust never prints a command (see "Output for agents"). Go's
+  action items with priorities (red to violet), their links and the sources release drafts, tags and CI do not exist in Rust:
+  the remote half is pull requests and issues.
+- `--icons`: Rust has one marker per repository line and no priority levels, so the glyph sets cover the two markers only
+  (Go also puts the priority glyph in front of every action line). The glyphs are those of Go. Go keeps the ascii marker in its
+  local layout unless `--icons` is given; Rust has one layout, so the terminal default applies to every run, `--offline` and a run
+  without a token included. The default also asks whether stdout is a terminal, as Go does.
+- `--fetch`: Go runs `git fetch --no-tags --no-write-fetch-head --no-recurse-submodules --no-prune` for every remote kind with at
+  most 16 in flight. Rust uses the fetch of `sync` (see above): https remotes are fetched by gix, the git path writes
+  FETCH_HEAD, the refspec scope check is an addition, the fetches of all repositories run in parallel without a bound, the
+  `agent-rules` checkout is not fetched, and the GitHub token is offered for github.com https unless `--offline` is given.
+- `--timeout`: Go's deadline also covers its other sources (repo, releases, tags, CI, viewer) and cuts a request at 15 s; Rust cuts
+  at 30 s. A failed GitHub read is a notice and exit 0 in Rust (Go: exit 1), see "Exit codes". The notices come per repository
+  (Go: once per source).
+- `--stats`, `--verbose`: Go counts every source it has; Rust has `pulls` and `issues` (and `other`). `cached 304s` is always 0
+  (Rust sends no ETags) and `consumed` equals the requests. There is no `viewer` line. The rate limit is the one of the answer
+  with the smallest remaining count. Go's `--verbose` text output puts the breakdown before the stats line as Rust does.
+- `--worktrees`: Go counts missing and prunable registrations as linked worktrees and shows, even without the flag, a line
+  `N linked worktrees (1 dirty, 1 locked, ...)` and the JSON counts `linked`, `dirty`, `locked`, `prunable`, `missing`; Rust keeps
+  its `Worktrees` count (existing checkouts only), has no such summary line or counts, and lists the stale registrations only with
+  the flag. Go shows the lines only in its long layout, Rust always with the flag. Go lists in the order of `git worktree list`,
+  Rust sorted by path. A relative link (a `..` in its path) is listed and `missing` is checked, `prunable` is not evaluated for it.
+- Before this change `status` had no equivalent of `--worktrees`: only the number in `Worktrees` and, in `tidy plan`, the worktree
+  of a kept branch and the stale registrations. The list of linked worktrees with their state is new.
+- JSON: Go's schema 2 differs from the Rust one as a whole (see the migration plan); the new fields here are only additive to
+  the Rust document, `schema_version` stays `2`.
 
 ## Backup branches
 
