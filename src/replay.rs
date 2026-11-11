@@ -165,8 +165,9 @@ pub fn configured_user(repo: &gix::Repository) -> Option<(BString, BString)> {
     ))
 }
 
-/// A clone of `repo` whose object writes stay in memory and whose merge configuration is pinned.
-fn sandbox(repo: &gix::Repository) -> Result<gix::Repository, ReplayError> {
+/// A clone of `repo` whose object writes stay in memory and whose merge configuration is pinned. Several
+/// `replay_range_in` calls on one handle see each other's commits (a stack of branches replayed level by level).
+pub fn sandbox(repo: &gix::Repository) -> Result<gix::Repository, ReplayError> {
     let mut mem = repo.clone().with_object_memory();
     {
         let mut snap = mem.config_snapshot_mut();
@@ -207,11 +208,28 @@ pub fn replay_range(
     committer: &Signature,
 ) -> Result<Replay, ReplayError> {
     let mem = sandbox(repo)?;
-    let chain = chain(&mem, old_base, tip)?;
+    let (steps, tip) = replay_range_in(&mem, onto, old_base, tip, committer)?;
+    Ok(Replay {
+        repo: mem,
+        steps,
+        tip,
+    })
+}
+
+/// `replay_range` on a handle that `sandbox` made: the new commits stay in that handle, so the next call can replay
+/// on top of them. Returns the steps and the last replayed commit (`onto` when nothing was replayed).
+pub fn replay_range_in(
+    mem: &gix::Repository,
+    onto: ObjectId,
+    old_base: ObjectId,
+    tip: ObjectId,
+    committer: &Signature,
+) -> Result<(Vec<Step>, ObjectId), ReplayError> {
+    let chain = chain(mem, old_base, tip)?;
     let mut steps = Vec::with_capacity(chain.len());
     let mut new_tip = onto;
     for c in chain {
-        let step = replay_commit(&mem, c, new_tip, committer)?;
+        let step = replay_commit(mem, c, new_tip, committer)?;
         let stop = step.status == Status::Conflicted;
         if let Some(n) = step.new {
             new_tip = n;
@@ -221,11 +239,7 @@ pub fn replay_range(
             break;
         }
     }
-    Ok(Replay {
-        repo: mem,
-        steps,
-        tip: new_tip,
-    })
+    Ok((steps, new_tip))
 }
 
 /// The commits of `old_base..tip`, oldest first, all with exactly one parent.
