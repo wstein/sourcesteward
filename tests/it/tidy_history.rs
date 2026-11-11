@@ -451,6 +451,18 @@ fn every_bound_is_a_visible_marker() {
         "{:?}",
         h.truncated
     );
+    // every directory entry counts for the scan bound, also the ones that are no manifest
+    let junk = home.path().join("junk");
+    std::fs::create_dir(&junk).unwrap();
+    for n in 0..5 {
+        std::fs::write(junk.join(format!("note{n}.txt")), "x").unwrap();
+    }
+    let h = history_with(&junk, 10, 3, 100, Duration::from_secs(30)).unwrap();
+    assert!(
+        h.scan_truncated,
+        "five foreign entries exceed a bound of three"
+    );
+    assert_eq!(h.total, 0);
     // entry bound: the 2-entry manifest is over a bound of 2 once another one was counted
     let h = history_with(&md, 10, 100, 2, Duration::from_secs(30)).unwrap();
     let over: Vec<_> = h

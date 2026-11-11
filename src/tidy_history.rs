@@ -139,16 +139,19 @@ pub fn history_with(
     let started = Instant::now();
     let mut found: Vec<(String, i64)> = Vec::new();
     let mut scan_truncated = false;
+    let mut looked = 0usize;
     match std::fs::read_dir(dir) {
         Ok(rd) => {
             for e in rd {
                 let e = e.map_err(|e| {
                     Error::repository(format!("cannot read {}: {e}", dir.display()))
                 })?;
-                if found.len() >= scan_limit {
+                // every directory entry counts, whatever it is: the scan is bounded by the entries it looks at
+                if looked >= scan_limit {
                     scan_truncated = true;
                     break;
                 }
+                looked += 1;
                 let name = e.file_name();
                 let Some(id) = name
                     .to_str()
