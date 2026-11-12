@@ -5,9 +5,12 @@ import (
 	"fmt"
 	"os"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func TestMain(m *testing.M) {
+	gittest.LimitBelow(2, 46, "", "^(TestHostingSDKEntryPoints|TestHostingStatusAndLookupEntryPoints|TestReleaseCheck.*|TestReleasePlanAllowlistCountsBothFormats|TestReleasePlanGateExitStatuses|TestReleaseRecordAndVerifyCLIEntryPoints|TestReleaseRecordExplicitZeroRunID.*|TestRestackPlanEndToEnd)$")
 	if err := isolateGitEnvironment(); err != nil {
 		fmt.Fprintln(os.Stderr, "tests refuse to run:", err)
 		os.Exit(2)

@@ -5,12 +5,15 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 // TestMain refuses to run when the process inherits a GIT_DIR that is not a
 // temporary repository and removes every other repository-selecting variable, so
 // that a fixture can never write into a real repository.
 func TestMain(m *testing.M) {
+	gittest.LimitBelow(2, 46, "^(TestCheckCommitRefusesInsteadOfLazyFetchOnGitBefore246|TestBuildViewGraphRefusesSparseIndexAndNamesIt)$", "")
 	if err := isolateGitEnvironment(); err != nil {
 		fmt.Fprintln(os.Stderr, "release tests refuse to run:", err)
 		os.Exit(2)
