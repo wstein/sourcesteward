@@ -23,6 +23,7 @@ mod hostile_repo;
 mod identity;
 mod lint_pr;
 mod lint_pr_cmd;
+mod nested;
 mod network;
 mod no_binaries;
 mod patchid;

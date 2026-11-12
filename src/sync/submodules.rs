@@ -10,7 +10,7 @@
 //!
 //! Only top-level submodules (the gitlinks of the index) are visited (the repository list of `stw` is flat); a nested
 //! submodule is not.
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
@@ -150,9 +150,9 @@ fn url_note(
     (!parts.is_empty()).then(|| parts.join("; "))
 }
 
-/// The step on one pinned submodule `rec` (detached HEAD) of the superproject at `root`.
-fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
-    let rel = rec.name.clone();
+/// The step on one pinned submodule `rec` (detached HEAD) at `rel` below the superproject at `root`: the
+/// workspace root or, for a nested submodule, the submodule that holds the gitlink.
+fn step(root: &Path, rel: String, rec: &mut SyncRec, o: &Opts) {
     let none = SubRec::default;
     let Ok(path) = SubPath::parse(&rel) else {
         return unreachable_rec(
@@ -400,40 +400,83 @@ pub fn submodule_pass(
     include_uninitialized: bool,
     skip: &Path,
 ) {
-    for rec in list.iter_mut() {
+    // the superproject of each listed submodule: the listed repository with the longest name that is a path prefix
+    // of it (a gitlink path of the workspace root has none: the root holds it)
+    let holders: Vec<(PathBuf, String)> = list
+        .iter()
+        .map(|rec| holder_of(root, list, &rec.name))
+        .collect();
+    for (rec, (parent, rel)) in list.iter_mut().zip(holders) {
         let is_root = std::path::Path::new(&rec.path) == root;
         if !is_root && rec.pinned && rec.result == "skip" {
-            step(root, rec, o);
+            step(&parent, rel, rec, o);
         }
     }
     if !include_uninitialized {
         return;
     }
-    for p in repo::submodule_paths(root) {
-        // a refused path is reported by `rejected_pass`; the name is the normalized path, as in the list
-        let Some(p) = repo::accepted_name(root, &p) else {
-            continue;
-        };
-        let dir = root.join(&p);
-        let canon = std::fs::canonicalize(&dir).unwrap_or(dir.clone());
-        if dir.join(".git").exists()
-            || canon == skip
-            || list.iter().any(|r| Path::new(&r.path) == dir)
-        {
+    // every checked-out repository of the workspace (the root, nested ones too) may hold gitlinks without a checkout
+    let mut holders: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
+    holders.extend(
+        list.iter()
+            .filter(|r| !r.path.is_empty() && Path::new(&r.path) != root)
+            .map(|r| (PathBuf::from(&r.path), r.name.clone())),
+    );
+    for (holder, prefix) in holders {
+        for p in repo::submodule_paths(&holder) {
+            // a refused path is reported by `rejected_pass`; the name is the normalized path, as in the list
+            let Some(p) = repo::accepted_name(&holder, &p) else {
+                continue;
+            };
+            let dir = holder.join(&p);
+            let name = if prefix.is_empty() {
+                p.clone()
+            } else {
+                format!("{prefix}/{p}")
+            };
+            let canon = std::fs::canonicalize(&dir).unwrap_or(dir.clone());
+            if dir.join(".git").exists()
+                || canon == skip
+                || list.iter().any(|r| Path::new(&r.path) == dir)
+            {
+                continue;
+            }
+            let mut rec = SyncRec {
+                name,
+                path: dir.to_string_lossy().into_owned(),
+                fetch: "not-run".into(),
+                ..Default::default()
+            };
+            unreachable_rec(
+                &mut rec,
+                o,
+                "not initialized; init it with plain git, stw never clones",
+                SubRec::default(),
+            );
+            list.push(rec);
+        }
+    }
+}
+
+/// The repository that holds the gitlink of the listed repository `name`, and the gitlink path inside it: the listed
+/// submodule whose name is the longest path prefix of `name`, else the workspace root (`root`, the whole name).
+fn holder_of(root: &Path, list: &[SyncRec], name: &str) -> (PathBuf, String) {
+    let mut best: Option<(&SyncRec, &str)> = None;
+    for r in list {
+        if r.path.is_empty() || Path::new(&r.path) == root {
             continue;
         }
-        let mut rec = SyncRec {
-            name: p.clone(),
-            path: dir.to_string_lossy().into_owned(),
-            fetch: "not-run".into(),
-            ..Default::default()
-        };
-        unreachable_rec(
-            &mut rec,
-            o,
-            "not initialized; init it with plain git, stw never clones",
-            SubRec::default(),
-        );
-        list.push(rec);
+        if let Some(rest) = name
+            .strip_prefix(r.name.as_str())
+            .and_then(|t| t.strip_prefix('/'))
+        {
+            if best.is_none_or(|(b, _)| r.name.len() > b.name.len()) {
+                best = Some((r, rest));
+            }
+        }
+    }
+    match best {
+        Some((r, rest)) => (PathBuf::from(&r.path), rest.to_string()),
+        None => (root.to_path_buf(), name.to_string()),
     }
 }

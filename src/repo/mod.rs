@@ -24,7 +24,8 @@ pub fn default_root(cwd: &Path) -> Option<PathBuf> {
     if let Some(repo) = discover::discover(cwd) {
         if let Some(top) = repo.workdir() {
             let top = top.to_path_buf();
-            if let Some(sup) = superproject_of(&top) {
+            let sup = topmost_superproject(&top);
+            if sup != top {
                 return Some(sup);
             }
             if top.join(".gitmodules").is_file() || !submodule_paths(&top).is_empty() {
@@ -33,6 +34,22 @@ pub fn default_root(cwd: &Path) -> Option<PathBuf> {
         }
     }
     std::env::var_os("STW_ROOT").map(PathBuf::from)
+}
+
+/// The levels `topmost_superproject` climbs at most (Go: `workspaceRoot`, `sync.go:215`).
+pub const SUPERPROJECT_LEVELS: usize = 16;
+
+/// The top-level superproject of a checkout, found by climbing `superproject_of` up to `SUPERPROJECT_LEVELS` times;
+/// `top` itself when it is no submodule checkout. Go: `git rev-parse --show-superproject-working-tree`, repeated.
+pub fn topmost_superproject(top: &Path) -> PathBuf {
+    let mut cur = top.to_path_buf();
+    for _ in 0..SUPERPROJECT_LEVELS {
+        match superproject_of(&cur) {
+            Some(up) => cur = up,
+            None => break,
+        }
+    }
+    cur
 }
 
 /// A submodule checkout: the superproject is the nearest parent repository whose index has a gitlink at that path.
@@ -137,13 +154,84 @@ pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
     None
 }
 
-/// The gitlink paths of `root` that `path_rejection` refuses, with the reason (each path once, in path order).
-/// They are never listed as repositories; the commands report them.
+/// The repositories Go lists in one run at most (`repoLimit`, `sync.go:22`); above it the run fails.
+pub const REPO_LIMIT: usize = 256;
+
+/// What one depth-first walk over the nested gitlinks finds.
+struct Walk {
+    repos: Vec<RepoRef>,
+    rejected: Vec<(String, String)>,
+    seen: Vec<PathBuf>,
+    limit: usize,
+    exceeded: bool,
+}
+
+/// Lists the repository at `dir` (name `rel`, "" for the root's children) and then, depth-first, each checked-out
+/// gitlink of its index (Go: `walk`). A gitlink path is checked against the repository that holds it
+/// (`path_rejection`), so a nested path never leaves the workspace either; an unchecked-out gitlink has nothing to
+/// descend into. A refused path is kept with its path below the root (`outer/inner`).
+fn walk(dir: &Path, prefix: &str, w: &mut Walk) {
+    for p in submodule_paths(dir) {
+        if w.exceeded {
+            return;
+        }
+        let full = |n: &str| {
+            if prefix.is_empty() {
+                n.to_string()
+            } else {
+                format!("{prefix}/{n}")
+            }
+        };
+        if let Some(why) = path_rejection(dir, &p) {
+            w.rejected.push((full(&p), why));
+            continue;
+        }
+        let Some(name) = accepted_name(dir, &p) else {
+            continue;
+        };
+        let path = dir.join(&name);
+        let real = std::fs::canonicalize(&path).unwrap_or_else(|_| path.clone());
+        if !path.join(".git").exists() || w.seen.contains(&real) {
+            continue;
+        }
+        w.seen.push(real);
+        let name = full(&name);
+        w.repos.push(RepoRef {
+            name: name.clone(),
+            path: path.clone(),
+        });
+        if w.repos.len() > w.limit {
+            w.exceeded = true;
+            return;
+        }
+        walk(&path, &name, w);
+    }
+}
+
+fn walk_root(root: &Path, limit: usize) -> Walk {
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "root".into());
+    let real = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let mut w = Walk {
+        repos: vec![RepoRef {
+            name,
+            path: root.to_path_buf(),
+        }],
+        rejected: Vec::new(),
+        seen: vec![real],
+        limit,
+        exceeded: false,
+    };
+    walk(root, "", &mut w);
+    w
+}
+
+/// The gitlink paths of the workspace that `path_rejection` refuses, with the reason, in walk order; a nested
+/// path is given below the root (`outer/inner`). They are never listed as repositories; the commands report them.
 pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
-    submodule_paths(root)
-        .into_iter()
-        .filter_map(|p| path_rejection(root, &p).map(|why| (p, why)))
-        .collect()
+    walk_root(root, REPO_LIMIT).rejected
 }
 
 /// The normalized name of an accepted gitlink path, else None.
@@ -156,31 +244,34 @@ pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
         .map(|s| s.as_str().to_string())
 }
 
-/// The root and every checked-out submodule (a gitlink of the index and a `.git` entry), in path order. A path that
-/// `path_rejection` refuses is left out (see `rejected_paths`). The name is the normalized path; a directory is
-/// listed once, and never twice with the root.
+/// The root and every checked-out submodule, nested ones too (a gitlink of the index and a `.git` entry), depth-first
+/// in path order, as Go walks them. A path that `path_rejection` refuses is left out (see `rejected_paths`). The name
+/// is the normalized path below the root (`outer/inner`); a directory is listed once, and never twice with the
+/// root. The list stops at `REPO_LIMIT` + 1 entries; `list_repos_checked` fails there, as Go does.
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {
-    let name = root
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "root".into());
-    let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
-    let mut seen = vec![real(root)];
-    let mut v = vec![RepoRef {
-        name,
-        path: root.to_path_buf(),
-    }];
-    for p in submodule_paths(root) {
-        let Some(name) = accepted_name(root, &p) else {
-            continue;
-        };
-        let path = root.join(&name);
-        if path.join(".git").exists() && !seen.contains(&real(&path)) {
-            seen.push(real(&path));
-            v.push(RepoRef { name, path });
-        }
+    walk_root(root, REPO_LIMIT).repos
+}
+
+/// `list_repos` with another limit: the repositories found (at most `limit` + 1) and whether there are more than `limit`.
+pub fn list_repos_limited(root: &Path, limit: usize) -> (Vec<RepoRef>, bool) {
+    let w = walk_root(root, limit);
+    (w.repos, w.exceeded)
+}
+
+/// `list_repos`, but a workspace of more than `REPO_LIMIT` repositories is an error (Go: `sync-limit`).
+pub fn list_repos_checked(root: &Path) -> Result<Vec<RepoRef>> {
+    list_repos_checked_with(root, REPO_LIMIT)
+}
+
+/// `list_repos_checked` with another limit.
+pub fn list_repos_checked_with(root: &Path, limit: usize) -> Result<Vec<RepoRef>> {
+    let (repos, exceeded) = list_repos_limited(root, limit);
+    if exceeded {
+        return Err(crate::error::Error::usage(format!(
+            "the workspace has more than {limit} repositories"
+        )));
     }
-    v
+    Ok(repos)
 }
 
 /// `real` lies strictly below `base` (both real paths).

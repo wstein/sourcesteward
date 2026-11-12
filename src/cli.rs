@@ -302,7 +302,7 @@ fn selected_repo(root: Option<&Path>, name: Option<&str>) -> Result<RepoRef> {
         )));
     }
     let root = std::fs::canonicalize(&root).unwrap_or(root);
-    let repos = repo::list_repos(&root);
+    let repos = repo::list_repos_checked(&root)?;
     let known = || {
         repos
             .iter()
@@ -753,7 +753,7 @@ fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
         )));
     }
     let root = std::fs::canonicalize(&root).unwrap_or(root);
-    let mut repos = repo::list_repos(&root);
+    let mut repos = repo::list_repos_checked(&root)?;
     // the rules checkout is handled only by the agent-rules logic, never by the generic loop
     let rules = sync::rules::checkout_path(&root, rules_path);
     repos.retain(|r| std::fs::canonicalize(&r.path).unwrap_or(r.path.clone()) != rules);

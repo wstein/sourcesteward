@@ -268,10 +268,11 @@ fn a_gitlink_without_a_checkout_is_unreachable_for_submodules_and_a_gitmodules_e
     assert!(repo_names(&v).iter().all(|n| n != "ghost"), "{v}");
 }
 
-/// Rust takes the nearest parent repository as the workspace root (its list is flat); Go goes up to the top-level
-/// superproject (`--show-superproject-working-tree`, up to 16 levels) and walks the nested ones.
+/// The workspace root of a nested checkout is the top-level superproject, whose list holds the nested ones (Go:
+/// `--show-superproject-working-tree` up to 16 levels, `walk`); a directory below a gitlink path that is no gitlink
+/// itself is no checkout of that superproject.
 #[test]
-fn a_nested_checkout_belongs_to_the_nearest_superproject() {
+fn a_nested_checkout_belongs_to_the_top_level_superproject() {
     let t = setup();
     t.clone_at("sub");
     t.w.git(&t.ws, &["add", "sub"]);
@@ -284,9 +285,10 @@ fn a_nested_checkout_belongs_to_the_nearest_superproject() {
         v["root"]
             .as_str()
             .map(|r| std::fs::canonicalize(r).unwrap()),
-        Some(sub.canonicalize().unwrap()),
+        Some(t.ws.canonicalize().unwrap()),
         "{v}"
     );
+    assert_eq!(repo_names(&v), ["ws", "sub", "sub/n2"], "{v}");
     // a directory below a gitlink path that is no gitlink itself is no checkout of that superproject
     let other = t.ws.join("sub/plain");
     std::fs::create_dir_all(&other).unwrap();
