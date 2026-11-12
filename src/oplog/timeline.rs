@@ -338,8 +338,8 @@ pub fn build(ctx: &super::Ctx, opts: &Options) -> Timeline {
             epoch,
             time: r.line.time.clone(),
             refname: display(&r.refname),
-            old: r.old.clone(),
-            new: r.line.new.clone(),
+            old: value_text(&r.old),
+            new: value_text(&r.line.new),
             origin,
             message: format!(
                 "{} line, worktree {}",
@@ -389,6 +389,24 @@ pub fn build(ctx: &super::Ctx, opts: &Options) -> Timeline {
         entries,
         other_lines: joined.other,
         gaps,
+    }
+}
+
+/// An `old`/`new` value of a log line for output: a hash as it is, a symbolic value decoded and escaped.
+fn value_text(v: &str) -> String {
+    if v.starts_with("ref:") {
+        display(&display_name(v))
+    } else {
+        v.to_string()
+    }
+}
+
+/// A hash cut to 7 digits; a symbolic value (already decoded and escaped) cut at 40 characters.
+fn short_value(v: &str) -> String {
+    if v.starts_with("ref:") {
+        v.chars().take(40).collect()
+    } else {
+        v[..7.min(v.len())].to_string()
     }
 }
 
@@ -501,11 +519,7 @@ impl Timeline {
                 "{:<20}  {:<30}  {:<17}  {:<7}  {:<9}  {:<13}  {}",
                 e.time,
                 e.refname,
-                format!(
-                    "{}->{}",
-                    &e.old[..7.min(e.old.len())],
-                    &e.new[..7.min(e.new.len())]
-                ),
+                format!("{}->{}", short_value(&e.old), short_value(&e.new)),
                 e.origin,
                 g,
                 e.flag,

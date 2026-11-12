@@ -291,6 +291,28 @@ fn stw_lines_have_origin_stw_and_unknown_contexts_stay_out_of_the_timeline() {
     );
 }
 
+/// A symbolic value (`HEAD` moving to another branch) is shown whole, decoded; the text table does not cut it to 7 characters.
+#[test]
+fn a_symbolic_value_is_decoded_and_shown_whole() {
+    let fx = Fx::new();
+    oplog(
+        &fx,
+        "refs.log",
+        &line(
+            T,
+            Z,
+            "ref:refs/heads/a%C3%A4",
+            "HEAD",
+            "ref-transaction",
+            "main",
+        ),
+    );
+    let v = json(&fx, &["timeline"]);
+    assert_eq!(entries(&v)[0]["new"], "ref:refs/heads/aä");
+    let r = run(&fx, &["timeline"]);
+    assert!(r.text.contains("0000000->ref:refs/heads/aä"), "{}", r.text);
+}
+
 #[test]
 fn ref_names_are_decoded_and_escaped() {
     let fx = Fx::new();
