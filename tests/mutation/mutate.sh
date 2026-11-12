@@ -2107,9 +2107,8 @@ m OL2 'oplog: a glued rewrites.log line is accepted' src/oplog/parse.rs \
 m OL3 'oplog: a line over 4 KB is read' src/oplog/parse.rs \
   'if l.len() > MAX_LINE || l.contains(&0) {' 'if l.contains(&0) {' \
   oplog_read a_line_over_4_kb_is_bad_and_the_stream_goes_on
-m OL4 'oplog: a line with a NUL byte is read' src/oplog/parse.rs \
-  'if l.len() > MAX_LINE || l.contains(&0) {' 'if l.len() > MAX_LINE {' \
-  oplog_read a_line_with_a_nul_byte_is_bad
+# OL4 (a NUL byte is read) is an equivalent mutant: every field of both logs is validated by a character set that excludes NUL,
+# so the explicit NUL check in `lines` changes no result. It stays in the code as the spec rule (section 9); no mutation.
 m OL5 'oplog: an upper-case hash is accepted' src/oplog/parse.rs \
   'matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\''))
 }' 'matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\'' | b'\''A'\''..=b'\''F'\''))
@@ -2205,7 +2204,7 @@ m OL34 'oplog undo-plan: the creation entry is a target' src/oplog/undo_plan.rs 
   'if is_zero(&alt) {' 'if false {' \
   oplog_read the_plan_refuses_what_undo_would_refuse
 m OL35 'oplog undo-plan: a symbolic ref is not refused' src/oplog/undo_plan.rs \
-  'gix::refs::TargetRef::Symbolic(n) => Some(n.as_bstr().to_string()),' 'gix::refs::TargetRef::Symbolic(_) => None,' \
+  'gix::refs::TargetRef::Symbolic(n) => Some(n.as_bstr().to_string()),' 'gix::refs::TargetRef::Symbolic(_) => None::<String>,' \
   oplog_read a_running_operation_and_an_unknown_ref_and_a_symbolic_ref_are_refused
 m OL36 'oplog undo-plan: a refused plan is executable' src/oplog/undo_plan.rs \
   'self.refused == 0 && self.branch' 'self.branch' \

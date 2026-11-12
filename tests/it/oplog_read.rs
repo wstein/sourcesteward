@@ -476,7 +476,12 @@ fn a_symlinked_log_is_not_read() {
     std::os::unix::fs::symlink(&target, fx.path.join(".git/stw/oplog/refs.log")).unwrap();
     let v = json(&fx, &["timeline"]);
     assert!(entries(&v).is_empty(), "{v}");
-    assert_eq!(gap(&v, "unreadable").unwrap()["ref"], "refs.log");
+    let g = gap(&v, "unreadable").unwrap();
+    assert_eq!(g["ref"], "refs.log");
+    assert!(
+        g["text"].as_str().unwrap().contains("a symbolic link"),
+        "the reason is the link, not 'not a regular file': {g}"
+    );
 }
 
 #[test]
@@ -493,7 +498,11 @@ fn a_symlinked_oplog_directory_is_not_read() {
     std::os::unix::fs::symlink(&other, fx.path.join(".git/stw/oplog")).unwrap();
     let v = json(&fx, &["timeline"]);
     assert!(entries(&v).is_empty(), "{v}");
-    assert!(gap(&v, "unreadable").is_some(), "{v}");
+    let g = gap(&v, "unreadable").expect("an unreadable gap");
+    assert!(
+        g["text"].as_str().unwrap().contains("a symbolic link"),
+        "the reason is the link, not 'not a directory': {g}"
+    );
 }
 
 #[test]
