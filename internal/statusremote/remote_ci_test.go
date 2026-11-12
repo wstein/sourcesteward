@@ -13,6 +13,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/gittest"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/stwsync"
@@ -40,6 +41,7 @@ func TestCIMainIsReadForTheDefaultBranchOfTheRepositoryRead(t *testing.T) {
 }
 
 func TestCIMainKnowsWhetherTheLocalCloneLagsOrigin(t *testing.T) {
+	gittest.RequireAtLeast(t, 2, 45, "--no-lazy-fetch")
 	dir := t.TempDir()
 	ciGit(t, dir, "init", "-q", "-b", "main")
 	have := ciCommit(t, dir, "one")

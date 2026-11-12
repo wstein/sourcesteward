@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func TestBehindOrigin(t *testing.T) {
+	gittest.RequireAtLeast(t, 2, 45, "--no-lazy-fetch")
 	dir := t.TempDir()
 	runGit(t, dir, "init", "-q", "-b", "main")
 	commit(t, dir, "a.txt", "one\n")
@@ -46,6 +49,7 @@ func TestBehindOrigin(t *testing.T) {
 // The lookup decides from the local object store alone: a commit that origin has and the clone lacks is
 // still absent afterwards, so nothing was fetched.
 func TestBehindOriginDoesNotFetch(t *testing.T) {
+	gittest.RequireAtLeast(t, 2, 45, "--no-lazy-fetch")
 	origin := t.TempDir()
 	runGit(t, origin, "init", "-q", "-b", "main")
 	commit(t, origin, "a.txt", "one\n")
@@ -76,6 +80,7 @@ func TestBehindOriginWithoutARepositoryIsUnknown(t *testing.T) {
 // In a partial clone Git fetches a missing object from the promisor remote on demand; the lookup must
 // not: the commit stays absent, and the answer is that the clone is behind.
 func TestBehindOriginDoesNotLazyFetchInAPartialClone(t *testing.T) {
+	gittest.RequireAtLeast(t, 2, 45, "--no-lazy-fetch")
 	origin := t.TempDir()
 	runGit(t, origin, "init", "-q", "-b", "main")
 	runGit(t, origin, "config", "uploadpack.allowFilter", "true")
@@ -97,7 +102,7 @@ func TestBehindOriginDoesNotLazyFetchInAPartialClone(t *testing.T) {
 	}
 }
 
-// Git before 2.44 does not know --no-lazy-fetch and exits 129: the answer is undecided, never a guess.
+// Git before 2.45 does not know --no-lazy-fetch and exits 129: the answer is undecided, never a guess.
 func TestBehindOriginIsUndecidedWhenGitRefusesTheOption(t *testing.T) {
 	tip := strings.Repeat("a", 40)
 	for _, failing := range []string{"show-ref", "rev-parse", "merge-base"} {
@@ -116,5 +121,31 @@ func TestBehindOriginIsUndecidedWhenGitRefusesTheOption(t *testing.T) {
 		if behind || known {
 			t.Errorf("%s: %v %v", failing, behind, known)
 		}
+	}
+}
+
+// Git before 2.45 refuses --no-lazy-fetch (exit 129): the lookup is undecided for every case of
+// TestBehindOrigin and fetches nothing (docs/hosting.md). On Git 2.45 and later the full tests apply.
+func TestBehindOriginIsUndecidedOnGitBefore245(t *testing.T) {
+	gittest.RequireBelow(t, 2, 45, "--no-lazy-fetch is refused")
+	origin := t.TempDir()
+	runGit(t, origin, "init", "-q", "-b", "main")
+	commit(t, origin, "a.txt", "one\n")
+	clone := filepath.Join(t.TempDir(), "clone")
+	runGit(t, filepath.Dir(clone), "clone", "-q", origin, clone)
+	tip := runGit(t, clone, "rev-parse", "HEAD")
+	commit(t, origin, "a.txt", "two\n")
+	newHead := runGit(t, origin, "rev-parse", "HEAD")
+	before := runGit(t, clone, "for-each-ref")
+	for name, head := range map[string]string{"local tip": tip, "absent from the local store": newHead} {
+		if behind, known := BehindOrigin(context.Background(), clone, "main", head); behind || known {
+			t.Errorf("%s: behind=%v known=%v, want false false", name, behind, known)
+		}
+	}
+	if exec.Command("git", "-C", clone, "cat-file", "-e", newHead+"^{commit}").Run() == nil {
+		t.Fatal("the commit of origin was fetched")
+	}
+	if after := runGit(t, clone, "for-each-ref"); after != before {
+		t.Fatalf("refs changed: %q -> %q", before, after)
 	}
 }
