@@ -10,7 +10,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	gittest.LimitBelow(2, 46, "", "^(TestHostingSDKEntryPoints|TestHostingStatusAndLookupEntryPoints|TestReleaseCheck.*|TestReleasePlanAllowlistCountsBothFormats|TestReleasePlanGateExitStatuses|TestReleaseRecordAndVerifyCLIEntryPoints|TestReleaseRecordExplicitZeroRunID.*|TestRestackPlanEndToEnd)$")
+	gittest.LimitBelow(2, 46, "", "^(TestHostingSDKEntryPoints|TestHostingStatusAndLookupEntryPoints|TestPruneV4CLIRefusesUnprovenOrChangedSelection|TestPruneV4CLIStoresOnlyExactOwnedPlan|TestReleaseCheckCommit|TestReleaseCheckEmptyProductIsAbsent|TestReleaseCheckEscapesHostileRepositoryText|TestReleaseCheckFindingsExitThree|TestReleaseCheckJSON|TestReleaseCheckProductAmbiguityExitsThree|TestReleaseCheckRefusalsExitOne|TestReleaseCheckValidContract|TestReleasePlanAllowlistCountsBothFormats|TestReleasePlanGateExitStatuses|TestReleaseRecordAndVerifyCLIEntryPoints|TestReleaseRecordExplicitZeroRunIDIsCompared|TestReleaseRecordExplicitZeroRunIDMayMatchManifest|TestRestackPlanEndToEnd|TestTidyOverviewV4NativeReadOnlyMissingRegistration|TestTidyPruneV4ApplyExplicitDispatch|TestTidyPruneV4RestoreExplicitDispatch|TestTidyPruneV4RestoreHumanDisclosesLimitations)$")
 	if err := isolateGitEnvironment(); err != nil {
 		fmt.Fprintln(os.Stderr, "tests refuse to run:", err)
 		os.Exit(2)
