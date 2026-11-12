@@ -145,7 +145,7 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
    Update `tests/it/no_binaries.rs` to permit only the runner module rather than removing the architecture check.
    Currently gix itself can spawn ssh/git-upload-pack for non-HTTPS fetch (`tests/it/remote_kinds.rs`); M0 must close
    that indirect path too. Keep authentication usable; exact environment scrub/credential allowlist and minimum Git
-   versions need fixtures. Git version requirements differ: preview spike 2.40, resolve spike 2.45.
+   versions need fixtures. Git version requirements differ: preview spike 2.40, resolve spike 2.45. Status 2026-11-12: Rust `stw` declares a minimum per command (`Op::min_version`: range-diff 2.41, index-reading ops 2.36, fetch 2.30; README "Git versions"); the 2.40 of the preview spike was wrong (`GIT_ATTR_SOURCE` is 2.41).
 2. **Open: stack input.** Recommend explicit stack input first. Existing prototypes take `ONTO BRANCH...`; local
    upstream config does not reliably encode stack parentage. Keep explicit ordered input until owner accepts a durable
    local/PR edge model. Reject ambiguity instead of guessing from merge-base. Benefit 5, effort 2, risk 2. The decision

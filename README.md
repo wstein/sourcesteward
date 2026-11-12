@@ -500,10 +500,43 @@ Runner rules (`src/git_runner.rs`):
   `GIT_PAGER=cat`, `GIT_EDITOR=true`, `GIT_ALLOW_PROTOCOL=file:ssh:git:http:https`, `GIT_CEILING_DIRECTORIES` = parent of
   the repository. The user's Git configuration and identity stay in effect; stw sets no author or committer.
 - Time (120 s) and output (1 MiB per stream) are bounded; the process group depends on the terminal. Without a terminal on stdin or stderr (agents, CI) git runs in its own process group, and a timeout or output limit kills the whole group, helpers holding the pipes included. With a terminal git stays in stw's foreground group, as plain git: prompts (ssh host key, passphrase) and Ctrl-C work, and a timeout or output limit kills git only, so a helper it started can outlive it. ssh options are the user's (`BatchMode` is not forced): without a terminal a host-key prompt cannot be answered and blocks until the time limit. `git --version` is read once
-  per run; the fetch needs 2.30.0 (UNKNOWN below 2.47.3: only that version was run). A spawn that fails with ETXTBSY is retried.
+  per run; the minimum per command is in "Git versions" below. A spawn that fails with ETXTBSY is retried.
 - Errors are typed (`GitError`) and redacted: URL user info, GitHub token shapes, `Authorization:` values and the values of
   `GH_TOKEN`/`GITHUB_TOKEN` never reach output.
-- Not done: Windows (executable lookup, path form), `range-diff` minimum version, push.
+- Not done: Windows (executable lookup, path form), push.
+
+## Git versions
+
+Only `src/git_runner.rs` starts `git`; everything else (status, tidy, restack plan, lint pr, review lines, the merge
+simulation, patch-id, the fast-forward and the journal of `sync`) runs in gix and needs no installed Git. Every runner call
+checks `git --version` against the minimum of its `Op` (`Op::min_version`) before it starts anything; an older Git, or a
+version text that cannot be read, is refused (fail closed, `git_error: version`, result `unsupported`) with
+`stw needs Git X.Y or newer for <command> (found Z)`.
+
+| Command | Minimum Git | Deciding feature | Evidence (RelNotes) |
+| --- | --- | --- | --- |
+| `status`, `tidy`, `restack plan`, `lint pr`, `review lines` | none (no Git call) | gix only | `tests/it/no_binaries.rs` |
+| `status --fetch`, `sync` (default), `sync --prune`, `--no-prune` | 2.30 | `fetch --prune --no-prune-tags` (2.17); 2.30 is the fail-closed value, formally 2.17 | 2.17.0 |
+| `sync --submodules`, `sync restore`, `add` | 2.36 | `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command); these ops read the index | 2.36.0 (config/core) |
+| `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
+
+The 2.36 bound is documentary: a run of the whole test suite with Git 2.35.3 passed, so no failure was observed there.
+The 2.41 bound was shown: with 2.40.1 a worktree `.gitattributes` with `* -diff` made `range-diff` report "equal" for a
+changed commit; with 2.41.0 and 2.43.0 it reported "not equal".
+
+Test-only requirements (not needed at run time):
+
+| Where | Requirement | Feature |
+| --- | --- | --- |
+| `tests/it/replay.rs` (oracle) | 2.40 | `git merge-tree --write-tree --merge-base` (2.38 for `--write-tree`) |
+| `tests/it/carryover*.rs`, `prove` tests | 2.41 | real `range-diff` with `GIT_ATTR_SOURCE` |
+| test repositories | 2.28 | `git init -b` |
+| `tests/oracle/*.sh` | 2.23 | `git switch` |
+
+Distributions (not checked against their packages): Ubuntu 24.04 ships Git 2.43.0 and covers every command. Debian 12 ships
+2.39.x and loses `review carry-over` and `prove` (shown by the version check with a 2.39.2 build, not by the Debian package);
+`sync --submodules`, `sync restore` and `add` stay available there. The suite ran green with 2.43.0 and 2.41.0, and with
+2.40.1 except one test that needs 2.41.
 
 ## GitHub reads for review and readiness (internal API)
 
@@ -581,7 +614,7 @@ Deviations from the Go `--review` (`internal/pulls/review.go`, `internal/reviews
 `stw review carry-over --pr <N|none> [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD` (read-only; posts
 nothing; `stw` does not read the review it is about). Full lower-case 40-hex ids. All three conditions must hold: (1) equal patch-id of
 `BASE...HEAD`, old and new, each against its own base (in process, `via: gix`); (2) no merge commit in `NEW_BASE..NEW_HEAD` (gix);
-(3) `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit at the same position (`via: git`, Git 2.40+).
+(3) `git range-diff OLD_BASE..OLD_HEAD NEW_BASE..NEW_HEAD` shows `=` for every commit at the same position (`via: git`, Git 2.41+).
 A fourth condition, added with `stw prove` and checked only when the three held: the patch-id of every commit is equal, old against new at the same position (`range-diff` shows only "Binary files differ" for a binary change, so a binary file with other contents in an intermediate commit passed the three; Go compares the commits themselves, so this is nearer to Go; JSON `commit_patches{state,differing,via}`, reason `commit-patch-differs`). A step that could not run is `unknown`; the answer is then no. Only for a yes the output ends with
 `Carried-over: from=<old head> to=<new head> patch-id=<40 hex> pr=<n|none>` (a line of the M3 grammar). Exit 0 yes, 1 no or a
 step could not run (result printed), 2 usage. `--fetch` fetches `refs/pull/N/head` of `origin` into `refs/stw/carry-over/pr-N`
@@ -624,7 +657,7 @@ fails and a hint names `--base`. Problems before any check: `unknown-revision` (
 accepts identical heads), `base-not-below-new`; the verdict is `not proved` and the checks do not run. Merge commits of the old range are left out of the pairing (range-diff and the per-commit patch-ids leave them out too); a linearized `NEU` can be proved, and the trailer line says how many were left out. A step that could not run is `unknown`
 and the verdict is `not proved`; there is never a line then. `identity-unknown`: no `user.name` and `user.email` in the Git
 configuration; stw never sets them. The identity check is as strict as `lint pr`: a rebased commit of another author is not proved.
-Git boundary: only `range-diff` runs through the installed git (`Op::RangeDiff`, Git 2.40+, `via: git`; gix has no range-diff);
+Git boundary: only `range-diff` runs through the installed git (`Op::RangeDiff`, Git 2.41+, `via: git`; gix has no range-diff);
 revisions, merge base, commit walk, trees, patch-id (`src/patch_id.rs`), identity and trailers are read in process. Commit
 subjects, names and paths from the repository are untrusted: text and JSON carry them escaped (`escape_untrusted`).
 The repository is the one of the current directory, which must belong to the workspace (`--root`, else the repository or
@@ -743,7 +776,7 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 239 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 242 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
