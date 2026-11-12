@@ -2098,6 +2098,131 @@ m NS16 'any repository above counts as the superproject, whether or not it recor
   '        .any(|p| Path::new(p) == rel)' '        .any(|_| true)' \
   nested an_unrelated_repository_between_a_checkout_and_an_outer_one_ends_the_search
 
+m OL1 'oplog: a glued refs.log line is accepted' src/oplog/parse.rs \
+  'if f.len() < 5 || !extensions_ok(&f) {' 'if f.len() < 5 {' \
+  oplog_read a_glued_line_is_bad_and_not_accepted
+m OL2 'oplog: a glued rewrites.log line is accepted' src/oplog/parse.rs \
+  'if f.len() < 4 || !extensions_ok(&f) {' 'if f.len() < 4 {' \
+  oplog_read a_glued_rewrites_line_is_bad
+m OL3 'oplog: a line over 4 KB is read' src/oplog/parse.rs \
+  'if l.len() > MAX_LINE || l.contains(&0) {' 'if l.contains(&0) {' \
+  oplog_read a_line_over_4_kb_is_bad_and_the_stream_goes_on
+m OL4 'oplog: a line with a NUL byte is read' src/oplog/parse.rs \
+  'if l.len() > MAX_LINE || l.contains(&0) {' 'if l.len() > MAX_LINE {' \
+  oplog_read a_line_with_a_nul_byte_is_bad
+m OL5 'oplog: an upper-case hash is accepted' src/oplog/parse.rs \
+  'matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\''))
+}' 'matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\'' | b'\''A'\''..=b'\''F'\''))
+}' \
+  oplog_read a_hash_in_upper_case_is_bad
+m OL6 'oplog: a pre-old marker does not give the old value' src/oplog/timeline.rs \
+  'old = mo;' 'let _ = mo;' \
+  oplog_read a_pre_old_marker_gives_the_old_value_of_a_delete
+m OL7 'oplog: the second 0 0 line of a deleted ref is kept' src/oplog/timeline.rs \
+  'if last_new.get(&name).is_some_and(|n| is_zero(n)) {' 'if false {' \
+  oplog_read a_pre_old_marker_gives_the_old_value_of_a_delete
+m OL8 'oplog: a pre-same marker does not hide the packing line' src/oplog/timeline.rs \
+  'if is_zero(&old) && !is_zero(&line.new) {' 'if false {' \
+  oplog_read a_pre_same_marker_hides_the_packing_line
+m OL9 'oplog: a marker is consumed by more than one line' src/oplog/timeline.rs \
+  'markers.remove(&name)' 'markers.get(&name).cloned()' \
+  oplog_read a_marker_is_consumed_by_exactly_one_line
+m OL10 'oplog: the current file is read before the old generation' src/oplog/store.rs \
+  'for n in [format!("{name}.1"), name.to_string()] {' 'for n in [name.to_string(), format!("{name}.1")] {' \
+  oplog_read the_old_generation_is_read_before_the_current_file
+m OL11 'oplog: a symbolic link as a log file is read' src/oplog/store.rs \
+  'Ok(m) if m.file_type().is_symlink() => File::Unreadable("a symbolic link".into()),' 'Ok(m) if false => File::Unreadable("a symbolic link".into()),' \
+  oplog_read a_symlinked_log_is_not_read
+m OL12 'oplog: a symbolic link as the oplog directory is followed' src/oplog/store.rs \
+  'Ok(m) if m.file_type().is_symlink() => return Err("a symbolic link".into()),' 'Ok(m) if false => return Err("a symbolic link".into()),' \
+  oplog_read a_symlinked_oplog_directory_is_not_read
+m OL13 'oplog: refs/remotes reflogs are read without --remotes' src/oplog/store.rs \
+  'remotes || all
+' 'true
+' \
+  oplog_read remote_tracking_refs_need_remotes_and_other_refs_need_all
+m OL14 'oplog: an install record is taken for an uninstall window' src/oplog/store.rs \
+  'Some(true) => Coverage::Expected,' 'Some(true) => Coverage::HookAbsent,' \
+  oplog_read the_install_window_tells_uncovered_from_pre_install
+m OL15 'oplog: a HEAD row is not covered by the branch line' src/oplog/timeline.rs \
+  '|| (f.refname == "HEAD" && heads_new.contains(r.new.as_str()))' '|| false' \
+  oplog_read the_head_row_of_a_commit_is_covered_by_the_branch_line
+m OL16 'oplog: groups are never formed' src/oplog/timeline.rs \
+  'Some(&(t, g)) if e.epoch - t <= 1 => g,' 'Some(&(t, g)) if false && e.epoch - t <= 1 => g,' \
+  oplog_read groups_are_always_suspected
+m OL17 'oplog: a log line covered by a reflog row is shown twice' src/oplog/timeline.rs \
+  'if reflog_keys.contains(&(r.refname.clone(), r.line.new.clone())) {' 'if false {' \
+  oplog_read a_hook_line_covers_its_reflog_row_and_a_hook_only_line_is_its_own_entry
+m OL18 'oplog: the reflog message is shown raw' src/oplog/timeline.rs \
+  'message: escape_untrusted(&r.message, NAME_CAP).0,' 'message: r.message,' \
+  oplog_read reflog_text_is_escaped
+m OL19 'oplog: a rotation counts as a capture gap' src/oplog/timeline.rs \
+  'let capture = gap_lines.iter().filter(|(k, _)| k != "rotated").count();' 'let capture = gap_lines.len();' \
+  oplog_read error_lines_are_capture_gaps_and_a_rotation_is_its_own_row
+m OL20 'oplog: the files backend check is off' src/oplog/timeline.rs \
+  '.is_none_or(|b| b.eq_ignore_ascii_case("files"));' '.is_none_or(|_| true);' \
+  oplog_read the_files_backend_is_required_for_reflog_rows
+m OL21 'oplog: bad lines are not reported' src/oplog/timeline.rs \
+  'if log.bad > 0 {' 'if false {' \
+  oplog_read bad_lines_are_counted_in_a_gap_and_never_shown
+m OL22 'oplog: a missing install record is not reported' src/oplog/timeline.rs \
+  'if window.is_none() {' 'if false {' \
+  oplog_read without_an_install_record_nothing_is_claimed_to_be_uncovered
+m OL23 'oplog: a line of an unknown context is dropped silently' src/oplog/timeline.rs \
+  '_ => out.other.push(line),' '_ => {}' \
+  oplog_read stw_lines_have_origin_stw_and_unknown_contexts_stay_out_of_the_timeline
+m OL24 'oplog: names are shown encoded' src/oplog/timeline.rs \
+  'Some(b) => String::from_utf8_lossy(&b).into_owned(),' 'Some(_) => encoded.to_string(),' \
+  oplog_read ref_names_are_decoded_and_escaped
+m OL25 'oplog evolog: a merge is not flagged' src/oplog/evolog.rs \
+  'fl.push(format!("merge={}", preds.len()));' 'fl.push(String::new());' \
+  oplog_read merges_splits_cycles_and_repeated_commits_are_flagged
+m OL26 'oplog evolog: a self pair counts as a pair' src/oplog/evolog.rs \
+  'if l.old == l.new || !seen.insert((l.old.clone(), l.new.clone())) {' 'if !seen.insert((l.old.clone(), l.new.clone())) {' \
+  oplog_read merges_splits_cycles_and_repeated_commits_are_flagged
+m OL27 'oplog evolog: an equal pair is taken twice' src/oplog/evolog.rs \
+  'if l.old == l.new || !seen.insert((l.old.clone(), l.new.clone())) {' 'if l.old == l.new {' \
+  oplog_read the_first_of_two_equal_pairs_wins_and_an_unknown_kind_is_shown
+m OL28 'oplog evolog: the limit does not stop the chain' src/oplog/evolog.rs \
+  'if self.count >= self.limit {' 'if false {' \
+  oplog_read the_limit_stops_the_chain
+m OL29 'oplog evolog: a missing commit has no subject text' src/oplog/evolog.rs \
+  'Err(_) => gone(),' 'Err(_) => String::new(),' \
+  oplog_read a_predecessor_that_is_gone_says_so
+m OL30 'oplog evolog: an amend in the reflog is not compared' src/oplog/evolog.rs \
+  'msg.starts_with("commit (amend)") ||' 'false ||' \
+  oplog_read a_reflog_rewrite_without_a_hook_pair_is_uncovered
+m OL31 'oplog undo-plan: a branch checked out is not refused' src/oplog/undo_plan.rs \
+  'if format!("refs/heads/{b}") == reference {' 'if false {' \
+  oplog_read the_plan_refuses_what_undo_would_refuse
+m OL32 'oplog undo-plan: a running operation is not refused' src/oplog/undo_plan.rs \
+  'if d.join(m).symlink_metadata().is_ok() {' 'if false {' \
+  oplog_read a_running_operation_and_an_unknown_ref_and_a_symbolic_ref_are_refused
+m OL33 'oplog undo-plan: a changed ref is accepted' src/oplog/undo_plan.rs \
+  'if *tip == cur_s {' 'if true {' \
+  oplog_read the_plan_refuses_what_undo_would_refuse
+m OL34 'oplog undo-plan: the creation entry is a target' src/oplog/undo_plan.rs \
+  'if is_zero(&alt) {' 'if false {' \
+  oplog_read the_plan_refuses_what_undo_would_refuse
+m OL35 'oplog undo-plan: a symbolic ref is not refused' src/oplog/undo_plan.rs \
+  'gix::refs::TargetRef::Symbolic(n) => Some(n.as_bstr().to_string()),' 'gix::refs::TargetRef::Symbolic(_) => None,' \
+  oplog_read a_running_operation_and_an_unknown_ref_and_a_symbolic_ref_are_refused
+m OL36 'oplog undo-plan: a refused plan is executable' src/oplog/undo_plan.rs \
+  'self.refused == 0 && self.branch' 'self.branch' \
+  oplog_read the_plan_refuses_what_undo_would_refuse
+m OL37 'oplog undo-plan: a refused plan exits 0' src/cli.rs \
+  'Ok(if plan.refused == 0 {' 'Ok(if true {' \
+  oplog_read the_plan_refuses_what_undo_would_refuse
+m OL38 'oplog evolog: --limit 0 is accepted' src/cli.rs \
+  'if limit == 0 {' 'if false {' \
+  oplog_read evolog_usage_errors
+m OL39 'oplog undo-plan: --steps 0 is accepted' src/cli.rs \
+  'if a.steps == Some(0) {' 'if false {' \
+  oplog_read undo_plan_usage_errors
+m OL40 'oplog undo-plan: --to accepts upper case' src/cli.rs \
+  'if to.is_empty() || !to.bytes().all(|b| matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\'')) {' 'if false {' \
+  oplog_read undo_plan_usage_errors
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

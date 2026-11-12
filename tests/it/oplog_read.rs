@@ -613,6 +613,80 @@ fn an_empty_repository_has_no_entries() {
     assert!(r.text.contains("(no entries)"), "{}", r.text);
 }
 
+/// Parser rules seen through the command: each line below is skipped and counted, and the good line after it is read.
+fn bad_then_good(fx: &Fx, bad: &str) -> Value {
+    oplog(
+        fx,
+        "refs.log",
+        &(bad.to_string() + &line(T, &h('1'), &h('2'), "refs/heads/ok", "stw", "main")),
+    );
+    json(fx, &["timeline"])
+}
+
+fn one_bad(v: &Value) {
+    assert_eq!(entries(v).len(), 1, "{v}");
+    assert_eq!(entries(v)[0]["ref"], "refs/heads/ok");
+    assert!(
+        gap(v, "bad").unwrap()["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("1 lines"),
+        "{v}"
+    );
+}
+
+#[test]
+fn a_glued_line_is_bad_and_not_accepted() {
+    let fx = Fx::new();
+    let a = line(T, &h('1'), &h('2'), "refs/heads/a", "stw", "main");
+    let b = line(T, &h('2'), &h('3'), "refs/heads/b", "stw", "main");
+    one_bad(&bad_then_good(&fx, &format!("{}{b}", a.trim_end())));
+}
+
+#[test]
+fn a_line_over_4_kb_is_bad_and_the_stream_goes_on() {
+    let fx = Fx::new();
+    let long = line(
+        T,
+        &h('1'),
+        &h('2'),
+        &format!("refs/heads/{}", "x".repeat(4100)),
+        "stw",
+        "main",
+    );
+    one_bad(&bad_then_good(&fx, &long));
+}
+
+#[test]
+fn a_line_with_a_nul_byte_is_bad() {
+    let fx = Fx::new();
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), &h('2'), "refs/heads/a%00", "stw\0", "main"),
+    ));
+}
+
+#[test]
+fn a_hash_in_upper_case_is_bad() {
+    let fx = Fx::new();
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &"A".repeat(40), &h('2'), "refs/heads/a", "stw", "main"),
+    ));
+}
+
+#[test]
+fn a_glued_rewrites_line_is_bad() {
+    let fx = Fx::new();
+    let [a, b, c] = three(&fx);
+    let l1 = rewrites(&[("amend", &a.to_string(), &b.to_string())]);
+    let l2 = rewrites(&[("amend", &b.to_string(), &c.to_string())]);
+    oplog(&fx, "rewrites.log", &format!("{}{l2}", l1.trim_end()));
+    let v = json(&fx, &["evolog", &c.to_string()]);
+    assert_eq!(v["gaps"]["bad_lines"], 1, "{v}");
+    assert_eq!(v["pairs"], 0);
+}
+
 // ---- evolog -------------------------------------------------------------------------------------------------------
 
 fn rewrites(pairs: &[(&str, &str, &str)]) -> String {
@@ -813,7 +887,15 @@ fn evolog_usage_errors() {
     assert_eq!(run(&fx, &["evolog"]).code, 2);
     let r = run(&fx, &["evolog", "no-such-rev"]);
     assert_eq!(r.code, 2, "{}", r.err);
-    assert_eq!(run(&fx, &["evolog", "x", "--limit", "0"]).code, 2);
+    let [_, _, c] = three(&fx);
+    assert_eq!(
+        run(&fx, &["evolog", &c.to_string(), "--limit", "1"]).code,
+        0
+    );
+    assert_eq!(
+        run(&fx, &["evolog", &c.to_string(), "--limit", "0"]).code,
+        2
+    );
 }
 
 #[test]
