@@ -1,5 +1,4 @@
 //! Parser of `refs.log` and `rewrites.log` and the encoding of ref names (`docs/oplog-format.md`, sections 2, 3.2, 4, 9).
-//! Not built yet: the functions return empty results; the tests below fix the contract.
 
 /// A line longer than this many bytes is skipped as `bad` (spec section 9).
 pub const MAX_LINE: usize = 4096;
@@ -41,39 +40,279 @@ impl<T> Default for Parsed<T> {
     }
 }
 
-pub fn parse_refs(_data: &[u8]) -> Parsed<RefLine> {
-    Parsed::default()
+pub fn parse_refs(data: &[u8]) -> Parsed<RefLine> {
+    let mut out = Parsed::default();
+    for line in lines(data) {
+        match line.and_then(ref_line) {
+            Some(l) => out.lines.push(l),
+            None => out.bad += 1,
+        }
+    }
+    out
 }
 
-pub fn parse_rewrites(_data: &[u8]) -> Parsed<RewriteLine> {
-    Parsed::default()
+pub fn parse_rewrites(data: &[u8]) -> Parsed<RewriteLine> {
+    let mut out = Parsed::default();
+    for line in lines(data) {
+        match line.and_then(rewrite_line) {
+            Some(l) => out.lines.push(l),
+            None => out.bad += 1,
+        }
+    }
+    out
 }
 
-/// Percent-encoding of a ref name as the hook writes it (spec 3.2).
-pub fn encode_name(_name: &[u8]) -> String {
-    String::new()
+/// The lines of a log: `None` for one that is skipped before any field is looked at (over 4 KB, NUL, not UTF-8).
+/// The piece after the last LF is a line only when it is not empty (a hook killed before its LF).
+fn lines(data: &[u8]) -> impl Iterator<Item = Option<Vec<&str>>> {
+    let mut parts: Vec<&[u8]> = data.split(|b| *b == b'\n').collect();
+    if parts.last().is_some_and(|l| l.is_empty()) {
+        parts.pop();
+    }
+    parts.into_iter().map(|l| {
+        if l.len() > MAX_LINE || l.contains(&0) {
+            return None;
+        }
+        std::str::from_utf8(l).ok().map(|s| s.split('\t').collect())
+    })
+}
+
+fn all_bytes(s: &str, ok: impl Fn(u8) -> bool) -> bool {
+    s.bytes().all(ok)
+}
+
+fn is_hash(s: &str) -> bool {
+    matches!(s.len(), 40 | 64) && all_bytes(s, |b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Characters of an encoded name (spec 3.2): the plain set and `%`.
+fn name_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b"._/+@:-%".contains(&b)
+}
+
+/// Every `%` is followed by two hex digits.
+fn percent_ok(s: &str) -> bool {
+    let b = s.as_bytes();
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            if i + 3 > b.len() {
+                return false;
+            }
+            if !(b[i + 1].is_ascii_hexdigit() && b[i + 2].is_ascii_hexdigit()) {
+                return false;
+            }
+            i += 3;
+        } else {
+            i += 1;
+        }
+    }
+    true
+}
+
+fn is_name(s: &str) -> bool {
+    (s == "HEAD" || s.starts_with("refs/")) && all_bytes(s, name_byte) && percent_ok(s)
+}
+
+/// A hash, or `ref:` and an encoded name.
+fn is_value(s: &str) -> bool {
+    match s.strip_prefix("ref:") {
+        Some(t) => !t.is_empty() && all_bytes(t, name_byte) && percent_ok(t),
+        None => is_hash(s),
+    }
+}
+
+fn is_time(s: &str) -> bool {
+    s == "unknown" || epoch_of(s).is_some()
+}
+
+fn is_word(s: &str) -> bool {
+    !s.is_empty() && all_bytes(s, |b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
+}
+
+/// Fields from the 7th on must be `key=value` extensions (spec section 9): a glued line has a time, hash or name there.
+fn extensions_ok(fields: &[&str]) -> bool {
+    fields.iter().skip(6).all(|f| {
+        let Some((k, v)) = f.split_once('=') else {
+            return false;
+        };
+        let mut kb = k.bytes();
+        kb.next().is_some_and(|b| b.is_ascii_lowercase())
+            && kb.all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            && all_bytes(v, |b| {
+                b.is_ascii_alphanumeric() || b"._/+@:=%-".contains(&b)
+            })
+    })
+}
+
+fn ref_line(f: Vec<&str>) -> Option<RefLine> {
+    if f.len() < 5 || !extensions_ok(&f) {
+        return None;
+    }
+    let worktree = f.get(5).copied().unwrap_or("");
+    let ok = is_time(f[0])
+        && is_value(f[1])
+        && is_value(f[2])
+        && is_name(f[3])
+        && is_word(f[4])
+        && all_bytes(worktree, |b| {
+            b.is_ascii_alphanumeric() || b"._?-".contains(&b)
+        });
+    ok.then(|| RefLine {
+        time: f[0].into(),
+        old: f[1].into(),
+        new: f[2].into(),
+        refname: f[3].into(),
+        context: f[4].into(),
+        worktree: worktree.into(),
+    })
+}
+
+fn rewrite_line(f: Vec<&str>) -> Option<RewriteLine> {
+    if f.len() < 4 || !extensions_ok(&f) {
+        return None;
+    }
+    let reduced = |s: &str| all_bytes(s, |b| b.is_ascii_alphanumeric() || b"._/+@?-".contains(&b));
+    let extra = f.get(4).copied().unwrap_or("");
+    let branch = f.get(5).copied().unwrap_or("");
+    let ok = is_time(f[0])
+        && is_word(f[1])
+        && is_hash(f[2])
+        && is_hash(f[3])
+        && reduced(extra)
+        && reduced(branch);
+    ok.then(|| RewriteLine {
+        time: f[0].into(),
+        kind: f[1].into(),
+        old: f[2].into(),
+        new: f[3].into(),
+        extra: extra.into(),
+        branch: branch.into(),
+    })
+}
+
+/// Percent-encoding of a ref name as the hook writes it (spec 3.2): bytes outside `[A-Za-z0-9._/+@:-]` become `%XX`
+/// (upper case); a name over 200 bytes is cut at 200 bytes and ends in `%00` and the djb2 of the whole name.
+pub fn encode_name(name: &[u8]) -> String {
+    let cut = name.len() > 200;
+    let shown = if cut { &name[..200] } else { name };
+    let mut out = String::with_capacity(shown.len() + 11);
+    for &b in shown {
+        if b.is_ascii_alphanumeric() || b"._/+@:-".contains(&b) {
+            out.push(b as char);
+        } else {
+            out.push_str(&format!("%{b:02X}"));
+        }
+    }
+    if cut {
+        out.push_str(&format!("%00{:08x}", djb2(name)));
+    }
+    out
 }
 
 /// Inverse of [`encode_name`] for names that were not cut; `None` for malformed input or a cut name (`%00`).
-pub fn decode_name(_s: &str) -> Option<Vec<u8>> {
-    None
+pub fn decode_name(s: &str) -> Option<Vec<u8>> {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%' {
+            let hex = std::str::from_utf8(b.get(i + 1..i + 3)?).ok()?;
+            let v = u8::from_str_radix(hex, 16).ok()?;
+            if v == 0 {
+                return None;
+            }
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    Some(out)
 }
 
-pub fn djb2(_bytes: &[u8]) -> u32 {
-    0
+pub fn djb2(bytes: &[u8]) -> u32 {
+    bytes.iter().fold(5381u32, |h, &b| {
+        h.wrapping_mul(33).wrapping_add(u32::from(b))
+    })
 }
 
-pub fn is_zero(_id: &str) -> bool {
-    false
+pub fn is_zero(id: &str) -> bool {
+    id.len() >= 40 && all_bytes(id, |b| b == b'0')
 }
 
-/// `2026-11-12T00:42:26Z` -> seconds since the epoch.
-pub fn epoch_of(_time: &str) -> Option<i64> {
-    None
+/// Days since 1970-01-01 of a civil date (proleptic Gregorian; the algorithm of Howard Hinnant).
+fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
 }
 
-pub fn iso_of(_epoch: i64) -> String {
-    String::new()
+fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+/// `2026-11-12T00:42:26Z` -> seconds since the epoch; `None` for any other shape or an impossible date.
+pub fn epoch_of(time: &str) -> Option<i64> {
+    let b = time.as_bytes();
+    let shape = b.len() == 20
+        && b[4] == b'-'
+        && b[7] == b'-'
+        && b[10] == b'T'
+        && b[13] == b':'
+        && b[16] == b':'
+        && b[19] == b'Z'
+        && b.iter()
+            .enumerate()
+            .all(|(i, c)| matches!(i, 4 | 7 | 10 | 13 | 16 | 19) || c.is_ascii_digit());
+    if !shape {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| time[r].parse::<i64>().ok();
+    let (y, mo, d, h, mi, s) = (
+        n(0..4)?,
+        n(5..7)?,
+        n(8..10)?,
+        n(11..13)?,
+        n(14..16)?,
+        n(17..19)?,
+    );
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let dim = match mo {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return None,
+    };
+    if d < 1 || d > dim || h > 23 || mi > 59 || s > 59 {
+        return None;
+    }
+    Some(days_from_civil(y, mo, d) * 86_400 + h * 3600 + mi * 60 + s)
+}
+
+pub fn iso_of(epoch: i64) -> String {
+    let (y, m, d) = civil_from_days(epoch.div_euclid(86_400));
+    let s = epoch.rem_euclid(86_400);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        s / 3600,
+        (s % 3600) / 60,
+        s % 60
+    )
 }
 
 #[cfg(test)]
