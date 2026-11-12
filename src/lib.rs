@@ -9,6 +9,7 @@ pub mod git_runner;
 pub mod github;
 pub mod lint_pr;
 pub mod lint_pr_cmd;
+pub mod oplog;
 pub mod output;
 pub mod patch_id;
 pub mod prove;
