@@ -291,7 +291,7 @@ func TestPlanRefusalNamesTheGitFloor(t *testing.T) {
 	gittest.RequireBelow(t, 2, 46, "the inspection refuses older Git")
 	s := rebaseMerged(t)
 	res := s.plan(t)
-	if res.Status != StatusError || firstCode(res) != "inspection-failed" || !strings.Contains(res.Diagnostics[0].Message, "Git 2.46") {
+	if res.Status != StatusError || firstCode(res) != "inspection-failed" || !strings.HasPrefix(res.Diagnostics[0].Message, "inspection requires Git 2.46") {
 		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
 	}
 }

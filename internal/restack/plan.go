@@ -142,7 +142,7 @@ func (p *planner) admit(ctx context.Context) error {
 		}
 		message := "The path is not a readable native Git checkout."
 		if len(id.Diagnostics) > 0 && strings.HasPrefix(id.Diagnostics[0].Message, "inspection requires Git") {
-			message += " " + id.Diagnostics[0].Message + "."
+			message = id.Diagnostics[0].Message + ". " + message
 		}
 		return refuse(code, message, nil)
 	}
