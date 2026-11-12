@@ -12,8 +12,8 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, prove, restack_plan, status, status_review,
-    status_stats, sync, tidy, tidy_apply, tidy_history,
+    add, carryover, dev, git_runner, lint_pr_cmd, oplog, prove, restack_plan, status,
+    status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
 };
 
 const EXIT_CODES: &str = "\
@@ -72,6 +72,12 @@ enum Command {
         #[command(subcommand)]
         command: RestackCommand,
     },
+    /// The op log: ref changes (timeline), rewrites of a commit (evolog) and a preview of undoing one branch (read-only)
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = OPLOG_HELP)]
+    Oplog {
+        #[command(subcommand)]
+        command: OplogCommand,
+    },
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Lint {
@@ -114,6 +120,19 @@ enum RestackCommand {
     /// Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
     #[command(after_help = RESTACK_PLAN_HELP)]
     Plan(RestackPlanArgs),
+}
+
+#[derive(Subcommand)]
+enum OplogCommand {
+    /// Ref changes from the reflogs and the hook log `refs.log`, newest last, with what the logs do not cover
+    #[command(after_help = OPLOG_HELP)]
+    Timeline(OplogTimelineArgs),
+    /// The recorded rewrites (amend, rebase) of a commit, from the hook log `rewrites.log`
+    #[command(after_help = OPLOG_HELP)]
+    Evolog(OplogEvologArgs),
+    /// What undoing one local branch to an older reflog value would check; changes nothing
+    #[command(after_help = OPLOG_HELP)]
+    UndoPlan(OplogUndoPlanArgs),
 }
 
 #[derive(Subcommand)]
@@ -420,6 +439,156 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
         print!("{}", plan.render_human());
     }
     Ok(if plan.is_clean() {
+        exit::OK
+    } else {
+        exit::FAILED
+    })
+}
+
+const OPLOG_HELP: &str = "\
+New in stw (no Go counterpart); format and rules: docs/oplog-format.md. Everything here is read-only: nothing is written,
+no hook is installed, no git program runs. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
+the hooks of the spikes `stw-oplog-refhook` and `stw-oplog-hook`) and the reflogs of the repository. A log that is a
+symbolic link or not a regular file is not read. Reflogs are read for the files ref backend only.
+timeline  A reflog row and the log line of the same change are one entry (flag `covered`); a log line without a reflog
+          row (a deleted branch, a tag) is its own entry (`hook-only`). Groups are suspected only. The gaps list says what
+          the logs do not show (never a proof of completeness). --ref GLOB filters by ref name (`*` matches any run);
+          refs/remotes only with --remotes, other refs than refs/heads, refs/stash, refs/stw only with --all.
+evolog    REV is a branch, a revision or a 40-digit commit id; the chain follows the recorded pairs back (--limit N commits).
+undo-plan REF is a branch name, a full ref name or HEAD. --to OLD (lower-case hex prefix of an old reflog value) or
+          --steps N (default 1) picks the target. Exit 1 when a check is refused. `undo` itself does not exist yet.
+
+Exit codes:
+  0  done (undo-plan: no check refused)
+  1  undo-plan: a check is refused; the repository could not be read
+  2  usage error";
+
+#[derive(Args)]
+struct OplogTimelineArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Only refs whose name matches GLOB (`*` matches any run of characters)
+    #[arg(long = "ref", value_name = "GLOB")]
+    ref_glob: Option<String>,
+    /// Also refs/remotes
+    #[arg(long)]
+    remotes: bool,
+    /// Also refs/remotes and every other ref with a reflog
+    #[arg(long)]
+    all: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+}
+
+#[derive(Args)]
+struct OplogEvologArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Commits of the chain shown at most [default: 200]
+    #[arg(long, value_name = "N")]
+    limit: Option<usize>,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// A branch, a revision or a commit id
+    #[arg(value_name = "REV")]
+    rev: String,
+}
+
+#[derive(Args)]
+struct OplogUndoPlanArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// The old value to go back to: a lower-case hex prefix of an old value of the reflog
+    #[arg(long, value_name = "OLD", conflicts_with = "steps")]
+    to: Option<String>,
+    /// Go back this many reflog entries [default: 1]
+    #[arg(long, value_name = "N")]
+    steps: Option<u64>,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// A branch name, a full ref name or HEAD
+    #[arg(value_name = "REF")]
+    reference: String,
+}
+
+fn oplog_ctx(root: Option<&Path>, name: Option<&str>) -> Result<oplog::Ctx> {
+    let r = selected_repo(root, name)?;
+    let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
+    oplog::Ctx::open(&dir)
+}
+
+fn run_oplog_timeline(a: OplogTimelineArgs) -> Result<u8> {
+    let ctx = oplog_ctx(a.root.as_deref(), a.repo.as_deref())?;
+    let t = oplog::timeline::build(
+        &ctx,
+        &oplog::timeline::Options {
+            remotes: a.remotes || a.all,
+            all: a.all,
+            pattern: a.ref_glob,
+        },
+    );
+    if a.json {
+        print_json(&t.to_json());
+    } else {
+        print!("{}", t.render_human());
+    }
+    Ok(exit::OK)
+}
+
+fn run_oplog_evolog(a: OplogEvologArgs) -> Result<u8> {
+    let limit = a.limit.unwrap_or(oplog::evolog::DEFAULT_LIMIT);
+    if limit == 0 {
+        return Err(Error::usage("--limit must be at least 1"));
+    }
+    let ctx = oplog_ctx(a.root.as_deref(), a.repo.as_deref())?;
+    let e = oplog::evolog::evolog(&ctx, &a.rev, limit)?;
+    if a.json {
+        print_json(&e.to_json());
+    } else {
+        print!("{}", e.render_human());
+    }
+    Ok(exit::OK)
+}
+
+fn run_oplog_undo_plan(a: OplogUndoPlanArgs) -> Result<u8> {
+    if a.steps == Some(0) {
+        return Err(Error::usage("--steps must be at least 1"));
+    }
+    if let Some(to) = &a.to {
+        if to.is_empty() || !to.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+            return Err(Error::usage("--to must be lower-case hex"));
+        }
+    }
+    let ctx = oplog_ctx(a.root.as_deref(), a.repo.as_deref())?;
+    let plan = oplog::undo_plan::plan(
+        &ctx,
+        &oplog::undo_plan::Request {
+            reference: a.reference,
+            to: a.to,
+            steps: a.steps,
+        },
+    )?;
+    if a.json {
+        print_json(&plan.to_json());
+    } else {
+        print!("{}", plan.render_human());
+    }
+    Ok(if plan.refused == 0 {
         exit::OK
     } else {
         exit::FAILED
@@ -1110,6 +1279,7 @@ fn git_command_label(command: &Command) -> &'static str {
         // these start no git (gix only); a new command must be named here on purpose
         Command::Tidy { .. }
         | Command::Restack { .. }
+        | Command::Oplog { .. }
         | Command::Lint { .. }
         | Command::Dev { .. } => "this step",
     }
@@ -1309,6 +1479,11 @@ fn run(command: Command) -> Result<u8> {
         Command::Restack {
             command: RestackCommand::Plan(a),
         } => run_restack_plan(a),
+        Command::Oplog { command } => match command {
+            OplogCommand::Timeline(a) => run_oplog_timeline(a),
+            OplogCommand::Evolog(a) => run_oplog_evolog(a),
+            OplogCommand::UndoPlan(a) => run_oplog_undo_plan(a),
+        },
         Command::Lint {
             command: LintCommand::Pr(a),
         } => run_lint_pr(a),
