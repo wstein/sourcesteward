@@ -244,7 +244,7 @@ Work package B (releases, tags, repository) is implemented in source: the typed 
 
 Work package C reads the CI state for the online `stw status`: `internal/statusremote` (`ReadCIMain`, `ReadReleaseProducts`, `ReadCIRelease`), the
 typed `WorkflowRuns` read and decoders in `internal/hosting`, `stwsync.BehindOrigin` (local object lookup with `--no-lazy-fetch`; undecided on a
-Git before 2.44) and `release.ReadWorktreeContracts` (the reader of `release check`); see [hosting](hosting.md). The default branch class reuses the
+Git before 2.45) and `release.ReadWorktreeContracts` (the reader of `release check`); see [hosting](hosting.md). The default branch class reuses the
 classifier of `stw watch`. `ReadCIRelease` adds the newest runs to the per pattern entries of the `tags` source (the latest tag of every pattern and at most 5 unreleased tags, N+5 reads, each with
 the workflow of its product, `release.yml` by default, 404 skipped); an unusable contract is the error code `contract-invalid`. A red default
 branch and a failed, cancelled or timed-out tag run reach the action model as red items (US5, tested through `overview.Build`). Tests use an
