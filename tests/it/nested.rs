@@ -73,6 +73,12 @@ fn setup() -> N {
     }
 }
 
+impl N {
+    fn oid_of_c(&self) -> String {
+        self.w.git(&self.c, &["rev-parse", "HEAD"])
+    }
+}
+
 fn names(root: &Path) -> Vec<String> {
     stw::repo::list_repos(root)
         .into_iter()
@@ -377,4 +383,268 @@ fn an_uninitialized_nested_submodule_is_reported_as_unreachable_and_never_cloned
         "{r}"
     );
     assert!(!t.c.join("m").exists());
+}
+
+/// `n` gets its own submodule `m`, which `n` records at m2 while it sits at m1 (3 levels: ws, c, c/n, c/n/m).
+fn add_third_level(t: &N) -> (PathBuf, String) {
+    let mup = t.w.p("m-up");
+    std::fs::create_dir(&mup).unwrap();
+    t.w.git(&mup, &["init", "-q"]);
+    let m1 = t.w.commit(&mup, "m.txt", "1\n");
+    t.w.git(&t.w.base, &["clone", "-q", "--bare", "m-up", "m.git"]);
+    let m2 = t.w.commit(&mup, "m.txt", "2\n");
+    t.w.git(
+        &mup,
+        &["push", "-q", t.w.p("m.git").to_str().unwrap(), "main"],
+    );
+    t.w.git(
+        &t.n,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            t.w.p("m.git").to_str().unwrap(),
+            "m",
+        ],
+    );
+    t.w.git(&t.n, &["commit", "-q", "-m", "add m"]);
+    let m = t.n.join("m");
+    t.w.git(&m, &["fetch", "-q", "origin"]);
+    t.w.git(&m, &["checkout", "-q", "--detach", &m1]);
+    t.w.git(
+        &t.n,
+        &["update-index", "--cacheinfo", &format!("160000,{m2},m")],
+    );
+    (m, m2)
+}
+
+fn plan_submodules(t: &N, extra: &[&str]) -> (i32, Value, String) {
+    let mut args = vec!["sync", "--plan", "--submodules", "--offline"];
+    args.extend_from_slice(extra);
+    args.extend_from_slice(&["--root", t.ws.to_str().unwrap()]);
+    stw(t, &t.w.base, &args)
+}
+
+fn rec<'a>(v: &'a Value, name: &str) -> &'a Value {
+    v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == name)
+        .unwrap_or_else(|| panic!("no {name} in {v}"))
+}
+
+#[test]
+fn a_third_level_pinned_submodule_is_stepped_against_its_own_holder() {
+    let t = setup();
+    let (m, m2) = add_third_level(&t);
+    let (code, v, err) = plan_submodules(&t, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    let r = rec(&v, "c/n/m");
+    assert_eq!(r["submodule"]["state"], "would-move", "{r}");
+    assert_eq!(r["submodule"]["new"], m2.as_str(), "{r}");
+    assert_eq!(names(&t.ws), ["ws", "c", "c/n", "c/n/m"]);
+    assert!(m.join(".git").exists());
+}
+
+#[test]
+fn repo_names_a_nested_submodule_whose_holder_is_left_out_of_the_list() {
+    let t = setup();
+    pin_nested_ahead(&t);
+    let (code, v, err) = plan_submodules(&t, &["--repo", "c/n"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(rec(&v, "c/n")["submodule"]["state"], "would-move", "{v}");
+}
+
+/// The agent-rules checkout (`<root>/.agents`) is left to the rules logic, but its own submodules are listed and
+/// stepped like those of any repository (Go: `walk` descends after the rules record).
+fn add_rules_checkout(t: &N) {
+    t.w.git(
+        &t.ws,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            t.w.p("c.git").to_str().unwrap(),
+            ".agents",
+        ],
+    );
+    let rules = t.ws.join(".agents");
+    t.w.git(
+        &rules,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            t.w.p("n.git").to_str().unwrap(),
+            "x",
+        ],
+    );
+    t.w.git(&rules, &["commit", "-q", "-m", "add x"]);
+    t.w.git(&t.ws, &["add", ".agents"]);
+    t.w.git(&t.ws, &["commit", "-q", "-m", "add rules"]);
+}
+
+#[test]
+fn a_pinned_submodule_of_the_rules_checkout_is_stepped_against_the_rules_checkout() {
+    let t = setup();
+    add_rules_checkout(&t);
+    let rules = t.ws.join(".agents");
+    let x = rules.join("x");
+    t.w.git(&x, &["fetch", "-q", "origin"]);
+    t.w.git(&x, &["checkout", "-q", "--detach", &t.n1]);
+    t.w.git(
+        &rules,
+        &["update-index", "--cacheinfo", &format!("160000,{},x", t.n2)],
+    );
+    let (code, v, err) = plan_submodules(&t, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(
+        rec(&v, ".agents/x")["submodule"]["state"],
+        "would-move",
+        "{v}"
+    );
+}
+
+#[test]
+fn an_uninitialized_gitlink_of_the_rules_checkout_is_reported() {
+    let t = setup();
+    add_rules_checkout(&t);
+    let rules = t.ws.join(".agents");
+    t.w.git(
+        &rules,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{},u", t.n1),
+        ],
+    );
+    let (code, v, err) = plan_submodules(&t, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert!(
+        rec(&v, ".agents/u")["reason"]
+            .as_str()
+            .unwrap()
+            .contains("not initialized"),
+        "{v}"
+    );
+}
+
+fn stw_ceiling(t: &N, cwd: &Path, ceiling: &Path, args: &[&str]) -> (i32, Value, String) {
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &t.w.home)
+        .env("GIT_CEILING_DIRECTORIES", ceiling)
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(cwd)
+        .args(args)
+        .arg("--json")
+        .output()
+        .unwrap();
+    (
+        o.status.code().unwrap_or(-1),
+        serde_json::from_slice(&o.stdout).unwrap_or(Value::Null),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn a_foreign_outer_repository_behind_a_ceiling_is_no_superproject() {
+    let t = setup();
+    // `outer` is a repository the user does not work in; its index names the workspace path as a gitlink
+    let outer = t.w.p("outer");
+    std::fs::create_dir(&outer).unwrap();
+    t.w.git(&outer, &["init", "-q"]);
+    t.w.commit(&outer, "f", "f\n");
+    let home = outer.join("home");
+    std::fs::create_dir(&home).unwrap();
+    let w = home.join("w");
+    t.w.git(&t.w.base, &["clone", "-q", "c.git", "outer/home/w"]);
+    t.w.git(
+        &w,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            t.w.p("n.git").to_str().unwrap(),
+            "s",
+        ],
+    );
+    t.w.git(&w, &["commit", "-q", "-m", "add s"]);
+    let head = t.w.git(&w, &["rev-parse", "HEAD"]);
+    t.w.git(
+        &outer,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{head},home/w"),
+        ],
+    );
+    let before = t.w.git(&outer, &["rev-parse", "HEAD"]);
+    let (code, v, err) = stw_ceiling(&t, &w.join("s"), &outer, &["status", "--offline"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(
+        v["root"]
+            .as_str()
+            .map(|r| std::fs::canonicalize(r).unwrap()),
+        Some(std::fs::canonicalize(&w).unwrap()),
+        "a ceiling hides the outer repository: {v}"
+    );
+    assert_eq!(t.w.git(&outer, &["rev-parse", "HEAD"]), before);
+}
+
+#[test]
+fn an_unrelated_repository_between_a_checkout_and_an_outer_one_ends_the_search() {
+    let t = setup();
+    let outer = t.w.p("outer2");
+    std::fs::create_dir(&outer).unwrap();
+    t.w.git(&outer, &["init", "-q"]);
+    t.w.commit(&outer, "f", "f\n");
+    std::fs::create_dir_all(outer.join("a")).unwrap();
+    t.w.git(&t.w.base, &["clone", "-q", "c.git", "outer2/a/b"]);
+    t.w.git(&t.w.base, &["clone", "-q", "c.git", "outer2/a/b/w2"]);
+    let w2 = outer.join("a/b/w2");
+    // the repository in between holds a gitlink too, but not for the checkout
+    t.w.git(
+        &outer.join("a/b"),
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{},other", t.oid_of_c()),
+        ],
+    );
+    t.w.git(
+        &w2,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            t.w.p("n.git").to_str().unwrap(),
+            "s",
+        ],
+    );
+    t.w.git(&w2, &["commit", "-q", "-m", "add s"]);
+    let head = t.w.git(&w2, &["rev-parse", "HEAD"]);
+    t.w.git(
+        &outer,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{head},a/b/w2"),
+        ],
+    );
+    let (code, v, err) = stw(&t, &w2.join("s"), &["status", "--offline"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(
+        v["root"]
+            .as_str()
+            .map(|r| std::fs::canonicalize(r).unwrap()),
+        Some(std::fs::canonicalize(&w2).unwrap()),
+        "git names no superproject here: {v}"
+    );
 }

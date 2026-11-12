@@ -52,20 +52,19 @@ pub fn topmost_superproject(top: &Path) -> PathBuf {
     cur
 }
 
-/// A submodule checkout: the superproject is the nearest parent repository whose index has a gitlink at that path.
+/// A submodule checkout: the superproject is the nearest repository above it (`discover`: it honors
+/// `GIT_CEILING_DIRECTORIES` and the owner check, as git does), provided its index has a gitlink at that path. Only
+/// the nearest repository counts, as for `git rev-parse --show-superproject-working-tree`: a repository between the
+/// checkout and an outer one that names it ends the search.
 fn superproject_of(top: &Path) -> Option<PathBuf> {
-    let mut cur = top.parent();
-    while let Some(dir) = cur {
-        if dir.join(".git").exists() {
-            if let Ok(rel) = top.strip_prefix(dir) {
-                if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {
-                    return Some(dir.to_path_buf());
-                }
-            }
-        }
-        cur = dir.parent();
-    }
-    None
+    let above = discover::discover(top.parent()?)?;
+    let dir = above.workdir()?.to_path_buf();
+    let real = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let rel = real(top).strip_prefix(real(&dir)).ok()?.to_path_buf();
+    submodule_paths(&dir)
+        .iter()
+        .any(|p| Path::new(p) == rel)
+        .then_some(dir)
 }
 
 /// Root for `stw add`: the superproject of the repository of `cwd`, else that repository's top level (a

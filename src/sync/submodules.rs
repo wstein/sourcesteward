@@ -8,8 +8,8 @@
 //! not undone by anything. The pass runs after every repository was synced (so the superproject's own
 //! fast-forward is done and its new gitlinks count), one submodule after the other.
 //!
-//! Only top-level submodules (the gitlinks of the index) are visited (the repository list of `stw` is flat); a nested
-//! submodule is not.
+//! The submodules of every level are visited (the gitlinks of each checked-out repository's index, nested ones too):
+//! a nested pinned submodule is stepped against the submodule that holds its gitlink (`holder_of`).
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
@@ -400,11 +400,12 @@ pub fn submodule_pass(
     include_uninitialized: bool,
     skip: &Path,
 ) {
-    // the superproject of each listed submodule: the listed repository with the longest name that is a path prefix
-    // of it (a gitlink path of the workspace root has none: the root holds it)
+    // The holder of a gitlink is found in the whole walk of the workspace, not in `list`: `--repo` and the
+    // agent-rules checkout leave repositories out of it, and a nested one is still held by its own parent.
+    let all = repo::list_repos(root);
     let holders: Vec<(PathBuf, String)> = list
         .iter()
-        .map(|rec| holder_of(root, list, &rec.name))
+        .map(|rec| holder_of(root, &all, &rec.name))
         .collect();
     for (rec, (parent, rel)) in list.iter_mut().zip(holders) {
         let is_root = std::path::Path::new(&rec.path) == root;
@@ -418,9 +419,9 @@ pub fn submodule_pass(
     // every checked-out repository of the workspace (the root, nested ones too) may hold gitlinks without a checkout
     let mut holders: Vec<(PathBuf, String)> = vec![(root.to_path_buf(), String::new())];
     holders.extend(
-        list.iter()
-            .filter(|r| !r.path.is_empty() && Path::new(&r.path) != root)
-            .map(|r| (PathBuf::from(&r.path), r.name.clone())),
+        all.iter()
+            .filter(|r| r.path != root)
+            .map(|r| (r.path.clone(), r.name.clone())),
     );
     for (holder, prefix) in holders {
         for p in repo::submodule_paths(&holder) {
@@ -458,12 +459,12 @@ pub fn submodule_pass(
     }
 }
 
-/// The repository that holds the gitlink of the listed repository `name`, and the gitlink path inside it: the listed
-/// submodule whose name is the longest path prefix of `name`, else the workspace root (`root`, the whole name).
-fn holder_of(root: &Path, list: &[SyncRec], name: &str) -> (PathBuf, String) {
-    let mut best: Option<(&SyncRec, &str)> = None;
-    for r in list {
-        if r.path.is_empty() || Path::new(&r.path) == root {
+/// The repository that holds the gitlink of the repository `name`, and the gitlink path inside it: the repository
+/// of the walk `all` whose name is the longest path prefix of `name`, else the workspace root (`root`, the whole name).
+fn holder_of(root: &Path, all: &[repo::RepoRef], name: &str) -> (PathBuf, String) {
+    let mut best: Option<(&repo::RepoRef, &str)> = None;
+    for r in all {
+        if r.path == root {
             continue;
         }
         if let Some(rest) = name
@@ -476,7 +477,7 @@ fn holder_of(root: &Path, list: &[SyncRec], name: &str) -> (PathBuf, String) {
         }
     }
     match best {
-        Some((r, rest)) => (PathBuf::from(&r.path), rest.to_string()),
+        Some((r, rest)) => (r.path.clone(), rest.to_string()),
         None => (root.to_path_buf(), name.to_string()),
     }
 }
