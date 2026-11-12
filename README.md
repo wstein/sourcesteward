@@ -128,7 +128,7 @@ stw --help
 
 The repository/module is `github.com/wstein/sourcesteward`; the executable is `stw`,
 which is invoked directly as `stw`. No Git repository or credentials are needed for help/version.
-Git inspection requires Git 2.46+. Native jj inspection requires stable jj 0.45.1+ and usable
+Git inspection requires Git 2.43+. Native jj inspection requires stable jj 0.45.1+ and usable
 read-only bubblewrap on Linux or sandbox-exec on macOS; unavailable enforcement fails safely
 without a Git fallback. Inspection reports stored identity, not file status or disk freshness.
 Git/version retain schema v1; native jj results use schema v2. See the
