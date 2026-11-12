@@ -8,6 +8,7 @@ use gix::ObjectId;
 
 use crate::error::Result;
 
+pub mod discover;
 pub mod worktrees;
 
 /// One repository of the workspace: the root itself or a checked-out submodule.
