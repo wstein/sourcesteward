@@ -10,9 +10,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"strconv"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/wstein/sourcesteward/internal/gitversion"
 )
 
 // gitFloor is the oldest Git that a caller of the inspection accepts, with the reason it gives.
@@ -224,35 +225,9 @@ func inspectAt(ctx context.Context, path string, run runner, noJJ bool, floor gi
 	return r
 }
 
-// ParseVersion returns the major and minor number of a Git version number such as "2.43.0" or
-// "2.39.5". The first two dot-separated fields must be plain decimal digits.
-func ParseVersion(v string) (major, minor int, err error) {
-	p := strings.Split(v, ".")
-	if len(p) < 2 {
-		return 0, 0, fmt.Errorf("invalid Git version %q", v)
-	}
-	if major, err = digits(p[0]); err != nil {
-		return 0, 0, fmt.Errorf("invalid Git version %q", v)
-	}
-	if minor, err = digits(p[1]); err != nil {
-		return 0, 0, fmt.Errorf("invalid Git version %q", v)
-	}
-	return major, minor, nil
-}
-
 // VersionAtLeast reports whether the Git version number v is at least major.minor; an invalid v is not.
-func VersionAtLeast(v string, major, minor int) bool {
-	ma, mi, err := ParseVersion(v)
-	return err == nil && (ma > major || (ma == major && mi >= minor))
-}
+func VersionAtLeast(v string, major, minor int) bool { return gitversion.AtLeast(v, major, minor) }
 
-// digits parses a non-empty string of ASCII decimal digits; strconv.Atoi would also take a sign.
-func digits(s string) (int, error) {
-	if s == "" || strings.Trim(s, "0123456789") != "" {
-		return 0, strconv.ErrSyntax
-	}
-	return strconv.Atoi(s)
-}
 func readHead(ctx context.Context, run runner, dir, format string) (Head, error) {
 	ref, code, err := run(ctx, dir, "symbolic-ref", "--quiet", "HEAD")
 	if err != nil || code > 1 {
