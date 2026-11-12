@@ -19,7 +19,7 @@ func inventoryCommandWith(run func(context.Context, string, inspection.Inventory
 	var jsonOutput bool
 	command := &cobra.Command{
 		Use: "inventory [PATH]", Short: "Inventory local Git worktrees or native jj workspaces without writes",
-		Long: "Inventory bounded, sampled local Git worktrees or native jj workspaces and references.\nNo repository writes, snapshots, refresh, hooks or network. Git 2.43+ and native jj 0.45.1+\nare Tier 1 backends; GitButler is unsupported. Native jj requires read-only bubblewrap\n(Linux) or sandbox-exec (macOS), with private temporary configuration outside the target.\nThe total deadline is ten seconds. Native jj disk freshness remains unknown without snapshotting.\nPaths are literal; reference and revision selectors never evaluate user expressions.\nKnown false predicates exit 0; partial/unknown or operational failures exit 1; usage errors exit 2.",
+		Long: "Inventory bounded, sampled local Git worktrees or native jj workspaces and references.\nNo repository writes, snapshots, refresh, hooks or network. Git 2.46+ and native jj 0.45.1+\nare Tier 1 backends; GitButler is unsupported. Native jj requires read-only bubblewrap\n(Linux) or sandbox-exec (macOS), with private temporary configuration outside the target.\nThe total deadline is ten seconds. Native jj disk freshness remains unknown without snapshotting.\nPaths are literal; reference and revision selectors never evaluate user expressions.\nKnown false predicates exit 0; partial/unknown or operational failures exit 1; usage errors exit 2.",
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := inspection.ValidateInventoryOptions(options); err != nil {

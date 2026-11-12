@@ -281,7 +281,7 @@ type ownerProblem struct {
 // detectOwner decides the backend by ownership (never by executable availability) and returns
 // the repository root. The order is jj, GitButler, ambiguous, bare, not a repository.
 func detectOwner(ctx context.Context, path string, forCommit bool) (root, backend string, problem *ownerProblem) {
-	res := inspection.Inspect(ctx, path)
+	res := inspection.InspectStrict(ctx, path)
 	backend = res.Backend
 	switch {
 	case res.Backend == "ambiguous":

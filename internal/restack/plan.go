@@ -124,7 +124,7 @@ func (p *planner) admit(ctx context.Context) error {
 	if real, err := filepath.EvalSymlinks(abs); err != nil || real != abs {
 		return refuse("path-not-canonical", "The path is not canonical: it contains a symbolic link or does not exist.", nil)
 	}
-	id := inspection.Inspect(ctx, abs)
+	id := inspection.InspectStrict(ctx, abs)
 	if err := ctx.Err(); err != nil {
 		return err
 	}

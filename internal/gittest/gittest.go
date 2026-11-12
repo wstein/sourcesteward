@@ -12,7 +12,8 @@ import (
 	"github.com/wstein/sourcesteward/internal/inspection"
 )
 
-// AtLeast reports whether the Git on PATH is at least major.minor, from `git version`.
+// AtLeast reports whether the Git on PATH is at least major.minor, from `git version`. A version that
+// cannot be read fails the test; it never counts as old.
 func AtLeast(t testing.TB, major, minor int) bool {
 	t.Helper()
 	out, err := exec.Command("git", "version").Output()
@@ -23,7 +24,11 @@ func AtLeast(t testing.TB, major, minor int) bool {
 	if len(fields) < 3 {
 		t.Fatalf("unexpected git version output %q", out)
 	}
-	return inspection.VersionAtLeast(fields[2], major, minor)
+	ma, mi, err := inspection.ParseVersion(fields[2])
+	if err != nil {
+		t.Fatalf("git version %q: %v", out, err)
+	}
+	return ma > major || (ma == major && mi >= minor)
 }
 
 // RequireAtLeast skips the test unless the Git on PATH is at least major.minor.

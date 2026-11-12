@@ -16,7 +16,7 @@ const (
 )
 
 // defaultTidyInspect is the ownership inspection of the path; a variable only for tests.
-var defaultTidyInspect = inspection.Inspect
+var defaultTidyInspect = inspection.InspectStrict
 
 // DefaultTidyBase returns the integration base `stw tidy plan` uses without --base (Spec 053, issue
 // 389): the target of the symbolic reference refs/remotes/origin/HEAD, for example

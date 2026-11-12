@@ -44,7 +44,7 @@ func gitExecutable() (string, error) {
 }
 
 func gitNativeIdentity(ctx context.Context, path string) (NativeIdentity, error) {
-	r := inspection.Inspect(ctx, path)
+	r := inspection.InspectStrict(ctx, path)
 	if r.Status != "ok" || r.Backend != "git" || r.Repository == nil || r.Repository.Bare || r.Repository.Worktree == nil || r.Repository.Head.OID == nil {
 		return NativeIdentity{}, failure("git-ownership-refused", "workspace creation requires an unambiguous ordinary Git checkout with a committed HEAD")
 	}

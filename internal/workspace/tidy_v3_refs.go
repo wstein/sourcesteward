@@ -37,7 +37,7 @@ type tidyV3RefsCoordinator struct {
 }
 
 func defaultTidyV3RefsCoordinator() tidyV3RefsCoordinator {
-	return tidyV3RefsCoordinator{inspect: inspection.Inspect, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry, integration: defaultIntegrationEngine(), writeReport: defaultWriteReport,
+	return tidyV3RefsCoordinator{inspect: inspection.InspectStrict, observe: observeTidyV3Git, ancestry: tidyV3NativeAncestry, integration: defaultIntegrationEngine(), writeReport: defaultWriteReport,
 		openHosting: func(ctx context.Context, path string, o hosting.TidySessionOptions) (tidyV3Hosting, error) {
 			return hosting.OpenTidySession(ctx, path, o)
 		}}

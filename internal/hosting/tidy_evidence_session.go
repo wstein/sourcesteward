@@ -162,7 +162,7 @@ func OpenTidySession(ctx context.Context, path string, o TidySessionOptions) (*T
 func OpenTidySessionWithTransport(ctx context.Context, path string, o TidySessionOptions, rt http.RoundTripper) (*TidySession, error) {
 	return openTidySession(ctx, path, o, rt, tidySessionDependencies{
 		remotes: func(ctx context.Context, path string) inspection.RemoteResult {
-			return inspection.Remotes(ctx, inspection.Inspect(ctx, path))
+			return inspection.Remotes(ctx, inspection.InspectStrict(ctx, path))
 		},
 		api: newGHWithTransport,
 	})

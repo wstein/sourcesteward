@@ -158,7 +158,7 @@ func (c worktreeObserver) observe(ctx context.Context, o ObserveOptions) (Worktr
 	}
 	// The history hard stops (grafts, alternates) end as Incomplete proofs of the items, not as a
 	// refusal of the whole repository.
-	switch inspection.Inspect(ctx, o.Path).Backend {
+	switch inspection.InspectStrict(ctx, o.Path).Backend {
 	case "jj":
 		return c.observeJJ(ctx, o)
 	case "git":

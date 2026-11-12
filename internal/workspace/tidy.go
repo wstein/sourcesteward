@@ -37,7 +37,7 @@ func PlanTidy(ctx context.Context, o TidyPlanOptions) TidyResult {
 	if o.Task != "" || o.Owner != "" || o.RemoveRegistration || o.RemoveFiles != "" {
 		return boundedTidy(withNeutralizedConfigLimit(defaultRetirementCoordinator().plan(ctx, o), session))
 	}
-	c := tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}
+	c := tidyCoordinator{inspect: inspection.InspectStrict, adapter: selectTidyAdapter}
 	return boundedTidy(withNeutralizedConfigLimit(c.plan(ctx, o), session))
 }
 
