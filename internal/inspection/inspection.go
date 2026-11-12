@@ -109,7 +109,7 @@ func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (resu
 	}
 	fields := strings.Fields(version)
 	if code != 0 || len(fields) < 3 || !supportedVersion(fields[2]) {
-		return r.fail("git-failed", "inspection requires Git 2.46 or newer")
+		return r.fail("git-failed", "inspection requires Git 2.43 or newer")
 	}
 	gitdir, code, err := run(ctx, abs, "rev-parse", "--path-format=absolute", "--absolute-git-dir")
 	if err != nil || code != 0 {
@@ -201,7 +201,7 @@ func supportedVersion(v string) bool {
 	}
 	major, e := strconv.Atoi(p[0])
 	minor, f := strconv.Atoi(p[1])
-	return e == nil && f == nil && (major > 2 || (major == 2 && minor >= 46))
+	return e == nil && f == nil && (major > 2 || (major == 2 && minor >= 43))
 }
 func readHead(ctx context.Context, run runner, dir, format string) (Head, error) {
 	ref, code, err := run(ctx, dir, "symbolic-ref", "--quiet", "HEAD")

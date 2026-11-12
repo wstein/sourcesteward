@@ -10,7 +10,7 @@ import (
 
 func inspectCommand() *cobra.Command {
 	jsonOutput := false
-	command := &cobra.Command{Use: "inspect [PATH]", Short: "Inspect local repository identity without writes", Long: "Inspect local repository identity without repository writes, snapshots, hooks or network.\nGit 2.46+ and native jj 0.45.1+ are Tier 1 backends; GitButler remains unsupported.\nNative jj requires read-only bubblewrap (Linux) or sandbox-exec (macOS), with a ten-second deadline.\nPrivate temporary configuration outside the inspected repository is created and removed.\njj reads stored unsnapshotted state; disk freshness is unknown.\nIdentity is sampled twice; metadata races and ABA changes are not transactionally detected.", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+	command := &cobra.Command{Use: "inspect [PATH]", Short: "Inspect local repository identity without writes", Long: "Inspect local repository identity without repository writes, snapshots, hooks or network.\nGit 2.43+ and native jj 0.45.1+ are Tier 1 backends; GitButler remains unsupported.\nNative jj requires read-only bubblewrap (Linux) or sandbox-exec (macOS), with a ten-second deadline.\nPrivate temporary configuration outside the inspected repository is created and removed.\njj reads stored unsnapshotted state; disk freshness is unknown.\nIdentity is sampled twice; metadata races and ABA changes are not transactionally detected.", Args: cobra.MaximumNArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
 		path := ""
 		if len(args) == 1 {
 			path = args[0]
