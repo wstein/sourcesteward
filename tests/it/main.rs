@@ -11,6 +11,7 @@ mod carryover;
 mod carryover_cli;
 mod cli;
 mod credentials;
+mod discover_cli;
 mod git_runner;
 mod git_runner_ops;
 mod git_runner_sync_ops;

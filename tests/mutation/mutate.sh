@@ -1864,6 +1864,22 @@ m DC8 'safe.directory path match ignores the whole path (prefix match)' src/repo
   'Path::new(v.trim_end_matches('"'/'"')) == workdir' 'workdir.starts_with(v.trim_end_matches('"'/'"'))' \
   lib repo::discover::tests::safe_directory_rules
 
+m DC9 'default_root calls gix::discover directly' src/repo/mod.rs \
+  'if let Some(repo) = discover::discover(cwd) {' 'if let Some(repo) = gix::discover(cwd).ok() {' \
+  discover_cli a_ceiling_hides_the_workspace_root_of_status
+m DC10 'top_level calls gix::discover directly' src/repo/mod.rs \
+  'discover::discover(dir).and_then(' 'gix::discover(dir).ok().and_then(' \
+  discover_cli a_ceiling_hides_the_root_of_add
+m DC11 'discover() does not read GIT_CEILING_DIRECTORIES' src/repo/discover.rs \
+  'discover_in(dir, std::env::var_os("GIT_CEILING_DIRECTORIES").as_ref())' 'discover_in(dir, None)' \
+  discover_cli a_ceiling_hides_the_workspace_root_of_status
+m DC12 'relative ceiling entries are kept' src/repo/discover.rs \
+  '        .filter(|p| p.is_absolute())' '        .filter(|_| true)' \
+  lib repo::discover::tests::relative_ceiling_entries_are_ignored
+m DC13 'ceiling entries are not resolved through symlinks' src/repo/discover.rs \
+  'let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());' 'let canon = |p: &Path| p.to_path_buf();' \
+  lib repo::discover::tests::a_ceiling_named_through_a_symlink_hides_the_repository
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

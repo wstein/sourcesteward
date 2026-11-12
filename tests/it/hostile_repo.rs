@@ -143,19 +143,33 @@ fn repositories_are_opened_only_through_repo_open() {
             .unwrap()
             .to_string_lossy()
             .into_owned();
-        // the repo module itself (also its discovery, which applies ceiling and owner check), and the runner, which reads only the repository's own config
-        if rel == "src/repo/mod.rs" || rel == "src/repo/discover.rs" || rel == "src/git_runner.rs" {
+        // the repo module opens repositories itself, `repo/discover.rs` applies ceiling and owner check, and the
+        // runner reads only the repository's own config
+        if rel == "src/repo/discover.rs" || rel == "src/git_runner.rs" {
             continue;
         }
         let text = std::fs::read_to_string(&f).unwrap();
         for (n, line) in text.lines().enumerate() {
             let code = line.split("//").next().unwrap();
+            // discovery goes through repo::discover everywhere, `src/repo/mod.rs` included
+            for bad in [
+                "gix::discover(",
+                "ThreadSafeRepository::discover",
+                "discover_opts(",
+            ] {
+                assert!(
+                    !code.contains(bad),
+                    "{rel}:{}: {bad} bypasses repo::discover",
+                    n + 1
+                );
+            }
+            if rel == "src/repo/mod.rs" {
+                continue;
+            }
             for bad in [
                 "gix::open(",
                 "gix::open_opts(",
-                "gix::discover(",
                 "gix::ThreadSafeRepository::open",
-                "gix::ThreadSafeRepository::discover",
             ] {
                 assert!(
                     !code.contains(bad),

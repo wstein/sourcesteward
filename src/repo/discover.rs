@@ -16,7 +16,9 @@ fn discover_in(dir: &Path, ceiling_env: Option<&OsString>) -> Option<gix::Reposi
     discover_with(dir, &ceilings, &safe)
 }
 
-/// `GIT_CEILING_DIRECTORIES`: absolute entries only, as Git reads it.
+/// `GIT_CEILING_DIRECTORIES`: absolute entries only, as Git reads it. Deviation: after an empty entry Git stops
+/// resolving symlinks in the following entries; stw resolves every entry (stricter: it may hide one more
+/// repository than Git).
 fn parse_ceilings(v: &OsString) -> Vec<PathBuf> {
     std::env::split_paths(v)
         .filter(|p| p.is_absolute())
@@ -54,7 +56,10 @@ fn behind_ceiling(start: &Path, tree: &Path, ceilings: &[PathBuf]) -> bool {
         .any(|c| start.starts_with(&c) && start != c && c.starts_with(&tree))
 }
 
-/// A repository of the current user is trusted; another user's repository only if `safe.directory` names it.
+/// gix decides trust when it opens the repository (`git_dir_trust`: ownership of the git dir, the common dir
+/// and the work tree; it also trusts `/dir/*` for `/dir` itself, which Git does not). A repository of another
+/// user is kept only if `safe.directory` (system or global config) names its work tree: this check is an
+/// additional fallback, not Git's own matching.
 fn trusted(repo: &gix::Repository, trust: gix::sec::Trust, safe: &[String]) -> bool {
     if trust == gix::sec::Trust::Full {
         return true;
@@ -63,7 +68,8 @@ fn trusted(repo: &gix::Repository, trust: gix::sec::Trust, safe: &[String]) -> b
     safe_directory_allows(safe, tree)
 }
 
-/// `safe.directory` from the system and global config only (a repository must not vouch for itself).
+/// `safe.directory` from the system and global config only (a repository must not vouch for itself). Values
+/// given by `-c` or `GIT_CONFIG_COUNT` count only for Git.
 fn safe_directory_values() -> Vec<String> {
     let Ok(file) = gix::config::File::from_globals() else {
         return Vec::new();
@@ -73,8 +79,8 @@ fn safe_directory_values() -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Git's matching: `*` allows all, a trailing `/*` allows everything below that directory, otherwise the path
-/// must be equal (a trailing slash is ignored). An empty value resets the list.
+/// The fallback match: `*` allows all, a trailing `/*` allows everything below that directory, otherwise the
+/// path must be equal (a trailing slash is ignored). An empty value resets the list.
 fn safe_directory_allows(values: &[String], workdir: &Path) -> bool {
     let mut allowed = false;
     for v in values {
@@ -136,6 +142,30 @@ mod tests {
         init(&root.join("sub"));
         let r = discover_with(&root.join("sub/deep"), std::slice::from_ref(&root), &[]).unwrap();
         assert_eq!(canon(r.workdir().unwrap()), root.join("sub"));
+    }
+
+    #[test]
+    fn a_ceiling_named_through_a_symlink_hides_the_repository() {
+        let t = tempfile::tempdir().unwrap();
+        let root = canon(t.path()).join("r");
+        init(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let link = canon(t.path()).join("link");
+        std::os::unix::fs::symlink(&root, &link).unwrap();
+        // Git resolves the entries of GIT_CEILING_DIRECTORIES: the link is the repository root
+        assert!(discover_with(&root.join("sub"), &[link], &[]).is_none());
+    }
+
+    #[test]
+    fn relative_ceiling_entries_are_ignored() {
+        let v = OsString::from("sub::/abs/dir:rel/x");
+        assert_eq!(parse_ceilings(&v), vec![PathBuf::from("/abs/dir")]);
+        let t = tempfile::tempdir().unwrap();
+        let root = canon(t.path());
+        init(&root);
+        std::fs::create_dir_all(root.join("sub")).unwrap();
+        let rel = OsString::from("sub");
+        assert!(discover_in(&root.join("sub"), Some(&rel)).is_some());
     }
 
     #[test]
