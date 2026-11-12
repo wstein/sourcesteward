@@ -13,19 +13,24 @@ All files live in `<git-common-dir>/stw/oplog/` (one log per repository, shared 
 |---|---|---|
 | `refs.log` | `reference-transaction` hook (origin `hook`), stw itself (origin `stw`) | ref changes |
 | `rewrites.log` | `post-rewrite` hook, stw itself | commit pairs of amend/rebase |
-| `errors.log` (fallback `<common-dir>/stw-oplog-gaps`) | hooks | capture gaps |
-| `events-refhook.log`, `events.log` | install/uninstall | `<UTC time>\tinstall|uninstall` |
+| `errors.log` (fallback `<common-dir>/stw-oplog-gaps`) | hooks, stw | gap lines, format in 2.1 |
+| `events-refhook.log` (written by the refhook install), `events.log` (written by the post-rewrite install) | install/uninstall | `<UTC time>\tinstall|uninstall`; two files because a reader of one hook must not take the other's word `install` for its own (the spike's reason). The product keeps both names |
 | `config` | owner | `remotes=on|off`, read up to 1 KB, never executed |
 
-Two logs stay separate (owner decision). Retention of `.log` files: section 6.
+Two logs stay separate (owner decision). Rotation applies only to `refs.log` and `rewrites.log` (section 6); `errors.log`, `stw-oplog-gaps` and the events files are never rotated (small, written rarely) and keep growing until the owner deletes them.
 
 ## 2. Common rules
 
-- UTF-8 (in fact ASCII), LF terminated, TAB separated, append only. One `write` per line on a file opened `O_APPEND`; a line is far below `PIPE_BUF` (at most about 1.4 KB), so concurrent writers do not tear lines.
+- UTF-8 (in fact ASCII), LF terminated, TAB separated, append only. One `write` per line on a file opened `O_APPEND`; the longest possible `refs.log` line is below 2 KB (computed here, not measured: refname 603 bytes, `old` and `new` as `ref:` + 603 bytes each, time 20, context 15, worktree 40, 5 TABs, LF = 1898 bytes; with hashes only 812). `PIPE_BUF` (4096 on Linux, 512 guaranteed by POSIX) is a limit for pipes, not for files: the guarantee relied on is that an `O_APPEND` write to a regular file on a local file system goes to the end in one piece; network file systems give no such guarantee (UNKNOWN, as in the spike).
 - A line is never rewritten or deleted except by rotation (section 6).
+- Writer rule (stw): before appending, if the file is non-empty and its last byte is not LF (a hook killed mid-write), write one LF first, in the same `write` call as the new line (`\n` + line), so the broken fragment ends and the new line starts clean. The shell hooks do not do this; the reader handles it (section 9).
 - Time: UTC ISO 8601 with `Z` (`2026-11-12T00:42:26Z`), second resolution, or the word `unknown` (hook without a working `date`).
 - Hashes: 40 or 64 lowercase hex digits (SHA-1 or SHA-256). The zero id is `0` repeated to the hash length. Any other value in a hash field makes the line `bad`.
 - Free text from git or users is never written, except encoded names (section 3.2).
+
+### 2.1 `errors.log` and `stw-oplog-gaps`
+
+One line per event, 6 TAB fields, as in the spike: `<time> gap <kind> failed=<n> bad=<n> <worktree-or-branch>`. Field 2 is the word `gap`; field 3 is the kind (fixed words only). Hooks write the failing phase or `post-rewrite` as kind; stw writes `rotated` (a rotation happened, `failed=0 bad=0`, last field `-`), `rotate-failed` and `unreadable` (a log could not be read). `rotated` is information, not a capture gap: the gaps section counts every line with a kind other than `rotated` as `capture-gap` and shows rotations as a separate row `rotated`.
 
 ## 3. `refs.log`
 
@@ -41,29 +46,40 @@ Exactly 6 TAB fields:
 | `old`, `new` | hash, or `ref:<encoded target>` for a symbolic ref. `old` all zeros = created or unknown (see 3.3). `new` all zeros = deleted |
 | `refname` | `HEAD` or `refs/*`, percent-encoded (3.2). Per-worktree refs appear as plain `HEAD`, never `worktrees/<id>/HEAD` |
 | `context` | see 3.3 |
-| `worktree` | `main` or `worktrees/<id>` (id cut to 40 characters) of the writing process, not necessarily of the ref; `-` for markers |
+| `worktree` | `main`, or the worktree id (the directory name under `<common-dir>/worktrees/`, without the prefix `worktrees/`) of the writing process, not necessarily of the ref. The id is `other` if it contains `/`; every byte outside `[A-Za-z0-9._-]` becomes `?`; cut to 40 characters (hook `stw-oplog-refhook:103`). `-` for markers. stw writes `main` or the same reduced id of the worktree it runs in |
 
 ### 3.2 Encoding of names
 
 Every byte outside `[A-Za-z0-9._/+@:-]` becomes `%XX` (upper-case hex, byte-wise, so `%` is `%25`, `ä` is `%C3%A4`). A name longer than 200 bytes is cut at 200 bytes and ends in `%00` followed by 8 hex digits
 (djb2 of the whole unencoded name; NUL cannot occur in a ref name, so the suffix is unambiguous). A cut may split a UTF-8 sequence; harmless because bytes are encoded one by one.
-Readers decode for comparison with reflog names and MUST replace control characters on display. The Rust writer MUST produce the same output as the hook for the same name (djb2 over the bytes, 32-bit unsigned, 8 lowercase hex digits; the test corpus of the spike is the reference).
+Readers decode for comparison with reflog names and MUST replace control characters on display. The Rust writer MUST produce the same output as the hook for the same name (djb2 over the bytes of the whole unencoded name: `h = 5381`, per byte `h = (h * 33 + byte) mod 2^32`, 8 lowercase hex digits). Fixed test vectors (computed with an independent implementation; the Rust test MUST contain them, and the shell hook must give the same):
+
+| Unencoded name | Bytes | Encoded form in the log | djb2 |
+|---|---|---|---|
+| `refs/heads/main` | 15 | `refs/heads/main` | `0866f11d` |
+| `refs/heads/ä` | 13 | `refs/heads/%C3%A4` | `aee7ecff` |
+| `refs/tags/v1%` | 13 | `refs/tags/v1%25` | `9cff28ce` |
+| `refs/heads/` + 210 × `x` | 221 | first 200 bytes + `%00ffb8bca8` | `ffb8bca8` |
+| `refs/heads/` + 110 × `ä` | 231 | first 200 bytes (encoded byte by byte, ends inside a sequence) + `%00b252bbfa` | `b252bbfa` |
+| empty string | 0 | not a ref name; the function returns | `00001505` |
+
+Only names longer than 200 bytes carry the hash; the other rows fix the function.
 
 ### 3.3 Contexts
 
 | `context` | Written by | Meaning |
 |---|---|---|
 | `ref-transaction` | hook | a ref change as git committed it |
-| `pre-old` | hook (phase `prepared`) | marker: `old` = value the ref has now, `new` = zeros, worktree `-`. Not a ref change. The reader joins it to the next `ref-transaction` line of the same ref with `old` = zeros: delete `old -> 0`, or a move without expected old value `marker -> new`. A marker without a following line is an aborted transaction: ignored |
+| `pre-old` | hook (phase `prepared`) | marker: `old` = value the ref has now, `new` = zeros, worktree `-`. Not a ref change. The reader joins it to the next `ref-transaction` line of the same ref with `old` = zeros: delete `old -> 0`, or a move without expected old value `marker -> new`. A marker without a following line is an aborted transaction: ignored. A marker is consumed by exactly one following line; a second line for the same ref with `old` = zeros has no marker (shows `old value unknown`) |
 | `pre-same` | hook | marker: current value equals the new value (packing, no-op). The reader drops it together with the next `0 -> value` line of that ref |
 | `stw` | stw | a ref update stw wrote itself (gix writes: sync recovery refs, fast-forward, undo, backup refs). `old` is the real old value from `PreviousValue`, never a marker. The command is not in the line; see Q3 |
 
 Readers MUST ignore unknown contexts and lines with fewer than 5 fields (counted as `bad`, shown in the gaps section). A line with a good shape but unknown context is kept in JSON output (`context` verbatim, encoded) and skipped in the timeline.
-The second `0 0` delete line of an already deleted ref (git runs two transactions for a packed-only tag) is dropped by the reader. `HEAD` lines that repeat a branch line of the same transaction are not written by the hook.
+A line with `old` and `new` both zeros is a delete whose old value git did not tell; without a marker it is shown as `old value unknown`. The second `0 0` line of an already deleted ref (git runs two transactions for a packed-only tag) is dropped by the reader (it follows a delete of the same ref with nothing created in between). `HEAD` lines that repeat a branch line of the same transaction are not written by the hook.
 
 ### 3.4 What is logged
 
-Only `HEAD` and `refs/*`. `refs/remotes/**` only with `remotes=on` (default off; stw's own writes to `refs/remotes/**` follow the same switch). Not logged: pseudo refs (`ORIG_HEAD`, `AUTO_MERGE`, ...), `old = new`, the pruning of loose refs by `pack-refs`/`gc`.
+Only `HEAD` and `refs/*`. `refs/remotes/**` only with `remotes=on` (default off; stw's own writes to `refs/remotes/**` follow the same switch). Not logged: pseudo refs (`ORIG_HEAD`, `AUTO_MERGE`, ...), `old = new`, the pruning of loose refs by `pack-refs`/`gc` (a delete whose old value is in `packed-refs`; the hook reads `packed-refs` only then, once, lazily). The packing itself is logged as `0 -> value` per ref after a `pre-same` marker, which the reader hides together with the line.
 Per-worktree refs `refs/bisect/*`, `refs/worktree/*`, `refs/rewritten/*` get no `pre-old` marker (a delete shows `old value unknown`).
 
 ### 3.5 Hook phase rules (contract for the hook text)
@@ -77,8 +93,8 @@ Exactly 6 TAB fields:
 
     <time> <amend|rebase|other> <old sha> <new sha> <extra> <branch|detached>
 
-`extra` and `branch` are reduced to `[A-Za-z0-9._/+@-]` (other bytes become `?`); `extra` may be empty. The kind written by stw itself is `other` (Q3 proposes a fixed word `stw`).
-Readers ignore lines with fewer than 4 fields and accept unknown kinds. `(old, new)` is one edge; for duplicate pairs the first line wins. Self pairs are ignored. Several old commits with the same new commit = merge (fixup/squash); one old with several successors = split; cycles stop the chain. These semantics are those of `evolog` in the spike.
+`extra` and `branch` are reduced: every byte outside `[A-Za-z0-9._/+@-]` becomes `?` (one `?` per byte, so a multi-byte character gives several; the original is not recoverable); `extra` may be empty, `branch` is `detached` if none. The kind written by stw itself is `other` (Q3 proposes a fixed word `stw`).
+Readers ignore lines with fewer than 4 fields. **Unknown kinds are kept in the chain** (an edge is an edge; the kind is shown verbatim, escaped); only unknown `context` words of `refs.log` are skipped in the timeline (section 3.3). `(old, new)` is one edge; for duplicate pairs the first line wins. Self pairs are ignored. Several old commits with the same new commit = merge (fixup/squash); one old with several successors = split; cycles stop the chain. These semantics are those of `evolog` in the spike.
 
 ## 5. Version field
 
@@ -88,24 +104,25 @@ The line formats have no per-line version. Version lives in:
 2. the file name: a change of the field count or meaning of a field means new file names (`refs2.log`, `rewrites2.log`), never a silent change of the old files;
 3. JSON output of the readers: `schema_version` (the product starts at 1 for the oplog JSON, independent of other stw schemas).
 
-Adding a new `context` word or `rewrites.log` kind is not a format change (readers ignore unknown words). Old hooks keep writing the old files after a product upgrade; the reader reads both generations if present (Q6).
+Adding a new `context` word or `rewrites.log` kind is not a format change (readers ignore unknown words). Old hooks keep writing the old files after a product upgrade. Reading two generations is not built for v1 (Q6).
 
 ## 6. Rotation and retention
 
-- `refs.log` and `rewrites.log` rotate by size: when a file is larger than 10 MiB at the moment of a write by stw, stw renames it to `<name>.1` (replacing an older `.1`) and starts a new file; exactly one old generation. No silent deletion otherwise; no time-based expiry.
-- The hook shell scripts do not rotate (cost and risk in `prepared`/`committed`). Rotation is done by the next stw command that writes or reads with write access (`stw oplog` commands), under a lock file `rotate.lock` (create-new, stale after 60 s). A rename is atomic; a hook that opened the old file for append keeps writing to `.1` for that one line (acceptable).
-- A rotation is noted in `errors.log` as a gap line `<time> gap rotated failed=0 bad=0 -`.
-- Readers read `<name>.1` then `<name>`, so a rotation does not cut the timeline; the oldest part is lost after the second rotation (stated in the gaps section as `truncated`).
-- `pre-old`/`pre-same` markers across a rotation: a marker at the end of `.1` and its line at the start of the new file are still joined (the reader treats the two files as one stream).
-- Backup refs `refs/stw/backup/<n>` (section 8) are separate: retention 10 runs.
+- Only `refs.log` and `rewrites.log` rotate, by size: above 10 MiB stw renames the file to `<name>.1` (replacing an older `.1`) and the next append creates a new file; exactly one old generation. No silent deletion otherwise; no time-based expiry. `errors.log`, `stw-oplog-gaps` and the events files do not rotate (section 1).
+- **Who rotates.** Only stw commands that write anyway (those that append their own `refs.log` or `rewrites.log` lines: sync, undo, tidy and similar) check for rotation, after their append. `timeline`, `evolog`, `undo-plan`, `status` and every other read-only command never write, also not a rotation (the read-only tests compare `.git` byte for byte). The hook scripts never rotate (cost and risk in `prepared`/`committed`).
+- **Lock.** `rotate.lock` is created with `create_new`. Sequence: take the lock; **check the size again under the lock** (another stw may have rotated already); rotate; remove the lock. A lock older than 60 s is stale: take it over atomically by `rename` of the lock file to a unique name (`rotate.lock.stale.<pid>.<nanos>`), then `create_new` a fresh one; if either step fails another process won: give up. **If the lock is held (not stale), do not rotate and do not wait**: the command goes on and the next writer tries again. Rotation never makes a command block or fail; a failed rotation is a gap line `rotate-failed` and the command's result is unaffected.
+- A rotation is noted in `errors.log` as `<time> gap rotated failed=0 bad=0 -` (section 2.1).
+- A hook that opened the old file just before the rename keeps writing to `.1` for that one line (acceptable).
+- Readers read `<name>.1` then `<name>` as one stream, so a rotation does not cut the timeline or the join of a `pre-old` marker at the end of `.1` with its line at the start of the new file. After a second rotation the oldest generation is gone; the gaps section then says `truncated` meaning "older lines were rotated away". The reflog spike uses the same word for a reflog that was expired or cut; the product keeps both rows with their own text.
+- Backup refs (section 8) are separate: retention 10 runs.
 
 ## 7. Timeline model
 
-The timeline merges reflog rows (gix reflog iterator, origin `reflog`) with `refs.log` rows (origin `hook` or `stw`), sorted by time, then by file order. Row fields: `time`, `ref`, `old`, `new`, `origin`, `text`, `flag`.
+The timeline merges reflog rows (gix reflog iterator, origin `reflog`) with `refs.log` rows (origin `hook` or `stw`; the sync journal refs `refs/stw/recovery/sync/**` are written by gix and get origin `stw` once stw logs its own writes, see section 8 item 7), sorted by time, then by file order. Row fields: `time`, `ref`, `old`, `new`, `origin`, `text`, `flag`.
 
 - A ref change is `covered` when a log line exists for the same (ref, new value) within the hook window (after `install`, before `uninstall`); a reflog row without it inside the window is `uncovered`. Comparison by (ref, new value); the same value twice counts as covered once (known nit of the spike).
 - Grouping is always labelled `suspected` (`"group_basis":"suspected"`): same text stem and time proximity. It is a display aid and never proof of one operation. Undo plans refer to one explicitly named ref change, never to a group.
-- Gaps section always printed: `capture-gap`, `uncovered`, `pre-install`, `truncated`, `still open` (clone, `-c core.hooksPath`, other tools), as in the spikes.
+- Gaps section always printed: `capture-gap`, `uncovered`, `pre-install`, `truncated` (older lines rotated away), `rotated` (a rotation happened), `still open` (clone, `-c core.hooksPath`, other tools), as in the spikes.
 - JSON: `schema_version`, `entries[]`, `gaps{}`. Output goes through `escape_untrusted`; no log text is trusted.
 
 ## 8. Undo, compare-and-swap and backup namespace
@@ -114,10 +131,15 @@ Undo of a ref (one named change, not a full undo: index, worktree, other worktre
 
 1. `undo-plan` writes nothing and prints all checks; `undo` needs `--to OLD`, `--expect NEW` (full current value) and `--yes`.
 2. Checks: the ref is `refs/heads/*` (other types: plan only); not symbolic; not checked out in any worktree (otherwise refuse and hint `git reset --keep`; a `--keep` path is a later own package); old value is a commit and exists; the target is not the creation entry.
-3. Backup: create `refs/stw/backup/<n>` on the current value, create-only (`PreviousValue::MustNotExist`, reflog forced). `<n>` is a monotonically increasing integer, one namespace for all stw safety copies (undo and slim M5); retention 10, the oldest are removed when an 11th is made. This replaces the spike's `refs/stw/recovery/oplog/` (no second namespace).
-4. CAS: update the ref `old := --expect`, `new := --to` with `PreviousValue::MustExistAndMatch` and no-deref semantics (equivalent to `git update-ref --no-deref REF OLD CUR`); a change since the checks fails the update and leaves the backup. The reflog message is `stw oplog undo`, logged even with `core.logAllRefUpdates=false`.
-5. stw appends its own `refs.log` lines (context `stw`) for the backup creation, the retention prune and the undo update, before reporting success. A failed append is reported, does not undo the ref change.
-6. The result prints backup ref and the way back as a command.
+3. **Backup ref.** One safety copy per undo run on the current value, named `refs/stw/backup/<run>/<k>`. **Deviation from the owner decision:** the owner named the form `refs/stw/backup/<n>` with retention 10. Retention is meant per run (10 runs, as for the sync journals), and a run can hold more than one ref (`k` = 1, 2, ...); with one ref per number, retention would count refs instead of runs. For the common case of one ref per run the name is `refs/stw/backup/<run>/1`. The owner decides (Q7); the plain form is the alternative if every run holds exactly one ref.
+   - `<run>` is a positive integer that is **never reused**. A counter ref `refs/stw/backup-counter` points to a blob with the last used `<run>` as decimal text; a new run writes `<run>+1` as a new blob and updates the counter with a CAS (`MustExistAndMatch`, or create-only for the first run). A lost race means another run took the number: re-read and retry. The counter survives pruning, which is why "maximum existing + 1" is not used (after pruning the newest runs it would reuse a number).
+   - Retention: after creating a run, remove all runs except the 10 highest `<run>` values (all `k` of a run together). The counter ref is never pruned.
+   - `refs/stw/recovery/sync/<run id>/<n>` (the sync journal, 10 runs) stays as it is and is not renamed by this spec. The spike's `refs/stw/recovery/oplog/` is not used by the product.
+4. **Create-only check.** gix lets `PreviousValue::MustNotExist` pass when the ref already holds the same value (gix-ref `prepare.rs:126-134`), so the flag alone does not enforce create-only. Before creating a backup ref the code looks the ref up and fails if it exists with any value, as `create_recovery_ref` in `src/sync/journal.rs:493` does (`try_find_reference(...)` then error), and also passes `MustNotExist`.
+5. **Reflog.** The reflog entries of the backup ref and of the undone branch must be written even when the repository has `core.logAllRefUpdates=false`. In gix 0.90 that setting makes the ref store run with `WriteReflog::Disable`, and `force_create_reflog: true` on the edit then has no effect. Mechanism: stw opens the ref store handle for these writes with `write_reflog = WriteReflog::Always` (a handle made for the call, not a change of the repository config) and asks for `RefLog::AndReference`; message `stw oplog undo`. **Required test:** a repository with `core.logAllRefUpdates=false` has the reflog entries for the backup ref and the branch after `undo`, with a mutation that removes the `Always` handle. If the mechanism does not work with gix 0.90 as written, this item is replaced by "no reflog guarantee with `logAllRefUpdates=false`; the `refs.log` line of item 7 is the record". UNKNOWN until the test runs.
+6. **CAS update.** Update the ref with `old := --expect`, `new := --to` and `PreviousValue::MustExistAndMatch`, no-deref semantics (as `git update-ref --no-deref REF OLD CUR`); a change since the checks fails the update and leaves the backup.
+7. stw appends its own `refs.log` lines (context `stw`) for the backup creation, the retention prune and the undo update. A failed append is reported and does not undo the ref change.
+8. The result prints backup ref and the way back as a command.
 
 The same CAS rule applies to every stw ref write: expected old value always given.
 
@@ -126,28 +148,31 @@ The same CAS rule applies to every stw ref write: expected old value always give
 | Input | Behaviour |
 |---|---|
 | fewer fields than the minimum (5 refs, 4 rewrites) | skipped, counted as `bad` |
-| more than 6 fields | the first 6 are read, rest ignored (forward compatibility) |
+| more than 6 fields | the first 6 are read, the rest ignored (forward compatibility), **unless** a field 7 or later does not match the extension pattern `[A-Za-z0-9._/+@:=%-]*` (printable ASCII without space); then the line is `bad` |
 | `old`/`new` not hash or `ref:`, bad time | counted as `bad`, skipped |
 | unknown `context` or kind | kept in JSON, skipped in timeline/chain |
 | missing file | empty log; the gaps section says "no install record" |
 | file not regular (FIFO, device) | not read, gap `unreadable` |
 | huge line (over 4 KB) | skipped as `bad`, stream continues |
-| trailing line without LF | read (a hook may be killed mid-write), marked `truncated` if shorter than 6 fields |
-| symlink as log or directory | refused, gap `unreadable` |
+| last byte of the file is not LF | a final fragment with 6 valid fields is read; a shorter fragment is `bad`. A stw writer that finds such a file writes an LF first (section 2) |
+| log file or `stw/oplog` directory is a symlink | refused, gap `unreadable` (no following of links in the common dir, as the install rules of the spikes) |
 | NUL byte | line skipped as `bad` |
+
+`bad` lines are counted per file and shown in the gaps section; they are never deleted.
 
 Parsing is by bytes, not lossy UTF-8 conversion; names are decoded from `%XX` only for comparison.
 
 ## 10. Open questions (with recommendation)
 
 1. **Context word for stw's writes.** Recommend a single word `stw` in `refs.log`; the origin column of the timeline then reads `stw`. Alternative: one word per command (`stw-sync`, `stw-undo`): more detail, but the field becomes a vocabulary the hook readers must know. Recommend `stw` and put the command in the reflog message.
-2. **Command name in the line.** The format has no field for "which stw command". Recommend: no 7th field (format stays frozen at 6); the recovery/backup ref and the reflog message carry it.
+2. **Command name in the line.** The format has no field for "which stw command". Recommend: no 7th field (format stays frozen at 6); the backup ref and the reflog message carry it. Section 9 allows later extension fields with a fixed pattern.
 3. **`rewrites.log` kind for stw.** Recommend a new fixed word `stw` (instead of `other`) so that stw's own rewrites are distinguishable; allowed because unknown kinds are accepted by readers.
 4. **Rotation by hook or by stw only.** Recommend stw only (section 6): the hook stays at one `printf >>`. Price: a repository that never runs stw grows unbounded until the next `stw` command; acceptable (10 MiB is about 80 000 lines).
 5. **Rotation threshold.** 10 MiB per file and one generation as decided. Recommend keeping it config-free for the first version; `config` key `max_bytes` later if needed.
 6. **Reading both file generations.** After a format change (new file names) the product reads old and new. Recommend: not implemented for v1 (no second format exists yet); keep the rule in this spec only.
-7. **Backup numbering.** `<n>` per repository, never reused (counter = max existing + 1, scanned from refs; after pruning the maximum survives because the newest is kept). Recommend this over timestamps (shorter, sortable, matches the sync journals' counter). Race between two stw processes is caught by `MustNotExist` (retry once with n+1).
+7. **Backup name.** Owner form `refs/stw/backup/<n>` against this spec's `refs/stw/backup/<run>/<k>` (section 8 item 3). Recommend `<run>/<k>`: retention counts runs, as decided. `<run>` comes from the counter ref `refs/stw/backup-counter` and is never reused. Alternative: the plain form, valid only if each run makes exactly one ref; retention then counts refs.
 8. **Markers across rotation.** Recommend joining across files as in section 6; the alternative (markers dropped at the boundary) loses the old value of one delete per rotation.
 9. **SHA-256 repositories.** The spec allows 64 digits; nothing was run beyond forged hook input. Recommend a Rust test with `--object-format=sha256`, marked as a deviation from the spike's proof.
 10. **Timeline joining of `rewrites.log` and `refs.log`** ("which command"). The spike does not join them. Recommend not joining in v1; `evolog` and `timeline` stay separate commands.
 11. **Reading `refs.log` of a repository where the hook was never installed** (stw's own lines only). Recommend: valid; the gaps section states "no hook install record" and marks every hook-covered kind as open.
+12. **Reflog with `core.logAllRefUpdates=false`.** Recommend keeping the `WriteReflog::Always` handle (section 8 item 5) only if the required test passes with gix 0.90; otherwise drop the promise. The `refs.log` line is the record either way.
