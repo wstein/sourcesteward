@@ -19,7 +19,7 @@ type retirementCoordinator struct {
 }
 
 func defaultRetirementCoordinator() retirementCoordinator {
-	return retirementCoordinator{inspection.Inspect, selectRetirementAdapter, observeRetirementSource, currentRetirementCWD}
+	return retirementCoordinator{inspection.InspectStrict, selectRetirementAdapter, observeRetirementSource, currentRetirementCWD}
 }
 func selectRetirementAdapter(backend string) (retirementAdapter, error) {
 	switch backend {

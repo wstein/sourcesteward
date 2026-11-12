@@ -15,15 +15,44 @@ import (
 	"unicode/utf8"
 )
 
-// Inspect reads native identity only, without modifying repository state.
-func Inspect(ctx context.Context, path string) Result { return inspect(ctx, path, runGit) }
+// gitFloor is the oldest Git that a caller of the inspection accepts, with the reason it gives.
+type gitFloor struct {
+	major, minor int
+	message      string
+}
+
+var (
+	// floorIdentity applies to the commands that only read identity and local state and never read
+	// objects that may be missing from a partial clone: inspect, sync and status.
+	floorIdentity = gitFloor{2, 43, "inspection requires Git 2.43 or newer"}
+	// floorNoLazyFetch applies to every other caller. Git before 2.46 fetches missing objects of a
+	// partial clone although GIT_NO_LAZY_FETCH=1 is set (2.43 and 2.44 ignore the variable, 2.45
+	// rejects it, and `diff -M` fetches up to 2.45), so no-network commands need 2.46.
+	floorNoLazyFetch = gitFloor{2, 46, "inspection requires Git 2.46 or newer (older Git fetches missing objects of a partial clone and ignores GIT_NO_LAZY_FETCH)"}
+)
+
+// Inspect reads native identity only, without modifying repository state. It accepts Git 2.43 and
+// later and is for the commands that read no objects of a possibly partial clone: inspect, sync and
+// status. Every other caller uses InspectStrict.
+func Inspect(ctx context.Context, path string) Result {
+	return inspectAt(ctx, path, runGit, false, floorIdentity)
+}
+
+// InspectStrict is Inspect for the commands that promise no network access and may read objects of a
+// partial clone (inventory, release, restack, hosting, workspace and tidy). It requires Git 2.46.
+func InspectStrict(ctx context.Context, path string) Result {
+	return inspect(ctx, path, runGit)
+}
 func inspect(ctx context.Context, path string, run runner) Result {
 	return inspectOwned(ctx, path, run, false)
 }
 
 // inspectOwned is inspect with an optional guarantee that no jj process can start: when noJJ is set,
 // jj metadata is reported as a change of ownership instead of being inspected through jj.
-func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (result Result) {
+func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) Result {
+	return inspectAt(ctx, path, run, noJJ, floorNoLazyFetch)
+}
+func inspectAt(ctx context.Context, path string, run runner, noJJ bool, floor gitFloor) (result Result) {
 	defer func() {
 		if ctx.Err() != nil {
 			result = result.fail("canceled", "inspection canceled")
@@ -108,8 +137,8 @@ func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (resu
 		return r.fail("git-failed", "cannot execute Git identity inspection")
 	}
 	fields := strings.Fields(version)
-	if code != 0 || len(fields) < 3 || !supportedVersion(fields[2]) {
-		return r.fail("git-failed", "inspection requires Git 2.43 or newer")
+	if code != 0 || len(fields) < 3 || !VersionAtLeast(fields[2], floor.major, floor.minor) {
+		return r.fail("git-failed", floor.message)
 	}
 	gitdir, code, err := run(ctx, abs, "rev-parse", "--path-format=absolute", "--absolute-git-dir")
 	if err != nil || code != 0 {
@@ -194,17 +223,35 @@ func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (resu
 	r.Status = "ok"
 	return r
 }
-func supportedVersion(v string) bool { return VersionAtLeast(v, 2, 43) }
 
-// VersionAtLeast reports whether the Git version number v (for example "2.43.0") is at least major.minor.
-func VersionAtLeast(v string, major, minor int) bool {
+// ParseVersion returns the major and minor number of a Git version number such as "2.43.0" or
+// "2.39.5". The first two dot-separated fields must be plain decimal digits.
+func ParseVersion(v string) (major, minor int, err error) {
 	p := strings.Split(v, ".")
 	if len(p) < 2 {
-		return false
+		return 0, 0, fmt.Errorf("invalid Git version %q", v)
 	}
-	ma, e := strconv.Atoi(p[0])
-	mi, f := strconv.Atoi(p[1])
-	return e == nil && f == nil && (ma > major || (ma == major && mi >= minor))
+	if major, err = digits(p[0]); err != nil {
+		return 0, 0, fmt.Errorf("invalid Git version %q", v)
+	}
+	if minor, err = digits(p[1]); err != nil {
+		return 0, 0, fmt.Errorf("invalid Git version %q", v)
+	}
+	return major, minor, nil
+}
+
+// VersionAtLeast reports whether the Git version number v is at least major.minor; an invalid v is not.
+func VersionAtLeast(v string, major, minor int) bool {
+	ma, mi, err := ParseVersion(v)
+	return err == nil && (ma > major || (ma == major && mi >= minor))
+}
+
+// digits parses a non-empty string of ASCII decimal digits; strconv.Atoi would also take a sign.
+func digits(s string) (int, error) {
+	if s == "" || strings.Trim(s, "0123456789") != "" {
+		return 0, strconv.ErrSyntax
+	}
+	return strconv.Atoi(s)
 }
 func readHead(ctx context.Context, run runner, dir, format string) (Head, error) {
 	ref, code, err := run(ctx, dir, "symbolic-ref", "--quiet", "HEAD")

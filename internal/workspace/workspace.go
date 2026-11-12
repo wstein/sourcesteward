@@ -22,7 +22,7 @@ type coordinator struct {
 }
 
 func defaultCoordinator() coordinator {
-	return coordinator{inspection.Inspect, selectAdapter, inspection.Inventory, nil}
+	return coordinator{inspection.InspectStrict, selectAdapter, inspection.Inventory, nil}
 }
 func selectAdapter(backend string) (nativeAdapter, error) {
 	switch backend {

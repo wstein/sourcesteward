@@ -135,18 +135,26 @@ func TestInvalidUTF8HeadRef(t *testing.T) {
 		t.Fatal("accepted invalidUTF8 ref")
 	}
 }
-func TestSupportedVersionFloor(t *testing.T) {
-	for v, want := range map[string]bool{
-		"2.42.0": false, "2.42.9": false, "2.40.1": false, "1.99.0": false, "0.0": false,
-		"2.43.0": true, "2.43.9": true, "2.46.0": true, "2.47.3": true, "2.56.0": true, "3.0": true, "3.0.0": true,
-		"": false, "2": false, "x.y.z": false, "2.x": false, "v2.46.0": false, "-2.50": false,
+func TestVersionAtLeast(t *testing.T) {
+	for _, tc := range []struct {
+		v     string
+		minor int
+		want  bool
+	}{
+		{"2.42.9", 43, false}, {"2.43.0", 43, true}, {"2.43.9", 43, true}, {"2.46.0", 43, true}, {"3.0", 43, true}, {"3.x", 43, false},
+		{"2.45.9", 46, false}, {"2.46.0", 46, true}, {"2.47.3", 46, true}, {"2.56.0", 46, true}, {"3.0", 46, true}, {"3.0.0", 46, true},
+		{"1.99.0", 43, false}, {"0.0", 43, false}, {"", 43, false}, {"2", 43, false}, {"x.y.z", 43, false}, {"2.x", 43, false},
+		{"v2.46.0", 43, false}, {"-2.50", 43, false}, {"+2.50", 43, false}, {"+3.0", 43, false}, {"3.+1", 43, false}, {"2. 50", 43, false},
 	} {
-		if got := supportedVersion(v); got != want {
-			t.Errorf("supportedVersion(%q) = %t, want %t", v, got, want)
+		if got := VersionAtLeast(tc.v, 2, tc.minor); got != tc.want {
+			t.Errorf("VersionAtLeast(%q, 2, %d) = %t, want %t", tc.v, tc.minor, got, tc.want)
 		}
 	}
 }
-func TestVersionFloorMessage(t *testing.T) {
+
+// Two floors: the identity commands (inspect, sync, status) accept Git 2.43; every other caller needs
+// 2.46, because older Git fetches missing objects of a partial clone and ignores GIT_NO_LAZY_FETCH.
+func TestVersionFloors(t *testing.T) {
 	d := repo(t)
 	versionRunner := func(version string) runner {
 		return func(ctx context.Context, dir string, args ...string) (string, int, error) {
@@ -156,16 +164,29 @@ func TestVersionFloorMessage(t *testing.T) {
 			return "", 128, nil
 		}
 	}
-	for _, v := range []string{"2.42.0", "2.40.1"} {
-		r := inspect(context.Background(), d, versionRunner(v))
-		if r.Status != "error" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "git-failed" || r.Diagnostics[0].Message != "inspection requires Git 2.43 or newer" {
-			t.Errorf("%s: %+v", v, r)
-		}
+	const identity = "inspection requires Git 2.43 or newer"
+	const strict = "inspection requires Git 2.46 or newer (older Git fetches missing objects of a partial clone and ignores GIT_NO_LAZY_FETCH)"
+	run := map[string]func(string) Result{
+		"identity": func(v string) Result {
+			return inspectAt(context.Background(), d, versionRunner(v), false, floorIdentity)
+		},
+		"strict": func(v string) Result { return inspect(context.Background(), d, versionRunner(v)) },
 	}
-	for _, v := range []string{"2.43.0", "2.43.9", "2.46.0", "3.0"} {
-		r := inspect(context.Background(), d, versionRunner(v))
+	for _, tc := range []struct{ floor, version, want string }{
+		{"identity", "2.42.0", identity}, {"identity", "2.40.1", identity},
+		{"identity", "2.43.0", ""}, {"identity", "2.43.9", ""}, {"identity", "2.45.0", ""}, {"identity", "2.46.0", ""}, {"identity", "3.0", ""},
+		{"strict", "2.43.0", strict}, {"strict", "2.45.9", strict}, {"strict", "2.42.0", strict},
+		{"strict", "2.46.0", ""}, {"strict", "2.47.3", ""}, {"strict", "3.0", ""},
+	} {
+		r := run[tc.floor](tc.version)
+		if tc.want != "" {
+			if r.Status != "error" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "git-failed" || r.Diagnostics[0].Message != tc.want {
+				t.Errorf("%s %s: %+v", tc.floor, tc.version, r)
+			}
+			continue
+		}
 		if len(r.Diagnostics) > 0 && strings.Contains(r.Diagnostics[0].Message, "inspection requires Git") {
-			t.Errorf("%s rejected: %+v", v, r)
+			t.Errorf("%s %s rejected: %+v", tc.floor, tc.version, r)
 		}
 	}
 }

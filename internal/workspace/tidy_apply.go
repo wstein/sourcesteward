@@ -54,7 +54,7 @@ func ApplyTidy(ctx context.Context, o TidyApplyOptions) TidyResult {
 	if err != nil {
 		return boundedTidy(failTidy(newTidyResult("tidy-apply"), err))
 	}
-	return boundedTidy((tidyCoordinator{inspect: inspection.Inspect, adapter: selectTidyAdapter}).apply(ctx, o))
+	return boundedTidy((tidyCoordinator{inspect: inspection.InspectStrict, adapter: selectTidyAdapter}).apply(ctx, o))
 }
 func tidyApplyEffects(p TidyPlanRecord) []string {
 	effects := []string{"Proposed local reference apply v1: persist prepared and confirmed recovery journals before native changes; planning changes no native state."}

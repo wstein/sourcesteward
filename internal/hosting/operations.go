@@ -37,7 +37,7 @@ func InspectWithTransport(ctx context.Context, path string, o Options, rt http.R
 }
 func productionDependencies(rt http.RoundTripper) dependencies {
 	return dependencies{remotes: func(ctx context.Context, path string) inspection.RemoteResult {
-		return inspection.Remotes(ctx, inspection.Inspect(ctx, path))
+		return inspection.Remotes(ctx, inspection.InspectStrict(ctx, path))
 	}, api: func(ctx context.Context, path, host string) (apiReader, func(), error) {
 		return newGHWithTransport(ctx, path, host, rt)
 	}}

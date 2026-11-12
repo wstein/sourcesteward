@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func examplePath(name string) string {
@@ -715,5 +717,47 @@ func TestGitEnvironmentPinsEveryVariable(t *testing.T) {
 				t.Errorf("unexpected %s", k)
 			}
 		}
+	}
+}
+
+// Git before 2.46 fetches a missing object of a partial clone although GIT_NO_LAZY_FETCH=1 is set. On
+// such Git the check of a commit refuses instead of fetching (effects: no network, no writes). On
+// Git 2.46 and later the variable is honored and TestCheckCommitReadsTheCommittedBlob applies.
+func TestCheckCommitRefusesInsteadOfLazyFetchOnGitBefore246(t *testing.T) {
+	gittest.RequireBelow(t, 2, 46, "GIT_NO_LAZY_FETCH is ignored or rejected")
+	origin := repoWith(t, map[string][]byte{".stw/release.toml": exampleBytes(t, "go-cli")})
+	commit := commitAll(t, origin)
+	for _, kv := range [][2]string{{"uploadpack.allowFilter", "true"}, {"uploadpack.allowAnySHA1InWant", "true"}} {
+		if out, err := exec.Command("git", "-C", origin, "config", kv[0], kv[1]).CombinedOutput(); err != nil {
+			t.Fatalf("%v %s", err, out)
+		}
+	}
+	clone := filepath.Join(t.TempDir(), "clone")
+	if out, err := exec.Command("git", "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+origin, clone).CombinedOutput(); err != nil {
+		t.Fatalf("%v %s", err, out)
+	}
+	missing := func() string {
+		out, err := exec.Command("git", "-C", clone, "rev-list", "--objects", "--missing=print", "--all").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var m []string
+		for _, l := range strings.Split(string(out), "\n") {
+			if strings.HasPrefix(l, "?") {
+				m = append(m, l)
+			}
+		}
+		return strings.Join(m, "\n")
+	}
+	before := missing()
+	if before == "" {
+		t.Fatal("the fixture is not a partial clone with missing objects")
+	}
+	r := run(t, CheckOptions{Path: clone, Commit: commit})
+	if r.Status == "ok" || r.Error == nil || !strings.Contains(r.Error.Message, "Git 2.46") {
+		t.Fatalf("not refused with the Git 2.46 reason: %+v", r)
+	}
+	if after := missing(); after != before {
+		t.Fatalf("missing objects changed: %q -> %q", before, after)
 	}
 }
