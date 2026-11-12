@@ -171,7 +171,7 @@ information only. A failure, cancelled or timed-out newest run is a red item of 
 
 `behind_origin` is decided in the local object store: `stwsync.BehindOrigin` looks the head of the default branch up and is true when the
 commit is absent or is not an ancestor of the local branch tip. Every Git call passes `--no-lazy-fetch`, so a partial clone does not fetch
-the commit on demand; a Git older than 2.44 refuses the option (exit 129) and the answer stays undecided, as it does without a clone or a
+the commit on demand; a Git older than 2.45 refuses the option (exit 129) and the answer stays undecided, as it does without a clone or a
 local branch of that name.
 
 ## Orchestration of the sources of `stw status` (Spec 037, work package R)

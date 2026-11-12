@@ -13,7 +13,7 @@ import (
 // Git call carries --no-lazy-fetch, so even a partial clone never fetches the missing commit. behind is
 // true when the commit is absent locally or is not an ancestor of the tip of the local branch. known is
 // false when it cannot be decided: remoteHead is not a full lower-case SHA, branch is not an existing
-// local branch of the repository at dir, Git is unavailable, or Git is older than 2.44 and refuses
+// local branch of the repository at dir, Git is unavailable, or Git is older than 2.45 and refuses
 // --no-lazy-fetch.
 func BehindOrigin(ctx context.Context, dir, branch, remoteHead string) (behind, known bool) {
 	bin, err := exec.LookPath("git")
