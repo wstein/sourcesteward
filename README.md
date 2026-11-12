@@ -109,7 +109,11 @@ The repositories of a workspace are the gitlinks of the root's index (mode 16000
 path order; `repo::submodule_paths`). `.gitmodules` is not read for that: a gitlink needs no entry there, a path that
 `.gitmodules` names without a gitlink is no repository (a clone that no gitlink names is never listed), and a root with
 gitlinks but no `.gitmodules` file is a workspace. The superproject of a checkout is the nearest parent repository whose
-index has a gitlink at that path. Only `stw add` still reads `.gitmodules` (it refuses a path that the file names already).
+index has a gitlink at that path, and the workspace root is the top-level one (up to 16 levels, `repo::topmost_superproject`).
+Nested gitlinks (in a submodule's own index) are listed depth first, after the submodule that holds them, named `outer/inner`
+(`repo::list_repos`); a gitlink without a checkout is never descended into. More than 256 repositories (the root included) is
+a usage error (exit 2), as Go's `sync-limit`. Only `stw add` still reads `.gitmodules` (it refuses a path that the file names
+already) and still takes the nearest superproject as its target.
 
 A gitlink path is untrusted (a repository can name it). It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
 passes the rules of `stw add` (`[A-Za-z0-9._/-]`, relative, no `..`, no `-x` component, no git-special name), no component
@@ -128,16 +132,18 @@ mv; stw handles only [A-Za-z0-9._/-]`), and never changes the exit code, except 
 - Not reported when `--repo` names repositories; an unknown `--repo` (also a refused path) is a usage error.
 
 Deviations from Go: Go lists the same gitlinks (`ls-files --stage`, `sync.go:262-276`; absolute paths and `..` are filtered
-there) and walks nested submodules; it checks charset and symbolic links only for a `sync --submodules` run
-(`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust checks every gitlink path in every command and lists the top-level
-gitlinks only (flat, see "sync --submodules" deviation 6). Git cannot hold an absolute path or a `..` segment in an index and a
+there) and walks nested submodules, as Rust does now; it checks charset and symbolic links only for a `sync --submodules` run
+(`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust checks every gitlink path of every level in every command (a nested
+path is checked against the repository that holds it and reported below the root, `outer/inner`). Git cannot hold an absolute path or a `..` segment in an index and a
 clone brings none, so such a path of `.gitmodules` is ignored (earlier Rust reported it as refused). The order is the path
 order of the index (earlier: the order of `.gitmodules`). Go counts a gitlink at stage 1 to 3 once, as Rust does.
-The workspace root of a checkout is the nearest parent repository whose index has a gitlink at that path (from `ws/sub/n2`
-Rust chooses `ws/sub`, whose list is flat); Go goes up to the top-level superproject (`--show-superproject-working-tree`, up to
-16 levels, `sync.go:215`) and walks the nested ones. An unreadable index gives an empty list (Go: the run fails with
-`cannot list the submodules`, `sync.go:265`).
-Not done here: nested submodules (UNKNOWN whether the owner wants them: the repository list is flat in every command).
+The workspace root of a checkout is found by repeating the nearest-superproject step up to 16 times (Go: `git rev-parse
+--show-superproject-working-tree`, `sync.go:215`); the two agree on a plain nested checkout. They can differ for a
+superproject that is itself a linked worktree (Go resolves the main worktree at every level, Rust does not: UNKNOWN, not
+tested). An unreadable index gives an empty list (Go: the run fails with `cannot list the submodules`, `sync.go:265`).
+Not nested-aware: `stw add` (target: the nearest superproject). `tidy plan` and `tidy apply` name repositories through
+`list_repos` and therefore accept a nested one (`--repo outer/inner`); how `tidy apply` treats a repository that contains
+a checked-out submodule is unchanged (`tidy_apply.rs`), and its behavior on a nested repository is UNKNOWN (not tested).
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
@@ -182,7 +188,8 @@ Deviations from Go in these flags:
    nothing fetched); Go checked it in the plan only. Tags are never pruned (`--no-prune-tags` wins over `remote.origin.pruneTags`).
 4. Only `origin` is fetched and pruned; Go prunes the remote of the branch.
 5. JSON `pruned` is a list of ref names (Go: a number); `summary.pruned` is the total.
-6. Rust visits the top-level gitlinks of the index only (its repository list is flat); Go walks nested ones depth-first.
+6. (Removed: Rust walks nested gitlinks depth-first as Go does, with `--submodules` acting on a nested pinned submodule
+   against the submodule that holds its gitlink; README "Submodules: the gitlinks of the index".)
 7. A submodule path outside `[A-Za-z0-9._/-]` or through a symbolic link is `unreachable` (Go: only absolute, `..`,
    option-like and control characters). Paths from `.gitmodules` are reported escaped.
 8. `unreachable` is result `error` (run) or `skip` ("would be unreachable", `--plan`); Go has the result `unreachable`.
@@ -960,8 +967,8 @@ changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`
 `stw: sync: <code>: <message>` to stderr. `restore` together with any sync option (`--plan`, `--dry-run`, `--apply`, `--prune`,
 `--no-prune`, `--submodules`, `--rules`, `--rules-path`, `--offline`, `--repo`) is a usage error (exit 2, nothing done).
 
-Deviations from Go: (1) the workspace is `PATH` or `--root` (both is a usage error), and the repositories are the root and the top-level
-gitlinks of the index (Go walks them too, nested ones included); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
+Deviations from Go: (1) the workspace is `PATH` or `--root` (both is a usage error), and the repositories are the root and the gitlinks of the index
+(nested ones included, as Go walks them); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
 result, exit 1); (3) a record is also refused when a `ref` is not a valid branch name by the rules of git, an OID is not 40 digits
 (a 64 digit OID of a SHA-256 repository is `bad-record`: stw has no SHA-256 support) or the file is a symbolic link; (4) any merge, rebase, bisect, cherry-pick or revert
 running in any worktree of the repository (main, linked, relative or dead registration) stops the restore of that repository (Go: only an
