@@ -678,6 +678,57 @@ fn a_line_with_a_nul_byte_is_bad() {
 }
 
 #[test]
+fn a_name_with_a_broken_percent_escape_is_bad() {
+    let fx = Fx::new();
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), &h('2'), "refs/heads/a%zz", "stw", "main"),
+    ));
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), &h('2'), "refs/heads/a%4", "stw", "main"),
+    ));
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), "ref:refs/heads/a%", "HEAD", "stw", "main"),
+    ));
+}
+
+#[test]
+fn a_worktree_id_outside_the_reduced_character_set_is_bad() {
+    let fx = Fx::new();
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), &h('2'), "refs/heads/a", "stw", "a b"),
+    ));
+    one_bad(&bad_then_good(
+        &fx,
+        &line(T, &h('1'), &h('2'), "refs/heads/a", "stw", "wt/x"),
+    ));
+}
+
+#[test]
+fn a_log_that_is_a_directory_is_not_read_as_a_regular_file() {
+    let fx = Fx::new();
+    std::fs::create_dir_all(fx.path.join(".git/stw/oplog/refs.log")).unwrap();
+    let v = json(&fx, &["timeline"]);
+    let g = gap(&v, "unreadable").expect("an unreadable gap");
+    assert_eq!(g["text"], "not read: not a regular file", "{g}");
+}
+
+#[test]
+fn a_log_over_the_size_limit_is_not_read() {
+    let fx = Fx::new();
+    std::fs::create_dir_all(fx.path.join(".git/stw/oplog")).unwrap();
+    let f = std::fs::File::create(fx.path.join(".git/stw/oplog/refs.log")).unwrap();
+    f.set_len(64 * 1024 * 1024 + 1).unwrap();
+    let v = json(&fx, &["timeline"]);
+    let g = gap(&v, "unreadable").expect("an unreadable gap");
+    assert!(g["text"].as_str().unwrap().contains("larger than"), "{g}");
+    assert!(gap(&v, "bad").is_none(), "the file must not be parsed: {v}");
+}
+
+#[test]
 fn a_hash_in_upper_case_is_bad() {
     let fx = Fx::new();
     one_bad(&bad_then_good(
@@ -892,6 +943,34 @@ fn capture_gaps_and_bad_lines_are_counted_in_the_evolog() {
     assert_eq!(v["gaps"]["bad_lines"], 1);
 }
 
+/// The JSON says what the text says: an unreadable log and whether `rewrites.log` exists at all.
+#[test]
+fn the_evolog_json_names_an_unreadable_log_and_a_missing_file() {
+    let fx = Fx::new();
+    let [_, _, c] = three(&fx);
+    let tip = c.to_string();
+    let v = json(&fx, &["evolog", &tip]);
+    assert_eq!(v["gaps"]["log_exists"], false, "{v}");
+    assert!(
+        v["gaps"]["unreadable"].as_array().unwrap().is_empty(),
+        "{v}"
+    );
+    let target = fx.path.join("elsewhere.log");
+    std::fs::write(&target, rewrites(&[("amend", &h('1'), &tip)])).unwrap();
+    std::fs::create_dir_all(fx.path.join(".git/stw/oplog")).unwrap();
+    std::os::unix::fs::symlink(&target, fx.path.join(".git/stw/oplog/rewrites.log")).unwrap();
+    let v = json(&fx, &["evolog", &tip]);
+    assert_eq!(v["pairs"], 0, "{v}");
+    assert_eq!(v["gaps"]["log_exists"], true, "{v}");
+    let u = v["gaps"]["unreadable"].as_array().unwrap();
+    assert_eq!(u.len(), 1, "{v}");
+    assert_eq!(u[0]["file"], "rewrites.log");
+    assert_eq!(u[0]["text"], "not read: a symbolic link");
+    assert!(run(&fx, &["evolog", &tip])
+        .text
+        .contains("unreadable      rewrites.log: not read: a symbolic link"));
+}
+
 #[test]
 fn evolog_usage_errors() {
     let fx = Fx::new();
@@ -1090,6 +1169,36 @@ fn a_running_operation_and_an_unknown_ref_and_a_symbolic_ref_are_refused() {
             .any(|t| t.contains("symbolic ref")),
         "{v}"
     );
+}
+
+#[test]
+fn an_ambiguous_to_prefix_is_refused() {
+    let fx = Fx::new();
+    let [c1, _, c3] = three(&fx);
+    fx.branch("main", c1);
+    fx.set_head("main");
+    fx.branch("work", c3);
+    let (a, b) = (
+        format!("ab{}", "1".repeat(38)),
+        format!("ab{}", "2".repeat(38)),
+    );
+    reflog(
+        &fx,
+        "refs/heads/work",
+        &[
+            (Z, &a, 1_700_000_000, "x"),
+            (&a, &b, 1_700_000_100, "y"),
+            (&b, &c3.to_string(), 1_700_000_200, "z"),
+        ],
+    );
+    let v = json(&fx, &["undo-plan", "work", "--to", "ab"]);
+    assert!(
+        checks(&v, "refused")
+            .iter()
+            .any(|t| t.contains("is ambiguous: 2 different old values")),
+        "{v}"
+    );
+    assert!(v["target"].is_null(), "no target is chosen: {v}");
 }
 
 #[test]

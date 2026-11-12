@@ -304,6 +304,11 @@ impl Evolog {
             })
             .collect();
         let count = |s: &str| self.uncovered.iter().filter(|u| u.state == s).count();
+        let unreadable: Vec<Value> = self
+            .unreadable
+            .iter()
+            .map(|(n, why)| json!({ "file": n, "text": format!("not read: {}", escape_untrusted(why, 200).0) }))
+            .collect();
         json!({
             "schema_version": SCHEMA_VERSION, "command": "oplog evolog", "engine": crate::output::engine(),
             "source": "hook", "tip": self.tip, "ref": self.label, "pairs": self.pairs, "nodes": nodes,
@@ -312,6 +317,7 @@ impl Evolog {
                 "uncovered_rewrites": count("uncovered"), "hook_absent": count("hook-absent"),
                 "unknown_window": count("unknown-window"), "pre_install": self.pre_install,
                 "compared_with_reflog": self.label, "bad_lines": self.bad,
+                "log_exists": self.log_exists, "unreadable": unreadable,
             },
         })
     }

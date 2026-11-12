@@ -2222,6 +2222,25 @@ m OL40 'oplog undo-plan: --to accepts upper case' src/cli.rs \
   'if to.is_empty() || !to.bytes().all(|b| matches!(b, b'\''0'\''..=b'\''9'\'' | b'\''a'\''..=b'\''f'\'')) {' 'if false {' \
   oplog_read undo_plan_usage_errors
 
+m OL41 'oplog evolog: the JSON leaves out the unreadable logs' src/oplog/evolog.rs \
+  '"log_exists": self.log_exists, "unreadable": unreadable,' '"log_exists": self.log_exists, "unreadable": Vec::<Value>::new(),' \
+  oplog_read the_evolog_json_names_an_unreadable_log_and_a_missing_file
+m OL42 'oplog: a percent escape is not checked' src/oplog/parse.rs \
+  '(s == "HEAD" || s.starts_with("refs/")) && all_bytes(s, name_byte) && percent_ok(s)' '(s == "HEAD" || s.starts_with("refs/")) && all_bytes(s, name_byte)' \
+  oplog_read a_name_with_a_broken_percent_escape_is_bad
+m OL43 'oplog: the worktree id may hold any character' src/oplog/parse.rs \
+  'b.is_ascii_alphanumeric() || b"._?-".contains(&b)' 'true' \
+  oplog_read a_worktree_id_outside_the_reduced_character_set_is_bad
+m OL44 'oplog: a log that is not a regular file is read' src/oplog/store.rs \
+  'Ok(m) if !m.is_file() => File::Unreadable("not a regular file".into()),' 'Ok(m) if false => File::Unreadable("not a regular file".into()),' \
+  oplog_read a_log_that_is_a_directory_is_not_read_as_a_regular_file
+m OL45 'oplog: the size limit of a log file is not applied' src/oplog/store.rs \
+  'Ok(m) if m.len() > MAX_FILE => {' 'Ok(m) if false && m.len() > MAX_FILE => {' \
+  oplog_read a_log_over_the_size_limit_is_not_read
+m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_plan.rs \
+  'if olds.len() > 1 {' 'if false && olds.len() > 1 {' \
+  oplog_read an_ambiguous_to_prefix_is_refused
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
