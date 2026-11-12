@@ -90,7 +90,7 @@ func jjTidyEligible(candidates []JJTidyCandidate, target JJTidyCandidate) bool {
 func mutateJJTidy(ctx context.Context, path string, before JJTidyState, target JJTidyCandidate, recovery JJTidyRecovery, deleting bool) (JJWorkspaceState, JJTidyNativeOutcome, error) {
 	outcome := jjTidyOutcome()
 	var post JJWorkspaceState
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.JJRepository == nil || *identity.JJRepository != before.Expected.Source {
 		return post, outcome, errJJChanged
 	}

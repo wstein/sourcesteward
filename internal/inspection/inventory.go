@@ -113,7 +113,7 @@ func Inventory(ctx context.Context, path string, options InventoryOptions) (resu
 	if ctx.Err() != nil {
 		return r.fail("canceled", "inventory canceled")
 	}
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	r = newInventoryResult(identity)
 	if identity.Status != "ok" {
 		r.Status = "error"
@@ -143,7 +143,7 @@ func Inventory(ctx context.Context, path string, options InventoryOptions) (resu
 		return boundedInventoryFailure(r, "canceled", "inventory canceled")
 	}
 	if r.Status != "error" {
-		final := Inspect(ctx, path)
+		final := InspectStrict(ctx, path)
 		if ctx.Err() != nil {
 			return inventoryContextFailure(ctx, r)
 		}

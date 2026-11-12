@@ -31,7 +31,7 @@ type RemoteResult struct {
 func Remotes(ctx context.Context, identity Result) RemoteResult {
 	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
 	defer cancel()
-	return remotes(ctx, identity, Inspect, readRemotes)
+	return remotes(ctx, identity, InspectStrict, readRemotes)
 }
 
 func remotes(ctx context.Context, identity Result, inspect func(context.Context, string) Result, read func(context.Context, Result) ([]Remote, error)) RemoteResult {

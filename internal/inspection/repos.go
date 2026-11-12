@@ -23,7 +23,7 @@ const (
 
 // Repos executes the multi-repository inventory operation across explicit and discovered members.
 func Repos(ctx context.Context, o ReposOptions) ReposResult {
-	return reposWithRunner(ctx, o, Inspect, Inventory, newReposRunner)
+	return reposWithRunner(ctx, o, InspectStrict, Inventory, newReposRunner)
 }
 
 func repos(ctx context.Context, o ReposOptions, inspectFn inspectFunc, inventoryFn inventoryFunc) ReposResult {

@@ -18,7 +18,7 @@ func VerifyJJRetirementPostState(ctx context.Context, source string, expected JJ
 	if !reflect.DeepEqual(fresh, expected) {
 		return errJJChanged
 	}
-	identity := Inspect(ctx, source)
+	identity := InspectStrict(ctx, source)
 	if identity.Status != "ok" || identity.JJRepository == nil {
 		return errJJChanged
 	}

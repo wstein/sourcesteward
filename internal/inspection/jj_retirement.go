@@ -44,7 +44,7 @@ func ObserveJJRetirement(ctx context.Context, source, base, destination, name, r
 	if r.Target.OperationID != r.Expected.Source.OperationID {
 		return r, errJJChanged
 	}
-	identity := Inspect(ctx, destination)
+	identity := InspectStrict(ctx, destination)
 	if identity.Status != "ok" || identity.JJRepository == nil {
 		return r, errJJChanged
 	}

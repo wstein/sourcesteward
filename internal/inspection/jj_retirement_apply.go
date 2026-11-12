@@ -46,7 +46,7 @@ func mutateJJRetirement(ctx context.Context, source string, expected JJWorkspace
 	if observed != target {
 		return post, o, errJJChanged
 	}
-	identity := Inspect(ctx, source)
+	identity := InspectStrict(ctx, source)
 	if identity.Status != "ok" || identity.JJRepository == nil || *identity.JJRepository != expected.Source {
 		return post, o, errJJChanged
 	}

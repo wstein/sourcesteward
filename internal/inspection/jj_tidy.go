@@ -32,7 +32,7 @@ func ObserveJJTidy(ctx context.Context, path, base string) (JJTidyState, error) 
 		return state, err
 	}
 	state.Expected = expected
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.Backend != "jj" || identity.JJRepository == nil || *identity.JJRepository != expected.Source {
 		return state, errJJChanged
 	}
