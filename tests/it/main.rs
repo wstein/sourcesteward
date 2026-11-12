@@ -26,6 +26,7 @@ mod lint_pr_cmd;
 mod nested;
 mod network;
 mod no_binaries;
+mod oplog_read;
 mod patchid;
 mod patchid_props;
 mod prove;
