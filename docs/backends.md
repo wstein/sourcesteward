@@ -62,7 +62,7 @@ Use separate workspaces/worktrees when tasks need separate filesystem or runtime
 
 | Backend | Current accepted capability | Version support | Next acceptance gate |
 | --- | --- | --- | --- |
-| Git | Bounded identity inspection | Git 2.43+ | Preserve existing fixtures and v1 schema |
+| Git | Bounded identity inspection | Git 2.43+ for identity inspection, sync and status; 2.46+ for all other commands | Preserve existing fixtures and v1 schema |
 | jj | Native stored identity inspection implemented; final acceptance tracked in Spec 008 | Stable jj 0.45.1+; enforced sandbox required | Minimum/current conformance and no-target-write evidence |
 | GitButler | Recognized ownership detection and explicit unsupported result | No native adapter supported | Separate specification |
 
@@ -73,7 +73,7 @@ executables, stale/concurrent state and absence of unintended writes. Capability
 backend-specific identities stay visible in human output, JSON schemas and documentation.
 Published v1 contracts remain compatible; incompatible result shapes require a new version.
 
-The inspection floor is Git 2.43 (the release that introduced `show-ref --exists`); the minimum CI lane still pins Git 2.46.0, so 2.43 is not yet a conformance lane. Git conformance pins minimum 2.46.0 and current 2.56.0; jj conformance pins minimum 0.45.1
+The identity floor is Git 2.43 (the release that introduced `show-ref --exists`) for `stw inspect`, `stw sync` and `stw status`. Every other command that reads a repository (inventory, release, restack, hosting, workspace, tidy) needs Git 2.46 (`inspection.InspectStrict`): Git 2.43 and 2.44 ignore `GIT_NO_LAZY_FETCH`, 2.45 rejects it and `diff -M` still fetches, so older Git fetches missing objects of a partial clone and breaks the no-network promise. The minimum CI lane pins Git 2.46.0; 2.43 is not a conformance lane. Git conformance pins minimum 2.46.0 and current 2.56.0; jj conformance pins minimum 0.45.1
 and current 0.46.0. Later stable versions must retain the supported identity interfaces; an
 untested release is not equivalent to recorded conformance. Git/version keep published schema
 v1; selected native jj success/errors use schema v2 with distinct workspace, change, commit and

@@ -27,7 +27,7 @@ stw version --json
 This guide follows the main branch and may differ from an installed version. Check
 `stw version` and the matching source revision before diagnosing a discrepancy. The
 CLI does not fetch the guidance URLs, use a pager or prompt, or require credentials or
-a Git repository for help/version; inspection requires a supported local backend and repository. Git requires 2.43+; jj requires
+a Git repository for help/version; inspection requires a supported local backend and repository. Git requires 2.43+ for `stw inspect`, `stw sync` and `stw status` and 2.46+ for every other command that reads a repository (older Git fetches missing objects of a partial clone); jj requires
 stable 0.45.1+ with usable Linux bubblewrap or macOS sandbox-exec. A local checkout can read this file offline.
 
 ## Build and use a checkout

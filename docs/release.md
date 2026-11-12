@@ -23,7 +23,7 @@ All current release commands offer human output and `--json`.
 
 | Registered command | Current source behavior | Boundary still pending |
 | --- | --- | --- |
-| `stw release check [PATH] [--commit C]` | Validates working-tree contracts, or committed contracts at full C; fixed ownership/native reads, no network, writes or project commands | Contract validity is not proof of script behavior or release acceptance |
+| `stw release check [PATH] [--commit C]` | Requires Git 2.46+ (older Git fetches missing objects of a partial clone). Validates working-tree contracts, or committed contracts at full C; fixed ownership/native reads, no network, writes or project commands | Contract validity is not proof of script behavior or release acceptance |
 | `stw release plan C --version V [PATH]` | Reads C's contract, checks local build gates and displays argv/effects as data; `--online` adds bounded authenticated GitHub GET reads | Required remote gates remain `not-run` offline; live end-to-end acceptance remains pending |
 | `stw release plan TAG [PATH]` | Checks annotation, ancestry, record and allowlist-diff gates; `--online` adds remote gates; `--for build` selects existing-tag build mode | Git-owned checkout required; artifacts and attestations require `verify` |
 | `stw release verify TAG [PATH] --artifacts DIR` | Adds exact file-set, size, checksum and canonical-record checks; `--online` adds remote gates and bounded `gh attestation verify` processes | Git-owned checkout required; source conformance is separate from real release acceptance |

@@ -17,7 +17,7 @@ Expanded fixture coverage subsequently checks the complete bounded contract.
 - Human/JSON success and errors, usage classification, stderr cardinality and unchanged version contract.
 - Ten real-process smoke cases against disposable repositories.
 
-The implementation uses Git 2.43+ show-ref --exists to distinguish absent branch from lookup
+The implementation uses Git 2.43+ show-ref --exists (the identity floor of inspect, sync and status; the other commands need 2.46+) to distinguish absent branch from lookup
 errors. It does not bypass safe.directory or execute managed-backend CLIs. Writer failures
 remain runtime1 and may leave incomplete output.
 
