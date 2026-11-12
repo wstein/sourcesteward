@@ -520,7 +520,9 @@ version text that cannot be read, is refused (fail closed, `git_error: version`,
 | `sync --submodules`, `sync restore`, `add` | 2.36 | `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command); these ops read the index | 2.36.0 (config/core) |
 | `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
 
-The 2.36 bound is documentary: a run of the whole test suite with Git 2.35.3 passed, so no failure was observed there.
+The 2.36 bound is documentary: with Git 2.35.3 no test of `add`, `sync --submodules` or `sync restore` failed (48 failures,
+all range-diff or merge-tree tests that need 2.40/2.41; calls seen: check-attr 146, reset --keep 32, reset --hard 19,
+submodule add 19, absorbgitdirs 17, commit 17, submodule sync 5, update 4), so no failure was observed there.
 The 2.41 bound was shown: with 2.40.1 a worktree `.gitattributes` with `* -diff` made `range-diff` report "equal" for a
 changed commit; with 2.41.0 and 2.43.0 it reported "not equal".
 
@@ -536,7 +538,7 @@ Test-only requirements (not needed at run time):
 Distributions (not checked against their packages): Ubuntu 24.04 ships Git 2.43.0 and covers every command. Debian 12 ships
 2.39.x and loses `review carry-over` and `prove` (shown by the version check with a 2.39.2 build, not by the Debian package);
 `sync --submodules`, `sync restore` and `add` stay available there. The suite ran green with 2.43.0 and 2.41.0, and with
-2.40.1 except one test that needs 2.41.
+2.40.1 the carry-over and prove tests fail at the version check (they need 2.41) and the rest passes.
 
 ## GitHub reads for review and readiness (internal API)
 
@@ -776,7 +778,7 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 242 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 500 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
