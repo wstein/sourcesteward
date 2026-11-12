@@ -65,7 +65,9 @@ func LimitBelow(major, minor int, run, skip string) {
 	if err != nil || ma > major || (ma == major && mi >= minor) {
 		return
 	}
-	flag.Parse()
+	if !flag.Parsed() {
+		flag.Parse()
+	}
 	limited := false
 	for name, value := range map[string]string{"test.run": run, "test.skip": skip} {
 		if f := flag.Lookup(name); f != nil && value != "" && f.Value.String() == "" {

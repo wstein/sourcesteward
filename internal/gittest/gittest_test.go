@@ -2,6 +2,7 @@
 package gittest
 
 import (
+	"flag"
 	"os"
 	"path/filepath"
 	"testing"
@@ -70,5 +71,48 @@ func TestUnreadableVersionFailsInsteadOfSkipping(t *testing.T) {
 				t.Errorf("%s with %q: fatal=%v skipped=%v", name, out, r.fatal, r.skipped)
 			}
 		}
+	}
+}
+
+// limited runs LimitBelow with a fake git and returns the resulting test.run and test.skip.
+func limited(t *testing.T, version string) (run, skip string) {
+	t.Helper()
+	fakeGit(t, version)
+	for _, name := range []string{"test.run", "test.skip"} {
+		f := flag.Lookup(name)
+		old := f.Value.String()
+		f.Value.Set("")
+		t.Cleanup(func() { f.Value.Set(old) })
+	}
+	LimitBelow(2, 46, "^RUN$", "^SKIP$")
+	return flag.Lookup("test.run").Value.String(), flag.Lookup("test.skip").Value.String()
+}
+
+func TestLimitBelow(t *testing.T) {
+	for _, tc := range []struct {
+		out     string
+		limited bool
+	}{
+		{"git version 2.45.9", true}, {"git version 2.43.0", true}, {"git version 1.99.0", true},
+		{"git version 2.46.0", false}, {"git version 2.47.3", false}, {"git version 3.0.0", false},
+		{"git version x.y", false}, {"git version", false}, {"nonsense", false},
+	} {
+		run, skip := limited(t, tc.out)
+		if got := run == "^RUN$" && skip == "^SKIP$"; got != tc.limited || (!tc.limited && (run != "" || skip != "")) {
+			t.Errorf("%q: run=%q skip=%q, want limited=%v", tc.out, run, skip, tc.limited)
+		}
+	}
+}
+
+// An explicit -test.run of the caller wins over the limit.
+func TestLimitBelowKeepsAnExplicitRun(t *testing.T) {
+	fakeGit(t, "git version 2.43.0")
+	f := flag.Lookup("test.run")
+	old := f.Value.String()
+	f.Value.Set("^Mine$")
+	t.Cleanup(func() { f.Value.Set(old) })
+	LimitBelow(2, 46, "^RUN$", "")
+	if got := f.Value.String(); got != "^Mine$" {
+		t.Errorf("test.run = %q", got)
 	}
 }
