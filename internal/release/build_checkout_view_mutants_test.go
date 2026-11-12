@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 // These tests pin single guarded lines of the checkout view that earlier tests passed
@@ -346,7 +348,8 @@ func TestBuildViewGraphBoundsGitlinkRecursion(t *testing.T) {
 
 // A clean checkout that uses a sparse index is refused, because native Git expands the
 // index and reports it on its diagnostic stream; the refusal names the sparse index.
-// A cone-mode sparse checkout with a full index is accepted.
+// A cone-mode sparse checkout with a full index is accepted. The refusal rests on the diagnostic of
+// Git 2.46 and later; older Git expands the index silently and the sparse index is accepted.
 func TestBuildViewGraphRefusesSparseIndexAndNamesIt(t *testing.T) {
 	for name, sparseIndex := range map[string]bool{"sparse index": true, "full index": false} {
 		t.Run(name, func(t *testing.T) {
@@ -364,6 +367,15 @@ func TestBuildViewGraphRefusesSparseIndexAndNamesIt(t *testing.T) {
 			if !sparseIndex {
 				if err != nil {
 					t.Fatal("a sparse checkout with a full index was refused: ", err)
+				}
+				return
+			}
+			if !gittest.AtLeast(t, 2, 46) {
+				// Before Git 2.46, ls-files expands a sparse index without a diagnostic (the hint
+				// "The sparse index is expanding" appeared with 2.46, advice.sparseIndexExpanded), so
+				// the checkout is read as with a full index and accepted.
+				if err != nil {
+					t.Fatal("a sparse index on Git before 2.46 is read like a full index: ", err)
 				}
 				return
 			}

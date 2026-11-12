@@ -129,7 +129,7 @@ included), compared with C through a supervised native Git process, and revalida
 after the build. A change of that metadata or of the native configuration during the
 build refuses `checkout-mismatch`; the stat data of the verified index copy is cleared and
 Git re-hashes every tracked file, so a forged mtime or size is not trusted. Entries flagged assume-unchanged or skip-worktree, and the
-worktree content of gitlink checkouts, are bound but not re-read. A checkout with a sparse index is refused (cone-mode sparse checkouts with a full index are accepted). This is source-implemented and pending independent
+worktree content of gitlink checkouts, are bound but not re-read. A checkout with a sparse index is refused on Git 2.46 and later, where Git reports the index expansion (cone-mode sparse checkouts with a full index are accepted; Git before 2.46 expands a sparse index silently and the checkout is read as with a full index). This is source-implemented and pending independent
 review. The Darwin observer has only been compiled, not run; `internal/release` does
 not compile for Windows, as before. `promote` does not compare the checkout and does
 not use the view. See the
