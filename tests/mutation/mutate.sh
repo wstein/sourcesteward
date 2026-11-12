@@ -1833,6 +1833,10 @@ m GF3 'the version message prints the found text raw' src/git_runner.rs \
   'escape_untrusted(found, 80).0' 'found' \
   git_runner_ops the_version_message_names_the_command_and_escapes_the_found_text
 
+m GF4 'the command layer does not name the command in the version error' src/cli.rs \
+  'git_runner::shared().set_command(git_command_label(&command));' 'let _ = git_command_label(&command);' \
+  carryover_cli an_old_git_is_refused_with_the_command_name
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

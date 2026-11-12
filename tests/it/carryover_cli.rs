@@ -205,3 +205,31 @@ fn a_binary_file_with_other_contents_in_an_intermediate_commit_is_no() {
     assert_eq!(v["carry_over"], false);
     assert!(v["line"].is_null());
 }
+
+#[test]
+fn an_old_git_is_refused_with_the_command_name() {
+    // the command layer names `review carry-over` in the version error (fake git 2.40.1 first and only on PATH)
+    let (fx, ids) = rebase_fixture();
+    let home = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let git = bin.path().join("git");
+    std::fs::write(&git, "#!/bin/sh\necho 'git version 2.40.1'\n").unwrap();
+    std::fs::set_permissions(&git, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let out = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", bin.path())
+        .env("HOME", home.path())
+        .current_dir(&fx.path)
+        .args(["review", "carry-over"])
+        .args(&ids)
+        .args(["--pr", "none"])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    assert_eq!(out.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("stw needs Git 2.41 or newer for review carry-over (found 2.40.1)"),
+        "{text}"
+    );
+    assert!(!text.contains("Carried-over:"), "{text}");
+}

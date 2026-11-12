@@ -929,3 +929,31 @@ fn an_empty_new_range_is_range_empty_and_not_an_unsupported_git() {
     assert!(r.text.contains("the new range is empty"), "{}", r.text);
     assert!(!r.text.contains("unsupported"), "{}", r.text);
 }
+
+#[test]
+fn an_old_git_is_refused_with_the_command_name() {
+    // the command layer names `prove` in the version error (fake git 2.40.1 first and only on PATH)
+    let p = pair();
+    let (alt, neu, base) = (s(p.old[1]), s(p.new[1]), s(p.m2));
+    let home = tempfile::tempdir().unwrap();
+    let bin = tempfile::tempdir().unwrap();
+    let git = bin.path().join("git");
+    std::fs::write(&git, "#!/bin/sh\necho 'git version 2.40.1'\n").unwrap();
+    std::fs::set_permissions(&git, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", bin.path())
+        .env("HOME", home.path())
+        .current_dir(&p.fx.path)
+        .arg("prove")
+        .args([alt.as_str(), neu.as_str(), "--base", base.as_str()])
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert_eq!(o.status.code(), Some(1), "{text}");
+    assert!(
+        text.contains("stw needs Git 2.41 or newer for prove (found 2.40.1)"),
+        "{text}"
+    );
+    assert!(!text.contains("Carried-over:"), "{text}");
+}

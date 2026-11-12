@@ -1082,7 +1082,11 @@ fn git_command_label(command: &Command) -> &'static str {
             command: ReviewCommand::CarryOver(_),
         } => "review carry-over",
         Command::Prove(_) => "prove",
-        _ => "this step",
+        // these start no git (gix only); a new command must be named here on purpose
+        Command::Tidy { .. }
+        | Command::Restack { .. }
+        | Command::Lint { .. }
+        | Command::Dev { .. } => "this step",
     }
 }
 

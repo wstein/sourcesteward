@@ -276,7 +276,8 @@ fn range_diff_needs_git_2_41() {
 fn the_floor_of_every_op_is_declared_and_enforced() {
     // 2.36: `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command), so
     // every op that reads the index needs it. Static evidence (Documentation/config/core.txt of v2.35 vs v2.36);
-    // a run with 2.35.3 passed the whole suite, so the bound is the documented one, not an observed failure.
+    // with 2.35.3 no test of add, sync --submodules or sync restore failed (the 48 failures are range-diff/merge-tree
+    // tests that need 2.40/2.41), so the bound is the documented one, not an observed failure.
     // 2.30: the fail-closed value for the fetch/update-ref vectors (their options are older, 2.29 for the fetch).
     let sub = || stw::add::SubPath::parse("projects/tool").unwrap();
     let name = || stw::add::RepoName::parse("tool").unwrap();
@@ -315,7 +316,24 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
         ),
         (Op::ResetKeep { target: h('c') }, Version(2, 36, 0)),
     ];
+    // no wildcard: a new `Op` does not compile until it is listed above
+    let listed = |op: &Op| match op {
+        Op::FetchOrigin
+        | Op::FetchOriginPrune { .. }
+        | Op::FetchPullHead { .. }
+        | Op::UpdateBranchCas { .. }
+        | Op::RangeDiff { .. }
+        | Op::SubmoduleSync { .. }
+        | Op::SubmoduleUpdate { .. }
+        | Op::CheckAttrGitmodules { .. }
+        | Op::CheckoutClone
+        | Op::SubmoduleAddExisting { .. }
+        | Op::AbsorbGitDirs { .. }
+        | Op::CommitSubmodule { .. }
+        | Op::ResetKeep { .. } => (),
+    };
     for (op, floor) in ops {
+        listed(&op);
         assert_eq!(op.min_version(), floor, "{op:?}");
         // one patch level below the floor is refused before anything runs
         let below = format!("{}.{}.9", floor.0, floor.1 - 1);

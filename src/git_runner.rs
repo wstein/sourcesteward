@@ -241,11 +241,12 @@ impl Op {
     ///   it silently, so a `-diff` attribute in the worktree could make range-diff report "equal" for a changed
     ///   commit (shown with 2.40.1 against 2.41.0 and 2.43.0).
     /// - Ops that read the index: 2.36. Every call leads with `-c core.fsmonitor=false`, a boolean only since 2.36
-    ///   (up to 2.35 the value names a hook command). Evidence is static (config/core of v2.35 vs v2.36); a run of
-    ///   the whole test suite with 2.35.3 passed, so no failure of 2.35 was observed.
+    ///   (up to 2.35 the value names a hook command). Evidence is static (config/core of v2.35 vs v2.36). With 2.35.3 no
+    ///   test of `add`, `sync --submodules` or `sync restore` failed (48 failures, all range-diff/merge-tree tests
+    ///   that need 2.40/2.41), so no failure of 2.35 was observed.
     /// - All others (fetch, `update-ref`): 2.30, the fail-closed value. Their options are older (`--no-write-fetch-head`
-    ///   2.29, `--prune-tags` 2.17); no failure below 2.30 was observed or excluded. Verified against 2.47.3 and the
-    ///   versions named in the README table.
+    ///   2.29, `--prune-tags` 2.17); no failure below 2.30 was observed or excluded. Suites ran with 2.35.3, 2.39.2,
+    ///   2.40.1, 2.41.0, 2.43.0 and 2.47.3.
     pub fn min_version(&self) -> Version {
         match self {
             Op::RangeDiff { .. } => Version(2, 41, 0),
