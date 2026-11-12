@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func hazardsOf(r Result) []string {
@@ -281,5 +283,15 @@ func TestStatusAppliesCommittedTextAttributesSoARealChangeIsDirty(t *testing.T) 
 	}
 	if res := s.plan(t); firstCode(res) != "target-dirty" {
 		t.Fatalf("expected target-dirty: %s %+v", res.Status, res.Diagnostics)
+	}
+}
+
+// On Git before 2.46 the plan is refused, and the refusal names the Git version as the reason.
+func TestPlanRefusalNamesTheGitFloor(t *testing.T) {
+	gittest.RequireBelow(t, 2, 46, "the inspection refuses older Git")
+	s := rebaseMerged(t)
+	res := s.plan(t)
+	if res.Status != StatusError || firstCode(res) != "inspection-failed" || !strings.Contains(res.Diagnostics[0].Message, "Git 2.46") {
+		t.Fatalf("%s %+v", res.Status, res.Diagnostics)
 	}
 }

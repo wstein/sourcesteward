@@ -10,7 +10,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	gittest.LimitBelow(2, 46, "^$", "")
+	gittest.LimitBelow(2, 46, "^TestPlanRefusalNamesTheGitFloor$", "")
 	if err := isolateGitEnvironment(); err != nil {
 		fmt.Fprintln(os.Stderr, "tests refuse to run:", err)
 		os.Exit(2)

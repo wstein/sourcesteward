@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/wstein/sourcesteward/internal/inspection"
@@ -139,7 +140,11 @@ func (p *planner) admit(ctx context.Context) error {
 		if len(id.Diagnostics) > 0 && id.Diagnostics[0].Code == "not-repository" {
 			code = "not-repository"
 		}
-		return refuse(code, "The path is not a readable native Git checkout.", nil)
+		message := "The path is not a readable native Git checkout."
+		if len(id.Diagnostics) > 0 && strings.HasPrefix(id.Diagnostics[0].Message, "inspection requires Git") {
+			message += " " + id.Diagnostics[0].Message + "."
+		}
+		return refuse(code, message, nil)
 	}
 	r := id.Repository
 	if r.Bare || r.Worktree == nil {
