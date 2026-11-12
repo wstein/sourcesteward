@@ -83,7 +83,8 @@ pub fn gitmodules_paths(root: &Path) -> Vec<String> {
 /// order, each once: the direct submodules, as Go lists them (`stwsync` `submodules`, `ls-files --stage -z`).
 /// `.gitmodules` is not read: a gitlink needs no entry there, a path it names without a gitlink is no
 /// repository, and a clone that no gitlink names is never one. Only the repository's own config is read
-/// (`open_isolated`); a root that is no repository, or an unreadable index, gives no paths. A path that is not
+/// (`open_isolated`); a root that is no repository, or an unreadable index, gives no paths (Go: the run fails
+/// with "cannot list the submodules"). A path that is not
 /// UTF-8 is listed lossily and is refused by `path_rejection` (charset).
 pub fn submodule_paths(root: &Path) -> Vec<String> {
     let Ok(repo) = open_isolated(root) else {
@@ -98,8 +99,9 @@ pub fn submodule_paths(root: &Path) -> Vec<String> {
         .filter(|e| e.mode.is_submodule())
         .map(|e| e.path(&index).to_str_lossy().into_owned())
         .collect();
-    // the entries of an index are in path order (gix restores it on read: a test writes an unsorted one), so
-    // the copies of a conflicted gitlink (stages 1 to 3) are adjacent
+    // as Go (`sort.Strings`, `slices.Compact`): gix does not sort what it reads, and the copies of a conflicted
+    // gitlink (stages 1 to 3) must be adjacent for the compaction
+    out.sort();
     out.dedup();
     out
 }
@@ -135,25 +137,16 @@ pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
     None
 }
 
-/// The gitlink paths of `root` that `path_rejection` refuses, with the reason (each path once, a trailing
-/// `/` ignored, in file order). They are never listed as repositories; the commands report them.
+/// The gitlink paths of `root` that `path_rejection` refuses, with the reason (each path once, in path order).
+/// They are never listed as repositories; the commands report them.
 pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = Vec::new();
-    for p in submodule_paths(root) {
-        if let Some(why) = path_rejection(root, &p) {
-            let key = p.strip_suffix('/').unwrap_or(&p);
-            if !out
-                .iter()
-                .any(|(q, _)| q.strip_suffix('/').unwrap_or(q) == key)
-            {
-                out.push((p, why));
-            }
-        }
-    }
-    out
+    submodule_paths(root)
+        .into_iter()
+        .filter_map(|p| path_rejection(root, &p).map(|why| (p, why)))
+        .collect()
 }
 
-/// The normalized name of an accepted gitlink path (no trailing `/`), else None.
+/// The normalized name of an accepted gitlink path, else None.
 pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
     if path_rejection(root, p).is_some() {
         return None;
@@ -164,8 +157,8 @@ pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
 }
 
 /// The root and every checked-out submodule (a gitlink of the index and a `.git` entry), in path order. A path that
-/// `path_rejection` refuses is left out (see `rejected_paths`). The name is the normalized path; a directory
-/// named twice (`a`, `a/`) is listed once, and never twice with the root.
+/// `path_rejection` refuses is left out (see `rejected_paths`). The name is the normalized path; a directory is
+/// listed once, and never twice with the root.
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {
     let name = root
         .file_name()

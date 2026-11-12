@@ -225,9 +225,72 @@ fn a_repository_with_gitlinks_and_no_gitmodules_file_is_a_workspace_root() {
 }
 
 #[test]
-fn an_index_that_is_out_of_order_still_gives_each_path_once_in_order() {
+fn an_index_that_is_out_of_order_gives_the_paths_sorted() {
     let t = setup();
-    // not an index git writes: the entries are as pushed (b, a, b)
-    crate::common::stage_gitlinks_in(&t.ws, &["b", "a", "b"], false);
-    assert_eq!(stw::repo::submodule_paths(&t.ws), ["a", "b"]);
+    // not an index git writes: gix does not sort what it reads, the entries stay as pushed (c, a, b)
+    crate::common::stage_gitlinks_in(&t.ws, &["c", "a", "b"], false);
+    assert_eq!(stw::repo::submodule_paths(&t.ws), ["a", "b", "c"]);
+}
+
+#[test]
+fn a_gitlink_without_a_checkout_is_unreachable_for_submodules_and_a_gitmodules_entry_is_no_record()
+{
+    let t = setup();
+    t.gitlink("gone");
+    t.gitmodules(&["ghost"]);
+    let (code, v) = stw_in(
+        &t,
+        &t.w.base,
+        &[
+            "sync",
+            "--plan",
+            "--submodules",
+            "--offline",
+            "--root",
+            t.ws.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{v}");
+    let gone = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|r| r["name"] == "gone");
+    let gone = gone.unwrap_or_else(|| panic!("no record for the gitlink in {v}"));
+    assert_eq!(gone["result"], "skip", "{gone}");
+    assert!(
+        gone["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("would be unreachable: "),
+        "{gone}"
+    );
+    assert!(repo_names(&v).iter().all(|n| n != "ghost"), "{v}");
+}
+
+/// Rust takes the nearest parent repository as the workspace root (its list is flat); Go goes up to the top-level
+/// superproject (`--show-superproject-working-tree`, up to 16 levels) and walks the nested ones.
+#[test]
+fn a_nested_checkout_belongs_to_the_nearest_superproject() {
+    let t = setup();
+    t.clone_at("sub");
+    t.w.git(&t.ws, &["add", "sub"]);
+    let sub = t.ws.join("sub");
+    t.w.git(&t.w.base, &["clone", "-q", "o.git", "ws/sub/n2"]);
+    t.w.git(&sub, &["add", "n2"]);
+    let (code, v) = stw_in(&t, &sub.join("n2"), &["status", "--offline"]);
+    assert_eq!(code, 0, "{v}");
+    assert_eq!(
+        v["root"]
+            .as_str()
+            .map(|r| std::fs::canonicalize(r).unwrap()),
+        Some(sub.canonicalize().unwrap()),
+        "{v}"
+    );
+    // a directory below a gitlink path that is no gitlink itself is no checkout of that superproject
+    let other = t.ws.join("sub/plain");
+    std::fs::create_dir_all(&other).unwrap();
+    t.w.git(&other, &["init", "-q"]);
+    let (code, v) = stw_in(&t, &other, &["status", "--offline"]);
+    assert_eq!(code, 2, "no workspace: {v}");
 }

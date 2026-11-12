@@ -422,25 +422,17 @@ fn repo_names_decide_whether_refused_paths_are_reported() {
 }
 
 #[test]
-fn a_directory_named_twice_is_listed_and_synced_once() {
+fn a_gitlink_is_listed_and_synced_once() {
     let t = setup();
-    write_gitmodules(&t.ws, &["a/b", "a/b/", "a/b"]);
-    let names: Vec<String> = stw::repo::list_repos(&t.ws)
-        .into_iter()
-        .map(|r| r.name)
-        .collect();
-    assert_eq!(names, ["ws", "a/b"]);
-    // the name is the normalized path
-    write_gitmodules(&t.ws, &["a/b/"]);
-    assert_eq!(stw::repo::list_repos(&t.ws)[1].name, "a/b");
-    write_gitmodules(&t.ws, &["a/b", "a/b/", "a/b"]);
+    write_gitmodules(&t.ws, &["a/b"]);
+    assert_eq!(t.names(), ["ws", "a/b"]);
     let (code, text, v) = stw(&t, &["sync", "--plan", "--offline"]);
     assert_eq!(code, 0, "{text}");
     assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
     let (code, text, _) = stw(&t, &["sync", "--plan", "--offline", "--repo", "a/b"]);
     assert_eq!(code, 0, "{text}");
-    // a refused path named twice is reported once
-    write_gitmodules(&t.ws, &["x y", "x y/"]);
+    // a refused path is reported once
+    write_gitmodules(&t.ws, &["x y"]);
     assert_eq!(stw::repo::rejected_paths(&t.ws).len(), 1);
 }
 
