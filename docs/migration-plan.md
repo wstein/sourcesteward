@@ -385,3 +385,12 @@ from Go:
   `rules_table_anchors_in_agent_rules` runs only with `AGENT_RULES_DIR` (as in Go). The current `.agents` checkout of this workspace has
   no `claude/` directory, so the anchors are UNKNOWN against the current dotagents layout (see the "PR lint" line in "Test corpus").
 Then M9 (`pulls`).
+
+## Op log readers (2026-11-12)
+
+`stw oplog timeline | evolog | undo-plan` (read-only) over `docs/oplog-format.md`: new behavior, the formats were accepted
+as spikes (`spikes/stw/oplog-reflog`, `oplog-hooks`, `oplog-refhook`), the Rust package is the first of the op log
+stack. Deviations and limits: README, "The op log readers". Next packages, in this order: stw's own `refs.log` lines and
+the rotation; the backup refs and `stw oplog undo` with CAS (spec 8, including the `core.logAllRefUpdates=false` test);
+the hook install (opt-in per repository, `--yes`); the `--keep` path for a checked-out branch; then `stw restack
+apply|undo` (conflicts resolved later through the op log, owner decision 2026-11-11).

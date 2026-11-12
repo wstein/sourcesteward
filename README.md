@@ -851,6 +851,52 @@ Exit 0: no error finding (warnings do not fail). Exit 3: an error finding, or a 
 command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.rs` and `tests/it/lint_pr_cmd.rs`; plan:
 `docs/migration-plan.md`, "Slice 3".
 
+## The op log readers: `stw oplog timeline | evolog | undo-plan` (new)
+
+New behavior without a Go counterpart: the three read-only commands over the logs that the accepted spikes
+`spikes/stw/oplog-reflog`, `oplog-hooks` and `oplog-refhook` write. The format is the contract in
+`docs/oplog-format.md` (reviewed CLEAR); this package builds the readers only. Not part of it, each its own package:
+the undo itself (`stw oplog undo`), the backup refs `refs/stw/backup/<run>/<k>`, stw's own `refs.log` lines, the
+rotation, the hook install. Nothing is written by these commands (tests compare the repository byte for byte before and
+after), no hook is installed and no `git` program runs. `--root PATH` and `--repo NAME` as for `stw prove`; `--json`.
+
+- `stw oplog timeline [--ref GLOB] [--remotes] [--all]`: the reflogs (`HEAD` of the main and the linked worktrees,
+  `refs/heads`, `refs/stash`, `refs/stw`; `refs/remotes` with `--remotes`, every other ref with `--all`) and `refs.log`
+  as one list sorted by time, then by file order. A reflog row and the `refs.log` line of the same ref and new value are
+  one entry (origin `reflog`, flag `covered`); a line no reflog row has is its own entry (origin `hook` or `stw`, flag
+  `hook-only`; `old-unknown` for a delete without a marker). Markers are joined as in the spec (3.3). A reflog row without
+  a line is `uncovered` (the hook was installed then), `pre-install`, `hook-absent` (after an uninstall),
+  `unknown-window` (no `events-refhook.log`) or `not-expected` (`refs/remotes` while `remotes=off`; `refs/bisect/*`,
+  `refs/worktree/*`, `refs/rewritten/*`). A `HEAD` row is covered by a line of any `refs/heads/*` ref with the same new
+  value. Groups are `suspected` only (same text stem, within one second). The gaps list is always printed: `backend`,
+  `config`, `truncated`, `empty-reflog`, `unreadable`, `bad`, `capture-gap`, `rotated`, `uncovered`, `pre-install`,
+  `hook-absent`, `no-install-record`, `still-open`, `suspected`. JSON: `schema_version` 1, `command` `oplog timeline`,
+  `entries[]`, `other_lines[]` (a well-formed line with an unknown context: kept, not in the timeline), `gaps[]`.
+- `stw oplog evolog REV [--limit N]`: the chain of recorded rewrites (`rewrites.log`, both generations) from a commit
+  back, with the semantics of the spike: first of equal pairs wins, self pairs ignored, `merge=N`, `split=N`, `cycle`,
+  `seen-above`, `limit`; an unknown kind is shown. The reflog of the branch is compared with the pairs (`commit (amend)`
+  and `rebase ... (finish)` entries): `uncovered-rewrite`, `pre-install`, `hook-absent`, `unknown-window`.
+- `stw oplog undo-plan REF [--to OLD | --steps N]`: the checks of the spike: the ref exists and is no symbolic ref, a local
+  branch (other refs are previewed and marked not undoable), not checked out in any worktree (hint `git reset --keep`),
+  no registration without a readable git dir, no running operation (`rebase-merge`, `rebase-apply`, `MERGE_HEAD`,
+  `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `BISECT_LOG`, `sequencer` in the git dirs), the ref still equals the newest reflog
+  value, the target is not the creation entry and is a commit; notes: ancestry and the commits that only the reflog would
+  keep. Exit 1 when a check is refused. It prints that `stw oplog undo` is not built yet.
+
+Rules shared with the spec: a log that is a symbolic link, not a regular file, in a symbolic `stw` or `stw/oplog`
+directory, or over 64 MiB is not read (`unreadable`); a line is skipped and counted as `bad` when it is over 4 KB,
+holds a NUL byte, is no UTF-8, has too few fields, a wrong hash, time or name, or has a field 7 or later that is not
+`key=value` (a glued line); all text from logs is escaped (`escape_untrusted`). Deviations from the spikes and the
+spec, one by one: (1) reflogs are read from the files directly, not through the gix reflog iterator (same lines; the
+reftable backend is reported as `backend` and no reflog row is shown); (2) a `refs.log` line that a reflog row covers is
+not listed twice (the spec says the two sources are merged; the spike had no hook rows); (3) the timeline has no
+`--since`, no `expiring`, `tags` and `deleted-branch` gaps and no `no-reflog` gap of the reflog spike (later); (4) JSON of
+the spikes is not reproduced field for field: `command`, `engine` and `schema_version` 1 as in the other stw documents;
+(5) `undo-plan` counts the commits that only the reflog would keep with a gix walk (at most 10 000) against every other ref
+and `HEAD`, not with `git rev-list`; (6) the evolog counts as capture gaps only the post-rewrite kinds (`amend`,
+`rebase`, `other`) in `errors.log`; the spike counted every line of the file. UNKNOWN: SHA-256 repositories (spec Q9; the
+parser accepts 64 digits, nothing ran), macOS, and a reflog read while another process writes it.
+
 ## Build and test
 
 ```
