@@ -2010,6 +2010,10 @@ m GL2 'a conflicted gitlink (three stages) is listed three times' src/repo/mod.r
 
 /// Why a gitlink path' \
   gitlinks the_paths_are_sorted_and_a_conflicted_gitlink_is_listed_once
+m GL3 'the gitlink paths are not sorted' src/repo/mod.rs \
+  '    out.sort();
+    out.dedup();' '    out.dedup();' \
+  gitlinks an_index_that_is_out_of_order_gives_the_paths_sorted
 m GL4 'the repositories come from .gitmodules, not from the index' src/repo/mod.rs \
   '    for p in submodule_paths(root) {
         let Some(name) = accepted_name(root, &p) else {' '    for p in gitmodules_paths(root) {
@@ -2030,6 +2034,15 @@ m GL7 'a gitlink without a .gitmodules entry is left out' src/repo/mod.rs \
 m GL8 'add looks for the path among the gitlinks, not among the .gitmodules entries' src/add.rs \
   'crate::repo::gitmodules_paths(ws).iter().any(|s| s == p)' 'crate::repo::submodule_paths(ws).iter().any(|s| s == p)' \
   add a_gitmodules_entry_for_path_refuses_even_without_a_gitlink
+
+m GL9 '--submodules asks .gitmodules, not the index, for submodules without a checkout' src/sync/submodules.rs \
+  '    for p in repo::submodule_paths(root) {
+        // a refused path' '    for p in repo::gitmodules_paths(root) {
+        // a refused path' \
+  gitlinks a_gitlink_without_a_checkout_is_unreachable_for_submodules_and_a_gitmodules_entry_is_no_record
+m GL10 'a directory below a gitlink path counts as that submodule' src/repo/mod.rs \
+  'if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {' 'if submodule_paths(dir).iter().any(|p| rel.starts_with(Path::new(p))) {' \
+  gitlinks a_nested_checkout_belongs_to_the_nearest_superproject
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
