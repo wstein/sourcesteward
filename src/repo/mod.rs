@@ -163,14 +163,25 @@ struct Walk {
     seen: Vec<PathBuf>,
     limit: usize,
     exceeded: bool,
+    /// Submodule nesting depth of each entry of `repos` (the root is 0).
+    depths: Vec<usize>,
+    /// Gitlinks of a repository at this depth are not followed (`usize::MAX`: no bound).
+    max_depth: usize,
+    /// Names (`""` is the root) of the repositories that have gitlinks which the depth bound left out.
+    cut: Vec<String>,
 }
 
 /// Lists the repository at `dir` (name `rel`, "" for the root's children) and then, depth-first, each checked-out
 /// gitlink of its index (Go: `walk`). A gitlink path is checked against the repository that holds it
 /// (`path_rejection`), so a nested path never leaves the workspace either; an unchecked-out gitlink has nothing to
 /// descend into. A refused path is kept with its path below the root (`outer/inner`).
-fn walk(dir: &Path, prefix: &str, w: &mut Walk) {
-    for p in submodule_paths(dir) {
+fn walk(dir: &Path, prefix: &str, depth: usize, w: &mut Walk) {
+    let subs = submodule_paths(dir);
+    if depth >= w.max_depth && !subs.is_empty() {
+        w.cut.push(prefix.to_string());
+        return;
+    }
+    for p in subs {
         if w.exceeded {
             return;
         }
@@ -199,15 +210,16 @@ fn walk(dir: &Path, prefix: &str, w: &mut Walk) {
             name: name.clone(),
             path: path.clone(),
         });
+        w.depths.push(depth + 1);
         if w.repos.len() > w.limit {
             w.exceeded = true;
             return;
         }
-        walk(&path, &name, w);
+        walk(&path, &name, depth + 1, w);
     }
 }
 
-fn walk_root(root: &Path, limit: usize) -> Walk {
+fn walk_root(root: &Path, limit: usize, max_depth: usize) -> Walk {
     let name = root
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
@@ -222,15 +234,55 @@ fn walk_root(root: &Path, limit: usize) -> Walk {
         seen: vec![real],
         limit,
         exceeded: false,
+        depths: vec![0],
+        max_depth,
+        cut: Vec::new(),
     };
-    walk(root, "", &mut w);
+    walk(root, "", 0, &mut w);
     w
+}
+
+/// The workspace as `stw status --all` lists it: the repositories of `list_repos` with their nesting depth (the root
+/// is 0), and the repositories whose gitlinks lie below `max_depth` and are therefore not followed.
+#[derive(Debug)]
+pub struct Listing {
+    pub repos: Vec<RepoRef>,
+    /// Parallel to `repos`.
+    pub depths: Vec<usize>,
+    /// Names of the repositories with gitlinks below the depth bound (the root by its own name).
+    pub cut: Vec<String>,
+    /// More than `limit` repositories (`repos` holds at most `limit` + 1).
+    pub exceeded: bool,
+}
+
+/// `list_repos_limited` with a bound on the nesting depth: gitlinks of a repository at depth `max_depth` are not
+/// followed (0 lists the root only).
+pub fn list_repos_depth(root: &Path, limit: usize, max_depth: usize) -> Listing {
+    let w = walk_root(root, limit, max_depth);
+    let root_name = w.repos[0].name.clone();
+    let cut = w
+        .cut
+        .iter()
+        .map(|c| {
+            if c.is_empty() {
+                root_name.clone()
+            } else {
+                c.clone()
+            }
+        })
+        .collect();
+    Listing {
+        repos: w.repos,
+        depths: w.depths,
+        cut,
+        exceeded: w.exceeded,
+    }
 }
 
 /// The gitlink paths of the workspace that `path_rejection` refuses, with the reason, in walk order; a nested
 /// path is given below the root (`outer/inner`). They are never listed as repositories; the commands report them.
 pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
-    walk_root(root, REPO_LIMIT).rejected
+    walk_root(root, REPO_LIMIT, usize::MAX).rejected
 }
 
 /// The normalized name of an accepted gitlink path, else None.
@@ -248,12 +300,12 @@ pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
 /// is the normalized path below the root (`outer/inner`); a directory is listed once, and never twice with the
 /// root. The list stops at `REPO_LIMIT` + 1 entries; `list_repos_checked` fails there, as Go does.
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {
-    walk_root(root, REPO_LIMIT).repos
+    walk_root(root, REPO_LIMIT, usize::MAX).repos
 }
 
 /// `list_repos` with another limit: the repositories found (at most `limit` + 1) and whether there are more than `limit`.
 pub fn list_repos_limited(root: &Path, limit: usize) -> (Vec<RepoRef>, bool) {
-    let w = walk_root(root, limit);
+    let w = walk_root(root, limit, usize::MAX);
     (w.repos, w.exceeded)
 }
 

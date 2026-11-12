@@ -38,6 +38,7 @@ mod review_go_corpus;
 mod review_lines;
 mod review_read;
 mod slug;
+mod status_all;
 mod status_counts;
 mod status_flags;
 mod status_notices;

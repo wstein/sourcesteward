@@ -12,7 +12,7 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, oplog, prove, restack_plan, status,
+    add, carryover, dev, git_runner, lint_pr_cmd, oplog, prove, restack_plan, status, status_all,
     status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
 };
 
@@ -813,6 +813,18 @@ struct StatusArgs {
     /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
     #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
     icons: Option<String>,
+    /// Every repository of the workspace, nested submodules included, in one line each with the stack of its current
+    /// branch and the GitHub counts; with --json the same document plus `kind`, `depth` and `stack` per repository
+    #[arg(long, conflicts_with_all = ["long", "icons", "worktrees", "review", "stats", "verbose"])]
+    all: bool,
+    /// With --all: how deep below the root submodules are listed, 0 to 64 (0 is the root only); a cut is a notice
+    #[arg(long, value_name = "N", requires = "all", default_value_t = status_all::DEFAULT_DEPTH as u32,
+          value_parser = clap::value_parser!(u32).range(0..=status_all::MAX_DEPTH as i64))]
+    depth: u32,
+    /// With --all: the most repositories of a run, 1 to 1024; more is a usage error (exit 2)
+    #[arg(long, value_name = "N", requires = "all", default_value_t = repo::REPO_LIMIT as u32,
+          value_parser = clap::value_parser!(u32).range(1..=status_all::MAX_LIMIT as i64))]
+    limit: u32,
 }
 
 /// The bounds of `--timeout`, the overall deadline of the remote half.
@@ -867,6 +879,9 @@ struct Workspace {
     /// `.gitmodules` paths that are not accepted (never in `repos`); empty when repositories were named.
     rejected: Vec<(String, String)>,
     github: GithubState,
+    /// `--all`: nesting depth of each repository by name, and the repositories whose submodules the depth bound left out.
+    depths: std::collections::BTreeMap<String, usize>,
+    cut: Vec<String>,
 }
 
 /// Notices for the paths of `.gitmodules` that are not accepted: text lines and the JSON field
@@ -905,6 +920,15 @@ fn rejected_json(rejected: &[(String, String)]) -> Value {
 }
 
 fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
+    workspace_bounded(c, rules_path, None)
+}
+
+/// `workspace`; `bounds` is `(limit, depth)` of `status --all`: the repository limit and the nesting depth.
+fn workspace_bounded(
+    c: &Common,
+    rules_path: Option<&Path>,
+    bounds: Option<(usize, usize)>,
+) -> Result<Workspace> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let root = c
         .root
@@ -922,7 +946,27 @@ fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
         )));
     }
     let root = std::fs::canonicalize(&root).unwrap_or(root);
-    let mut repos = repo::list_repos_checked(&root)?;
+    let mut depths = std::collections::BTreeMap::new();
+    let mut cut = Vec::new();
+    let mut repos = match bounds {
+        None => repo::list_repos_checked(&root)?,
+        Some((limit, depth)) => {
+            let l = repo::list_repos_depth(&root, limit, depth);
+            if l.exceeded {
+                return Err(Error::usage(format!(
+                    "the workspace has more than {limit} repositories"
+                )));
+            }
+            depths = l
+                .repos
+                .iter()
+                .zip(&l.depths)
+                .map(|(r, d)| (r.name.clone(), *d))
+                .collect();
+            cut = l.cut;
+            l.repos
+        }
+    };
     // the rules checkout is handled only by the agent-rules logic, never by the generic loop
     let rules = sync::rules::checkout_path(&root, rules_path);
     repos.retain(|r| std::fs::canonicalize(&r.path).unwrap_or(r.path.clone()) != rules);
@@ -946,6 +990,8 @@ fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
         repos,
         rejected,
         github: GithubState::discover(c.offline),
+        depths,
+        cut,
     })
 }
 
@@ -1170,16 +1216,29 @@ fn same_path(a: &str, b: &std::path::Path) -> bool {
 fn run_status(a: StatusArgs) -> Result<u8> {
     let started = std::time::Instant::now();
     let c = a.common;
-    let ws = workspace(&c, a.rules_path.as_deref())?;
+    let all = a.all.then_some(status_all::AllOpts {
+        depth: a.depth as usize,
+        limit: a.limit as usize,
+        timeout_secs: a.timeout.as_secs(),
+    });
+    let ws = workspace_bounded(
+        &c,
+        a.rules_path.as_deref(),
+        all.as_ref().map(|o| (o.limit, o.depth)),
+    )?;
     let root = PathBuf::from(&ws.root);
     let opts = status::StatusOpts {
         worktrees: a.worktrees,
         fetch: a.fetch,
         review: a.review,
+        all: all.is_some(),
     };
     let mut list = repo::for_each(&ws.repos, |r| {
         status::collect_local(r, &root, &opts, ws.github.client())
     });
+    for s in &mut list {
+        s.depth = ws.depths.get(&s.name).copied().unwrap_or(0);
+    }
     let local_done = started.elapsed();
     if let Some(cl) = ws.github.client() {
         cl.arm_deadline(a.timeout);
@@ -1203,8 +1262,11 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             ..Default::default()
         },
     );
-    let notices =
+    let mut notices =
         status::collect_notices(&ws.github, &rejected_status_notices(&ws.rejected), &list);
+    if let Some(o) = &all {
+        notices.extend(status_all::extra_notices(&list, &ws.cut, o.depth));
+    }
     if c.json {
         let mut v = status::to_json(
             &ws.root,
@@ -1214,6 +1276,9 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             &opts,
             diag.then(|| status_stats::to_json(&stats, &timings)),
         );
+        if let Some(o) = &all {
+            status_all::add_json(&mut v, &list, o);
+        }
         if let Value::Object(m) = &mut v {
             m.insert("agent_rules".into(), sync::rules::to_json(&rules));
             m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
@@ -1228,6 +1293,11 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             );
             eprintln!("{}", status_stats::stats_line(&stats, &timings));
         }
+    } else if let Some(o) = &all {
+        print!(
+            "{}",
+            status_all::render(&ws.root, &list, &notices, o, ws.github.note_code())
+        );
     } else {
         let mut tail = String::new();
         if a.verbose {

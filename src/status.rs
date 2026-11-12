@@ -45,13 +45,17 @@ pub fn changes_opts(
     let mut unstaged: BTreeSet<BString> = BTreeSet::new();
     let mut conflicts: BTreeSet<BString> = BTreeSet::new();
     let mut untracked_paths: Vec<BString> = Vec::new();
-    let platform = repo
+    let mut platform = repo
         .status(gix::progress::Discard)?
         .untracked_files(if with_untracked {
             gix::status::UntrackedFiles::Collapsed
         } else {
             gix::status::UntrackedFiles::None
         });
+    if ignore_submodule_changes {
+        // `--ignore-submodules=all`: a submodule is not looked into, so one that cannot be read does not make its parent unreadable
+        platform = platform.index_worktree_submodules(None);
+    }
     for item in platform.into_iter(Vec::<BString>::new())? {
         match item? {
             Item::TreeIndex(ch) => {
@@ -226,6 +230,9 @@ pub struct StatusOpts {
     pub fetch: bool,
     /// `--review`: read the review state of the open pull requests from their comments.
     pub review: bool,
+    /// `--all`: also read the stack of the current branch, and leave the state of a submodule out of the counts of its
+    /// parent (the submodule has its own row), as the spike did (`status_all`).
+    pub all: bool,
 }
 
 /// What `--fetch` did for one repository.
@@ -373,6 +380,10 @@ pub struct RepoStatus {
     pub worktree_list: Option<Vec<WorktreeInfo>>,
     /// `--fetch`.
     pub fetch: FetchFact,
+    /// `--all`: the stack of the current branch; None for a detached or unborn head and without `--all`.
+    pub stack: Option<crate::status_all::StackFacts>,
+    /// `--all`: nesting depth below the root (the root is 0); 0 without `--all`.
+    pub depth: usize,
 }
 
 /// Remote-tracking branches of `origin` (`refs/remotes/origin/*` without `HEAD`), as of the last fetch.
@@ -413,6 +424,8 @@ fn blank(name: String, path: String) -> RepoStatus {
         worktrees: None,
         worktree_list: None,
         fetch: FetchFact::not_run(),
+        stack: None,
+        depth: 0,
     }
 }
 
@@ -437,7 +450,7 @@ pub fn collect_local(
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
         s.facts = head_facts(&repo)?;
-        s.changes = changes(&repo, true)?;
+        s.changes = changes_opts(&repo, true, opts.all)?;
         s.stash = stash_count(&repo);
         s.branches_local = repo::local_branches(&repo).ok().map(|b| b.len());
         s.branches_remote = remote_branch_count(&repo).ok();
@@ -449,6 +462,9 @@ pub fn collect_local(
             s.worktree_list = wts.as_ref().map(worktree_list);
         }
         s.op = operation(&repo);
+        if let (true, Some(b), Some(_)) = (opts.all, &s.facts.branch, &s.facts.head) {
+            s.stack = Some(crate::status_all::stack_of(&repo, b));
+        }
         s.slug = repo::slug(&repo);
         if r.path != root {
             if let Ok(rel) = r.path.strip_prefix(root) {

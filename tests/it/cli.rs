@@ -131,7 +131,7 @@ fn usage_errors_exit_2() {
         vec!["bogus"],
         vec!["status", "--no-such-flag"],
         vec!["status", "--root"],
-        vec!["status", "--all"],
+        vec!["status", "--depth", "1"],
         vec!["sync", "--root", &r, "--repo", "no-such-repo", "--offline"],
         vec!["status", "--root", "/nonexistent/stw-root"],
     ] {
