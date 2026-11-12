@@ -1964,6 +1964,37 @@ m SY23 'a plan does not check the owners' src/sync/rules.rs \
   '    let mut bad = not_by_owner(repo, head, target, owners, &o.committers)?;' '    let mut bad = if o.apply { not_by_owner(repo, head, target, owners, &o.committers)? } else { vec![] };' \
   sync_rules a_commit_of_a_foreign_author_refuses_the_update_in_a_run_and_in_a_plan
 
+m SY24 'a result that does not contain the upstream tip is accepted' src/sync/pull.rs \
+  'if new == old || !repo::is_ancestor(&repo, tip, new).unwrap_or(false) {' 'if new == old {' \
+  sync_pull a_result_that_does_not_contain_the_upstream_tip_is_raced
+m SY25 'a refusal for local changes is no skip' src/sync/pull.rs \
+  '    .any(|k| low.contains(k))' '    .any(|_| false)' \
+  sync_pull a_refusal_for_local_changes_is_a_skip_and_any_other_failure_is_an_error
+m SY26 'the journal is not trimmed after a rebase or merge' src/sync/pull.rs \
+  '        j.retain(&repo);' '        let _ = &repo;' \
+  sync_pull the_journal_keeps_the_ten_latest_runs_after_rebases_too
+m SY27 'a merge verifies signatures with the configured gpg program' src/git_runner.rs \
+  'v(&["merge", "--no-edit", "--ff", "--no-verify-signatures"])' 'v(&["merge", "--no-edit", "--ff"])' \
+  sync_pull a_configured_gpg_program_is_not_started_by_a_merge
+m SY28 'a rebase keeps merge commits' src/git_runner.rs \
+  'v(&["rebase", "--no-update-refs", "--no-rebase-merges"])' 'v(&["rebase", "--no-update-refs"])' \
+  sync_pull a_rebase_flattens_a_local_merge_commit_whatever_rebase_rebase_merges_says
+m SY29 'branch.<name>.mergeoptions does not refuse a merge' src/sync/pull.rs \
+  '            .is_some()
+    {
+        return fail(
+            "config-refused",' '            .is_none()
+    {
+        return fail(
+            "config-refused",' \
+  sync_pull a_configured_merge_option_set_of_the_branch_refuses_a_merge
+m SY30 'the first gate counts a changed submodule' src/sync/mod.rs \
+  'let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' 'let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
+m SY31 'the gate after the fetch counts a changed submodule' src/sync/mod.rs \
+  '        gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '        gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
