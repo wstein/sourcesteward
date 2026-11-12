@@ -1837,6 +1837,33 @@ m GF4 'the command layer does not name the command in the version error' src/cli
   'git_runner::shared().set_command(git_command_label(&command));' 'let _ = git_command_label(&command);' \
   carryover_cli an_old_git_is_refused_with_the_command_name
 
+# discovery: ceiling and owner check (unit tests in src/repo/discover.rs, target `lib`)
+m DC1 'a repository at or above a ceiling is still returned' src/repo/discover.rs \
+  'start.starts_with(&c) && start != c && c.starts_with(&tree)' 'false' \
+  lib repo::discover::tests::a_ceiling_hides_a_repository_above_it
+m DC2 'a ceiling equal to the start hides the repository' src/repo/discover.rs \
+  'start.starts_with(&c) && start != c && c.starts_with(&tree)' 'start.starts_with(&c) && c.starts_with(&tree)' \
+  lib repo::discover::tests::a_ceiling_hides_a_repository_above_it
+m DC3 'GIT_CEILING_DIRECTORIES entries are dropped' src/repo/discover.rs \
+  '.filter(|p| p.is_absolute())' '.filter(|_| false)' \
+  lib repo::discover::tests::the_environment_ceiling_is_read
+m DC4 'a foreign-owned repository is trusted' src/repo/discover.rs \
+  'if trust == gix::sec::Trust::Full {' 'if true {' \
+  lib repo::discover::tests::a_foreign_owner_needs_safe_directory
+m DC5 'safe.directory "*" is not honoured' src/repo/discover.rs \
+  '} else if v == "*" {' '} else if v == "*not" {' \
+  lib repo::discover::tests::safe_directory_rules
+m DC6 'an empty safe.directory value does not reset the list' src/repo/discover.rs \
+  '            allowed = false;
+        } else if v == "*"' '        } else if v == "*"' \
+  lib repo::discover::tests::safe_directory_rules
+m DC7 'safe.directory prefix matches the directory itself' src/repo/discover.rs \
+  'workdir.starts_with(prefix) && workdir != Path::new(prefix)' 'workdir.starts_with(prefix)' \
+  lib repo::discover::tests::safe_directory_rules
+m DC8 'safe.directory path match ignores the whole path (prefix match)' src/repo/discover.rs \
+  'Path::new(v.trim_end_matches('"'/'"')) == workdir' 'workdir.starts_with(v.trim_end_matches('"'/'"'))' \
+  lib repo::discover::tests::safe_directory_rules
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
@@ -1852,8 +1879,13 @@ for i in "${!IDS[@]}"; do
   if [ "$count" != 1 ]; then echo "$id BAD MUTATION (pattern occurs $count times in ${FILES[$i]})"; bad=$((bad+1)); continue; fi
   OLD="$old" NEW="${NEWS[$i]}" perl -0777 -pi -e '$o=$ENV{OLD}; $n=$ENV{NEW}; $p=index($_,$o); substr($_,$p,length($o))=$n;' "$f"
   tgt=${TARGETS[$i]} tst=${TESTS[$i]}
-  [ -f "$WORK/tests/$tgt.rs" ] || { tst="$tgt::$tst"; tgt=it; }
-  out=$(cd "$WORK" && cargo test --test "$tgt" -- --exact "$tst" 2>&1)
+  if [ "$tgt" = lib ]; then
+    # unit test inside src/: the test name is its module path
+    out=$(cd "$WORK" && cargo test --lib -- --exact "$tst" 2>&1)
+  else
+    [ -f "$WORK/tests/$tgt.rs" ] || { tst="$tgt::$tst"; tgt=it; }
+    out=$(cd "$WORK" && cargo test --test "$tgt" -- --exact "$tst" 2>&1)
+  fi
   if grep -q "could not compile" <<<"$out"; then
     echo "$id COMPILE ERROR: ${DESCS[$i]}"; bad=$((bad+1))
   elif grep -q "test $tst ... FAILED" <<<"$out" && grep -q "panicked at" <<<"$out"; then
