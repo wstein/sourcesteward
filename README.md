@@ -103,9 +103,15 @@ Deviations from Go, one by one:
    unless they overlap the update (the check of a plain `sync`); Go refuses the rebase then (`merge --ff-only
    --autostash`, the dirty check of a rebase pull). `--autostash` has no effect on a fast-forward: nothing is stashed.
 
-### Submodule paths of `.gitmodules`
+### Submodules: the gitlinks of the index
 
-A path in `.gitmodules` is untrusted. It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
+The repositories of a workspace are the gitlinks of the root's index (mode 160000, any conflict stage, each path once, in
+path order; `repo::submodule_paths`). `.gitmodules` is not read for that: a gitlink needs no entry there, a path that
+`.gitmodules` names without a gitlink is no repository (a clone that no gitlink names is never listed), and a root with
+gitlinks but no `.gitmodules` file is a workspace. The superproject of a checkout is the nearest parent repository whose
+index has a gitlink at that path. Only `stw add` still reads `.gitmodules` (it refuses a path that the file names already).
+
+A gitlink path is untrusted (a repository can name it). It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
 passes the rules of `stw add` (`[A-Za-z0-9._/-]`, relative, no `..`, no `-x` component, no git-special name), no component
 is a symbolic link, and the real path of the directory is below the real path of the workspace root. Any other path is
 never listed and nothing there is read or written (no fetch, no fast-forward, no PR lookup). The repository name is the
@@ -121,9 +127,13 @@ mv; stw handles only [A-Za-z0-9._/-]`), and never changes the exit code, except 
   only there; `--plan --submodules` shows `skip` ("would be unreachable").
 - Not reported when `--repo` names repositories; an unknown `--repo` (also a refused path) is a usage error.
 
-Deviation from Go: Go lists the gitlinks of the index (`ls-files --stage`, `sync.go:262-276`; absolute paths and `..` are
-filtered there, nested submodules are walked) and checks charset and symbolic links only for a `sync --submodules` run
-(`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust lists the paths of `.gitmodules` and checks them in every command.
+Deviations from Go: Go lists the same gitlinks (`ls-files --stage`, `sync.go:262-276`; absolute paths and `..` are filtered
+there) and walks nested submodules; it checks charset and symbolic links only for a `sync --submodules` run
+(`validSubmodulePath`/`symlinkedPath`, `sync.go:166`). Rust checks every gitlink path in every command and lists the top-level
+gitlinks only (flat, see "sync --submodules" deviation 6). Git cannot hold an absolute path or a `..` segment in an index and a
+clone brings none, so such a path of `.gitmodules` is ignored (earlier Rust reported it as refused). The order is the path
+order of the index (earlier: the order of `.gitmodules`). Go counts a gitlink at stage 1 to 3 once, as Rust does.
+Not done here: nested submodules (UNKNOWN whether the owner wants them: the repository list is flat in every command).
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
@@ -142,7 +152,7 @@ writes nothing (it never fetches).
   `pruned` (the deleted names, JSON), the reason says how many, and `summary.pruned` the total. Pruning is not undone.
   Dry run: `prune` (`on`/`off`) and, with `--prune`, `tracking_refs` (how many refs could be reached); which of them are gone
   is only known from the remote, so the dry run does not name them.
-- `--submodules`: after every repository was synced, each pinned submodule of `.gitmodules` (checked out, detached HEAD) is
+- `--submodules`: after every repository was synced, each pinned submodule (a gitlink of the index, checked out, detached HEAD) is
   moved to the commit the superproject's index records, when that is a fast-forward of its HEAD: `git submodule sync` and
   `git submodule update --no-fetch --checkout` in the superproject, through the runner (`GIT_ALLOW_PROTOCOL=none`, hooks off,
   no recursion, never `--init`, `--remote`, `--recursive` or `--force`). The submodule's own config is refused when it
@@ -168,7 +178,7 @@ Deviations from Go in these flags:
    nothing fetched); Go checked it in the plan only. Tags are never pruned (`--no-prune-tags` wins over `remote.origin.pruneTags`).
 4. Only `origin` is fetched and pruned; Go prunes the remote of the branch.
 5. JSON `pruned` is a list of ref names (Go: a number); `summary.pruned` is the total.
-6. Rust visits the top-level submodules of `.gitmodules` only (its repository list is flat); Go walks nested ones depth-first.
+6. Rust visits the top-level gitlinks of the index only (its repository list is flat); Go walks nested ones depth-first.
 7. A submodule path outside `[A-Za-z0-9._/-]` or through a symbolic link is `unreachable` (Go: only absolute, `..`,
    option-like and control characters). Paths from `.gitmodules` are reported escaped.
 8. `unreachable` is result `error` (run) or `skip` ("would be unreachable", `--plan`); Go has the result `unreachable`.
@@ -932,7 +942,7 @@ planned tip is `restored`; either way the entry becomes `restored` in the record
 (retention of the next run does).
 
 The record is data and is not trusted: the repository to work in is the one whose git directory holds the record, taken from the
-workspace (`.gitmodules` paths that are not accepted are never used, see "Submodule paths"; they are listed as `rejected_paths`), the
+workspace (gitlink paths that are not accepted are never used, see "Submodules: the gitlinks of the index"; they are listed as `rejected_paths`), the
 `worktree` field is never read, a ref and an OID are checked before any git argument is built, and every git step runs through the runner
 (`"via": "git"`, hooks off, fixed argument vector, `reset --keep` refused when the repository's own config names a `filter.*`
 driver). Not undone, because not journaled: pruned remote-tracking refs, stash reapplies, submodule moves. At most 16 repositories at a time.
@@ -947,7 +957,7 @@ changed_since, journal_incomplete, failed}`, `error` (null, or `{code, message}`
 `--no-prune`, `--submodules`, `--rules`, `--rules-path`, `--offline`, `--repo`) is a usage error (exit 2, nothing done).
 
 Deviations from Go: (1) the workspace is `PATH` or `--root` (both is a usage error), and the repositories are the root and the top-level
-submodules of `.gitmodules` (Go walks the index gitlinks, nested ones too); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
+gitlinks of the index (Go walks them too, nested ones included); (2) a malformed `--run` is a usage error (exit 2; Go: a refused
 result, exit 1); (3) a record is also refused when a `ref` is not a valid branch name by the rules of git, an OID is not 40 digits
 (a 64 digit OID of a SHA-256 repository is `bad-record`: stw has no SHA-256 support) or the file is a symbolic link; (4) any merge, rebase, bisect, cherry-pick or revert
 running in any worktree of the repository (main, linked, relative or dead registration) stops the restore of that repository (Go: only an
