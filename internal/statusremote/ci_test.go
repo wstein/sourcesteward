@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/wstein/sourcesteward/internal/gittest"
 	"github.com/wstein/sourcesteward/internal/hosting"
 	"github.com/wstein/sourcesteward/internal/overview"
 	"github.com/wstein/sourcesteward/internal/stwsync"
@@ -214,6 +215,7 @@ func ciCommit(t *testing.T, dir, content string) string {
 }
 
 func TestReadCIMainBehindOriginComesFromTheLocalStore(t *testing.T) {
+	gittest.RequireAtLeast(t, 2, 45, "--no-lazy-fetch")
 	dir := t.TempDir()
 	ciGit(t, dir, "init", "-q", "-b", "main")
 	have := ciCommit(t, dir, "one")
@@ -710,6 +712,23 @@ func TestUS5RedMainAndFailedTagRunAreRedItems(t *testing.T) {
 		}
 		if _, unreleased := got[overview.TagWithoutRelease]; unreleased == failed {
 			t.Errorf("%s: one item per tag: %v", tc.name, got)
+		}
+	}
+}
+
+// Git before 2.45 refuses --no-lazy-fetch: behind_origin stays undecided (nil), never a guess. On Git
+// 2.45 and later TestReadCIMainBehindOriginComesFromTheLocalStore applies.
+func TestReadCIMainBehindOriginIsUndecidedOnGitBefore245(t *testing.T) {
+	gittest.RequireBelow(t, 2, 45, "--no-lazy-fetch is refused")
+	dir := t.TempDir()
+	ciGit(t, dir, "init", "-q", "-b", "main")
+	have := ciCommit(t, dir, "one")
+	for name, head := range map[string]string{"present": have, "missing": ciSHA("e")} {
+		f := newCIFake()
+		f.branches["main"] = ciBranch(head)
+		got := ReadCIMain(context.Background(), f, ciRepo, "main", dir)
+		if got.Main == nil || got.Main.Head != head || got.Main.BehindOrigin != nil {
+			t.Errorf("%s: %+v", name, got.Main)
 		}
 	}
 }
