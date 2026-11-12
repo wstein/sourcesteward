@@ -635,11 +635,13 @@ fn one_bad(v: &Value) {
     );
 }
 
+/// A hook killed before its LF and the next one appended. With a normal time the colons of the second time already break
+/// the worktree field; with the time `unknown` only the rule for fields from the 7th on (`key=value`) catches it.
 #[test]
 fn a_glued_line_is_bad_and_not_accepted() {
     let fx = Fx::new();
     let a = line(T, &h('1'), &h('2'), "refs/heads/a", "stw", "main");
-    let b = line(T, &h('2'), &h('3'), "refs/heads/b", "stw", "main");
+    let b = line("unknown", &h('2'), &h('3'), "refs/heads/b", "stw", "main");
     one_bad(&bad_then_good(&fx, &format!("{}{b}", a.trim_end())));
 }
 
@@ -680,7 +682,7 @@ fn a_glued_rewrites_line_is_bad() {
     let fx = Fx::new();
     let [a, b, c] = three(&fx);
     let l1 = rewrites(&[("amend", &a.to_string(), &b.to_string())]);
-    let l2 = rewrites(&[("amend", &b.to_string(), &c.to_string())]);
+    let l2 = format!("unknown\tamend\t{b}\t{c}\t\tmain\n");
     oplog(&fx, "rewrites.log", &format!("{}{l2}", l1.trim_end()));
     let v = json(&fx, &["evolog", &c.to_string()]);
     assert_eq!(v["gaps"]["bad_lines"], 1, "{v}");
