@@ -53,9 +53,46 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
 
-`sync` never merges, rebases, stashes, resets or pushes. It refuses (exit 1, nothing changed) when a
-tracked local change overlaps a file the update touches, when untracked files are in the way, when the branch
-diverged, or when a merge, rebase or similar operation is running. Local changes elsewhere are kept.
+Without a flag `sync` only fast-forwards: it never merges, rebases, stashes, resets or pushes. It refuses (exit 1,
+nothing changed) when a tracked local change overlaps a file the update touches, when untracked files are in the way,
+or when a merge, rebase or similar operation is running; a diverged branch is reported (`skip`) and left alone. Local
+changes elsewhere are kept. `--rebase` and `--merge` (exclusive) handle a diverged branch with the installed `git`,
+`--autostash` and `--no-autostash` (exclusive) choose the stash, see "`sync --rebase` and `--merge`".
+
+### `sync --rebase` and `--merge`
+
+Port of the Go flags (`internal/stwsync/apply.go`, `config.go`). `--rebase` rebases the local commits of a diverged
+branch (ahead and behind its upstream) onto the fetched upstream: `git rebase --no-update-refs --fork-point
+refs/remotes/origin/<branch>`; `--merge` merges the fetched tip: `git merge --no-edit --ff <commit>`. A branch that is only
+behind is fast-forwarded as without a flag (never a merge commit). `--plan` says `would rebase N local commit(s) onto M new`
+or `would merge`, changes nothing and fetches nothing. Both need Git 2.38 (rebase) or 2.36 (merge), checked before git starts.
+Tracked local changes (staged or not; untracked files do not count) refuse the run with the result `skip` ("cannot rebase
+with local changes (use --autostash)") unless `--autostash` is given; `--autostash` stashes and reapplies them (git's own
+autostash), `--no-autostash` is the default. The flag decides every time: the argument vector of git always carries
+`--autostash` or `--no-autostash`, so `rebase.autoStash` and `merge.autoStash` never apply. Every run that changes a branch
+writes the journal entry first (recovery ref and record `prepared`, no planned tip), so `stw sync restore` moves a rebased or
+merged branch back to the tip it had. A conflict stops the rebase or merge as git leaves it (result `conflict`, exit 1, the
+reason names `git rebase --continue|--abort` or `git commit|git merge --abort`, `detail` has git's message, the record is
+`failed` with the reason "stopped on a conflict"). A conflict while the stash is put back is `autostash-conflict` (exit 1, the
+stash is kept: `git stash pop` or `git stash drop`). After a successful run the branch must stand on a commit that has the
+fetched upstream tip below it, else the result is `error` (`raced`). JSON: `result` is `rebased`, `merged`, `rebase`, `merge`,
+`conflict`, `autostash-conflict`; `options` carry `rebase` (`true` or null), `merge` and `autostash` (`true`, `false` or null);
+`summary` carries `rebased`, `merged`, `would_rebase`, `would_merge` and `conflicts`; a repository with a conflict has `detail`.
+Deviations from Go, one by one:
+
+1. No Git configuration is followed (`pull.rebase`, `branch.<name>.rebase`, `pull.ff`, `rebase.autoStash`,
+   `merge.autoStash`, `pull.rebase=merges`): only the flags decide. A diverged branch with `pull.rebase` set is skipped and
+   the reason says "stw does not follow it: use --rebase". There is no `--ff-only` (it is the default) and no
+   `--rebase-merges`.
+2. No hook of the repository runs (`core.hooksPath=/dev/null`, as for every git call of stw); Go ran them
+   (`pre-rebase`, `post-rewrite`, `post-merge`, ...). No editor, no signing (`commit.gpgsign=false`).
+3. A repository whose own config names a `filter.*` driver, a `merge.<name>.driver` or another key that starts a program is
+   refused (`error`); nothing changes. Go runs git as configured.
+4. The dirty gate is stricter for `--merge`: any tracked change refuses it without `--autostash`; Go refused only when a
+   changed file overlapped the update (`git merge` itself refuses then).
+5. The stash entry of an `autostash-conflict` is not claimed: the result has no `stash_oid` and the record no `stash_oid`
+   (Go reads the stash reflog). The record has no `orig_head`.
+6. The record of a stopped run has the state `failed` (Go: `conflict`).
 
 ### Submodule paths of `.gitmodules`
 
@@ -164,9 +201,17 @@ could be lost or the update cannot be done: changed files in the working tree; d
 `origin/<default>` and new ones upstream); another branch than the default one checked out; the fetch failed; no checkout
 at the path; the path is not a git repository; the checkout has no remote `origin`, no commits, or `origin` has no default
 branch (no `origin/HEAD`, `origin/main` or `origin/master`, or `origin/HEAD` points to a missing ref); the checkout cannot be read; the fast-forward itself
-refuses (changed files, untracked files in the way, unmerged paths); the commit walk or diff fails. There is no owner or author check. When the new
-commits have authors or committers other than git `user.name`/`user.email` of the checkout (skipped when unset), one
-info line lists them; nothing is refused for that.
+refuses (changed files, untracked files in the way, unmerged paths); the commit walk or diff fails. Every new commit must be by an owner (port of the Go check):
+the author is an owner identity, the committer an owner identity or an `--allowed-committer`; otherwise the update is refused
+(`not by an owner identity: <sha7> author|committer Name <email>`, three named, then `(and N more)`), in a plan as well as in a
+run, before anything is written. `--owner-identity "Name <email>"` (repeatable) names the owners; the default is
+`user.name` and `user.email` of the Git configuration seen from the workspace root. `--allowed-committer "Name <email>"`
+(repeatable) adds committers only, such as the GitHub rebase-merge committer `<login>@users.noreply.github.com`. The name is
+compared exactly, the email without regard to case. Both flags are a usage error without `--rules` and without the form
+`Name <email>`. Deviations from Go: when the workspace root has no identity the configuration of the rules checkout is used
+before the update is refused for lack of any owner identity (`no owner identity`); the list of at most three faults is
+built in the order of the walk, not of `git log`; the info line `new commits by ... (not the configured git identity)`
+stays for what is not refused.
 
 stw never commits in the workspace: after updating a submodule the line `.agents has a new commit, recorded as modified
 in the workspace (not committed)` says that its gitlink shows as modified there; the owner commits it. The new commit is only kept once the workspace records it: `git submodule update` can restore the recorded commit (`whr-up` runs it when a submodule is not yet initialized). Before the update the

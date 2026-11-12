@@ -315,6 +315,21 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
             Version(2, 36, 0),
         ),
         (Op::ResetKeep { target: h('c') }, Version(2, 36, 0)),
+        (
+            Op::SyncMerge {
+                target: h('d'),
+                autostash: false,
+            },
+            Version(2, 36, 0),
+        ),
+        // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
+        (
+            Op::SyncRebase {
+                upstream: stw::git_runner::RemoteRef::parse("refs/remotes/origin/main").unwrap(),
+                autostash: false,
+            },
+            Version(2, 38, 0),
+        ),
     ];
     // no wildcard: a new `Op` does not compile until it is listed above
     let listed = |op: &Op| match op {
@@ -330,6 +345,8 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
         | Op::SubmoduleAddExisting { .. }
         | Op::AbsorbGitDirs { .. }
         | Op::CommitSubmodule { .. }
+        | Op::SyncMerge { .. }
+        | Op::SyncRebase { .. }
         | Op::ResetKeep { .. } => (),
     };
     for (op, floor) in ops {

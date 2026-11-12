@@ -20,6 +20,7 @@ use super::fast_forward::fast_forward;
 use super::fetch;
 use crate::error::Result;
 use crate::github::Client;
+use crate::lint_pr::Identity;
 use crate::output::*;
 use crate::repo;
 use crate::status;
@@ -39,6 +40,11 @@ pub struct RulesOpts {
     /// Execute (no `--plan`/`--dry-run`): fetch and fast-forward; otherwise `--rules` only reports
     pub apply: bool,
     pub offline: bool,
+    /// `--owner-identity`: the identities that author and committer of every new commit must be. Empty: `user.name` and
+    /// `user.email` of the Git configuration seen from the workspace root.
+    pub owners: Vec<Identity>,
+    /// `--allowed-committer`: further identities allowed as committer (never as author).
+    pub committers: Vec<Identity>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -182,6 +188,39 @@ fn new_commits(
     Ok((out, foreign))
 }
 
+/// The name is compared exactly, the email address without regard to case.
+fn is_one_of(list: &[Identity], name: &str, email: &str) -> bool {
+    list.iter()
+        .any(|i| i.name == name && i.email.eq_ignore_ascii_case(email))
+}
+
+/// The new commits that are not by an owner: author not an owner, committer neither an owner nor an allowed committer
+/// (`<sha7> author|committer Name <email>`, in the order of the walk, one entry per fault).
+fn not_by_owner(
+    repo: &gix::Repository,
+    head: gix::ObjectId,
+    target: gix::ObjectId,
+    owners: &[Identity],
+    committers: &[Identity],
+) -> Result<Vec<String>> {
+    let mut bad = vec![];
+    for info in repo.rev_walk([target]).with_hidden([head]).all()? {
+        let id = info?.id;
+        let c = repo.find_commit(id)?;
+        let short = &id.to_string()[..7];
+        let (a, k) = (c.author()?, c.committer()?);
+        let (an, ae) = (a.name.to_str_lossy(), a.email.to_str_lossy());
+        let (kn, ke) = (k.name.to_str_lossy(), k.email.to_str_lossy());
+        if !is_one_of(owners, &an, &ae) {
+            bad.push(format!("{short} author {an} <{ae}>"));
+        }
+        if !is_one_of(owners, &kn, &ke) && !is_one_of(committers, &kn, &ke) {
+            bad.push(format!("{short} committer {kn} <{ke}>"));
+        }
+    }
+    Ok(bad)
+}
+
 /// State of the checkout, or `Err` when it cannot be read.
 fn inspect(
     repo: &gix::Repository,
@@ -298,6 +337,19 @@ pub fn agent_rules(root: &Path, gh: Option<&Client>, o: &RulesOpts) -> RulesRec 
     if !o.update || rec.action == "refused" {
         return rec;
     }
+    // the owners: the flags, else the configured identity of the workspace root (read only), else that of the checkout
+    let owners: Vec<Identity> = if o.owners.is_empty() {
+        let of = |r: &gix::Repository| identity(r).map(|(name, email)| Identity { name, email });
+        // the workspace root when it is a repository, else the checkout itself
+        repo::top_level(root)
+            .and_then(|top| repo::open(&top).ok())
+            .and_then(|r| of(&r))
+            .or_else(|| of(&repo))
+            .into_iter()
+            .collect()
+    } else {
+        o.owners.clone()
+    };
     let default_ref = rec.default_ref.clone().unwrap_or_default();
     let (dirty, branch) = (rec.dirty, rec.branch.clone());
     match rec.state.as_str() {
@@ -330,7 +382,7 @@ pub fn agent_rules(root: &Path, gh: Option<&Client>, o: &RulesOpts) -> RulesRec 
         }
         "behind" => {
             let (head, target) = heads.expect("behind has heads");
-            if let Err(e) = update_behind(&repo, head, target, o, &mut rec) {
+            if let Err(e) = update_behind(&repo, head, target, o, &owners, &mut rec) {
                 refuse(&mut rec, e.to_string());
             }
         }
@@ -344,9 +396,30 @@ fn update_behind(
     head: gix::ObjectId,
     target: gix::ObjectId,
     o: &RulesOpts,
+    owners: &[Identity],
     rec: &mut RulesRec,
 ) -> Result<()> {
     (rec.commits, rec.foreign) = new_commits(repo, head, target, identity(repo).as_ref())?;
+    // every new commit is by an owner, in a plan as well as in a run, before anything is written
+    if owners.is_empty() {
+        return Err(crate::error::Error::repository(
+            "no owner identity: pass --owner-identity \"Name <email>\" or set user.name and user.email in the Git configuration of the workspace",
+        ));
+    }
+    let mut bad = not_by_owner(repo, head, target, owners, &o.committers)?;
+    if !bad.is_empty() {
+        let more = bad.len().saturating_sub(3);
+        bad.truncate(3);
+        let tail = if more > 0 {
+            format!(" (and {more} more)")
+        } else {
+            String::new()
+        };
+        return Err(crate::error::Error::repository(format!(
+            "not by an owner identity: {}{tail}",
+            bad.join("; ")
+        )));
+    }
     rec.files = changed_files(repo, head, target)?;
     rec.flagged = rec
         .files

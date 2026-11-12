@@ -321,6 +321,29 @@ impl Journal {
         old: Hex40,
         planned: Hex40,
     ) -> Result<usize, String> {
+        self.prepare_planned(repo, reference, worktree, old, planned.as_str())
+    }
+
+    /// `prepare` for a rebase or a merge: the new tip is not known before git ran, so the entry names none
+    /// (`planned_new_oid` empty, as in the Go record).
+    pub fn prepare_unplanned(
+        &mut self,
+        repo: &gix::Repository,
+        reference: &str,
+        worktree: &str,
+        old: Hex40,
+    ) -> Result<usize, String> {
+        self.prepare_planned(repo, reference, worktree, old, "")
+    }
+
+    fn prepare_planned(
+        &mut self,
+        repo: &gix::Repository,
+        reference: &str,
+        worktree: &str,
+        old: Hex40,
+        planned: &str,
+    ) -> Result<usize, String> {
         let n = self.rec.entries.len() as u32 + 1;
         create_recovery_ref(repo, &recovery_ref(&self.id, n), old, &self.id)
             .map_err(|e| format!("recovery ref: {e}"))?;
@@ -329,7 +352,7 @@ impl Journal {
             reference: reference.to_string(),
             worktree: worktree.to_string(),
             old_oid: old.as_str().to_string(),
-            planned_new_oid: planned.as_str().to_string(),
+            planned_new_oid: planned.to_string(),
             recovery_ref: recovery_ref(&self.id, n),
             state: STATE_PREPARED.into(),
             ..Default::default()

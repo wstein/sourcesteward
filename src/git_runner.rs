@@ -165,6 +165,30 @@ impl BranchRef {
     }
 }
 
+/// A full remote-tracking ref `refs/remotes/origin/<name>` that passes the ref-name rules of git and whose short part
+/// does not start with `-`: the upstream of `Op::SyncRebase` (`--fork-point` needs the ref name, its reflog is read).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RemoteRef(String);
+
+impl RemoteRef {
+    pub fn parse(full: &str) -> Option<RemoteRef> {
+        let short = full.strip_prefix("refs/remotes/origin/")?;
+        if short.is_empty()
+            || short.starts_with('-')
+            || full.len() > 255
+            || full.bytes().any(|b| b < 0x20 || b == 0x7f || b == b' ')
+        {
+            return None;
+        }
+        gix::refs::FullName::try_from(full).ok()?;
+        Some(RemoteRef(full.to_string()))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// The ref namespace of `Op::FetchPullHead`; the only ref it writes is `<ROOT>pr-<n>`.
 pub const PULL_HEAD_NAMESPACE: &str = "refs/stw/carry-over/";
 
@@ -233,6 +257,27 @@ pub enum Op {
     /// change would be lost (`stw sync restore`, after the caller found the tracked tree clean). The repository's own
     /// config must not name a `filter.*` driver (the checkout would start it).
     ResetKeep { target: Hex40 },
+    /// `git merge --no-edit --ff [--autostash|--no-autostash] <target>`: merge the fetched upstream tip into the
+    /// checked-out branch of a diverged branch (`stw sync --merge`). `target` is the commit the checks ran on, never a
+    /// ref name. The explicit stash flag wins over `merge.autoStash`. Needs the same config guards as `ResetKeep`
+    /// (a checkout runs filters) plus no `merge.<name>.driver`. No hook runs (`core.hooksPath=/dev/null`), no editor.
+    SyncMerge { target: Hex40, autostash: bool },
+    /// `git rebase --no-update-refs [--autostash|--no-autostash] --fork-point <upstream>`: rebase the local commits of
+    /// the checked-out branch onto its upstream (`stw sync --rebase`). The explicit stash flag wins over
+    /// `rebase.autoStash`; `--no-update-refs` keeps other branches of a stack where they are. Same config guards as
+    /// `SyncMerge`. No hook runs, no editor; a conflict stops the rebase as git leaves it.
+    SyncRebase {
+        upstream: RemoteRef,
+        autostash: bool,
+    },
+}
+
+fn stash_flag(autostash: bool) -> &'static str {
+    if autostash {
+        "--autostash"
+    } else {
+        "--no-autostash"
+    }
 }
 
 impl Op {
@@ -250,6 +295,8 @@ impl Op {
     pub fn min_version(&self) -> Version {
         match self {
             Op::RangeDiff { .. } => Version(2, 41, 0),
+            // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
+            Op::SyncRebase { .. } => Version(2, 38, 0),
             Op::SubmoduleSync { .. }
             | Op::SubmoduleUpdate { .. }
             | Op::CheckAttrGitmodules { .. }
@@ -257,6 +304,7 @@ impl Op {
             | Op::SubmoduleAddExisting { .. }
             | Op::AbsorbGitDirs { .. }
             | Op::CommitSubmodule { .. }
+            | Op::SyncMerge { .. }
             | Op::ResetKeep { .. } => Version(2, 36, 0),
             Op::FetchOrigin
             | Op::FetchOriginPrune { .. }
@@ -349,6 +397,22 @@ impl Op {
                 let mut a = v(&["reset", "--keep", "--quiet"]);
                 a.push(target.as_str().to_string());
                 a.push("--".to_string());
+                a
+            }
+            Op::SyncMerge { target, autostash } => {
+                let mut a = v(&["merge", "--no-edit", "--ff"]);
+                a.push(stash_flag(*autostash).to_string());
+                a.push(target.as_str().to_string());
+                a
+            }
+            Op::SyncRebase {
+                upstream,
+                autostash,
+            } => {
+                let mut a = v(&["rebase", "--no-update-refs"]);
+                a.push(stash_flag(*autostash).to_string());
+                a.push("--fork-point".to_string());
+                a.push(upstream.as_str().to_string());
                 a
             }
             Op::RangeDiff {
@@ -926,8 +990,11 @@ impl Runner {
             check_fetch_transport(repo)?;
         }
         refuse_local_command_config(repo, &op)?;
-        if matches!(op, Op::ResetKeep { .. }) {
-            // the checkout of a reset runs the clean/smudge filters of the repository
+        if matches!(
+            op,
+            Op::ResetKeep { .. } | Op::SyncMerge { .. } | Op::SyncRebase { .. }
+        ) {
+            // the checkout of a reset, merge or rebase runs the clean/smudge filters of the repository
             refuse_config(repo, &|section, sub_name, key| {
                 runs_a_command(section, sub_name, key) || section == "filter"
             })?;
@@ -1105,8 +1172,11 @@ fn runs_a_command(section: &str, sub: Option<&str>, key: &str) -> bool {
 fn refuse_local_command_config(repo: &Path, op: &Op) -> std::result::Result<(), GitError> {
     // range-diff runs `git log -p`: a diff program or textconv driver of the repository would start
     let patch = matches!(op, Op::RangeDiff { .. });
+    // a merge or rebase starts the merge driver a `merge.<name>.driver` names
+    let merges = matches!(op, Op::SyncMerge { .. } | Op::SyncRebase { .. });
     refuse_config(repo, &|section, sub, key| {
         runs_a_command(section, sub, key)
+            || (merges && section == "merge" && sub.is_some() && key == "driver")
             || (patch
                 && section == "diff"
                 && (key == "external" || (sub.is_some() && matches!(key, "textconv" | "command"))))

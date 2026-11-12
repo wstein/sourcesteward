@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
-use stw::git_runner::{recovery_ref, BranchRef, GitError, Hex40, Op, RunId, Runner};
+use stw::git_runner::{recovery_ref, BranchRef, GitError, Hex40, Op, RemoteRef, RunId, Runner};
 use stw::sync::journal::{self, Journal, Record};
 
 use crate::common::scratch;
@@ -627,6 +627,81 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
             "--".into()
         ]
     );
+    let up = RemoteRef::parse("refs/remotes/origin/feature/x").unwrap();
+    assert_eq!(
+        tail(
+            &argv(Op::SyncRebase {
+                upstream: up.clone(),
+                autostash: false
+            }),
+            "rebase"
+        ),
+        [
+            "rebase".to_string(),
+            "--no-update-refs".into(),
+            "--no-autostash".into(),
+            "--fork-point".into(),
+            "refs/remotes/origin/feature/x".into()
+        ]
+    );
+    assert_eq!(
+        tail(
+            &argv(Op::SyncRebase {
+                upstream: up,
+                autostash: true
+            }),
+            "rebase"
+        )[2],
+        "--autostash"
+    );
+    assert_eq!(
+        tail(
+            &argv(Op::SyncMerge {
+                target: a,
+                autostash: false
+            }),
+            "merge"
+        ),
+        [
+            "merge".to_string(),
+            "--no-edit".into(),
+            "--ff".into(),
+            "--no-autostash".into(),
+            "a".repeat(40)
+        ]
+    );
+    assert_eq!(
+        tail(
+            &argv(Op::SyncMerge {
+                target: a,
+                autostash: true
+            }),
+            "merge"
+        )[3],
+        "--autostash"
+    );
+}
+
+#[test]
+fn only_a_remote_tracking_ref_of_origin_reaches_the_rebase_argument_vector() {
+    for bad in [
+        "",
+        "main",
+        "refs/remotes/origin/",
+        "refs/remotes/origin/-x",
+        "refs/remotes/origin/a..b",
+        "refs/remotes/other/x",
+        "refs/heads/x",
+        "refs/remotes/origin/a b",
+        "refs/remotes/origin/a\nb",
+        "refs/remotes/origin/x.lock",
+        "refs/remotes/origin/a~1",
+        "refs/remotes/origin/@{u}",
+        "--upload-pack=x",
+    ] {
+        assert!(RemoteRef::parse(bad).is_none(), "{bad:?}");
+    }
+    assert!(RemoteRef::parse("refs/remotes/origin/feature/ok-1.x").is_some());
 }
 
 #[test]

@@ -304,7 +304,14 @@ fn json_field_names_are_the_documented_ones() {
     );
     assert_eq!(
         keys(&sy["options"]),
-        doc(&["prune", "submodules", "dry_run"])
+        doc(&[
+            "prune",
+            "submodules",
+            "dry_run",
+            "rebase",
+            "merge",
+            "autostash"
+        ])
     );
     assert_eq!(
         keys(&sy["summary"]),
@@ -316,6 +323,11 @@ fn json_field_names_are_the_documented_ones() {
             "errors",
             "submodules_moved",
             "would_move_submodules",
+            "rebased",
+            "merged",
+            "would_rebase",
+            "would_merge",
+            "conflicts",
             "pruned"
         ])
     );

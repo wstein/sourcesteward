@@ -47,6 +47,8 @@ fn opts() -> RulesOpts {
         update: true,
         apply: true,
         offline: true,
+        owners: vec![],
+        committers: vec![],
     }
 }
 
@@ -318,13 +320,28 @@ fn with_foreign(author: (&str, &str), committer: (&str, &str)) -> R {
     r
 }
 
+fn who(name: &str, email: &str) -> stw::lint_pr::Identity {
+    stw::lint_pr::Identity {
+        name: name.into(),
+        email: email.into(),
+    }
+}
+
 #[test]
-fn foreign_authors_are_listed_once_as_information_and_never_refused() {
+fn foreign_authors_are_listed_once_as_information_when_the_owner_flags_admit_them() {
     let r = with_foreign(
         ("Eve", "eve@example.org"),
         ("Web Flow", "noreply@github.com"),
     );
-    let rec = agent_rules(r.fx.path.parent().unwrap(), None, &at(&r));
+    let rec = agent_rules(
+        r.fx.path.parent().unwrap(),
+        None,
+        &RulesOpts {
+            owners: vec![who("T", "t@example.com"), who("Eve", "eve@example.org")],
+            committers: vec![who("Web Flow", "noreply@github.com")],
+            ..at(&r)
+        },
+    );
     assert_eq!(rec.action, "updated", "{}", rec.reason);
     assert_eq!(r.fx.tip("main"), r.c2);
     assert_eq!(
@@ -344,7 +361,11 @@ fn foreign_authors_are_listed_once_as_information_and_never_refused() {
     // the configured identity decides what is foreign
     let r = with_foreign(("Eve", "eve@example.org"), ("Eve", "eve@example.org"));
     r.fx.set_identity("Eve", "eve@example.org");
-    let rec = agent_rules(r.fx.path.parent().unwrap(), None, &at(&r));
+    let both = RulesOpts {
+        owners: vec![who("T", "t@example.com"), who("Eve", "eve@example.org")],
+        ..at(&r)
+    };
+    let rec = agent_rules(r.fx.path.parent().unwrap(), None, &both);
     assert_eq!(rec.action, "updated", "{}", rec.reason);
     assert_eq!(rec.foreign, ["T <t@example.com>"]);
 }
@@ -427,14 +448,30 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     assert_eq!(v["agent_rules"]["state"], "behind");
     assert_eq!(o.status.code(), Some(0), "{v}");
     // with --plan: reports, changes nothing
-    let o = stw(&["sync", "--plan", "--root", rs, "--rules"]);
+    let o = stw(&[
+        "sync",
+        "--plan",
+        "--root",
+        rs,
+        "--rules",
+        "--owner-identity",
+        "T <t@example.com>",
+    ]);
     assert_eq!(o.status.code(), Some(0));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(text.contains("dry run (--plan)"), "{text}");
     assert!(!root.join(".agents/rules").exists());
     // a refusal exits 1
     std::fs::write(root.join(".agents/README.md"), "edited\n").unwrap();
-    let o = stw(&["sync", "--root", rs, "--offline", "--rules"]);
+    let o = stw(&[
+        "sync",
+        "--root",
+        rs,
+        "--offline",
+        "--rules",
+        "--owner-identity",
+        "T <t@example.com>",
+    ]);
     assert_eq!(o.status.code(), Some(1));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     let text = text[text.find("agent-rules:").unwrap()..].to_string();
@@ -442,7 +479,15 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     assert!(!text.contains("next:"), "{text}");
     std::fs::write(root.join(".agents/README.md"), "readme\n").unwrap();
     // updated
-    let o = stw(&["sync", "--root", rs, "--offline", "--rules"]);
+    let o = stw(&[
+        "sync",
+        "--root",
+        rs,
+        "--offline",
+        "--rules",
+        "--owner-identity",
+        "T <t@example.com>",
+    ]);
     assert_eq!(
         o.status.code(),
         Some(0),
@@ -726,4 +771,153 @@ fn plan_and_dry_run_with_rules_fetch_and_move_nothing_online() {
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["agent_rules"]["fetch"], "ok", "{v}");
     assert_eq!(gix::open(&sub).unwrap().head_id().unwrap(), o2);
+}
+
+// ---- --owner-identity / --allowed-committer (port of the Go owner check; Rust used to list foreign authors only)
+
+fn refused_with(r: &R, o: RulesOpts, want: &str) -> stw::sync::rules::RulesRec {
+    let rec = agent_rules(r.fx.path.parent().unwrap(), None, &o);
+    assert_eq!(rec.action, "refused", "{}", rec.reason);
+    assert!(rec.reason.contains(want), "{}", rec.reason);
+    assert_ne!(r.fx.tip("main"), r.c2, "the branch must not move");
+    rec
+}
+
+#[test]
+fn a_commit_of_a_foreign_author_refuses_the_update_in_a_run_and_in_a_plan() {
+    let r = with_foreign(("Eve", "eve@example.org"), ("T", "t@example.com"));
+    let c3 = r.c2.to_string();
+    let want = format!(
+        "not by an owner identity: {} author Eve <eve@example.org>",
+        &c3[..7]
+    );
+    refused_with(&r, at(&r), &want);
+    refused_with(
+        &r,
+        RulesOpts {
+            apply: false,
+            ..at(&r)
+        },
+        &want,
+    );
+    assert!(!r.fx.exists("guards"), "nothing was written");
+}
+
+#[test]
+fn a_foreign_committer_refuses_unless_it_is_an_allowed_committer() {
+    let r = with_foreign(("T", "t@example.com"), ("Web Flow", "noreply@github.com"));
+    refused_with(&r, at(&r), "committer Web Flow <noreply@github.com>");
+    let ok = agent_rules(
+        r.fx.path.parent().unwrap(),
+        None,
+        &RulesOpts {
+            committers: vec![who("Web Flow", "noreply@github.com")],
+            ..at(&r)
+        },
+    );
+    assert_eq!(ok.action, "updated", "{}", ok.reason);
+}
+
+#[test]
+fn an_allowed_committer_is_never_an_allowed_author() {
+    let r = with_foreign(
+        ("Web Flow", "noreply@github.com"),
+        ("Web Flow", "noreply@github.com"),
+    );
+    refused_with(
+        &r,
+        RulesOpts {
+            committers: vec![who("Web Flow", "noreply@github.com")],
+            ..at(&r)
+        },
+        "author Web Flow <noreply@github.com>",
+    );
+}
+
+#[test]
+fn owner_identity_replaces_the_configured_identity() {
+    // the commits of `setup` are by T: with Eve as the only owner they are all refused
+    let r = setup();
+    let rec = refused_with(
+        &r,
+        RulesOpts {
+            owners: vec![who("Eve", "eve@example.org")],
+            ..at(&r)
+        },
+        "not by an owner identity",
+    );
+    assert!(
+        rec.reason.contains("author T <t@example.com>"),
+        "{}",
+        rec.reason
+    );
+}
+
+#[test]
+fn the_email_is_compared_without_case_and_the_name_exactly() {
+    let r = setup();
+    let ok = agent_rules(
+        r.fx.path.parent().unwrap(),
+        None,
+        &RulesOpts {
+            owners: vec![who("T", "T@EXAMPLE.COM")],
+            ..at(&r)
+        },
+    );
+    assert_eq!(ok.action, "updated", "{}", ok.reason);
+    let r = setup();
+    refused_with(
+        &r,
+        RulesOpts {
+            owners: vec![who("t", "t@example.com")],
+            ..at(&r)
+        },
+        "author T <t@example.com>",
+    );
+}
+
+#[test]
+fn at_most_three_faults_are_named() {
+    let r = setup();
+    // four commits of three owners... here: two commits by T, each author and committer refused = 4 faults
+    let rec = refused_with(
+        &r,
+        RulesOpts {
+            owners: vec![who("Eve", "eve@example.org")],
+            ..at(&r)
+        },
+        "(and 1 more)",
+    );
+    assert_eq!(
+        rec.reason.matches(" author ").count() + rec.reason.matches(" committer ").count(),
+        3,
+        "{}",
+        rec.reason
+    );
+}
+
+#[test]
+fn without_any_owner_identity_nothing_is_admitted() {
+    // through the binary with an empty home: no global identity of this machine can supply an owner
+    let r = setup();
+    r.fx.strip_identity();
+    let root = r.fx.path.parent().unwrap().to_path_buf();
+    std::fs::rename(&r.fx.path, root.join(".agents")).unwrap();
+    gix::init(&root).unwrap();
+    let home = root.join("home");
+    std::fs::create_dir(&home).unwrap();
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &home)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .current_dir(&root)
+        .args(["sync", "--offline", "--rules", "--root"])
+        .arg(&root)
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert_eq!(o.status.code(), Some(1), "{text}");
+    assert!(text.contains("no owner identity"), "{text}");
+    assert!(!root.join(".agents/rules").exists(), "nothing was written");
 }

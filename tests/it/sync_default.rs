@@ -386,7 +386,7 @@ fn rebase_merge_and_autostash_settings_are_not_followed_and_a_diverged_skip_says
         let r = entry(&v, "ws");
         assert_eq!(r["result"], "skip", "{cfg:?}: {r}");
         let reason = r["reason"].as_str().unwrap();
-        let named = reason.contains("stw sync never rebases (not ported)");
+        let named = reason.contains("stw does not follow it: use --rebase");
         let rebase_set = cfg.iter().any(|(k, _)| k.ends_with(".rebase"));
         assert_eq!(named, rebase_set, "{cfg:?}: {reason}");
         assert_eq!(d.tip(), local, "{cfg:?}");
@@ -399,5 +399,5 @@ fn rebase_merge_and_autostash_settings_are_not_followed_and_a_diverged_skip_says
     assert!(!entry(&v, "ws")["reason"]
         .as_str()
         .unwrap()
-        .contains("never rebases"));
+        .contains("does not follow it"));
 }

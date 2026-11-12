@@ -1,7 +1,7 @@
 //! `stw sync`: bring every repository up to date, like `git pull --ff-only`.
 //! Acts by default, like the Go tool; `--plan` / `--dry-run` only report. `Opts::apply` is the internal name of "act" (its
-//! default, false, is the dry run, so a caller that builds `Opts` by hand fails closed). Never merges, rebases, stashes,
-//! resets or pushes. A run fast-forwards the checked-out branch (index and working tree included) when no local change
+//! default, false, is the dry run, so a caller that builds `Opts` by hand fails closed). Without `--rebase` or `--merge`
+//! it never merges, rebases, stashes, resets or pushes (`pull.rs` does with them). A run fast-forwards the checked-out branch (index and working tree included) when no local change
 //! overlaps.
 //!
 //! `--prune` / `--no-prune` choose how the fetch treats remote-tracking refs that are gone on `origin`; only
@@ -21,6 +21,7 @@ use crate::github::Client;
 pub mod fast_forward;
 pub mod fetch;
 pub mod journal;
+pub mod pull;
 pub mod restore;
 pub mod rules;
 pub mod submodules;
@@ -33,6 +34,7 @@ use crate::repo::{self, RepoRef};
 use crate::status::{self, HeadFacts};
 use fast_forward::fast_forward_with;
 use fetch::Prune;
+pub use pull::Diverged;
 pub use submodules::{rejected_pass, submodule_pass, SubRec};
 
 #[derive(Clone, Debug, Default)]
@@ -67,6 +69,8 @@ pub struct SyncRec {
     /// The journal entry of the branch change of a run (recovery ref and record); None when this repository was not
     /// changed, and always in a dry run.
     pub journal: Option<journal::Note>,
+    /// Git's own message of a stopped rebase or merge or a kept autostash (`conflict`, `autostash-conflict`).
+    pub detail: Option<String>,
 }
 
 /// The names of the remote-tracking refs of `origin` (`refs/remotes/origin/*`) except `origin/HEAD`, which a fetch
@@ -100,7 +104,7 @@ fn rebase_configured(repo: &gix::Repository, branch: &str) -> bool {
         })
 }
 
-fn plan_of(f: &HeadFacts, op: Option<&str>) -> (&'static str, String) {
+fn plan_of(f: &HeadFacts, op: Option<&str>, o: &Opts, dirty: usize) -> (&'static str, String) {
     let (a, b) = (f.ahead.unwrap_or(0), f.behind.unwrap_or(0));
     if let Some(op) = op {
         ("skip", format!("{op} in progress"))
@@ -110,6 +114,24 @@ fn plan_of(f: &HeadFacts, op: Option<&str>) -> (&'static str, String) {
         ("skip", "upstream branch is gone".into())
     } else if f.upstream.short.is_none() {
         ("skip", "no upstream configured".into())
+    } else if b > 0 && a > 0 && o.diverged != Diverged::Skip {
+        let verb = o.diverged.verb();
+        if dirty > 0 && o.autostash != Some(true) {
+            (
+                "skip",
+                format!("cannot {verb} with local changes (use --autostash)"),
+            )
+        } else if o.diverged == Diverged::Rebase {
+            (
+                "rebase",
+                format!("would rebase {a} local commit(s) onto {b} new"),
+            )
+        } else {
+            (
+                "merge",
+                format!("would merge {b} new commit(s) into {a} local"),
+            )
+        }
     } else if b > 0 && a > 0 {
         ("skip", format!("diverged: ahead {a}, behind {b}"))
     } else if b > 0 {
@@ -131,6 +153,11 @@ pub struct Opts {
     pub offline: bool,
     pub prune: Prune,
     pub submodules: bool,
+    /// `--rebase` / `--merge`: what a diverged branch gets; `Skip` without either flag.
+    pub diverged: Diverged,
+    /// `--autostash` (`Some(true)`) / `--no-autostash` (`Some(false)`); None without either. The Git configuration
+    /// (`rebase.autoStash`, `merge.autoStash`) is not followed: the stash flag of git is always explicit.
+    pub autostash: Option<bool>,
     /// The ID of this run, shared by all repositories (a run). None: a repository that is changed gets an ID of its own.
     pub run_id: Option<RunId>,
 }
@@ -183,7 +210,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
             }
         }
     }
-    let (mut action, mut reason) = plan_of(&facts, op);
+    let (mut action, mut reason) = plan_of(&facts, op, o, dirty);
     rec.pinned = op.is_none() && facts.branch.is_none();
     let mut result = action.to_string();
     let mut err = None;
@@ -233,7 +260,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         dirty = status::changes(&repo, false)?.dirty_paths;
         let op_now = status::operation(&repo);
         rec.pinned = op_now.is_none() && facts.branch.is_none();
-        (action, reason) = plan_of(&facts, op_now);
+        (action, reason) = plan_of(&facts, op_now, o, dirty);
         result = action.to_string();
         if rec.fetch == "failed" {
             result = "error".into();
@@ -301,6 +328,15 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
             }
         }
     }
+    if o.apply && (result == "rebase" || result == "merge") {
+        let run = o.run_id.clone().unwrap_or_else(journal::new_run_id);
+        let done = pull::apply(r, &facts, o.diverged, o.autostash == Some(true), &run);
+        result = done.result.into();
+        reason = done.reason;
+        err = done.err;
+        rec.detail = done.detail;
+        rec.journal = done.journal;
+    }
     if dirty > 0 && result == "fast-forward" {
         reason += &format!("; working tree has {dirty} changed file(s), refused if they overlap");
     }
@@ -308,7 +344,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
     if result == "skip" && reason.starts_with("diverged") {
         if let Some(b) = &facts.branch {
             if rebase_configured(&repo, b) {
-                reason += "; pull.rebase/branch.<name>.rebase is set: stw sync never rebases (not ported)";
+                reason += "; pull.rebase/branch.<name>.rebase is set, stw does not follow it: use --rebase";
             }
         }
     }
@@ -375,6 +411,9 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
             if let Some(n) = s.tracking_refs {
                 v["tracking_refs"] = json!(n);
             }
+            if let Some(d) = &s.detail {
+                v["detail"] = json!(d);
+            }
             if let Some(m) = &s.submodule {
                 v["submodule"] = m.to_json();
             }
@@ -388,10 +427,15 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
     json!({"schema_version": 2, "command": "sync", "mode": if apply {"apply"} else {"dry-run"}, "root": root,
            "engine": engine(), "run_id": jopt(run_id_of(list)), "repos": repos,
            "options": {"prune": match o.prune { Prune::Unset => Value::Null, Prune::On => json!(true), Prune::Off => json!(false) },
-                       "submodules": o.submodules, "dry_run": !apply},
+                       "submodules": o.submodules, "dry_run": !apply,
+                       "rebase": (o.diverged == Diverged::Rebase).then_some(true),
+                       "merge": o.diverged == Diverged::Merge, "autostash": o.autostash},
            "summary": {"total": list.len(), "fast_forwarded": count("fast-forwarded"),
                        "would_fast_forward": count("fast-forward"), "skipped": count("skip"), "errors": count("error"),
                        "submodules_moved": count("submodule-moved"), "would_move_submodules": count("submodule-move"),
+                       "rebased": count("rebased"), "merged": count("merged"),
+                       "would_rebase": count("rebase"), "would_merge": count("merge"),
+                       "conflicts": count("conflict") + count("autostash-conflict"),
                        "pruned": list.iter().map(|x| x.pruned.len()).sum::<usize>()}})
 }
 
@@ -426,6 +470,14 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
             count("skip"),
             count("error")
         );
+        if o.diverged != Diverged::Skip {
+            out += &format!(
+                ", {} rebased, {} merged, {} stopped on a conflict",
+                count("rebased"),
+                count("merged"),
+                count("conflict") + count("autostash-conflict")
+            );
+        }
         if o.submodules {
             out += &format!(", {} submodule(s) moved", count("submodule-moved"));
         }
@@ -448,6 +500,13 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
             count("fast-forward"),
             count("skip")
         );
+        if o.diverged != Diverged::Skip {
+            out += &format!(
+                ", {} would rebase, {} would merge",
+                count("rebase"),
+                count("merge")
+            );
+        }
         if o.submodules {
             out += &format!(", {} submodule(s) would move", count("submodule-move"));
         }

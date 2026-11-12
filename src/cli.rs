@@ -551,6 +551,22 @@ struct SyncArgs {
     /// Fetch without pruning (overrides fetch.prune for a fetch by the installed git)
     #[arg(long)]
     no_prune: bool,
+    /// Rebase a diverged branch (ahead and behind its upstream) onto the fetched upstream, with the installed git: a
+    /// conflict stops the rebase as git leaves it. Without --rebase and --merge a diverged branch is only reported.
+    /// The Git configuration (pull.rebase, branch.<name>.rebase, rebase.autoStash, ...) is not followed
+    #[arg(long, conflicts_with = "merge")]
+    rebase: bool,
+    /// Merge the fetched upstream into a diverged branch (the only way to get a merge commit; a branch that can be
+    /// fast-forwarded is still fast-forwarded), with the installed git
+    #[arg(long)]
+    merge: bool,
+    /// Stash local changes of tracked files around a --rebase or --merge and reapply them (git's autostash); without
+    /// it a rebase or merge is refused while tracked files have changes
+    #[arg(long, conflicts_with = "no_autostash")]
+    autostash: bool,
+    /// Never stash (the default): --rebase and --merge refuse a repository with local changes of tracked files
+    #[arg(long)]
+    no_autostash: bool,
     /// Also move each pinned (detached) submodule to the commit the superproject records when that is a
     /// fast-forward: git submodule sync and update --no-fetch --checkout; never a clone, init or extra fetch. An
     /// uninitialized submodule or a missing commit is reported as unreachable. --plan says what would move
@@ -564,6 +580,15 @@ struct SyncArgs {
     /// agent-rules checkout [default: <workspace>/.agents]
     #[arg(long, value_name = "PATH")]
     rules_path: Option<PathBuf>,
+    /// With --rules: owner identity `Name <email>` that the author and the committer of every new commit must be
+    /// (repeatable) [default: user.name and user.email of the Git configuration of the workspace]. A commit by anyone
+    /// else refuses the update
+    #[arg(long = "owner-identity", value_name = "NAME <EMAIL>")]
+    owner_identity: Vec<String>,
+    /// With --rules: a further identity `Name <email>` allowed as committer (not as author), such as the GitHub
+    /// rebase-merge committer `<login>@users.noreply.github.com` (repeatable)
+    #[arg(long = "allowed-committer", value_name = "NAME <EMAIL>")]
+    allowed_committer: Vec<String>,
 }
 
 #[derive(Args)]
@@ -831,7 +856,7 @@ fn run_add(a: AddArgs) -> Result<u8> {
 fn run_sync_restore(
     r: SyncRestoreArgs,
     common: &Common,
-    sync_flags: [(&str, bool); 8],
+    sync_flags: [(&str, bool); 14],
 ) -> Result<u8> {
     let given = sync_flags
         .iter()
@@ -1160,6 +1185,12 @@ fn run(command: Command) -> Result<u8> {
             submodules,
             rules,
             rules_path,
+            rebase,
+            merge,
+            autostash,
+            no_autostash,
+            owner_identity,
+            allowed_committer,
         }) => run_sync_restore(
             r,
             &common,
@@ -1172,9 +1203,31 @@ fn run(command: Command) -> Result<u8> {
                 ("--submodules", submodules),
                 ("--rules", rules),
                 ("--rules-path", rules_path.is_some()),
+                ("--rebase", rebase),
+                ("--merge", merge),
+                ("--autostash", autostash),
+                ("--no-autostash", no_autostash),
+                ("--owner-identity", !owner_identity.is_empty()),
+                ("--allowed-committer", !allowed_committer.is_empty()),
             ],
         ),
         Command::Sync(a) => {
+            if !a.rules && (!a.owner_identity.is_empty() || !a.allowed_committer.is_empty()) {
+                return Err(Error::usage(
+                    "--owner-identity and --allowed-committer apply to --rules only",
+                ));
+            }
+            let parse_all = |flag: &str, raw: &[String]| -> Result<Vec<crate::lint_pr::Identity>> {
+                raw.iter()
+                    .map(|r| {
+                        lint_pr_cmd::parse_identity(r).ok_or_else(|| {
+                            Error::usage(format!("{flag} {r:?} is not \"Name <email>\""))
+                        })
+                    })
+                    .collect()
+            };
+            let owners = parse_all("--owner-identity", &a.owner_identity)?;
+            let committers = parse_all("--allowed-committer", &a.allowed_committer)?;
             let ws = workspace(&a.common, a.rules_path.as_deref())?;
             // sync acts unless --plan or --dry-run asks for the preview; --apply is an ignored alias
             let execute = !(a.plan || a.dry_run);
@@ -1189,6 +1242,20 @@ fn run(command: Command) -> Result<u8> {
                     sync::fetch::Prune::Unset
                 },
                 submodules: a.submodules,
+                diverged: if a.rebase {
+                    sync::Diverged::Rebase
+                } else if a.merge {
+                    sync::Diverged::Merge
+                } else {
+                    sync::Diverged::Skip
+                },
+                autostash: if a.autostash {
+                    Some(true)
+                } else if a.no_autostash {
+                    Some(false)
+                } else {
+                    None
+                },
                 // one ID for the whole run; a plan journals nothing
                 run_id: execute.then(sync::journal::new_run_id),
             };
@@ -1211,6 +1278,8 @@ fn run(command: Command) -> Result<u8> {
                 update: a.rules,
                 apply: execute,
                 offline: a.common.offline,
+                owners,
+                committers,
             };
             let rules =
                 sync::rules::agent_rules(&PathBuf::from(&ws.root), ws.github.client(), &ropts);
@@ -1225,7 +1294,12 @@ fn run(command: Command) -> Result<u8> {
                 print!("{}", sync::rules::render_human(&rules));
             }
             Ok(failed(
-                list.iter().any(|s| s.result == "error") || rules.action == "refused",
+                list.iter().any(|s| {
+                    matches!(
+                        s.result.as_str(),
+                        "error" | "conflict" | "autostash-conflict"
+                    )
+                }) || rules.action == "refused",
             ))
         }
         Command::Review {
