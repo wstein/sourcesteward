@@ -110,9 +110,12 @@ path order; `repo::submodule_paths`). `.gitmodules` is not read for that: a gitl
 `.gitmodules` names without a gitlink is no repository (a clone that no gitlink names is never listed), and a root with
 gitlinks but no `.gitmodules` file is a workspace. The superproject of a checkout is the nearest parent repository whose
 index has a gitlink at that path, and the workspace root is the top-level one (up to 16 levels, `repo::topmost_superproject`).
+The nearest repository is found as git does (`discover`: `GIT_CEILING_DIRECTORIES` and the owner check apply, and only the
+nearest repository counts: a repository in between that has no gitlink there ends the search).
 Nested gitlinks (in a submodule's own index) are listed depth first, after the submodule that holds them, named `outer/inner`
 (`repo::list_repos`); a gitlink without a checkout is never descended into. More than 256 repositories (the root included) is
-a usage error (exit 2), as Go's `sync-limit`. Only `stw add` still reads `.gitmodules` (it refuses a path that the file names
+a usage error (exit 2, text on stderr). Go fails the run with exit 1 and the JSON error code `sync-limit`, and it counts
+uninitialized and unreachable entries too; Rust counts only checked-out repositories. Only `stw add` still reads `.gitmodules` (it refuses a path that the file names
 already) and still takes the nearest superproject as its target.
 
 A gitlink path is untrusted (a repository can name it). It becomes a repository of `status`, `sync`, `tidy plan` and `tidy apply` only if it
@@ -138,12 +141,13 @@ path is checked against the repository that holds it and reported below the root
 clone brings none, so such a path of `.gitmodules` is ignored (earlier Rust reported it as refused). The order is the path
 order of the index (earlier: the order of `.gitmodules`). Go counts a gitlink at stage 1 to 3 once, as Rust does.
 The workspace root of a checkout is found by repeating the nearest-superproject step up to 16 times (Go: `git rev-parse
---show-superproject-working-tree`, `sync.go:215`); the two agree on a plain nested checkout. They can differ for a
-superproject that is itself a linked worktree (Go resolves the main worktree at every level, Rust does not: UNKNOWN, not
-tested). An unreadable index gives an empty list (Go: the run fails with `cannot list the submodules`, `sync.go:265`).
+--show-superproject-working-tree`, `sync.go:215`); the two agree on a plain nested checkout. They differ for a
+superproject that is a linked worktree: Go resolves the main worktree at every level (`mainWorktree`), Rust takes the
+linked worktree itself (also without nesting; checked by the reviewer, not covered by a test). An unreadable index gives an empty list (Go: the run fails with `cannot list the submodules`, `sync.go:265`).
 Not nested-aware: `stw add` (target: the nearest superproject). `tidy plan` and `tidy apply` name repositories through
 `list_repos` and therefore accept a nested one (`--repo outer/inner`); how `tidy apply` treats a repository that contains
-a checked-out submodule is unchanged (`tidy_apply.rs`), and its behavior on a nested repository is UNKNOWN (not tested).
+a checked-out submodule is unchanged (`tidy_apply.rs`), and its behavior on a nested repository is UNKNOWN (not tested). `lint-pr` counts the GitHub slugs of all repositories of
+the walk, nested ones included, and refuses a workspace with more than one slug without `--repo`.
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
