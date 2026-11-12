@@ -2042,7 +2042,45 @@ m GL9 '--submodules asks .gitmodules, not the index, for submodules without a ch
   gitlinks a_gitlink_without_a_checkout_is_unreachable_for_submodules_and_a_gitmodules_entry_is_no_record
 m GL10 'a directory below a gitlink path counts as that submodule' src/repo/mod.rs \
   'if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {' 'if submodule_paths(dir).iter().any(|p| rel.starts_with(Path::new(p))) {' \
-  gitlinks a_nested_checkout_belongs_to_the_nearest_superproject
+  gitlinks a_nested_checkout_belongs_to_the_top_level_superproject
+
+m NS1 'a nested gitlink is not descended into (the list is flat)' src/repo/mod.rs \
+  '        walk(&path, &name, w);' '        let _ = &name;' \
+  nested nested_gitlinks_are_listed_depth_first_with_the_path_below_the_root
+m NS2 'a nested repository is named without the path of its holder' src/repo/mod.rs \
+  '        let name = full(&name);' '        let name = name.clone();' \
+  nested nested_gitlinks_are_listed_depth_first_with_the_path_below_the_root
+m NS3 'the root climbs 17 levels, not 16' src/repo/mod.rs \
+  'for _ in 0..SUPERPROJECT_LEVELS {' 'for _ in 0..SUPERPROJECT_LEVELS + 1 {' \
+  nested the_root_climbs_at_most_sixteen_levels
+m NS4 'the root is the nearest superproject, not the top-level one' src/repo/mod.rs \
+  '            let sup = topmost_superproject(&top);' '            let sup = superproject_of(&top).unwrap_or_else(|| top.clone());' \
+  nested a_checkout_inside_a_nested_submodule_has_the_top_level_superproject_as_root
+m NS5 'the walk fails only above limit + 1 repositories' src/repo/mod.rs \
+  '        if w.repos.len() > w.limit {' '        if w.repos.len() > w.limit + 1 {' \
+  nested the_walk_stops_above_the_repository_limit
+m NS6 'a refused nested path is reported without the path of its holder' src/repo/mod.rs \
+  '            w.rejected.push((full(&p), why));' '            w.rejected.push((p.clone(), why));' \
+  nested a_refused_path_of_a_nested_repository_is_reported_with_its_full_path
+m NS7 'the step of a nested pinned submodule runs against the workspace root' src/sync/submodules.rs \
+  '            step(&parent, rel, rec, o);' '            let _ = (&parent, &rel); let nm = rec.name.clone(); step(root, nm, rec, o);' \
+  nested a_run_moves_a_nested_pinned_submodule_to_the_commit_its_parent_records
+m NS8 'an uninitialized nested submodule is named without its holder' src/sync/submodules.rs \
+  '            .map(|r| (PathBuf::from(&r.path), r.name.clone())),' '            .map(|r| (PathBuf::from(&r.path), String::new())),' \
+  nested an_uninitialized_nested_submodule_is_reported_as_unreachable_and_never_cloned
+m NS9 'a workspace above the limit is not an error' src/repo/mod.rs \
+  '    if exceeded {
+        return Err(crate::error::Error::usage(format!(
+            "the workspace has more than {limit} repositories"' '    if false && exceeded {
+        return Err(crate::error::Error::usage(format!(
+            "the workspace has more than {limit} repositories"' \
+  nested the_walk_stops_above_the_repository_limit
+m NS10 'status and sync list the workspace without the repository limit' src/cli.rs \
+  '    let mut repos = repo::list_repos_checked(&root)?;' '    let mut repos = repo::list_repos(&root);' \
+  nested a_workspace_of_more_than_256_repositories_is_refused
+m NS11 'prove and restack plan pick their repository without the repository limit' src/cli.rs \
+  '    let repos = repo::list_repos_checked(&root)?;' '    let repos = repo::list_repos(&root);' \
+  nested a_workspace_of_more_than_256_repositories_is_refused
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
