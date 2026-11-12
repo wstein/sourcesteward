@@ -2082,6 +2082,22 @@ m NS11 'prove and restack plan pick their repository without the repository limi
   '    let repos = repo::list_repos_checked(&root)?;' '    let repos = repo::list_repos(&root);' \
   nested a_workspace_of_more_than_256_repositories_is_refused
 
+m NS12 'the holder of a nested gitlink is the shortest name prefix, not the longest' src/sync/submodules.rs \
+  'if best.is_none_or(|(b, _)| r.name.len() > b.name.len()) {' 'if best.is_none_or(|(b, _)| r.name.len() < b.name.len()) {' \
+  nested a_third_level_pinned_submodule_is_stepped_against_its_own_holder
+m NS13 'the holder is looked up in the filtered sync list, not in the walk' src/sync/submodules.rs \
+  '    let all = repo::list_repos(root);' '    let all: Vec<repo::RepoRef> = list.iter().filter(|r| !r.path.is_empty()).map(|r| repo::RepoRef { name: r.name.clone(), path: PathBuf::from(&r.path) }).collect();' \
+  nested repo_names_a_nested_submodule_whose_holder_is_left_out_of_the_list
+m NS14 'the gitlinks of the rules checkout are not looked at for uninitialized submodules' src/sync/submodules.rs \
+  '            .filter(|r| r.path != root)' '            .filter(|r| r.path != root && !r.name.starts_with(".agents"))' \
+  nested an_uninitialized_gitlink_of_the_rules_checkout_is_reported
+m NS15 'the superproject is searched without the ceiling and the owner check' src/repo/mod.rs \
+  '    let above = discover::discover(top.parent()?)?;' '    let above = gix::discover(top.parent()?).ok()?;' \
+  nested a_foreign_outer_repository_behind_a_ceiling_is_no_superproject
+m NS16 'any repository above counts as the superproject, whether or not it records a gitlink there' src/repo/mod.rs \
+  '        .any(|p| Path::new(p) == rel)' '        .any(|_| true)' \
+  nested an_unrelated_repository_between_a_checkout_and_an_outer_one_ends_the_search
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
