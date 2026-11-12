@@ -1880,6 +1880,90 @@ m DC13 'ceiling entries are not resolved through symlinks' src/repo/discover.rs 
   'let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());' 'let canon = |p: &Path| p.to_path_buf();' \
   lib repo::discover::tests::a_ceiling_named_through_a_symlink_hides_the_repository
 
+m SY1 'a rebase or merge with tracked local changes is not refused without --autostash' src/sync/mod.rs \
+  'if dirty > 0 && o.autostash != Some(true) {' 'if false && dirty > 0 && o.autostash != Some(true) {' \
+  sync_pull local_changes_of_tracked_files_refuse_a_rebase_or_merge_without_autostash
+m SY2 'the stash flag of git is always --no-autostash' src/git_runner.rs \
+  '    if autostash {
+        "--autostash"
+    } else {
+        "--no-autostash"
+    }' '    if autostash {
+        "--no-autostash"
+    } else {
+        "--no-autostash"
+    }' \
+  sync_journal the_argument_vectors_of_the_journal_operations_are_fixed
+m SY3 'the rebase moves other branches of a stack (--no-update-refs dropped)' src/git_runner.rs \
+  'let mut a = v(&["rebase", "--no-update-refs"]);' 'let mut a = v(&["rebase"]);' \
+  sync_pull a_stack_branch_that_a_rebase_does_not_own_stays_where_it_is
+m SY4 'the rebase has no --fork-point' src/git_runner.rs \
+  'a.push("--fork-point".to_string());' 'a.push("--no-fork-point".to_string());' \
+  sync_journal the_argument_vectors_of_the_journal_operations_are_fixed
+m SY5 'a merge may only fast-forward (--ff replaced by --ff-only)' src/git_runner.rs \
+  'let mut a = v(&["merge", "--no-edit", "--ff"]);' 'let mut a = v(&["merge", "--no-edit", "--ff-only"]);' \
+  sync_pull merge_makes_a_merge_commit_of_the_local_branch_and_the_upstream
+m SY6 'a stopped rebase is not recognised as a conflict' src/sync/pull.rs \
+  'let stopped = after.as_ref().is_ok_and(|a| status::operation(a).is_some());' 'let stopped = false;' \
+  sync_pull a_rebase_conflict_is_left_in_progress_and_exits_one
+m SY7 'a conflict of the put-back stash is not recognised' src/sync/pull.rs \
+  'text.contains("resulted in conflicts")' 'text.contains("never printed by git")' \
+  sync_pull a_conflict_while_the_stash_is_put_back_is_an_autostash_conflict
+m SY8 'a merge driver in the repository config does not refuse a merge or rebase' src/git_runner.rs \
+  '|| (merges && section == "merge" && sub.is_some() && key == "driver")' '|| (false && merges && section == "merge" && sub.is_some() && key == "driver")' \
+  sync_pull a_merge_driver_in_the_repository_config_refuses_the_run
+m SY9 'a filter driver does not refuse a merge or rebase' src/git_runner.rs \
+  '            Op::ResetKeep { .. } | Op::SyncMerge { .. } | Op::SyncRebase { .. }
+        ) {' '            Op::ResetKeep { .. }
+        ) {' \
+  sync_pull a_filter_driver_in_the_repository_config_refuses_the_run
+m SY10 'rebase accepts Git below 2.38' src/git_runner.rs \
+  'Op::SyncRebase { .. } => Version(2, 38, 0),' 'Op::SyncRebase { .. } => Version(2, 30, 0),' \
+  git_runner_ops the_floor_of_every_op_is_declared_and_enforced
+m SY11 'the upstream of a rebase may be outside origin' src/git_runner.rs \
+  'let short = full.strip_prefix("refs/remotes/origin/")?;' 'let short = full.strip_prefix("refs/remotes/")?;' \
+  sync_journal only_a_remote_tracking_ref_of_origin_reaches_the_rebase_argument_vector
+m SY12 'a conflict does not make the exit status 1' src/cli.rs \
+  '"error" | "conflict" | "autostash-conflict"
+                    )' '"error"
+                    )' \
+  sync_pull a_rebase_conflict_is_left_in_progress_and_exits_one
+m SY13 '--merge runs a rebase' src/sync/pull.rs \
+  'Diverged::Merge => Op::SyncMerge { target, autostash },' 'Diverged::Merge => Op::SyncRebase { upstream: upstream.clone(), autostash },' \
+  sync_pull merge_makes_a_merge_commit_of_the_local_branch_and_the_upstream
+m SY14 'the journal entry of a rebase does not record the new tip' src/sync/pull.rs \
+  '.finish(i, journal::STATE_COMPLETED, &new.to_string(), "")' '.finish(i, journal::STATE_COMPLETED, "", "")' \
+  sync_pull sync_restore_moves_a_rebased_branch_back
+m SY15 'the identity flags are accepted without --rules' src/cli.rs \
+  'if !a.rules && (!a.owner_identity.is_empty() || !a.allowed_committer.is_empty()) {' 'if false && (!a.owner_identity.is_empty() || !a.allowed_committer.is_empty()) {' \
+  sync_pull the_identity_flags_need_rules_and_a_well_formed_identity
+m SY16 'the author of a new rules commit is not checked' src/sync/rules.rs \
+  'if !is_one_of(owners, &an, &ae) {' 'if false && !is_one_of(owners, &an, &ae) {' \
+  sync_rules a_commit_of_a_foreign_author_refuses_the_update_in_a_run_and_in_a_plan
+m SY17 'an allowed committer is not admitted' src/sync/rules.rs \
+  'if !is_one_of(owners, &kn, &ke) && !is_one_of(committers, &kn, &ke) {' 'if !is_one_of(owners, &kn, &ke) {' \
+  sync_rules a_foreign_committer_refuses_unless_it_is_an_allowed_committer
+m SY18 'an allowed committer is admitted as author' src/sync/rules.rs \
+  'if !is_one_of(owners, &an, &ae) {' 'if !is_one_of(owners, &an, &ae) && !is_one_of(committers, &an, &ae) {' \
+  sync_rules an_allowed_committer_is_never_an_allowed_author
+m SY19 'the email is compared with case' src/sync/rules.rs \
+  '.any(|i| i.name == name && i.email.eq_ignore_ascii_case(email))' '.any(|i| i.name == name && i.email == email)' \
+  sync_rules the_email_is_compared_without_case_and_the_name_exactly
+m SY20 'the name is compared without case' src/sync/rules.rs \
+  '.any(|i| i.name == name && i.email.eq_ignore_ascii_case(email))' '.any(|i| i.name.eq_ignore_ascii_case(name) && i.email.eq_ignore_ascii_case(email))' \
+  sync_rules the_email_is_compared_without_case_and_the_name_exactly
+m SY21 'a run without any owner identity admits every commit' src/sync/rules.rs \
+  '    if owners.is_empty() {
+        return Err(crate::error::Error::repository(' '    if false && owners.is_empty() {
+        return Err(crate::error::Error::repository(' \
+  sync_rules without_any_owner_identity_nothing_is_admitted
+m SY22 'more than three faults are named' src/sync/rules.rs \
+  'bad.truncate(3);' 'bad.truncate(4);' \
+  sync_rules at_most_three_faults_are_named
+m SY23 'a plan does not check the owners' src/sync/rules.rs \
+  '    let mut bad = not_by_owner(repo, head, target, owners, &o.committers)?;' '    let mut bad = if o.apply { not_by_owner(repo, head, target, owners, &o.committers)? } else { vec![] };' \
+  sync_rules a_commit_of_a_foreign_author_refuses_the_update_in_a_run_and_in_a_plan
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
