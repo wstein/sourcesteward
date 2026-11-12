@@ -1995,6 +1995,42 @@ m SY31 'the gate after the fetch counts a changed submodule' src/sync/mod.rs \
   '        gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '        gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
   sync_pull a_changed_submodule_is_no_local_change_for_the_gate
 
+m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
+  '        .filter(|e| e.mode.is_submodule())
+        .map(|e| e.path(&index).to_str_lossy().into_owned())' '        .filter(|_| true)
+        .map(|e| e.path(&index).to_str_lossy().into_owned())' \
+  gitlinks a_file_of_the_index_is_no_gitlink
+m GL2 'a conflicted gitlink (three stages) is listed three times' src/repo/mod.rs \
+  '    out.dedup();
+    out
+}
+
+/// Why a gitlink path' '    out
+}
+
+/// Why a gitlink path' \
+  gitlinks the_paths_are_sorted_and_a_conflicted_gitlink_is_listed_once
+m GL4 'the repositories come from .gitmodules, not from the index' src/repo/mod.rs \
+  '    for p in submodule_paths(root) {
+        let Some(name) = accepted_name(root, &p) else {' '    for p in gitmodules_paths(root) {
+        let Some(name) = accepted_name(root, &p) else {' \
+  gitlinks a_gitmodules_entry_without_a_gitlink_is_no_repository
+m GL5 'a repository with gitlinks but no .gitmodules file is no workspace root' src/repo/mod.rs \
+  'if top.join(".gitmodules").is_file() || !submodule_paths(&top).is_empty() {' 'if top.join(".gitmodules").is_file() {' \
+  gitlinks a_repository_with_gitlinks_and_no_gitmodules_file_is_a_workspace_root
+m GL6 'the superproject of a checkout needs a .gitmodules file' src/repo/mod.rs \
+  '        if dir.join(".git").exists() {' '        if dir.join(".gitmodules").is_file() && dir.join(".git").exists() {' \
+  gitlinks the_workspace_of_a_gitlink_checkout_is_its_superproject_without_a_gitmodules_file
+m GL7 'a gitlink without a .gitmodules entry is left out' src/repo/mod.rs \
+  '        .filter(|e| e.mode.is_submodule())
+        .map(|e| e.path(&index).to_str_lossy().into_owned())' '        .filter(|e| e.mode.is_submodule() && gitmodules_paths(root).contains(&e.path(&index).to_str_lossy().into_owned()))
+        .map(|e| e.path(&index).to_str_lossy().into_owned())' \
+  gitlinks a_gitlink_without_a_gitmodules_entry_is_a_repository
+
+m GL8 'add looks for the path among the gitlinks, not among the .gitmodules entries' src/add.rs \
+  'crate::repo::gitmodules_paths(ws).iter().any(|s| s == p)' 'crate::repo::submodule_paths(ws).iter().any(|s| s == p)' \
+  add a_gitmodules_entry_for_path_refuses_even_without_a_gitlink
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
