@@ -135,3 +135,37 @@ func TestInvalidUTF8HeadRef(t *testing.T) {
 		t.Fatal("accepted invalidUTF8 ref")
 	}
 }
+func TestSupportedVersionFloor(t *testing.T) {
+	for v, want := range map[string]bool{
+		"2.42.0": false, "2.42.9": false, "2.40.1": false, "1.99.0": false, "0.0": false,
+		"2.43.0": true, "2.43.9": true, "2.46.0": true, "2.47.3": true, "2.56.0": true, "3.0": true, "3.0.0": true,
+		"": false, "2": false, "x.y.z": false, "2.x": false, "v2.46.0": false, "-2.50": false,
+	} {
+		if got := supportedVersion(v); got != want {
+			t.Errorf("supportedVersion(%q) = %t, want %t", v, got, want)
+		}
+	}
+}
+func TestVersionFloorMessage(t *testing.T) {
+	d := repo(t)
+	versionRunner := func(version string) runner {
+		return func(ctx context.Context, dir string, args ...string) (string, int, error) {
+			if args[0] == "version" {
+				return "git version " + version + "\n", 0, nil
+			}
+			return "", 128, nil
+		}
+	}
+	for _, v := range []string{"2.42.0", "2.40.1"} {
+		r := inspect(context.Background(), d, versionRunner(v))
+		if r.Status != "error" || len(r.Diagnostics) != 1 || r.Diagnostics[0].Code != "git-failed" || r.Diagnostics[0].Message != "inspection requires Git 2.43 or newer" {
+			t.Errorf("%s: %+v", v, r)
+		}
+	}
+	for _, v := range []string{"2.43.0", "2.43.9", "2.46.0", "3.0"} {
+		r := inspect(context.Background(), d, versionRunner(v))
+		if len(r.Diagnostics) > 0 && strings.Contains(r.Diagnostics[0].Message, "inspection requires Git") {
+			t.Errorf("%s rejected: %+v", v, r)
+		}
+	}
+}
