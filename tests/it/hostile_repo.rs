@@ -143,8 +143,8 @@ fn repositories_are_opened_only_through_repo_open() {
             .unwrap()
             .to_string_lossy()
             .into_owned();
-        // the repo module itself, and the runner, which reads only the repository's own config
-        if rel == "src/repo/mod.rs" || rel == "src/git_runner.rs" {
+        // the repo module itself (also its discovery, which applies ceiling and owner check), and the runner, which reads only the repository's own config
+        if rel == "src/repo/mod.rs" || rel == "src/repo/discover.rs" || rel == "src/git_runner.rs" {
             continue;
         }
         let text = std::fs::read_to_string(&f).unwrap();
@@ -155,6 +155,7 @@ fn repositories_are_opened_only_through_repo_open() {
                 "gix::open_opts(",
                 "gix::discover(",
                 "gix::ThreadSafeRepository::open",
+                "gix::ThreadSafeRepository::discover",
             ] {
                 assert!(
                     !code.contains(bad),

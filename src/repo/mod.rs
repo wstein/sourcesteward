@@ -21,7 +21,7 @@ pub struct RepoRef {
 /// Root choice: `--root`, else the repository (or its superproject) of the current directory,
 /// else `$STW_ROOT`. The prototype's hard-coded last resort path is intentionally not copied.
 pub fn default_root(cwd: &Path) -> Option<PathBuf> {
-    if let Ok(repo) = gix::discover(cwd) {
+    if let Some(repo) = discover::discover(cwd) {
         if let Some(top) = repo.workdir() {
             let top = top.to_path_buf();
             if let Some(sup) = superproject_of(&top) {
@@ -202,9 +202,7 @@ pub fn open_isolated(path: &Path) -> Result<gix::Repository> {
 
 /// The top level of the work tree that contains `dir`, if there is one.
 pub fn top_level(dir: &Path) -> Option<PathBuf> {
-    gix::discover(dir)
-        .ok()
-        .and_then(|r| r.workdir().map(Path::to_path_buf))
+    discover::discover(dir).and_then(|r| r.workdir().map(Path::to_path_buf))
 }
 
 /// Forget every `filter.<name>.*` driver of the (in-memory) configuration. gix would start the `clean`,

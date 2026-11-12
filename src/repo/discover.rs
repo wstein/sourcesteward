@@ -1,31 +1,96 @@
 //! Repository discovery as Git does it: upwards from a directory, stopping at `GIT_CEILING_DIRECTORIES`, and a
 //! repository owned by another user is used only when `safe.directory` (system or global config, never the
 //! repository's own config) names its work tree. Read-only; nothing is written to any config.
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-/// The repository around `dir`, or `None`.
+/// The repository around `dir`, or `None`: no repository, one above `GIT_CEILING_DIRECTORIES`, or one that
+/// belongs to another user and is not named by `safe.directory`.
 pub fn discover(dir: &Path) -> Option<gix::Repository> {
-    gix::discover(dir).ok()
+    discover_in(dir, std::env::var_os("GIT_CEILING_DIRECTORIES").as_ref())
 }
 
-fn discover_in(dir: &Path, ceiling_env: Option<&std::ffi::OsString>) -> Option<gix::Repository> {
-    let _ = ceiling_env;
-    gix::discover(dir).ok()
+fn discover_in(dir: &Path, ceiling_env: Option<&OsString>) -> Option<gix::Repository> {
+    let ceilings = ceiling_env.map(parse_ceilings).unwrap_or_default();
+    let safe = safe_directory_values();
+    discover_with(dir, &ceilings, &safe)
+}
+
+/// `GIT_CEILING_DIRECTORIES`: absolute entries only, as Git reads it.
+fn parse_ceilings(v: &OsString) -> Vec<PathBuf> {
+    std::env::split_paths(v)
+        .filter(|p| p.is_absolute())
+        .collect()
 }
 
 fn discover_with(dir: &Path, ceilings: &[PathBuf], safe: &[String]) -> Option<gix::Repository> {
-    let _ = (ceilings, safe);
-    gix::discover(dir).ok()
+    let options = gix::discover::upwards::Options {
+        ceiling_dirs: ceilings.to_vec(),
+        // Git ignores a ceiling list that does not contain the start
+        match_ceiling_dir_or_error: false,
+        ..Default::default()
+    };
+    let repo = gix::ThreadSafeRepository::discover_opts(dir, options, Default::default())
+        .ok()?
+        .to_thread_local();
+    let tree = repo
+        .workdir()
+        .unwrap_or_else(|| repo.git_dir())
+        .to_path_buf();
+    if behind_ceiling(dir, &tree, ceilings) {
+        return None;
+    }
+    trusted(&repo, repo.git_dir_trust(), safe).then_some(repo)
 }
 
-fn safe_directory_allows(values: &[String], workdir: &Path) -> bool {
-    let _ = (values, workdir);
-    true
+/// Git does not enter a ceiling directory: a repository at a ceiling, or above one that contains the start,
+/// is not found (a ceiling equal to the start is ignored). gix still returns a repository at the ceiling itself.
+fn behind_ceiling(start: &Path, tree: &Path, ceilings: &[PathBuf]) -> bool {
+    let canon = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+    let (start, tree) = (canon(start), canon(tree));
+    ceilings
+        .iter()
+        .map(|c| canon(c))
+        .any(|c| start.starts_with(&c) && start != c && c.starts_with(&tree))
 }
 
+/// A repository of the current user is trusted; another user's repository only if `safe.directory` names it.
 fn trusted(repo: &gix::Repository, trust: gix::sec::Trust, safe: &[String]) -> bool {
-    let _ = (repo, trust, safe);
-    true
+    if trust == gix::sec::Trust::Full {
+        return true;
+    }
+    let tree = repo.workdir().unwrap_or_else(|| repo.git_dir());
+    safe_directory_allows(safe, tree)
+}
+
+/// `safe.directory` from the system and global config only (a repository must not vouch for itself).
+fn safe_directory_values() -> Vec<String> {
+    let Ok(file) = gix::config::File::from_globals() else {
+        return Vec::new();
+    };
+    file.strings("safe.directory")
+        .map(|v| v.iter().map(|s| s.to_string()).collect())
+        .unwrap_or_default()
+}
+
+/// Git's matching: `*` allows all, a trailing `/*` allows everything below that directory, otherwise the path
+/// must be equal (a trailing slash is ignored). An empty value resets the list.
+fn safe_directory_allows(values: &[String], workdir: &Path) -> bool {
+    let mut allowed = false;
+    for v in values {
+        if v.is_empty() {
+            allowed = false;
+        } else if v == "*" {
+            allowed = true;
+        } else if let Some(prefix) = v.strip_suffix("/*") {
+            if workdir.starts_with(prefix) && workdir != Path::new(prefix) {
+                allowed = true;
+            }
+        } else if Path::new(v.trim_end_matches('/')) == workdir {
+            allowed = true;
+        }
+    }
+    allowed
 }
 
 #[cfg(test)]
@@ -58,14 +123,18 @@ mod tests {
         init(&root);
         std::fs::create_dir_all(root.join("sub/deep")).unwrap();
         // the ceiling is the parent of the start: the repository at `root` is not seen
-        assert!(discover_with(&root.join("sub/deep"), &[root.clone()], &[]).is_none());
+        assert!(discover_with(&root.join("sub/deep"), std::slice::from_ref(&root), &[]).is_none());
+        // a ceiling between start and repository hides it as well
+        assert!(discover_with(&root.join("sub/deep"), &[root.join("sub")], &[]).is_none());
+        // a ceiling equal to the start is ignored, as Git does
+        assert!(discover_with(&root, std::slice::from_ref(&root), &[]).is_some());
         // a ceiling elsewhere does not hide it
         let other = tempfile::tempdir().unwrap();
         let r = discover_with(&root.join("sub/deep"), &[canon(other.path())], &[]);
         assert_eq!(canon(r.unwrap().workdir().unwrap()), root);
         // a repository inside the ceiling is still found
         init(&root.join("sub"));
-        let r = discover_with(&root.join("sub/deep"), &[root.clone()], &[]).unwrap();
+        let r = discover_with(&root.join("sub/deep"), std::slice::from_ref(&root), &[]).unwrap();
         assert_eq!(canon(r.workdir().unwrap()), root.join("sub"));
     }
 
