@@ -8,7 +8,7 @@
 //! not undone by anything. The pass runs after every repository was synced (so the superproject's own
 //! fast-forward is done and its new gitlinks count), one submodule after the other.
 //!
-//! Only top-level submodules of `.gitmodules` are visited (the repository list of `stw` is flat); a nested
+//! Only top-level submodules (the gitlinks of the index) are visited (the repository list of `stw` is flat); a nested
 //! submodule is not.
 use std::path::Path;
 
@@ -366,7 +366,7 @@ fn step(root: &Path, rec: &mut SyncRec, o: &Opts) {
     );
 }
 
-/// Adds one record per `.gitmodules` path that is not accepted (`repo::rejected_paths`), never synced, whatever
+/// Adds one record per gitlink path that is not accepted (`repo::rejected_paths`), never synced, whatever
 /// the flags. Only a run with `--submodules` makes it an error (Go's `unreachable` arises only there; a dry run
 /// predicts it as a skip); a run without `--submodules` shows a skip with the same text, a hint that does not fail the run.
 /// The path is untrusted: no file system access, escaped in the text.
@@ -391,7 +391,7 @@ pub fn rejected_pass(rejected: &[(String, String)], list: &mut Vec<SyncRec>, o: 
 
 /// The `--submodules` pass over the synced `list` of the superproject at `root`: each pinned submodule (checked
 /// out, detached HEAD, nothing else wrong with it) gets its step; with `include_uninitialized`, a submodule of
-/// `.gitmodules` without a checkout is added as unreachable (never cloned). `skip` is the rules checkout, which
+/// a gitlink without a checkout is added as unreachable (never cloned). `skip` is the rules checkout, which
 /// only `--rules` handles.
 pub fn submodule_pass(
     root: &Path,

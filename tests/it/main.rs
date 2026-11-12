@@ -18,6 +18,7 @@ mod git_runner_sync_ops;
 mod github;
 mod github_reads;
 mod github_rules;
+mod gitlinks;
 mod hostile_repo;
 mod identity;
 mod lint_pr;

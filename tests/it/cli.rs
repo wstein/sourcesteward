@@ -173,7 +173,7 @@ fn a_repository_that_cannot_be_read_exits_1_in_every_command() {
     let fx = root();
     fx.write(
         ".gitmodules",
-        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n\tignore = all\n",
     );
     fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
     let r = path_str(&fx.path);
@@ -197,7 +197,7 @@ fn repo_filter_selects_by_name() {
     let fx = root();
     fx.write(
         ".gitmodules",
-        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n\tignore = all\n",
     );
     fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
     let r = path_str(&fx.path);

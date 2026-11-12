@@ -517,7 +517,7 @@ fn check_path(ws: &Path, gitdir: &Path, repo: &gix::Repository, req: &Request) -
             return Err(refused(format!("{path} is a file in the index")));
         }
     }
-    if crate::repo::submodule_paths(ws).iter().any(|s| s == p) {
+    if crate::repo::gitmodules_paths(ws).iter().any(|s| s == p) {
         return Err(refused(format!("{p} is a submodule already (skipped)")));
     }
     modules_clear(gitdir, req)?;

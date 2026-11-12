@@ -767,6 +767,7 @@ fn a_submodule_path_through_a_symbolic_link_is_left_alone() {
             "dir/c",
         ],
     );
+    crate::common::stage_gitlink_in(&s.ws, "dir/c");
     // offline: `dir/c` and `c` are one repository, which two fetches would lock against each other
     let (code, v, _) = s.w.stw(&s.ws, &["--submodules", "--offline"]);
     assert_eq!(code, 1, "{v}");
@@ -809,20 +810,30 @@ fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
     gm.push_str("[submodule \"up\"]\n\tpath = ../outside\n\turl = ../c.git\n");
     gm.push_str("[submodule \"abs\"]\n\tpath = /abs/x\n\turl = ../c.git\n");
     std::fs::write(fresh.join(".gitmodules"), gm).unwrap();
+    // git cannot hold `../outside` or `/abs/x` in an index: `.gitmodules` alone makes no repository of them
+    crate::common::stage_gitlink_in(&fresh, "x\u{1b}[31mRED\u{1b}[0m");
     // JSON: the control character is escaped by the encoder, the reason is the plain-path refusal
     let (code, v, _) = s.w.stw(&fresh, &["--submodules", "--offline"]);
     assert_eq!(code, 1, "{v}");
-    for name in ["x\u{1b}[31mRED\u{1b}[0m", "../outside", "/abs/x"] {
-        let r = repo(&v, name);
-        assert_eq!(r["submodule"]["state"], "unreachable", "{r}");
+    for name in ["../outside", "/abs/x"] {
         assert!(
-            r["reason"]
-                .as_str()
+            v["repos"]
+                .as_array()
                 .unwrap()
-                .contains("submodule path not accepted"),
-            "{r}"
+                .iter()
+                .all(|r| r["name"] != name),
+            "{name}: {v}"
         );
     }
+    let r = repo(&v, "x\u{1b}[31mRED\u{1b}[0m");
+    assert_eq!(r["submodule"]["state"], "unreachable", "{r}");
+    assert!(
+        r["reason"]
+            .as_str()
+            .unwrap()
+            .contains("submodule path not accepted"),
+        "{r}"
+    );
     // text: no raw control character reaches the terminal
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()

@@ -27,7 +27,7 @@ pub fn default_root(cwd: &Path) -> Option<PathBuf> {
             if let Some(sup) = superproject_of(&top) {
                 return Some(sup);
             }
-            if top.join(".gitmodules").is_file() {
+            if top.join(".gitmodules").is_file() || !submodule_paths(&top).is_empty() {
                 return Some(top);
             }
         }
@@ -35,11 +35,11 @@ pub fn default_root(cwd: &Path) -> Option<PathBuf> {
     std::env::var_os("STW_ROOT").map(PathBuf::from)
 }
 
-/// A submodule checkout: the superproject is the nearest parent with a `.gitmodules` naming it.
+/// A submodule checkout: the superproject is the nearest parent repository whose index has a gitlink at that path.
 fn superproject_of(top: &Path) -> Option<PathBuf> {
     let mut cur = top.parent();
     while let Some(dir) = cur {
-        if dir.join(".gitmodules").is_file() && dir.join(".git").exists() {
+        if dir.join(".git").exists() {
             if let Ok(rel) = top.strip_prefix(dir) {
                 if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {
                     return Some(dir.to_path_buf());
@@ -60,8 +60,9 @@ pub fn add_root(cwd: &Path) -> Option<PathBuf> {
     std::env::var_os("STW_ROOT").map(PathBuf::from)
 }
 
-/// `submodule.*.path` values of `<root>/.gitmodules`.
-pub fn submodule_paths(root: &Path) -> Vec<String> {
+/// `submodule.*.path` values of `<root>/.gitmodules`. Only `stw add` reads them (it writes the file and the
+/// gitlink together); the repositories of a workspace come from `submodule_paths`.
+pub fn gitmodules_paths(root: &Path) -> Vec<String> {
     let file = root.join(".gitmodules");
     let Ok(cfg) = gix::config::File::from_path_no_includes(file, gix::config::Source::Worktree)
     else {
@@ -78,7 +79,32 @@ pub fn submodule_paths(root: &Path) -> Vec<String> {
     out
 }
 
-/// Why a `.gitmodules` path is not accepted as a repository of the workspace; None when it is. The text of the
+/// The paths of the gitlinks (mode 160000, any conflict stage) of the index of the work tree at `root`, in path
+/// order, each once: the direct submodules, as Go lists them (`stwsync` `submodules`, `ls-files --stage -z`).
+/// `.gitmodules` is not read: a gitlink needs no entry there, a path it names without a gitlink is no
+/// repository, and a clone that no gitlink names is never one. Only the repository's own config is read
+/// (`open_isolated`); a root that is no repository, or an unreadable index, gives no paths. A path that is not
+/// UTF-8 is listed lossily and is refused by `path_rejection` (charset).
+pub fn submodule_paths(root: &Path) -> Vec<String> {
+    let Ok(repo) = open_isolated(root) else {
+        return Vec::new();
+    };
+    let Ok(index) = repo.index_or_empty() else {
+        return Vec::new();
+    };
+    let mut out: Vec<String> = index
+        .entries()
+        .iter()
+        .filter(|e| e.mode.is_submodule())
+        .map(|e| e.path(&index).to_str_lossy().into_owned())
+        .collect();
+    // the entries of an index are in path order (gix restores it on read: a test writes an unsorted one), so
+    // the copies of a conflicted gitlink (stages 1 to 3) are adjacent
+    out.dedup();
+    out
+}
+
+/// Why a gitlink path is not accepted as a repository of the workspace; None when it is. The text of the
 /// path is untrusted: the rules of `stw add` (`SubPath::parse`: `[A-Za-z0-9._/-]`, relative, no `..`, no `-x`
 /// component, no git-special name), no symbolic link among its components, and the real path of an existing
 /// directory stays below the real path of the root. The reason does not repeat the path.
@@ -109,7 +135,7 @@ pub fn path_rejection(root: &Path, p: &str) -> Option<String> {
     None
 }
 
-/// The `.gitmodules` paths of `root` that `path_rejection` refuses, with the reason (each path once, a trailing
+/// The gitlink paths of `root` that `path_rejection` refuses, with the reason (each path once, a trailing
 /// `/` ignored, in file order). They are never listed as repositories; the commands report them.
 pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = Vec::new();
@@ -127,7 +153,7 @@ pub fn rejected_paths(root: &Path) -> Vec<(String, String)> {
     out
 }
 
-/// The normalized name of an accepted `.gitmodules` path (no trailing `/`), else None.
+/// The normalized name of an accepted gitlink path (no trailing `/`), else None.
 pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
     if path_rejection(root, p).is_some() {
         return None;
@@ -137,7 +163,7 @@ pub fn accepted_name(root: &Path, p: &str) -> Option<String> {
         .map(|s| s.as_str().to_string())
 }
 
-/// The root and every checked-out submodule (a `.git` entry must exist), in `.gitmodules` order. A path that
+/// The root and every checked-out submodule (a gitlink of the index and a `.git` entry), in path order. A path that
 /// `path_rejection` refuses is left out (see `rejected_paths`). The name is the normalized path; a directory
 /// named twice (`a`, `a/`) is listed once, and never twice with the root.
 pub fn list_repos(root: &Path) -> Vec<RepoRef> {

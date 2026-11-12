@@ -1,6 +1,6 @@
-//! `.gitmodules` paths are untrusted: a path that is not a plain directory path below the workspace is never a
-//! repository of `status`, `sync` or `tidy plan`; it is reported as its own entry (escaped) and nothing there is
-//! read or written. Unit part: `repo::path_rejection`, `repo::list_repos`.
+//! The repositories of `status`, `sync`, `tidy plan` and `tidy apply` are the gitlinks of the index. A gitlink path is
+//! untrusted: one that is not a plain directory path below the workspace is never a repository; it is reported as its
+//! own entry (escaped) and nothing there is read or written. Unit part: `repo::path_rejection`, `repo::list_repos`.
 //!
 //! Harness confinement: everything lives in a tempdir of `World` (git and stw run with a scrubbed environment).
 use std::path::{Path, PathBuf};
@@ -9,6 +9,15 @@ use std::process::Command;
 use serde_json::Value;
 
 use crate::sync_flags::World;
+
+impl Ws {
+    fn names(&self) -> Vec<String> {
+        stw::repo::list_repos(&self.ws)
+            .into_iter()
+            .map(|r| r.name)
+            .collect()
+    }
+}
 
 struct Ws {
     w: World,
@@ -48,28 +57,39 @@ fn setup() -> Ws {
     }
 }
 
-/// `.gitmodules` text for the paths (each already in git-config quoted form).
+/// `.gitmodules` text for the paths (each already in git-config quoted form), and a gitlink in the index for
+/// each of them (the repositories of a workspace are the gitlinks; a trailing `/` is no part of an index path,
+/// so `a/b` and `a/b/` are one gitlink).
 fn write_gitmodules(ws: &Path, paths: &[&str]) {
     let mut s = String::new();
     for (i, p) in paths.iter().enumerate() {
         s += &format!("[submodule \"m{i}\"]\n\tpath = {p}\n\turl = ../o.git\n");
     }
     std::fs::write(ws.join(".gitmodules"), s).unwrap();
+    for p in paths {
+        let display = match p.strip_prefix('"').and_then(|q| q.strip_suffix('"')) {
+            Some(q) => q.replace("\\n", "\n"),
+            None => p.to_string(),
+        };
+        let display = display.strip_suffix('/').unwrap_or(&display);
+        // a path that git cannot hold (absolute, with a `..` segment) stays in `.gitmodules` only: it is no
+        // gitlink, so no repository, and is never read (see `paths_that_only_gitmodules_names_are_ignored`)
+        if !display.starts_with('/') && !display.split('/').any(|c| c == "..") {
+            crate::common::stage_gitlink_in(ws, display);
+        }
+    }
 }
 
 const ESC_NAME: &str = "x\u{1b}[31mRED";
 
 /// Hostile entries: the display name (as `.gitmodules` yields it) and the `.gitmodules` spelling.
 fn hostile(t: &Ws) -> Vec<(String, String)> {
-    let abs = t.outside.to_str().unwrap().to_string();
     // directories that WOULD be repositories if the path were accepted
     for d in ["-opt", ESC_NAME, "nl\nINJECTED", "sp ace"] {
         t.w.git(&t.w.base, &["clone", "-q", "o.git", &format!("ws/{d}")]);
     }
     std::os::unix::fs::symlink(&t.outside, t.ws.join("link")).unwrap();
     vec![
-        ("../outside".into(), "../outside".into()),
-        (abs.clone(), abs),
         ("-opt".into(), "-opt".into()),
         ("link".into(), "link".into()),
         (ESC_NAME.into(), ESC_NAME.into()),
@@ -83,7 +103,10 @@ fn hostile(t: &Ws) -> Vec<(String, String)> {
 fn setup_hostile() -> (Ws, Vec<(String, String)>) {
     let t = setup();
     let h = hostile(&t);
+    let abs = t.outside.to_str().unwrap().to_string();
     let mut spell: Vec<&str> = h.iter().map(|(_, s)| s.as_str()).collect();
+    spell.push("../outside");
+    spell.push(&abs);
     spell.push("a/b");
     write_gitmodules(&t.ws, &spell);
     (t, h)
@@ -183,7 +206,40 @@ fn list_repos_leaves_out_refused_paths_and_keeps_valid_ones() {
         .into_iter()
         .map(|(p, _)| p)
         .collect();
-    assert_eq!(rej, h.into_iter().map(|(n, _)| n).collect::<Vec<_>>());
+    // the repositories are the gitlinks of the index, in path order
+    let mut want: Vec<String> = h.into_iter().map(|(n, _)| n).collect();
+    want.sort();
+    assert_eq!(rej, want);
+}
+
+/// Git cannot hold an absolute path or a `..` segment in an index, and a clone brings no index: a `.gitmodules`
+/// that names one has no gitlink for it, so it is no repository and no entry of any command (Go ignores it too).
+#[test]
+fn paths_that_only_gitmodules_names_are_ignored() {
+    let (t, _) = setup_hostile();
+    let abs = t.outside.to_str().unwrap().to_string();
+    let rej: Vec<String> = stw::repo::rejected_paths(&t.ws)
+        .into_iter()
+        .map(|(p, _)| p)
+        .collect();
+    assert!(
+        !rej.contains(&"../outside".to_string()) && !rej.contains(&abs),
+        "{rej:?}"
+    );
+    assert!(!t.names().iter().any(|n| n == "../outside" || *n == abs));
+    let (code, text, v) = stw(&t, &["sync", "--submodules", "--offline"]);
+    assert_eq!(code, 1, "{text}");
+    for name in ["../outside", abs.as_str()] {
+        assert!(
+            v["repos"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|r| r["name"] != name),
+            "{name}: {v}"
+        );
+    }
+    outside_unchanged(&t);
 }
 
 #[test]
@@ -202,10 +258,7 @@ fn sync_dry_run_reports_refused_paths_and_touches_nothing() {
     let ok = entry(&v, "a/b");
     assert!(!ok["reason"].as_str().unwrap().contains("not accepted"));
     assert!(!ok["path"].as_str().unwrap().is_empty());
-    assert!(
-        text.contains("submodule path not accepted: ../outside"),
-        "{text}"
-    );
+    assert!(text.contains("submodule path not accepted: -opt"), "{text}");
     no_raw_controls(&text);
     outside_unchanged(&t);
 }
@@ -266,7 +319,7 @@ fn assert_rejected_field(v: &Value, n: usize) {
         no_raw_controls(e["path"].as_str().unwrap());
         assert!(!e["reason"].as_str().unwrap().is_empty());
     }
-    assert!(r.iter().any(|e| e["path"] == "../outside"), "{v}");
+    assert!(r.iter().any(|e| e["path"] == "-opt"), "{v}");
 }
 
 #[test]
@@ -307,10 +360,7 @@ fn status_notes_refused_paths_without_a_repository_entry() {
         h.len(),
         "{text}"
     );
-    assert!(
-        text.contains("submodule path not accepted: ../outside"),
-        "{text}"
-    );
+    assert!(text.contains("submodule path not accepted: -opt"), "{text}");
     assert!(
         text.contains("rename with git mv; stw handles only [A-Za-z0-9._/-]"),
         "{text}"
@@ -328,7 +378,7 @@ fn tidy_plan_notes_refused_paths_without_a_repository_entry() {
     assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
     assert_rejected_field(&v, h.len());
     assert!(
-        text.contains("(submodule path not accepted: ../outside"),
+        text.contains("(submodule path not accepted: -opt"),
         "{text}"
     );
     no_raw_controls(&text);
@@ -353,7 +403,7 @@ fn tidy_apply_notes_refused_paths_and_does_not_touch_them() {
     assert_eq!(v["repos"].as_array().unwrap().len(), 2, "{v}");
     assert_rejected_field(&v, h.len());
     assert!(
-        text.contains("(submodule path not accepted: ../outside"),
+        text.contains("(submodule path not accepted: -opt"),
         "{text}"
     );
     no_raw_controls(&text);
@@ -367,7 +417,7 @@ fn repo_names_decide_whether_refused_paths_are_reported() {
     assert_eq!(code, 0, "{text}");
     assert_eq!(v["rejected_paths"].as_array().map(Vec::len), Some(0), "{v}");
     assert!(!text.contains("not accepted"), "{text}");
-    let (code, text, _) = stw(&t, &["status", "--offline", "--repo", "../outside"]);
+    let (code, text, _) = stw(&t, &["status", "--offline", "--repo", "link"]);
     assert_eq!(code, 2, "{text}");
 }
 
@@ -390,7 +440,7 @@ fn a_directory_named_twice_is_listed_and_synced_once() {
     let (code, text, _) = stw(&t, &["sync", "--plan", "--offline", "--repo", "a/b"]);
     assert_eq!(code, 0, "{text}");
     // a refused path named twice is reported once
-    write_gitmodules(&t.ws, &["../x", "../x/"]);
+    write_gitmodules(&t.ws, &["x y", "x y/"]);
     assert_eq!(stw::repo::rejected_paths(&t.ws).len(), 1);
 }
 
@@ -459,10 +509,7 @@ fn below_means_strictly_below() {
 #[test]
 fn refused_paths_are_notices_in_the_json_too_with_hostile_characters_escaped() {
     let t = setup();
-    write_gitmodules(
-        &t.ws,
-        &["../outside", "\"nl\\nx\"", "rtl\u{202e}x", ESC_NAME],
-    );
+    write_gitmodules(&t.ws, &["-opt", "\"nl\\nx\"", "rtl\u{202e}x", ESC_NAME]);
     let (code, text, v) = stw(&t, &["status", "--offline"]);
     assert_eq!(code, 0, "{text}");
     let n = v["notices"].as_array().unwrap();

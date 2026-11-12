@@ -38,7 +38,7 @@ fn attention_and_failed() -> Fx {
     fx.write("untracked.txt", "x\n");
     fx.write(
         ".gitmodules",
-        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n\tignore = all\n",
     );
     fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
     fx
@@ -1084,7 +1084,7 @@ fn long_fixture() -> Fx {
     fx.write(".git/MERGE_HEAD", &format!("{c0}\n"));
     fx.write(
         ".gitmodules",
-        "[submodule \"det\"]\n\tpath = det\n\turl = x\n[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+        "[submodule \"det\"]\n\tpath = det\n\turl = x\n[submodule \"broken\"]\n\tpath = broken\n\turl = x\n\tignore = all\n",
     );
     fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
     let det = std::path::Path::new(&fx.path).join("det");
@@ -1166,8 +1166,10 @@ fn long_adds_cards_and_explanations_and_nothing_is_taken_away() {
         .unwrap();
     for want in [
         "- operation:merge: a merge is in progress: finish or abort it",
-        "- staged: 1 path staged but not committed",
-        "- unstaged: 1 path with tracked changes in the working tree that are not staged",
+        // the staged file and the gitlinks of `det` and `broken` (in the index, not in HEAD); the changed file and
+        // `det`, whose checkout is not at the id of its gitlink
+        "- staged: 3 paths staged but not committed",
+        "- unstaged: 2 paths with tracked changes in the working tree that are not staged",
         "- untracked: ",
         "- behind: origin/main is 1 commit ahead of this branch",
         "- detached: HEAD is detached at ",
@@ -1179,7 +1181,7 @@ fn long_adds_cards_and_explanations_and_nothing_is_taken_away() {
     for want in [
         "    remote: test/fixture\n",
         "    upstream: origin/main (ahead 0, behind 1)\n",
-        "    changes: 1 staged, 1 unstaged, 3 untracked, 0 conflicts\n",
+        "    changes: 3 staged, 2 unstaged, 2 untracked, 0 conflicts\n",
         "    branches: 1 local, 1 remote; linked worktrees: 0; stash: 0\n",
     ] {
         assert!(l.contains(want), "{want:?} in\n{l}");

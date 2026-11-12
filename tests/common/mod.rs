@@ -290,7 +290,28 @@ impl Fx {
         index.write(Default::default()).unwrap();
     }
 
+    /// Write a file. Writing `.gitmodules` also stages a gitlink for each `path =` it names (a fixture's
+    /// submodules are the gitlinks of its index); `write_plain` skips that.
     pub fn write(&self, rel: &str, content: &str) {
+        self.write_plain(rel, content);
+        if rel == ".gitmodules" {
+            for line in content.lines() {
+                let Some(v) = line.trim().strip_prefix("path = ") else {
+                    continue;
+                };
+                let v = match v.strip_prefix('"').and_then(|v| v.strip_suffix('"')) {
+                    Some(q) => q
+                        .replace("\\n", "\n")
+                        .replace("\\\"", "\"")
+                        .replace("\\\\", "\\"),
+                    None => v.to_string(),
+                };
+                self.stage_gitlink(&v);
+            }
+        }
+    }
+
+    pub fn write_plain(&self, rel: &str, content: &str) {
         let p = self.path.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, content).unwrap();
@@ -306,6 +327,11 @@ impl Fx {
 
     pub fn tip(&self, branch: &str) -> ObjectId {
         stw::repo::resolve(&self.repo(), &format!("refs/heads/{branch}")).unwrap()
+    }
+
+    /// Stage a gitlink at `rel` (see `stage_gitlink_in`).
+    pub fn stage_gitlink(&self, rel: &str) {
+        stage_gitlink_in(&self.path, rel);
     }
 
     /// Stage a file the way `git add` would: blob into the object store, entry into the index.
@@ -631,4 +657,45 @@ pub fn tree_snapshot(dir: &Path) -> std::collections::BTreeMap<PathBuf, Option<V
     let mut out = std::collections::BTreeMap::new();
     walk(dir, dir, &mut out);
     out
+}
+
+/// Stage a gitlink at `rel` in the index of the repository at `dir`, the way `git add` does for a checked-out
+/// submodule: a mode 160000 entry (the repositories of a workspace are the gitlinks of its index). Unlike
+/// `git update-index` it accepts any path, also the hostile ones a test needs. The id is a fixed placeholder;
+/// the HEAD tree and the checkout are not touched.
+pub fn stage_gitlink_in(dir: &Path, rel: &str) {
+    stage_gitlinks_in(dir, &[rel], true);
+}
+
+/// `stage_gitlink_in` for several paths in the given order; `sort` false writes the entries as they are (an
+/// index git would never write, to see how a reader copes).
+pub fn stage_gitlinks_in(dir: &Path, rels: &[&str], sort: bool) {
+    let repo = gix::open(dir).unwrap();
+    let mut index = gix::index::File::at(
+        repo.index_path(),
+        repo.object_hash(),
+        true,
+        Default::default(),
+    )
+    .unwrap_or_else(|_| {
+        gix::index::File::from_state(
+            gix::index::State::new(repo.object_hash()),
+            repo.index_path(),
+        )
+    });
+    for rel in rels {
+        index.remove_entries(|_, p, _| p == rel.as_bytes() as &[u8]);
+        index.dangerously_push_entry(
+            gix::index::entry::Stat::default(),
+            gix::ObjectId::from_hex(&b"1".repeat(40)).unwrap(),
+            gix::index::entry::Flags::empty(),
+            gix::index::entry::Mode::COMMIT,
+            (*rel).into(),
+        );
+    }
+    if sort {
+        index.sort_entries();
+    }
+    index.remove_tree();
+    index.write(Default::default()).unwrap();
 }

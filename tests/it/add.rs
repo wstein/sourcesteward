@@ -1055,6 +1055,22 @@ fn the_json_report_says_what_ran_and_whether_it_wrote() {
 }
 
 #[test]
+fn a_gitmodules_entry_for_path_refuses_even_without_a_gitlink() {
+    let e = env();
+    // `.gitmodules` alone (no gitlink in the index, no directory): `add` would write a second section for it
+    e.ws.write_plain(
+        ".gitmodules",
+        "[submodule \"tool\"]\n\tpath = projects/tool\n\turl = ../tool.git\n",
+    );
+    refuses(
+        &e,
+        &cloner(|_, _| panic!("refused before the clone")),
+        &req("octo", "tool", "projects/tool"),
+        "is a submodule already",
+    );
+}
+
+#[test]
 fn an_index_entry_below_path_refuses_even_without_the_directory() {
     let e = env();
     e.ws.write("projects/tool/x", "x\n");

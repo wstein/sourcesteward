@@ -252,7 +252,7 @@ fn an_unreadable_repository_has_no_notice_and_exit_1() {
     let fx = status_fixture();
     fx.write(
         ".gitmodules",
-        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n",
+        "[submodule \"broken\"]\n\tpath = broken\n\turl = x\n\tignore = all\n",
     );
     fx.write("broken/.git", "gitdir: /nonexistent/stw/gitdir\n");
     let r = path_str(&fx.path);
@@ -322,6 +322,7 @@ fn notices_of_several_repositories_keep_the_list_order_and_escape_the_name() {
         "[submodule \"x\"]\n\tpath = sub/x\n\turl = ../seed\n[submodule \"y\"]\n\tpath = sub/y\n\turl = ../seed\n",
     )
     .unwrap();
+    w.git(&ws, &["add", "sub/x", "sub/y"]);
     for d in [".", "sub/x", "sub/y"] {
         w.git(
             &ws.join(d),
