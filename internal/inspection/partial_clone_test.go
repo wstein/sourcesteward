@@ -45,13 +45,21 @@ func TestInventoryDoesNotFetchInAPartialCloneOnGitBefore246(t *testing.T) {
 	gitCmd(t, origin, "init", "-q", "-b", "main")
 	gitCmd(t, origin, "config", "uploadpack.allowFilter", "true")
 	gitCmd(t, origin, "config", "uploadpack.allowAnySHA1InWant", "true")
-	if err := os.WriteFile(filepath.Join(origin, "f"), []byte("one\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(origin, "f"), []byte(strings.Repeat("line\n", 200)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	gitCmd(t, origin, "add", "f")
 	gitCmd(t, origin, "commit", "-qm", "one")
+	// The last commit renames and changes the file: rename detection (diff -M) reads the old blob, which the
+	// checkout of the clone does not fetch.
+	gitCmd(t, origin, "mv", "f", "g")
+	if err := os.WriteFile(filepath.Join(origin, "g"), []byte(strings.Repeat("line\n", 200)+"more\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gitCmd(t, origin, "add", "g")
+	gitCmd(t, origin, "commit", "-qm", "rename")
 	clone := filepath.Join(t.TempDir(), "clone")
-	gitCmd(t, filepath.Dir(clone), "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+origin, clone)
+	gitCmd(t, filepath.Dir(clone), "-c", "protocol.file.allow=always", "clone", "-q", "--filter=blob:none", "file://"+origin, clone)
 	before := missingObjects(t, clone)
 	if before == "" {
 		t.Fatal("the fixture is not a partial clone with missing objects")

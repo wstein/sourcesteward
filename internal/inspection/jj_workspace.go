@@ -39,7 +39,7 @@ func ObserveJJWorkspace(ctx context.Context, path, base string) (JJWorkspaceStat
 	if base == "" || len(base) > 4096 || strings.ContainsRune(base, 0) {
 		return state, errors.New("invalid explicit jj base")
 	}
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.Backend != "jj" || identity.JJRepository == nil {
 		return state, errors.New("supported unambiguous native jj workspace required")
 	}
@@ -108,7 +108,7 @@ func CheckJJWorkspaceTaskAvailable(ctx context.Context, path, name string) error
 	if !validJJTaskName(name) {
 		return errors.New("invalid native jj workspace name")
 	}
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.JJRepository == nil {
 		return errors.New("supported native jj workspace required")
 	}
@@ -274,7 +274,7 @@ func CreateJJWorkspace(ctx context.Context, path string, expected JJWorkspaceSta
 	if !reflect.DeepEqual(fresh, expected) {
 		return result, errJJChanged
 	}
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.JJRepository == nil {
 		return result, errors.New("cannot revalidate source jj identity")
 	}
@@ -397,7 +397,7 @@ func jjWorkspaceVerifySession(ctx context.Context, s jjSession, destination, nam
 }
 
 // verifyInspect is the identity read of VerifyJJWorkspace; tests replace it.
-var verifyInspect = Inspect
+var verifyInspect = InspectStrict
 
 // inspectionStopped reports an inspection that ended on a deadline or a
 // cancellation. It observed nothing, so it is not evidence of a foreign owner.

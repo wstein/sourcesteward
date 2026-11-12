@@ -56,7 +56,7 @@ func ObserveJJWorkspaces(ctx context.Context, path, base string) (JJWorkspacesOb
 		return o, err
 	}
 	o.Expected = expected
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.Backend != "jj" || identity.JJRepository == nil || *identity.JJRepository != expected.Source {
 		return o, errJJChanged
 	}

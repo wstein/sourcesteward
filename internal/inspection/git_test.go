@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func TestBoundedCapture(t *testing.T) {
@@ -188,5 +190,27 @@ func TestVersionFloors(t *testing.T) {
 		if len(r.Diagnostics) > 0 && strings.Contains(r.Diagnostics[0].Message, "inspection requires Git") {
 			t.Errorf("%s %s rejected: %+v", tc.floor, tc.version, r)
 		}
+	}
+}
+
+// Inspect (inspect, sync, status) reads the identity of a real repository with every supported Git,
+// from 2.43. InspectStrict refuses Git before 2.46 and names the reason. This test is in the run that
+// TestMain limits on Git before 2.46.
+func TestIdentityInspectionOnTheInstalledGit(t *testing.T) {
+	d := repo(t)
+	git(t, d, "commit", "--allow-empty", "-qm", "initial")
+	r := Inspect(context.Background(), d)
+	if r.Status != "ok" || r.Backend != "git" || r.Repository == nil || r.Repository.Head.State != "attached" {
+		t.Fatalf("Inspect: %+v", r)
+	}
+	s := InspectStrict(context.Background(), d)
+	if gittest.AtLeast(t, 2, 46) {
+		if s.Status != "ok" {
+			t.Fatalf("InspectStrict: %+v", s)
+		}
+		return
+	}
+	if s.Status != "error" || len(s.Diagnostics) != 1 || !strings.Contains(s.Diagnostics[0].Message, "Git 2.46") {
+		t.Fatalf("InspectStrict on Git before 2.46: %+v", s)
 	}
 }

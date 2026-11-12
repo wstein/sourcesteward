@@ -33,7 +33,7 @@ func WithJJReleaseTree(ctx context.Context, path, commit string, visit func(*JJR
 	}
 	ctx, cancel := context.WithTimeout(ctx, jjTimeout)
 	defer cancel()
-	identity := Inspect(ctx, path)
+	identity := InspectStrict(ctx, path)
 	if identity.Status != "ok" || identity.Backend != "jj" || identity.JJRepository == nil {
 		return errors.New("supported native jj workspace required")
 	}
