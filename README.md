@@ -133,6 +133,10 @@ there) and walks nested submodules; it checks charset and symbolic links only fo
 gitlinks only (flat, see "sync --submodules" deviation 6). Git cannot hold an absolute path or a `..` segment in an index and a
 clone brings none, so such a path of `.gitmodules` is ignored (earlier Rust reported it as refused). The order is the path
 order of the index (earlier: the order of `.gitmodules`). Go counts a gitlink at stage 1 to 3 once, as Rust does.
+The workspace root of a checkout is the nearest parent repository whose index has a gitlink at that path (from `ws/sub/n2`
+Rust chooses `ws/sub`, whose list is flat); Go goes up to the top-level superproject (`--show-superproject-working-tree`, up to
+16 levels, `sync.go:215`) and walks the nested ones. An unreadable index gives an empty list (Go: the run fails with
+`cannot list the submodules`, `sync.go:265`).
 Not done here: nested submodules (UNKNOWN whether the owner wants them: the repository list is flat in every command).
 
 ### `sync --prune`, `--no-prune`, `--submodules`
