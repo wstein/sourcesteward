@@ -123,6 +123,18 @@ pub fn apply(
     let Some(upstream) = RemoteRef::parse(&format!("refs/remotes/{up}")) else {
         return fail("invalid-plan", format!("upstream {up} is not under origin"));
     };
+    // `git merge` reads the options of this key into its own command line, which stw does not follow: refused
+    if mode == Diverged::Merge
+        && repo
+            .config_snapshot()
+            .string(format!("branch.{branch}.mergeoptions").as_str())
+            .is_some()
+    {
+        return fail(
+            "config-refused",
+            format!("branch.{branch}.mergeoptions is set; stw does not follow it, unset it or merge with git"),
+        );
+    }
     let reference = format!("refs/heads/{branch}");
     let mut j = Journal::new(&repo, run.clone());
     let i = match j.prepare_unplanned(&repo, &reference, &p2s(&r.path), old) {

@@ -257,14 +257,16 @@ pub enum Op {
     /// change would be lost (`stw sync restore`, after the caller found the tracked tree clean). The repository's own
     /// config must not name a `filter.*` driver (the checkout would start it).
     ResetKeep { target: Hex40 },
-    /// `git merge --no-edit --ff [--autostash|--no-autostash] <target>`: merge the fetched upstream tip into the
+    /// `git merge --no-edit --ff --no-verify-signatures [--autostash|--no-autostash] <target>`: merge the fetched upstream tip into the
     /// checked-out branch of a diverged branch (`stw sync --merge`). `target` is the commit the checks ran on, never a
     /// ref name. The explicit stash flag wins over `merge.autoStash`. Needs the same config guards as `ResetKeep`
     /// (a checkout runs filters) plus no `merge.<name>.driver`. No hook runs (`core.hooksPath=/dev/null`), no editor.
+    /// `--no-verify-signatures` keeps `merge.verifySignatures` from starting the configured `gpg.program`.
     SyncMerge { target: Hex40, autostash: bool },
-    /// `git rebase --no-update-refs [--autostash|--no-autostash] --fork-point <upstream>`: rebase the local commits of
+    /// `git rebase --no-update-refs --no-rebase-merges [--autostash|--no-autostash] --fork-point <upstream>`: rebase the local commits of
     /// the checked-out branch onto its upstream (`stw sync --rebase`). The explicit stash flag wins over
-    /// `rebase.autoStash`; `--no-update-refs` keeps other branches of a stack where they are. Same config guards as
+    /// `rebase.autoStash`; `--no-update-refs` keeps other branches of a stack where they are; `--no-rebase-merges` wins
+    /// over `rebase.rebaseMerges`. Same config guards as
     /// `SyncMerge`. No hook runs, no editor; a conflict stops the rebase as git leaves it.
     SyncRebase {
         upstream: RemoteRef,
@@ -400,7 +402,7 @@ impl Op {
                 a
             }
             Op::SyncMerge { target, autostash } => {
-                let mut a = v(&["merge", "--no-edit", "--ff"]);
+                let mut a = v(&["merge", "--no-edit", "--ff", "--no-verify-signatures"]);
                 a.push(stash_flag(*autostash).to_string());
                 a.push(target.as_str().to_string());
                 a
@@ -409,7 +411,7 @@ impl Op {
                 upstream,
                 autostash,
             } => {
-                let mut a = v(&["rebase", "--no-update-refs"]);
+                let mut a = v(&["rebase", "--no-update-refs", "--no-rebase-merges"]);
                 a.push(stash_flag(*autostash).to_string());
                 a.push("--fork-point".to_string());
                 a.push(upstream.as_str().to_string());

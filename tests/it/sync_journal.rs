@@ -639,6 +639,7 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
         [
             "rebase".to_string(),
             "--no-update-refs".into(),
+            "--no-rebase-merges".into(),
             "--no-autostash".into(),
             "--fork-point".into(),
             "refs/remotes/origin/feature/x".into()
@@ -651,7 +652,7 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
                 autostash: true
             }),
             "rebase"
-        )[2],
+        )[3],
         "--autostash"
     );
     assert_eq!(
@@ -666,6 +667,7 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
             "merge".to_string(),
             "--no-edit".into(),
             "--ff".into(),
+            "--no-verify-signatures".into(),
             "--no-autostash".into(),
             "a".repeat(40)
         ]
@@ -677,7 +679,7 @@ fn the_argument_vectors_of_the_journal_operations_are_fixed() {
                 autostash: true
             }),
             "merge"
-        )[3],
+        )[4],
         "--autostash"
     );
 }

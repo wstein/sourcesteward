@@ -81,7 +81,11 @@ fetched upstream tip below it, else the result is `error` (`raced`). JSON: `resu
 Deviations from Go, one by one:
 
 1. No Git configuration is followed (`pull.rebase`, `branch.<name>.rebase`, `pull.ff`, `rebase.autoStash`,
-   `merge.autoStash`, `pull.rebase=merges`): only the flags decide. A diverged branch with `pull.rebase` set is skipped and
+   `merge.autoStash`, `pull.rebase=merges`): only the flags decide. The argument vector pins what a setting could
+   otherwise change: `--no-autostash`/`--autostash`, `--no-update-refs` (`rebase.updateRefs`), `--no-rebase-merges`
+   (`rebase.rebaseMerges`: a local merge commit is flattened), `--ff` and `--no-verify-signatures`
+   (`merge.verifySignatures` would start the configured `gpg.program`). A set `branch.<name>.mergeoptions` refuses a
+   `--merge` (`error`, nothing changes): git would add its options to the command line. A diverged branch with `pull.rebase` set is skipped and
    the reason says "stw does not follow it: use --rebase". There is no `--ff-only` (it is the default) and no
    `--rebase-merges`.
 2. No hook of the repository runs (`core.hooksPath=/dev/null`, as for every git call of stw); Go ran them
@@ -93,6 +97,11 @@ Deviations from Go, one by one:
 5. The stash entry of an `autostash-conflict` is not claimed: the result has no `stash_oid` and the record no `stash_oid`
    (Go reads the stash reflog). The record has no `orig_head`.
 6. The record of a stopped run has the state `failed` (Go: `conflict`).
+7. The gate looks at tracked changes without a changed submodule (as Go: `--ignore-submodules=all`); git itself also
+   ignores them for a rebase.
+8. A branch that is only behind is fast-forwarded by gix also with `--rebase` or `--merge` and tracked local changes,
+   unless they overlap the update (the check of a plain `sync`); Go refuses the rebase then (`merge --ff-only
+   --autostash`, the dirty check of a rebase pull). `--autostash` has no effect on a fast-forward: nothing is stashed.
 
 ### Submodule paths of `.gitmodules`
 

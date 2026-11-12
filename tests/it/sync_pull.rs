@@ -488,3 +488,265 @@ fn a_stack_branch_that_a_rebase_does_not_own_stays_where_it_is() {
     assert_eq!(repo(&v, "ws")["result"], "rebased");
     assert_eq!(d.w.git(&d.ws, &["rev-parse", "stack"]), d.local);
 }
+
+// ---------------------------------------------------------------------------------------------------------
+// what the configuration of the repository cannot change
+// ---------------------------------------------------------------------------------------------------------
+
+fn executable(path: &std::path::Path, text: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(path, text).unwrap();
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+}
+
+#[test]
+fn a_configured_gpg_program_is_not_started_by_a_merge() {
+    let d = diverged();
+    // the new upstream commit carries a (forged) signature header: `merge.verifySignatures` would start gpg
+    let other = d.w.p("other");
+    let raw = d.w.git(&other, &["cat-file", "commit", "HEAD"]);
+    let (head, msg) = raw.split_once("\n\n").unwrap();
+    let forged = format!(
+        "{head}\ngpgsig -----BEGIN PGP SIGNATURE-----\n \n forged\n -----END PGP SIGNATURE-----\n\n{msg}\n"
+    );
+    let sink = d.w.p("forged-commit");
+    std::fs::write(&sink, forged).unwrap();
+    let id = d.w.git(
+        &other,
+        &[
+            "hash-object",
+            "-t",
+            "commit",
+            "-w",
+            "--",
+            sink.to_str().unwrap(),
+        ],
+    );
+    d.w.git(
+        &other,
+        &[
+            "push",
+            "-q",
+            "-f",
+            "origin",
+            &format!("{id}:refs/heads/main"),
+        ],
+    );
+    let marker = d.w.p("gpg-ran");
+    let gpg = d.w.p("fake-gpg");
+    executable(
+        &gpg,
+        &format!("#!/bin/sh\necho ran >> \"{}\"\nexit 1\n", marker.display()),
+    );
+    d.w.git(&d.ws, &["config", "merge.verifySignatures", "true"]);
+    d.w.git(&d.ws, &["config", "gpg.program", gpg.to_str().unwrap()]);
+    let (code, v, err) = d.w.stw(&d.ws, &["--merge"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(repo(&v, "ws")["result"], "merged", "{v}");
+    assert!(!marker.exists(), "the configured gpg program ran");
+}
+
+#[test]
+fn a_configured_merge_option_set_of_the_branch_refuses_a_merge() {
+    let d = diverged();
+    d.w.git(&d.ws, &["config", "branch.main.mergeoptions", "-s ours"]);
+    let (code, v, _) = d.w.stw(&d.ws, &["--merge"]);
+    assert_eq!(code, 1, "{v}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "error", "{r}");
+    assert!(
+        r["error"]
+            .as_str()
+            .unwrap()
+            .contains("branch.main.mergeoptions is set"),
+        "{r}"
+    );
+    assert_eq!(head(&d), d.local, "nothing changed");
+    assert!(r.get("journal").is_none(), "nothing was journaled: {r}");
+    // a rebase does not read the key
+    let (_, v, _) = d.w.stw(&d.ws, &["--rebase"]);
+    assert_eq!(repo(&v, "ws")["result"], "rebased");
+}
+
+#[test]
+fn a_rebase_flattens_a_local_merge_commit_whatever_rebase_rebase_merges_says() {
+    let d = diverged();
+    d.w.git(&d.ws, &["checkout", "-q", "-b", "side"]);
+    d.w.commit(&d.ws, "side.txt", "side\n");
+    d.w.git(&d.ws, &["checkout", "-q", "main"]);
+    d.w.git(
+        &d.ws,
+        &["merge", "-q", "--no-ff", "-m", "local merge", "side"],
+    );
+    d.w.git(&d.ws, &["config", "rebase.rebaseMerges", "true"]);
+    assert_eq!(
+        d.w.git(&d.ws, &["rev-list", "--merges", "--count", "main"]),
+        "1"
+    );
+    let (code, v, err) = d.w.stw(&d.ws, &["--rebase"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(repo(&v, "ws")["result"], "rebased", "{v}");
+    assert_eq!(
+        d.w.git(&d.ws, &["rev-list", "--merges", "--count", "main"]),
+        "0",
+        "the merge commit was kept although stw asked for a linear rebase"
+    );
+}
+
+#[test]
+fn a_changed_submodule_is_no_local_change_for_the_gate() {
+    let d = diverged();
+    let subsrc = d.w.p("subsrc");
+    std::fs::create_dir(&subsrc).unwrap();
+    d.w.git(&subsrc, &["init", "-q"]);
+    d.w.commit(&subsrc, "s.txt", "s\n");
+    d.w.git(
+        &d.ws,
+        &["submodule", "add", "-q", subsrc.to_str().unwrap(), "sub"],
+    );
+    d.w.git(&d.ws, &["commit", "-q", "-m", "add sub"]);
+    // the submodule moves on: the superproject shows a modified gitlink
+    d.w.git(
+        &d.ws.join("sub"),
+        &["commit", "-q", "--allow-empty", "-m", "moved"],
+    );
+    assert!(d.w.git(&d.ws, &["status", "--porcelain"]).contains("M sub"));
+    // the plan (it does not fetch) says the same as the run
+    d.w.git(&d.ws, &["fetch", "-q", "origin"]);
+    let (_, v, _) = d.w.stw(&d.ws, &["--rebase", "--plan"]);
+    assert_eq!(repo(&v, "ws")["result"], "rebase", "{v}");
+    let (code, v, err) = d.w.stw(&d.ws, &["--rebase"]);
+    assert_eq!(code, 0, "{v} {err}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "rebased", "{r}");
+    assert!(is_ancestor(&d, &d.upstream, "HEAD"));
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// a git that answers in a way the real one rarely does (a wrapper first in PATH), and the retention
+// ---------------------------------------------------------------------------------------------------------
+
+/// `stw sync` with a `git` wrapper first in `PATH`: `rebase` and `merge` run `on_update` (shell text, `$REAL` is the real
+/// git, `$2` the repository), every other call goes to the real git.
+fn stw_with_git(d: &D, on_update: &str, args: &[&str]) -> (i32, Value, String) {
+    let real = String::from_utf8(
+        std::process::Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    let dir = d.w.p("fakebin");
+    std::fs::create_dir_all(&dir).unwrap();
+    executable(
+        &dir.join("git"),
+        &format!(
+            "#!/bin/sh\nREAL={}\ncase \" $* \" in\n  *\" rebase \"*|*\" merge \"*)\n{on_update}\n    ;;\n  *) exec \"$REAL\" \"$@\" ;;\nesac\n",
+            real.trim()
+        ),
+    );
+    let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", path)
+        .env("HOME", &d.w.home)
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .current_dir(&d.w.base)
+        .arg("sync")
+        .args(args)
+        .args(["--json", "--root"])
+        .arg(&d.ws)
+        .output()
+        .unwrap();
+    (
+        o.status.code().unwrap_or(-1),
+        serde_json::from_slice(&o.stdout).unwrap_or(Value::Null),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn a_result_that_does_not_contain_the_upstream_tip_is_raced() {
+    let d = diverged();
+    // git "succeeds" but the branch got a new commit that is not on top of the upstream
+    let (code, v, err) = stw_with_git(
+        &d,
+        "    \"$REAL\" -C \"$2\" -c user.name=T -c user.email=t@example.com commit -q --allow-empty -m x\n    exit 0",
+        &["--rebase"],
+    );
+    assert_eq!(code, 1, "{v} {err}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "error", "{r}");
+    assert_eq!(r["error"], "raced", "{r}");
+    assert_eq!(r["journal"]["state"], "failed");
+    // and git that changes nothing at all is raced too
+    let d = diverged();
+    let (code, v, _) = stw_with_git(&d, "    exit 0", &["--rebase"]);
+    assert_eq!(code, 1, "{v}");
+    assert_eq!(repo(&v, "ws")["error"], "raced");
+}
+
+#[test]
+fn a_refusal_for_local_changes_is_a_skip_and_any_other_failure_is_an_error() {
+    let d = diverged();
+    let (code, v, err) = stw_with_git(
+        &d,
+        "    echo 'error: cannot rebase: You have unstaged changes.' >&2\n    exit 1",
+        &["--rebase"],
+    );
+    assert_eq!(code, 0, "{v} {err}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "skip", "{r}");
+    assert!(
+        r["reason"]
+            .as_str()
+            .unwrap()
+            .starts_with("git refused: error: cannot rebase"),
+        "{r}"
+    );
+    assert_eq!(r["journal"]["state"], "failed");
+    let d = diverged();
+    let (code, v, _) = stw_with_git(
+        &d,
+        "    echo 'fatal: boom' >&2\n    exit 128",
+        &["--rebase"],
+    );
+    assert_eq!(code, 1, "{v}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "error", "{r}");
+    assert!(
+        r["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("git-failed: fatal: boom"),
+        "{r}"
+    );
+}
+
+#[test]
+fn the_journal_keeps_the_ten_latest_runs_after_rebases_too() {
+    let d = diverged();
+    let other = d.w.p("other");
+    for k in 0..11 {
+        let (code, v, err) = d.w.stw(&d.ws, &["--rebase"]);
+        assert_eq!(code, 0, "run {k}: {v} {err}");
+        assert_eq!(repo(&v, "ws")["result"], "rebased", "run {k}");
+        // the next divergence
+        d.w.commit(&d.ws, &format!("l{k}.txt"), "l\n");
+        d.w.commit(&other, &format!("r{k}.txt"), "r\n");
+        d.w.git(&other, &["push", "-q", "origin", "HEAD:main"]);
+    }
+    let dir = d.ws.join(".git/stw/sync");
+    let n = std::fs::read_dir(&dir)
+        .unwrap()
+        .filter(|e| {
+            e.as_ref()
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".json")
+        })
+        .count();
+    assert_eq!(n, 10, "records in {}", dir.display());
+}
