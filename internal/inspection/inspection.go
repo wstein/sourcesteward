@@ -194,14 +194,17 @@ func inspectOwned(ctx context.Context, path string, run runner, noJJ bool) (resu
 	r.Status = "ok"
 	return r
 }
-func supportedVersion(v string) bool {
+func supportedVersion(v string) bool { return VersionAtLeast(v, 2, 43) }
+
+// VersionAtLeast reports whether the Git version number v (for example "2.43.0") is at least major.minor.
+func VersionAtLeast(v string, major, minor int) bool {
 	p := strings.Split(v, ".")
 	if len(p) < 2 {
 		return false
 	}
-	major, e := strconv.Atoi(p[0])
-	minor, f := strconv.Atoi(p[1])
-	return e == nil && f == nil && (major > 2 || (major == 2 && minor >= 43))
+	ma, e := strconv.Atoi(p[0])
+	mi, f := strconv.Atoi(p[1])
+	return e == nil && f == nil && (ma > major || (ma == major && mi >= minor))
 }
 func readHead(ctx context.Context, run runner, dir, format string) (Head, error) {
 	ref, code, err := run(ctx, dir, "symbolic-ref", "--quiet", "HEAD")
