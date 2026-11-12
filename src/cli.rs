@@ -1065,7 +1065,29 @@ fn run_status(a: StatusArgs) -> Result<u8> {
     })
 }
 
+/// The `stw` command as a user types it, for the version error of the git runner (`stw needs Git 2.41 or newer for
+/// review carry-over (found 2.40.1)`). A fixed string per command; no argument text.
+fn git_command_label(command: &Command) -> &'static str {
+    match command {
+        Command::Status(a) if a.fetch => "status --fetch",
+        Command::Status(_) => "status",
+        Command::Add(_) => "add",
+        Command::Sync(SyncArgs {
+            sub: Some(SyncCommand::Restore(_)),
+            ..
+        }) => "sync restore",
+        Command::Sync(a) if a.submodules => "sync --submodules",
+        Command::Sync(_) => "sync",
+        Command::Review {
+            command: ReviewCommand::CarryOver(_),
+        } => "review carry-over",
+        Command::Prove(_) => "prove",
+        _ => "this step",
+    }
+}
+
 fn run(command: Command) -> Result<u8> {
+    git_runner::shared().set_command(git_command_label(&command));
     let failed = |any: bool| if any { exit::FAILED } else { exit::OK };
     match command {
         Command::Status(a) => run_status(a),

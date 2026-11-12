@@ -1823,6 +1823,16 @@ m RK25 'restack plan: a macro definition that sets binary or merge is not seen' 
   'l.fields().skip(1).any(|t| {' 'l.fields().skip(2).any(|t| {' \
   restack_plan a_macro_that_sets_binary_or_merge_makes_a_clean_result_unknown
 
+m GF1 'range-diff accepts Git 2.40 (GIT_ATTR_SOURCE is 2.41)' src/git_runner.rs \
+  'Op::RangeDiff { .. } => Version(2, 41, 0),' 'Op::RangeDiff { .. } => Version(2, 40, 0),' \
+  git_runner_ops range_diff_needs_git_2_41
+m GF2 'an index-reading op accepts Git below 2.36' src/git_runner.rs \
+  '            | Op::ResetKeep { .. } => Version(2, 36, 0),' '            | Op::ResetKeep { .. } => Version(2, 30, 0),' \
+  git_runner_ops the_floor_of_every_op_is_declared_and_enforced
+m GF3 'the version message prints the found text raw' src/git_runner.rs \
+  'escape_untrusted(found, 80).0' 'found' \
+  git_runner_ops the_version_message_names_the_command_and_escapes_the_found_text
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

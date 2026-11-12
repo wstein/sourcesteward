@@ -234,26 +234,131 @@ fn range_diff_without_git_is_typed_unsupported() {
     }
 }
 
+/// A runner whose `git` is a script that reports `version` and succeeds.
+fn fake_git_runner(t: &Path, version: &str) -> Runner {
+    let bin = t.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    script(&bin, "git", &format!("echo 'git version {version}'"));
+    Runner::from_env(osv(&[(
+        "PATH",
+        &format!("{}:/usr/bin:/bin", bin.display()),
+    )]))
+}
+
 #[test]
-fn range_diff_needs_git_2_40() {
-    assert_eq!(range_diff().min_version(), Version(2, 40, 0));
+fn range_diff_needs_git_2_41() {
+    // GIT_ATTR_SOURCE exists since Git 2.41; 2.40 ignores it silently, so a `-diff` attribute could hide a change
+    assert_eq!(range_diff().min_version(), Version(2, 41, 0));
     assert_eq!(Op::FetchPullHead { pr: 1 }.min_version(), Version(2, 30, 0));
     let t = tmp();
-    let bin = t.path().join("bin");
-    std::fs::create_dir(&bin).unwrap();
     let repo = t.path().join("repo");
     gix::init(&repo).unwrap();
-    script(&bin, "git", "echo 'git version 2.39.5'");
+    let r = fake_git_runner(t.path(), "2.40.1");
+    r.set_command("review carry-over");
+    let e = r.run(&repo, range_diff()).unwrap_err();
+    assert!(
+        matches!(&e, GitError::Version { required, .. } if *required == Version(2, 41, 0)),
+        "{e:?}"
+    );
+    assert_eq!(
+        e.to_string(),
+        "stw needs Git 2.41 or newer for review carry-over (found 2.40.1)"
+    );
+    assert!(e.is_unsupported());
+    let t2 = tmp();
+    let repo2 = t2.path().join("repo");
+    gix::init(&repo2).unwrap();
+    let ok = fake_git_runner(t2.path(), "2.41.0");
+    ok.run(&repo2, range_diff()).unwrap();
+}
+
+#[test]
+fn the_floor_of_every_op_is_declared_and_enforced() {
+    // 2.36: `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command), so
+    // every op that reads the index needs it. Static evidence (Documentation/config/core.txt of v2.35 vs v2.36);
+    // a run with 2.35.3 passed the whole suite, so the bound is the documented one, not an observed failure.
+    // 2.30: the fail-closed value for the fetch/update-ref vectors (their options are older, 2.29 for the fetch).
+    let sub = || stw::add::SubPath::parse("projects/tool").unwrap();
+    let name = || stw::add::RepoName::parse("tool").unwrap();
+    let ops: Vec<(Op, Version)> = vec![
+        (Op::FetchOrigin, Version(2, 30, 0)),
+        (Op::FetchOriginPrune { prune: true }, Version(2, 30, 0)),
+        (Op::FetchPullHead { pr: 1 }, Version(2, 30, 0)),
+        (
+            Op::UpdateBranchCas {
+                run: stw::git_runner::RunId::parse("20260101T000000Z-0123abcd").unwrap(),
+                branch: stw::git_runner::BranchRef::parse("refs/heads/x").unwrap(),
+                new: h('a'),
+                expected: h('b'),
+            },
+            Version(2, 30, 0),
+        ),
+        (range_diff(), Version(2, 41, 0)),
+        (Op::SubmoduleSync { path: sub() }, Version(2, 36, 0)),
+        (Op::SubmoduleUpdate { path: sub() }, Version(2, 36, 0)),
+        (Op::CheckAttrGitmodules { cached: true }, Version(2, 36, 0)),
+        (Op::CheckoutClone, Version(2, 36, 0)),
+        (
+            Op::SubmoduleAddExisting {
+                url: stw::add::CanonicalUrl::new(&name(), &name()),
+                path: sub(),
+            },
+            Version(2, 36, 0),
+        ),
+        (Op::AbsorbGitDirs { path: sub() }, Version(2, 36, 0)),
+        (
+            Op::CommitSubmodule {
+                name: name(),
+                path: sub(),
+            },
+            Version(2, 36, 0),
+        ),
+        (Op::ResetKeep { target: h('c') }, Version(2, 36, 0)),
+    ];
+    for (op, floor) in ops {
+        assert_eq!(op.min_version(), floor, "{op:?}");
+        // one patch level below the floor is refused before anything runs
+        let below = format!("{}.{}.9", floor.0, floor.1 - 1);
+        let t = tmp();
+        let repo = t.path().join("repo");
+        gix::init(&repo).unwrap();
+        let r = fake_git_runner(t.path(), &below);
+        let e = r.run(&repo, op.clone()).unwrap_err();
+        assert!(
+            matches!(&e, GitError::Version { required, .. } if *required == floor),
+            "{op:?}: {e:?}"
+        );
+    }
+}
+
+#[test]
+fn the_version_message_names_the_command_and_escapes_the_found_text() {
+    let t = tmp();
+    let repo = t.path().join("repo");
+    gix::init(&repo).unwrap();
+    // an unreadable `git --version` is shown escaped, never raw
+    let bin = t.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    script(&bin, "git", "printf 'bogus \\033[31mred\\n'");
     let r = Runner::from_env(osv(&[(
         "PATH",
         &format!("{}:/usr/bin:/bin", bin.display()),
     )]));
+    r.set_command("prove");
     let e = r.run(&repo, range_diff()).unwrap_err();
+    let m = e.to_string();
     assert!(
-        matches!(&e, GitError::Version { required, .. } if *required == Version(2, 40, 0)),
-        "{e:?}"
+        m.starts_with("stw needs Git 2.41 or newer for prove (found "),
+        "{m}"
     );
-    assert!(e.is_unsupported());
+    assert!(!m.contains('\x1b') && !m.contains('\n'), "{m:?}");
+    // without a command the text still says what is needed
+    let r2 = fake_git_runner(t.path(), "2.35.3");
+    let e = r2.run(&repo, Op::ResetKeep { target: h('c') }).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "stw needs Git 2.36 or newer for this step (found 2.35.3)"
+    );
 }
 
 #[test]

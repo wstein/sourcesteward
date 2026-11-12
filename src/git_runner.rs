@@ -25,6 +25,8 @@ use std::sync::mpsc;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use crate::github::reads::escape_untrusted;
+
 /// Value of the `via` field of every step that ran through this module.
 pub const VIA: &str = "git";
 
@@ -35,6 +37,17 @@ pub struct Version(pub u32, pub u32, pub u32);
 impl std::fmt::Display for Version {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}.{}.{}", self.0, self.1, self.2)
+    }
+}
+
+impl Version {
+    /// `2.41` for `2.41.0`, else the full form: how a requirement is named to the user.
+    pub fn short(&self) -> String {
+        if self.2 == 0 {
+            format!("{}.{}", self.0, self.1)
+        } else {
+            self.to_string()
+        }
     }
 }
 
@@ -223,15 +236,31 @@ pub enum Op {
 }
 
 impl Op {
-    /// Minimum installed Git for this capability. Not copied from jj (2.42, which `worktree add --orphan`
-    /// needs): the fetch vector uses `-C`, `-c`, `--quiet`, `--no-tags`, `--no-recurse-submodules` and
-    /// `protocol.ext.allow`, all older than 2.30. Verified against 2.47.3 only (see the README).
+    /// Minimum installed Git for this capability; `Runner::run` refuses an older one before it starts anything.
+    /// - `RangeDiff`: 2.41. `GIT_ATTR_SOURCE` (the empty tree, see `EMPTY_TREE`) exists since 2.41; Git 2.40 ignores
+    ///   it silently, so a `-diff` attribute in the worktree could make range-diff report "equal" for a changed
+    ///   commit (shown with 2.40.1 against 2.41.0 and 2.43.0).
+    /// - Ops that read the index: 2.36. Every call leads with `-c core.fsmonitor=false`, a boolean only since 2.36
+    ///   (up to 2.35 the value names a hook command). Evidence is static (config/core of v2.35 vs v2.36); a run of
+    ///   the whole test suite with 2.35.3 passed, so no failure of 2.35 was observed.
+    /// - All others (fetch, `update-ref`): 2.30, the fail-closed value. Their options are older (`--no-write-fetch-head`
+    ///   2.29, `--prune-tags` 2.17); no failure below 2.30 was observed or excluded. Verified against 2.47.3 and the
+    ///   versions named in the README table.
     pub fn min_version(&self) -> Version {
-        // the `stw add` vectors use only options that exist since git 2.30 as well; verified against 2.47.3 only
         match self {
-            // `GIT_ATTR_SOURCE` (2.40) and `--no-patch` of range-diff
-            Op::RangeDiff { .. } => Version(2, 40, 0),
-            _ => Version(2, 30, 0),
+            Op::RangeDiff { .. } => Version(2, 41, 0),
+            Op::SubmoduleSync { .. }
+            | Op::SubmoduleUpdate { .. }
+            | Op::CheckAttrGitmodules { .. }
+            | Op::CheckoutClone
+            | Op::SubmoduleAddExisting { .. }
+            | Op::AbsorbGitDirs { .. }
+            | Op::CommitSubmodule { .. }
+            | Op::ResetKeep { .. } => Version(2, 36, 0),
+            Op::FetchOrigin
+            | Op::FetchOriginPrune { .. }
+            | Op::FetchPullHead { .. }
+            | Op::UpdateBranchCas { .. } => Version(2, 30, 0),
         }
     }
 
@@ -501,6 +530,8 @@ pub enum GitError {
     Version {
         found: String,
         required: Version,
+        /// The `stw` command that needed it (`review carry-over`, `prove`, ...), or `this step`.
+        command: String,
     },
     /// Git does not know an option of the fixed vector (exit 129 or "unknown option").
     UnknownOption(String),
@@ -569,9 +600,16 @@ impl std::fmt::Display for GitError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             GitError::NotFound => f.write_str("git is not installed (not found on PATH)"),
-            GitError::Version { found, required } => write!(
+            GitError::Version {
+                found,
+                required,
+                command,
+            } => write!(
                 f,
-                "installed git {found} is not usable: this step needs git {required} or newer"
+                "stw needs Git {} or newer for {} (found {})",
+                required.short(),
+                escape_untrusted(command, 80).0,
+                escape_untrusted(found, 80).0
             ),
             GitError::UnknownOption(l) => {
                 write!(f, "installed git does not know an option stw needs: {l}")
@@ -638,6 +676,8 @@ pub struct Runner {
     limits: Limits,
     secrets: Vec<String>,
     version: OnceLock<std::result::Result<Version, VersionFailure>>,
+    /// The `stw` command of this process, named in a version error. Set once by the command layer.
+    command: OnceLock<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -672,6 +712,7 @@ impl Runner {
             limits: Limits::default(),
             secrets,
             version: OnceLock::new(),
+            command: OnceLock::new(),
         }
     }
 
@@ -705,6 +746,12 @@ impl Runner {
             .filter(|d| d.is_absolute())
             .map(|d| d.join("git"))
             .find(|p| is_executable_file(p))
+    }
+
+    /// Name the `stw` command (`review carry-over`, `prove`, `sync --submodules`, ...) in a version error. The first
+    /// call wins; the name carries no free text (the command layer passes a fixed string).
+    pub fn set_command(&self, name: &str) {
+        let _ = self.command.set(name.to_string());
     }
 
     /// Installed Git version, asked once per runner.
@@ -743,6 +790,7 @@ impl Runner {
                 found: f.clone(),
                 // the real requirement is attached by `run`; version() alone reports the lowest
                 required: Version(0, 0, 0),
+                command: String::new(),
             }),
         }
     }
@@ -857,10 +905,12 @@ impl Runner {
     pub fn run(&self, repo: &Path, op: Op) -> std::result::Result<Output, GitError> {
         let argv = self.argv(repo, op.clone())?;
         let exe = self.find_git().ok_or(GitError::NotFound)?;
+        let command = self.command.get().map_or("this step", String::as_str);
         let found = self.version().map_err(|e| match e {
             GitError::Version { found, .. } => GitError::Version {
                 found,
                 required: op.min_version(),
+                command: command.to_string(),
             },
             other => other,
         })?;
@@ -868,6 +918,7 @@ impl Runner {
             return Err(GitError::Version {
                 found: found.to_string(),
                 required: op.min_version(),
+                command: command.to_string(),
             });
         }
         if matches!(op, Op::FetchPullHead { .. }) {

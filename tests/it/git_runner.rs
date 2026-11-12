@@ -374,7 +374,9 @@ fn old_or_unreadable_versions_are_typed_and_nothing_else_is_started() {
     let r = runner_with(&bin, &[]);
     let e = r.run(&repo, Op::FetchOrigin).unwrap_err();
     match &e {
-        GitError::Version { found, required } => {
+        GitError::Version {
+            found, required, ..
+        } => {
             assert_eq!(found, "2.20.1");
             assert_eq!(*required, Op::FetchOrigin.min_version());
         }
