@@ -8,8 +8,6 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
-
-	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 func TestBoundedCapture(t *testing.T) {
@@ -204,7 +202,7 @@ func TestIdentityInspectionOnTheInstalledGit(t *testing.T) {
 		t.Fatalf("Inspect: %+v", r)
 	}
 	s := InspectStrict(context.Background(), d)
-	if gittest.AtLeast(t, 2, 46) {
+	if installedGitAtLeast(t, 2, 46) {
 		if s.Status != "ok" {
 			t.Fatalf("InspectStrict: %+v", s)
 		}

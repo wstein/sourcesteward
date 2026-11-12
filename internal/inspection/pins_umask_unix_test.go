@@ -8,15 +8,13 @@ import (
 	"os"
 	"syscall"
 	"testing"
-
-	"github.com/wstein/sourcesteward/internal/gittest"
 )
 
 // TestMain fixes the umask: the pins validation refuses world-writable submodule directories, and a
 // sandbox with umask 000 would otherwise create every fixture directory world-writable.
 func TestMain(m *testing.M) {
 	syscall.Umask(0o022)
-	gittest.LimitBelow(2, 46, "^(TestVersionAtLeast|TestVersionFloors|TestInventoryDoesNotFetchInAPartialCloneOnGitBefore246|TestIdentityInspectionOnTheInstalledGit)$", "")
+	limitRunBelow246("^(TestVersionAtLeast|TestVersionFloors|TestInventoryDoesNotFetchInAPartialCloneOnGitBefore246|TestIdentityInspectionOnTheInstalledGit)$")
 	if err := isolateGitEnvironment(); err != nil {
 		fmt.Fprintln(os.Stderr, "tests refuse to run:", err)
 		os.Exit(2)
