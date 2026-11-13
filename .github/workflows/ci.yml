@@ -170,9 +170,13 @@ jobs:
       # blocked (fail closed).
       heavy: ${{ github.event_name == 'pull_request' && 'false' || 'true' }}
 
+  # The deploy is off: GitHub Pages is not enabled in this repository (configure-pages fails with
+  # "Not Found"; owner decision 2026-11-13). The check job still builds and checks the artifact.
+  # To turn it on: enable Pages (build source GitHub Actions), then set the repository variable
+  # PAGES_ENABLED to true.
   pages:
     needs: [check, conformance]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:

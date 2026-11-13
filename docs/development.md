@@ -290,6 +290,8 @@ sources, unsafe raw HTML is disabled, and templates cannot execute tools or fetc
 resources. Internal specifications, progress and agent instructions are not included in the
 public artifact. Published schemas retain source bytes. CI validates the exact artifact and
 main-only Pages deploys that same artifact after checks pass; `revision.txt` records its SHA.
+The deploy job is off while the repository variable `PAGES_ENABLED` is not `true` (Pages is not enabled;
+owner decision 2026-11-13); the artifact is still built and checked. To turn it on, enable Pages and set the variable.
 
 ## Waiting for pull request CI
 
