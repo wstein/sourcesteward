@@ -1,7 +1,7 @@
 //! `stw oplog undo-plan REF [--to OLD | --steps N]`: what an undo of one local branch would check and do, without doing
 //! it (read-only; `docs/oplog-format.md`, 8). The checks are those of the accepted spike `stw-oplog-reflog undo-plan`.
-//! The undo itself, the backup refs and the `refs.log` lines it writes are a later package: this command only says
-//! `all checks ok` or names what is refused.
+//! The undo itself (`undo.rs`) runs this same plan first; this command only says `all checks ok` and the command that
+//! applies it, or names what is refused.
 use std::fmt::Write;
 
 use gix::bstr::ByteSlice;
@@ -385,28 +385,51 @@ impl Plan {
         } else if !self.branch {
             "Result: preview ok, but `undo` handles local branches only.".into()
         } else {
-            "Result: all checks ok (preview only). `stw oplog undo` is not built yet; nothing was changed.".into()
+            format!(
+                "Result: all checks ok (preview only, nothing was changed). Apply with: {}",
+                self.apply_command()
+            )
         }
     }
 
+    /// The `undo` command that applies this plan (full values for `--to` and `--expect`).
+    pub fn apply_command(&self) -> String {
+        format!(
+            "stw oplog undo {} --to {} --expect {} --yes",
+            self.reference,
+            self.target.as_deref().unwrap_or("?"),
+            self.current.as_deref().unwrap_or("?")
+        )
+    }
+
     pub fn to_json(&self) -> Value {
+        self.to_json_as("oplog undo-plan")
+    }
+
+    /// The same document for `command` (`undo` prints it when it refuses); `apply` is new and only set when executable.
+    pub fn to_json_as(&self, command: &str) -> Value {
+        let apply = self.executable().then(|| self.apply_command());
         let checks: Vec<Value> = self
             .checks
             .iter()
             .map(|c| json!({ "status": c.status, "text": c.text }))
             .collect();
         json!({
-            "schema_version": SCHEMA_VERSION, "command": "oplog undo-plan", "engine": crate::output::engine(),
+            "schema_version": SCHEMA_VERSION, "command": command, "engine": crate::output::engine(),
             "ref": self.reference, "repo": self.common, "current": self.current, "target": self.target,
-            "checks": checks, "executable": self.executable(), "result": self.result(),
+            "checks": checks, "executable": self.executable(), "result": self.result(), "apply": apply,
         })
     }
 
     pub fn render_human(&self) -> String {
+        self.render_human_as("undo-plan", "preview only, nothing is written")
+    }
+
+    pub fn render_human_as(&self, command: &str, note: &str) -> String {
         let mut b = String::new();
         let _ = writeln!(
             b,
-            "undo-plan {}  git-dir={}  (preview only, nothing is written)",
+            "{command} {}  git-dir={}  ({note})",
             esc(&self.reference),
             self.common
         );

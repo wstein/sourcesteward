@@ -1,6 +1,6 @@
 //! The op log readers: `refs.log` and `rewrites.log` of `<git-common-dir>/stw/oplog/` and the reflogs, as `stw oplog
-//! timeline | evolog | undo-plan` (read-only; format and rules: `docs/oplog-format.md`). Writing logs, rotation, backup
-//! refs, the undo itself and the hook install are later packages.
+//! timeline | evolog | undo-plan` (read-only) and `stw oplog undo` (format and rules: `docs/oplog-format.md`). Writing
+//! logs and rotation are in `write.rs`, the backup refs and the undo in `undo.rs`; the hook install is a later package.
 use std::path::{Path, PathBuf};
 
 use crate::error::{Error, Result};
@@ -9,6 +9,7 @@ pub mod evolog;
 pub mod parse;
 pub mod store;
 pub mod timeline;
+pub mod undo;
 pub mod undo_plan;
 pub mod write;
 

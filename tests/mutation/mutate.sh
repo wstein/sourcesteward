@@ -2534,6 +2534,90 @@ m LR15 'a text cut at 300 characters shows no sign of it' src/status.rs \
   "        out.push('\\u{2026}');" "        let _ = &out;" \
   lib status::esc_tests::a_name_cut_at_300_characters_ends_in_an_ellipsis
 
+m OU1 'oplog undo: the first run number is taken without a create-only counter update' src/oplog/undo.rs \
+  '            None => PreviousValue::MustNotExist,' '            None => PreviousValue::Any,' \
+  oplog_undo a_lost_race_for_the_first_run_takes_the_next_number
+m OU2 'oplog undo: a later run number is taken without a compare-and-swap on the counter' src/oplog/undo.rs \
+  '            Some(p) => PreviousValue::MustExistAndMatch(Target::Object(p)),' '            Some(p) => PreviousValue::Any,' \
+  oplog_undo a_lost_race_for_a_later_run_takes_the_next_number
+m OU3 'oplog undo: one try more than asked for a run number' src/oplog/undo.rs \
+  '    for attempt in 0..tries {' '    for attempt in 0..tries + 1 {' \
+  oplog_undo a_run_number_that_keeps_being_taken_ends_in_an_error
+m OU4 'oplog undo: the backup ref is not looked up before the create-only edit' src/oplog/undo.rs \
+  '        .is_some()
+    {' '        .is_some()
+        && false
+    {' \
+  oplog_undo an_existing_backup_ref_is_never_replaced
+m OU5 'oplog undo: retention keeps 9 runs' src/oplog/undo.rs \
+  'pub const RETAINED_RUNS: usize = 10;' 'pub const RETAINED_RUNS: usize = 9;' \
+  oplog_undo ten_runs_are_all_kept
+m OU6 'oplog undo: retention keeps 11 runs' src/oplog/undo.rs \
+  'pub const RETAINED_RUNS: usize = 10;' 'pub const RETAINED_RUNS: usize = 11;' \
+  oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
+m OU7 'oplog undo: retention keeps the oldest runs and prunes the newest' src/oplog/undo.rs \
+  'runs.iter().rev().take(RETAINED_RUNS)' 'runs.iter().take(RETAINED_RUNS)' \
+  oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
+m OU8 'oplog undo: retention prunes one ref per run only' src/oplog/undo.rs \
+  '        if keep.contains(&run) {' '        if keep.contains(&run) || name.ends_with("/2") {' \
+  oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
+m OU9 'oplog undo: a name below the backup prefix whose second part is no number is pruned' src/oplog/undo.rs \
+  'k.parse::<u64>().is_ok()) else {' 'true) else {' \
+  oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
+m OU10 'oplog undo: the reflog handle follows core.logAllRefUpdates' src/oplog/undo.rs \
+  '    store.write_reflog = gix::refs::store::WriteReflog::Always;' '    store.write_reflog = repo.refs.write_reflog;' \
+  oplog_undo the_reflog_entries_are_written_with_log_all_ref_updates_false
+m OU11 'oplog undo: the reflog message is not the command' src/oplog/undo.rs \
+  'const MESSAGE: &str = "stw oplog undo";' 'const MESSAGE: &str = "undo";' \
+  oplog_undo the_reflog_entries_are_written_with_log_all_ref_updates_false
+m OU12 'oplog undo: the update of the branch has no expected old value' src/oplog/undo.rs \
+  '            PreviousValue::MustExistAndMatch(Target::Object(expect)),' '            PreviousValue::Any,' \
+  oplog_undo the_update_is_a_compare_and_swap_and_a_lost_race_keeps_the_backup
+m OU13 'oplog undo: a --expect that is not the current value is not refused up front' src/oplog/undo.rs \
+  '    if req.expect != cur_s {' '    if false && req.expect != cur_s {' \
+  oplog_undo a_wrong_expect_changes_nothing
+m OU14 'oplog undo: a refused plan is executed' src/oplog/undo.rs \
+  '    if !plan.executable() {' '    if false && !plan.executable() {' \
+  oplog_undo a_checked_out_branch_is_refused_with_the_reset_keep_hint
+m OU15 'oplog undo: a ref that is no local branch is a refusal, not a usage error' src/oplog/undo.rs \
+  '    if !plan.branch {' '    if false && !plan.branch {' \
+  oplog_undo a_ref_that_is_no_local_branch_is_a_usage_error
+m OU16 'oplog undo: an abbreviated --expect is accepted' src/oplog/undo.rs \
+  '    if !is_full_hex(&req.expect, hex_len) {' '    if false && !is_full_hex(&req.expect, hex_len) {' \
+  oplog_undo a_wrong_expect_changes_nothing
+m OU17 'oplog undo: undo runs without --yes' src/cli.rs \
+  '    if !a.yes {' '    if false && !a.yes {' \
+  oplog_undo expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written
+m OU18 'oplog undo: the backup ref holds the new value, not the current one' src/oplog/undo.rs \
+  '    create_backup(repo, &backup_ref, expect).map_err(|e| {' '    create_backup(repo, &backup_ref, to).map_err(|e| {' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU19 'oplog undo: the counter update has no refs.log line' src/oplog/undo.rs \
+  '            refname: COUNTER_REF,
+            old: prev,' '            refname: "refs/stw/other",
+            old: prev,' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU20 'oplog undo: the backup creation has no refs.log line' src/oplog/undo.rs \
+  '            refname: &backup_ref,' '            refname: "refs/stw/other",' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU21 'oplog undo: the undo update has no refs.log line' src/oplog/undo.rs \
+  '            refname: &plan.reference,' '            refname: "refs/stw/other",' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU22 'oplog undo: the prune has no refs.log lines' src/oplog/undo.rs \
+  '                        refname: name,' '                        refname: "refs/stw/other",' \
+  oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
+m OU23 'oplog undo: the next run number is the counter, not counter plus one' src/oplog/undo.rs \
+  'Some(blob) => counter_run(repo, blob)? + 1,' 'Some(blob) => counter_run(repo, blob)?,' \
+  oplog_undo the_counter_is_never_reused_after_the_backups_are_pruned
+m OU24 'oplog undo: the way back has --to and --expect swapped' src/oplog/undo.rs \
+  '"stw oplog undo {} --to {expect} --expect {to} --yes",' '"stw oplog undo {} --to {to} --expect {expect} --yes",' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU25 'oplog undo: a refs.log that is a symbolic link is written through' src/oplog/write.rs \
+  '    refuse_link(path)?;' '    let _ = path;' \
+  oplog_undo a_refs_log_that_is_a_symbolic_link_does_not_undo_the_undo
+m OU26 'oplog undo: undo-plan names the apply command with --to and --expect swapped' src/oplog/undo_plan.rs \
+  '"stw oplog undo {} --to {} --expect {} --yes",' '"stw oplog undo {} --expect {} --to {} --yes",' \
+  oplog_undo expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

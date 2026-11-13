@@ -1249,12 +1249,14 @@ fn a_stash_is_previewed_but_marked_not_undoable() {
 }
 
 #[test]
-fn the_plan_says_it_does_not_run_undo_and_writes_nothing() {
-    let (fx, _) = undo_fx();
+fn the_plan_names_the_undo_command_and_writes_nothing() {
+    let (fx, [_, c2, c3]) = undo_fx();
     let before = tree_snapshot(&fx.path);
     let r = run(&fx, &["undo-plan", "work"]);
     assert!(
-        r.text.contains("`stw oplog undo` is not built yet"),
+        r.text.contains(&format!(
+            "Apply with: stw oplog undo refs/heads/work --to {c2} --expect {c3} --yes"
+        )),
         "{}",
         r.text
     );

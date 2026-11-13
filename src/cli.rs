@@ -133,6 +133,9 @@ enum OplogCommand {
     /// What undoing one local branch to an older reflog value would check; changes nothing
     #[command(after_help = OPLOG_HELP)]
     UndoPlan(OplogUndoPlanArgs),
+    /// Move one local branch back to an older reflog value: backup ref, compare-and-swap update; writes
+    #[command(after_help = OPLOG_HELP)]
+    Undo(OplogUndoArgs),
 }
 
 #[derive(Subcommand)]
@@ -446,8 +449,8 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
 }
 
 const OPLOG_HELP: &str = "\
-New in stw (no Go counterpart); format and rules: docs/oplog-format.md. Everything here is read-only: nothing is written,
-no hook is installed, no git program runs. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
+New in stw (no Go counterpart); format and rules: docs/oplog-format.md. timeline, evolog and undo-plan are read-only:
+nothing is written. `undo` writes (see below). No hook is installed, no git program runs. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
 the hooks of the spikes `stw-oplog-refhook` and `stw-oplog-hook`) and the reflogs of the repository. A log that is a
 symbolic link or not a regular file is not read. Reflogs are read for the files ref backend only.
 timeline  A reflog row and the log line of the same change are one entry (flag `covered`); a log line without a reflog
@@ -456,11 +459,16 @@ timeline  A reflog row and the log line of the same change are one entry (flag `
           refs/remotes only with --remotes, other refs than refs/heads, refs/stash, refs/stw only with --all.
 evolog    REV is a branch, a revision or a 40-digit commit id; the chain follows the recorded pairs back (--limit N commits).
 undo-plan REF is a branch name, a full ref name or HEAD. --to OLD (lower-case hex prefix of an old reflog value) or
-          --steps N (default 1) picks the target. Exit 1 when a check is refused. `undo` itself does not exist yet.
+          --steps N (default 1) picks the target. Exit 1 when a check is refused. It prints the `undo` command to apply.
+undo      REF --to OLD --expect NEW --yes: the same checks as undo-plan, then a backup ref refs/stw/backup/<run>/1 on the
+          current value, then the branch is set to OLD only if it still holds NEW (compare-and-swap). Local branches only;
+          a branch that is checked out in a worktree is refused (use `git reset --keep`). The newest 10 runs of backup refs
+          are kept. Reflog entries (message `stw oplog undo`) and refs.log lines are written. Only the ref moves: index,
+          working tree, other worktrees and pushes are not covered. The result names the backup ref and the way back.
 
 Exit codes:
   0  done (undo-plan: no check refused)
-  1  undo-plan: a check is refused; the repository could not be read
+  1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error";
 
 #[derive(Args)]
@@ -522,6 +530,31 @@ struct OplogUndoPlanArgs {
     #[arg(long = "repo", value_name = "NAME")]
     repo: Option<String>,
     /// A branch name, a full ref name or HEAD
+    #[arg(value_name = "REF")]
+    reference: String,
+}
+
+#[derive(Args)]
+struct OplogUndoArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// The old value to go back to: a lower-case hex prefix of an old value of the reflog
+    #[arg(long, value_name = "OLD")]
+    to: String,
+    /// The full current value of the ref; the update happens only if the ref still holds it
+    #[arg(long, value_name = "NEW")]
+    expect: String,
+    /// Do it (without it nothing is written; `undo-plan` shows the checks)
+    #[arg(long)]
+    yes: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// A branch name or a full ref name
     #[arg(value_name = "REF")]
     reference: String,
 }
@@ -593,6 +626,49 @@ fn run_oplog_undo_plan(a: OplogUndoPlanArgs) -> Result<u8> {
     } else {
         exit::FAILED
     })
+}
+
+fn run_oplog_undo(a: OplogUndoArgs) -> Result<u8> {
+    if !a.yes {
+        return Err(Error::usage(
+            "undo writes: add --yes (`stw oplog undo-plan` shows the checks without writing)",
+        ));
+    }
+    if a.to.is_empty() || !a.to.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')) {
+        return Err(Error::usage("--to must be lower-case hex"));
+    }
+    let ctx = oplog_ctx(a.root.as_deref(), a.repo.as_deref())?;
+    let out = oplog::undo::undo(
+        &ctx,
+        &oplog::undo::Request {
+            reference: a.reference,
+            to: a.to,
+            expect: a.expect,
+        },
+    )?;
+    match out {
+        oplog::undo::Outcome::Done(d) => {
+            if a.json {
+                print_json(&d.to_json());
+            } else {
+                print!("{}", d.render_human());
+            }
+            Ok(exit::OK)
+        }
+        oplog::undo::Outcome::Refused(plan) => {
+            if a.json {
+                let mut v = plan.to_json_as("oplog undo");
+                v["executed"] = false.into();
+                print_json(&v);
+            } else {
+                print!(
+                    "{}",
+                    plan.render_human_as("undo", "refused, nothing was written")
+                );
+            }
+            Ok(exit::FAILED)
+        }
+    }
 }
 
 #[derive(Subcommand)]
@@ -1553,6 +1629,7 @@ fn run(command: Command) -> Result<u8> {
             OplogCommand::Timeline(a) => run_oplog_timeline(a),
             OplogCommand::Evolog(a) => run_oplog_evolog(a),
             OplogCommand::UndoPlan(a) => run_oplog_undo_plan(a),
+            OplogCommand::Undo(a) => run_oplog_undo(a),
         },
         Command::Lint {
             command: LintCommand::Pr(a),
