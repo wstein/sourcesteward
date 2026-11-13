@@ -451,9 +451,9 @@ scanned. `kind`, `depth` and `stack` exist only with a PATH. Notices that only a
 listed`; source `scan`, `<key>: repositories below depth <n> not listed`, for a scanned directory that has repositories below the bound) and `stack-cycle` (source `stack`, `<key>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
 A refused gitlink path (`rejected_paths`, notice `rejected-path`) is named below the key of its repository, once.
 
-The status of every repository looks into its submodules (also in `status` without a PATH, in `sync` and in `sync restore`): a submodule whose
-HEAD or work tree differs from the gitlink of its parent is an `unstaged` path of the parent, and a submodule that cannot be read makes its parent
-unreadable (its row is an error row). `submodule.<name>.ignore = all` in the parent's configuration leaves a submodule out.
+`stw status` (with and without a PATH) looks into the submodules of every repository: a submodule whose HEAD or work tree differs from the gitlink
+of its parent is an `unstaged` path of the parent, and a submodule that cannot be read makes its parent unreadable (its row is an error row).
+`sync` and `sync restore` check submodules as before (see deviation 14).
 
 Deviations from the spike and from Go, one by one:
 
@@ -485,12 +485,10 @@ Deviations from the spike and from Go, one by one:
     spike keeps its own interface.
 13. The scan is new (the spike and Go list the submodules of one workspace): directories are scanned for repositories, `--depth` counts levels of
     directories and submodules together, a repository named by a PATH has no depth bound.
-14. The inspection of the submodules in the work tree is never left out (`index_worktree_submodules(None)` is removed). The spike and Go
-    (`--ignore-submodules=all`) leave a changed submodule out of its parent. It follows: `sync --rebase/--merge` counts a changed submodule as a local
-    change of the superproject (`cannot rebase with local changes (use --autostash)`); an unreadable submodule makes `sync` report the superproject as
-    failed; `sync restore` stops a superproject whose submodule differs from the gitlink (`changed-since`, `the worktree has local changes`), so it
-    restores the last listed repository first (a submodule before its superproject), one after the other. A superproject whose submodule was not moved by the run
-    that is restored stays `changed-since`; `submodule.<name>.ignore = all` is the way out. Recommendation: keep, and decide whether `restore` needs an option for it.
+14. `stw status` never leaves the inspection of the submodules in the work tree out (`index_worktree_submodules(None)` is not used for it). The spike and Go
+    (`--ignore-submodules=all`) leave a changed submodule out of its parent, and the earlier `--all` of the Rust product did too. Owner decision 2026-11-13:
+    only `status` checks in full; the gate of `sync --rebase/--merge` and `sync restore` keep the check of Go (`status::changes_opts(.., ignore_submodule_changes = true)`):
+    a changed submodule is no local change of its superproject there, and one that cannot be read does not stop it (unchanged from `3dece37`).
 
 Open questions (recommendation each):
 
@@ -1058,7 +1056,7 @@ SHA-256 repositories, a concurrent `git` writing the same refs.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 754 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 753 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
