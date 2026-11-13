@@ -1565,19 +1565,9 @@ m XR3 'a restored branch is not recognized as already restored' src/sync/restore
 m XR4 'the check of the worktree for local changes is left out' src/sync/restore.rs \
   '            Ok(c) if c.dirty_paths == 0 && c.conflicts == 0 => {}' '            Ok(_) => {}' \
   sync_restore local_changes_in_the_checked_out_worktree_stop_the_restore
-m XR5 'a submodule off its gitlink is no local change of the superproject' src/status.rs \
-  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
-    for item in platform.into_iter(Vec::<BString>::new())? {' \
-  sync_restore a_submodule_off_its_gitlink_is_a_local_change_of_the_superproject
-m XR17 'the last listed repository is not restored first' src/sync/restore.rs \
-  '        .iter()
-        .rev()
-        .map(|s| {' '        .iter()
-        .map(|s| {' \
-  sync_restore a_submodule_is_restored_before_its_superproject
-m XR18 'the restored repositories are listed in reverse order' src/sync/restore.rs \
-  '    found.reverse();' '' \
-  sync_restore a_submodule_is_restored_before_its_superproject
+m XR5 'a moved submodule counts as a local change of the superproject' src/status.rs \
+  ') if ignore_submodule_changes => {}' ') if false => {}' \
+  sync_restore a_run_that_moved_two_repositories_is_restored_in_both
 m XR6 'an operation in progress does not stop the restore' src/sync/restore.rs \
   '    if let Some(op) = status::operation(repo) {' '    if let Some(op) = status::operation(repo).filter(|_| false) {' \
   sync_restore an_operation_in_progress_stops_the_restore
@@ -1994,16 +1984,12 @@ m SY29 'branch.<name>.mergeoptions does not refuse a merge' src/sync/pull.rs \
         if let Some(why) = merge_options_refusal(&repo, &branch) {' '    if mode == Diverged::Rebase {
         if let Some(why) = merge_options_refusal(&repo, &branch) {' \
   sync_pull a_configured_merge_option_set_of_the_branch_refuses_a_merge
-m SY30 'the first gate does not count a changed submodule' src/sync/mod.rs \
-  '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' '    let mut dirty = 0;' \
-  sync_pull a_changed_submodule_is_a_local_change_for_the_gate
-m SY31 'the gate after the fetch does not count a changed submodule' src/sync/mod.rs \
-  '        dirty = status::changes(&repo, false)?.dirty_paths;' '        dirty = 0;' \
-  sync_pull a_changed_submodule_is_a_local_change_for_the_gate
-m SY32 'a submodule that cannot be read does not stop the superproject in sync' src/status.rs \
-  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
-    for item in platform.into_iter(Vec::<BString>::new())? {' \
-  sync_pull a_submodule_that_cannot_be_read_makes_the_superproject_unreadable_for_the_run
+m SY30 'the first gate counts a changed submodule' src/sync/mod.rs \
+  'let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' 'let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
+m SY31 'the gate after the fetch counts a changed submodule' src/sync/mod.rs \
+  '        gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '        gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
 
 m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
@@ -2611,9 +2597,15 @@ use gix::open_opts as lr10_open;' \
 m LR11 'a relative GIT_CEILING_DIRECTORIES entry is kept' src/repo/discover.rs \
   '.filter(|p| p.is_absolute())' '.filter(|_| true)' \
   lib repo::discover::tests::relative_ceiling_entries_are_ignored
-m LR12 'the read of the changed files of sync does not fail on an unreadable submodule' src/sync/mod.rs \
-  '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' '    let mut dirty = status::changes(&repo, false).map_or(0, |c| c.dirty_paths);' \
-  sync_pull a_submodule_that_cannot_be_read_makes_the_superproject_unreadable_for_the_run
+m LR12 'the first read of the changed files of sync fails on an unreadable submodule' src/sync/mod.rs \
+  '    let mut dirty = dirty_with_submodules(&repo, gate_dirty);' '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR14 'the gate of sync counts an unreadable submodule' src/sync/mod.rs \
+  '    let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '    let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR13 'the read after the fetch fails on an unreadable submodule' src/sync/mod.rs \
+  '        dirty = dirty_with_submodules(&repo, gate_dirty);' '        dirty = status::changes(&repo, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
 m LR15 'a text cut at 300 characters shows no sign of it' src/status.rs \
   "        out.push('\\u{2026}');" "        let _ = &out;" \
   lib status::esc_tests::a_name_cut_at_300_characters_ends_in_an_ellipsis
