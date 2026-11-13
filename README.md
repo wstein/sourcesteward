@@ -1000,7 +1000,7 @@ after), no hook is installed and no `git` program runs. `--root PATH` and `--rep
 Rules shared with the spec: a log that is a symbolic link, not a regular file, in a symbolic `stw` or `stw/oplog`
 directory, or over 64 MiB is not read (`unreadable`); a line is skipped and counted as `bad` when it is over 4 KB,
 holds a NUL byte, is no UTF-8, has too few fields, a wrong hash, time or name, or has a field 7 or later that is not
-`key=value` (a glued line); all text from logs is escaped (`escape_untrusted`). Deviations from the spikes and the
+`key=value` (a glued line); an empty line is skipped and counts as nothing (a lost lock race of two writers can leave one; a line of white space is still `bad`); all text from logs is escaped (`escape_untrusted`). Deviations from the spikes and the
 spec, one by one: (1) reflogs are read from the files directly, not through the gix reflog iterator (same lines; the
 reftable backend is reported as `backend` and no reflog row is shown); (2) a `refs.log` line that a reflog row covers is
 not listed twice (the spec says the two sources are merged; the spike had no hook rows); (3) the timeline has no
@@ -1031,10 +1031,10 @@ New behavior without a Go counterpart; the owner accepts it live (recipe: `scrat
 `stw oplog undo REF --to OLD --expect NEW --yes` moves one local branch back to an older value of its reflog. REF is a
 branch name or a full ref name; `--to` is a lower-case hex prefix of an old reflog value (as in `undo-plan`; no `--steps`);
 `--expect` is the full current value; `--yes` is required. It runs the checks of `undo-plan` (the same function), then:
-(1) takes a run number from the counter ref `refs/stw/backup-counter` (a blob `<run> <pid>-<nanos>`, compare-and-swap, up to 5
-tries against other writers; a run number is never reused), (2) creates `refs/stw/backup/<run>/1` on the current value
+(1) takes a run number: the larger of the counter ref `refs/stw/backup-counter` (a blob `<run> <pid>-<nanos>`, compare-and-swap, up to 5
+tries against other writers) and the highest run that exists, plus one (a run number is never reused; a counter that was deleted or lowered by hand does not hand out a taken number), (2) creates `refs/stw/backup/<run>/1` on the current value
 (create-only: an existing ref of that name is an error, whatever its value), (3) removes the backup refs of all but the 10
-highest runs (the counter and the newest run are never removed; names that are not `<run>/<k>` are left alone), (4) sets
+highest runs (the counter and the run just taken are never removed; names that are not `<run>/<k>` with canonical positive decimals, that is no sign and no leading zero, are left alone: `+1/1` and `01/1` are no runs), (4) sets
 the branch to OLD only if it still holds NEW (`MustExistAndMatch`, no-deref); a changed ref leaves the backup and the
 branch as the other writer left it. Reflog entries for the backup ref and the branch (message `stw oplog undo`) are written
 also with `core.logAllRefUpdates=false`. `refs.log` lines (context `stw`) are written for the counter, the backup ref, each
@@ -1043,7 +1043,7 @@ Refused with exit 1 and nothing written: a failed check of `undo-plan` (a branch
 `git reset --keep`; there is no `--keep` path yet), `--expect` not equal to the current value.
 Usage errors (exit 2): no `--yes`, `--expect` not a full lower-case hash, a ref that is no local branch.
 Only the ref moves: index, working tree, other worktrees and pushes are not covered.
-Output: backup ref and the way back as a command (`stw oplog undo REF --to <old> --expect <new> --yes`). `--json`
+Output: backup ref and the way back as a command (`stw oplog undo REF --to <old> --expect <new> --yes`); in the text output (here and in `undo-plan`: `Apply with:`) a ref name with shell characters is written in POSIX single quotes, other names as they are; the JSON fields `way_back` and `apply` keep the raw name. `--json`
 (`schema_version` 1, `command` `oplog undo`): `ref`, `executed`, `previous`, `current`, `backup_ref`, `run`, `pruned`,
 `way_back`, `notices`; a refusal prints the `undo-plan` document with `command` `oplog undo` and `executed` false.
 Deviations from the spec text: none in behavior; the spec sections 8 and Q12 now say the reflog mechanism works with
@@ -1056,7 +1056,7 @@ SHA-256 repositories, a concurrent `git` writing the same refs.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 755 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 783 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
