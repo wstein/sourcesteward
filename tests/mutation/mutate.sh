@@ -2241,6 +2241,105 @@ m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_pl
   'if olds.len() > 1 {' 'if false && olds.len() > 1 {' \
   oplog_read an_ambiguous_to_prefix_is_refused
 
+# OW: stw writes its own refs.log lines and rotates (package 2)
+m OW1 'oplog write: a long name is not cut' src/oplog/write.rs \
+  'let cut = &name[..name.len().min(NAME_CUT)];' 'let cut = name;' \
+  lib oplog::write::tests::djb2_and_encoding_match_the_spec_vectors
+m OW2 'oplog write: percent escapes in lower case' src/oplog/write.rs \
+  '"%{b:02X}"' '"%{b:02x}"' \
+  lib oplog::write::tests::djb2_and_encoding_match_the_spec_vectors
+m OW3 'oplog write: djb2 with another multiplier' src/oplog/write.rs \
+  'h.wrapping_mul(33)' 'h.wrapping_mul(31)' \
+  lib oplog::write::tests::djb2_and_encoding_match_the_spec_vectors
+m OW4 'oplog write: the hash is taken over the cut name' src/oplog/write.rs \
+  'djb2(name))' 'djb2(cut))' \
+  lib oplog::write::tests::djb2_and_encoding_match_the_spec_vectors
+m OW5 'oplog write: a worktree id with a slash is kept' src/oplog/write.rs \
+  'if id.contains('\''/'\'') {' 'if false {' \
+  lib oplog::write::tests::worktree_field_reduces_the_id
+m OW6 'oplog write: the worktree id is not cut' src/oplog/write.rs \
+  '.take(40)' '.take(400)' \
+  lib oplog::write::tests::worktree_field_reduces_the_id
+m OW7 'oplog write: no line feed before a line that follows a broken one' src/oplog/write.rs \
+  'if last[0] != b'\''\n'\'' {' 'if false {' \
+  oplog_write a_broken_last_line_gets_a_line_feed_first
+m OW8 'oplog write: a symbolic oplog directory is followed' src/oplog/write.rs \
+  'return Err(format!("{} is a symbolic link", p.display()))' '()' \
+  oplog_write an_oplog_directory_that_is_a_symbolic_link_fails_no_sync_and_leaves_a_gap_line
+m OW9 'oplog write: refs/remotes is logged without remotes=on' src/oplog/write.rs \
+  'if u.refname.starts_with("refs/remotes/") && !Oplog::new(common).remotes_on() {' 'if false && u.refname.starts_with("refs/remotes/") && !Oplog::new(common).remotes_on() {' \
+  oplog_write stw_lines_below_refs_remotes_follow_the_remotes_switch
+m OW10 'oplog write: an update with old equal to new is logged' src/oplog/write.rs \
+  '|| u.old == u.new {' '|| false {' \
+  oplog_write unlogged_updates_are_skipped
+m OW11 'oplog write: a pseudo ref is logged' src/oplog/write.rs \
+  '!(u.refname == "HEAD" || u.refname.starts_with("refs/"))' 'false' \
+  oplog_write unlogged_updates_are_skipped
+m OW12 'oplog write: the rotation limit is doubled' src/oplog/write.rs \
+  'm.is_file() && m.len() > max' 'm.is_file() && m.len() > max * 2' \
+  oplog_write a_log_over_10_mib_is_rotated_to_one_old_generation_after_the_append
+m OW13 'oplog write: a file at the limit is rotated' src/oplog/write.rs \
+  'm.is_file() && m.len() > max' 'm.is_file() && m.len() >= max' \
+  oplog_write only_a_log_above_the_limit_is_renamed_and_a_rotation_is_no_failure
+m OW14 'oplog write: a file that is not large (or missing) is renamed' src/oplog/write.rs \
+  'if !big(name) {' 'if false {' \
+  oplog_write only_a_log_above_the_limit_is_renamed_and_a_rotation_is_no_failure
+m OW15 'oplog write: a held rotate lock does not stop the rotation' src/oplog/write.rs \
+  'Err(std::fs::TryLockError::WouldBlock) => return,' 'Err(std::fs::TryLockError::WouldBlock) => {}' \
+  oplog_write a_held_rotate_lock_means_no_rotation_no_waiting_and_a_successful_command
+m OW16 'oplog write: the rotated gap line has no file name' src/oplog/write.rs \
+  'Ok(()) => gap(common, "rotated", 0, name),' 'Ok(()) => gap(common, "rotated", 0, "-"),' \
+  oplog_write a_log_over_10_mib_is_rotated_to_one_old_generation_after_the_append
+m OW17 'oplog write: a failed write leaves no gap line' src/oplog/write.rs \
+  'gap(common, "write-failed", 1, "-");' '' \
+  oplog_write an_oplog_directory_that_is_a_symbolic_link_fails_no_sync_and_leaves_a_gap_line
+m OW18 'oplog write: no rotation after the append' src/oplog/write.rs \
+  'Ok(()) => rotate_if_needed(common, max),' 'Ok(()) => {}' \
+  oplog_write a_log_over_10_mib_is_rotated_to_one_old_generation_after_the_append
+m OW19 'oplog write: the oplog directory is world readable' src/oplog/write.rs \
+  '.mode(0o700)' '.mode(0o755)' \
+  oplog_write file_and_directory_modes_are_0600_and_0700
+m OW20 'oplog write: the worktree field is always main' src/oplog/write.rs \
+  '(repo.git_dir() != common)' '(false)' \
+  oplog_write a_linked_worktree_writes_its_id_in_the_worktree_field
+m OW21 'oplog write: the sync recovery ref create is not logged' src/sync/journal.rs \
+  '            old: None,
+            new: Some(id),' '            old: Some(id),
+            new: Some(id),' \
+  oplog_write a_sync_writes_the_recovery_ref_and_the_branch_move_as_stw_lines
+m OW22 'oplog write: the sync recovery ref delete is not logged' src/sync/journal.rs \
+  '            old: Some(id),
+            new: None,' '            old: Some(id),
+            new: Some(id),' \
+  oplog_write the_deleted_recovery_refs_of_old_runs_are_written_as_delete_lines
+m OW23 'oplog write: the fast-forward is not logged' src/sync/fast_forward.rs \
+  '            old: Some(from),
+            new: Some(to),' '            old: Some(to),
+            new: Some(to),' \
+  oplog_write a_sync_writes_the_recovery_ref_and_the_branch_move_as_stw_lines
+m OW24 'oplog write: the fast-forward is logged for HEAD, not the branch' src/sync/fast_forward.rs \
+  'Ok(Target::Symbolic(n)) => n.as_bstr().to_string(),' 'Ok(Target::Symbolic(_)) => "HEAD".to_string(),' \
+  oplog_write a_sync_writes_the_recovery_ref_and_the_branch_move_as_stw_lines
+m OW25 'oplog write: the tidy branch delete is not logged' src/tidy_apply.rs \
+  '            old: Some(sha),
+            new: None,' '            old: Some(sha),
+            new: Some(sha),' \
+  tidy_apply deleting_and_restoring_branches_are_logged_as_stw_lines
+m OW26 'oplog write: the tidy restore is not logged' src/tidy_apply.rs \
+  '                    old: None,
+                    new: Some(sha),' '                    old: Some(sha),
+                    new: Some(sha),' \
+  tidy_apply deleting_and_restoring_branches_are_logged_as_stw_lines
+m OW27 'oplog timeline: one rotation already says truncated' src/oplog/timeline.rs \
+  'if n >= 2 {' 'if n >= 1 {' \
+  oplog_read two_rotations_of_one_log_are_reported_as_truncated
+m OW28 'oplog timeline: rotations of both logs are added up' src/oplog/timeline.rs \
+  'k == "rotated" && last == name' 'k == "rotated"' \
+  oplog_read two_rotations_of_one_log_are_reported_as_truncated
+m OW29 'oplog write: a symbolic link as the log file is written through' src/oplog/write.rs \
+  'Err(format!("{} is a symbolic link", path.display()))' 'Ok(())' \
+  oplog_write a_log_file_that_is_a_symbolic_link_is_not_written_through
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

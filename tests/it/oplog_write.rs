@@ -214,8 +214,8 @@ fn a_held_rotate_lock_means_no_rotation_no_waiting_and_a_successful_command() {
 }
 
 #[test]
-fn rotation_is_checked_again_under_the_lock() {
-    // another stw rotated between the size check and the lock: the file is small again, nothing is renamed
+fn only_a_log_above_the_limit_is_renamed_and_a_rotation_is_no_failure() {
+    // the second log does not exist: nothing is renamed for it and no failure is noted
     let j = setup();
     let d = oplog_dir(&j);
     std::fs::create_dir_all(&d).unwrap();
@@ -228,6 +228,31 @@ fn rotation_is_checked_again_under_the_lock() {
     std::fs::write(d.join("refs.log"), "x\n").unwrap();
     stw::oplog::write::rotate_if_needed(&j.ws.join(".git"), 1);
     assert!(d.join("refs.log.1").exists());
+    assert!(!d.join("rewrites.log.1").exists());
+    let errors = std::fs::read_to_string(d.join("errors.log")).unwrap();
+    assert_eq!(errors.lines().count(), 1, "{errors}");
+    assert!(
+        errors.contains("\tgap\trotated\tfailed=0\tbad=0\trefs.log"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn a_log_file_that_is_a_symbolic_link_is_not_written_through() {
+    let j = setup();
+    let d = oplog_dir(&j);
+    std::fs::create_dir_all(&d).unwrap();
+    let target = j.w.p("victim.log");
+    std::fs::write(&target, "").unwrap();
+    std::os::unix::fs::symlink(&target, d.join("refs.log")).unwrap();
+    let (code, v, err) = j.w.stw(&j.ws, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(
+        std::fs::read(&target).unwrap(),
+        b"",
+        "the link is not followed"
+    );
+    assert!(err.contains("op log"), "{err}");
 }
 
 #[test]
