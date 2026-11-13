@@ -2240,6 +2240,88 @@ m OL45 'oplog: the size limit of a log file is not applied' src/oplog/store.rs \
 m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_plan.rs \
   'if olds.len() > 1 {' 'if false && olds.len() > 1 {' \
   oplog_read an_ambiguous_to_prefix_is_refused
+# `stw status --all` (prefix AL: SA is taken by `stw add`)
+m AL1 'the depth bound does not cut the walk' src/repo/mod.rs \
+  '    if depth >= w.max_depth && !subs.is_empty() {' '    if false && depth >= w.max_depth && !subs.is_empty() {' \
+  status_all the_depth_bounds_the_walk_and_a_cut_is_a_notice
+m AL2 'a nested repository has the depth of its holder' src/repo/mod.rs \
+  '        w.depths.push(depth + 1);' '        w.depths.push(depth);' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL3 'the cut of the root is named without its name' src/repo/mod.rs \
+  '            if c.is_empty() {' '            if false {' \
+  status_all the_depth_bounds_the_walk_and_a_cut_is_a_notice
+m AL4 '--all lists more repositories than --limit' src/cli.rs \
+  '            if l.exceeded {' '            if false && l.exceeded {' \
+  status_all more_repositories_than_the_limit_is_a_usage_error
+m AL5 'a remote upstream counts as a local parent' src/status_all.rs \
+  '    if remote.as_slice() != b"." {' '    if false && remote.as_slice() != b"." {' \
+  status_all the_stack_is_the_chain_of_local_upstreams_of_the_current_branch
+m AL6 'the chain has the current branch first' src/status_all.rs \
+  '        chain.insert(0, parent.clone());' '        chain.push(parent.clone());' \
+  status_all the_stack_is_the_chain_of_local_upstreams_of_the_current_branch
+m AL7 'the links count every branch' src/status_all.rs \
+  '.filter(|(n, _)| local_parent(repo, n).is_some())' '.filter(|(_, _)| true)' \
+  status_all the_stack_is_the_chain_of_local_upstreams_of_the_current_branch
+m AL8 'a cycle of local upstreams is not noticed' src/status_all.rs \
+  '        if seen.contains(&parent) {' '        if false && seen.contains(&parent) {' \
+  status_all a_cycle_of_local_upstreams_ends_the_chain_with_a_notice
+m AL9 'the status of a parent counts its submodules' src/status.rs \
+  '        s.changes = changes_opts(&repo, true, opts.all)?;' '        s.changes = changes_opts(&repo, true, false)?;' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL10 'a submodule is looked into by the status of its parent' src/status.rs \
+  '        platform = platform.index_worktree_submodules(None);' '        let _ = &platform;' \
+  status_all a_repository_that_cannot_be_read_is_an_error_row_and_exits_1
+m AL11 'an unborn branch has a stack' src/status.rs \
+  '        if let (true, Some(b), Some(_)) = (opts.all, &s.facts.branch, &s.facts.head) {' '        if let (true, Some(b), _) = (opts.all, &s.facts.branch, &s.facts.head) {' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL12 'a failed read gives a total of ? instead of n/a' src/status_all.rs \
+  '        Source::Read { .. } => number(s),' '        Source::Read { .. } | Source::Failed => number(s),' \
+  status_all github_counts_failed_reads_and_totals
+m AL13 'a full page is shown as an exact count' src/status_all.rs \
+  '        } => format!("{open}{}", if truncated { "+" } else { "" }),' '        } => format!("{open}{}", if truncated && false { "+" } else { "" }),' \
+  status_all a_full_page_is_a_lower_bound
+m AL14 'HTTP 403 is not told from other errors' src/status_all.rs \
+  '    } else if message.contains("HTTP 403") {' '    } else if message.contains("HTTP 4030") {' \
+  status_all github_counts_failed_reads_and_totals
+m AL15 'no repository has an attention mark' src/status_all.rs \
+  '        let mark = if status::reasons(s).is_empty() {' '        let mark = if true {' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL16 'the totals do not sum ahead' src/status_all.rs \
+  '        ahead += s.facts.ahead.unwrap_or(0);' '        let _ = &ahead;' \
+  status_all the_text_lists_every_repository_of_a_nested_workspace_in_one_line_each
+m AL17 'a staged change is counted as unstaged in the line' src/status_all.rs \
+  '        (c.staged, "staged"),' '        (c.staged, "unstaged"),' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL18 'an unborn branch has the sync text of a branch without upstream' src/status_all.rs \
+  '    } else if f.head.is_none() {' '    } else if false && f.head.is_none() {' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL19 'a detached head has the sync text of a branch without upstream' src/status_all.rs \
+  '    } else if f.branch.is_none() {' '    } else if false && f.branch.is_none() {' \
+  status_all counts_sync_forms_and_attention_follow_the_status_rules
+m AL20 'the branch is shown without escapes' src/status_all.rs \
+  '            Some(b) => status::escape_for_text(b),' '            Some(b) => b.clone(),' \
+  status_all text_from_outside_is_shown_escaped_and_the_run_writes_nothing
+m AL21 'the root has the kind submodule' src/status_all.rs \
+  'json!(if s.depth == 0 { "root" } else { "submodule" }),' 'json!(if s.depth == 99 { "root" } else { "submodule" }),' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL22 'options.timeout is not the deadline' src/status_all.rs \
+  '        o.insert("timeout".into(), json!(all.timeout_secs));' '        o.insert("timeout".into(), json!(0));' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL23 '--all conflicts with --worktrees no more' src/cli.rs \
+  'conflicts_with_all = ["long", "icons", "worktrees", "review", "stats", "verbose"])]' 'conflicts_with_all = ["long", "icons", "review", "stats", "verbose"])]' \
+  status_all flags_that_do_not_fit_are_usage_errors
+m AL24 '--depth is accepted without --all' src/cli.rs \
+  '    #[arg(long, value_name = "N", requires = "all", default_value_t = status_all::DEFAULT_DEPTH as u32,' '    #[arg(long, value_name = "N", default_value_t = status_all::DEFAULT_DEPTH as u32,' \
+  status_all flags_that_do_not_fit_are_usage_errors
+m AL25 '--all is always on' src/cli.rs \
+  '    let all = a.all.then_some(status_all::AllOpts {' '    let all = Some(status_all::AllOpts {' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL26 'a stack cycle notice has another text' src/status_all.rs \
+  'format!("{name}: stack cycle at {}", status::escape_for_text(at))' 'format!("{name}: stack loop at {}", status::escape_for_text(at))' \
+  status_all a_cycle_of_local_upstreams_ends_the_chain_with_a_notice
+m AL27 'the chain is joined without the arrow' src/status_all.rs \
+  '                    .join("<-")' '                    .join("-")' \
+  status_all the_stack_is_the_chain_of_local_upstreams_of_the_current_branch
 
 # OW: stw writes its own refs.log lines and rotates (package 2)
 m OW1 'oplog write: a long name is not cut' src/oplog/write.rs \
