@@ -5,6 +5,7 @@ use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::os::unix::fs::{DirBuilderExt, FileExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use super::parse;
 use super::store::Oplog;
@@ -156,9 +157,33 @@ fn ends_without_lf(
     Ok(last.is_some_and(|b| b != b'\n'))
 }
 
+/// How long `append_line` waits for the lock of a log at most (spec 2, "Lock wait").
+const LOCK_BUDGET: Duration = Duration::from_millis(300);
+
+/// Take the exclusive lock of `f`, retrying with a short backoff until `budget` is used up. `false` when the lock stayed
+/// held or the file system has none: the caller goes on without it, stw never waits for a log (spec 2, Q16).
+fn lock_within(f: &File, budget: Duration) -> bool {
+    let end = Instant::now() + budget;
+    let mut pause = Duration::from_millis(2);
+    loop {
+        match f.try_lock() {
+            Ok(()) => return true,
+            Err(std::fs::TryLockError::WouldBlock) => {}
+            Err(std::fs::TryLockError::Error(_)) => return false,
+        }
+        let left = end.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            return false;
+        }
+        std::thread::sleep(pause.min(left));
+        pause = (pause * 2).min(Duration::from_millis(50));
+    }
+}
+
 /// Append one line to a file, once, with `O_APPEND`, a link is refused, mode 0600. When the file is non-empty and
 /// does not end in LF (a writer killed mid-line), one LF goes first in the same write (spec 2). The check and the write
-/// run under an exclusive lock of the file.
+/// run under an exclusive lock of the file, which is waited for at most `LOCK_BUDGET`; a lock that stays held does not
+/// stop the write.
 fn append_line(path: &Path, line: &str) -> Result<(), String> {
     refuse_link(path)?;
     let mut f = OpenOptions::new()
@@ -174,8 +199,9 @@ fn append_line(path: &Path, line: &str) -> Result<(), String> {
     }
     // One stw at a time from the tail check to the write: another writer's line that is in flight must not look like a
     // broken one (on FUSE it can be seen half written). Released when `f` is dropped; a file system without locks
-    // goes on without one (hooks write the same files with `>>` and never take it).
-    let _ = f.lock();
+    // goes on without one (hooks write the same files with `>>` and never take it). A lock that stays held after
+    // `LOCK_BUDGET` is no reason to block either: the line is written without it.
+    let _ = lock_within(&f, LOCK_BUDGET);
     let m = f.metadata().map_err(|e| e.to_string())?;
     let mut buf = Vec::with_capacity(line.len() + 2);
     if m.len() > 0
@@ -395,6 +421,59 @@ mod tests {
             (12000, 0),
             "empty lines"
         );
+        std::fs::remove_dir_all(&t).unwrap();
+    }
+
+    // The lock of a log is held by another open file description: the append must not hang and must write its line.
+    fn append_with_timeout(log: &Path, line: &str) -> Duration {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let (log, line) = (log.to_path_buf(), line.to_string());
+        let start = Instant::now();
+        std::thread::spawn(move || {
+            let _ = tx.send(append_line(&log, &line));
+        });
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("append_line hangs on a held lock")
+            .unwrap();
+        start.elapsed()
+    }
+
+    #[test]
+    fn a_lock_that_stays_held_does_not_stop_the_append() {
+        let t = std::env::temp_dir().join(format!("stw-ow-held-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let log = t.join("refs.log");
+        std::fs::write(&log, "first\npart").unwrap();
+        let holder = File::open(&log).unwrap();
+        holder.lock().unwrap();
+        let took = append_with_timeout(&log, "second");
+        assert!(took >= LOCK_BUDGET.mul_f32(0.8), "no wait: {took:?}");
+        // the result is the one of an append under the lock: a broken tail gets its LF, the line is whole
+        assert_eq!(
+            std::fs::read_to_string(&log).unwrap(),
+            "first\npart\nsecond\n"
+        );
+        drop(holder);
+        std::fs::remove_dir_all(&t).unwrap();
+    }
+
+    #[test]
+    fn a_lock_that_is_released_within_the_budget_is_taken() {
+        let t = std::env::temp_dir().join(format!("stw-ow-rel-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let log = t.join("refs.log");
+        std::fs::write(&log, "").unwrap();
+        let holder = File::open(&log).unwrap();
+        holder.lock().unwrap();
+        let rel = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(100));
+            drop(holder);
+        });
+        let took = append_with_timeout(&log, "x");
+        rel.join().unwrap();
+        assert!(took >= Duration::from_millis(80), "did not wait: {took:?}");
+        assert!(took < LOCK_BUDGET + Duration::from_millis(200), "{took:?}");
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "x\n");
         std::fs::remove_dir_all(&t).unwrap();
     }
 
