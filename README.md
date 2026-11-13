@@ -64,8 +64,8 @@ changes elsewhere are kept. `--rebase` and `--merge` (exclusive) handle a diverg
 Port of the Go flags (`internal/stwsync/apply.go`, `config.go`). `--rebase` rebases the local commits of a diverged
 branch (ahead and behind its upstream) onto the fetched upstream: `git rebase --no-update-refs --fork-point
 refs/remotes/origin/<branch>`; `--merge` merges the fetched tip: `git merge --no-edit --ff <commit>`. A branch that is only
-behind is fast-forwarded as without a flag (never a merge commit). `--plan` says `would rebase N local commit(s) onto M new`
-or `would merge`, changes nothing and fetches nothing. Both need Git 2.38 (rebase) or 2.36 (merge), checked before git starts.
+behind is fast-forwarded as without a flag (never a merge commit). `--plan` says `would rebase A local commit(s) onto B new`
+or `would merge B new commit(s) into A local`, changes nothing and fetches nothing. Both need Git 2.38 (rebase) or 2.36 (merge), checked before git starts.
 Tracked local changes (staged or not; untracked files do not count) refuse the run with the result `skip` ("cannot rebase
 with local changes (use --autostash)") unless `--autostash` is given; `--autostash` stashes and reapplies them (git's own
 autostash), `--no-autostash` is the default. The flag decides every time: the argument vector of git always carries
@@ -85,7 +85,7 @@ Deviations from Go, one by one:
    otherwise change: `--no-autostash`/`--autostash`, `--no-update-refs` (`rebase.updateRefs`), `--no-rebase-merges`
    (`rebase.rebaseMerges`: a local merge commit is flattened), `--ff` and `--no-verify-signatures`
    (`merge.verifySignatures` would start the configured `gpg.program`). A set `branch.<name>.mergeoptions` refuses a
-   `--merge` (`error`, nothing changes): git would add its options to the command line. A diverged branch with `pull.rebase` set is skipped and
+   `--merge` (`error`, nothing changes; `--plan` says `skip` and "would be refused"): git would add its options to the command line. A diverged branch with `pull.rebase` set is skipped and
    the reason says "stw does not follow it: use --rebase". There is no `--ff-only` (it is the default) and no
    `--rebase-merges`.
 2. No hook of the repository runs (`core.hooksPath=/dev/null`, as for every git call of stw); Go ran them
@@ -97,11 +97,12 @@ Deviations from Go, one by one:
 5. The stash entry of an `autostash-conflict` is not claimed: the result has no `stash_oid` and the record no `stash_oid`
    (Go reads the stash reflog). The record has no `orig_head`.
 6. The record of a stopped run has the state `failed` (Go: `conflict`).
-7. The gate looks at tracked changes without a changed submodule (as Go: `--ignore-submodules=all`); git itself also
-   ignores them for a rebase.
-8. A branch that is only behind is fast-forwarded by gix also with `--rebase` or `--merge` and tracked local changes,
-   unless they overlap the update (the check of a plain `sync`); Go refuses the rebase then (`merge --ff-only
-   --autostash`, the dirty check of a rebase pull). `--autostash` has no effect on a fast-forward: nothing is stashed.
+7. A branch that is only behind is fast-forwarded by gix also with `--rebase` or `--merge` and tracked local changes,
+   unless they overlap the update (the check of a plain `sync`); Go refuses the rebase then (`sync.go:392`: `git pull
+   --rebase` refuses a dirty tree, even for a fast-forward). `--autostash` has no effect on a fast-forward: nothing is stashed.
+
+Not a deviation: the gate looks at tracked changes without a changed submodule, as Go does (`--ignore-submodules=all`); git
+itself also ignores them for a rebase.
 
 ### Submodules: the gitlinks of the index
 
@@ -194,8 +195,8 @@ Deviations from Go in these flags:
 5. JSON `pruned` is a list of ref names (Go: a number); `summary.pruned` is the total.
 6. (Removed: Rust walks nested gitlinks depth-first as Go does, with `--submodules` acting on a nested pinned submodule
    against the submodule that holds its gitlink; README "Submodules: the gitlinks of the index".)
-7. A submodule path outside `[A-Za-z0-9._/-]` or through a symbolic link is `unreachable` (Go: only absolute, `..`,
-   option-like and control characters). Paths from `.gitmodules` are reported escaped.
+7. A submodule path outside `[A-Za-z0-9._/-]` is `unreachable` (Go: only absolute, `..`, empty segments, option-like and
+   control characters); a path through a symbolic link is `unreachable` in both (Go `symlinkedPath`). Paths from `.gitmodules` are reported escaped.
 8. `unreachable` is result `error` (run) or `skip` ("would be unreachable", `--plan`); Go has the result `unreachable`.
 9. A run fetches `origin` of a pinned submodule too (Rust fetches every repository; Go fetches branch repositories only).
    A recorded commit that `origin` has is then present before the move, where Go says `unreachable`. If that fetch fails
@@ -207,7 +208,7 @@ Deviations from Go in these flags:
 11. The superproject's recorded commit comes from the index (as in Go); an uninitialized submodule is listed only without
     `--repo`. The submodule's local-change check uses gix status (tracked changes, untracked files excluded); whether a
     change inside a nested submodule counts is UNKNOWN (Go ignores it: `--ignore-submodules=all`).
-12. `--no-prune` also passes `--no-prune-tags`; Go gives `--no-prune-tags` not along, so with `fetch.pruneTags` or
+12. `--no-prune` also passes `--no-prune-tags`; Go does not pass `--no-prune-tags`, so with `fetch.pruneTags` or
     `remote.origin.pruneTags` configured Go's fetch creates tags there. (`sync` without a prune flag keeps the Go
     behavior, see "Status flags".)
 13. The Git configuration `pull.rebase`, `branch.<name>.rebase`, `pull.ff`, `rebase.autoStash` and `merge.autoStash` is not
@@ -277,7 +278,7 @@ and no `next_steps` field in JSON. Notes say what happened or why something was 
 and `sync`; there is no `next_steps` any more); fields are only added within a version, a
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
 `tidy-plan`, `tidy-apply`, `tidy-restore`, `tidy-history`, `sync`; `prove` has its own layout, see "Local rebase proof"), `root`, `engine`, `repos`, `summary`. `status` and `tidy-plan` also carry `github` (bool),
-`github_auth` (where the token came from, never the token) and `github_note` (why pull requests were not read). `status` also carries `notices` (below).
+`github_auth` (where the token came from, never the token) and `github_note` (why GitHub was not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
 `summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep} (`delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
@@ -777,7 +778,7 @@ Deviations from the Go `--review` (`internal/pulls/review.go`, `internal/reviews
 
 1. States: Go has `none`, `findings`, `clear`, `clear-carried`, `clear-stale`, `unparsed`; Rust has the M3 states `no-review`, `findings`, `clear`, `clear-carried`, `unverified-author`, `unknown`. A CLEAR of another head is `no-review` with the finding `stale-head` (Go: `clear-stale`); an unparsable or wrong-pull-request line is `unknown` or a finding (Go: `unparsed`); a failed read is `unknown` (Go: the review stays unset and the source of the repository is an error).
 2. Grammar: the M3 parser, not the Go regular expression (exactly 40 hex patch-ids, no CR, `pr=` of any width from 1 without leading zeros; see `docs/migration-plan.md`, deviations D1 to D8). A line for another pull request is the finding `wrong-pr`, not `unparsed`.
-3. The commit date of the head is not read: Go reads one commit per pull request whose comments name the head and ignores comments older than that commit. Rust has no second read; the verdict is bound to the exact head id instead (M3), so a comment can only name a commit id that existed when it was written. A comment that was edited later still counts at its `created_at` (Go ignores a comment older than the head commit): an old CLEAR that its author edited afterwards to name the head is `clear`, and only the flag `edited` (shown by `--long` and in the JSON) marks it. That grants nothing new: only the author or an administrator can edit a comment, both are trusted authors, and a later FINDINGS wins.
+3. The commit date of the head is not read: Go reads one commit per pull request whose comments name the head and ignores comments older than that commit. Rust has no second read; the verdict is bound to the exact head id instead (M3), so a comment can only name a commit id that existed when it was written. A comment that was edited later still counts at its `created_at` (Go ignores a comment older than the head commit): an old CLEAR that its author edited afterwards to name the head is `clear`, and only the flag `edited` (shown by `--long` and in the JSON) marks it. That grants nothing new: only the author or someone with write access can edit a comment (on GitHub that includes OWNER, MEMBER and COLLABORATOR, the trusted associations), and a later FINDINGS wins.
 4. Carry-over: the chain rules of M3 (up to 16 links, patch-ids of all links equal, a `FINDINGS` of a chain head ends the chain) instead of Go's up to 8 links; the patch-ids are compared as declared (`stw review carry-over` proves them from git, `stw status` does not).
 5. Trust is per login: a login is trusted when one of its comments has the association OWNER, MEMBER or COLLABORATOR (Go: per comment). Go's `ignored` count and the hint `foreign-review-ignored` are the findings `untrusted-author` and the state `unverified-author`.
 6. Long threads: Go reads the first page and the last five pages and marks the state `truncated` (hint `truncated-review-unknown`); Rust reads from the first page up to the budget (500 comments) and then says `unknown` with the reason. A verdict on a page that was not read is never guessed.
@@ -1012,7 +1013,7 @@ carries the file name instead of `-` (Q15); `rust-version` 1.89 (Q18).
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 500 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 690 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1175,5 +1176,5 @@ trusted for the workspace (its `text`/`eol`/`working-tree-encoding` effects on `
 it (no `dirfd`/`O_NOFOLLOW`).
 
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
-index during a `sync` run; sparse checkout, `skip-worktree`, case-insensitive path collisions; LFS and filter drivers
-during fast-forward; Windows, and Linux beyond the test suite (the original measurements ran on macOS arm64; the M0 review and tests ran on Linux aarch64; keychain code is macOS-only); cold-cache timings.
+index during a `sync` run; sparse checkout, `skip-worktree`, case-insensitive path collisions; a real git-lfs
+during fast-forward (a `filter` attribute on a path the update writes and a `filter.*` driver in the config are refused, tested); Windows, and Linux beyond the test suite (the original measurements ran on macOS arm64; the M0 review and tests ran on Linux aarch64; keychain code is macOS-only); cold-cache timings.
