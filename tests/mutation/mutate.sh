@@ -2475,6 +2475,28 @@ m OW39 'oplog write: a lock that stays held is a write failure' src/oplog/write.
 m OW40 'oplog write: the lock budget is 30 s' src/oplog/write.rs \
   'Duration::from_millis(300);' 'Duration::from_millis(30000);' \
   lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
+m OW41 'oplog write: the lock wait sleeps over the whole rest of the budget' src/oplog/write.rs \
+  '        std::thread::sleep(pause.min(left));' '        std::thread::sleep(left);' \
+  lib oplog::write::tests::lock_within_takes_a_lock_that_is_released_soon_and_holds_it
+m OW42 'oplog write: the first pause of the lock wait is 200 ms' src/oplog/write.rs \
+  '    let mut pause = Duration::from_millis(2);' '    let mut pause = Duration::from_millis(200);' \
+  lib oplog::write::tests::lock_within_takes_a_lock_that_is_released_soon_and_holds_it
+m OW43 'oplog write: the lock is taken and released at once' src/oplog/write.rs \
+  '            Ok(()) => return true,' '            Ok(()) => {
+                let _ = f.unlock();
+                return true;
+            }' \
+  lib oplog::write::tests::lock_within_takes_a_lock_that_is_released_soon_and_holds_it
+m OW44 'oplog write: the lock budget is 3 s' src/oplog/write.rs \
+  'Duration::from_millis(300);' 'Duration::from_millis(3000);' \
+  lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
+m OW45 'oplog write: lock_within reports a lock it did not get as taken' src/oplog/write.rs \
+  '        if left.is_zero() {
+            return false;
+        }' '        if left.is_zero() {
+            return true;
+        }' \
+  lib oplog::write::tests::lock_within_gives_up_when_the_budget_is_used_up
 m AL28 'the depth of a repository is not the one of its target' src/cli.rs \
   '            s.depth = t.depth;' '            s.depth = 0;' \
   status_all a_submodule_named_like_the_root_directory_has_its_own_key

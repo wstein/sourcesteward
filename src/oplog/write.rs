@@ -448,6 +448,8 @@ mod tests {
         holder.lock().unwrap();
         let took = append_with_timeout(&log, "second");
         assert!(took >= LOCK_BUDGET.mul_f32(0.8), "no wait: {took:?}");
+        // the wait ends with the budget: not at the 5 s of the timeout, not at a larger budget
+        assert!(took < LOCK_BUDGET + Duration::from_secs(1), "{took:?}");
         // the result is the one of an append under the lock: a broken tail gets its LF, the line is whole
         assert_eq!(
             std::fs::read_to_string(&log).unwrap(),
@@ -474,6 +476,59 @@ mod tests {
         assert!(took >= Duration::from_millis(80), "did not wait: {took:?}");
         assert!(took < LOCK_BUDGET + Duration::from_secs(1), "{took:?}");
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "x\n");
+        std::fs::remove_dir_all(&t).unwrap();
+    }
+
+    #[test]
+    fn lock_within_takes_a_lock_that_is_released_soon_and_holds_it() {
+        let t = std::env::temp_dir().join(format!("stw-ow-within-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let log = t.join("refs.log");
+        std::fs::write(&log, "").unwrap();
+        let holder = File::open(&log).unwrap();
+        holder.lock().unwrap();
+        let rel = std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(20));
+            drop(holder);
+        });
+        let mine = File::open(&log).unwrap();
+        let start = Instant::now();
+        // a long budget: the call returns when the lock is free, not at the end of the budget
+        assert!(lock_within(&mine, Duration::from_secs(5)));
+        let took = start.elapsed();
+        rel.join().unwrap();
+        assert!(took >= Duration::from_millis(15), "did not wait: {took:?}");
+        // the first pauses are 2, 4, 8, 16 ms: the lock is seen within about 30 ms, far below 150 ms
+        assert!(
+            took < Duration::from_millis(150),
+            "waited too long: {took:?}"
+        );
+        // the lock is held now: a second open file description does not get it
+        let other = File::open(&log).unwrap();
+        assert!(matches!(
+            other.try_lock(),
+            Err(std::fs::TryLockError::WouldBlock)
+        ));
+        drop(mine);
+        assert!(other.try_lock().is_ok(), "released with the file");
+        std::fs::remove_dir_all(&t).unwrap();
+    }
+
+    #[test]
+    fn lock_within_gives_up_when_the_budget_is_used_up() {
+        let t = std::env::temp_dir().join(format!("stw-ow-giveup-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let log = t.join("refs.log");
+        std::fs::write(&log, "").unwrap();
+        let holder = File::open(&log).unwrap();
+        holder.lock().unwrap();
+        let mine = File::open(&log).unwrap();
+        let start = Instant::now();
+        assert!(!lock_within(&mine, Duration::from_millis(100)));
+        let took = start.elapsed();
+        assert!(took >= Duration::from_millis(90), "{took:?}");
+        assert!(took < Duration::from_secs(1), "{took:?}");
+        drop(holder);
         std::fs::remove_dir_all(&t).unwrap();
     }
 
