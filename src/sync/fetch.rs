@@ -130,6 +130,20 @@ fn check_scope(repo: &gix::Repository, consequence: &str) -> std::result::Result
 /// `fetch_origin` with the prune choice. `On` is always fetched by the installed git (gix has no prune, and refs
 /// are deleted only by git's own fetch), also for an https remote; `Off` and `Unset` keep the old transports.
 pub fn fetch_origin_with(repo: &gix::Repository, gh: Option<&Client>, prune: Prune) -> Fetched {
+    fetch_origin_mode(repo, gh, prune, false)
+}
+
+/// The fetch of `stw sync --plan`: as a run, but a tag is never pruned (`--no-prune-tags`, also without a prune flag).
+pub fn fetch_origin_plan(repo: &gix::Repository, gh: Option<&Client>, prune: Prune) -> Fetched {
+    fetch_origin_mode(repo, gh, prune, true)
+}
+
+fn fetch_origin_mode(
+    repo: &gix::Repository,
+    gh: Option<&Client>,
+    prune: Prune,
+    plan: bool,
+) -> Fetched {
     let url = repo
         .find_remote("origin")
         .ok()
@@ -148,9 +162,9 @@ pub fn fetch_origin_with(repo: &gix::Repository, gh: Option<&Client>, prune: Pru
         };
     };
     match u.scheme {
-        Scheme::Ssh | Scheme::File => run_git(repo, prune, url.as_ref(), false),
+        Scheme::Ssh | Scheme::File => run_git(repo, prune, plan, url.as_ref(), false),
         Scheme::Https | Scheme::Http | Scheme::Git if prune == Prune::On => {
-            run_git(repo, prune, url.as_ref(), true)
+            run_git(repo, prune, plan, url.as_ref(), true)
         }
         Scheme::Https | Scheme::Http | Scheme::Git => match run_gix(repo, gh) {
             Ok(true) => done(Fetch::Done, Some("gix"), None),
@@ -173,6 +187,7 @@ pub fn fetch_origin_with(repo: &gix::Repository, gh: Option<&Client>, prune: Pru
 fn run_git(
     repo: &gix::Repository,
     prune: Prune,
+    plan: bool,
     url: Option<&gix::Url>,
     net_hint: bool,
 ) -> Fetched {
@@ -191,6 +206,7 @@ fn run_git(
         .map(std::path::Path::to_path_buf)
         .unwrap_or_else(|| repo.git_dir().to_path_buf());
     let op = match prune {
+        Prune::Unset if plan => Op::FetchOriginNoPruneTags,
         Prune::Unset => Op::FetchOrigin,
         Prune::On => Op::FetchOriginPrune { prune: true },
         Prune::Off => Op::FetchOriginPrune { prune: false },

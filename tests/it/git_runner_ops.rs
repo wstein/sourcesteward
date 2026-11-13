@@ -284,6 +284,7 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
     let ops: Vec<(Op, Version)> = vec![
         (Op::FetchOrigin, Version(2, 30, 0)),
         (Op::FetchOriginPrune { prune: true }, Version(2, 30, 0)),
+        (Op::FetchOriginNoPruneTags, Version(2, 30, 0)),
         (Op::FetchPullHead { pr: 1 }, Version(2, 30, 0)),
         (
             Op::UpdateBranchCas {
@@ -335,6 +336,7 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
     let listed = |op: &Op| match op {
         Op::FetchOrigin
         | Op::FetchOriginPrune { .. }
+        | Op::FetchOriginNoPruneTags
         | Op::FetchPullHead { .. }
         | Op::UpdateBranchCas { .. }
         | Op::RangeDiff { .. }

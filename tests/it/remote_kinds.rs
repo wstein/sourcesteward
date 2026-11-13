@@ -104,10 +104,12 @@ fn ssh_and_local_remotes_go_through_the_git_runner_only() {
             );
         }
         assert_eq!(calls.lines().count(), 2, "{url}: {calls}");
-        assert!(
-            calls.contains("fetch --quiet --no-tags --no-recurse-submodules --upload-pack=git-upload-pack origin"),
-            "{calls}"
-        );
+        let want = if mode == "sync" {
+            "fetch --quiet --no-tags --no-recurse-submodules --upload-pack=git-upload-pack origin"
+        } else {
+            "fetch --quiet --no-tags --no-recurse-submodules --no-prune-tags --upload-pack=git-upload-pack -- origin"
+        };
+        assert!(calls.contains(want), "{calls}");
         let everything = all(&o);
         for secret in ["SECRETPW", "ghp_SECRET"] {
             assert!(

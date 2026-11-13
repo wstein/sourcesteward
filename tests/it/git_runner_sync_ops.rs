@@ -40,6 +40,20 @@ fn the_new_operations_have_fixed_argument_vectors() {
             "origin"
         ]
     );
+    let plan = argv(Op::FetchOriginNoPruneTags);
+    assert_eq!(
+        tail(&plan, "fetch"),
+        [
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-recurse-submodules",
+            "--no-prune-tags",
+            "--upload-pack=git-upload-pack",
+            "--",
+            "origin"
+        ]
+    );
     let off = argv(Op::FetchOriginPrune { prune: false });
     assert_eq!(
         tail(&off, "fetch"),
@@ -107,6 +121,7 @@ fn the_submodule_operations_allow_no_transport_and_prune_keeps_the_fetch_transpo
     let fetch = allow(&Op::FetchOrigin);
     assert_eq!(allow(&Op::FetchOriginPrune { prune: true }), fetch);
     assert_eq!(allow(&Op::FetchOriginPrune { prune: false }), fetch);
+    assert_eq!(allow(&Op::FetchOriginNoPruneTags), fetch);
     assert!(!fetch.unwrap().contains("ext"));
 }
 

@@ -276,7 +276,8 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
                 fetch::check_plan_scope(&repo)
             };
             let fetched = match refused {
-                Ok(()) => fetch::fetch_origin_with(&repo, gh, o.prune),
+                Ok(()) if o.apply => fetch::fetch_origin_with(&repo, gh, o.prune),
+                Ok(()) => fetch::fetch_origin_plan(&repo, gh, o.prune),
                 Err(m) => fetch::Fetched {
                     fetch: fetch::Fetch::Failed(m),
                     via: None,

@@ -208,6 +208,10 @@ pub enum Op {
     /// `--no-prune` (it wins over `fetch.prune`). The caller has checked that every configured fetch refspec writes
     /// below `refs/remotes/origin/`. Same transports as `FetchOrigin`.
     FetchOriginPrune { prune: bool },
+    /// `FetchOrigin` for `stw sync --plan` without a prune flag: `fetch.prune` decides as for a run, but
+    /// `--no-prune-tags` keeps `fetch.pruneTags` / `remote.origin.pruneTags` from deleting a local tag (a plan
+    /// must not delete one). Same transports as `FetchOrigin`.
+    FetchOriginNoPruneTags,
     /// `git submodule sync -- <path>` in the superproject: rewrites the submodule's `remote.origin.url` and the
     /// superproject's `submodule.<name>.url` from `.gitmodules`. Local, no network (`stw sync --submodules`).
     SubmoduleSync { path: crate::add::SubPath },
@@ -310,6 +314,7 @@ impl Op {
             | Op::ResetKeep { .. } => Version(2, 36, 0),
             Op::FetchOrigin
             | Op::FetchOriginPrune { .. }
+            | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. }
             | Op::UpdateBranchCas { .. } => Version(2, 30, 0),
         }
@@ -336,6 +341,16 @@ impl Op {
                 // `-c remote.origin.uploadpack=` does not win over the repository's own value (git uses
                 // the first one); the option does
                 "--upload-pack=git-upload-pack",
+                "origin",
+            ]),
+            Op::FetchOriginNoPruneTags => v(&[
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-recurse-submodules",
+                "--no-prune-tags",
+                "--upload-pack=git-upload-pack",
+                "--",
                 "origin",
             ]),
             Op::FetchOriginPrune { prune } => {
@@ -463,7 +478,10 @@ impl Op {
     /// a configured or global attributes file (it would attach filter drivers) and never use a pager.
     fn extra_leading(&self) -> &'static [&'static str] {
         match self {
-            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchPullHead { .. } => &[],
+            Op::FetchOrigin
+            | Op::FetchOriginPrune { .. }
+            | Op::FetchOriginNoPruneTags
+            | Op::FetchPullHead { .. } => &[],
             // a patch comparison pins what hides or reshapes a change: `diff.ignoreSubmodules=all` hides a
             // gitlink, a size limit turns a file into "Binary files differ", context and algorithm reshape the
             // inner `git log -p` patches
@@ -511,7 +529,9 @@ impl Op {
     /// Value of `GIT_ALLOW_PROTOCOL` of the child. The `stw add` operations are local: no transport at all.
     fn allow_protocol(&self) -> &'static str {
         match self {
-            Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https",
+            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchOriginNoPruneTags => {
+                "file:ssh:git:http:https"
+            }
             // ssh and local only: a `url.<base>.insteadOf` of the user's config cannot turn the remote into http(s)
             Op::FetchPullHead { .. } => "file:ssh",
             _ => "none",
@@ -945,7 +965,10 @@ impl Runner {
         // the operations of `stw add` evaluate attributes: no system attributes file (`/etc/gitattributes`)
         if !matches!(
             op,
-            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchPullHead { .. }
+            Op::FetchOrigin
+                | Op::FetchOriginPrune { .. }
+                | Op::FetchOriginNoPruneTags
+                | Op::FetchPullHead { .. }
         ) {
             set("GIT_ATTR_NOSYSTEM", "1".into());
         }
