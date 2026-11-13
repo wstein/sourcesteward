@@ -42,14 +42,18 @@ pub fn encode_name(name: &[u8]) -> String {
 
 /// The worktree field: `main`, or the reduced id (`other` if it holds `/`, bytes outside `[A-Za-z0-9._-]` as `?`, at
 /// most 40 characters).
-pub fn worktree_field(id: Option<&str>) -> String {
+pub fn worktree_field(id: Option<&std::ffi::OsStr>) -> String {
+    use std::os::unix::ffi::OsStrExt;
     let Some(id) = id else {
         return "main".into();
     };
-    if id.contains('/') {
+    // bytes, not a lossy UTF-8 conversion: one `?` per byte, as in the hook
+    let bytes: Vec<u8> = id.as_bytes().to_vec();
+    if bytes.contains(&b'/') {
         return "other".into();
     }
-    id.bytes()
+    bytes
+        .into_iter()
         .map(|b| {
             if b.is_ascii_alphanumeric() || b"._-".contains(&b) {
                 b as char
@@ -96,12 +100,7 @@ fn ensure_dir(common: &Path) -> Result<PathBuf, String> {
             }
             Ok(m) if !m.is_dir() => return Err(format!("{} is not a directory", p.display())),
             Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-                std::fs::DirBuilder::new()
-                    .mode(0o700)
-                    .create(&p)
-                    .map_err(|e| format!("{}: {e}", p.display()))?;
-            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => create_or_accept(&p)?,
             Err(e) => return Err(format!("{}: {e}", p.display())),
         }
     }
@@ -115,6 +114,22 @@ fn refuse_link(path: &Path) -> Result<(), String> {
             Err(format!("{} is a symbolic link", path.display()))
         }
         _ => Ok(()),
+    }
+}
+
+/// Create the directory `p` with mode 0700. When another stw created it in the meantime (`AlreadyExists`), the
+/// directory is accepted; a link or a non-directory there is refused as everywhere else.
+fn create_or_accept(p: &Path) -> Result<(), String> {
+    match std::fs::DirBuilder::new().mode(0o700).create(p) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            match std::fs::symlink_metadata(p) {
+                Ok(m) if m.is_dir() => Ok(()),
+                Ok(_) => Err(format!("{} is not a directory", p.display())),
+                Err(e) => Err(format!("{}: {e}", p.display())),
+            }
+        }
+        Err(e) => Err(format!("{}: {e}", p.display())),
     }
 }
 
@@ -236,11 +251,7 @@ pub fn log_ref_update_in(common: &Path, repo: &gix::Repository, u: &RefUpdate<'_
     let zeros = "0".repeat(repo.object_hash().len_in_hex());
     let hex = |o: Option<gix::ObjectId>| o.map_or_else(|| zeros.clone(), |i| i.to_string());
     let wt = (repo.git_dir() != common)
-        .then(|| {
-            repo.git_dir()
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-        })
+        .then(|| repo.git_dir().file_name())
         .flatten();
     let line = format_line(
         &now(),
@@ -248,7 +259,7 @@ pub fn log_ref_update_in(common: &Path, repo: &gix::Repository, u: &RefUpdate<'_
         &hex(u.new),
         u.refname,
         "stw",
-        &worktree_field(wt.as_deref()),
+        &worktree_field(wt),
     );
     let result = ensure_dir(common).and_then(|d| append_line(&d.join("refs.log"), &line));
     match result {
@@ -297,6 +308,50 @@ mod tests {
     }
 
     #[test]
+    fn a_directory_that_exists_already_is_accepted_and_nothing_else_is() {
+        let t = std::env::temp_dir().join(format!("stw-ow-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let d = t.join("d");
+        std::fs::create_dir(&d).unwrap();
+        assert_eq!(
+            create_or_accept(&d),
+            Ok(()),
+            "a lost mkdir race is no failure"
+        );
+        let f = t.join("f");
+        std::fs::write(&f, "").unwrap();
+        assert!(create_or_accept(&f).is_err(), "a file is no directory");
+        let l = t.join("l");
+        std::os::unix::fs::symlink(&d, &l).unwrap();
+        assert!(create_or_accept(&l).is_err(), "a link is refused");
+        std::fs::remove_dir_all(&t).unwrap();
+    }
+
+    #[test]
+    fn many_writers_on_a_fresh_repository_lose_no_line() {
+        // threads race for the creation of `stw` and `stw/oplog`
+        for round in 0..40 {
+            let t =
+                std::env::temp_dir().join(format!("stw-ow-race-{}-{round}", std::process::id()));
+            std::fs::create_dir_all(&t).unwrap();
+            let barrier = std::sync::Arc::new(std::sync::Barrier::new(8));
+            let hs: Vec<_> = (0..8)
+                .map(|_| {
+                    let (t, b) = (t.clone(), barrier.clone());
+                    std::thread::spawn(move || {
+                        b.wait();
+                        ensure_dir(&t).map(|_| ())
+                    })
+                })
+                .collect();
+            for h in hs {
+                assert_eq!(h.join().unwrap(), Ok(()), "round {round}");
+            }
+            std::fs::remove_dir_all(&t).unwrap();
+        }
+    }
+
+    #[test]
     fn a_name_of_exactly_200_bytes_is_not_cut() {
         let n = long("refs/heads/", "x", 189);
         assert_eq!(n.len(), 200);
@@ -306,10 +361,15 @@ mod tests {
     #[test]
     fn worktree_field_reduces_the_id() {
         assert_eq!(worktree_field(None), "main");
-        assert_eq!(worktree_field(Some("wt-1.a_b")), "wt-1.a_b");
-        assert_eq!(worktree_field(Some("a/b")), "other");
-        assert_eq!(worktree_field(Some("ä b")), "???b");
-        assert_eq!(worktree_field(Some(&"w".repeat(50))).len(), 40);
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let f = |s: &str| worktree_field(Some(OsStr::new(s)));
+        assert_eq!(f("wt-1.a_b"), "wt-1.a_b");
+        assert_eq!(f("a/b"), "other");
+        assert_eq!(f("ä b"), "???b");
+        assert_eq!(f(&"w".repeat(50)).len(), 40);
+        // an invalid UTF-8 byte is one `?`, as in the hook
+        assert_eq!(worktree_field(Some(OsStr::from_bytes(b"a\xffb"))), "a?b");
     }
 
     #[test]
