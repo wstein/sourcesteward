@@ -246,11 +246,11 @@ pub fn evolog(ctx: &Ctx, arg: &str, limit: usize) -> Result<Evolog> {
         nodes,
         capture_errors_log: gap_lines
             .iter()
-            .filter(|(k, f)| !f && post_rewrite(k))
+            .filter(|(k, f, _)| !f && post_rewrite(k))
             .count(),
         capture_gaps_file: gap_lines
             .iter()
-            .filter(|(k, f)| *f && post_rewrite(k))
+            .filter(|(k, f, _)| *f && post_rewrite(k))
             .count(),
         uncovered,
         pre_install: pre,

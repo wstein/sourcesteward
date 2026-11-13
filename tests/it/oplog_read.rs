@@ -445,6 +445,36 @@ fn error_lines_are_capture_gaps_and_a_rotation_is_its_own_row() {
     );
 }
 
+/// A second rotation of one file replaced its old generation: the timeline says `truncated` for that file only.
+#[test]
+fn two_rotations_of_one_log_are_reported_as_truncated() {
+    let rot = |name: &str| format!("{T}\tgap\trotated\tfailed=0\tbad=0\t{name}\n");
+    let truncated = |lines: String| {
+        let fx = Fx::new();
+        oplog(&fx, "errors.log", &lines);
+        let v = json(&fx, &["timeline"]);
+        v["gaps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|g| {
+                g["kind"] == "truncated" && g["ref"].as_str().is_some_and(|r| r.ends_with(".log"))
+            })
+            .map(|g| g["ref"].as_str().unwrap().to_string())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(truncated(rot("refs.log") + &rot("refs.log")), ["refs.log"]);
+    assert_eq!(truncated(rot("rewrites.log").repeat(2)), ["rewrites.log"]);
+    assert!(
+        truncated(rot("refs.log")).is_empty(),
+        "one rotation keeps the old generation"
+    );
+    assert!(
+        truncated(rot("refs.log") + &rot("rewrites.log")).is_empty(),
+        "one rotation of each file"
+    );
+}
+
 /// The old generation is read first, so a marker at its end joins its line at the start of the new file.
 #[test]
 fn the_old_generation_is_read_before_the_current_file() {

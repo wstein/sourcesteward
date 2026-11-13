@@ -363,8 +363,23 @@ pub fn build(ctx: &super::Ctx, opts: &Options) -> Timeline {
     for (n, why) in gap_unreadable {
         gap(&mut gaps, "unreadable", &n, format!("not read: {why}"));
     }
-    let capture = gap_lines.iter().filter(|(k, _)| k != "rotated").count();
-    let rotated = gap_lines.iter().filter(|(k, _)| k == "rotated").count();
+    let capture = gap_lines.iter().filter(|(k, _, _)| k != "rotated").count();
+    let rotated = gap_lines.iter().filter(|(k, _, _)| k == "rotated").count();
+    // a second rotation of one file has replaced its old generation: the oldest lines are gone (spec 6)
+    for name in ["refs.log", "rewrites.log"] {
+        let n = gap_lines
+            .iter()
+            .filter(|(k, _, last)| k == "rotated" && last == name)
+            .count();
+        if n >= 2 {
+            gap(
+                &mut gaps,
+                "truncated",
+                name,
+                format!("{n} rotations of {name}: older lines were rotated away and are gone"),
+            );
+        }
+    }
     if capture > 0 {
         gap(&mut gaps, "capture-gap", "-", format!("{capture} gap lines in errors.log / stw-oplog-gaps: the hook or stw failed to write; changes around them may be missing"));
     }

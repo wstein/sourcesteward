@@ -157,7 +157,11 @@ impl Oplog {
                     for l in String::from_utf8_lossy(&d).lines() {
                         let f: Vec<&str> = l.split('\t').collect();
                         if f.len() >= 3 && f[1] == "gap" {
-                            out.push((f[2].to_string(), i == 1));
+                            out.push((
+                                f[2].to_string(),
+                                i == 1,
+                                f.get(5).unwrap_or(&"").to_string(),
+                            ));
                         }
                     }
                 }
@@ -169,8 +173,9 @@ impl Oplog {
     }
 }
 
-/// A gap line: its kind and whether it comes from the fallback file `stw-oplog-gaps`.
-pub type GapLine = (String, bool);
+/// A gap line: its kind, whether it comes from the fallback file `stw-oplog-gaps`, and its last field (for a
+/// `rotated` line the name of the rotated file).
+pub type GapLine = (String, bool, String);
 
 /// The install windows of one hook, from its events file.
 pub struct Window(Vec<(i64, bool)>);
