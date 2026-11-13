@@ -93,6 +93,16 @@ fn is_dirty_refusal(text: &str) -> bool {
     .any(|k| low.contains(k))
 }
 
+/// `git merge` reads the options of `branch.<name>.mergeoptions` into its own command line, which stw does not follow:
+/// a merge is refused then (the plan says so too).
+pub(super) fn merge_options_refusal(repo: &gix::Repository, branch: &str) -> Option<String> {
+    repo.config_snapshot()
+        .string(format!("branch.{branch}.mergeoptions").as_str())
+        .map(|_| {
+            format!("branch.{branch}.mergeoptions is set; stw does not follow it, unset it or merge with git")
+        })
+}
+
 /// Rebase or merge the checked-out branch of `r` (`facts` is the state after the fetch). `autostash` is the explicit
 /// choice of the flags, `false` without one: the stash flag of the argument vector is always explicit.
 pub fn apply(
@@ -123,17 +133,10 @@ pub fn apply(
     let Some(upstream) = RemoteRef::parse(&format!("refs/remotes/{up}")) else {
         return fail("invalid-plan", format!("upstream {up} is not under origin"));
     };
-    // `git merge` reads the options of this key into its own command line, which stw does not follow: refused
-    if mode == Diverged::Merge
-        && repo
-            .config_snapshot()
-            .string(format!("branch.{branch}.mergeoptions").as_str())
-            .is_some()
-    {
-        return fail(
-            "config-refused",
-            format!("branch.{branch}.mergeoptions is set; stw does not follow it, unset it or merge with git"),
-        );
+    if mode == Diverged::Merge {
+        if let Some(why) = merge_options_refusal(&repo, &branch) {
+            return fail("config-refused", why);
+        }
     }
     let reference = format!("refs/heads/{branch}");
     let mut j = Journal::new(&repo, run.clone());

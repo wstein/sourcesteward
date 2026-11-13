@@ -213,6 +213,16 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         }
     }
     let (mut action, mut reason) = plan_of(&facts, op, o, gate_dirty);
+    if !o.apply && action == "merge" {
+        // the run refuses this merge (`config-refused`): the plan must not promise it
+        if let Some(why) = facts
+            .branch
+            .as_deref()
+            .and_then(|b| pull::merge_options_refusal(&repo, b))
+        {
+            (action, reason) = ("skip", format!("{why} (would be refused)"));
+        }
+    }
     rec.pinned = op.is_none() && facts.branch.is_none();
     let mut result = action.to_string();
     let mut err = None;

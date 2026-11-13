@@ -1980,13 +1980,9 @@ m SY28 'a rebase keeps merge commits' src/git_runner.rs \
   'v(&["rebase", "--no-update-refs", "--no-rebase-merges"])' 'v(&["rebase", "--no-update-refs"])' \
   sync_pull a_rebase_flattens_a_local_merge_commit_whatever_rebase_rebase_merges_says
 m SY29 'branch.<name>.mergeoptions does not refuse a merge' src/sync/pull.rs \
-  '            .is_some()
-    {
-        return fail(
-            "config-refused",' '            .is_none()
-    {
-        return fail(
-            "config-refused",' \
+  '    if mode == Diverged::Merge {
+        if let Some(why) = merge_options_refusal(&repo, &branch) {' '    if mode == Diverged::Rebase {
+        if let Some(why) = merge_options_refusal(&repo, &branch) {' \
   sync_pull a_configured_merge_option_set_of_the_branch_refuses_a_merge
 m SY30 'the first gate counts a changed submodule' src/sync/mod.rs \
   'let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' 'let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
@@ -2483,6 +2479,12 @@ m LR3 'the tail check reads the byte at len - 1 only' src/oplog/write.rs \
 m LR4 'append_line takes no lock (FUSE: TMPDIR on the FUSE mount, probabilistic)' src/oplog/write.rs \
   '    let _ = f.lock();' '    let _ = &f;' \
   lib oplog::write::tests::parallel_writers_leave_no_empty_line_and_lose_no_line
+m LR5 'the plan promises a merge that the merge options of the branch refuse' src/sync/mod.rs \
+  '    if !o.apply && action == "merge" {' '    if false && action == "merge" {' \
+  sync_pull a_plan_does_not_promise_a_merge_that_the_merge_options_of_the_branch_refuse
+m LR6 'the plan refuses a rebase because of the merge options' src/sync/mod.rs \
+  '    if !o.apply && action == "merge" {' '    if !o.apply && (action == "merge" || action == "rebase") {' \
+  sync_pull a_plan_does_not_promise_a_merge_that_the_merge_options_of_the_branch_refuse
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

@@ -569,6 +569,26 @@ fn a_configured_merge_option_set_of_the_branch_refuses_a_merge() {
 }
 
 #[test]
+fn a_plan_does_not_promise_a_merge_that_the_merge_options_of_the_branch_refuse() {
+    let d = diverged();
+    d.w.git(&d.ws, &["fetch", "-q", "origin"]);
+    d.w.git(&d.ws, &["config", "branch.main.mergeoptions", "-s ours"]);
+    let (code, v, err) = d.w.stw(&d.ws, &["--merge", "--plan"]);
+    assert_eq!(code, 0, "{v} {err}");
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "skip", "{r}");
+    let reason = r["reason"].as_str().unwrap();
+    assert!(
+        reason.contains("branch.main.mergeoptions is set") && reason.contains("would be refused"),
+        "{reason}"
+    );
+    assert_eq!(v["summary"]["would_merge"], 0, "{v}");
+    // a rebase does not read the key
+    let (_, v, _) = d.w.stw(&d.ws, &["--rebase", "--plan"]);
+    assert_eq!(repo(&v, "ws")["result"], "rebase");
+}
+
+#[test]
 fn a_rebase_flattens_a_local_merge_commit_whatever_rebase_rebase_merges_says() {
     let d = diverged();
     d.w.git(&d.ws, &["checkout", "-q", "-b", "side"]);
