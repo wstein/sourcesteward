@@ -2448,6 +2448,24 @@ m OW35 'oplog write: the worktree id is converted lossily' src/oplog/write.rs \
 m OW36 'oplog write: a lost mkdir race is a write failure (threads)' src/oplog/write.rs \
   'Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {' 'Err(e) if false && e.kind() == std::io::ErrorKind::AlreadyExists => {' \
   lib oplog::write::tests::many_writers_on_a_fresh_repository_lose_no_line
+m AL28 'the depth of a repository is looked up by its name' src/cli.rs \
+  'ws.depths.get(&s.path)' 'ws.depths.get(&s.name)' \
+  status_all a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind
+m AL29 'the class of a failed read is found anywhere in the message' src/status_all.rs \
+  'm.starts_with("sent an unexpected")' 'message.contains("unexpected")' \
+  status_all the_class_of_a_failed_read_comes_from_the_start_of_the_message
+m AL30 'a gitlink without a checkout counts for the depth bound' src/repo/mod.rs \
+  'subs.iter().any(|p| dir.join(p).join(".git").exists())' '!subs.is_empty()' \
+  status_all a_gitlink_without_a_checkout_is_no_depth_limit_notice
+m AL31 'the reason of the run is not named in the row' src/status_all.rs \
+  'Some(note_code.unwrap_or("not-read"))' 'Some("not-read")' \
+  status_all the_row_names_why_github_was_not_read_and_which_read_failed
+m AL32 'the reason of a failed issue read is not named in the row' src/status_all.rs \
+  '(_, Source::Failed) => s.issue_error.as_deref().map(classify),' '(_, Source::Failed) => None,' \
+  status_all the_row_names_why_github_was_not_read_and_which_read_failed
+m AL33 '--all is allowed with --stats' src/cli.rs \
+  '"review", "stats", "verbose"])]' '"review", "verbose"])]' \
+  status_all stats_verbose_and_review_are_usage_errors_with_all
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
