@@ -448,7 +448,7 @@ named or found, or `submodule`), `depth` (0 for the root) and `stack` (`{"chain"
 repository that cannot be read; `links` is the number of branches of the repository with a local parent), and `path` is the key. `options.paths` is the list of the arguments as
 given (empty without a PATH, in every `status --json`); `options.depth`, `options.limit` and `options.timeout` (whole seconds of `--timeout`) are there only when a directory was
 scanned. `kind`, `depth` and `stack` exist only with a PATH. Notices that only a PATH has: `depth-limit` (source `submodules`, `<key>: submodules below depth <n> not
-listed`; source `scan`, `<key>: repositories below depth <n> not listed`, for a scanned directory that has repositories below the bound) and `stack-cycle` (source `stack`, `<key>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
+listed`; source `scan`, `<key>: repositories below depth <n> not listed`, for a scanned directory that has repositories below the bound) `no-repositories` (source `scan`, `<key>: no repository found`, for a scanned directory in which nothing was found; for a bare repository with `(a bare repository has no work tree and is not listed)`; exit stays 0) and `stack-cycle` (source `stack`, `<key>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
 A refused gitlink path (`rejected_paths`, notice `rejected-path`) is named below the key of its repository, once.
 
 `stw status` (with and without a PATH) looks into the submodules of every repository: a submodule whose HEAD or work tree differs from the gitlink
@@ -461,7 +461,7 @@ Deviations from the spike and from Go, one by one:
    (`classify`, the start of the message only); `not-logged-in` and `gh-missing` do not exist, `no-token` does; a 403 is
    `forbidden` even when GitHub meant a rate limit (the client does not tell them apart; the spike said `rate-limited`); the stop after a rate limit is the one of
    `status` (none for the plain reads; `--review` has its own).
-2. Walk: `repo::list_repos_depth`. An uninitialised submodule is not listed (spike: an error row `not initialised`) and a symlinked or
+2. Walk: `repo::list_repos_depth`. An uninitialized submodule is not listed (spike: an error row `not initialised`) and a symlinked or
    otherwise refused gitlink path is a `rejected-path` notice and no row (spike: an error row). Neither makes the exit code 1.
 3. Name: display only; the key is the path relative to the current directory (spike: the name, the root `.`). A name that occurs twice
    (a root and a submodule `ws`) is no ambiguity any more (this replaces the former deviation 13).
@@ -1056,7 +1056,7 @@ SHA-256 repositories, a concurrent `git` writing the same refs.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 753 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 755 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
