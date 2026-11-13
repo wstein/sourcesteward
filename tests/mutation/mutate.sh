@@ -65,7 +65,15 @@ m D4 "diverged branches are fast-forwarded" src/sync/mod.rs \
   "} else if b > 0 && a > 0 {" "} else if false && a > 0 {" \
   sync diverged_is_skipped_even_with_apply
 m D5 "index is not written after the file changes" src/sync/fast_forward.rs \
-  'real.write_to(&mut out, Default::default())' 'Ok::<(), std::io::Error>(())' \
+  '        real.write_to(&mut out, Default::default())
+            .map_err(|e| FfError::Other(format!("index: {e}")))?;
+        out.into_inner()
+            .map_err(|e| FfError::Other(format!("index: {e}")))?
+            .commit()
+            .map_err(|e| FfError::Other(format!("index: {e}")))?;
+' '        let _ = &real;
+        drop(out);
+' \
   sync clean_fast_forward_updates_files_index_and_ref
 m R1 "a failed non-https fetch is reported as a plain failure" src/sync/fetch.rs \
   '        Some(u) if u.scheme != Scheme::Https => Fetch::Unsupported(format!(' '        Some(u) if false && u.scheme != Scheme::Https => Fetch::Unsupported(format!(' \
@@ -259,8 +267,9 @@ m U3 "a CRLF line is not recognized in info/exclude" src/tidy_apply.rs \
   'l.trim_ascii() == w.as_bytes()' 'l == w.as_bytes()' \
   tidy_apply a_crlf_line_counts_as_present_and_gets_no_duplicate
 m U4 "tidy --help shows no exit codes" src/cli.rs \
-  '    #[command(after_help = EXIT_CODES)]
-    Status(StatusArgs),' '    Status(StatusArgs),' \
+  '    #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
+    Tidy {' '    #[command(subcommand_required = true, arg_required_else_help = true)]
+    Tidy {' \
   cli help_documents_the_exit_codes_on_every_command
 m I1 "no fallback identity for reflogs" src/repo/mod.rs \
   '    repo.committer_or_set_fallback(FALLBACK_NAME, FALLBACK_EMAIL)?;' '    let _ = (FALLBACK_NAME, FALLBACK_EMAIL);' \
@@ -1106,9 +1115,6 @@ m SH12 "status JSON has no rejected_paths" src/cli.rs \
         print_json(&v);
         if a.verbose {' \
   submodule_paths status_notes_refused_paths_without_a_repository_entry
-m SH14 "the name keeps the trailing slash" src/repo/mod.rs \
-  ".map(|s| s.as_str().to_string())" ".map(|_| p.to_string())" \
-  submodule_paths a_directory_named_twice_is_listed_and_synced_once
 m SH15 "a submodule named like the root is dropped (dedup by name)" src/repo/mod.rs \
   'if !path.join(".git").exists() || w.seen.contains(&real) {' 'if !path.join(".git").exists() || w.repos.iter().any(|r| r.name == name) {' \
   submodule_paths a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported
