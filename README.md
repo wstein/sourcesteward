@@ -856,8 +856,8 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 New behavior without a Go counterpart: the three read-only commands over the logs that the accepted spikes
 `spikes/stw/oplog-reflog`, `oplog-hooks` and `oplog-refhook` write. The format is the contract in
 `docs/oplog-format.md` (reviewed CLEAR); this package builds the readers only. Not part of it, each its own package:
-the undo itself (`stw oplog undo`), the backup refs `refs/stw/backup/<run>/<k>`, stw's own `refs.log` lines, the
-rotation, the hook install. Nothing is written by these commands (tests compare the repository byte for byte before and
+the undo itself (`stw oplog undo`), the backup refs `refs/stw/backup/<run>/<k>`, the hook install (stw's own `refs.log`
+lines and the rotation are the next section). Nothing is written by these commands (tests compare the repository byte for byte before and
 after), no hook is installed and no `git` program runs. `--root PATH` and `--repo NAME` as for `stw prove`; `--json`.
 
 - `stw oplog timeline [--ref GLOB] [--remotes] [--all]`: the reflogs (`HEAD` of the main and the linked worktrees,
@@ -896,6 +896,19 @@ the spikes is not reproduced field for field: `command`, `engine` and `schema_ve
 and `HEAD`, not with `git rev-list`; (6) the evolog counts as capture gaps only the post-rewrite kinds (`amend`,
 `rebase`, `other`) in `errors.log`; the spike counted every line of the file. UNKNOWN: SHA-256 repositories (spec Q9; the
 parser accepts 64 digits, nothing ran), macOS, and a reflog read while another process writes it.
+
+### stw writes its own ref updates (package 2)
+
+Hooks never see gix writes, so stw appends them itself to the same `refs.log` (six TAB fields, context `stw`, names
+`%XX`-encoded and cut at 200 bytes with the djb2 suffix, spec 3). Logged: `stw sync` (recovery ref create and prune,
+branch fast-forward and put-back; the branch, not `HEAD`), `stw tidy apply` (branch delete), `stw tidy restore` (branch
+create). Skipped: `old == new`, names other than `HEAD` and `refs/*`, `refs/remotes/**` without `remotes=on`. The line is
+written even with `core.logAllRefUpdates=false`. A write never fails the command: a failure is a `write-failed` gap line
+and one notice on stderr. Rotation (spec 6): after an append, a log above 10 MiB is renamed to `<name>.1` (one old
+generation, replacing an older one) under `try_lock` on `rotate.lock`; a held lock means no rotation and no waiting; a
+`rotated` gap line names the file. The timeline reports `truncated` for a file that rotated twice (ledger nit N2).
+Open questions with recommendations: spec section 10, Q13 to Q18. Deviations from the spec text: the `rotated` gap line
+carries the file name instead of `-` (Q15); `rust-version` 1.89 (Q18).
 
 ## Build and test
 

@@ -390,7 +390,7 @@ Then M9 (`pulls`).
 
 `stw oplog timeline | evolog | undo-plan` (read-only) over `docs/oplog-format.md`: new behavior, the formats were accepted
 as spikes (`spikes/stw/oplog-reflog`, `oplog-hooks`, `oplog-refhook`), the Rust package is the first of the op log
-stack. Deviations and limits: README, "The op log readers". Next packages, in this order: stw's own `refs.log` lines and
-the rotation; the backup refs and `stw oplog undo` with CAS (spec 8, including the `core.logAllRefUpdates=false` test);
+stack. Deviations and limits: README, "The op log readers". Package 2 (stw's own `refs.log` lines for sync and tidy, the
+rotation, `truncated`) is built: README, "stw writes its own ref updates". Next packages, in this order: the backup refs and `stw oplog undo` with CAS (spec 8, including the `core.logAllRefUpdates=false` test);
 the hook install (opt-in per repository, `--yes`); the `--keep` path for a checked-out branch; then `stw restack
 apply|undo` (conflicts resolved later through the op log, owner decision 2026-11-11).
