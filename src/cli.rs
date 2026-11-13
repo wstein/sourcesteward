@@ -72,7 +72,7 @@ enum Command {
         #[command(subcommand)]
         command: RestackCommand,
     },
-    /// The op log: ref changes (timeline), rewrites of a commit (evolog) and a preview of undoing one branch (read-only)
+    /// The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = OPLOG_HELP)]
     Oplog {
         #[command(subcommand)]
@@ -136,6 +136,32 @@ enum OplogCommand {
     /// Move one local branch back to an older reflog value: backup ref, compare-and-swap update; writes
     #[command(after_help = OPLOG_HELP)]
     Undo(OplogUndoArgs),
+    /// Install, check or remove the two git hooks that write the op log (post-rewrite, reference-transaction); opt-in per repository
+    #[command(subcommand_required = true, arg_required_else_help = true, after_help = OPLOG_HOOKS_HELP)]
+    Hooks {
+        #[command(subcommand)]
+        command: OplogHooksCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum OplogHooksCommand {
+    /// Where the hooks are, whether they are ours, `core.hooksPath`, worktrees, submodules, logs (read-only)
+    #[command(after_help = OPLOG_HOOKS_HELP)]
+    Status(OplogHooksArgs),
+    /// Write both hooks into this repository's hooks directory; without --yes only the plan
+    #[command(after_help = OPLOG_HOOKS_HELP)]
+    Install(OplogHooksWriteArgs),
+    /// Remove our two hook files (only files that carry our header); the logs stay; without --yes only the plan
+    #[command(after_help = OPLOG_HOOKS_HELP)]
+    Uninstall(OplogHooksWriteArgs),
+    /// Print the text of one hook (post-rewrite or reference-transaction); writes nothing
+    #[command(after_help = OPLOG_HOOKS_HELP)]
+    Print {
+        /// post-rewrite or reference-transaction
+        #[arg(value_name = "NAME")]
+        name: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -450,7 +476,7 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
 
 const OPLOG_HELP: &str = "\
 New in stw (no Go counterpart); format and rules: docs/oplog-format.md. timeline, evolog and undo-plan are read-only:
-nothing is written. `undo` writes (see below). No hook is installed, no git program runs. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
+nothing is written. `undo` and `hooks install|uninstall` write (see below; `hooks` has its own help). Nothing here installs a hook except `hooks install --yes`. No git program runs. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
 the hooks of the spikes `stw-oplog-refhook` and `stw-oplog-hook`) and the reflogs of the repository. A log that is a
 symbolic link or not a regular file is not read. Reflogs are read for the files ref backend only.
 timeline  A reflog row and the log line of the same change are one entry (flag `covered`); a log line without a reflog
@@ -470,6 +496,45 @@ Exit codes:
   0  done (undo-plan: no check refused)
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error";
+
+const OPLOG_HOOKS_HELP: &str = "\
+New in stw (no Go counterpart); rules: docs/oplog-format.md, 11. The hooks `post-rewrite` (-> rewrites.log) and
+`reference-transaction` (-> refs.log) are the scripts of the spikes; they never make git fail. Opt-in: only this command
+installs them, `stw add`, `tidy` and `status` never do. No git program runs, no git config is written.
+install    Both hooks into <git-common-dir>/hooks (shared by all linked worktrees), mode 755, plus one `install` line
+           in events.log / events-refhook.log. Refused, with nothing written, when core.hooksPath is set (any source,
+           also empty), when the hooks directory is a symbolic link, or when a hook of that name exists that is not ours
+           (never overwritten or chained; the output gives a chain proposal). Without --yes: the plan, exit 1.
+uninstall  Removes a hook file only if it is a regular file whose line 2 is our header; other files are not touched.
+           Without --yes: the plan, exit 1. Logs are not deleted.
+status     Read-only. A submodule has its own hooks directory: use `--repo NAME`.
+
+Exit codes:
+  0  done, already installed, nothing to remove, or status
+  1  refused, or the plan without --yes, or a write failed
+  2  usage error";
+
+#[derive(Args)]
+struct OplogHooksArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+}
+
+#[derive(Args)]
+struct OplogHooksWriteArgs {
+    #[command(flatten)]
+    common: OplogHooksArgs,
+    /// Do it (without it only the plan is printed and nothing is written)
+    #[arg(long)]
+    yes: bool,
+}
 
 #[derive(Args)]
 struct OplogTimelineArgs {
@@ -626,6 +691,42 @@ fn run_oplog_undo_plan(a: OplogUndoPlanArgs) -> Result<u8> {
     } else {
         exit::FAILED
     })
+}
+
+fn print_hooks_outcome(o: oplog::hooks::Outcome, json: bool) -> u8 {
+    if json {
+        print_json(&o.json);
+    } else {
+        print!("{}", o.text);
+    }
+    o.exit
+}
+
+fn run_oplog_hooks(command: OplogHooksCommand) -> Result<u8> {
+    match command {
+        OplogHooksCommand::Status(a) => {
+            let ctx = oplog_ctx(a.root.as_deref(), a.repo.as_deref())?;
+            Ok(print_hooks_outcome(oplog::hooks::status(&ctx)?, a.json))
+        }
+        OplogHooksCommand::Install(a) => {
+            let ctx = oplog_ctx(a.common.root.as_deref(), a.common.repo.as_deref())?;
+            Ok(print_hooks_outcome(
+                oplog::hooks::install(&ctx, a.yes)?,
+                a.common.json,
+            ))
+        }
+        OplogHooksCommand::Uninstall(a) => {
+            let ctx = oplog_ctx(a.common.root.as_deref(), a.common.repo.as_deref())?;
+            Ok(print_hooks_outcome(
+                oplog::hooks::uninstall(&ctx, a.yes)?,
+                a.common.json,
+            ))
+        }
+        OplogHooksCommand::Print { name } => {
+            print!("{}", oplog::hooks::print(&name)?);
+            Ok(exit::OK)
+        }
+    }
 }
 
 fn run_oplog_undo(a: OplogUndoArgs) -> Result<u8> {
@@ -1677,6 +1778,7 @@ fn run(command: Command) -> Result<u8> {
             OplogCommand::Evolog(a) => run_oplog_evolog(a),
             OplogCommand::UndoPlan(a) => run_oplog_undo_plan(a),
             OplogCommand::Undo(a) => run_oplog_undo(a),
+            OplogCommand::Hooks { command } => run_oplog_hooks(command),
         },
         Command::Lint {
             command: LintCommand::Pr(a),

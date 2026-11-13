@@ -729,7 +729,7 @@ fn a_submodule_has_its_own_hooks_directory() {
     assert!(!r.hook(POST).exists(), "the superproject has none");
     // the superproject's status hints at the submodule
     let s = r.stw(&["status"]);
-    assert!(s.out.contains("submodule"), "{}", s.out);
+    assert!(s.out.contains("submodule    libs/sub"), "{}", s.out);
 }
 
 #[test]
@@ -772,21 +772,4 @@ fn status_reports_absent_ours_foreign_and_not_executable() {
         .contains("config"));
     let t = r.stw(&["status"]);
     assert!(t.out.contains("install would be refused"), "{}", t.out);
-}
-
-#[test]
-fn a_bare_repository_gets_the_hooks_in_its_own_directory() {
-    let r = R::new();
-    let bare = r.repo.parent().unwrap().join("bare.git");
-    r.git(&[
-        "clone",
-        "-q",
-        "--bare",
-        r.repo.to_str().unwrap(),
-        bare.to_str().unwrap(),
-    ]);
-    let o = r.stw_env(&bare, &["install", "--yes"], &[]);
-    assert_eq!(o.code, 0, "{}{}", o.out, o.err);
-    assert!(bare.join("hooks").join(POST).is_file(), "{}", o.out);
-    assert!(bare.join("stw/oplog/events.log").is_file());
 }

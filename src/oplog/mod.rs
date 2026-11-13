@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use crate::error::{Error, Result};
 
 pub mod evolog;
+pub mod hooks;
 pub mod parse;
 pub mod store;
 pub mod timeline;
