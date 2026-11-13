@@ -1565,9 +1565,19 @@ m XR3 'a restored branch is not recognized as already restored' src/sync/restore
 m XR4 'the check of the worktree for local changes is left out' src/sync/restore.rs \
   '            Ok(c) if c.dirty_paths == 0 && c.conflicts == 0 => {}' '            Ok(_) => {}' \
   sync_restore local_changes_in_the_checked_out_worktree_stop_the_restore
-m XR5 'a moved submodule counts as a local change of the superproject' src/status.rs \
-  ') if ignore_submodule_changes => {}' ') if false => {}' \
-  sync_restore a_run_that_moved_two_repositories_is_restored_in_both
+m XR5 'a submodule off its gitlink is no local change of the superproject' src/status.rs \
+  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
+    for item in platform.into_iter(Vec::<BString>::new())? {' \
+  sync_restore a_submodule_off_its_gitlink_is_a_local_change_of_the_superproject
+m XR17 'the last listed repository is not restored first' src/sync/restore.rs \
+  '        .iter()
+        .rev()
+        .map(|s| {' '        .iter()
+        .map(|s| {' \
+  sync_restore a_submodule_is_restored_before_its_superproject
+m XR18 'the restored repositories are listed in reverse order' src/sync/restore.rs \
+  '    found.reverse();' '' \
+  sync_restore a_submodule_is_restored_before_its_superproject
 m XR6 'an operation in progress does not stop the restore' src/sync/restore.rs \
   '    if let Some(op) = status::operation(repo) {' '    if let Some(op) = status::operation(repo).filter(|_| false) {' \
   sync_restore an_operation_in_progress_stops_the_restore
@@ -1984,12 +1994,16 @@ m SY29 'branch.<name>.mergeoptions does not refuse a merge' src/sync/pull.rs \
         if let Some(why) = merge_options_refusal(&repo, &branch) {' '    if mode == Diverged::Rebase {
         if let Some(why) = merge_options_refusal(&repo, &branch) {' \
   sync_pull a_configured_merge_option_set_of_the_branch_refuses_a_merge
-m SY30 'the first gate counts a changed submodule' src/sync/mod.rs \
-  'let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' 'let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
-  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
-m SY31 'the gate after the fetch counts a changed submodule' src/sync/mod.rs \
-  '        gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '        gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
-  sync_pull a_changed_submodule_is_no_local_change_for_the_gate
+m SY30 'the first gate does not count a changed submodule' src/sync/mod.rs \
+  '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' '    let mut dirty = 0;' \
+  sync_pull a_changed_submodule_is_a_local_change_for_the_gate
+m SY31 'the gate after the fetch does not count a changed submodule' src/sync/mod.rs \
+  '        dirty = status::changes(&repo, false)?.dirty_paths;' '        dirty = 0;' \
+  sync_pull a_changed_submodule_is_a_local_change_for_the_gate
+m SY32 'a submodule that cannot be read does not stop the superproject in sync' src/status.rs \
+  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
+    for item in platform.into_iter(Vec::<BString>::new())? {' \
+  sync_pull a_submodule_that_cannot_be_read_makes_the_superproject_unreadable_for_the_run
 
 m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
@@ -2236,18 +2250,18 @@ m OL45 'oplog: the size limit of a log file is not applied' src/oplog/store.rs \
 m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_plan.rs \
   'if olds.len() > 1 {' 'if false && olds.len() > 1 {' \
   oplog_read an_ambiguous_to_prefix_is_refused
-# `stw status --all` (prefix AL: SA is taken by `stw add`)
-m AL1 'the depth bound does not cut the walk' src/repo/mod.rs \
+# `stw status PATH..` (prefix AL: SA is taken by `stw add`)
+m AL1 'the depth bound does not cut the walk of the submodules' src/repo/mod.rs \
   '    if depth >= w.max_depth && subs.iter()' '    if false && depth >= w.max_depth && subs.iter()' \
-  status_all the_depth_bounds_the_walk_and_a_cut_is_a_notice
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
 m AL2 'a nested repository has the depth of its holder' src/repo/mod.rs \
   '        w.depths.push(depth + 1);' '        w.depths.push(depth);' \
   status_all the_json_is_the_status_document_plus_the_additive_fields
-m AL3 'the cut of the root is named without its name' src/repo/mod.rs \
-  '            if c.is_empty() {' '            if false {' \
-  status_all the_depth_bounds_the_walk_and_a_cut_is_a_notice
-m AL4 '--all lists more repositories than --limit' src/cli.rs \
-  '            if l.exceeded {' '            if false && l.exceeded {' \
+m AL3 'a cut is named by its name, not by its key' src/status_all.rs \
+  '            let k = key(&top.join(c));' '            let k = c.clone();' \
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
+m AL4 'a run lists more repositories than --limit' src/status_all.rs \
+  '            if out.targets.len() > limit {' '            if false && out.targets.len() > limit {' \
   status_all more_repositories_than_the_limit_is_a_usage_error
 m AL5 'a remote upstream counts as a local parent' src/status_all.rs \
   '    if remote.as_slice() != b"." {' '    if false && remote.as_slice() != b"." {' \
@@ -2261,14 +2275,16 @@ m AL7 'the links count every branch' src/status_all.rs \
 m AL8 'a cycle of local upstreams is not noticed' src/status_all.rs \
   '        if seen.contains(&parent) {' '        if false && seen.contains(&parent) {' \
   status_all a_cycle_of_local_upstreams_ends_the_chain_with_a_notice
-m AL9 'the status of a parent counts its submodules' src/status.rs \
-  '        s.changes = changes_opts(&repo, true, opts.all)?;' '        s.changes = changes_opts(&repo, true, false)?;' \
+m AL9 'the status of a parent does not count its changed submodules' src/status.rs \
+  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
+    for item in platform.into_iter(Vec::<BString>::new())? {' \
   status_all counts_sync_forms_and_attention_follow_the_status_rules
-m AL10 'a submodule is looked into by the status of its parent' src/status.rs \
-  '        platform = platform.index_worktree_submodules(None);' '        let _ = &platform;' \
+m AL10 'a submodule is not looked into by the status of its parent' src/status.rs \
+  '    for item in platform.into_iter(Vec::<BString>::new())? {' '    let platform = platform.index_worktree_submodules(None);
+    for item in platform.into_iter(Vec::<BString>::new())? {' \
   status_all a_repository_that_cannot_be_read_is_an_error_row_and_exits_1
 m AL11 'an unborn branch has a stack' src/status.rs \
-  '        if let (true, Some(b), Some(_)) = (opts.all, &s.facts.branch, &s.facts.head) {' '        if let (true, Some(b), _) = (opts.all, &s.facts.branch, &s.facts.head) {' \
+  '        if let (true, Some(b), Some(_)) = (opts.stack, &s.facts.branch, &s.facts.head) {' '        if let (true, Some(b), _) = (opts.stack, &s.facts.branch, &s.facts.head) {' \
   status_all counts_sync_forms_and_attention_follow_the_status_rules
 m AL12 'a failed read gives a total of ? instead of n/a' src/status_all.rs \
   '        Source::Read { .. } => number(s),' '        Source::Read { .. } | Source::Failed => number(s),' \
@@ -2301,17 +2317,17 @@ m AL21 'the root has the kind submodule' src/status_all.rs \
   'json!(if s.depth == 0 { "root" } else { "submodule" }),' 'json!(if s.depth == 99 { "root" } else { "submodule" }),' \
   status_all the_json_is_the_status_document_plus_the_additive_fields
 m AL22 'options.timeout is not the deadline' src/status_all.rs \
-  '        o.insert("timeout".into(), json!(all.timeout_secs));' '        o.insert("timeout".into(), json!(0));' \
+  '        o.insert("timeout".into(), json!(scan.timeout_secs));' '        o.insert("timeout".into(), json!(0));' \
   status_all the_json_is_the_status_document_plus_the_additive_fields
 m AL23 '--all conflicts with --worktrees no more' src/cli.rs \
   'conflicts_with_all = ["long", "icons", "worktrees", "review", "stats", "verbose"])]' 'conflicts_with_all = ["long", "icons", "review", "stats", "verbose"])]' \
   status_all flags_that_do_not_fit_are_usage_errors
-m AL24 '--depth is accepted without --all' src/cli.rs \
-  '    #[arg(long, value_name = "N", requires = "all", default_value_t = status_all::DEFAULT_DEPTH as u32,' '    #[arg(long, value_name = "N", default_value_t = status_all::DEFAULT_DEPTH as u32,' \
-  status_all flags_that_do_not_fit_are_usage_errors
-m AL25 '--all is always on' src/cli.rs \
-  '    let all = a.all.then_some(status_all::AllOpts {' '    let all = Some(status_all::AllOpts {' \
-  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL24 '--depth is accepted when every PATH is a repository' src/status_all.rs \
+  '    if !scanned && (depth.is_some() || limit.is_some()) {' '    if false && !scanned && (depth.is_some() || limit.is_some()) {' \
+  status_all depth_and_limit_need_a_directory_that_is_scanned
+m AL25 'the stack is not read with a PATH' src/cli.rs \
+  '        stack: res.is_some(),' '        stack: false,' \
+  status_all the_stack_is_the_chain_of_local_upstreams_of_the_current_branch
 m AL26 'a stack cycle notice has another text' src/status_all.rs \
   'format!("{name}: stack cycle at {}", status::escape_for_text(at))' 'format!("{name}: stack loop at {}", status::escape_for_text(at))' \
   status_all a_cycle_of_local_upstreams_ends_the_chain_with_a_notice
@@ -2464,9 +2480,9 @@ m OW39 'oplog write: a lock that stays held is a write failure' src/oplog/write.
 m OW40 'oplog write: the lock budget is 30 s' src/oplog/write.rs \
   'Duration::from_millis(300);' 'Duration::from_millis(30000);' \
   lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
-m AL28 'the depth of a repository is looked up by its name' src/cli.rs \
-  'ws.depths.get(&s.path)' 'ws.depths.get(&s.name)' \
-  status_all a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind
+m AL28 'the depth of a repository is not the one of its target' src/cli.rs \
+  '            s.depth = t.depth;' '            s.depth = 0;' \
+  status_all a_submodule_named_like_the_root_directory_has_its_own_key
 m AL29 'the class of a failed read is found anywhere in the message' src/status_all.rs \
   'm.starts_with("sent an unexpected")' 'message.contains("unexpected")' \
   status_all the_class_of_a_failed_read_comes_from_the_start_of_the_message
@@ -2479,9 +2495,83 @@ m AL31 'the reason of the run is not named in the row' src/status_all.rs \
 m AL32 'the reason of a failed issue read is not named in the row' src/status_all.rs \
   '(_, Source::Failed) => s.issue_error.as_deref().map(classify),' '(_, Source::Failed) => None,' \
   status_all the_row_names_why_github_was_not_read_and_which_read_failed
-m AL33 '--all is allowed with --stats' src/cli.rs \
+m AL33 'a PATH is allowed with --stats' src/cli.rs \
   '"review", "stats", "verbose"])]' '"review", "verbose"])]' \
-  status_all stats_verbose_and_review_are_usage_errors_with_all
+  status_all stats_verbose_and_review_are_usage_errors_with_a_path
+m AL34 'the key of a repository below the current directory is not relative' src/status_all.rs \
+  '    if let Ok(rel) = real.strip_prefix(cwd) {' '    if let Ok(rel) = real.strip_prefix(cwd).map_err(|_| ()).and_then(|_| Err::<&Path, ()>(())) {' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL35 'the key of an absolute path outside the current directory is relative' src/status_all.rs \
+  '    if absolute {' '    if false && absolute {' \
+  status_all the_key_of_a_repository_is_its_path_and_the_name_is_only_display
+m AL36 'the key of a relative path outside the current directory has no .. components' src/status_all.rs \
+  '    let mut parts: Vec<String> = vec!["..".into(); b.len() - common];' '    let mut parts: Vec<String> = vec![];' \
+  status_all the_key_of_a_repository_is_its_path_and_the_name_is_only_display
+m AL37 'a repository named twice is listed twice' src/status_all.rs \
+  '            if seen.contains(&real) {' '            if false && seen.contains(&real) {' \
+  status_all several_paths_keep_their_order_and_a_repository_is_listed_once
+m AL38 'the paths are not taken in the order of the arguments' src/status_all.rs \
+  '    for a in &args {' '    for a in args.iter().rev() {' \
+  status_all several_paths_keep_their_order_and_a_repository_is_listed_once
+m AL39 'the children of a scanned directory are not in path order' src/repo/mod.rs \
+  '    kids.sort();' '    kids.sort_by(|a, b| b.cmp(a));' \
+  status_all a_directory_without_a_repository_is_scanned_below_in_sorted_order
+m AL40 'a scan follows symbolic links' src/repo/mod.rs \
+  '        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))' '        .filter(|e| e.path().is_dir())' \
+  status_all a_directory_without_a_repository_is_scanned_below_in_sorted_order
+m AL41 'a scan enters the repositories it found' src/repo/mod.rs \
+  '        } else if has_repo {' '        } else if false && has_repo {' \
+  status_all a_directory_without_a_repository_is_scanned_below_in_sorted_order
+m AL42 'a bare repository is listed by a scan' src/repo/mod.rs \
+  '        let has_repo = path.join(".git").exists();' '        let has_repo = path.join(".git").exists() || path.join("HEAD").exists();' \
+  status_all a_directory_without_a_repository_is_scanned_below_in_sorted_order
+m AL43 'repositories below the depth bound of a scan are not noticed' src/repo/mod.rs \
+  '            s.beyond |= has_repo;' '            s.beyond |= false && has_repo;' \
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
+m AL44 'a scan looks one level too deep' src/repo/mod.rs \
+  '        if level + 1 > max_level {' '        if level + 1 > max_level + 1 {' \
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
+m AL45 'the submodules of a found repository ignore the level it was found at' src/status_all.rs \
+  '            add(&dir, depth - level, a.absolute, &mut out)?;' '            add(&dir, depth, a.absolute, &mut out)?;' \
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
+m AL46 '--repo is accepted with a PATH' src/cli.rs \
+  '    if !c.repos.is_empty() {
+        return Err(Error::usage("--repo does not apply with a PATH"));' '    if false && !c.repos.is_empty() {
+        return Err(Error::usage("--repo does not apply with a PATH"));' \
+  status_all flags_that_do_not_fit_are_usage_errors
+m AL47 '--depth is accepted without a PATH' src/cli.rs \
+  '    if a.paths.is_empty() && (a.depth.is_some() || a.limit.is_some()) {' '    if false && a.paths.is_empty() && (a.depth.is_some() || a.limit.is_some()) {' \
+  status_all depth_and_limit_need_a_directory_that_is_scanned
+m AL48 'a PATH that does not exist is taken for a missing directory' src/status_all.rs \
+  '            .map_err(|e| Error::usage(format!("PATH {shown}: {e}")))?;' '            .unwrap_or_else(|_| cwd.join(p));' \
+  status_all a_path_that_does_not_exist_or_cannot_be_read_is_a_usage_error_and_prints_nothing
+m AL49 'a PATH that is a file is not refused as such' src/status_all.rs \
+  '        if !real.is_dir() {' '        if false && !real.is_dir() {' \
+  status_all a_path_that_does_not_exist_or_cannot_be_read_is_a_usage_error_and_prints_nothing
+m AL50 'a directory that cannot be read is not refused' src/status_all.rs \
+  '        if let Err(e) = std::fs::read_dir(&real) {' '        if let Err(e) = Ok::<(), std::io::Error>(()) {' \
+  status_all a_path_that_does_not_exist_or_cannot_be_read_is_a_usage_error_and_prints_nothing
+m AL51 'options.paths is missing' src/cli.rs \
+  '            o.insert("paths".into(), json!(paths));' '            let _ = paths;' \
+  status_all the_json_is_the_status_document_plus_the_additive_fields
+m AL52 'the text has no depth bound of a scan in its header' src/status_all.rs \
+  '        out += &format!("  depth<={}", o.depth);' '        let _ = o;' \
+  status_all the_depth_bounds_the_scan_and_a_cut_is_a_notice
+m AL53 'the scan options are there when every PATH is a repository' src/status_all.rs \
+  '        scan: scanned.then_some((depth, limit)),' '        scan: Some((depth, limit)),' \
+  status_all the_run_of_a_repository_path_has_no_scan_options
+m AL54 'a refused gitlink path is not named below the key of its repository' src/status_all.rs \
+  '            let shown = if top_key == "." {' '            let shown = if true {' \
+  status_all a_refused_gitlink_path_is_reported_below_the_key_of_its_repository
+m AL55 'the agent-rules checkout is listed by a scan' src/status_all.rs \
+  '            if canon(&dir) == *rules {' '            if false && canon(&dir) == *rules {' \
+  status_all a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named
+m AL56 'a submodule that is the agent-rules checkout is listed' src/status_all.rs \
+  '            if *d > 0 && real == *rules && !explicit.contains(&real) {' '            if false && *d > 0 && real == *rules && !explicit.contains(&real) {' \
+  status_all a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named
+m AL57 'a named submodule that is the agent-rules checkout is left out' src/status_all.rs \
+  '            if *d > 0 && real == *rules && !explicit.contains(&real) {' '            if *d > 0 && real == *rules {' \
+  status_all a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named
 
 m LR1 'a tail without a visible byte counts as a broken line' src/oplog/write.rs \
   "Ok(last.is_some_and(|b| b != b'\\n'))" "Ok(last.is_none_or(|b| b != b'\\n'))" \
@@ -2521,15 +2611,9 @@ use gix::open_opts as lr10_open;' \
 m LR11 'a relative GIT_CEILING_DIRECTORIES entry is kept' src/repo/discover.rs \
   '.filter(|p| p.is_absolute())' '.filter(|_| true)' \
   lib repo::discover::tests::relative_ceiling_entries_are_ignored
-m LR12 'the first read of the changed files of sync fails on an unreadable submodule' src/sync/mod.rs \
-  '    let mut dirty = dirty_with_submodules(&repo, gate_dirty);' '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' \
-  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
-m LR13 'the read after the fetch fails on an unreadable submodule' src/sync/mod.rs \
-  '        dirty = dirty_with_submodules(&repo, gate_dirty);' '        dirty = status::changes(&repo, false)?.dirty_paths;' \
-  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
-m LR14 'the gate of sync counts an unreadable submodule' src/sync/mod.rs \
-  '    let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '    let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
-  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR12 'the read of the changed files of sync does not fail on an unreadable submodule' src/sync/mod.rs \
+  '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' '    let mut dirty = status::changes(&repo, false).map_or(0, |c| c.dirty_paths);' \
+  sync_pull a_submodule_that_cannot_be_read_makes_the_superproject_unreadable_for_the_run
 m LR15 'a text cut at 300 characters shows no sign of it' src/status.rs \
   "        out.push('\\u{2026}');" "        let _ = &out;" \
   lib status::esc_tests::a_name_cut_at_300_characters_ends_in_an_ellipsis
