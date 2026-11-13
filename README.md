@@ -390,7 +390,7 @@ with `--offline`.
 
 ### `stw status --all`
 
-Port of the spike `spikes/stw/status-all` (new behavior without a Go counterpart; the owner accepted the spike live). A flag of
+Port of the spike `spikes/stw/status-all` (new behavior without a Go counterpart; the live acceptance of the spike by the owner is not yet done). A flag of
 `status`, not a command. It builds on the row of `status` (`collect_local`, `read_remote`, `reasons`, `collect_notices`, the
 GitHub client of `src/github.rs`) and on the walk of the nested submodules (`repo::list_repos`, the root as in
 "Submodules: the gitlinks of the index"); what it adds is the stack of the current branch, the depth bound and the one-line text
@@ -437,7 +437,8 @@ a changed submodule is not an `unstaged` path of its parent and an unreadable su
 Deviations from the spike, one by one:
 
 1. GitHub: the product client (`src/github.rs`, token rules, no `gh`) instead of `gh api`; the reasons are read from its messages
-   (`classify`); `not-logged-in` and `gh-missing` do not exist, `no-token` does; the stop after a rate limit is the one of
+   (`classify`, the start of the message only); `not-logged-in` and `gh-missing` do not exist, `no-token` does; a 403 is
+   `forbidden` even when GitHub meant a rate limit (the client does not tell them apart; the spike said `rate-limited`); the stop after a rate limit is the one of
    `status` (none for the plain reads; `--review` has its own).
 2. Walk: `repo::list_repos`. An uninitialised submodule is not listed (spike: an error row `not initialised`) and a symlinked or
    otherwise refused gitlink path is a `rejected-path` notice and no row (spike: an error row). Neither makes the exit code 1.
@@ -461,7 +462,13 @@ Deviations from the spike, one by one:
     `--fetch` works.
 12. A submodule's state is not counted in its parent as in the spike, but only under `--all`: `status` without `--all` still counts
     a changed submodule as one `unstaged` path of its parent and cannot read a parent whose submodule is unreadable. The JSON
-    `changes` of a parent can therefore differ between `status --json` and `status --all --json`.
+    `changes` of a parent can therefore differ between `status --json` and `status --all --json`. The same status function
+    (`changes_opts(.., ignore_submodule_changes = true)`) also serves the gate of `sync --rebase/--merge` and `sync restore`;
+    it now skips the inspection of a submodule there too, as Go's `--ignore-submodules=all` does. Observable effect on `sync`:
+    none known, because `sync` reads the same repository once more with the inspection (`status::changes`) before the gate;
+    not proven by a test (ledger).
+13. A name can occur twice (the root `ws` and a submodule `ws`): `kind` and `depth` in the JSON tell them apart (by path), the
+    text and the notices name both `ws` (ledger).
 
 Open questions (recommendation each):
 
