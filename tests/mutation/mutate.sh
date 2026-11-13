@@ -2510,6 +2510,9 @@ m LR13 'the read after the fetch fails on an unreadable submodule' src/sync/mod.
 m LR14 'the gate of sync counts an unreadable submodule' src/sync/mod.rs \
   '    let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '    let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
   sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR15 'a text cut at 300 characters shows no sign of it' src/status.rs \
+  "        out.push('\\u{2026}');" "        let _ = &out;" \
+  lib status::esc_tests::a_name_cut_at_300_characters_ends_in_an_ellipsis
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

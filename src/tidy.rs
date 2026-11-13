@@ -93,7 +93,7 @@ pub fn is_backup(branch: &str) -> bool {
         .any(|p| branch.starts_with(p))
 }
 
-/// Patch-ID cache of one repository: commit -> patch ID (None for merges).
+/// Patch-key cache of one repository: commit -> `PatchKey` (patch ID and exact digest; None for merges).
 #[derive(Default)]
 pub struct PatchCache {
     map: HashMap<ObjectId, Option<PatchKey>>,

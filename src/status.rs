@@ -620,7 +620,27 @@ pub fn escape_for_text(s: &str) -> String {
 /// Text from outside (repository names, GitHub error messages with the slug from the origin URL) for the
 /// human output: control and invisible characters are shown as escapes, never sent to the terminal.
 fn esc(s: &str) -> String {
-    crate::github::reads::escape_untrusted(s, 300).0
+    let (mut out, truncated) = crate::github::reads::escape_untrusted(s, 300);
+    if truncated {
+        // two long names with the same beginning must not look alike without a sign that text is missing
+        out.push('\u{2026}');
+    }
+    out
+}
+
+#[cfg(test)]
+mod esc_tests {
+    use super::esc;
+
+    #[test]
+    fn a_name_cut_at_300_characters_ends_in_an_ellipsis() {
+        let at_limit = "a".repeat(300);
+        assert_eq!(esc(&at_limit), at_limit);
+        let cut = esc(&"a".repeat(301));
+        assert_eq!(cut.chars().count(), 301);
+        assert!(cut.ends_with("a\u{2026}"), "{cut}");
+        assert_eq!(esc("x\u{1b}y"), "x\\u{1b}y");
+    }
 }
 
 fn sum_source(all: impl Iterator<Item = Source>) -> Source {
