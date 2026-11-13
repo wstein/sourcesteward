@@ -2485,6 +2485,19 @@ m LR5 'the plan promises a merge that the merge options of the branch refuse' sr
 m LR6 'the plan refuses a rebase because of the merge options' src/sync/mod.rs \
   '    if !o.apply && action == "merge" {' '    if !o.apply && (action == "merge" || action == "rebase") {' \
   sync_pull a_plan_does_not_promise_a_merge_that_the_merge_options_of_the_branch_refuse
+m LR7 'the import check does not see an alias of the crate' tests/it/hostile_repo.rs \
+  '        if rest.starts_with("gix as ") || rest == "gix" {' '        if false {' \
+  hostile_repo the_import_check_sees_short_names_and_aliases_of_the_opening_functions
+m LR8 'the import check flags a module path such as open::Options' tests/it/hostile_repo.rs \
+  '        let rest = rest.replace("open::", "").replace("discover::", "");' '        let rest = rest.replace("discover::", "");' \
+  hostile_repo the_import_check_sees_short_names_and_aliases_of_the_opening_functions
+m LR9 'the import check does not see an imported discover' tests/it/hostile_repo.rs \
+  '                    "discover" | "open" | "open_opts" | "ThreadSafeRepository"' '                    "open" | "open_opts" | "ThreadSafeRepository"' \
+  hostile_repo the_import_check_sees_short_names_and_aliases_of_the_opening_functions
+m LR10 'a source file imports open_opts under a short name' src/status.rs \
+  'use gix::bstr::BString;' 'use gix::bstr::BString;
+use gix::open_opts as lr10_open;' \
+  hostile_repo repositories_are_opened_only_through_repo_open
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

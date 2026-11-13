@@ -118,6 +118,74 @@ fn sync_dry_run_and_offline_start_no_program_named_by_the_repository() {
     );
 }
 
+/// Imports that would let `gix::discover`, `gix::open`, `gix::open_opts` or `gix::ThreadSafeRepository` be called
+/// under a short or another name (`use gix::discover;`, `use gix::{open_opts as o}`, `use gix as g;`): the text search
+/// for the full path does not see those calls. Returns what is wrong in `code` (comments already removed).
+fn import_bypasses(code: &str) -> Vec<String> {
+    let flat = code.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut out = vec![];
+    for stmt in flat.split(';') {
+        let stmt = stmt.trim();
+        let stmt = stmt.strip_prefix("pub ").unwrap_or(stmt);
+        let Some(rest) = stmt
+            .strip_prefix("use ")
+            .or(stmt.strip_prefix("extern crate "))
+        else {
+            continue;
+        };
+        let rest = rest.trim_start_matches("::");
+        if !(rest == "gix" || rest.starts_with("gix ") || rest.starts_with("gix::")) {
+            continue;
+        }
+        if rest.starts_with("gix as ") || rest == "gix" {
+            out.push(format!("`{stmt}` renames the crate"));
+            continue;
+        }
+        // `open::Options` and `discover::upwards` name modules; the bare names import the functions too
+        let rest = rest.replace("open::", "").replace("discover::", "");
+        let hit = rest
+            .split(|c: char| !(c.is_alphanumeric() || c == '_'))
+            .find(|t| {
+                matches!(
+                    *t,
+                    "discover" | "open" | "open_opts" | "ThreadSafeRepository"
+                )
+            });
+        if let Some(t) = hit {
+            out.push(format!("`{stmt}` imports {t}"));
+        }
+    }
+    out
+}
+
+#[test]
+fn the_import_check_sees_short_names_and_aliases_of_the_opening_functions() {
+    for bad in [
+        "use gix::discover;",
+        "use gix::open;",
+        "use gix::open_opts as o;",
+        "use gix::{ObjectId, discover as d};",
+        "use gix::{\n    ObjectId,\n    open_opts,\n};",
+        "use gix::ThreadSafeRepository as T;",
+        "use ::gix::discover;",
+        "pub use gix::open;",
+        "use gix as g;",
+        "extern crate gix as g;",
+    ] {
+        assert!(!import_bypasses(bad).is_empty(), "not seen: {bad}");
+    }
+    for good in [
+        "use gix::open::Options;",
+        "use gix::{open::Permissions, ObjectId};",
+        "use gix::bstr::{BStr, ByteSlice};",
+        "use gix::ObjectId;",
+        "use std::fs::open;",
+        "let discover = 1;",
+    ] {
+        assert_eq!(import_bypasses(good), Vec::<String>::new(), "{good}");
+    }
+}
+
 /// Every repository the commands read is opened by `repo::open` (which drops filter drivers). A direct
 /// `gix::open`, `gix::open_opts` or `gix::discover` elsewhere would bypass that.
 #[test]
@@ -149,6 +217,16 @@ fn repositories_are_opened_only_through_repo_open() {
             continue;
         }
         let text = std::fs::read_to_string(&f).unwrap();
+        let code_only = text
+            .lines()
+            .map(|l| l.split("//").next().unwrap())
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            import_bypasses(&code_only),
+            Vec::<String>::new(),
+            "{rel}: an import hides the opening functions from this test"
+        );
         for (n, line) in text.lines().enumerate() {
             let code = line.split("//").next().unwrap();
             // discovery goes through repo::discover everywhere, `src/repo/mod.rs` included
