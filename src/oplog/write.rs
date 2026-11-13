@@ -133,8 +133,32 @@ fn create_or_accept(p: &Path) -> Result<(), String> {
     }
 }
 
+/// Whether the file ends in the middle of a line, judged from the size `len` that was read earlier. Other writers append
+/// at the same time, and a file system such as FUSE may show a size that does not match the data: the byte at `len - 1`
+/// can then be missing (nothing is read: no verdict) or lie inside a line that others finished since. So it reads from
+/// `len - 1` on to the end of what is visible and judges the last byte that came back.
+fn ends_without_lf(
+    len: u64,
+    read_at: &dyn Fn(&mut [u8], u64) -> std::io::Result<usize>,
+) -> std::io::Result<bool> {
+    let mut chunk = [0u8; 4096];
+    let mut at = len - 1;
+    let mut last = None;
+    // 16 chunks at most: the file is not read to its end while others keep appending
+    for _ in 0..16 {
+        let n = read_at(&mut chunk, at)?;
+        if n == 0 {
+            break;
+        }
+        last = Some(chunk[n - 1]);
+        at += n as u64;
+    }
+    Ok(last.is_some_and(|b| b != b'\n'))
+}
+
 /// Append one line to a file, once, with `O_APPEND`, a link is refused, mode 0600. When the file is non-empty and
-/// does not end in LF (a writer killed mid-line), one LF goes first in the same write (spec 2).
+/// does not end in LF (a writer killed mid-line), one LF goes first in the same write (spec 2). The check and the write
+/// run under an exclusive lock of the file.
 fn append_line(path: &Path, line: &str) -> Result<(), String> {
     refuse_link(path)?;
     let mut f = OpenOptions::new()
@@ -148,14 +172,16 @@ fn append_line(path: &Path, line: &str) -> Result<(), String> {
     if !m.is_file() {
         return Err(format!("{} is not a regular file", path.display()));
     }
+    // One stw at a time from the tail check to the write: another writer's line that is in flight must not look like a
+    // broken one (on FUSE it can be seen half written). Released when `f` is dropped; a file system without locks
+    // goes on without one (hooks write the same files with `>>` and never take it).
+    let _ = f.lock();
+    let m = f.metadata().map_err(|e| e.to_string())?;
     let mut buf = Vec::with_capacity(line.len() + 2);
-    if m.len() > 0 {
-        let mut last = [0u8; 1];
-        f.read_at(&mut last, m.len() - 1)
-            .map_err(|e| e.to_string())?;
-        if last[0] != b'\n' {
-            buf.push(b'\n');
-        }
+    if m.len() > 0
+        && ends_without_lf(m.len(), &|b, at| f.read_at(b, at)).map_err(|e| e.to_string())?
+    {
+        buf.push(b'\n');
     }
     buf.extend_from_slice(line.as_bytes());
     buf.push(b'\n');
@@ -305,6 +331,71 @@ mod tests {
         // 200 bytes: 11 plain, 94 two-byte letters, the first byte of the 95th
         assert_eq!(enc.len(), 11 + 94 * 6 + 3 + 11);
         assert!(enc.contains("%C3%A4%C3") && enc.trim_end_matches("%00b252bbfa").ends_with("%C3"));
+    }
+
+    #[test]
+    fn the_tail_check_follows_what_is_visible_not_only_the_size() {
+        let at = |data: &'static [u8]| {
+            move |b: &mut [u8], off: u64| -> std::io::Result<usize> {
+                let off = off as usize;
+                if off >= data.len() {
+                    return Ok(0);
+                }
+                let n = b.len().min(data.len() - off);
+                b[..n].copy_from_slice(&data[off..off + n]);
+                Ok(n)
+            }
+        };
+        // a complete last line
+        assert!(!ends_without_lf(4, &at(b"a\nb\n")).unwrap());
+        // a writer killed mid-line
+        assert!(ends_without_lf(3, &at(b"a\nb")).unwrap());
+        // the size is larger than the data (FUSE): nothing to read at len - 1, no verdict, no line feed
+        assert!(!ends_without_lf(10, &at(b"a\nb\n")).unwrap());
+        // the size is smaller than the data: len - 1 lies inside a line that others have finished
+        assert!(!ends_without_lf(3, &at(b"aaaa\nbbbb\n")).unwrap());
+        // the data beyond the first chunk counts
+        static LONG_LF: [u8; 10000] = {
+            let mut a = [b'x'; 10000];
+            a[9999] = b'\n';
+            a
+        };
+        static LONG_X: [u8; 10000] = [b'x'; 10000];
+        assert!(!ends_without_lf(1, &at(&LONG_LF)).unwrap());
+        assert!(ends_without_lf(1, &at(&LONG_X)).unwrap());
+        // a read error is an error, not a verdict
+        let err = |_: &mut [u8], _: u64| Err(std::io::Error::other("boom"));
+        assert!(ends_without_lf(1, &err).is_err());
+    }
+
+    #[test]
+    fn parallel_writers_leave_no_empty_line_and_lose_no_line() {
+        // on a FUSE file system the size and the data of a file under concurrent appends disagree for moments;
+        // there an empty line appeared (6 writers). On a local file system this cannot fail.
+        let t = std::env::temp_dir().join(format!("stw-ow-par-{}", std::process::id()));
+        std::fs::create_dir_all(&t).unwrap();
+        let log = t.join("refs.log");
+        let hs: Vec<_> = (0..6)
+            .map(|w| {
+                let log = log.clone();
+                std::thread::spawn(move || {
+                    for i in 0..2000 {
+                        append_line(&log, &format!("w{w}\t{i}")).unwrap();
+                    }
+                })
+            })
+            .collect();
+        for h in hs {
+            h.join().unwrap();
+        }
+        let s = std::fs::read_to_string(&log).unwrap();
+        let empty = s.lines().filter(|l| l.is_empty()).count();
+        assert_eq!(
+            (s.lines().count() - empty, empty),
+            (12000, 0),
+            "empty lines"
+        );
+        std::fs::remove_dir_all(&t).unwrap();
     }
 
     #[test]

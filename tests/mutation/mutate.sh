@@ -2467,6 +2467,23 @@ m AL33 '--all is allowed with --stats' src/cli.rs \
   '"review", "stats", "verbose"])]' '"review", "verbose"])]' \
   status_all stats_verbose_and_review_are_usage_errors_with_all
 
+m LR1 'a tail without a visible byte counts as a broken line' src/oplog/write.rs \
+  "Ok(last.is_some_and(|b| b != b'\\n'))" "Ok(last.is_none_or(|b| b != b'\\n'))" \
+  lib oplog::write::tests::the_tail_check_follows_what_is_visible_not_only_the_size
+m LR2 'the tail check reads one chunk only' src/oplog/write.rs \
+  '    for _ in 0..16 {
+        let n = read_at(&mut chunk, at)?;' '    for _ in 0..1 {
+        let n = read_at(&mut chunk, at)?;' \
+  lib oplog::write::tests::the_tail_check_follows_what_is_visible_not_only_the_size
+m LR3 'the tail check reads the byte at len - 1 only' src/oplog/write.rs \
+  '    for _ in 0..16 {
+        let n = read_at(&mut chunk, at)?;' '    for _ in 0..1 {
+        let n = read_at(&mut chunk[..1], at)?;' \
+  lib oplog::write::tests::the_tail_check_follows_what_is_visible_not_only_the_size
+m LR4 'append_line takes no lock (FUSE: TMPDIR on the FUSE mount, probabilistic)' src/oplog/write.rs \
+  '    let _ = f.lock();' '    let _ = &f;' \
+  lib oplog::write::tests::parallel_writers_leave_no_empty_line_and_lose_no_line
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
