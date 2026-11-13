@@ -1566,7 +1566,7 @@ m XR4 'the check of the worktree for local changes is left out' src/sync/restore
   '            Ok(c) if c.dirty_paths == 0 && c.conflicts == 0 => {}' '            Ok(_) => {}' \
   sync_restore local_changes_in_the_checked_out_worktree_stop_the_restore
 m XR5 'a moved submodule counts as a local change of the superproject' src/status.rs \
-  ') if ignore_submodule_changes => {}' ') if false => {}' \
+  '        platform = platform.index_worktree_submodules(None);' '        let _ = &platform;' \
   sync_restore a_run_that_moved_two_repositories_is_restored_in_both
 m XR6 'an operation in progress does not stop the restore' src/sync/restore.rs \
   '    if let Some(op) = status::operation(repo) {' '    if let Some(op) = status::operation(repo).filter(|_| false) {' \
