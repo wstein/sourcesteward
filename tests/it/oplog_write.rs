@@ -363,3 +363,49 @@ fn a_linked_worktree_writes_its_id_in_the_worktree_field() {
     assert_eq!(l.len(), 1);
     assert_eq!(l[0][5], "linked");
 }
+
+#[test]
+fn a_rename_that_fails_is_noted_as_rotate_failed_and_the_command_succeeds() {
+    let j = setup();
+    let d = oplog_dir(&j);
+    std::fs::create_dir_all(d.join("refs.log.1/inside")).unwrap();
+    std::fs::write(d.join("refs.log"), "x\n").unwrap();
+    stw::oplog::write::rotate_if_needed(&j.ws.join(".git"), 1);
+    let errors = std::fs::read_to_string(d.join("errors.log")).unwrap();
+    assert!(
+        errors.contains("\tgap\trotate-failed\tfailed=1\tbad=0\trefs.log"),
+        "{errors}"
+    );
+    assert_eq!(std::fs::read(d.join("refs.log")).unwrap(), b"x\n");
+}
+
+#[test]
+fn rewrites_log_is_rotated_too() {
+    let j = setup();
+    let d = oplog_dir(&j);
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("rewrites.log"), "x\n").unwrap();
+    stw::oplog::write::rotate_if_needed(&j.ws.join(".git"), 1);
+    assert!(d.join("rewrites.log.1").exists());
+    assert!(!d.join("refs.log.1").exists());
+    let errors = std::fs::read_to_string(d.join("errors.log")).unwrap();
+    assert!(
+        errors.contains("\tgap\trotated\tfailed=0\tbad=0\trewrites.log"),
+        "{errors}"
+    );
+}
+
+#[test]
+fn a_rotate_lock_that_is_a_symbolic_link_stops_the_rotation() {
+    let j = setup();
+    let d = oplog_dir(&j);
+    std::fs::create_dir_all(&d).unwrap();
+    std::fs::write(d.join("refs.log"), "x\n").unwrap();
+    let victim = j.w.p("victim.lock");
+    std::os::unix::fs::symlink(&victim, d.join("rotate.lock")).unwrap();
+    stw::oplog::write::rotate_if_needed(&j.ws.join(".git"), 1);
+    assert!(!victim.exists(), "the link is not followed");
+    assert!(!d.join("refs.log.1").exists());
+    let errors = std::fs::read_to_string(d.join("errors.log")).unwrap();
+    assert!(errors.contains("\tgap\trotate-failed\t"), "{errors}");
+}

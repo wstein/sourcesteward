@@ -2255,7 +2255,7 @@ m OW4 'oplog write: the hash is taken over the cut name' src/oplog/write.rs \
   'djb2(name))' 'djb2(cut))' \
   lib oplog::write::tests::djb2_and_encoding_match_the_spec_vectors
 m OW5 'oplog write: a worktree id with a slash is kept' src/oplog/write.rs \
-  'if id.contains('\''/'\'') {' 'if false {' \
+  'if bytes.contains(&b'\''/'\'') {' 'if false {' \
   lib oplog::write::tests::worktree_field_reduces_the_id
 m OW6 'oplog write: the worktree id is not cut' src/oplog/write.rs \
   '.take(40)' '.take(400)' \
@@ -2339,6 +2339,30 @@ m OW28 'oplog timeline: rotations of both logs are added up' src/oplog/timeline.
 m OW29 'oplog write: a symbolic link as the log file is written through' src/oplog/write.rs \
   'Err(format!("{} is a symbolic link", path.display()))' 'Ok(())' \
   oplog_write a_log_file_that_is_a_symbolic_link_is_not_written_through
+m OW30 'oplog write: a lost mkdir race is a write failure' src/oplog/write.rs \
+  'Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {' 'Err(e) if false && e.kind() == std::io::ErrorKind::AlreadyExists => {' \
+  lib oplog::write::tests::a_directory_that_exists_already_is_accepted_and_nothing_else_is
+m OW31 'oplog write: an existing non-directory is accepted after a lost race' src/oplog/write.rs \
+  'Ok(_) => Err(format!("{} is not a directory", p.display())),
+                Err(e) => Err(format!("{}: {e}", p.display())),
+            }
+        }' 'Ok(_) => Ok(()),
+                Err(e) => Err(format!("{}: {e}", p.display())),
+            }
+        }' \
+  lib oplog::write::tests::a_directory_that_exists_already_is_accepted_and_nothing_else_is
+m OW32 'oplog write: a rename failure leaves no gap line' src/oplog/write.rs \
+  'Err(_) => gap(common, "rotate-failed", 1, name),' 'Err(_) => {}' \
+  oplog_write a_rename_that_fails_is_noted_as_rotate_failed_and_the_command_succeeds
+m OW33 'oplog write: rewrites.log is not rotated' src/oplog/write.rs \
+  'let names = ["refs.log", "rewrites.log"];' 'let names = ["refs.log"];' \
+  oplog_write rewrites_log_is_rotated_too
+m OW34 'oplog write: a symbolic rotate.lock is followed' src/oplog/write.rs \
+  'if refuse_link(&dir.join("rotate.lock")).is_err() {' 'if false {' \
+  oplog_write a_rotate_lock_that_is_a_symbolic_link_stops_the_rotation
+m OW35 'oplog write: the worktree id is converted lossily' src/oplog/write.rs \
+  'id.as_bytes().to_vec();' 'id.to_string_lossy().into_owned().into_bytes();' \
+  lib oplog::write::tests::worktree_field_reduces_the_id
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
