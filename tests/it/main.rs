@@ -27,6 +27,7 @@ mod nested;
 mod network;
 mod no_binaries;
 mod oplog_read;
+mod oplog_write;
 mod patchid;
 mod patchid_props;
 mod prove;

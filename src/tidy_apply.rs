@@ -431,11 +431,19 @@ fn delete_branch(
             expected: PreviousValue::MustExistAndMatch(Target::Object(sha)),
             log: RefLog::AndReference,
         },
-        name,
+        name: name.clone(),
         deref: false,
     })
-    .map(|_| ())
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    crate::oplog::write::log_ref_update(
+        repo,
+        &crate::oplog::write::RefUpdate {
+            refname: name.as_bstr().to_string().as_str(),
+            old: Some(sha),
+            new: None,
+        },
+    );
+    Ok(())
 }
 
 /// The directory name under which agents keep their worktrees.
@@ -971,7 +979,17 @@ fn restore_one(e: &ManifestEntry, run: &str) -> (&'static str, String) {
         PreviousValue::MustNotExist,
         format!("stw: tidy restore {run}"),
     ) {
-        Ok(_) => ("restored", format!("created at {}", short(&e.sha))),
+        Ok(_) => {
+            crate::oplog::write::log_ref_update(
+                &repo,
+                &crate::oplog::write::RefUpdate {
+                    refname: &full,
+                    old: None,
+                    new: Some(sha),
+                },
+            );
+            ("restored", format!("created at {}", short(&e.sha)))
+        }
         Err(err) => ("failed", err.to_string()),
     }
 }

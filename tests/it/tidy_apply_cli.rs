@@ -228,7 +228,11 @@ fn the_manifest_goes_to_the_user_data_directory_by_default() {
     };
     let n = std::fs::read_dir(&dir).unwrap().count();
     assert_eq!(n, 1, "one manifest file in {}", dir.display());
-    assert!(!fx.path.join(".git").join("stw").exists());
+    // the manifest is not kept in the repository; only the op log directory (stw's own ref lines) is there
+    let inside: Vec<_> = std::fs::read_dir(fx.path.join(".git/stw"))
+        .map(|d| d.flatten().map(|e| e.file_name()).collect())
+        .unwrap_or_default();
+    assert!(inside.iter().all(|n| n == "oplog"), "{inside:?}");
     let text = String::from_utf8_lossy(&o.stdout);
     assert!(
         !text.contains("next:") && !text.contains("git "),

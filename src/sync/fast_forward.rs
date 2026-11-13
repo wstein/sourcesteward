@@ -195,6 +195,11 @@ fn move_head(
 ) -> Result<(), FfError> {
     use gix::refs::transaction::{Change as RC, LogChange, PreviousValue, RefEdit, RefLog};
     use gix::refs::Target;
+    // the ref that moves: the branch HEAD points to, or HEAD itself when detached
+    let moved = match repo.find_reference("HEAD").map(|r| r.target().into_owned()) {
+        Ok(Target::Symbolic(n)) => n.as_bstr().to_string(),
+        _ => "HEAD".to_string(),
+    };
     repo.edit_reference(RefEdit {
         change: RC::Update {
             log: LogChange {
@@ -211,6 +216,14 @@ fn move_head(
         deref: true,
     })
     .map_err(|e| FfError::Other(format!("ref update: {e}")))?;
+    crate::oplog::write::log_ref_update(
+        repo,
+        &crate::oplog::write::RefUpdate {
+            refname: &moved,
+            old: Some(from),
+            new: Some(to),
+        },
+    );
     Ok(())
 }
 

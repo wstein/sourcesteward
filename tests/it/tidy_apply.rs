@@ -900,6 +900,35 @@ fn remote_state_is_untouched() {
     assert_eq!(remote_state(&w), before);
 }
 
+/// The branch deletions and the restore are gix ref writes: they are logged as `stw` lines in `refs.log`
+/// (`docs/oplog-format.md`, 3.3).
+#[test]
+fn deleting_and_restoring_branches_are_logged_as_stw_lines() {
+    let w = build();
+    let tmp = scratch();
+    let dir = tmp.path().join("m");
+    let sha = w.fx.tip("merged-a").to_string();
+    apply(&w, &dir);
+    let z = "0".repeat(40);
+    let log = || {
+        std::fs::read_to_string(w.fx.path.join(".git/stw/oplog/refs.log"))
+            .unwrap_or_default()
+            .lines()
+            .map(|l| l.split('\t').map(str::to_string).collect::<Vec<_>>())
+            .collect::<Vec<_>>()
+    };
+    let f = |l: &[Vec<String>], name: &str| l.iter().find(|f| f[3] == name).cloned();
+    let del = f(&log(), "refs/heads/merged-a").expect("delete line");
+    assert_eq!((&del[1], &del[2], &del[4]), (&sha, &z, &"stw".to_string()));
+    restore_in(&dir);
+    let l = log();
+    let made = l
+        .iter()
+        .find(|f| f[3] == "refs/heads/merged-a" && f[1] == z)
+        .expect("restore line");
+    assert_eq!((&made[2], &made[4]), (&sha, &"stw".to_string()));
+}
+
 // ------------------------------------------------------------------ restore
 
 fn restore_in(dir: &Path) -> stw::tidy_apply::RestoreRun {

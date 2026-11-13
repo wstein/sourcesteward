@@ -531,11 +531,19 @@ fn create_recovery_ref(
             expected: PreviousValue::MustNotExist,
             new: Target::Object(id),
         },
-        name,
+        name: name.clone(),
         deref: false,
     })
-    .map(|_| ())
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    crate::oplog::write::log_ref_update(
+        repo,
+        &crate::oplog::write::RefUpdate {
+            refname: name.as_bstr().to_string().as_str(),
+            old: None,
+            new: Some(id),
+        },
+    );
+    Ok(())
 }
 
 /// Delete the recovery ref `name` only while it still holds `oid`.
@@ -551,9 +559,17 @@ fn delete_recovery_ref(repo: &gix::Repository, name: &str, oid: Hex40) -> Result
             expected: PreviousValue::MustExistAndMatch(Target::Object(id)),
             log: RefLog::AndReference,
         },
-        name,
+        name: name.clone(),
         deref: false,
     })
-    .map(|_| ())
-    .map_err(|e| e.to_string())
+    .map_err(|e| e.to_string())?;
+    crate::oplog::write::log_ref_update(
+        repo,
+        &crate::oplog::write::RefUpdate {
+            refname: name.as_bstr().to_string().as_str(),
+            old: Some(id),
+            new: None,
+        },
+    );
+    Ok(())
 }
