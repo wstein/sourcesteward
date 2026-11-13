@@ -23,7 +23,7 @@ m P2 "hunk header (line numbers) is hashed" src/patch_id.rs \
   "let start = hunks[i].before.start.saturating_sub(CONTEXT); h.line(format!(\"@@ -{} +{}\", hunks[i].before.start, hunks[i].after.start).as_bytes());" \
   patchid same_change_on_different_base_has_equal_patch_id
 m P3 "file path is not hashed" src/patch_id.rs \
-  "let p = path.to_str_lossy();" "let p = std::borrow::Cow::Borrowed(\"x\");" \
+  'let header = [quote_path(b"a/", path), quote_path(b"b/", path)];' 'let header = [quote_path(b"a/", "x".into()), quote_path(b"b/", "x".into())];' \
   patchid path_matters
 m P4 "context lines are not hashed" src/patch_id.rs \
   "        for k in start..hunks[i].before.start {
@@ -65,13 +65,15 @@ m D4 "diverged branches are fast-forwarded" src/sync/mod.rs \
   "} else if b > 0 && a > 0 {" "} else if false && a > 0 {" \
   sync diverged_is_skipped_even_with_apply
 m D5 "index is not written after the file changes" src/sync/fast_forward.rs \
-  "real.write(Default::default())" "Ok::<(), FfError>(())" \
+  'real.write_to(&mut out, Default::default())' 'Ok::<(), std::io::Error>(())' \
   sync clean_fast_forward_updates_files_index_and_ref
 m R1 "a failed non-https fetch is reported as a plain failure" src/sync/fetch.rs \
   '        Some(u) if u.scheme != Scheme::Https => Fetch::Unsupported(format!(' '        Some(u) if false && u.scheme != Scheme::Https => Fetch::Unsupported(format!(' \
   remote_kinds network_remotes_of_gix_fail_typed_without_any_program
 m C1 "an unreadable repository does not change the exit code" src/cli.rs \
-  "Ok(failed(list.iter().any(|s| s.error.is_some())))" "Ok(failed(false))" \
+  '    Ok(if list.iter().any(|s| s.error.is_some()) {
+        exit::FAILED' '    Ok(if false {
+        exit::FAILED' \
   cli a_repository_that_cannot_be_read_exits_1_in_every_command
 m C2 "unknown --repo names are ignored" src/cli.rs \
   "if let Some(bad) = c.repos.iter().find(|n| !known.contains(n)) {" "if let Some(bad) = c.repos.iter().find(|n| false && !known.contains(n)) {" \
@@ -83,7 +85,7 @@ m C4 "exit codes missing from --help" src/cli.rs \
   "  2  usage error or unusable workspace (nothing was done)" "  2  usage" \
   cli help_documents_the_exit_codes_on_every_command
 m C5 "schema_version changed in status" src/status.rs \
-  "\"schema_version\": 1, \"command\": \"status\"" "\"schema_version\": 2, \"command\": \"status\"" \
+  '"schema_version": 2, "command": "status"' '"schema_version": 3, "command": "status"' \
   cli json_documents_carry_schema_version_and_command
 m G1 "gix pin text differs from the constant" src/output.rs \
   "pub const GIX_VERSION: &str = \"0.90.0\";" "pub const GIX_VERSION: &str = \"0.89.0\";" \
@@ -141,7 +143,11 @@ m F4 "a file replaced by a directory is called untracked" src/sync/fast_forward.
                     {' \
   sync a_tracked_file_that_becomes_a_directory_is_reported_as_that
 m F5 "no hint when the fetch fails without a token" src/sync/mod.rs \
-  '            if rec.fetch == "failed" && gh.is_none() {' '            if false && gh.is_none() {' \
+  '            if rec.fetch == "failed"
+                && gh.is_none()
+' '            if false
+                && gh.is_none()
+' \
   sync a_failed_fetch_without_a_token_says_how_to_provide_one
 m Z1 "status JSON has the old schema version" src/status.rs \
   '"schema_version": 2, "command": "status"' '"schema_version": 1, "command": "status"' \
@@ -156,7 +162,7 @@ m Z4 "tidy plan text prints a command" src/tidy.rs \
   '"{d} to delete, {w} to delete with their worktree, {r} to review, {k} kept (read-only: nothing was changed)\n"' '"next: git -C x branch -d y\n{d} to delete, {w} to delete with their worktree, {r} to review, {k} kept (read-only: nothing was changed)\n"' \
   cli no_output_contains_a_command_or_next_steps
 m Z5 "sync text prints a command" src/sync/mod.rs \
-  '"dry run: {} would fast-forward, {} skipped. Nothing was written.\n"' '"next: git -C x pull\ndry run: {} would fast-forward, {} skipped. Nothing was written.\n"' \
+  '"{} fast-forwarded, {} skipped, {} failed",' '"next: git -C x pull\n{} fast-forwarded, {} skipped, {} failed",' \
   cli no_output_contains_a_command_or_next_steps
 m Z6 "tidy apply accepts --yes" src/cli.rs \
   '    /// Act on this `stw tidy plan --json` output' '    #[arg(long)]
@@ -205,10 +211,17 @@ m V3 "the plan text does not say outside .worktrees/" src/tidy.rs \
 m V4 "JSON hides the outside flag" src/tidy.rs \
   '"outside_worktrees_dir": w.outside' '"outside_worktrees_dir": false' \
   tidy worktrees_outside_the_worktrees_directory_are_marked
-m V5 "a worktree outside .worktrees/ is not removable" src/tidy.rs \
-  '            if bp.decision == "delete" {
-                bp.worktree' '            if bp.decision == "delete" && !outside_worktrees_dir(&repo, dir) {
-                bp.worktree' \
+m V5 "a worktree outside .worktrees/ is not removable" src/tidy_apply.rs \
+  '    if wt.main_dir.as_ref() == Some(&l.dir) {
+        return Some("main worktree".into());
+    }
+    if l.locked {' '    if wt.main_dir.as_ref() == Some(&l.dir) {
+        return Some("main worktree".into());
+    }
+    if crate::tidy::outside_worktrees_dir(repo, &l.dir) {
+        return Some("outside".into());
+    }
+    if l.locked {' \
   tidy_apply worktrees_inside_and_outside_the_worktrees_directory_are_removed_on_the_same_proof
 m V6 "untracked files in a worktree below .worktrees/ do not count as unclean" src/tidy_apply.rs \
   'c.staged + c.unstaged + c.untracked + c.conflicts == 0' 'c.staged + c.unstaged + c.conflicts == 0' \
@@ -246,7 +259,8 @@ m U3 "a CRLF line is not recognized in info/exclude" src/tidy_apply.rs \
   'l.trim_ascii() == w.as_bytes()' 'l == w.as_bytes()' \
   tidy_apply a_crlf_line_counts_as_present_and_gets_no_duplicate
 m U4 "tidy --help shows no exit codes" src/cli.rs \
-  'arg_required_else_help = true, after_help = EXIT_CODES)]' 'arg_required_else_help = true)]' \
+  '    #[command(after_help = EXIT_CODES)]
+    Status(StatusArgs),' '    Status(StatusArgs),' \
   cli help_documents_the_exit_codes_on_every_command
 m I1 "no fallback identity for reflogs" src/repo/mod.rs \
   '    repo.committer_or_set_fallback(FALLBACK_NAME, FALLBACK_EMAIL)?;' '    let _ = (FALLBACK_NAME, FALLBACK_EMAIL);' \
@@ -612,7 +626,8 @@ m SA2 'stw add: the origin of the clone is not compared' src/add.rs \
   'if origin.as_deref() != Some(url.as_str()) {' 'if false {' \
   add 'a_clone_with_another_origin_is_refused'
 m SA3 'stw add: rollback keeps the changed workspace config' src/add.rs \
-  'restore(self.gitdir.join("config"), &self.config, &mut problems);' '' \
+  '            restore(self.gitdir.join("config"), &snap.config, &mut problems);
+' '' \
   add 'a_failure_after_the_add_restores_gitmodules_index_config_and_the_git_dir'
 m SA4 'stw add: rollback keeps .git/modules/PATH' src/add.rs \
   'if let Err(e) = std::fs::remove_dir_all(&self.modules) {' 'if let Err(e) = Ok::<(), std::io::Error>(()) {' \
@@ -750,7 +765,7 @@ m SA17 'stw add: a filter after a closing quote is not seen in the clone' src/ad
   "matches!(c, '\"' | '-' | '!')" "matches!(c, '-' | '!')" \
   add 'a_filter_in_the_clones_attributes_is_found_however_it_is_written'
 m SA18 'stw add: a commit that exists is rolled back' src/add.rs \
-  'head_of(&self.ws) != self.head_before' 'false' \
+  '*now != self.head_before' 'false' \
   add 'a_commit_that_exists_is_never_rolled_back_even_when_git_reports_failure'
 m SA19 'stw add: the superproject of a submodule is not used' src/repo/mod.rs \
   'Some(superproject_of(&top).unwrap_or(top))' 'Some(top)' \
@@ -760,7 +775,7 @@ m SA21 'stw add: the --cached check-attr run is skipped' src/add.rs \
   'for cached in [false, true] {' 'for cached in [false] {' \
   add 'every_way_to_attach_a_filter_to_gitmodules_is_refused_and_no_filter_runs'
 m SA22 'stw add: the system attributes file is not switched off' src/git_runner.rs \
-  'if !matches!(op, Op::FetchOrigin) {' 'if false {' \
+  'set("GIT_ATTR_NOSYSTEM", "1".into());' 'let _ = ();' \
   git_runner 'the_add_vectors_are_fixed_unsigned_filterless_and_without_a_transport'
 
 m RP1 'replay: an empty-start commit is not kept' src/replay.rs \
@@ -804,9 +819,7 @@ m RP14 'replay: conflicts are not detected' src/replay.rs \
   '    if outcome.has_unresolved_conflicts(how) {' '    if false && outcome.has_unresolved_conflicts(how) {' \
   replay content_conflict_matches_git
 m RP15 'replay: user.* beats committer.* for the identity' src/replay.rs \
-  '            .string_filter(a, from_files)
-            .or_else(|| cfg.string_filter(b, from_files));' '            .string_filter(b, from_files)
-            .or_else(|| cfg.string_filter(a, from_files));' \
+  'config_value(repo, &["committer.name", "user.name"]),' 'config_value(repo, &["user.name", "committer.name"]),' \
   replay committer_comes_from_the_config_only
 m RP16 'replay: rename detection is off' src/replay.rs \
   '            ("renames", "true"),' '            ("renames", "false"),' \
@@ -815,13 +828,13 @@ m RP17 'replay: a file added to a renamed directory is not a conflict' src/repla
   '            if moved && exists(base, dir)? && !exists(renamer, dir)? {' '            if false && moved && exists(base, dir)? && !exists(renamer, dir)? {' \
   replay a_file_added_to_a_directory_that_onto_renamed_is_a_conflict_like_git
 m RP18 'replay: the environment counts as the configured identity' src/replay.rs \
-  '                | Source::Worktree
-        )' '                | Source::Worktree
-                | Source::Env
-                | Source::EnvOverride
-                | Source::Cli
-                | Source::Api
-        )' \
+  '            | Source::Worktree
+    )' '            | Source::Worktree
+            | Source::Env
+            | Source::EnvOverride
+            | Source::Cli
+            | Source::Api
+    )' \
   replay committer_ignores_the_environment
 m RP20 'replay: a directory that still exists counts as renamed' src/replay.rs \
   '            if moved && exists(base, dir)? && !exists(renamer, dir)? {' '            if moved && exists(base, dir)? {' \
@@ -940,7 +953,7 @@ m SP2 "--no-prune-tags is not passed: remote.origin.pruneTags deletes a local ta
   'a.extend(v(&["--prune", "--no-prune-tags"]));' 'a.extend(v(&["--prune"]));' \
   sync_flags a_tag_is_never_pruned_even_with_prune_tags_configured
 m SP3 "--no-prune is not passed: fetch.prune wins" src/git_runner.rs \
-  'a.push("--no-prune".to_string());' 'a.push("--no-tags".to_string());' \
+  'a.extend(v(&["--no-prune", "--no-prune-tags"]));' 'a.extend(v(&["--no-tags", "--no-prune-tags"]));' \
   sync_flags no_prune_overrides_fetch_prune
 m SP4 "a refspec outside refs/remotes/origin/ is accepted by --prune" src/sync/fetch.rs \
   'if !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {' 'if false && !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {' \
@@ -982,19 +995,24 @@ m SM5 "the dry run moves the submodule" src/sync/submodules.rs \
   '    if !o.apply {' '    if false && !o.apply {' \
   sync_flags the_dry_run_names_the_move_and_writes_nothing
 m SM6 "the rules checkout is listed as an uninitialized submodule" src/sync/submodules.rs \
-  'if dir.join(".git").exists() || canon == skip || list.iter().any(|r| r.name == p) {' 'if dir.join(".git").exists() || list.iter().any(|r| r.name == p) {' \
+  '                || canon == skip
+' '' \
   sync_flags the_rules_checkout_is_not_reported_as_an_uninitialized_submodule
 m SM7 "a --repo filter still adds uninitialized submodules" src/sync/submodules.rs \
   '    if !include_uninitialized {' '    if false {' \
   sync_flags a_repo_filter_does_not_add_uninitialized_submodules
 m SM8 "an uninitialized submodule is not reported" src/sync/submodules.rs \
-  '    for p in repo::submodule_paths(root) {' '    for p in Vec::<String>::new() {' \
+  '        for p in repo::submodule_paths(&holder) {' '        for p in Vec::<String>::new() {' \
   sync_flags an_uninitialized_submodule_is_unreachable_and_never_cloned
 m SM9 "repository hooks run during git (core.hooksPath override dropped)" src/git_runner.rs \
   '    "core.hooksPath=/dev/null",' '    "core.pager=cat",' \
   sync_flags hooks_of_the_submodule_do_not_run_during_the_move
 m SM10 "a filter driver in the submodule config is accepted" src/git_runner.rs \
-  'runs_a_command(section, sub_name, key) || section == "filter"' 'runs_a_command(section, sub_name, key)' \
+  '            let sub = repo.join(path.as_str());
+            refuse_config(&sub, &|section, sub_name, key| {
+                runs_a_command(section, sub_name, key) || section == "filter"' '            let sub = repo.join(path.as_str());
+            refuse_config(&sub, &|section, sub_name, key| {
+                runs_a_command(section, sub_name, key)' \
   sync_flags a_filter_driver_in_the_submodule_config_refuses_the_move
 m SM11 "the submodule operations allow network transports" src/git_runner.rs \
   '            _ => "none",' '            _ => "file:ssh:git:http:https",' \
@@ -1018,9 +1036,6 @@ m SM16 "a submodule path with spaces is accepted" src/add.rs \
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'/'))" \
   sync_flags a_submodule_path_that_is_not_a_plain_path_is_unreachable
-m SM18 "an uninitialized submodule path from .gitmodules is not validated" src/sync/submodules.rs \
-  '        if SubPath::parse(&p).is_err() {' '        if false && SubPath::parse(&p).is_err() {' \
-  sync_flags hostile_submodule_paths_are_reported_escaped_and_never_touched
 m SM19 "the repository name is printed unescaped in the text output" src/sync/mod.rs \
   '            escape_untrusted(&s.name, 200).0,' '            s.name,' \
   sync_flags hostile_submodule_paths_are_reported_escaped_and_never_touched
@@ -1032,10 +1047,16 @@ m RA "the prune scope has no trailing slash (origin-mirror/ passes)" src/sync/fe
   sync_flags a_refspec_into_a_sibling_namespace_of_origin_refuses_prune
 
 m SH1 "list_repos lists a refused path as a repository" src/repo/mod.rs \
-  "        let Some(name) = accepted_name(root, &p) else {
+  '        if let Some(why) = path_rejection(dir, &p) {
+            w.rejected.push((full(&p), why));
             continue;
-        };" \
-  "        let name = p.clone();" \
+        }
+        let Some(name) = accepted_name(dir, &p) else {
+            continue;
+        };' '        if let Some(why) = path_rejection(dir, &p) {
+            w.rejected.push((full(&p), why));
+        }
+        let name = p.clone();' \
   submodule_paths sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone
 m SH2 "the path rules of stw add are not applied to .gitmodules paths" src/repo/mod.rs \
   "let Ok(sub) = crate::add::SubPath::parse(p) else {" "let Ok(sub) = crate::add::SubPath::parse(\"x\") else {" \
@@ -1067,7 +1088,9 @@ m SH9 "refused paths are not a notice of tidy apply" src/cli.rs \
         print_notices(&ws.rejected);" "print!(\"{}\", tidy_apply::apply_render_human(&aopts.run_id, &list));" \
   submodule_paths tidy_apply_notes_refused_paths_and_does_not_touch_them
 m SH10 "a refused path makes status exit 1" src/cli.rs \
-  "Ok(failed(list.iter().any(|s| s.error.is_some())))" "Ok(failed(list.iter().any(|s| s.error.is_some()) || !ws.rejected.is_empty()))" \
+  '    Ok(if list.iter().any(|s| s.error.is_some()) {
+        exit::FAILED' '    Ok(if list.iter().any(|s| s.error.is_some()) || !ws.rejected.is_empty() {
+        exit::FAILED' \
   submodule_paths status_notes_refused_paths_without_a_repository_entry
 m SH11 "sync --apply without --submodules fails on a refused path" src/sync/submodules.rs \
   "        if o.submodules {
@@ -1075,25 +1098,19 @@ m SH11 "sync --apply without --submodules fails on a refused path" src/sync/subm
             unreachable_rec" \
   submodule_paths sync_apply_hints_at_refused_paths_and_leaves_their_repositories_alone
 m SH12 "status JSON has no rejected_paths" src/cli.rs \
-  "                    m.insert(\"rejected_paths\".into(), rejected_json(&ws.rejected));
-                }
-                print_json(&v);
-            } else {
-                print!(
-                    \"{}\"," "                }
-                print_json(&v);
-            } else {
-                print!(
-                    \"{}\"," \
+  '            m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+        }
+        print_json(&v);
+        if a.verbose {' '            let _ = &ws.rejected;
+        }
+        print_json(&v);
+        if a.verbose {' \
   submodule_paths status_notes_refused_paths_without_a_repository_entry
-m SH13 "a directory named twice is listed twice" src/repo/mod.rs \
-  "path.join(\".git\").exists() && !seen.contains(&real(&path))" "path.join(\".git\").exists()" \
-  submodule_paths a_directory_named_twice_is_listed_and_synced_once
 m SH14 "the name keeps the trailing slash" src/repo/mod.rs \
   ".map(|s| s.as_str().to_string())" ".map(|_| p.to_string())" \
   submodule_paths a_directory_named_twice_is_listed_and_synced_once
 m SH15 "a submodule named like the root is dropped (dedup by name)" src/repo/mod.rs \
-  "path.join(\".git\").exists() && !seen.contains(&real(&path))" "path.join(\".git\").exists() && !v.iter().any(|r| r.name == name)" \
+  'if !path.join(".git").exists() || w.seen.contains(&real) {' 'if !path.join(".git").exists() || w.repos.iter().any(|r| r.name == name) {' \
   submodule_paths a_submodule_named_like_the_root_is_listed_and_a_refused_one_is_reported
 m SH16 "sync skips a refused path whose name is already in the list" src/sync/submodules.rs \
   "    for (p, why) in rejected {" "    for (p, why) in rejected {
@@ -1105,9 +1122,9 @@ m SH17 "refused paths are reported although --repo names repositories" src/cli.r
   "    let rejected = if c.repos.is_empty() {" "    let rejected = if true {" \
   submodule_paths repo_names_decide_whether_refused_paths_are_reported
 m SH18 "the uninitialized pass visits refused paths too" src/sync/submodules.rs \
-  "        let Some(p) = repo::accepted_name(root, &p) else {
-            continue;
-        };" "        let p = p;" \
+  '            let Some(p) = repo::accepted_name(&holder, &p) else {
+                continue;
+            };' '            let p = p;' \
   submodule_paths sync_with_submodules_names_each_refused_path_once
 
 m SF1 'the unreadable-repository marker is the attention marker' src/status.rs \
@@ -1126,7 +1143,7 @@ m SF5 'the nerd attention glyph is the ascii one' src/status.rs \
   'Icons::Nerd => "\u{f071} ",' 'Icons::Nerd => "! ",' \
   status_flags icons_change_only_the_markers_of_the_repository_lines
 m SF6 'the JSON names an icon set' src/status.rs \
-  '"icons": null}' '"icons": "unicode"}' \
+  '"icons": null,' '"icons": "unicode",' \
   status_flags icons_never_reach_the_json_and_a_bad_value_is_a_usage_error
 m SF7 'a registration whose checkout is gone is not prunable' src/status.rs \
   'prunable: !st.locked,' 'prunable: false,' \
@@ -1153,7 +1170,7 @@ m SF14 '--fetch fetches nothing' src/status.rs \
   '    if opts.fetch {' '    if false && opts.fetch {' \
   status_flags fetch_updates_the_remote_tracking_refs_and_nothing_else
 m SF15 'a failed fetch is not a notice' src/status.rs \
-  '"{}: fetch failed ({})"' '"{}: fetch ({})"' \
+  'format!("{name}: fetch failed ({})", esc(e))' 'format!("{name}: fetch ({})", esc(e))' \
   status_flags a_failed_fetch_is_a_detail_line_and_a_notice_and_exit_0
 m SF16 'the error of a failed fetch is printed unescaped' src/status.rs \
   'out += &format!("    fetch failed: {}\n", esc(e));' 'out += &format!("    fetch failed: {}\n", e);' \
@@ -1335,18 +1352,23 @@ m SR30 'a rate limit answer does not set the stop' src/github/reads.rs \
             self.note_rate_limit();' \
   status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
 m SR31 'Retry-After is no rate limit evidence' src/github.rs \
-  '|| headers.contains_key("retry-after")))' '|| false))' \
+  '|| headers.contains_key("retry-after")' '|| false' \
   status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
 m SR32 'every 403 counts as a rate limit' src/github.rs \
-  '    status == 429
-        || (status == 403' '    status == 429 || status == 403
-        || (status == 403' \
+  '    let headers = resp.headers();
+    if headers
+        .get("x-ratelimit-remaining")' '    if true {
+        return true;
+    }
+    let headers = resp.headers();
+    if headers
+        .get("x-ratelimit-remaining")' \
   status_review a_forbidden_answer_without_a_rate_limit_does_not_stop_the_reads
 m SR33 'the stop covers only the first repository' src/status_review.rs \
   'if gh.rate_limited() {' 'if gh.rate_limited() && j.repo == 0 {' \
   status_review the_rate_limit_stop_covers_every_repository_of_the_run
 m SR34 'the notice of skipped reads is dropped' src/status_review.rs \
-  '(n > 0).then(|| {' '(n > 100_000).then(|| {' \
+  '(n > 0).then(|| Notice {' '(n > 100_000).then(|| Notice {' \
   status_review after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown
 m SR35 'skipped reads are also named in the repository notice' src/status_review.rs \
   '(!r.skipped).then_some((p, r.problem.as_deref()?))' 'Some((p, r.problem.as_deref()?))' \
@@ -1401,13 +1423,13 @@ m SD3 "--plan does not preview" src/cli.rs \
   'let execute = !(a.plan || a.dry_run);' 'let execute = !a.dry_run;' \
   sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
 m SD4 "--apply together with --plan is accepted" src/cli.rs \
-  '#[arg(long, conflicts_with = "apply")]
-    plan: bool,' '#[arg(long)]
+  '#[arg(long, conflicts_with = "apply", overrides_with = "plan")]
+    plan: bool,' '#[arg(long, overrides_with = "plan")]
     plan: bool,' \
   sync_default apply_together_with_plan_or_dry_run_is_a_usage_error_and_changes_nothing
 m SD5 "--apply together with --dry-run is accepted" src/cli.rs \
-  '#[arg(long, conflicts_with = "apply")]
-    dry_run: bool,' '#[arg(long)]
+  '#[arg(long, conflicts_with = "apply", overrides_with = "dry_run")]
+    dry_run: bool,' '#[arg(long, overrides_with = "dry_run")]
     dry_run: bool,' \
   sync_default apply_together_with_plan_or_dry_run_is_a_usage_error_and_changes_nothing
 m SD6 "--apply is shown in the help" src/cli.rs \
@@ -1416,7 +1438,7 @@ m SD6 "--apply is shown in the help" src/cli.rs \
     apply: bool,' \
   sync_default the_help_names_plan_and_dry_run_and_hides_apply
 m SD7 "the JSON options carry the wrong mode" src/sync/mod.rs \
-  '"dry_run": !apply}' '"dry_run": apply}' \
+  '"dry_run": !apply,' '"dry_run": apply,' \
   sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
 m SD8 "a plan fast-forwards the branch after its fetch" src/sync/mod.rs \
   'if o.apply && result == "fast-forward" {' 'if result == "fast-forward" {' \
@@ -1438,7 +1460,7 @@ m SD12 "a run ignores an operation in progress" src/sync/mod.rs \
         ("skip"' \
   sync_default a_run_still_leaves_diverged_and_in_progress_repositories_alone
 m SD13 "the plan does not report a failed fetch of a run as exit 1" src/cli.rs \
-  'list.iter().any(|s| s.result == "error") || rules.action == "refused",' 'rules.action == "refused",' \
+  '"error" | "conflict" | "autostash-conflict"' '"conflict" | "autostash-conflict"' \
   sync_default a_run_without_network_is_exit_1_and_so_is_a_plan_unless_it_is_offline
 
 m SD14 "--rules acts under --plan (R1)" src/cli.rs \
@@ -1503,11 +1525,17 @@ m NO12 "the rate-limit notice comes before the review notices" src/status.rs \
 
 m NO13 "the repositories of the notices run in reverse" src/status.rs \
   '    for s in list {
-        let name = esc(&s.name);' '    for s in list.iter().rev() {
-        let name = esc(&s.name);' \
+        let name = esc(s.label());
+        let one =' '    for s in list.iter().rev() {
+        let name = esc(s.label());
+        let one =' \
   status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
 m NO14 "the repository name is not escaped in the notices" src/status.rs \
-  '        let name = esc(&s.name);' '        let name = s.name.clone();' \
+  '    for s in list {
+        let name = esc(s.label());
+        let one =' '    for s in list {
+        let name = s.label().to_string();
+        let one =' \
   status_notices notices_of_several_repositories_keep_the_list_order_and_escape_the_name
 
 # sync journal, sync restore and tidy history (tests/it/sync_journal.rs, sync_restore.rs, tidy_history.rs)
@@ -1545,8 +1573,12 @@ m JR11 'a run ID without microseconds is not padded' src/git_runner.rs \
   '        if k.len() == 15 {' '        if false {' \
   sync_journal run_ids_are_distinct_and_follow_the_clock
 m JR12 'a branch name that looks like an option reaches git' src/git_runner.rs \
-  '            || short.starts_with('\''-'\'')
-' '' \
+  'let short = full.strip_prefix("refs/heads/")?;
+        if short.is_empty()
+            || short.starts_with('\''-'\'')
+' 'let short = full.strip_prefix("refs/heads/")?;
+        if short.is_empty()
+' \
   sync_journal only_a_well_formed_run_id_or_branch_reaches_an_argument_vector
 m JR13 'a record that is a symbolic link is read' src/sync/journal.rs \
   '        Ok(m) if m.is_file() => {}' '        Ok(_) => {}' \
@@ -1621,7 +1653,7 @@ m TH8 'the directory name is not escaped in the text' src/tidy_history.rs \
   '    let dir = escape_untrusted(&p2s(&h.manifest_dir), 300).0;' '    let dir = p2s(&h.manifest_dir);' \
   tidy_history an_escape_sequence_in_the_directory_name_is_escaped_in_the_text
 m TH9 'the scan bound is ignored' src/tidy_history.rs \
-  '                if found.len() >= scan_limit {' '                if false {' \
+  'if looked >= scan_limit {' 'if false {' \
   tidy_history every_bound_is_a_visible_marker
 m TH10 'the entry bound shows no marker' src/tidy_history.rs \
   '    if wanted > counted {' '    if false {' \
@@ -1893,13 +1925,13 @@ m SY2 'the stash flag of git is always --no-autostash' src/git_runner.rs \
     }' \
   sync_journal the_argument_vectors_of_the_journal_operations_are_fixed
 m SY3 'the rebase moves other branches of a stack (--no-update-refs dropped)' src/git_runner.rs \
-  'let mut a = v(&["rebase", "--no-update-refs"]);' 'let mut a = v(&["rebase"]);' \
+  'v(&["rebase", "--no-update-refs", "--no-rebase-merges"])' 'v(&["rebase", "--no-rebase-merges"])' \
   sync_pull a_stack_branch_that_a_rebase_does_not_own_stays_where_it_is
 m SY4 'the rebase has no --fork-point' src/git_runner.rs \
   'a.push("--fork-point".to_string());' 'a.push("--no-fork-point".to_string());' \
   sync_journal the_argument_vectors_of_the_journal_operations_are_fixed
 m SY5 'a merge may only fast-forward (--ff replaced by --ff-only)' src/git_runner.rs \
-  'let mut a = v(&["merge", "--no-edit", "--ff"]);' 'let mut a = v(&["merge", "--no-edit", "--ff-only"]);' \
+  'v(&["merge", "--no-edit", "--ff", "--no-verify-signatures"])' 'v(&["merge", "--no-edit", "--ff-only", "--no-verify-signatures"])' \
   sync_pull merge_makes_a_merge_commit_of_the_local_branch_and_the_upstream
 m SY6 'a stopped rebase is not recognised as a conflict' src/sync/pull.rs \
   'let stopped = after.as_ref().is_ok_and(|a| status::operation(a).is_some());' 'let stopped = false;' \
@@ -2087,15 +2119,16 @@ m GL3 'the gitlink paths are not sorted' src/repo/mod.rs \
     out.dedup();' '    out.dedup();' \
   gitlinks an_index_that_is_out_of_order_gives_the_paths_sorted
 m GL4 'the repositories come from .gitmodules, not from the index' src/repo/mod.rs \
-  '    for p in submodule_paths(root) {
-        let Some(name) = accepted_name(root, &p) else {' '    for p in gitmodules_paths(root) {
-        let Some(name) = accepted_name(root, &p) else {' \
+  '    let subs = submodule_paths(dir);' '    let subs = gitmodules_paths(dir);' \
   gitlinks a_gitmodules_entry_without_a_gitlink_is_no_repository
 m GL5 'a repository with gitlinks but no .gitmodules file is no workspace root' src/repo/mod.rs \
   'if top.join(".gitmodules").is_file() || !submodule_paths(&top).is_empty() {' 'if top.join(".gitmodules").is_file() {' \
   gitlinks a_repository_with_gitlinks_and_no_gitmodules_file_is_a_workspace_root
 m GL6 'the superproject of a checkout needs a .gitmodules file' src/repo/mod.rs \
-  '        if dir.join(".git").exists() {' '        if dir.join(".gitmodules").is_file() && dir.join(".git").exists() {' \
+  '        .any(|p| Path::new(p) == rel)
+        .then_some(dir)' '        .any(|p| Path::new(p) == rel)
+        .then_some(dir)
+        .filter(|d| d.join(".gitmodules").is_file())' \
   gitlinks the_workspace_of_a_gitlink_checkout_is_its_superproject_without_a_gitmodules_file
 m GL7 'a gitlink without a .gitmodules entry is left out' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
@@ -2108,16 +2141,11 @@ m GL8 'add looks for the path among the gitlinks, not among the .gitmodules entr
   add a_gitmodules_entry_for_path_refuses_even_without_a_gitlink
 
 m GL9 '--submodules asks .gitmodules, not the index, for submodules without a checkout' src/sync/submodules.rs \
-  '    for p in repo::submodule_paths(root) {
-        // a refused path' '    for p in repo::gitmodules_paths(root) {
-        // a refused path' \
+  '    for p in repo::submodule_paths(&holder) {' '    for p in repo::gitmodules_paths(&holder) {' \
   gitlinks a_gitlink_without_a_checkout_is_unreachable_for_submodules_and_a_gitmodules_entry_is_no_record
-m GL10 'a directory below a gitlink path counts as that submodule' src/repo/mod.rs \
-  'if submodule_paths(dir).iter().any(|p| Path::new(p) == rel) {' 'if submodule_paths(dir).iter().any(|p| rel.starts_with(Path::new(p))) {' \
-  gitlinks a_nested_checkout_belongs_to_the_top_level_superproject
 
 m NS1 'a nested gitlink is not descended into (the list is flat)' src/repo/mod.rs \
-  '        walk(&path, &name, w);' '        let _ = &name;' \
+  '        walk(&path, &name, depth + 1, w);' '        let _ = &name;' \
   nested nested_gitlinks_are_listed_depth_first_with_the_path_below_the_root
 m NS2 'a nested repository is named without the path of its holder' src/repo/mod.rs \
   '        let name = full(&name);' '        let name = name.clone();' \
@@ -2138,7 +2166,7 @@ m NS7 'the step of a nested pinned submodule runs against the workspace root' sr
   '            step(&parent, rel, rec, o);' '            let _ = (&parent, &rel); let nm = rec.name.clone(); step(root, nm, rec, o);' \
   nested a_run_moves_a_nested_pinned_submodule_to_the_commit_its_parent_records
 m NS8 'an uninitialized nested submodule is named without its holder' src/sync/submodules.rs \
-  '            .map(|r| (PathBuf::from(&r.path), r.name.clone())),' '            .map(|r| (PathBuf::from(&r.path), String::new())),' \
+  '.map(|r| (r.path.clone(), r.name.clone())),' '.map(|r| (r.path.clone(), String::new())),' \
   nested an_uninitialized_nested_submodule_is_reported_as_unreachable_and_never_cloned
 m NS9 'a workspace above the limit is not an error' src/repo/mod.rs \
   '    if exceeded {
