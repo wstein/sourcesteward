@@ -144,28 +144,21 @@ pub fn restore(repos: &[RepoRef], run: Option<&str>) -> Restored {
             }
         }
     };
-    // None: the repository has no record of the run. One after the other, the last listed first (a submodule before its
-    // superproject): the check of the work tree looks into submodules, so a superproject whose submodule has not been
-    // moved back yet would count the moved submodule as a local change.
-    let mut found: Vec<Option<Vec<RestoreRec>>> = sources
-        .iter()
-        .rev()
-        .map(|s| {
-            if !s.ids.as_ref().is_ok_and(|ids| ids.contains(&id)) {
-                return None;
-            }
-            match journal::load(&s.dir, &id) {
-                Ok(None) => None,
-                Err(e) => Some(vec![rec_for(
-                    s.r,
-                    FAILED,
-                    format!("the journal record cannot be used: {e}"),
-                )]),
-                Ok(Some(rec)) => Some(restore_record(s, &id, rec)),
-            }
-        })
-        .collect();
-    found.reverse();
+    // None: the repository has no record of the run
+    let found: Vec<Option<Vec<RestoreRec>>> = repo::par_map(&sources, repo::MAX_PARALLEL, |s| {
+        if !s.ids.as_ref().is_ok_and(|ids| ids.contains(&id)) {
+            return None;
+        }
+        match journal::load(&s.dir, &id) {
+            Ok(None) => None,
+            Err(e) => Some(vec![rec_for(
+                s.r,
+                FAILED,
+                format!("the journal record cannot be used: {e}"),
+            )]),
+            Ok(Some(rec)) => Some(restore_record(s, &id, rec)),
+        }
+    });
     let any = found.iter().any(Option::is_some);
     out.repos.extend(found.into_iter().flatten().flatten());
     if !any && out.repos.is_empty() {
@@ -180,6 +173,7 @@ pub fn restore(repos: &[RepoRef], run: Option<&str>) -> Restored {
 }
 
 fn restore_record(s: &Source, id: &RunId, rec: Record) -> Vec<RestoreRec> {
+    // gix::Repository is not Sync: each worker opens its own
     let repo = match repo::open(&s.r.path) {
         Ok(r) => r,
         Err(e) => {
@@ -309,7 +303,7 @@ fn restore_entry(
         .is_some_and(|n| n.as_bstr() == en.reference.as_bytes());
     let runner = git_runner::shared();
     if head_on_it {
-        match status::changes(repo, false) {
+        match status::changes_opts(repo, false, true) {
             Ok(c) if c.dirty_paths == 0 && c.conflicts == 0 => {}
             // unreadable counts as dirty: nothing is moved
             _ => return changed(rp, "the worktree has local changes"),

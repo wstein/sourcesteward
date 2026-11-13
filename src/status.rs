@@ -26,22 +26,37 @@ pub struct Changes {
 }
 
 /// Run the index/worktree/HEAD status of `repo` through gix. A submodule is looked into: its changed HEAD or work tree
-/// is an unstaged path of its parent, and a submodule that cannot be read makes the parent unreadable. The same check
-/// serves `status`, the gate of `sync` and `sync restore`.
+/// is an unstaged path of its parent, and a submodule that cannot be read makes the parent unreadable (`stw status`).
 pub fn changes(repo: &gix::Repository, with_untracked: bool) -> Result<Changes> {
+    changes_opts(repo, with_untracked, false)
+}
+
+/// `changes`, optionally without the unstaged change of a submodule (its HEAD or work tree differs from the gitlink
+/// of the index: what `git status --ignore-submodules=all` leaves out of the work tree side). The gate of `sync
+/// --rebase/--merge` and `stw sync restore` ask this way, as Go does: a run that moved the superproject and a submodule
+/// makes the gitlink of the submodule look modified, which is no local work of the superproject.
+pub fn changes_opts(
+    repo: &gix::Repository,
+    with_untracked: bool,
+    ignore_submodule_changes: bool,
+) -> Result<Changes> {
     use gix::status::index_worktree::Item as W;
     use gix::status::Item;
     let mut staged: BTreeSet<BString> = BTreeSet::new();
     let mut unstaged: BTreeSet<BString> = BTreeSet::new();
     let mut conflicts: BTreeSet<BString> = BTreeSet::new();
     let mut untracked_paths: Vec<BString> = Vec::new();
-    let platform = repo
+    let mut platform = repo
         .status(gix::progress::Discard)?
         .untracked_files(if with_untracked {
             gix::status::UntrackedFiles::Collapsed
         } else {
             gix::status::UntrackedFiles::None
         });
+    if ignore_submodule_changes {
+        // `--ignore-submodules=all`: a submodule is not looked into, so one that cannot be read does not make its parent unreadable
+        platform = platform.index_worktree_submodules(None);
+    }
     for item in platform.into_iter(Vec::<BString>::new())? {
         match item? {
             Item::TreeIndex(ch) => {
@@ -62,6 +77,9 @@ pub fn changes(repo: &gix::Repository, with_untracked: bool) -> Result<Changes> 
                     S::Conflict { .. } => {
                         conflicts.insert(rela_path);
                     }
+                    S::Change(
+                        gix::status::plumbing::index_as_worktree::Change::SubmoduleModification(_),
+                    ) if ignore_submodule_changes => {}
                     S::Change(_) => {
                         unstaged.insert(rela_path);
                     }
