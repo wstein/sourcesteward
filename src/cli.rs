@@ -1374,7 +1374,9 @@ fn run_status(a: StatusArgs) -> Result<u8> {
         status::collect_notices(&ws.github, &rejected_status_notices(&ws.rejected), &list);
     if let Some(r) = &res {
         let depth = scan.map_or(status_all::DEFAULT_DEPTH, |o| o.depth);
-        notices.extend(status_all::extra_notices(&list, &r.cut, &r.beyond, depth));
+        notices.extend(status_all::extra_notices(
+            &list, &r.cut, &r.beyond, &r.empty, depth,
+        ));
     }
     if c.json {
         let mut v = status::to_json(

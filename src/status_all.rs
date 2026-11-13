@@ -48,6 +48,8 @@ pub struct Resolved {
     pub cut: Vec<String>,
     /// Keys of the scanned directories with repositories below the depth bound.
     pub beyond: Vec<String>,
+    /// Scanned directories in which no repository was found, with whether the directory is a bare repository.
+    pub empty: Vec<(String, bool)>,
     /// Set when at least one PATH is a directory that was scanned.
     pub scan: Option<(usize, usize)>,
 }
@@ -195,6 +197,10 @@ pub fn resolve(
             continue;
         }
         let s = repo::scan_repos(&a.real, depth);
+        if s.found.is_empty() && !s.beyond {
+            let bare = a.real.join("HEAD").is_file() && a.real.join("objects").is_dir();
+            out.empty.push((key_of(&a.real, &cwd, a.absolute), bare));
+        }
         if s.beyond {
             let k = key_of(&a.real, &cwd, a.absolute);
             if !out.beyond.contains(&k) {
@@ -278,6 +284,7 @@ pub fn extra_notices(
     list: &[RepoStatus],
     cut: &[String],
     beyond: &[String],
+    empty: &[(String, bool)],
     depth: usize,
 ) -> Vec<Notice> {
     let mut v = Vec::new();
@@ -300,6 +307,21 @@ pub fn extra_notices(
             source: "submodules",
             repos: vec![name.clone()],
             message: format!("{name}: submodules below depth {depth} not listed"),
+            count: 1,
+        });
+    }
+    for (key, bare) in empty {
+        let name = status::escape_for_text(key);
+        let why = if *bare {
+            " (a bare repository has no work tree and is not listed)"
+        } else {
+            ""
+        };
+        v.push(Notice {
+            code: "no-repositories",
+            source: "scan",
+            repos: vec![name.clone()],
+            message: format!("{name}: no repository found{why}"),
             count: 1,
         });
     }
