@@ -49,6 +49,7 @@ mod sync;
 mod sync_default;
 mod sync_flags;
 mod sync_journal;
+mod sync_plan_fetch;
 mod sync_pull;
 mod sync_restore;
 mod sync_rules;
