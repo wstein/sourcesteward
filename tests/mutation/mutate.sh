@@ -2552,6 +2552,12 @@ m AL54 'a refused gitlink path is not named below the key of its repository' src
 m AL55 'the agent-rules checkout is listed by a scan' src/status_all.rs \
   '            if canon(&dir) == *rules {' '            if false && canon(&dir) == *rules {' \
   status_all a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named
+m AL58 'a scanned directory without a repository is not noticed' src/status_all.rs \
+  '        if s.found.is_empty() && !s.beyond {' '        if false && s.found.is_empty() && !s.beyond {' \
+  status_all a_scanned_directory_without_a_repository_is_a_notice_and_exit_0
+m AL59 'a bare repository is not named as such in the notice' src/status_all.rs \
+  '            let bare = a.real.join("HEAD").is_file() && a.real.join("objects").is_dir();' '            let bare = false;' \
+  status_all a_scanned_directory_without_a_repository_is_a_notice_and_exit_0
 m AL56 'a submodule that is the agent-rules checkout is listed' src/status_all.rs \
   '            if *d > 0 && real == *rules && !explicit.contains(&real) {' '            if false && *d > 0 && real == *rules && !explicit.contains(&real) {' \
   status_all a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named
