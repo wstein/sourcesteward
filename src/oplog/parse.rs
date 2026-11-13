@@ -476,7 +476,9 @@ mod tests {
                 "refname with a raw space",
                 refs_line(H1, H2, "refs/heads/a b", "stw", "main"),
             ),
-            ("empty line", "\n".to_string()),
+            ("a line of one space", " \n".to_string()),
+            ("a line of one TAB", "\t\n".to_string()),
+            ("a CR line", "\r\n".to_string()),
             (
                 "NUL byte",
                 refs_line(H1, H2, "refs/heads/x\0", "stw", "main"),
@@ -505,6 +507,30 @@ mod tests {
             let p = parse_refs(line.as_bytes());
             assert_eq!((p.lines.len(), p.bad), (0, 1), "{why}");
         }
+    }
+
+    #[test]
+    fn empty_lines_are_skipped_and_are_neither_lines_nor_bad() {
+        // a lost race of two writers can leave an extra LF before a line (spec 2, "Lock wait"); a lone LF is harmless
+        let good = refs_line(H1, H2, "refs/heads/x", "stw", "main");
+        let cases = [
+            (format!("\n{good}"), 1),
+            (format!("{good}\n{good}"), 2),
+            (format!("{good}\n\n\n{good}\n\n"), 2),
+            (format!("\n\n{good}\n"), 1),
+        ];
+        for (data, n) in cases {
+            let p = parse_refs(data.as_bytes());
+            assert_eq!((p.lines.len(), p.bad), (n, 0), "{data:?}");
+        }
+        let p = parse_refs(b"\n\n\n");
+        assert_eq!((p.lines.len(), p.bad), (0, 0));
+        let rw = format!("{T}\tamend\t{H1}\t{H2}\t\tmain\n");
+        let p = parse_rewrites(format!("\n{rw}\n\n{rw}\n").as_bytes());
+        assert_eq!((p.lines.len(), p.bad), (2, 0));
+        // a fragment after the last LF is still a line, an empty piece is not
+        let p = parse_refs(format!("{good}\n\n{}", good.trim_end()).as_bytes());
+        assert_eq!((p.lines.len(), p.bad), (2, 0));
     }
 
     #[test]

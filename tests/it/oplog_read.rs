@@ -674,6 +674,28 @@ fn one_bad(v: &Value) {
     );
 }
 
+/// An empty line (a lost lock race can leave one) is neither a line nor a bad line: the gaps section says nothing.
+/// A line of white space is still bad.
+#[test]
+fn empty_lines_are_not_bad_lines() {
+    let fx = Fx::new();
+    let a = line(T, &h('1'), &h('2'), "refs/heads/a", "stw", "main");
+    let b = line(T, &h('2'), &h('3'), "refs/heads/b", "stw", "main");
+    oplog(&fx, "refs.log", &format!("\n{a}\n\n{b}\n"));
+    let v = json(&fx, &["timeline"]);
+    assert_eq!(entries(&v).len(), 2, "{v}");
+    assert!(gap(&v, "bad").is_none(), "{v}");
+    oplog(&fx, "refs.log", &format!("{a}\n \n{b}"));
+    let v = json(&fx, &["timeline"]);
+    assert!(
+        gap(&v, "bad").unwrap()["text"]
+            .as_str()
+            .unwrap()
+            .starts_with("1 lines"),
+        "{v}"
+    );
+}
+
 /// A hook killed before its LF and the next one appended. With a normal time the colons of the second time already break
 /// the worktree field; with the time `unknown` only the rule for fields from the 7th on (`key=value`) catches it.
 #[test]
