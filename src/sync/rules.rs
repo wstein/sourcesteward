@@ -5,8 +5,8 @@
 //!
 //! Display (always, read-only): one line with the state of the checkout against `origin/<default>`.
 //! Update (`--rules`): by default fetch `origin` and fast-forward HEAD (the branch, or the detached HEAD) to
-//! `origin/<default>`; with `--plan` change nothing, fetch nothing, and report what would happen from what is
-//! already fetched. The only refusals protect data: local changes in the working tree, local commits that are
+//! `origin/<default>`; with `--plan` fetch `origin` as Go's plan does (not with `--offline`), change nothing else,
+//! and report what would happen. The only refusals protect data: local changes in the working tree, local commits that are
 //! not in `origin/<default>`, a non-default branch, or a diverged branch. The superproject is never touched: for
 //! a submodule the new commit shows up there as a modified gitlink that the owner commits. New commits by other
 //! authors than the configured git identity are listed as information, never refused. stw never runs
@@ -312,8 +312,21 @@ pub fn agent_rules(root: &Path, gh: Option<&Client>, o: &RulesOpts) -> RulesRec 
     };
     if o.update && o.offline {
         rec.fetch = "skipped-offline".into();
-    } else if o.update && o.apply {
-        let f = fetch::fetch_origin(&repo, gh);
+    } else if o.update {
+        // a plan fetches too, like Go's `--rules --plan` (`rulesFetch`): the refspecs must write below
+        // `refs/remotes/origin/` only, and a tag is never pruned
+        let f = if o.apply {
+            fetch::fetch_origin(&repo, gh)
+        } else {
+            match fetch::check_plan_scope(&repo) {
+                Ok(()) => fetch::fetch_origin_plan(&repo, gh, fetch::Prune::Unset),
+                Err(m) => fetch::Fetched {
+                    fetch: fetch::Fetch::Failed(m),
+                    via: None,
+                    git_error: Some("refused-refspec"),
+                },
+            }
+        };
         rec.fetch = f.label().into();
         rec.via = f.via.map(str::to_string);
         if rec.fetch == "failed" || rec.fetch == "unsupported-remote" || rec.fetch == "unsupported"
@@ -527,7 +540,11 @@ pub fn render_human(r: &RulesRec) -> String {
             }
         }
         "would-update" => {
-            out += "    dry run (--plan): would fast-forward; nothing was fetched or written\n"
+            out += if r.fetch == "ok" {
+                "    dry run (--plan): would fast-forward; only the remote-tracking refs were fetched\n"
+            } else {
+                "    dry run (--plan): would fast-forward; nothing was fetched or written\n"
+            }
         }
         "refused" => out += &format!("    refused, nothing changed: {}\n", r.reason),
         _ => {}

@@ -780,7 +780,8 @@ struct SyncArgs {
     sub: Option<SyncCommand>,
     #[command(flatten)]
     common: Common,
-    /// Print what a run would do and change nothing: no fetch, no write (alias: --dry-run)
+    /// Fetch the remote-tracking refs of origin (not with --offline) and print what a run would do; change nothing else
+    /// (alias: --dry-run)
     #[arg(long, conflicts_with = "apply", overrides_with = "plan")]
     plan: bool,
     /// Alias of --plan
@@ -790,7 +791,7 @@ struct SyncArgs {
     #[arg(long, hide = true)]
     apply: bool,
     /// Fetch with --prune: delete remote-tracking refs of origin (refs/remotes/origin/* only) that are gone there.
-    /// Overrides fetch.prune. With --plan it only says what it would do
+    /// Overrides fetch.prune. With --plan it prunes as a run does
     #[arg(long, conflicts_with = "no_prune")]
     prune: bool,
     /// Fetch without pruning (overrides fetch.prune for a fetch by the installed git)
@@ -818,7 +819,7 @@ struct SyncArgs {
     #[arg(long)]
     submodules: bool,
     /// Also handle the agent-rules checkout (the submodule .agents of a whr workspace): fetch it and
-    /// fast-forward HEAD to origin's default branch; with --plan only report. Refuses only to protect local
+    /// fast-forward HEAD to origin's default branch; with --plan it fetches origin and only reports. Refuses only to protect local
     /// changes or local commits. Never runs install.sh
     #[arg(long)]
     rules: bool,

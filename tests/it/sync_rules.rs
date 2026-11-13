@@ -447,10 +447,11 @@ fn cli_json_carries_agent_rules_and_a_refusal_exits_1() {
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["agent_rules"]["state"], "behind");
     assert_eq!(o.status.code(), Some(0), "{v}");
-    // with --plan: reports, changes nothing
+    // with --plan --offline: reports, fetches and changes nothing
     let o = stw(&[
         "sync",
         "--plan",
+        "--offline",
         "--root",
         rs,
         "--rules",
