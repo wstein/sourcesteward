@@ -2363,6 +2363,9 @@ m OW34 'oplog write: a symbolic rotate.lock is followed' src/oplog/write.rs \
 m OW35 'oplog write: the worktree id is converted lossily' src/oplog/write.rs \
   'id.as_bytes().to_vec();' 'id.to_string_lossy().into_owned().into_bytes();' \
   lib oplog::write::tests::worktree_field_reduces_the_id
+m OW36 'oplog write: a lost mkdir race is a write failure (threads)' src/oplog/write.rs \
+  'Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {' 'Err(e) if false && e.kind() == std::io::ErrorKind::AlreadyExists => {' \
+  lib oplog::write::tests::many_writers_on_a_fresh_repository_lose_no_line
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
