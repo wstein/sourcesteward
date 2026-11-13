@@ -2152,7 +2152,7 @@ m OL18 'oplog: the reflog message is shown raw' src/oplog/timeline.rs \
   'message: escape_untrusted(&r.message, NAME_CAP).0,' 'message: r.message,' \
   oplog_read reflog_text_is_escaped
 m OL19 'oplog: a rotation counts as a capture gap' src/oplog/timeline.rs \
-  'let capture = gap_lines.iter().filter(|(k, _)| k != "rotated").count();' 'let capture = gap_lines.len();' \
+  'let capture = gap_lines.iter().filter(|(k, _, _)| k != "rotated").count();' 'let capture = gap_lines.len();' \
   oplog_read error_lines_are_capture_gaps_and_a_rotation_is_its_own_row
 m OL20 'oplog: the files backend check is off' src/oplog/timeline.rs \
   '.is_none_or(|b| b.eq_ignore_ascii_case("files"));' '.is_none_or(|_| true);' \
@@ -2339,7 +2339,11 @@ m OW6 'oplog write: the worktree id is not cut' src/oplog/write.rs \
   '.take(40)' '.take(400)' \
   lib oplog::write::tests::worktree_field_reduces_the_id
 m OW7 'oplog write: no line feed before a line that follows a broken one' src/oplog/write.rs \
-  'if last[0] != b'\''\n'\'' {' 'if false {' \
+  "        buf.push(b'\\n');
+    }
+    buf.extend_from_slice(line.as_bytes());" "        let _ = &buf;
+    }
+    buf.extend_from_slice(line.as_bytes());" \
   oplog_write a_broken_last_line_gets_a_line_feed_first
 m OW8 'oplog write: a symbolic oplog directory is followed' src/oplog/write.rs \
   'return Err(format!("{} is a symbolic link", p.display()))' '()' \
