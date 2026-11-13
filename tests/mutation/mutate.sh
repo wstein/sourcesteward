@@ -2723,7 +2723,7 @@ m OU23 'oplog undo: the next run number is the counter, not counter plus one' sr
   oplog_undo the_counter_is_never_reused_after_the_backups_are_pruned
 m OU24 'oplog undo: the way back has --to and --expect swapped' src/oplog/undo.rs \
   'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);' 'undo_plan::undo_command(&plan.reference, &to.to_string(), &expect.to_string(), false);' \
-  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+  oplog_undo json_names_backup_run_and_way_back
 m OU25 'oplog undo: a refs.log that is a symbolic link is written through' src/oplog/write.rs \
   '    refuse_link(path)?;' '    let _ = path;' \
   oplog_undo a_refs_log_that_is_a_symbolic_link_does_not_undo_the_undo
@@ -2764,13 +2764,13 @@ m OU36 'oplog undo: a plain ref name is quoted too' src/oplog/undo_plan.rs \
   oplog_undo a_plain_ref_name_is_not_quoted
 m OU37 'oplog undo: a dollar sign counts as plain' src/oplog/undo_plan.rs \
   'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-$".contains(&b)' \
-  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+  oplog_undo shell_word_quotes_every_character_a_shell_treats_specially
 m OU38 'oplog undo: a backtick counts as plain' src/oplog/undo_plan.rs \
   'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-`".contains(&b)' \
-  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+  oplog_undo shell_word_quotes_every_character_a_shell_treats_specially
 m OU39 'oplog undo: a semicolon and a pipe count as plain' src/oplog/undo_plan.rs \
   'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-;|".contains(&b)' \
-  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+  oplog_undo shell_word_quotes_every_character_a_shell_treats_specially
 m OU40 'oplog undo: the JSON apply field is quoted' src/oplog/undo_plan.rs \
   '            self.current.as_deref().unwrap_or("?"),
             false,' '            self.current.as_deref().unwrap_or("?"),

@@ -448,8 +448,8 @@ mod tests {
         holder.lock().unwrap();
         let took = append_with_timeout(&log, "second");
         assert!(took >= LOCK_BUDGET.mul_f32(0.8), "no wait: {took:?}");
-        // the wait ends with the budget: not at the 5 s of the timeout, not at a larger budget
-        assert!(took < LOCK_BUDGET + Duration::from_secs(1), "{took:?}");
+        // the wait ends with the budget of 300 ms (a literal bound: a larger LOCK_BUDGET must not move it)
+        assert!(took < Duration::from_millis(1300), "{took:?}");
         // the result is the one of an append under the lock: a broken tail gets its LF, the line is whole
         assert_eq!(
             std::fs::read_to_string(&log).unwrap(),

@@ -195,10 +195,10 @@ fn json_names_backup_run_and_way_back() {
     assert_eq!(v["backup_ref"], "refs/stw/backup/1/1");
     assert_eq!(v["run"], 1);
     assert_eq!(v["pruned"].as_array().unwrap().len(), 0);
-    assert!(v["way_back"]
-        .as_str()
-        .unwrap()
-        .starts_with("stw oplog undo refs/heads/work --to "));
+    assert_eq!(
+        v["way_back"],
+        format!("stw oplog undo refs/heads/work --to {c3} --expect {c2} --yes")
+    );
     // a refusal prints the plan document with the command `oplog undo`
     let v = json(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
     assert_eq!(v["executed"], false, "{v}");
@@ -839,4 +839,19 @@ fn a_plain_ref_name_is_not_quoted() {
     let r = run(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
     assert!(r.text.contains("undo refs/heads/work --to"), "{}", r.text);
     assert!(!r.text.contains('\''), "{}", r.text);
+}
+
+#[test]
+fn shell_word_quotes_every_character_a_shell_treats_specially() {
+    use stw::oplog::undo_plan::shell_word;
+    for plain in ["refs/heads/work", "a.b_c-d+e@f:g=h%i,j/k", "0"] {
+        assert_eq!(shell_word(plain), plain);
+    }
+    for c in " \t\n;$`|&<>()*?!#~\"\\{}[]^'".chars() {
+        let name = format!("a{c}b");
+        let q = shell_word(&name);
+        assert!(q.starts_with('\'') && q.ends_with('\''), "{name:?} -> {q}");
+    }
+    assert_eq!(shell_word("a'b"), r"'a'\''b'");
+    assert_eq!(shell_word(""), "''");
 }
