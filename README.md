@@ -949,13 +949,12 @@ Exit 0: no error finding (warnings do not fail). Exit 3: an error finding, or a 
 command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.rs` and `tests/it/lint_pr_cmd.rs`; plan:
 `docs/migration-plan.md`, "Slice 3".
 
-## The op log readers: `stw oplog timeline | evolog | undo-plan` (new)
+## The op log: `stw oplog timeline | evolog | undo-plan | undo` (new)
 
 New behavior without a Go counterpart: the three read-only commands over the logs that the accepted spikes
 `spikes/stw/oplog-reflog`, `oplog-hooks` and `oplog-refhook` write. The format is the contract in
 `docs/oplog-format.md` (reviewed CLEAR); this package builds the readers only. Not part of it, each its own package:
-the undo itself (`stw oplog undo`), the backup refs `refs/stw/backup/<run>/<k>`, the hook install (stw's own `refs.log`
-lines and the rotation are the next section). Nothing is written by these commands (tests compare the repository byte for byte before and
+the hook install (stw's own `refs.log` lines and the rotation are the next section, `stw oplog undo` the section after). Nothing is written by these commands (tests compare the repository byte for byte before and
 after), no hook is installed and no `git` program runs. `--root PATH` and `--repo NAME` as for `stw prove`; `--json`.
 
 - `stw oplog timeline [--ref GLOB] [--remotes] [--all]`: the reflogs (`HEAD` of the main and the linked worktrees,
@@ -979,7 +978,8 @@ after), no hook is installed and no `git` program runs. `--root PATH` and `--rep
   no registration without a readable git dir, no running operation (`rebase-merge`, `rebase-apply`, `MERGE_HEAD`,
   `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `BISECT_LOG`, `sequencer` in the git dirs), the ref still equals the newest reflog
   value, the target is not the creation entry and is a commit; notes: ancestry and the commits that only the reflog would
-  keep. Exit 1 when a check is refused. It prints that `stw oplog undo` is not built yet.
+  keep. Exit 1 when a check is refused. When all pass it prints the `stw oplog undo` command that applies it
+  (`--json`: new key `apply`, null unless executable).
 
 Rules shared with the spec: a log that is a symbolic link, not a regular file, in a symbolic `stw` or `stw/oplog`
 directory, or over 64 MiB is not read (`unreadable`); a line is skipped and counted as `bad` when it is over 4 KB,
@@ -1008,13 +1008,39 @@ generation, replacing an older one) under `try_lock` on `rotate.lock`; a held lo
 Open questions with recommendations: spec section 10, Q13 to Q18. Deviations from the spec text: the `rotated` gap line
 carries the file name instead of `-` (Q15); `rust-version` 1.89 (Q18).
 
+### `stw oplog undo` and the backup refs (package 3)
+
+New behavior without a Go counterpart; the owner accepts it live (recipe: `scratch/abnahme-rezepte/rezept-stw-oplog-undo.md`).
+
+`stw oplog undo REF --to OLD --expect NEW --yes` moves one local branch back to an older value of its reflog. REF is a
+branch name or a full ref name; `--to` is a lower-case hex prefix of an old reflog value (as in `undo-plan`; no `--steps`);
+`--expect` is the full current value; `--yes` is required. It runs the checks of `undo-plan` (the same function), then:
+(1) takes a run number from the counter ref `refs/stw/backup-counter` (a blob `<run> <pid>-<nanos>`, compare-and-swap, up to 5
+tries against other writers; a run number is never reused), (2) creates `refs/stw/backup/<run>/1` on the current value
+(create-only: an existing ref of that name is an error, whatever its value), (3) removes the backup refs of all but the 10
+highest runs (the counter and the newest run are never removed; names that are not `<run>/<k>` are left alone), (4) sets
+the branch to OLD only if it still holds NEW (`MustExistAndMatch`, no-deref); a changed ref leaves the backup and the
+branch as the other writer left it. Reflog entries for the backup ref and the branch (message `stw oplog undo`) are written
+also with `core.logAllRefUpdates=false`. `refs.log` lines (context `stw`) are written for the counter, the backup ref, each
+pruned ref and the branch update; a failed append is a notice and a `write-failed` gap, the undo stands.
+Refused with exit 1 and nothing written: a failed check of `undo-plan` (a branch checked out in a worktree gets the hint
+`git reset --keep`; there is no `--keep` path yet), `--expect` not equal to the current value.
+Usage errors (exit 2): no `--yes`, `--expect` not a full lower-case hash, a ref that is no local branch.
+Only the ref moves: index, working tree, other worktrees and pushes are not covered.
+Output: backup ref and the way back as a command (`stw oplog undo REF --to <old> --expect <new> --yes`). `--json`
+(`schema_version` 1, `command` `oplog undo`): `ref`, `executed`, `previous`, `current`, `backup_ref`, `run`, `pruned`,
+`way_back`, `notices`; a refusal prints the `undo-plan` document with `command` `oplog undo` and `executed` false.
+Deviations from the spec text: none in behavior; the spec sections 8 and Q12 now say the reflog mechanism works with
+gix 0.90, and Q7 (`<run>/<k>`) is decided by the owner (2026-11-13). UNKNOWN: macOS, ext4,
+SHA-256 repositories, a concurrent `git` writing the same refs.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 703 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 729 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
