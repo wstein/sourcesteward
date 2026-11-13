@@ -11,6 +11,7 @@ use crate::sync_flags::World;
 struct D {
     w: World,
     ws: PathBuf,
+    origin: PathBuf,
     old: String,
     new: String,
 }
@@ -38,7 +39,13 @@ fn setup() -> D {
         &["push", "-q", origin.to_str().unwrap(), "HEAD:main"],
     );
     w.git(&origin, &["branch", "-q", "-D", "gone"]);
-    D { w, ws, old, new }
+    D {
+        w,
+        ws,
+        origin,
+        old,
+        new,
+    }
 }
 
 impl D {
@@ -423,4 +430,45 @@ fn the_plan_text_says_that_the_tracking_refs_were_fetched() {
         "{online}"
     );
     assert!(!online.contains("Nothing was fetched"), "{online}");
+}
+
+#[test]
+fn the_plan_never_prunes_a_tag_whatever_fetch_prune_tags_says() {
+    let d = setup();
+    // a tag that origin had and has lost, and a local tag origin never had
+    let seed = d.w.p("seed");
+    d.w.git(&seed, &["tag", "rt1"]);
+    d.w.git(
+        &seed,
+        &["push", "-q", d.w.p("origin.git").to_str().unwrap(), "rt1"],
+    );
+    d.w.git(
+        &d.ws,
+        &["fetch", "-q", "origin", "refs/tags/rt1:refs/tags/rt1"],
+    );
+    d.w.git(&d.w.p("origin.git"), &["tag", "-d", "rt1"]);
+    d.w.git(&d.ws, &["tag", "localtag"]);
+    d.w.git(&d.ws, &["config", "fetch.prune", "true"]);
+    d.w.git(&d.ws, &["config", "fetch.pruneTags", "true"]);
+    d.w.git(&d.ws, &["config", "remote.origin.pruneTags", "true"]);
+    for flags in [&[][..], &["--prune"][..], &["--no-prune"][..]] {
+        let (code, v, err) = d.plan(flags);
+        assert_eq!(code, 0, "{flags:?} {v} {err}");
+        let tags = d.w.git(&d.ws, &["tag", "--list"]);
+        assert!(
+            tags.contains("rt1") && tags.contains("localtag") && tags.contains("t1"),
+            "{flags:?}: a tag was pruned: {tags}"
+        );
+    }
+    // the branch ref that is gone is pruned by the first plan (fetch.prune), and `pruned` names only that
+    assert!(d.tracking("gone").is_none());
+    d.w.git(&d.origin, &["branch", "-q", "gone2", "main"]);
+    d.w.git(&d.ws, &["fetch", "-q", "origin"]);
+    d.w.git(&d.origin, &["branch", "-q", "-D", "gone2"]);
+    let (_, v, _) = d.plan(&[]);
+    assert_eq!(
+        entry(&v, "ws")["pruned"],
+        serde_json::json!(["refs/remotes/origin/gone2"]),
+        "{v}"
+    );
 }
