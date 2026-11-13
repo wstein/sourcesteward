@@ -188,10 +188,11 @@ pub fn take_run_with(
 
 /// Create the backup ref at `value`. Create-only: gix lets `MustNotExist` pass when the ref already holds the same value
 /// (gix-ref `prepare.rs`), so the ref is looked up first and an existing one, with any value, is an error.
-fn create_backup(
+pub fn create_backup_with(
     repo: &gix::Repository,
     name: &str,
     value: ObjectId,
+    between: &mut dyn FnMut(),
 ) -> std::result::Result<(), String> {
     if repo
         .try_find_reference(name)
@@ -202,6 +203,8 @@ fn create_backup(
             "{name} exists already; a backup ref is never replaced"
         ));
     }
+    // between the lookup and the edit (the tests let another writer create the ref here)
+    between();
     edit_with_reflog(
         repo,
         vec![update_edit(
@@ -240,11 +243,11 @@ fn backup_refs(
 }
 
 /// Refs deleted by the retention (name, old value) and the failures (text).
-type Pruned = (Vec<(String, ObjectId)>, Vec<String>);
+pub type Pruned = (Vec<(String, ObjectId)>, Vec<String>);
 
 /// Delete the refs of all runs but the `RETAINED_RUNS` highest; the counter ref is not below the prefix and stays.
 /// Returns the deleted refs (name, old value) and the failures.
-fn prune(repo: &gix::Repository) -> std::result::Result<Pruned, String> {
+pub fn prune(repo: &gix::Repository, _own: u64) -> std::result::Result<Pruned, String> {
     let refs = backup_refs(repo)?;
     let runs: BTreeSet<u64> = refs.iter().map(|(r, _, _)| *r).collect();
     let keep: BTreeSet<u64> = runs.iter().rev().take(RETAINED_RUNS).copied().collect();
@@ -268,6 +271,17 @@ fn is_full_hex(s: &str, len: usize) -> bool {
 /// `undo` with a hook that runs after the backup exists and before the update of the branch (tests move the branch
 /// there). The refusals of `undo-plan` and a wrong `--expect` change nothing.
 pub fn undo_with(ctx: &Ctx, req: &Request, before_update: &mut dyn FnMut()) -> Result<Outcome> {
+    undo_hooked(ctx, req, &mut |_| {}, before_update)
+}
+
+/// `undo_with` and a hook for the counter: `between` is called after the counter was read and before it is updated, once
+/// per try (the tests let another writer win there, through the same path the command takes).
+pub fn undo_hooked(
+    ctx: &Ctx,
+    req: &Request,
+    between: &mut dyn FnMut(u32),
+    before_update: &mut dyn FnMut(),
+) -> Result<Outcome> {
     let repo = ctx.repo()?;
     let plan = undo_plan::plan(
         ctx,
@@ -313,7 +327,7 @@ pub fn undo_with(ctx: &Ctx, req: &Request, before_update: &mut dyn FnMut()) -> R
 
     // the run number and the backup ref
     let (run, prev, blob) =
-        take_run_with(repo, COUNTER_TRIES, &mut |_| {}).map_err(Error::repository)?;
+        take_run_with(repo, COUNTER_TRIES, between).map_err(Error::repository)?;
     log_ref_update(
         repo,
         &RefUpdate {
@@ -323,7 +337,7 @@ pub fn undo_with(ctx: &Ctx, req: &Request, before_update: &mut dyn FnMut()) -> R
         },
     );
     let backup_ref = format!("{BACKUP_PREFIX}{run}/1");
-    create_backup(repo, &backup_ref, expect).map_err(|e| {
+    create_backup_with(repo, &backup_ref, expect, &mut || {}).map_err(|e| {
         Error::repository(format!(
             "backup ref {backup_ref} not created, nothing was changed: {e}"
         ))
@@ -338,7 +352,7 @@ pub fn undo_with(ctx: &Ctx, req: &Request, before_update: &mut dyn FnMut()) -> R
     );
     let mut notices = Vec::new();
     let mut pruned = Vec::new();
-    match prune(repo) {
+    match prune(repo, run) {
         Ok((gone, failed)) => {
             for (name, id) in &gone {
                 log_ref_update(

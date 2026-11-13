@@ -45,13 +45,17 @@ fn json(fx: &Fx, args: &[&str]) -> Value {
 
 /// Branch `work` at c3 (reflog: created at c1, then c2, c3); HEAD on `main` at c1.
 fn undo_fx() -> (Fx, [ObjectId; 3]) {
+    undo_fx_named("work")
+}
+
+fn undo_fx_named(name: &str) -> (Fx, [ObjectId; 3]) {
     let fx = Fx::new();
     let a = fx.commit(None, &[("f", Some("a\n"))], "first");
     let b = fx.commit(Some(a), &[("f", Some("b\n"))], "second");
     let c = fx.commit(Some(b), &[("f", Some("c\n"))], "third");
     fx.branch("main", a);
     fx.set_head("main");
-    fx.branch("work", c);
+    fx.branch(name, c);
     let rows = [
         (Z.to_string(), a, "branch: Created from HEAD"),
         (a.to_string(), b, "commit: second"),
@@ -64,7 +68,7 @@ fn undo_fx() -> (Fx, [ObjectId; 3]) {
             1_700_000_000 + 100 * i as i64
         );
     }
-    fx.write(".git/logs/refs/heads/work", &s);
+    fx.write(&format!(".git/logs/refs/heads/{name}"), &s);
     (fx, [a, b, c])
 }
 
@@ -582,4 +586,254 @@ fn the_help_names_undo() {
     ] {
         assert!(t.contains(w), "{w}: {t}");
     }
+}
+
+fn request(to: ObjectId, expect: ObjectId) -> undo::Request {
+    undo::Request {
+        reference: "work".into(),
+        to: to.to_string(),
+        expect: expect.to_string(),
+    }
+}
+
+fn delete_counter(fx: &Fx) {
+    std::fs::remove_file(fx.path.join(".git/refs/stw/backup-counter")).unwrap();
+}
+
+// ---- the run number never falls back below an existing run ------------------------------------------------------
+
+#[test]
+fn a_deleted_counter_does_not_reuse_a_number_and_the_new_backup_stays() {
+    let (fx, [c1, c2, c3]) = undo_fx();
+    seed_runs(&fx, 1, 12, c1);
+    put_counter(&fx, "12 seed");
+    delete_counter(&fx);
+    let v = json(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
+    assert_eq!(v["run"], 13, "{v}");
+    assert_eq!(v["backup_ref"], "refs/stw/backup/13/1", "{v}");
+    assert_eq!(refname_value(&fx, "refs/stw/backup/13/1"), Some(c3), "{v}");
+    assert!(counter_text(&fx).starts_with("13 "));
+    let mut gone: Vec<&str> = v["pruned"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|x| x.as_str().unwrap())
+        .collect();
+    gone.sort();
+    assert_eq!(
+        gone,
+        [
+            "refs/stw/backup/1/1",
+            "refs/stw/backup/2/1",
+            "refs/stw/backup/3/1"
+        ],
+        "{v}"
+    );
+}
+
+#[test]
+fn a_counter_below_the_highest_run_does_not_reuse_a_number() {
+    let (fx, [c1, c2, c3]) = undo_fx();
+    seed_runs(&fx, 1, 12, c1);
+    put_counter(&fx, "3 seed");
+    let v = json(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
+    assert_eq!(v["run"], 13, "{v}");
+    assert_eq!(refname_value(&fx, "refs/stw/backup/13/1"), Some(c3), "{v}");
+}
+
+#[test]
+fn the_prune_never_removes_the_run_it_was_made_for() {
+    let (fx, [c1, _, _]) = undo_fx();
+    // runs 2 to 12 exist and run 1 was just taken: by the ranking alone run 1 would go
+    seed_runs(&fx, 1, 12, c1);
+    let (gone, failed) = undo::prune(&fx.repo(), 1).unwrap();
+    assert!(failed.is_empty(), "{failed:?}");
+    let names: Vec<&str> = gone.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(names, ["refs/stw/backup/2/1"]);
+    assert_eq!(refname_value(&fx, "refs/stw/backup/1/1"), Some(c1));
+}
+
+// ---- only a canonical decimal number names a run ----------------------------------------------------------------
+
+#[test]
+fn names_that_are_no_canonical_decimal_are_no_run_and_stay() {
+    let (fx, [c1, c2, c3]) = undo_fx();
+    seed_runs(&fx, 5, 14, c1);
+    let odd = [
+        "refs/stw/backup/+1/1",
+        "refs/stw/backup/01/1",
+        "refs/stw/backup/001/1",
+        "refs/stw/backup/0/1",
+        "refs/stw/backup/1/01",
+        "refs/stw/backup/1/+1",
+        "refs/stw/backup/2/0",
+        "refs/stw/backup/99999999999999999999999/1",
+    ];
+    for n in odd {
+        fx.set_ref(n, c1);
+    }
+    put_counter(&fx, "14 seed");
+    let v = json(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
+    assert_eq!(v["run"], 15, "{v}");
+    assert_eq!(
+        v["pruned"],
+        serde_json::json!(["refs/stw/backup/5/1"]),
+        "{v}"
+    );
+    let runs = runs_of(&fx);
+    for n in odd {
+        assert!(runs.contains(&n.to_string()), "{n} was touched: {runs:?}");
+    }
+    // the highest odd name does not count as a run either: the next number is 16
+    let (c2s, c3s) = (c2.to_string(), c3.to_string());
+    let back = json(
+        &fx,
+        &["undo", "work", "--to", &c3s, "--expect", &c2s, "--yes"],
+    );
+    assert_eq!(back["run"], 16, "{back}");
+}
+
+// ---- gaps of the run-number and create-only code ----------------------------------------------------------------
+
+#[test]
+fn a_backup_ref_that_appears_between_the_lookup_and_the_edit_is_not_replaced() {
+    let (fx, [c1, _, c3]) = undo_fx();
+    let repo = fx.repo();
+    let name = "refs/stw/backup/1/1";
+    let e = undo::create_backup_with(&repo, name, c3, &mut || fx.set_ref(name, c1)).unwrap_err();
+    assert!(!e.is_empty());
+    assert_eq!(
+        refname_value(&fx, name),
+        Some(c1),
+        "the other writer's ref stands"
+    );
+    // and without a rival it is created
+    let other = "refs/stw/backup/2/1";
+    undo::create_backup_with(&repo, other, c3, &mut || {}).unwrap();
+    assert_eq!(refname_value(&fx, other), Some(c3));
+}
+
+#[test]
+fn the_command_tries_five_times_for_a_run_number() {
+    let (fx, [_, c2, c3]) = undo_fx();
+    let ctx = Ctx::open(&fx.path).unwrap();
+    // four lost races, the fifth try wins
+    let mut tries = 0;
+    let out = undo::undo_hooked(
+        &ctx,
+        &request(c2, c3),
+        &mut |attempt| {
+            tries += 1;
+            if attempt < 4 {
+                put_counter(&fx, &format!("{} rival-{attempt}", attempt + 1));
+            }
+        },
+        &mut || {},
+    );
+    match out {
+        Ok(undo::Outcome::Done(d)) => assert_eq!((d.run, tries), (5, 5)),
+        Ok(_) => panic!("refused"),
+        Err(e) => panic!("{e}"),
+    }
+}
+
+#[test]
+fn the_command_gives_up_after_five_lost_races_and_changes_nothing() {
+    let (fx, [_, c2, c3]) = undo_fx();
+    let ctx = Ctx::open(&fx.path).unwrap();
+    let mut tries = 0;
+    let e = match undo::undo_hooked(
+        &ctx,
+        &request(c2, c3),
+        &mut |attempt| {
+            tries += 1;
+            put_counter(&fx, &format!("{} rival-{attempt}", attempt + 1));
+        },
+        &mut || {},
+    ) {
+        Ok(_) => panic!("took a number against a rival that always wins"),
+        Err(e) => e,
+    };
+    assert_eq!(tries, 5, "{e}");
+    assert!(e.to_string().contains("after 5 tries"), "{e}");
+    assert_eq!(fx.tip("work"), c3, "the branch stays");
+    assert!(runs_of(&fx).is_empty());
+}
+
+#[test]
+fn two_first_runs_do_not_share_a_number_even_when_the_rival_wrote_the_same_text() {
+    // Two first runs both read no counter and take number 1. Without a nonce both write the blob "1": the same object, and
+    // gix lets a create-only update pass when the ref already holds the value it would write.
+    let (fx, _) = plain_repo();
+    let repo = fx.repo();
+    let (run, _, _) = undo::take_run_with(&repo, 5, &mut |attempt| {
+        if attempt == 0 {
+            put_counter(&fx, "1");
+        }
+    })
+    .unwrap();
+    assert_eq!(run, 2);
+    assert!(counter_text(&fx).starts_with("2 "));
+}
+
+// ---- a command the output names is safe to paste ----------------------------------------------------------------
+
+const EVIL: &str = "evil;$HOME|`id`'q";
+const EVIL_REF: &str = "refs/heads/evil;$HOME|`id`'q";
+const EVIL_QUOTED: &str = r"'refs/heads/evil;$HOME|`id`'\''q'";
+
+#[test]
+fn undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name() {
+    let (fx, [_, c2, c3]) = undo_fx_named(EVIL);
+    let r = run(&fx, &["undo-plan", EVIL_REF]);
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert!(
+        r.text.contains(&format!(
+            "Apply with: stw oplog undo {EVIL_QUOTED} --to {c2} --expect {c3} --yes"
+        )),
+        "{}",
+        r.text
+    );
+    let v = json(&fx, &["undo-plan", EVIL_REF]);
+    assert_eq!(
+        v["apply"],
+        format!("stw oplog undo {EVIL_REF} --to {c2} --expect {c3} --yes"),
+        "{v}"
+    );
+    assert_eq!(v["ref"], EVIL_REF);
+}
+
+#[test]
+fn undo_quotes_the_way_back_and_json_keeps_the_raw_name() {
+    let (fx, [_, c2, c3]) = undo_fx_named(EVIL);
+    let a = |r: &'static str| ["undo", r, "--to", "", "--expect", "", "--yes"].map(String::from);
+    let mut args = a(EVIL_REF);
+    args[3] = c2.to_string();
+    args[5] = c3.to_string();
+    let args: Vec<&str> = args.iter().map(String::as_str).collect();
+    let r = run(&fx, &args);
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert!(
+        r.text.contains(&format!(
+            "way back:   stw oplog undo {EVIL_QUOTED} --to {c3} --expect {c2} --yes"
+        )),
+        "{}",
+        r.text
+    );
+    // the same undo again through --json, from the state before
+    fx.branch(EVIL, c3);
+    let v = json(&fx, &args);
+    assert_eq!(
+        v["way_back"],
+        format!("stw oplog undo {EVIL_REF} --to {c3} --expect {c2} --yes"),
+        "{v}"
+    );
+}
+
+#[test]
+fn a_plain_ref_name_is_not_quoted() {
+    let (fx, [_, c2, c3]) = undo_fx();
+    let r = run(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
+    assert!(r.text.contains("undo refs/heads/work --to"), "{}", r.text);
+    assert!(!r.text.contains('\''), "{}", r.text);
 }
