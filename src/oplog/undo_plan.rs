@@ -15,6 +15,30 @@ use super::Ctx;
 use crate::error::{Error, Result};
 use crate::github::reads::escape_untrusted;
 
+/// A word for a POSIX shell: unchanged when it holds only characters that no shell treats specially, else in single
+/// quotes with each `'` written as `'\''`. Quoted only when needed, so the usual `refs/heads/work` reads as before.
+pub fn shell_word(s: &str) -> String {
+    let plain = !s.is_empty()
+        && s.bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"._/+@:=%,-".contains(&b));
+    if plain {
+        s.to_string()
+    } else {
+        format!("'{}'", s.replace('\'', "'\\''"))
+    }
+}
+
+/// `stw oplog undo REF --to OLD --expect NEW --yes`. With `shell` the ref name is quoted for pasting into a shell (the
+/// text output); the JSON fields keep the raw name.
+pub fn undo_command(reference: &str, to: &str, expect: &str, shell: bool) -> String {
+    let name = if shell {
+        shell_word(reference)
+    } else {
+        reference.to_string()
+    };
+    format!("stw oplog undo {name} --to {to} --expect {expect} --yes")
+}
+
 /// Files of a git directory that mean an operation is running there (the markers the spike checks).
 const MARKERS: [&str; 7] = [
     "rebase-merge",
@@ -387,18 +411,23 @@ impl Plan {
         } else {
             format!(
                 "Result: all checks ok (preview only, nothing was changed). Apply with: {}",
-                self.apply_command()
+                undo_command(
+                    &self.reference,
+                    self.target.as_deref().unwrap_or("?"),
+                    self.current.as_deref().unwrap_or("?"),
+                    true
+                )
             )
         }
     }
 
-    /// The `undo` command that applies this plan (full values for `--to` and `--expect`).
+    /// The `undo` command that applies this plan (full values for `--to` and `--expect`; the raw ref name, as in JSON).
     pub fn apply_command(&self) -> String {
-        format!(
-            "stw oplog undo {} --to {} --expect {} --yes",
-            self.reference,
+        undo_command(
+            &self.reference,
             self.target.as_deref().unwrap_or("?"),
-            self.current.as_deref().unwrap_or("?")
+            self.current.as_deref().unwrap_or("?"),
+            false,
         )
     }
 

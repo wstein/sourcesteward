@@ -2650,10 +2650,10 @@ m OU7 'oplog undo: retention keeps the oldest runs and prunes the newest' src/op
   'runs.iter().rev().take(RETAINED_RUNS)' 'runs.iter().take(RETAINED_RUNS)' \
   oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
 m OU8 'oplog undo: retention prunes one ref per run only' src/oplog/undo.rs \
-  '        if keep.contains(&run) {' '        if keep.contains(&run) || name.ends_with("/2") {' \
+  '        if keep.contains(&run) || run == own {' '        if keep.contains(&run) || run == own || name.ends_with("/2") {' \
   oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
 m OU9 'oplog undo: a name below the backup prefix whose second part is no number is pruned' src/oplog/undo.rs \
-  'k.parse::<u64>().is_ok()) else {' 'true) else {' \
+  'canonical(k).is_some()) else {' 'true) else {' \
   oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
 m OU10 'oplog undo: the reflog handle follows core.logAllRefUpdates' src/oplog/undo.rs \
   '    store.write_reflog = gix::refs::store::WriteReflog::Always;' '    store.write_reflog = repo.refs.write_reflog;' \
@@ -2680,7 +2680,7 @@ m OU17 'oplog undo: undo runs without --yes' src/cli.rs \
   '    if !a.yes {' '    if false && !a.yes {' \
   oplog_undo expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written
 m OU18 'oplog undo: the backup ref holds the new value, not the current one' src/oplog/undo.rs \
-  '    create_backup(repo, &backup_ref, expect).map_err(|e| {' '    create_backup(repo, &backup_ref, to).map_err(|e| {' \
+  '    create_backup_with(repo, &backup_ref, expect, &mut || {}).map_err(|e| {' '    create_backup_with(repo, &backup_ref, to, &mut || {}).map_err(|e| {' \
   oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
 m OU19 'oplog undo: the counter update has no refs.log line' src/oplog/undo.rs \
   '            refname: COUNTER_REF,
@@ -2697,17 +2697,83 @@ m OU22 'oplog undo: the prune has no refs.log lines' src/oplog/undo.rs \
   '                        refname: name,' '                        refname: "refs/stw/other",' \
   oplog_undo the_eleventh_run_prunes_the_oldest_runs_whole_and_never_the_counter_or_the_newest
 m OU23 'oplog undo: the next run number is the counter, not counter plus one' src/oplog/undo.rs \
-  'Some(blob) => counter_run(repo, blob)? + 1,' 'Some(blob) => counter_run(repo, blob)?,' \
+  'let run = counted.max(existing).saturating_add(1);' 'let run = counted.max(existing);' \
   oplog_undo the_counter_is_never_reused_after_the_backups_are_pruned
 m OU24 'oplog undo: the way back has --to and --expect swapped' src/oplog/undo.rs \
-  '"stw oplog undo {} --to {expect} --expect {to} --yes",' '"stw oplog undo {} --to {to} --expect {expect} --yes",' \
+  'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);' 'undo_plan::undo_command(&plan.reference, &to.to_string(), &expect.to_string(), false);' \
   oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
 m OU25 'oplog undo: a refs.log that is a symbolic link is written through' src/oplog/write.rs \
   '    refuse_link(path)?;' '    let _ = path;' \
   oplog_undo a_refs_log_that_is_a_symbolic_link_does_not_undo_the_undo
 m OU26 'oplog undo: undo-plan names the apply command with --to and --expect swapped' src/oplog/undo_plan.rs \
-  '"stw oplog undo {} --to {} --expect {} --yes",' '"stw oplog undo {} --expect {} --to {} --yes",' \
+  'format!("stw oplog undo {name} --to {to} --expect {expect} --yes")' 'format!("stw oplog undo {name} --to {expect} --expect {to} --yes")' \
   oplog_undo expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written
+m OU27 'oplog undo: the run number ignores the runs that exist' src/oplog/undo.rs \
+  'let run = counted.max(existing).saturating_add(1);' 'let run = counted.saturating_add(1);' \
+  oplog_undo a_deleted_counter_does_not_reuse_a_number_and_the_new_backup_stays
+m OU28 'oplog undo: a counter below the highest run hands out a taken number' src/oplog/undo.rs \
+  'let run = counted.max(existing).saturating_add(1);' 'let run = counted.saturating_add(1);' \
+  oplog_undo a_counter_below_the_highest_run_does_not_reuse_a_number
+m OU29 'oplog undo: the prune removes the run it was made for' src/oplog/undo.rs \
+  '        if keep.contains(&run) || run == own {' '        if keep.contains(&run) {' \
+  oplog_undo the_prune_never_removes_the_run_it_was_made_for
+m OU30 'oplog undo: a run name with a leading zero is a run' src/oplog/undo.rs \
+  "    if b.is_empty() || b[0] == b'0' || !b.iter().all(u8::is_ascii_digit) {" "    if b.is_empty() || !b.iter().all(u8::is_ascii_digit) {" \
+  oplog_undo names_that_are_no_canonical_decimal_are_no_run_and_stay
+m OU31 'oplog undo: a run name with a plus sign is a run' src/oplog/undo.rs \
+  "    if b.is_empty() || b[0] == b'0' || !b.iter().all(u8::is_ascii_digit) {" "    if b.is_empty() || b[0] == b'0' {" \
+  oplog_undo names_that_are_no_canonical_decimal_are_no_run_and_stay
+m OU32 'oplog undo: the second part of a backup name is read with u64::parse' src/oplog/undo.rs \
+  'canonical(k).is_some()) else {' 'k.parse::<u64>().is_ok()) else {' \
+  oplog_undo names_that_are_no_canonical_decimal_are_no_run_and_stay
+m OU33 'oplog undo: undo-plan names a ref with shell characters unquoted' src/oplog/undo_plan.rs \
+  '                    self.current.as_deref().unwrap_or("?"),
+                    true' '                    self.current.as_deref().unwrap_or("?"),
+                    false' \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU34 'oplog undo: the way back of the text output is unquoted' src/oplog/undo.rs \
+  'undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)' 'undo_plan::undo_command(&self.reference, &self.previous, &self.current, false)' \
+  oplog_undo undo_quotes_the_way_back_and_json_keeps_the_raw_name
+m OU35 'oplog undo: a single quote in a name is not escaped' src/oplog/undo_plan.rs \
+  "format!(\"'{}'\", s.replace('\\'', \"'\\\\''\"))" "format!(\"'{}'\", s)" \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU36 'oplog undo: a plain ref name is quoted too' src/oplog/undo_plan.rs \
+  '    let plain = !s.is_empty()' '    let plain = false && !s.is_empty()' \
+  oplog_undo a_plain_ref_name_is_not_quoted
+m OU37 'oplog undo: a dollar sign counts as plain' src/oplog/undo_plan.rs \
+  'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-$".contains(&b)' \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU38 'oplog undo: a backtick counts as plain' src/oplog/undo_plan.rs \
+  'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-`".contains(&b)' \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU39 'oplog undo: a semicolon and a pipe count as plain' src/oplog/undo_plan.rs \
+  'b"._/+@:=%,-".contains(&b)' 'b"._/+@:=%,-;|".contains(&b)' \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU40 'oplog undo: the JSON apply field is quoted' src/oplog/undo_plan.rs \
+  '            self.current.as_deref().unwrap_or("?"),
+            false,' '            self.current.as_deref().unwrap_or("?"),
+            true,' \
+  oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
+m OU41 'oplog undo: the JSON way_back field is quoted' src/oplog/undo.rs \
+  'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);' 'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), true);' \
+  oplog_undo undo_quotes_the_way_back_and_json_keeps_the_raw_name
+m OU42 'oplog undo: the way back of the text output has --to and --expect swapped' src/oplog/undo.rs \
+  'undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)' 'undo_plan::undo_command(&self.reference, &self.current, &self.previous, true)' \
+  oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
+m OU43 'oplog undo: the backup ref is created without the create-only flag (a ref that appears after the lookup is replaced)' src/oplog/undo.rs \
+  '            PreviousValue::MustNotExist,
+            value,' '            PreviousValue::Any,
+            value,' \
+  oplog_undo a_backup_ref_that_appears_between_the_lookup_and_the_edit_is_not_replaced
+m OU44 'oplog undo: the command takes a run number once only' src/oplog/undo.rs \
+  'pub const COUNTER_TRIES: u32 = 5;' 'pub const COUNTER_TRIES: u32 = 1;' \
+  oplog_undo the_command_tries_five_times_for_a_run_number
+m OU45 'oplog undo: the command takes 6 tries for a run number' src/oplog/undo.rs \
+  'pub const COUNTER_TRIES: u32 = 5;' 'pub const COUNTER_TRIES: u32 = 6;' \
+  oplog_undo the_command_gives_up_after_five_lost_races_and_changes_nothing
+m OU46 'oplog undo: the blob of the counter has no nonce' src/oplog/undo.rs \
+  '.write_blob(format!("{run} {}", nonce()).as_bytes())' '.write_blob(format!("{run}{}", "").as_bytes())' \
+  oplog_undo two_first_runs_do_not_share_a_number_even_when_the_rival_wrote_the_same_text
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

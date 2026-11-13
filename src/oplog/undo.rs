@@ -138,7 +138,7 @@ fn nonce() -> String {
     format!("{}-{nanos}", std::process::id())
 }
 
-/// Take the next run number: read the counter, write a new blob `<run> <pid>-<nanos>` and update the counter ref with a
+/// Take the next run number: the larger of the counter and the highest run that exists, plus one. Read the counter, write a new blob `<run> <pid>-<nanos>` and update the counter ref with a
 /// compare-and-swap. A lost race (another run took the number) reads the counter again; after `tries` tries it fails.
 /// `between` is called after the counter was read and before the update (the tests make another writer win here).
 /// Returns the run and the counter update (old blob, new blob) for the log.
@@ -150,10 +150,18 @@ pub fn take_run_with(
     let mut last = String::new();
     for attempt in 0..tries {
         let prev = direct_value(repo, COUNTER_REF)?;
-        let run = match prev {
-            Some(blob) => counter_run(repo, blob)? + 1,
-            None => 1,
+        // never below a run that exists: a counter that was deleted or lowered by hand must not hand out a number
+        // whose backup ref is there already, or whose run the prune would remove at once
+        let existing = backup_refs(repo)?
+            .into_iter()
+            .map(|(run, _, _)| run)
+            .max()
+            .unwrap_or(0);
+        let counted = match prev {
+            Some(blob) => counter_run(repo, blob)?,
+            None => 0,
         };
+        let run = counted.max(existing).saturating_add(1);
         let blob = repo
             .write_blob(format!("{run} {}", nonce()).as_bytes())
             .map_err(|e| e.to_string())?
@@ -215,6 +223,16 @@ pub fn create_backup_with(
     )
 }
 
+/// A run number or `k` as written by stw: a canonical decimal number, positive, no sign and no leading zero. `u64::parse`
+/// alone also takes `+1` and `01`; such names are no runs and stay untouched.
+fn canonical(s: &str) -> Option<u64> {
+    let b = s.as_bytes();
+    if b.is_empty() || b[0] == b'0' || !b.iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    s.parse().ok()
+}
+
 /// `(run, k)` of the refs below `refs/stw/backup/` with their values; names that do not have the form are ignored.
 fn backup_refs(
     repo: &gix::Repository,
@@ -232,7 +250,7 @@ fn backup_refs(
         let Some((run, k)) = rest.split_once('/') else {
             continue;
         };
-        let (Ok(run), true) = (run.parse::<u64>(), k.parse::<u64>().is_ok()) else {
+        let (Some(run), true) = (canonical(run), canonical(k).is_some()) else {
             continue;
         };
         if let gix::refs::TargetRef::Object(id) = r.target() {
@@ -245,15 +263,16 @@ fn backup_refs(
 /// Refs deleted by the retention (name, old value) and the failures (text).
 pub type Pruned = (Vec<(String, ObjectId)>, Vec<String>);
 
-/// Delete the refs of all runs but the `RETAINED_RUNS` highest; the counter ref is not below the prefix and stays.
+/// Delete the refs of all runs but the `RETAINED_RUNS` highest and the run `own` that this call was made for (the newest
+/// run of the caller is never removed, whatever other writers did meanwhile); the counter ref is not below the prefix and stays.
 /// Returns the deleted refs (name, old value) and the failures.
-pub fn prune(repo: &gix::Repository, _own: u64) -> std::result::Result<Pruned, String> {
+pub fn prune(repo: &gix::Repository, own: u64) -> std::result::Result<Pruned, String> {
     let refs = backup_refs(repo)?;
     let runs: BTreeSet<u64> = refs.iter().map(|(r, _, _)| *r).collect();
     let keep: BTreeSet<u64> = runs.iter().rev().take(RETAINED_RUNS).copied().collect();
     let (mut gone, mut failed) = (Vec::new(), Vec::new());
     for (run, name, id) in refs {
-        if keep.contains(&run) {
+        if keep.contains(&run) || run == own {
             continue;
         }
         match full_name(&name).and_then(|n| edit_with_reflog(repo, vec![delete_edit(n, id)])) {
@@ -397,10 +416,8 @@ pub fn undo_hooked(
             new: Some(to),
         },
     );
-    let way_back = format!(
-        "stw oplog undo {} --to {expect} --expect {to} --yes",
-        plan.reference
-    );
+    let way_back =
+        undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);
     Ok(Outcome::Done(Box::new(Done {
         reference: plan.reference,
         previous: expect.to_string(),
@@ -426,7 +443,8 @@ impl Done {
             self.current,
             self.backup_ref,
             self.previous,
-            self.way_back
+            // the text is made to be pasted into a shell: the name is quoted there, the JSON field keeps the raw one
+            undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)
         );
         if !self.pruned.is_empty() {
             b.push_str(&format!(

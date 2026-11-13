@@ -356,22 +356,25 @@ fn the_update_is_a_compare_and_swap_and_a_lost_race_keeps_the_backup() {
 
 #[test]
 fn an_existing_backup_ref_is_never_replaced() {
-    let (fx, [c1, c2, c3]) = undo_fx();
-    // the counter is empty, so this run is 1: its backup ref is taken already (same value, then another value)
+    let (fx, [c1, _, c3]) = undo_fx();
+    let repo = fx.repo();
+    // the ref is taken already: with the same value (gix would let a create-only edit pass) and with another one
     for taken in [c3, c1] {
         fx.set_ref("refs/stw/backup/1/1", taken);
-        let _ = std::fs::remove_file(fx.path.join(".git/refs/stw/backup-counter"));
-        let r = run(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
-        assert_eq!(r.code, 1, "{}{}", r.text, r.err);
-        assert!(
-            r.err.contains("exists already") || r.text.contains("exists already"),
-            "{}{}",
-            r.text,
-            r.err
-        );
-        assert_eq!(fx.tip("work"), c3, "the branch stays");
+        let e = undo::create_backup_with(&repo, "refs/stw/backup/1/1", c3, &mut || {}).unwrap_err();
+        assert!(e.contains("exists already"), "{e}");
         assert_eq!(refname_value(&fx, "refs/stw/backup/1/1"), Some(taken));
     }
+}
+
+#[test]
+fn a_backup_ref_that_is_there_without_a_counter_is_passed_over() {
+    let (fx, [c1, c2, c3]) = undo_fx();
+    fx.set_ref("refs/stw/backup/1/1", c1);
+    let r = run(&fx, &undo_args(&c2.to_string(), &c3.to_string()));
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert_eq!(refname_value(&fx, "refs/stw/backup/1/1"), Some(c1));
+    assert_eq!(refname_value(&fx, "refs/stw/backup/2/1"), Some(c3));
 }
 
 fn plain_repo() -> (Fx, ObjectId) {
