@@ -62,7 +62,7 @@ pub struct SyncRec {
     pub prune: Option<&'static str>,
     /// Remote-tracking refs of `origin` that the fetch deleted (apply). Also set when the fetch failed afterwards.
     pub pruned: Vec<String>,
-    /// Dry run with `--prune`: how many refs under `refs/remotes/origin/` are candidates.
+    /// Offline plan with `--prune`: how many refs under `refs/remotes/origin/` are candidates.
     pub tracking_refs: Option<usize>,
     /// `--submodules`: what happened to this pinned submodule.
     pub submodule: Option<SubRec>,
@@ -548,10 +548,26 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
         if o.submodules {
             out += &format!(", {} submodule(s) would move", count("submodule-move"));
         }
-        out += if o.offline {
+        let failed = list
+            .iter()
+            .filter(|x| {
+                matches!(
+                    x.fetch.as_str(),
+                    "failed" | "unsupported" | "unsupported-remote"
+                )
+            })
+            .count();
+        out += &if o.offline {
             ". Nothing was written. Nothing was fetched either: based on the last fetch.\n"
+                .to_string()
+        } else if failed > 0 {
+            format!(
+                ". The fetch failed for {failed} {}; {} plan is based on the last fetch. Nothing else was written.\n",
+                if failed == 1 { "repository" } else { "repositories" },
+                if failed == 1 { "its" } else { "their" }
+            )
         } else {
-            ". Only the remote-tracking refs were fetched; nothing else was written.\n"
+            ". Only the remote-tracking refs were fetched; nothing else was written.\n".to_string()
         };
     }
     out

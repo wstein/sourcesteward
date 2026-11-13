@@ -1,4 +1,4 @@
-//! Fetch of `origin` (a run, not `--plan`).
+//! Fetch of `origin` (a run, and `--plan` without `--offline`).
 //!
 //! By remote kind: `ssh://`, `user@host:path`, local paths and `file://` are fetched by the installed `git`
 //! through the runner (`git_runner`, reported as `"via": "git"`), because gix would start `ssh` or
