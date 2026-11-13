@@ -2,7 +2,7 @@
 name = "stw"
 version = "0.0.1"
 edition = "2021"
-rust-version = "1.88"
+rust-version = "1.89"
 description = "SourceSteward: everyday git and GitHub workflows for agents, on gitoxide, without git or gh binaries"
 license = "EUPL-1.2"
 publish = false

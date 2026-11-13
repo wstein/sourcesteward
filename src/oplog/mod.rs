@@ -10,6 +10,7 @@ pub mod parse;
 pub mod store;
 pub mod timeline;
 pub mod undo_plan;
+pub mod write;
 
 /// The repository of a command: the common directory (shared by all linked worktrees) and, when gix can open it, the
 /// repository handle. A repository whose ref backend gix does not read has a common directory and no handle.
