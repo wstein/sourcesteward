@@ -23,8 +23,8 @@ tool: it may work in a colocated Git repository, without a test and without a pr
 detection, no warning, no test).
 
 ```
-stw status    [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
-              [--all [--depth N] [--limit N]] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
+stw status    [PATH].. [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
+              [--depth N] [--limit N] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
@@ -346,8 +346,8 @@ with `--offline`.
 | `--review` | Also reads the review state of the open pull requests from their comments: one comment read per pull request (a list read of at most 500 comments, which is up to 6 requests of 100, none after the `--timeout`), at most 16 reads at a time, at most 200 pull requests per run (repository order, newest pull request first; the rest is `not read` with a notice). Each pull request line gets `review <state>` (`clear`, `clear-carried`, `findings`, `no-review`, `unverified-author`, `?`), each repository a line `reviews: 1 clear, 2 ?` and, with `--long`, the evidence per pull request. See "Review state in `stw status --review`". `Counts` do not change. Not with `--offline` (usage error, exit 2). |
 | `--icons unicode\|nerd\|ascii` | The marker in front of a repository line: attention `▲`, cannot be read `✖` (unicode), `U+F071` and `U+F057` of Font Awesome (nerd, needs a Nerd Font), `!` for both (ascii). Default: unicode when stdout is a terminal, the locale is UTF-8 (the first of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides) and `TERM` is not `dumb`; ascii otherwise (a pipe, a file). An explicit value always wins. Text only. |
 | `--timeout DURATION` | The overall deadline of the GitHub reads, 1s to 10m, default 90s, written as Go does (`90s`, `2m`, `1m30s`, `1.5s`). Every request is cut at the deadline and none starts after it (one request also takes at most 30 s). The cut reads are notices (`pull requests not read (deadline: ...)`), their counters `?`, exit 0. The fetch of `--fetch` and the local reads are not part of it. |
-| `--all` | Every repository of the workspace, the root and the nested submodules, in one line each with the stack of its current branch; `--json` is the same document plus `kind`, `depth`, `stack`. Not with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose` (usage error). See "`stw status --all`". |
-| `--depth N`, `--limit N` | Only with `--all`: how deep below the root submodules are listed (0 to 64, default 16; 0 is the root only; a cut is a notice) and the most repositories of a run (1 to 1024, default 256; more is a usage error, exit 2). |
+| `PATH..` | Only these repositories, in one line each with the stack of the current branch; `--json` is the same document plus `kind`, `depth`, `stack`. A PATH that holds a repository is that repository with its nested submodules, any other directory is scanned below for repositories. Not with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose`, `--repo` (usage error). Without a PATH: the repositories of the workspace, as before. See "`stw status PATH`". |
+| `--depth N`, `--limit N` | Only when a PATH is a directory that is scanned (usage error, exit 2, otherwise): how many levels below it repositories and their submodules are listed (0 to 64, default 16; a cut is a notice) and the most repositories of a run (1 to 1024, default 256; more is a usage error, exit 2). |
 | `--stats` | One line after the summary: `stats: API: 4 reqs (4,896/5,000 left, reset 22:13 UTC) \| 1.4s elapsed (local 110ms, remote 1.3s)`. `local` includes the fetch of `--fetch`; `elapsed` ends before the `agent-rules` read. With `--json` the member `stats`. |
 | `--verbose` | Implies `--stats`. Before the stats line: `Diagnostic breakdown:` with the requests and the summed request time per repository and source (`pulls`, `issues`; the comment reads of `--review` count as `pulls`). With `--json` the breakdown and the stats line go to stderr, so stdout stays one document. |
 
@@ -389,20 +389,39 @@ with `--offline`.
 - JSON: Go's schema 2 differs from the Rust one as a whole (see the migration plan); the new fields here are only additive to
   the Rust document, `schema_version` stays `2`.
 
-### `stw status --all`
+### `stw status PATH`
 
-Port of the spike `spikes/stw/status-all` (new behavior without a Go counterpart; the live acceptance of the spike by the owner is not yet done). A flag of
+Port of the spike `spikes/stw/status-all` (new behavior without a Go counterpart; the live acceptance of the spike by the owner is not yet done). It replaces `stw status --all` (owner decision 2026-11-13). `PATH` is an argument of
 `status`, not a command. It builds on the row of `status` (`collect_local`, `read_remote`, `reasons`, `collect_notices`, the
-GitHub client of `src/github.rs`) and on the walk of the nested submodules (`repo::list_repos`, the root as in
-"Submodules: the gitlinks of the index"); what it adds is the stack of the current branch, the depth bound and the one-line text
-(`src/status_all.rs`).
+GitHub client of `src/github.rs`) and on the walk of the nested submodules (`repo::list_repos_depth`, "Submodules: the gitlinks of the index"); what it adds is the
+resolution of the paths, the stack of the current branch, the depth bound and the one-line text (`src/status_all.rs`).
+
+Which repositories:
+
+- No PATH: the repositories of the workspace, the default text and JSON of `status` (unchanged).
+- A PATH that holds a repository (a `.git` directory or file: a checkout or a linked worktree): that repository and its nested
+  submodules, depth-first, as `status` lists a workspace. It is no scan: `--depth` and `--limit` do not apply.
+- Any other directory: it is scanned below for directories with a `.git` entry (depth-first, children in byte order of their
+  names, symbolic links not followed, a repository is not entered, a bare repository is not found); each repository found is
+  listed with its nested submodules. `--depth N` counts the levels below the directory: a child is level 1, a submodule is one
+  level below its repository, a found repository at level L lists submodules down to level N. `--limit N` bounds the repositories of the run.
+- Several PATHs are listed in the order of the arguments, sorted inside one PATH. A repository that comes more than once (`.` and
+  `..`, a symbolic link, a submodule of an earlier repository) is listed once, by its canonical path, at its first mention
+  (`kind` and `depth` are those of that mention).
+- A PATH that does not exist, is no directory or cannot be read is a usage error (exit 2); nothing is printed.
+- The agent-rules checkout (`--rules-path`, default `<workspace>/.agents`) is not listed by a scan or as a submodule unless it is named as a PATH.
+  The workspace root for this is `--root`, else the one `status` finds from the current directory, else the current directory; no workspace is needed for a PATH.
+
+The key of a repository, in the text, the notices and the JSON member `path`, is its path relative to the current directory
+(`.` for the directory itself, `..` components for a repository next to it; the absolute path when the argument was absolute and the repository lies
+outside the current directory). The name (`name` in the JSON) is display only, so two repositories with the same name differ by their key.
 
 Text (the blocks of the default text are not printed):
 
-    status --all  root=<abs>  repositories=<n>  depth<=<depth>
+    status  paths=<args>  repositories=<n>[  depth<=<depth>]
 
     Repositories (<n>)
-    <mark> <name>  <branch>  <sync>  <dirty> stack <chain>  PRs <n> | Issues <n> [(<reason>)]
+    <mark> <key>  <branch>  <sync>  <dirty> stack <chain>  PRs <n> | Issues <n> [(<reason>)]
 
     Totals  PRs <n> | Issues <n> | ahead <n> | behind <n>
 
@@ -411,44 +430,46 @@ Text (the blocks of the default text are not printed):
 
     <a> of <n> repositories need attention
 
-`<mark>` is `!` when the repository has an attention reason (`reasons()` unchanged), else a blank; `<name>` is the name of
-`status` (the root by its directory name, a submodule by its path below the root, `outer/inner`), padded to 28 characters.
+`depth<=` is printed when a directory was scanned. `<mark>` is `!` when the repository has an attention reason (`reasons()` unchanged), else a blank; `<key>` is padded to 28 characters.
 `<sync>` is `<upstream> +<ahead>/-<behind>`, `no upstream`, `upstream gone`, `(unborn)` or `-` (detached; the branch column then
 shows `(<head>)`). `<dirty>` is `clean` or the non-zero counts `<n> conflicts <n> staged <n> unstaged <n> untracked`. `<chain>` is the
 local upstream chain of the current branch, top-most local parent first (`main<-a<-b`), `-` without a local parent. A local parent
 is `branch.<b>.remote = .` with `branch.<b>.merge = refs/heads/<p>` (upstream links only; no other stack source). Because a branch
-name may contain `<-`, the JSON `stack.chain` is an array. A repository that cannot be read is `! <name>  (<error>)`. The GitHub
+name may contain `<-`, the JSON `stack.chain` is an array. A repository that cannot be read is `! <key>  (<error>)`. The GitHub
 cell is `PRs n | Issues n` (`n+` at a full page), `?` for a failed read with the reason in brackets (`unauthorized`,
 `forbidden`, `not-found`, `rate-limited`, `timeout`, `unreadable`, `unreachable`, `error`; read from the message of the client),
 `n/a` with `no-github-origin`, `offline` or `no-token`. `Totals`: a number only when every repository with a GitHub origin gave
 one (`n+` when a page was full), else `n/a` (the JSON `totals` has the state); `ahead` and `behind` are sums over the rows.
 Exit codes as `status`: 1 when a repository cannot be read, 0 otherwise (a failed GitHub read is a notice); an unusable
-workspace or more than `--limit` repositories is exit 2.
+PATH, a flag that does not fit or more than `--limit` repositories is exit 2.
 
-JSON (`--all --json`): the document of `status --json` (`schema_version` 2, `command` `status`) plus `options.all` (true),
-`options.depth`, `options.limit`, `options.timeout` (whole seconds of `--timeout`) and per repository `kind` (`root` or `submodule`),
-`depth` (0 for the root) and `stack` (`{"chain": [...] | null, "links": n}`; `null` for a detached or unborn head and for a
-repository that cannot be read; `links` is the number of branches of the repository with a local parent). Without `--all` none of
-these fields exists. Notices that only `--all` has: `depth-limit` (source `submodules`, `<name>: submodules below depth <n> not
-listed`) and `stack-cycle` (source `stack`, `<name>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
+JSON (`status PATH.. --json`): the document of `status --json` (`schema_version` 2, `command` `status`) plus per repository `kind` (`root`: the repository that was
+named or found, or `submodule`), `depth` (0 for the root) and `stack` (`{"chain": [...] | null, "links": n}`; `null` for a detached or unborn head and for a
+repository that cannot be read; `links` is the number of branches of the repository with a local parent), and `path` is the key. `options.paths` is the list of the arguments as
+given (empty without a PATH, in every `status --json`); `options.depth`, `options.limit` and `options.timeout` (whole seconds of `--timeout`) are there only when a directory was
+scanned. `kind`, `depth` and `stack` exist only with a PATH. Notices that only a PATH has: `depth-limit` (source `submodules`, `<key>: submodules below depth <n> not
+listed`; source `scan`, `<key>: repositories below depth <n> not listed`, for a scanned directory that has repositories below the bound) and `stack-cycle` (source `stack`, `<key>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
+A refused gitlink path (`rejected_paths`, notice `rejected-path`) is named below the key of its repository, once.
 
-The status of a repository under `--all` does not look into its submodules (`--ignore-submodules=all`; each has its own row), so
-a changed submodule is not an `unstaged` path of its parent and an unreadable submodule does not make its parent unreadable.
+The status of every repository looks into its submodules (also in `status` without a PATH, in `sync` and in `sync restore`): a submodule whose
+HEAD or work tree differs from the gitlink of its parent is an `unstaged` path of the parent, and a submodule that cannot be read makes its parent
+unreadable (its row is an error row). `submodule.<name>.ignore = all` in the parent's configuration leaves a submodule out.
 
-Deviations from the spike, one by one:
+Deviations from the spike and from Go, one by one:
 
 1. GitHub: the product client (`src/github.rs`, token rules, no `gh`) instead of `gh api`; the reasons are read from its messages
    (`classify`, the start of the message only); `not-logged-in` and `gh-missing` do not exist, `no-token` does; a 403 is
    `forbidden` even when GitHub meant a rate limit (the client does not tell them apart; the spike said `rate-limited`); the stop after a rate limit is the one of
    `status` (none for the plain reads; `--review` has its own).
-2. Walk: `repo::list_repos`. An uninitialised submodule is not listed (spike: an error row `not initialised`) and a symlinked or
+2. Walk: `repo::list_repos_depth`. An uninitialised submodule is not listed (spike: an error row `not initialised`) and a symlinked or
    otherwise refused gitlink path is a `rejected-path` notice and no row (spike: an error row). Neither makes the exit code 1.
-3. Name: the root is its directory name in the text and in the JSON (spike: `.`).
+3. Name: display only; the key is the path relative to the current directory (spike: the name, the root `.`). A name that occurs twice
+   (a root and a submodule `ws`) is no ambiguity any more (this replaces the former deviation 13).
 4. Notices: those of `status` (`offline`, `no-token`, `prs-not-read`, `issues-not-read`, `rejected-path`, ...) with their wording,
    not the spike codes (`github-offline`, `github-read-failed`, ...). New: `depth-limit`, `stack-cycle`.
 5. Exit code of an unreadable repository: 1, the rule of `status` (spike: 0, its open question 7). Recommendation: keep 1.
-6. Exit code above the limit: 2, a usage error with the text of `status` (spike: 1; Go: 1 with the code `sync-limit`). The same
-   text and code as `status` without `--all`; the owner decides whether 1 is wanted (recommendation: keep 2, one rule for every
+6. Exit code above the limit: 2, a usage error (`the paths hold more than <n> repositories`; spike: 1; Go: 1 with the code `sync-limit`). The same
+   code as `status` without a PATH; the owner decides whether 1 is wanted (recommendation: keep 2, one rule for every
    command).
 7. Text from outside is shown with escapes (`escape_for_text`: `\u{202e}`, `\u{1b}`, `\n`; cut at 300 characters), not as `?`.
 8. `reasons` contain `operation:*` (the spike left a running rebase out); the one-line row does not name the operation, only the
@@ -458,19 +479,18 @@ Deviations from the spike, one by one:
 10. `--timeout DURATION` is the overall deadline of the GitHub reads (default 90s, not with `--offline`), as `status` (spike: seconds
     per `gh` call, its open question 10, recommendation followed). `options.timeout` is its whole seconds; `options.offline` is
     not added (the spike had it).
-11. `--all` is not combined with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose` (the one-line text has no
-    place for them; spike open question 9 recommended one row builder for both, which is the case for the data, not for the text).
-    `--fetch` works.
-12. A submodule's state is not counted in its parent as in the spike, but only under `--all`: `status` without `--all` still counts
-    a changed submodule as one `unstaged` path of its parent and cannot read a parent whose submodule is unreadable. The JSON
-    `changes` of a parent can therefore differ between `status --json` and `status --all --json`. The same status function
-    (`changes_opts(.., ignore_submodule_changes = true)`) also serves the gate of `sync --rebase/--merge` and `sync restore`;
-    it now skips the inspection of a submodule there too, as Go's `--ignore-submodules=all` does. Effect on `sync`: a parent
-    whose submodule cannot be read stays readable for the gate and the run of `--rebase`/`--merge` (test in `sync_pull.rs`;
-    before, the extra read with the inspection (`status::changes`) failed the whole repository); the count `dirty_files`
-    falls back to the gate's count then. A fast-forward still reads with the inspection (`fast_forward.rs`, overlap check).
-13. A name can occur twice (the root `ws` and a submodule `ws`): `kind` and `depth` in the JSON tell them apart (by path), the
-    text and the notices name both `ws` (ledger).
+11. A PATH is not combined with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose`, `--repo` (the one-line text has no
+    place for them). `--fetch` works.
+12. `--all` is gone, without an alias (owner decision 2026-11-13). Go has `stw status --all`; Rust has `stw status PATH..` instead. The
+    spike keeps its own interface.
+13. The scan is new (the spike and Go list the submodules of one workspace): directories are scanned for repositories, `--depth` counts levels of
+    directories and submodules together, a repository named by a PATH has no depth bound.
+14. The inspection of the submodules in the work tree is never left out (`index_worktree_submodules(None)` is removed). The spike and Go
+    (`--ignore-submodules=all`) leave a changed submodule out of its parent. It follows: `sync --rebase/--merge` counts a changed submodule as a local
+    change of the superproject (`cannot rebase with local changes (use --autostash)`); an unreadable submodule makes `sync` report the superproject as
+    failed; `sync restore` stops a superproject whose submodule differs from the gitlink (`changed-since`, `the worktree has local changes`), so it
+    restores the last listed repository first (a submodule before its superproject), one after the other. A superproject whose submodule was not moved by the run
+    that is restored stays `changed-since`; `submodule.<name>.ignore = all` is the way out. Recommendation: keep, and decide whether `restore` needs an option for it.
 
 Open questions (recommendation each):
 
@@ -478,8 +498,6 @@ Open questions (recommendation each):
   through the same field `stack`. Not decided by the owner (the "Stapelmodell" is open).
 - Spike question 7, exit code of an unreadable submodule: exit 1 like `status` (deviation 5). Recommendation: keep.
 - Exit code above `--limit` (deviation 6): recommendation 2.
-- Deviation 12: recommendation, the same `--ignore-submodules=all` rule for `status` without `--all` (every submodule has its own
-  row there too); a change of the default `status`, so a decision of its own.
 - Should `kind` and `depth` also be in the default `status --json` (additive, the walk is nested there too)? Recommendation: yes,
   later, with `stack`.
 - Mutations of this flag have the prefix `AL` (`SA` is taken by `stw add`).
@@ -1040,7 +1058,7 @@ SHA-256 repositories, a concurrent `git` writing the same refs.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 729 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 754 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
