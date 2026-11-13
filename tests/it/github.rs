@@ -198,7 +198,7 @@ fn json_field_names_are_the_documented_ones() {
     );
     assert_eq!(
         keys(&st["options"]),
-        doc(&["fetch", "worktrees", "icons", "review"])
+        doc(&["fetch", "worktrees", "icons", "review", "paths"])
     );
     assert_eq!(keys(&repo["fetch"]), doc(&["state", "via", "error"]));
     assert_eq!(

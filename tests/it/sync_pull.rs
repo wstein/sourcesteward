@@ -613,9 +613,8 @@ fn a_rebase_flattens_a_local_merge_commit_whatever_rebase_rebase_merges_says() {
     );
 }
 
-#[test]
-fn a_changed_submodule_is_no_local_change_for_the_gate() {
-    let d = diverged();
+/// `diverged()` with the submodule `sub` added and committed.
+fn with_submodule(d: &D) {
     let subsrc = d.w.p("subsrc");
     std::fs::create_dir(&subsrc).unwrap();
     d.w.git(&subsrc, &["init", "-q"]);
@@ -625,53 +624,58 @@ fn a_changed_submodule_is_no_local_change_for_the_gate() {
         &["submodule", "add", "-q", subsrc.to_str().unwrap(), "sub"],
     );
     d.w.git(&d.ws, &["commit", "-q", "-m", "add sub"]);
+}
+
+#[test]
+fn a_changed_submodule_is_a_local_change_for_the_gate() {
+    // the full check of the work tree runs for the gate too (no `--ignore-submodules=all`)
+    let d = diverged();
+    with_submodule(&d);
     // the submodule moves on: the superproject shows a modified gitlink
     d.w.git(
         &d.ws.join("sub"),
         &["commit", "-q", "--allow-empty", "-m", "moved"],
     );
     assert!(d.w.git(&d.ws, &["status", "--porcelain"]).contains("M sub"));
-    // the plan (it does not fetch) says the same as the run
     d.w.git(&d.ws, &["fetch", "-q", "origin"]);
-    let (_, v, _) = d.w.stw(&d.ws, &["--rebase", "--plan"]);
-    assert_eq!(repo(&v, "ws")["result"], "rebase", "{v}");
-    let (code, v, err) = d.w.stw(&d.ws, &["--rebase"]);
-    assert_eq!(code, 0, "{v} {err}");
-    let r = repo(&v, "ws");
-    assert_eq!(r["result"], "rebased", "{r}");
-    assert!(is_ancestor(&d, &d.upstream, "HEAD"));
+    let before = head(&d);
+    for verb in ["rebase", "merge"] {
+        let flag = format!("--{verb}");
+        let (_, v, _) = d.w.stw(&d.ws, &[flag.as_str(), "--plan"]);
+        let r = repo(&v, "ws");
+        assert_eq!(r["result"], "skip", "{verb}: {r}");
+        assert_eq!(
+            r["reason"],
+            format!("cannot {verb} with local changes (use --autostash)"),
+            "{r}"
+        );
+        assert_eq!(r["dirty_files"], 1, "{r}");
+        let (code, v, err) = d.w.stw(&d.ws, &[flag.as_str()]);
+        assert_eq!(code, 0, "{v} {err}");
+        let r = repo(&v, "ws");
+        assert_eq!(r["result"], "skip", "{verb}: {r}");
+        assert_eq!(head(&d), before, "nothing moved");
+    }
 }
 
 #[test]
-fn a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject() {
-    // `status::changes_opts(.., ignore_submodule_changes = true)` serves the gate; Go: `--ignore-submodules=all`
+fn a_submodule_that_cannot_be_read_makes_the_superproject_unreadable_for_the_run() {
     let d = diverged();
-    let subsrc = d.w.p("subsrc");
-    std::fs::create_dir(&subsrc).unwrap();
-    d.w.git(&subsrc, &["init", "-q"]);
-    d.w.commit(&subsrc, "s.txt", "s\n");
-    d.w.git(
-        &d.ws,
-        &["submodule", "add", "-q", subsrc.to_str().unwrap(), "sub"],
-    );
-    d.w.git(&d.ws, &["commit", "-q", "-m", "add sub"]);
+    with_submodule(&d);
     // the checkout of the submodule can no longer be read: its `.git` file points nowhere
     std::fs::write(d.ws.join("sub/.git"), "gitdir: /nonexistent/stw/gitdir\n").unwrap();
     d.w.git(&d.ws, &["fetch", "-q", "origin"]);
+    let before = head(&d);
     for args in [["--rebase", "--plan"], ["--merge", "--plan"]] {
-        let (_, v, _) = d.w.stw(&d.ws, &args);
+        let (code, v, _) = d.w.stw(&d.ws, &args);
         let r = repo(&v, "ws");
-        assert!(r["error"].is_null(), "{args:?}: {r}");
-        assert_eq!(r["dirty_files"], 0, "{args:?}: {r}");
-        assert!(
-            matches!(r["result"].as_str(), Some("rebase" | "merge")),
-            "{args:?}: {r}"
-        );
+        assert!(!r["error"].is_null(), "{args:?}: {r}");
+        assert_eq!(code, 1, "{args:?}: {v}");
     }
-    let (_, v, err) = d.w.stw(&d.ws, &["--rebase"]);
-    let r = repo(&v, "ws");
-    assert_eq!(r["result"], "rebased", "{r} {err}");
-    assert!(is_ancestor(&d, &d.upstream, "HEAD"));
+    let (code, v, _) = d.w.stw(&d.ws, &["--rebase"]);
+    assert!(!repo(&v, "ws")["error"].is_null(), "{v}");
+    assert_eq!(code, 1);
+    assert_eq!(head(&d), before, "nothing moved");
 }
 
 // ---------------------------------------------------------------------------------------------------------

@@ -788,6 +788,8 @@ fn a_repository_config_that_names_a_program_stops_nothing_and_no_git_is_needed()
     // The journal step goes through gix: a local core.sshCommand, credential helper or url rewrite does not refuse it,
     // and a run (here: from the refs already fetched) needs no `git` on PATH.
     let j = setup();
+    // the restore of `ws` is to reach its git step: the submodule that the failing restore leaves moved is not looked at
+    j.w.git(&j.ws, &["config", "submodule.sub.ignore", "all"]);
     for dir in [&j.ws, &j.sub] {
         j.w.git(dir, &["fetch", "-q", "origin"]);
         j.w.git(dir, &["config", "core.sshCommand", "false"]);

@@ -10,7 +10,8 @@ expression: pretty
     "fetch": false,
     "worktrees": false,
     "icons": null,
-    "review": false
+    "review": false,
+    "paths": []
   },
   "engine": "[ENGINE]",
   "github": false,

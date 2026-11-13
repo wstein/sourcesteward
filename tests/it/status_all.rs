@@ -1,7 +1,8 @@
-//! `stw status --all`: every repository of the workspace (root and nested submodules) in one line each, with the stack of
-//! the current branch; `--json` is the `stw status --json` document plus the additive fields `kind`, `depth`, `stack` per
-//! repository and `all`, `depth`, `limit`, `timeout` in `options`. Port of the spike `spikes/stw/status-all`
-//! (deviations: README, "`stw status --all`").
+//! `stw status PATH..`: the repositories at the given paths (a repository with its nested submodules, or the repositories
+//! found below a directory) in one line each, with the stack of the current branch; `--json` is the `stw status --json`
+//! document plus the additive fields `kind`, `depth`, `stack` per repository, `paths` in `options` and, when a directory
+//! was scanned, `depth`, `limit`, `timeout` in `options`. Port of the spike `spikes/stw/status-all` (deviations: README,
+//! "`stw status PATH`"). The key of a repository is its path relative to the current directory.
 //!
 //! Harness confinement: every repository lives in a tempdir of `World`; git and stw run with a scrubbed environment
 //! (`HOME` inside the tempdir, `GIT_CEILING_DIRECTORIES` above the work area); GitHub is a fake API on 127.0.0.1.
@@ -72,6 +73,19 @@ fn setup() -> S {
     S { w, ws, c, n }
 }
 
+/// `setup()` with the clone moved into the directory `grp`, which is no repository: `grp/ws`, `grp/ws/c`, `grp/ws/c/n`.
+/// The submodule links are relative, so the move keeps them intact.
+fn grouped() -> (S, PathBuf) {
+    let mut s = setup();
+    let grp = s.w.p("grp");
+    std::fs::create_dir(&grp).unwrap();
+    std::fs::rename(&s.ws, grp.join("ws")).unwrap();
+    s.ws = grp.join("ws");
+    s.c = s.ws.join("c");
+    s.n = s.c.join("n");
+    (s, grp)
+}
+
 struct Run {
     code: i32,
     out: String,
@@ -103,17 +117,20 @@ fn run(w: &World, cwd: &Path, api: Option<&str>, args: &[&str]) -> Run {
     }
 }
 
-/// `stw status --all --offline --root <ws> <extra>`
+/// `stw status . --offline <extra>` in the workspace `ws`: the keys are `.`, `c`, `c/n`.
 fn all(s: &S, extra: &[&str]) -> Run {
-    let mut a = vec![
-        "status",
-        "--all",
-        "--offline",
-        "--root",
-        s.ws.to_str().unwrap(),
-    ];
+    let mut a = vec!["status", ".", "--offline"];
     a.extend_from_slice(extra);
-    run(&s.w, &s.w.base, None, &a)
+    run(&s.w, &s.ws, None, &a)
+}
+
+/// `stw status <paths> --offline <extra>` in the directory `cwd`.
+fn at(s: &S, cwd: &Path, paths: &[&str], extra: &[&str]) -> Run {
+    let mut a = vec!["status"];
+    a.extend_from_slice(paths);
+    a.push("--offline");
+    a.extend_from_slice(extra);
+    run(&s.w, cwd, None, &a)
 }
 
 /// The lines between `Repositories (N)` and the blank line after them.
@@ -130,13 +147,14 @@ fn flat(l: &str) -> String {
     l.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-fn repo<'a>(v: &'a Value, name: &str) -> &'a Value {
+/// The repository with the key `key` (the `path` member).
+fn repo<'a>(v: &'a Value, key: &str) -> &'a Value {
     v["repos"]
         .as_array()
         .unwrap()
         .iter()
-        .find(|r| r["name"] == name)
-        .unwrap_or_else(|| panic!("no repository {name} in {v}"))
+        .find(|r| r["path"] == key)
+        .unwrap_or_else(|| panic!("no repository {key} in {v}"))
 }
 
 fn notice_codes(v: &Value) -> Vec<String> {
@@ -153,26 +171,22 @@ fn the_text_lists_every_repository_of_a_nested_workspace_in_one_line_each() {
     let s = setup();
     let r = all(&s, &[]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
-    let root = s.ws.to_str().unwrap();
     let lines: Vec<String> = rows(&r.out).iter().map(|l| flat(l)).collect();
     assert_eq!(
         lines,
         [
-            "ws main origin/main +1/-0 clean stack - PRs n/a | Issues n/a (no-github-origin)",
+            ". main origin/main +1/-0 clean stack - PRs n/a | Issues n/a (no-github-origin)",
             "c main origin/main +1/-0 clean stack - PRs n/a | Issues n/a (no-github-origin)",
             "c/n main origin/main +0/-0 clean stack - PRs n/a | Issues n/a (no-github-origin)",
         ]
     );
     let first = r.out.lines().next().unwrap();
-    assert_eq!(
-        first,
-        format!("status --all  root={root}  repositories=3  depth<=16")
-    );
+    assert_eq!(first, "status  paths=.  repositories=3");
     // the name column is 28 wide, a mark column (one blank) in front
     assert!(
         r.out.contains(&format!(
             "\n  {:<28} main  origin/main +1/-0  clean stack -  PRs n/a",
-            "ws"
+            "."
         )),
         "{}",
         r.out
@@ -223,10 +237,12 @@ fn the_json_is_the_status_document_plus_the_additive_fields() {
     let v = r.json();
     assert_eq!(v["schema_version"], 2);
     assert_eq!(v["command"], "status");
-    assert_eq!(v["options"]["all"], true);
-    assert_eq!(v["options"]["depth"], 16);
-    assert_eq!(v["options"]["limit"], 256);
-    assert_eq!(v["options"]["timeout"], 90);
+    assert_eq!(v["options"]["paths"], json!(["."]));
+    assert!(v["options"].get("all").is_none(), "{v}");
+    // no directory was scanned: no scan options
+    for k in ["depth", "limit", "timeout"] {
+        assert!(v["options"].get(k).is_none(), "options.{k}");
+    }
     let names: Vec<&str> = v["repos"]
         .as_array()
         .unwrap()
@@ -234,19 +250,27 @@ fn the_json_is_the_status_document_plus_the_additive_fields() {
         .map(|r| r["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, ["ws", "c", "c/n"]);
-    for (name, kind, depth) in [
-        ("ws", "root", 0),
-        ("c", "submodule", 1),
-        ("c/n", "submodule", 2),
+    for (name, key, kind, depth) in [
+        ("ws", ".", "root", 0),
+        ("c", "c", "submodule", 1),
+        ("c/n", "c/n", "submodule", 2),
     ] {
-        let r = repo(&v, name);
-        assert_eq!(r["kind"], kind, "{name}");
-        assert_eq!(r["depth"], depth, "{name}");
-        assert_eq!(r["stack"], json!({"chain": null, "links": 0}), "{name}");
-        // every field of the plain document is there with the same value
-        let p = repo(&plain, name);
+        let r = repo(&v, key);
+        assert_eq!(r["name"], name, "{key}");
+        assert_eq!(r["kind"], kind, "{key}");
+        assert_eq!(r["depth"], depth, "{key}");
+        assert_eq!(r["stack"], json!({"chain": null, "links": 0}), "{key}");
+        // every field of the plain document is there with the same value, the path (the key) excepted
+        let p = plain["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|p| p["name"] == name)
+            .unwrap();
         for (k, pv) in p.as_object().unwrap() {
-            assert_eq!(&r[k], pv, "{name}.{k}");
+            if k != "path" {
+                assert_eq!(&r[k], pv, "{key}.{k}");
+            }
         }
     }
     // top level: nothing but the options differ
@@ -256,9 +280,12 @@ fn the_json_is_the_status_document_plus_the_additive_fields() {
         }
     }
     for (k, pv) in plain["options"].as_object().unwrap() {
-        assert_eq!(&v["options"][k], pv, "options.{k}");
+        if k != "paths" {
+            assert_eq!(&v["options"][k], pv, "options.{k}");
+        }
     }
-    // without --all nothing is added
+    // without a PATH nothing is added but the empty list of paths
+    assert_eq!(plain["options"]["paths"], json!([]));
     for k in ["all", "depth", "limit", "timeout"] {
         assert!(plain["options"].get(k).is_none(), "options.{k}");
     }
@@ -267,17 +294,16 @@ fn the_json_is_the_status_document_plus_the_additive_fields() {
             assert!(r.get(k).is_none(), "repos[].{k}");
         }
     }
-    // the options carry the values that were given
+    // a scanned directory: the options carry the values that were given, the paths as they were given
+    let (s, _) = grouped();
     let v = run(
         &s.w,
         &s.w.base,
         None,
         &[
             "status",
-            "--all",
             "--json",
-            "--root",
-            s.ws.to_str().unwrap(),
+            "./grp",
             "--depth",
             "3",
             "--limit",
@@ -287,34 +313,39 @@ fn the_json_is_the_status_document_plus_the_additive_fields() {
         ],
     )
     .json();
+    assert_eq!(v["options"]["paths"], json!(["./grp"]));
     assert_eq!(v["options"]["depth"], 3);
     assert_eq!(v["options"]["limit"], 9);
     assert_eq!(v["options"]["timeout"], 120);
+    // the defaults
+    let v = at(&s, &s.w.base, &["grp"], &["--json"]).json();
+    assert_eq!(v["options"]["depth"], 16);
+    assert_eq!(v["options"]["limit"], 256);
+    assert_eq!(v["options"]["timeout"], 90);
 }
 
 #[test]
-fn the_depth_bounds_the_walk_and_a_cut_is_a_notice() {
-    let s = setup();
-    let r = all(&s, &["--depth", "1"]);
+fn the_depth_bounds_the_scan_and_a_cut_is_a_notice() {
+    let (s, _) = grouped();
+    let b = &s.w.base;
+    // levels below `grp`: ws 1, ws/c 2, ws/c/n 3
+    let r = at(&s, b, &["grp"], &["--depth", "2"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     assert!(
-        r.out.starts_with(&format!(
-            "status --all  root={}  repositories=2  depth<=1\n",
-            s.ws.display()
-        )),
+        r.out
+            .starts_with("status  paths=grp  repositories=2  depth<=2\n"),
         "{}",
         r.out
     );
     assert_eq!(rows(&r.out).len(), 2, "{}", r.out);
     assert!(
         r.out
-            .contains("\n  c: submodules below depth 1 not listed\n"),
+            .contains("\n  grp/ws/c: submodules below depth 2 not listed\n"),
         "{}",
         r.out
     );
-    let v = all(&s, &["--depth", "1", "--json"]).json();
+    let v = at(&s, b, &["grp"], &["--depth", "2", "--json"]).json();
     assert_eq!(v["summary"]["total"], 2);
-    assert!(notice_codes(&v).contains(&"depth-limit".to_string()), "{v}");
     let n = v["notices"]
         .as_array()
         .unwrap()
@@ -322,10 +353,10 @@ fn the_depth_bounds_the_walk_and_a_cut_is_a_notice() {
         .find(|n| n["code"] == "depth-limit")
         .unwrap()
         .clone();
-    assert_eq!(n["repos"], json!(["c"]));
+    assert_eq!(n["repos"], json!(["grp/ws/c"]));
     assert_eq!(n["source"], "submodules");
-    // depth 0: the root only, and its gitlink is the cut
-    let v = all(&s, &["--depth", "0", "--json"]).json();
+    // depth 1: the repository found at level 1, and its gitlink is the cut (named by the key of the repository)
+    let v = at(&s, b, &["grp"], &["--depth", "1", "--json"]).json();
     assert_eq!(v["summary"]["total"], 1);
     let n = v["notices"]
         .as_array()
@@ -334,31 +365,56 @@ fn the_depth_bounds_the_walk_and_a_cut_is_a_notice() {
         .find(|n| n["code"] == "depth-limit")
         .unwrap()
         .clone();
-    assert_eq!(n["repos"], json!(["ws"]));
+    assert_eq!(n["repos"], json!(["grp/ws"]));
+    // depth 0: no level is looked at, the repository below is a notice of the scan
+    let v = at(&s, b, &["grp"], &["--depth", "0", "--json"]).json();
+    assert_eq!(v["summary"]["total"], 0);
+    let n = v["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["code"] == "depth-limit")
+        .unwrap()
+        .clone();
+    assert_eq!(n["repos"], json!(["grp"]));
+    assert_eq!(n["source"], "scan");
+    assert_eq!(n["message"], "grp: repositories below depth 0 not listed");
     // deep enough: no notice
-    let v = all(&s, &["--depth", "2", "--json"]).json();
+    let v = at(&s, b, &["grp"], &["--depth", "3", "--json"]).json();
     assert_eq!(v["summary"]["total"], 3);
     assert!(
         !notice_codes(&v).contains(&"depth-limit".to_string()),
+        "{v}"
+    );
+    // a directory that holds no repository at the bound is no notice either
+    std::fs::create_dir_all(s.w.p("grp/plain/deeper")).unwrap();
+    let v = at(&s, b, &["grp"], &["--depth", "1", "--json"]).json();
+    assert!(
+        !notice_codes(&v).iter().any(|c| c == "depth-limit")
+            || v["notices"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|n| n["source"] != "scan"),
         "{v}"
     );
 }
 
 #[test]
 fn more_repositories_than_the_limit_is_a_usage_error() {
-    let s = setup();
-    let r = all(&s, &["--limit", "2"]);
+    let (s, _) = grouped();
+    let b = &s.w.base;
+    let r = at(&s, b, &["grp"], &["--limit", "2"]);
     assert_eq!(r.code, 2, "{}{}", r.out, r.err);
-    assert!(
-        r.err.contains("the workspace has more than 2 repositories"),
-        "{}",
-        r.err
-    );
+    assert!(r.err.contains("more than 2 repositories"), "{}", r.err);
     assert!(r.out.is_empty(), "{}", r.out);
-    let r = all(&s, &["--limit", "3"]);
+    let r = at(&s, b, &["grp"], &["--limit", "3"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
-    // the limit counts the root; a limit above the default of the workspace is allowed
-    let r = all(&s, &["--limit", "1024", "--json"]);
+    // the limit counts every repository of the run, over all paths
+    let r = at(&s, b, &["grp", "grp/ws/c"], &["--limit", "3"]);
+    assert_eq!(r.code, 0, "a duplicate counts once: {}{}", r.out, r.err);
+    // a limit above the default is allowed
+    let r = at(&s, b, &["grp"], &["--limit", "1024", "--json"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
 }
 
@@ -472,7 +528,9 @@ fn counts_sync_forms_and_attention_follow_the_status_rules() {
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     let ls: Vec<String> = rows(&r.out).iter().map(|l| l.to_string()).collect();
     assert_eq!(ls.len(), 3, "{}", r.out);
-    assert!(ls[0].starts_with("  ws "), "{}", ls[0]);
+    // the full check: the changed submodule `c` is an unstaged path of its parent
+    assert!(ls[0].starts_with("! . "), "{}", ls[0]);
+    assert!(flat(&ls[0]).contains(" 1 unstaged stack - "), "{}", ls[0]);
     assert!(ls[1].starts_with("! c "), "{}", ls[1]);
     assert!(ls[2].starts_with("! c/n "), "{}", ls[2]);
     assert!(
@@ -488,7 +546,7 @@ fn counts_sync_forms_and_attention_follow_the_status_rules() {
     );
     assert!(r.out.contains("ahead 2 | behind 1\n"), "{}", r.out);
     assert!(
-        r.out.ends_with("\n\n2 of 3 repositories need attention\n"),
+        r.out.ends_with("\n\n3 of 3 repositories need attention\n"),
         "{}",
         r.out
     );
@@ -499,15 +557,16 @@ fn counts_sync_forms_and_attention_follow_the_status_rules() {
     );
     assert_eq!(repo(&v, "c/n")["reasons"], json!(["detached"]));
     assert_eq!(repo(&v, "c/n")["stack"], Value::Null);
-    assert_eq!(repo(&v, "ws")["attention"], false);
-    assert_eq!(v["summary"], json!({"total": 3, "attention": 2}));
+    assert_eq!(repo(&v, ".")["reasons"], json!(["unstaged"]));
+    assert_eq!(repo(&v, ".")["changes"]["unstaged"], 1);
+    assert_eq!(v["summary"], json!({"total": 3, "attention": 3}));
     // no upstream, upstream gone, unborn
     s.w.git(&s.ws, &["checkout", "-q", "-b", "local"]);
     let v = all(&s, &["--json"]).json();
-    assert_eq!(repo(&v, "ws")["reasons"], json!(["no-upstream"]));
+    assert_eq!(repo(&v, ".")["reasons"], json!(["unstaged", "no-upstream"]));
     let r = all(&s, &[]);
     assert!(
-        flat(&rows(&r.out)[0]).contains(" local no upstream clean stack - "),
+        flat(&rows(&r.out)[0]).contains(" local no upstream 1 unstaged stack - "),
         "{}",
         r.out
     );
@@ -515,48 +574,24 @@ fn counts_sync_forms_and_attention_follow_the_status_rules() {
     s.w.git(&s.ws, &["update-ref", "-d", "refs/remotes/origin/main"]);
     let r = all(&s, &[]);
     assert!(
-        flat(&rows(&r.out)[0]).contains(" main upstream gone clean stack - "),
+        flat(&rows(&r.out)[0]).contains(" main upstream gone 1 unstaged stack - "),
         "{}",
         r.out
     );
     let v = all(&s, &["--json"]).json();
-    assert_eq!(repo(&v, "ws")["upstream_gone"], true);
-    assert_eq!(repo(&v, "ws")["reasons"], json!([]));
+    assert_eq!(repo(&v, ".")["upstream_gone"], true);
+    assert_eq!(repo(&v, ".")["reasons"], json!(["unstaged"]));
     let u = s.w.p("unborn-ws");
     std::fs::create_dir(&u).unwrap();
     s.w.git(&u, &["init", "-q"]);
-    let r = run(
-        &s.w,
-        &s.w.base,
-        None,
-        &[
-            "status",
-            "--all",
-            "--offline",
-            "--root",
-            u.to_str().unwrap(),
-        ],
-    );
+    let r = run(&s.w, &u, None, &["status", ".", "--offline"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     assert!(
         flat(&rows(&r.out)[0]).contains(" main (unborn) clean stack - "),
         "{}",
         r.out
     );
-    let v = run(
-        &s.w,
-        &s.w.base,
-        None,
-        &[
-            "status",
-            "--all",
-            "--offline",
-            "--json",
-            "--root",
-            u.to_str().unwrap(),
-        ],
-    )
-    .json();
+    let v = run(&s.w, &u, None, &["status", ".", "--offline", "--json"]).json();
     assert_eq!(v["repos"][0]["stack"], Value::Null);
 }
 
@@ -591,13 +626,7 @@ fn github_counts_failed_reads_and_totals() {
         };
         (200, vec![], body.to_string())
     });
-    let root = s.ws.to_str().unwrap();
-    let r = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--root", root],
-    );
+    let r = run(&s.w, &s.ws, Some(&api.url), &["status", "."]);
     assert_eq!(
         r.code, 0,
         "a failed GitHub read is a notice: {}{}",
@@ -623,26 +652,15 @@ fn github_counts_failed_reads_and_totals() {
         r.out
     );
     assert!(r.out.contains("c: pull requests not read ("), "{}", r.out);
-    let v = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--json", "--root", root],
-    )
-    .json();
+    let v = run(&s.w, &s.ws, Some(&api.url), &["status", ".", "--json"]).json();
     assert_eq!(repo(&v, "c")["counts"]["pull_requests"]["state"], "failed");
-    assert_eq!(repo(&v, "ws")["counts"]["pull_requests"]["open"], 2);
+    assert_eq!(repo(&v, ".")["counts"]["pull_requests"]["open"], 2);
     // without the failing repository the totals are numbers
     s.w.git(
         &s.c,
         &["config", "remote.origin.url", "https://example.org/x/c"],
     );
-    let r = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--root", root],
-    );
+    let r = run(&s.w, &s.ws, Some(&api.url), &["status", "."]);
     assert!(
         r.out
             .contains("\nTotals  PRs 2 | Issues 3 | ahead 2 | behind 0\n"),
@@ -656,12 +674,7 @@ fn github_counts_failed_reads_and_totals() {
     );
     // a failure class in the row: 403 is `forbidden`, a deadline is `timeout`
     let api = FakeRoutes::start(|_, _| (403, vec![], "{}".into()));
-    let r = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--root", root],
-    );
+    let r = run(&s.w, &s.ws, Some(&api.url), &["status", "."]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     assert!(
         flat(&rows(&r.out)[0]).ends_with("PRs ? | Issues ? (forbidden)"),
@@ -685,12 +698,7 @@ fn a_full_page_is_a_lower_bound() {
         };
         (200, vec![], body.to_string())
     });
-    let r = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--root", s.ws.to_str().unwrap()],
-    );
+    let r = run(&s.w, &s.ws, Some(&api.url), &["status", "."]);
     assert!(
         flat(&rows(&r.out)[0]).ends_with("PRs 100+ | Issues 0"),
         "{}",
@@ -723,14 +731,17 @@ fn a_repository_that_cannot_be_read_is_an_error_row_and_exits_1() {
     assert_eq!(repo(&v, "c/n")["reasons"], json!(["error"]));
     assert_eq!(repo(&v, "c/n")["stack"], Value::Null);
     assert_eq!(repo(&v, "c/n")["kind"], "submodule");
+    // the full check looks into the submodules: the parents of the unreadable submodule cannot be read either
+    for (key, sub) in [(".", "c"), ("c", "n")] {
+        assert_eq!(repo(&v, key)["state"], "error", "{key}");
+        assert_eq!(
+            repo(&v, key)["error"],
+            format!("Could not determine status for submodule at \"{sub}\""),
+            "{key}"
+        );
+    }
     assert!(
-        r.out.ends_with("\n\n1 of 3 repositories need attention\n"),
-        "{}",
-        r.out
-    );
-    // the parents of the unreadable submodule are readable: its state is not looked into
-    assert!(
-        ls[0].starts_with("  ws ") && ls[1].starts_with("  c "),
+        r.out.ends_with("\n\n3 of 3 repositories need attention\n"),
         "{}",
         r.out
     );
@@ -738,23 +749,24 @@ fn a_repository_that_cannot_be_read_is_an_error_row_and_exits_1() {
 
 #[test]
 fn flags_that_do_not_fit_are_usage_errors() {
-    let s = setup();
-    let root = s.ws.to_str().unwrap();
+    let (s, _) = grouped();
+    let b = &s.w.base;
     let st = |extra: &[&str]| {
-        let mut a = vec!["status", "--offline", "--root", root];
+        let mut a = vec!["status", "--offline"];
         a.extend_from_slice(extra);
-        run(&s.w, &s.w.base, None, &a)
+        run(&s.w, b, None, &a)
     };
     for extra in [
-        &["--depth", "1"][..],
-        &["--limit", "5"],
-        &["--all", "--depth", "65"],
-        &["--all", "--depth", "x"],
-        &["--all", "--limit", "0"],
-        &["--all", "--limit", "1025"],
-        &["--all", "--long"],
-        &["--all", "--icons", "ascii"],
-        &["--all", "--worktrees"],
+        &["grp", "--depth", "65"][..],
+        &["grp", "--depth", "x"],
+        &["grp", "--limit", "0"],
+        &["grp", "--limit", "1025"],
+        &["grp", "--long"],
+        &["grp", "--icons", "ascii"],
+        &["grp", "--worktrees"],
+        &["grp", "--repo", "ws"],
+        &["--all", "grp"],
+        &["--all"],
     ] {
         let r = st(extra);
         assert_eq!(r.code, 2, "{extra:?}: {}{}", r.out, r.err);
@@ -762,13 +774,58 @@ fn flags_that_do_not_fit_are_usage_errors() {
     }
     // the bounds themselves are fine
     for extra in [
-        &["--all", "--depth", "0"][..],
-        &["--all", "--depth", "64"],
-        &["--all", "--limit", "3"],
+        &["grp", "--depth", "0"][..],
+        &["grp", "--depth", "64"],
+        &["grp", "--limit", "3"],
+        &["grp", "--limit", "1024"],
     ] {
         let r = st(extra);
         assert_eq!(r.code, 0, "{extra:?}: {}{}", r.out, r.err);
     }
+}
+
+#[test]
+fn depth_and_limit_need_a_directory_that_is_scanned() {
+    let (s, grp) = grouped();
+    let b = &s.w.base;
+    let ws = "grp/ws";
+    for (paths, flag, value) in [
+        (&[][..], "--depth", "1"),
+        (&[][..], "--limit", "5"),
+        (&[ws][..], "--depth", "1"),
+        (&[ws][..], "--limit", "5"),
+        (&[ws, "grp/ws/c"][..], "--depth", "0"),
+    ] {
+        let r = at(&s, b, paths, &[flag, value]);
+        assert_eq!(r.code, 2, "{paths:?} {flag}: {}{}", r.out, r.err);
+        assert!(r.out.is_empty(), "{paths:?} {flag}: {}", r.out);
+        assert!(
+            r.err.contains(flag) && r.err.contains("directory"),
+            "the error names the flag and the cause: {}",
+            r.err
+        );
+    }
+    // one directory among the paths is enough
+    let r = at(&s, b, &[ws, "grp"], &["--depth", "3", "--limit", "9"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let _ = grp;
+}
+
+#[test]
+fn the_run_of_a_repository_path_has_no_scan_options() {
+    let (s, _) = grouped();
+    let r = at(&s, &s.w.base, &["grp/ws"], &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    for k in ["depth", "limit", "timeout"] {
+        assert!(v["options"].get(k).is_none(), "options.{k}");
+    }
+    let r = at(&s, &s.w.base, &["grp/ws"], &[]);
+    assert!(
+        r.out.starts_with("status  paths=grp/ws  repositories=3\n"),
+        "{}",
+        r.out
+    );
 }
 
 #[test]
@@ -796,20 +853,19 @@ fn text_from_outside_is_shown_escaped_and_the_run_writes_nothing() {
 #[test]
 fn a_checkout_inside_a_nested_submodule_has_the_top_level_superproject_as_root() {
     let s = setup();
-    let r = run(
-        &s.w,
-        &s.n,
-        None,
-        &["status", "--all", "--offline", "--json"],
-    );
+    // the PATH is the nested submodule itself: its status alone, the root of the workspace is still the top-level superproject
+    let r = run(&s.w, &s.n, None, &["status", ".", "--offline", "--json"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     let v = r.json();
     assert_eq!(v["root"], s.ws.to_str().unwrap());
-    assert_eq!(v["summary"]["total"], 3);
+    assert_eq!(v["summary"]["total"], 1);
+    assert_eq!(v["repos"][0]["path"], ".");
+    assert_eq!(v["repos"][0]["name"], "n");
+    assert_eq!(v["repos"][0]["kind"], "root");
 }
 
 #[test]
-fn a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind() {
+fn a_submodule_named_like_the_root_directory_has_its_own_key() {
     let s = setup();
     s.w.git(
         &s.ws,
@@ -825,6 +881,7 @@ fn a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind() {
     let repos = v["repos"].as_array().unwrap();
     let key = |r: &Value| {
         (
+            r["path"].as_str().unwrap().to_string(),
             r["name"].as_str().unwrap().to_string(),
             r["kind"].clone(),
             r["depth"].clone(),
@@ -833,10 +890,25 @@ fn a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind() {
     assert_eq!(
         repos.iter().map(key).collect::<Vec<_>>(),
         [
-            ("ws".to_string(), json!("root"), json!(0)),
-            ("c".to_string(), json!("submodule"), json!(1)),
-            ("c/n".to_string(), json!("submodule"), json!(2)),
-            ("ws".to_string(), json!("submodule"), json!(1)),
+            (".".to_string(), "ws".to_string(), json!("root"), json!(0)),
+            (
+                "c".to_string(),
+                "c".to_string(),
+                json!("submodule"),
+                json!(1)
+            ),
+            (
+                "c/n".to_string(),
+                "c/n".to_string(),
+                json!("submodule"),
+                json!(2)
+            ),
+            (
+                "ws".to_string(),
+                "ws".to_string(),
+                json!("submodule"),
+                json!(1)
+            ),
         ],
         "{v}"
     );
@@ -903,19 +975,13 @@ fn the_row_names_why_github_was_not_read_and_which_read_failed() {
         &s.ws,
         &["config", "remote.origin.url", "https://github.com/test/ws"],
     );
-    let root = s.ws.to_str().unwrap();
-    let r = run(
-        &s.w,
-        &s.w.base,
-        None,
-        &["status", "--all", "--offline", "--root", root],
-    );
+    let r = run(&s.w, &s.ws, None, &["status", ".", "--offline"]);
     assert!(
         flat(&rows(&r.out)[0]).ends_with("PRs n/a | Issues n/a (offline)"),
         "{}",
         r.out
     );
-    let r = run(&s.w, &s.w.base, None, &["status", "--all", "--root", root]);
+    let r = run(&s.w, &s.ws, None, &["status", "."]);
     assert!(
         flat(&rows(&r.out)[0]).ends_with("PRs n/a | Issues n/a (no-token)"),
         "{}",
@@ -927,12 +993,7 @@ fn the_row_names_why_github_was_not_read_and_which_read_failed() {
         "/repos/test/ws/issues" => (404, vec![], "{}".into()),
         _ => (200, vec![], json!({"mergeable_state": "clean"}).to_string()),
     });
-    let r = run(
-        &s.w,
-        &s.w.base,
-        Some(&api.url),
-        &["status", "--all", "--root", root],
-    );
+    let r = run(&s.w, &s.ws, Some(&api.url), &["status", "."]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     assert!(
         flat(&rows(&r.out)[0]).ends_with("PRs 2 | Issues ? (not-found)"),
@@ -942,15 +1003,11 @@ fn the_row_names_why_github_was_not_read_and_which_read_failed() {
 }
 
 #[test]
-fn stats_verbose_and_review_are_usage_errors_with_all() {
+fn stats_verbose_and_review_are_usage_errors_with_a_path() {
     let s = setup();
     for flag in ["--stats", "--verbose", "--review"] {
-        let r = run(
-            &s.w,
-            &s.w.base,
-            None,
-            &["status", "--all", flag, "--root", s.ws.to_str().unwrap()],
-        );
+        // without --offline: --stats, --verbose and --review conflict with it by themselves
+        let r = run(&s.w, &s.ws, None, &["status", ".", flag]);
         assert_eq!(r.code, 2, "{flag}: {}{}", r.out, r.err);
         assert!(r.out.is_empty(), "{flag}: {}", r.out);
     }
@@ -959,29 +1016,385 @@ fn stats_verbose_and_review_are_usage_errors_with_all() {
 #[test]
 fn a_gitlink_without_a_checkout_is_no_depth_limit_notice() {
     let s = setup();
-    // a clone without --recurse-submodules: the gitlink `c` is in the index, nothing is checked out
-    s.w.git(&s.w.base, &["clone", "-q", "ws", "wsc"]);
-    let u = s.w.p("wsc");
-    let r = run(
-        &s.w,
-        &s.w.base,
-        None,
-        &[
-            "status",
-            "--all",
-            "--offline",
-            "--json",
-            "--depth",
-            "0",
-            "--root",
-            u.to_str().unwrap(),
-        ],
-    );
+    // a clone without a checkout of its gitlink `c`: the gitlink is in the index, nothing is checked out
+    let g = s.w.p("grpc");
+    std::fs::create_dir(&g).unwrap();
+    s.w.git(&s.w.base, &["clone", "-q", "ws", "grpc/wsc"]);
+    let r = at(&s, &s.w.base, &["grpc"], &["--json", "--depth", "1"]);
     assert_eq!(r.code, 0, "{}{}", r.out, r.err);
     let v = r.json();
     assert_eq!(v["summary"]["total"], 1);
     assert!(
         !notice_codes(&v).contains(&"depth-limit".to_string()),
         "{v}"
+    );
+}
+
+/// `grp2`: the directory `grp` of `grouped()` plus a second repository `grp/a/x` and a bare repository, a symlink and a
+/// plain directory that must not be listed.
+fn scan_tree(s: &S) -> PathBuf {
+    let grp = s.w.p("grp");
+    let x = grp.join("a/x");
+    std::fs::create_dir_all(&x).unwrap();
+    s.w.git(&x, &["init", "-q"]);
+    s.w.commit(&x, "x.txt", "x\n");
+    // a repository inside a repository that is no submodule is not listed
+    let inner = s.ws.join("inner");
+    std::fs::create_dir(&inner).unwrap();
+    s.w.git(&inner, &["init", "-q"]);
+    // a bare repository has no work tree, a symlink is not followed, a directory without repositories is empty
+    s.w.git(
+        &s.w.base,
+        &["clone", "-q", "--bare", "ws.git", "grp/bare.git"],
+    );
+    std::os::unix::fs::symlink(s.w.p("c-up"), grp.join("link")).unwrap();
+    std::fs::create_dir_all(grp.join("empty/deeper")).unwrap();
+    grp
+}
+
+#[test]
+fn a_directory_without_a_repository_is_scanned_below_in_sorted_order() {
+    let (s, _) = grouped();
+    let grp = scan_tree(&s);
+    let r = at(&s, &s.w.base, &["grp"], &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    let keys: Vec<&str> = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["path"].as_str().unwrap())
+        .collect();
+    // `a/x` sorts before `ws`; the submodules follow their repository; bare, link and inner are not listed
+    assert_eq!(keys, ["grp/a/x", "grp/ws", "grp/ws/c", "grp/ws/c/n"], "{v}");
+    let kinds: Vec<&str> = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["kind"].as_str().unwrap())
+        .collect();
+    assert_eq!(kinds, ["root", "root", "submodule", "submodule"]);
+    // the scan also works from inside: the keys are relative to the current directory
+    let r = at(&s, &grp, &["."], &["--json"]);
+    let keys: Vec<String> = r.json()["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["path"].as_str().unwrap().to_string())
+        .collect();
+    assert_eq!(keys, ["a/x", "ws", "ws/c", "ws/c/n"]);
+}
+
+#[test]
+fn a_repository_path_lists_that_repository_and_its_submodules_only() {
+    let (s, _) = grouped();
+    scan_tree(&s);
+    let r = at(&s, &s.w.base, &["grp/ws/c"], &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    let keys: Vec<&str> = v["repos"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(keys, ["grp/ws/c", "grp/ws/c/n"]);
+    assert_eq!(v["repos"][0]["kind"], "root");
+    assert_eq!(v["repos"][0]["depth"], 0);
+    assert_eq!(v["repos"][1]["kind"], "submodule");
+    assert_eq!(v["repos"][1]["depth"], 1);
+    // a linked worktree is a repository path too
+    s.w.git(
+        &s.ws,
+        &[
+            "worktree",
+            "add",
+            "-q",
+            "-b",
+            "wt",
+            s.w.p("wt").to_str().unwrap(),
+        ],
+    );
+    let r = at(&s, &s.w.base, &["wt"], &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    assert_eq!(v["repos"][0]["path"], "wt");
+    assert_eq!(v["repos"][0]["branch"], "wt");
+}
+
+#[test]
+fn several_paths_keep_their_order_and_a_repository_is_listed_once() {
+    let (s, _) = grouped();
+    scan_tree(&s);
+    let b = &s.w.base;
+    let keys = |r: &Run| -> Vec<String> {
+        r.json()["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["path"].as_str().unwrap().to_string())
+            .collect()
+    };
+    // argument order, sorted inside one path
+    let r = at(&s, b, &["grp/a/x", "grp/ws/c"], &["--json"]);
+    assert_eq!(keys(&r), ["grp/a/x", "grp/ws/c", "grp/ws/c/n"]);
+    let r = at(&s, b, &["grp/ws/c", "grp/a/x"], &["--json"]);
+    assert_eq!(keys(&r), ["grp/ws/c", "grp/ws/c/n", "grp/a/x"]);
+    // `.` and `..`, the same repository by a symlink and the submodule named again: one row each, first mention wins
+    std::os::unix::fs::symlink(&s.ws, s.w.p("grp/ws-link")).unwrap();
+    let r = run(
+        &s.w,
+        &s.ws,
+        None,
+        &[
+            "status",
+            ".",
+            "..",
+            "../ws",
+            "../ws-link",
+            "c",
+            "c/n",
+            "--offline",
+            "--json",
+        ],
+    );
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    // `..` is the directory `grp`: `ws` is known already, `a/x` is new
+    assert_eq!(keys(&r), [".", "c", "c/n", "../a/x"], "{v}");
+    assert_eq!(
+        v["options"]["paths"],
+        json!([".", "..", "../ws", "../ws-link", "c", "c/n"])
+    );
+    // the kind and the depth are those of the first mention: `c` first came as a submodule of `.`
+    assert_eq!(repo(&v, "c")["kind"], "submodule");
+    assert_eq!(repo(&v, "c")["depth"], 1);
+    // the other way round: `c` first is a root
+    let r = run(
+        &s.w,
+        &s.ws,
+        None,
+        &["status", "c", ".", "--offline", "--json"],
+    );
+    let v = r.json();
+    assert_eq!(keys(&r), ["c", "c/n", "."]);
+    assert_eq!(repo(&v, "c")["kind"], "root");
+    assert_eq!(v["summary"]["total"], 3);
+}
+
+#[test]
+fn the_key_of_a_repository_is_its_path_and_the_name_is_only_display() {
+    let (s, _) = grouped();
+    let grp = scan_tree(&s);
+    // two repositories with the same name
+    let x2 = grp.join("b/x");
+    std::fs::create_dir_all(&x2).unwrap();
+    s.w.git(&x2, &["init", "-q"]);
+    s.w.commit(&x2, "x.txt", "x\n");
+    std::fs::write(x2.join("dirty.txt"), "d\n").unwrap();
+    let b = &s.w.base;
+    let r = at(&s, b, &["grp/a/x", "grp/b/x"], &["--json"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    assert_eq!(v["repos"][0]["name"], "x");
+    assert_eq!(v["repos"][1]["name"], "x");
+    assert_eq!(v["repos"][0]["path"], "grp/a/x");
+    assert_eq!(v["repos"][1]["path"], "grp/b/x");
+    // the text and the notices are told apart by the key
+    let r = at(&s, b, &["grp/a/x", "grp/b/x"], &[]);
+    let ls: Vec<String> = rows(&r.out).iter().map(|l| flat(l)).collect();
+    assert!(ls[0].starts_with("! grp/a/x "), "{ls:?}");
+    assert!(ls[1].starts_with("! grp/b/x "), "{ls:?}");
+    s.w.git(
+        &x2,
+        &["config", "remote.origin.url", "https://github.com/test/x"],
+    );
+    let api = FakeRoutes::start(|_, _| (404, vec![], "{}".into()));
+    let r = run(&s.w, b, Some(&api.url), &["status", "grp/a/x", "grp/b/x"]);
+    assert!(
+        r.out.contains("\n  grp/b/x: pull requests not read ("),
+        "{}",
+        r.out
+    );
+    let v = run(
+        &s.w,
+        b,
+        Some(&api.url),
+        &["status", "grp/a/x", "grp/b/x", "--json"],
+    )
+    .json();
+    let n = v["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["code"] == "prs-not-read")
+        .unwrap()
+        .clone();
+    assert_eq!(n["repos"], json!(["grp/b/x"]));
+    // a path outside the current directory is the absolute path
+    let abs = grp.join("a/x");
+    let r = run(
+        &s.w,
+        &x2,
+        None,
+        &["status", abs.to_str().unwrap(), ".", "--offline", "--json"],
+    );
+    let v = r.json();
+    assert_eq!(v["repos"][0]["path"], abs.to_str().unwrap());
+    assert_eq!(v["repos"][1]["path"], ".");
+    // a relative path outside it keeps its `..` components
+    let r = run(
+        &s.w,
+        &x2,
+        None,
+        &["status", "../../a/x", "--offline", "--json"],
+    );
+    assert_eq!(r.json()["repos"][0]["path"], "../../a/x");
+    // inside the current directory it is relative, whatever way it was written
+    let r = run(
+        &s.w,
+        &grp,
+        None,
+        &["status", "./a/../a/x", "--offline", "--json"],
+    );
+    assert_eq!(r.json()["repos"][0]["path"], "a/x");
+}
+
+#[test]
+fn a_path_that_does_not_exist_or_cannot_be_read_is_a_usage_error_and_prints_nothing() {
+    let (s, _) = grouped();
+    let b = &s.w.base;
+    std::fs::write(s.w.p("a-file"), "f\n").unwrap();
+    for (paths, why) in [
+        (&["no-such-dir"][..], "PATH no-such-dir: "),
+        (&["grp", "no-such-dir"], "PATH no-such-dir: "),
+        (&["no-such-dir", "grp"], "PATH no-such-dir: "),
+        (&["a-file"], "PATH a-file is not a directory"),
+        (&["grp", "a-file"], "PATH a-file is not a directory"),
+    ] {
+        let r = at(&s, b, paths, &[]);
+        assert_eq!(r.code, 2, "{paths:?}: {}{}", r.out, r.err);
+        assert!(r.out.is_empty(), "{paths:?}: {}", r.out);
+        assert!(
+            r.err.starts_with(&format!("stw: {why}")),
+            "{paths:?}: {}",
+            r.err
+        );
+        let r = at(&s, b, paths, &["--json"]);
+        assert_eq!(r.code, 2, "{paths:?}: {}{}", r.out, r.err);
+        assert!(r.out.is_empty(), "{paths:?}: {}", r.out);
+    }
+    // a directory that cannot be read (not as root: the harness may run as root)
+    use std::os::unix::fs::PermissionsExt;
+    let locked = s.w.p("locked");
+    std::fs::create_dir(&locked).unwrap();
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let unreadable = std::fs::read_dir(&locked).is_err();
+    let r = at(&s, b, &["grp", "locked"], &[]);
+    std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+    if unreadable {
+        assert_eq!(r.code, 2, "{}{}", r.out, r.err);
+        assert!(r.out.is_empty(), "{}", r.out);
+        assert!(r.err.contains("PATH locked cannot be read"), "{}", r.err);
+    }
+}
+
+#[test]
+fn without_a_path_status_is_the_workspace_status_as_before() {
+    let s = setup();
+    let r = run(&s.w, &s.ws, None, &["status", "--offline"]);
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    // the default text: its blocks, not the one-line rows
+    assert!(r.out.contains("Counts\n"), "{}", r.out);
+    assert!(!r.out.starts_with("status  "), "{}", r.out);
+    let v = run(&s.w, &s.ws, None, &["status", "--offline", "--json"]).json();
+    assert_eq!(v["summary"]["total"], 3);
+    assert_eq!(v["options"]["paths"], json!([]));
+    // --all is gone: no alias
+    let r = run(&s.w, &s.ws, None, &["status", "--all", "--offline"]);
+    assert_eq!(r.code, 2, "{}{}", r.out, r.err);
+    assert!(r.out.is_empty(), "{}", r.out);
+}
+
+#[test]
+fn the_unreadable_repository_of_a_scan_is_an_error_row_and_exits_1() {
+    let (s, _) = grouped();
+    std::fs::write(s.n.join(".git"), "gitdir: /nonexistent/stw/none\n").unwrap();
+    let r = at(&s, &s.w.base, &["grp"], &[]);
+    assert_eq!(r.code, 1, "{}{}", r.out, r.err);
+    assert!(
+        rows(&r.out).iter().any(|l| l.starts_with("! grp/ws/c/n ")),
+        "{}",
+        r.out
+    );
+}
+
+#[test]
+fn a_refused_gitlink_path_is_reported_below_the_key_of_its_repository() {
+    let (s, _) = grouped();
+    let n1 = s.w.git(&s.n, &["rev-parse", "HEAD"]);
+    s.w.git(
+        &s.c,
+        &[
+            "update-index",
+            "--add",
+            "--cacheinfo",
+            &format!("160000,{n1},bad name"),
+        ],
+    );
+    let v = at(&s, &s.w.base, &["grp/ws"], &["--json"]).json();
+    assert_eq!(v["rejected_paths"][0]["path"], "grp/ws/c/bad name", "{v}");
+    assert_eq!(v["summary"]["total"], 3, "no row for the refused path");
+    let n = v["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["code"] == "rejected-path")
+        .unwrap()
+        .clone();
+    assert!(
+        n["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("submodule path not accepted: grp/ws/c/bad name: "),
+        "{n}"
+    );
+    // the same repository from inside: the key is `.`, the path stays below it
+    let r = run(&s.w, &s.ws, None, &["status", ".", "--offline", "--json"]);
+    assert_eq!(r.json()["rejected_paths"][0]["path"], "c/bad name");
+    // named twice: reported once
+    let v = at(&s, &s.w.base, &["grp/ws", "grp/ws/c"], &["--json"]).json();
+    assert_eq!(v["rejected_paths"].as_array().unwrap().len(), 1, "{v}");
+}
+
+#[test]
+fn a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named() {
+    let (s, grp) = grouped();
+    scan_tree(&s);
+    let keys = |paths: &[&str], rules: &Path| -> Vec<String> {
+        let r = at(
+            &s,
+            &s.w.base,
+            paths,
+            &["--json", "--rules-path", rules.to_str().unwrap()],
+        );
+        assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+        r.json()["repos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|r| r["path"].as_str().unwrap().to_string())
+            .collect()
+    };
+    // a repository found by the scan
+    let x = grp.join("a/x");
+    assert_eq!(keys(&["grp"], &x), ["grp/ws", "grp/ws/c", "grp/ws/c/n"]);
+    // a submodule of a repository found by the scan; its own submodule is still listed
+    assert_eq!(keys(&["grp"], &s.c), ["grp/a/x", "grp/ws", "grp/ws/c/n"]);
+    // named, it is listed: as a repository PATH, and as a submodule of a repository when it is named as well
+    assert_eq!(keys(&["grp/a/x"], &x), ["grp/a/x"]);
+    assert_eq!(
+        keys(&["grp/ws", "grp/ws/c"], &s.c),
+        ["grp/ws", "grp/ws/c", "grp/ws/c/n"]
     );
 }
