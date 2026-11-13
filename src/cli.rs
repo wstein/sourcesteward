@@ -879,7 +879,7 @@ struct Workspace {
     /// `.gitmodules` paths that are not accepted (never in `repos`); empty when repositories were named.
     rejected: Vec<(String, String)>,
     github: GithubState,
-    /// `--all`: nesting depth of each repository by name, and the repositories whose submodules the depth bound left out.
+    /// `--all`: nesting depth of each repository by its path (a name can repeat: root `ws` and a submodule `ws`), and the repositories whose submodules the depth bound left out.
     depths: std::collections::BTreeMap<String, usize>,
     cut: Vec<String>,
 }
@@ -961,7 +961,7 @@ fn workspace_bounded(
                 .repos
                 .iter()
                 .zip(&l.depths)
-                .map(|(r, d)| (r.name.clone(), *d))
+                .map(|(r, d)| (output::p2s(&r.path), *d))
                 .collect();
             cut = l.cut;
             l.repos
@@ -1237,7 +1237,7 @@ fn run_status(a: StatusArgs) -> Result<u8> {
         status::collect_local(r, &root, &opts, ws.github.client())
     });
     for s in &mut list {
-        s.depth = ws.depths.get(&s.name).copied().unwrap_or(0);
+        s.depth = ws.depths.get(&s.path).copied().unwrap_or(0);
     }
     let local_done = started.elapsed();
     if let Some(cl) = ws.github.client() {

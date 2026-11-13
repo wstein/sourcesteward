@@ -142,18 +142,23 @@ pub fn add_json(doc: &mut Value, list: &[RepoStatus], all: &AllOpts) {
 /// Why a GitHub read failed, as one word (the Rust client has no typed error: the class is read from its message).
 pub fn classify(message: &str) -> &'static str {
     if message.starts_with("deadline:") {
-        "timeout"
-    } else if message.contains("HTTP 401") {
+        return "timeout";
+    }
+    // only the start of the message is read: the rest names the request path (a slug can contain any word)
+    let Some(m) = message.strip_prefix("GitHub API ") else {
+        return "error";
+    };
+    if m.starts_with("HTTP 401") {
         "unauthorized"
-    } else if message.contains("HTTP 403") {
+    } else if m.starts_with("HTTP 403") {
         "forbidden"
-    } else if message.contains("HTTP 404") {
+    } else if m.starts_with("HTTP 404") {
         "not-found"
-    } else if message.contains("HTTP 429") {
+    } else if m.starts_with("HTTP 429") {
         "rate-limited"
-    } else if message.contains("unreadable JSON") || message.contains("unexpected") {
+    } else if m.starts_with("sent unreadable JSON") || m.starts_with("sent an unexpected") {
         "unreadable"
-    } else if message.contains("unreachable") {
+    } else if m.starts_with("unreachable") {
         "unreachable"
     } else {
         "error"

@@ -177,7 +177,8 @@ struct Walk {
 /// descend into. A refused path is kept with its path below the root (`outer/inner`).
 fn walk(dir: &Path, prefix: &str, depth: usize, w: &mut Walk) {
     let subs = submodule_paths(dir);
-    if depth >= w.max_depth && !subs.is_empty() {
+    // only a gitlink with a checkout is left out by the bound (an unchecked-out one is never listed)
+    if depth >= w.max_depth && subs.iter().any(|p| dir.join(p).join(".git").exists()) {
         w.cut.push(prefix.to_string());
         return;
     }

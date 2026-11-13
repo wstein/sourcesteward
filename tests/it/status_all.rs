@@ -807,3 +807,181 @@ fn a_checkout_inside_a_nested_submodule_has_the_top_level_superproject_as_root()
     assert_eq!(v["root"], s.ws.to_str().unwrap());
     assert_eq!(v["summary"]["total"], 3);
 }
+
+#[test]
+fn a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind() {
+    let s = setup();
+    s.w.git(
+        &s.ws,
+        &[
+            "submodule",
+            "add",
+            "-q",
+            s.w.p("n.git").to_str().unwrap(),
+            "ws",
+        ],
+    );
+    let v = all(&s, &["--json"]).json();
+    let repos = v["repos"].as_array().unwrap();
+    let key = |r: &Value| {
+        (
+            r["name"].as_str().unwrap().to_string(),
+            r["kind"].clone(),
+            r["depth"].clone(),
+        )
+    };
+    assert_eq!(
+        repos.iter().map(key).collect::<Vec<_>>(),
+        [
+            ("ws".to_string(), json!("root"), json!(0)),
+            ("c".to_string(), json!("submodule"), json!(1)),
+            ("c/n".to_string(), json!("submodule"), json!(2)),
+            ("ws".to_string(), json!("submodule"), json!(1)),
+        ],
+        "{v}"
+    );
+}
+
+#[test]
+fn the_class_of_a_failed_read_comes_from_the_start_of_the_message() {
+    use stw::status_all::classify;
+    assert_eq!(
+        classify("GitHub API HTTP 404 for /repos/a/unreachable/pulls: x"),
+        "not-found"
+    );
+    assert_eq!(
+        classify("GitHub API HTTP 500 for /repos/a/unexpected/pulls"),
+        "error"
+    );
+    assert_eq!(
+        classify("GitHub API HTTP 403 for /repos/a/b/pulls: forbidden or rate limited"),
+        "forbidden"
+    );
+    assert_eq!(
+        classify("GitHub API unreachable for /repos/a/b/pulls: x"),
+        "unreachable"
+    );
+    assert_eq!(
+        classify("GitHub API sent an unexpected pulls response"),
+        "unreadable"
+    );
+    assert_eq!(classify("deadline: the --timeout of 1s passed"), "timeout");
+    assert_eq!(classify("something else HTTP 404"), "error");
+}
+
+#[test]
+fn a_cycle_that_does_not_pass_the_current_branch_ends_the_chain_at_the_repeated_branch() {
+    let s = setup();
+    let c = &s.c;
+    for b in ["a", "b", "cur"] {
+        s.w.git(c, &["branch", b, "main"]);
+    }
+    set_parent(&s, c, "a", "b");
+    set_parent(&s, c, "b", "a");
+    set_parent(&s, c, "cur", "a");
+    s.w.git(c, &["checkout", "-q", "cur"]);
+    let v = all(&s, &["--json"]).json();
+    assert_eq!(
+        repo(&v, "c")["stack"]["chain"],
+        json!(["a", "b", "a", "cur"]),
+        "{v}"
+    );
+    let n = v["notices"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["code"] == "stack-cycle")
+        .unwrap()
+        .clone();
+    assert_eq!(n["message"], "c: stack cycle at a");
+}
+
+#[test]
+fn the_row_names_why_github_was_not_read_and_which_read_failed() {
+    let s = setup();
+    s.w.git(
+        &s.ws,
+        &["config", "remote.origin.url", "https://github.com/test/ws"],
+    );
+    let root = s.ws.to_str().unwrap();
+    let r = run(
+        &s.w,
+        &s.w.base,
+        None,
+        &["status", "--all", "--offline", "--root", root],
+    );
+    assert!(
+        flat(&rows(&r.out)[0]).ends_with("PRs n/a | Issues n/a (offline)"),
+        "{}",
+        r.out
+    );
+    let r = run(&s.w, &s.w.base, None, &["status", "--all", "--root", root]);
+    assert!(
+        flat(&rows(&r.out)[0]).ends_with("PRs n/a | Issues n/a (no-token)"),
+        "{}",
+        r.out
+    );
+    // only the issues fail: the pull requests keep their number, the reason is the one of the issues
+    let api = FakeRoutes::start(|path, _| match path {
+        "/repos/test/ws/pulls" => (200, vec![], json!([pr(1), pr(2)]).to_string()),
+        "/repos/test/ws/issues" => (404, vec![], "{}".into()),
+        _ => (200, vec![], json!({"mergeable_state": "clean"}).to_string()),
+    });
+    let r = run(
+        &s.w,
+        &s.w.base,
+        Some(&api.url),
+        &["status", "--all", "--root", root],
+    );
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    assert!(
+        flat(&rows(&r.out)[0]).ends_with("PRs 2 | Issues ? (not-found)"),
+        "{}",
+        r.out
+    );
+}
+
+#[test]
+fn stats_verbose_and_review_are_usage_errors_with_all() {
+    let s = setup();
+    for flag in ["--stats", "--verbose", "--review"] {
+        let r = run(
+            &s.w,
+            &s.w.base,
+            None,
+            &["status", "--all", flag, "--root", s.ws.to_str().unwrap()],
+        );
+        assert_eq!(r.code, 2, "{flag}: {}{}", r.out, r.err);
+        assert!(r.out.is_empty(), "{flag}: {}", r.out);
+    }
+}
+
+#[test]
+fn a_gitlink_without_a_checkout_is_no_depth_limit_notice() {
+    let s = setup();
+    // a clone without --recurse-submodules: the gitlink `c` is in the index, nothing is checked out
+    s.w.git(&s.w.base, &["clone", "-q", "ws", "wsc"]);
+    let u = s.w.p("wsc");
+    let r = run(
+        &s.w,
+        &s.w.base,
+        None,
+        &[
+            "status",
+            "--all",
+            "--offline",
+            "--json",
+            "--depth",
+            "0",
+            "--root",
+            u.to_str().unwrap(),
+        ],
+    );
+    assert_eq!(r.code, 0, "{}{}", r.out, r.err);
+    let v = r.json();
+    assert_eq!(v["summary"]["total"], 1);
+    assert!(
+        !notice_codes(&v).contains(&"depth-limit".to_string()),
+        "{v}"
+    );
+}
