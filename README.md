@@ -984,7 +984,7 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 New behavior without a Go counterpart: the three read-only commands over the logs that the accepted spikes
 `spikes/stw/oplog-reflog`, `oplog-hooks` and `oplog-refhook` write. The format is the contract in
 `docs/oplog-format.md` (reviewed CLEAR); this package builds the readers only. Not part of it, each its own package:
-the hook install (stw's own `refs.log` lines and the rotation are the next section, `stw oplog undo` the section after). Nothing is written by these commands (tests compare the repository byte for byte before and
+the hook install (stw's own `refs.log` lines and the rotation are the next section, `stw oplog undo` the section after, `stw oplog hooks` the one after that). Nothing is written by these commands (tests compare the repository byte for byte before and
 after), no hook is installed and no `git` program runs. `--root PATH` and `--repo NAME` as for `stw prove`; `--json`.
 
 - `stw oplog timeline [--ref GLOB] [--remotes] [--all]`: the reflogs (`HEAD` of the main and the linked worktrees,
@@ -1064,13 +1064,31 @@ Deviations from the spec text: none in behavior; the spec sections 8 and Q12 now
 gix 0.90, and Q7 (`<run>/<k>`) is decided by the owner (2026-11-13). UNKNOWN: macOS, ext4,
 SHA-256 repositories, a concurrent `git` writing the same refs.
 
+### `stw oplog hooks status | install | uninstall | print` (package 4)
+
+New behavior without a Go counterpart; the owner accepts it live (recipe: `scratch/abnahme-rezepte/rezept-stw-oplog-hooks-install.md`).
+Rules and deviations: `docs/oplog-format.md`, section 11.
+
+`stw oplog hooks install --yes` writes the two hooks of the spikes (`post-rewrite` -> `rewrites.log`, `reference-transaction` ->
+`refs.log`; the script texts are the spike texts, `src/oplog/hooks/*.sh`) into the hooks directory of one repository, `uninstall --yes` removes
+them, `status` shows where they are, `print NAME` prints a script (for a chain by hand). Opt-in per repository: nothing else installs a hook.
+Without `--yes` the plan is printed, nothing is written, exit 1.
+- `core.hooksPath` (any config source, `GIT_CONFIG_COUNT`, `GIT_CONFIG_PARAMETERS`, also empty) is read, never written: when it is
+  set, `install` refuses and names the place the hooks would belong. No git config is written.
+- A hook of the same name that is not ours is never overwritten or rebuilt: refusal with a chain proposal. One refusal refuses both.
+- The directory is `<git-common-dir>/hooks` (linked worktrees share it and the logs); a symbolic link there is refused; a submodule is
+  `--repo NAME`. `uninstall` removes only a regular file whose line 2 is our header; the logs stay.
+- `install` appends `install` to `events.log` and `events-refhook.log` (the window the timeline and `evolog` read), `uninstall` appends `uninstall`.
+- No git program runs (`PATH=/nonexistent` in the tests); the installed hooks are tested end to end with a real `git` (amend, tag, branch delete).
+`--json`: `schema_version` 1, `command` `oplog hooks <sub>`. Mutations `OH1` to `OH48`.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 799 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 847 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 

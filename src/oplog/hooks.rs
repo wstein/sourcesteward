@@ -215,14 +215,16 @@ struct Inspect {
 }
 
 fn inspect(ctx: &Ctx) -> Result<Inspect> {
-    let hooks_dir = ctx.common.join("hooks");
+    // a linked worktree reports `<git-dir>/worktrees/<id>/../..`: show and use the plain path
+    let common = fs::canonicalize(&ctx.common).unwrap_or_else(|_| ctx.common.clone());
+    let hooks_dir = common.join("hooks");
     let dir_is_link = fs::symlink_metadata(&hooks_dir).is_ok_and(|m| m.file_type().is_symlink());
     let states = [
         state_of(&hooks_dir.join(HOOKS[0].name), HOOKS[0].header),
         state_of(&hooks_dir.join(HOOKS[1].name), HOOKS[1].header),
     ];
     Ok(Inspect {
-        common: ctx.common.clone(),
+        common,
         hooks_path: hooks_path(ctx)?,
         hooks_dir,
         dir_is_link,
@@ -969,6 +971,14 @@ mod tests {
             parameters_value("'core.hooksPath=/a=b'", k),
             Some("/a=b".into())
         );
+    }
+
+    #[test]
+    fn each_script_carries_its_own_header_on_line_two() {
+        for def in &HOOKS {
+            assert_eq!(def.text.lines().next(), Some("#!/bin/sh"), "{}", def.name);
+            assert_eq!(def.text.lines().nth(1), Some(def.header), "{}", def.name);
+        }
     }
 
     #[test]

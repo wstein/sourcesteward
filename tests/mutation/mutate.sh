@@ -2907,6 +2907,227 @@ m OU46 'oplog undo: the blob of the counter has no nonce' src/oplog/undo.rs \
   '.write_blob(format!("{run} {}", nonce()).as_bytes())' '.write_blob(format!("{run}{}", "").as_bytes())' \
   oplog_undo two_first_runs_do_not_share_a_number_even_when_the_rival_wrote_the_same_text
 
+m OH1 'oplog hooks: core.hooksPath does not refuse the install' src/oplog/hooks.rs \
+  '    if let Some(h) = &i.hooks_path {
+        let _ = writeln!(
+            t,
+            "refused' '    if let Some(h) = i.hooks_path.as_ref().filter(|_| false) {
+        let _ = writeln!(
+            t,
+            "refused' \
+  oplog_hooks core_hookspath_from_the_repository_config_refuses
+m OH2 'oplog hooks: an empty core.hooksPath counts as unset' src/oplog/hooks.rs \
+  '            found = Some(HooksPath { value, origin });' '            if !value.is_empty() {
+                found = Some(HooksPath { value, origin });
+            }' \
+  oplog_hooks an_empty_core_hookspath_counts_as_set
+m OH3 'oplog hooks: GIT_CONFIG_PARAMETERS is not read' src/oplog/hooks.rs \
+  'std::env::var_os("GIT_CONFIG_PARAMETERS")' 'std::env::var_os("GIT_CONFIG_PARAMETERS_")' \
+  oplog_hooks core_hookspath_from_the_environment_refuses
+m OH4 'oplog hooks: the first value in GIT_CONFIG_PARAMETERS wins' src/oplog/hooks.rs \
+  '            out = Some(v.to_string());' '            out = out.or(Some(v.to_string()));' \
+  lib oplog::hooks::tests::the_last_value_wins_and_other_keys_are_ignored
+m OH5 'oplog hooks: the key in GIT_CONFIG_PARAMETERS is case-sensitive' src/oplog/hooks.rs \
+  'k.eq_ignore_ascii_case(key)' 'k == key' \
+  lib oplog::hooks::tests::parameters_in_the_old_and_the_new_form
+m OH6 'oplog hooks: the value in GIT_CONFIG_PARAMETERS is split at the last equals sign' src/oplog/hooks.rs \
+  'w.split_once(' 'w.rsplit_once(' \
+  lib oplog::hooks::tests::a_quote_and_a_space_inside_a_value_stay_in_the_value
+m OH7 'oplog hooks: the config key read is not core.hooksPath' src/oplog/hooks.rs \
+  'value_implicit("hooksPath")' 'value_implicit("hooksPathX")' \
+  oplog_hooks core_hookspath_from_the_repository_config_refuses
+m OH8 'oplog hooks: the hook is put in place by rename (replaces an existing file)' src/oplog/hooks.rs \
+  '    let linked = fs::hard_link(&tmp, &target);' '    let linked = fs::rename(&tmp, &target);' \
+  lib oplog::hooks::tests::write_hook_never_replaces_an_existing_file_and_leaves_no_temporary_file
+m OH9 'oplog hooks: the temporary file stays next to the hook' src/oplog/hooks.rs \
+  '    let linked = fs::hard_link(&tmp, &target);
+    let _ = fs::remove_file(&tmp);' '    let linked = fs::hard_link(&tmp, &target);' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH10 'oplog hooks: the hook is not executable' src/oplog/hooks.rs \
+  'fs::set_permissions(&tmp, fs::Permissions::from_mode(0o755))' 'fs::set_permissions(&tmp, fs::Permissions::from_mode(0o644))' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH11 'oplog hooks: a foreign hook is not refused' src/oplog/hooks.rs \
+  '        if i.states[n] == State::Foreign {
+            any_foreign = true;' '        if false && i.states[n] == State::Foreign {
+            any_foreign = true;' \
+  oplog_hooks a_foreign_hook_is_never_overwritten_and_then_nothing_at_all_is_installed
+m OH12 'oplog hooks: a refusal for one hook still installs the other' src/oplog/hooks.rs \
+  '    if any_foreign {' '    if false && any_foreign {' \
+  oplog_hooks a_foreign_hook_is_never_overwritten_and_then_nothing_at_all_is_installed
+m OH13 'oplog hooks: the install record has another word' src/oplog/hooks.rs \
+  'append_event(&dir, HOOKS[n].events, "install")' 'append_event(&dir, HOOKS[n].events, "installed")' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH14 'oplog hooks: only the first hook gets an install record' src/oplog/hooks.rs \
+  '            for &n in &done {
+                if let Err(why) = append_event(' '            for &n in done.iter().take(1) {
+                if let Err(why) = append_event(' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH15 'oplog hooks: the log directory is not private' src/oplog/hooks.rs \
+  '                    .mode(0o700)' '                    .mode(0o755)' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH16 'oplog hooks: the events file is readable by everyone' src/oplog/hooks.rs \
+  '        .mode(0o600)' '        .mode(0o644)' \
+  oplog_hooks install_json_says_what_was_done_and_the_origin_of_hookspath_is_named
+m OH17 'oplog hooks: a symbolic stw directory is not named as such' src/oplog/hooks.rs \
+  '            Ok(m) if m.file_type().is_symlink() => {' '            Ok(m) if false && m.file_type().is_symlink() => {' \
+  oplog_hooks a_log_directory_that_is_a_symbolic_link_is_not_written_through
+m OH18 'oplog hooks: a symbolic hooks directory is not detected' src/oplog/hooks.rs \
+  'is_ok_and(|m| m.file_type().is_symlink());' 'is_ok_and(|m| false && m.file_type().is_symlink());' \
+  oplog_hooks a_hooks_directory_that_is_a_symbolic_link_is_not_written_through
+m OH19 'oplog hooks: install writes through a symbolic hooks directory' src/oplog/hooks.rs \
+  '    if i.dir_is_link {
+        let _ = writeln!(
+            t,
+            "refused  {} is a symbolic link (the directory may be shared with other repositories). Nothing was written;' '    if false && i.dir_is_link {
+        let _ = writeln!(
+            t,
+            "refused  {} is a symbolic link (the directory may be shared with other repositories). Nothing was written;' \
+  oplog_hooks a_hooks_directory_that_is_a_symbolic_link_is_not_written_through
+m OH20 'oplog hooks: uninstall removes through a symbolic hooks directory' src/oplog/hooks.rs \
+  '    if i.dir_is_link {
+        let _ = writeln!(
+            t,
+            "refused  {} is a symbolic link (the directory may be shared with other repositories). Nothing was removed;' '    if false && i.dir_is_link {
+        let _ = writeln!(
+            t,
+            "refused  {} is a symbolic link (the directory may be shared with other repositories). Nothing was removed;' \
+  oplog_hooks a_hooks_directory_that_is_a_symbolic_link_is_not_written_through
+m OH21 'oplog hooks: a link counts as our file' src/oplog/hooks.rs \
+  '    if !md.file_type().is_file() {
+        return State::Foreign;' '    if md.file_type().is_dir() {
+        return State::Foreign;' \
+  oplog_hooks a_foreign_hook_that_is_a_link_is_foreign_too
+m OH22 'oplog hooks: a header that only starts like ours counts as ours' src/oplog/hooks.rs \
+  '    if second == Some(header.as_bytes()) {' '    if second.is_some_and(|l| l.starts_with(header.as_bytes())) {' \
+  lib oplog::hooks::tests::our_file_needs_the_exact_header_on_line_two
+m OH23 'oplog hooks: the header is read from line 1' src/oplog/hooks.rs \
+  '.nth(1);
+    if second' '.nth(0);
+    if second' \
+  lib oplog::hooks::tests::our_file_needs_the_exact_header_on_line_two
+m OH24 'oplog hooks: any regular file counts as ours' src/oplog/hooks.rs \
+  '    } else {
+        State::Foreign
+    }
+}' '    } else {
+        State::Ours { executable: true }
+    }
+}' \
+  oplog_hooks uninstall_leaves_a_foreign_hook_and_a_look_alike_header
+m OH25 'oplog hooks: uninstall without --yes removes' src/oplog/hooks.rs \
+  '    if !yes {
+        let _ = writeln!(t, "not executed: --yes is missing");
+        j["result"] = json!("not executed: --yes is missing");
+        return Ok(Outcome {
+            text: t,
+            json: j,
+            exit: exit::FAILED,
+        });
+    }
+    let dir = oplog_dir' '    if false && !yes {
+        let _ = writeln!(t, "not executed: --yes is missing");
+        j["result"] = json!("not executed: --yes is missing");
+        return Ok(Outcome {
+            text: t,
+            json: j,
+            exit: exit::FAILED,
+        });
+    }
+    let dir = oplog_dir' \
+  oplog_hooks uninstall_removes_only_our_files_and_leaves_the_logs
+m OH26 'oplog hooks: install without --yes writes' src/oplog/hooks.rs \
+  '    if !yes {
+        let _ = writeln!(t, "not executed: --yes is missing");
+        j["result"] = json!("not executed: --yes is missing");
+        return Ok(Outcome {
+            text: t,
+            json: j,
+            exit: exit::FAILED,
+        });
+    }
+    let mut done' '    if false && !yes {
+        let _ = writeln!(t, "not executed: --yes is missing");
+        j["result"] = json!("not executed: --yes is missing");
+        return Ok(Outcome {
+            text: t,
+            json: j,
+            exit: exit::FAILED,
+        });
+    }
+    let mut done' \
+  oplog_hooks install_without_yes_prints_the_plan_and_writes_nothing
+m OH27 'oplog hooks: the uninstall record has the install word' src/oplog/hooks.rs \
+  'append_event(&dir, HOOKS[n].events, "uninstall")' 'append_event(&dir, HOOKS[n].events, "install")' \
+  oplog_hooks uninstall_removes_only_our_files_and_leaves_the_logs
+m OH28 'oplog hooks: the hooks directory is the git dir of the worktree, not the common dir' src/oplog/hooks.rs \
+  '    let hooks_dir = ctx.common.join("hooks");' '    let hooks_dir = ctx.repo.as_ref().map_or(ctx.common.clone(), |r| r.git_dir().to_path_buf()).join("hooks");' \
+  oplog_hooks a_linked_worktree_installs_into_the_common_hooks_and_logs_there
+m OH29 'oplog hooks: status does not find submodule git directories' src/oplog/hooks.rs \
+  'if p.join("HEAD").is_file() {' 'if p.join("HEADX").is_file() {' \
+  oplog_hooks a_submodule_has_its_own_hooks_directory
+m OH30 'oplog hooks: status counts the linked worktrees only' src/oplog/hooks.rs \
+  '            linked + 1,
+            show(&i.hooks_dir),' '            linked,
+            show(&i.hooks_dir),' \
+  oplog_hooks a_linked_worktree_installs_into_the_common_hooks_and_logs_there
+m OH31 'oplog hooks: status calls every hook of ours executable' src/oplog/hooks.rs \
+  '            executable: md.permissions().mode() & 0o111 != 0,' '            executable: true,' \
+  oplog_hooks status_reports_absent_ours_foreign_and_not_executable
+m OH32 'oplog hooks: print accepts an unknown name' src/oplog/hooks.rs \
+  'hook_text(name).map(str::to_string)' 'hook_text(name).or(Some(HOOKS[0].text)).map(str::to_string)' \
+  oplog_hooks print_writes_the_hook_text_and_nothing_else
+m OH33 'oplog hooks: the header constant of post-rewrite differs from the script' src/oplog/hooks.rs \
+  '        header: "# stw-oplog-hook v1",' '        header: "# stw-oplog-hook v2",' \
+  oplog_hooks install_twice_changes_nothing_the_second_time
+m OH34 'oplog hooks: post-rewrite installs the other script' src/oplog/hooks.rs \
+  'include_str!("hooks/post-rewrite.sh")' 'include_str!("hooks/reference-transaction.sh")' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH35 'oplog hooks: post-rewrite records its install in the other events file' src/oplog/hooks.rs \
+  '        events: "events.log",' '        events: "events-refhook.log",' \
+  oplog_hooks install_yes_writes_both_hooks_executable_with_their_header_and_an_install_event
+m OH36 'oplog hooks: the plan does not say that reference-transaction runs on every ref change' src/oplog/hooks.rs \
+  '    if todo.contains(&1) {' '    if false && todo.contains(&1) {' \
+  oplog_hooks install_without_yes_prints_the_plan_and_writes_nothing
+m OH37 'oplog hooks: install tries to write a hook that is already ours' src/oplog/hooks.rs \
+  '(0..2).filter(|&n| i.states[n] == State::Absent)' '(0..2).filter(|&n| i.states[n] != State::Foreign)' \
+  oplog_hooks install_adds_only_the_missing_hook_next_to_ours
+m OH38 'oplog hooks: a missing hooks directory is not created' src/oplog/hooks.rs \
+  '    fs::create_dir_all(dir).map_err(|e| format!("cannot create {}: {e}", show(dir)))?;' '' \
+  oplog_hooks a_missing_hooks_directory_is_created
+m OH39 'oplog hooks: an events file that is a link is written through' src/oplog/hooks.rs \
+  '        if !m.file_type().is_file() {
+            return Err(format!("{} is not a regular file"' '        if false && !m.file_type().is_file() {
+            return Err(format!("{} is not a regular file"' \
+  oplog_hooks an_events_file_that_is_a_link_or_a_log_directory_that_is_a_file_is_not_written_through
+m OH40 'oplog hooks: a log directory that is a file is not named' src/oplog/hooks.rs \
+  '            Ok(m) if !m.is_dir() =>' '            Ok(m) if false && !m.is_dir() =>' \
+  oplog_hooks an_events_file_that_is_a_link_or_a_log_directory_that_is_a_file_is_not_written_through
+m OH41 'oplog hooks: the JSON of a first install says executed false' src/oplog/hooks.rs \
+  '    j["executed"] = json!(true);' '    j["executed"] = json!(false);' \
+  oplog_hooks install_json_says_what_was_done_and_the_origin_of_hookspath_is_named
+m OH42 'oplog hooks: the chain proposal of reference-transaction is the one of post-rewrite' src/oplog/hooks.rs \
+  '    let call = if def.name == "reference-transaction" {' '    let call = if def.name == "no-such-hook" {' \
+  oplog_hooks the_chain_proposal_differs_per_hook
+m OH43 'oplog hooks: the origin of an environment value is not named' src/oplog/hooks.rs \
+  '"environment GIT_CONFIG_COUNT".to_string()' '"environment".to_string()' \
+  oplog_hooks install_json_says_what_was_done_and_the_origin_of_hookspath_is_named
+m OH44 'oplog hooks: the origin of GIT_CONFIG_PARAMETERS is not named' src/oplog/hooks.rs \
+  'origin: "environment GIT_CONFIG_PARAMETERS".into(),' 'origin: "environment".into(),' \
+  oplog_hooks install_json_says_what_was_done_and_the_origin_of_hookspath_is_named
+m OH45 'oplog hooks: the config file of a value is not named' src/oplog/hooks.rs \
+  '(Some(p), _) => format!("file {}", p.display()),' '(Some(_), _) => "file".to_string(),' \
+  oplog_hooks install_json_says_what_was_done_and_the_origin_of_hookspath_is_named
+m OH46 'oplog hooks: a failed removal exits 0' src/oplog/hooks.rs \
+  '        exit: if failed { exit::FAILED } else { exit::OK },' '        exit: exit::OK,' \
+  oplog_hooks a_hooks_directory_that_cannot_be_written_is_reported_and_nothing_changes
+
+m OH47 'oplog hooks: the common dir of a linked worktree is shown as <git-dir>/worktrees/<id>/../..' src/oplog/hooks.rs \
+  '    let common = fs::canonicalize(&ctx.common).unwrap_or_else(|_| ctx.common.clone());' '    let common = ctx.common.clone();' \
+  oplog_hooks a_linked_worktree_installs_into_the_common_hooks_and_logs_there
+m OH48 'oplog hooks: the script of a hook carries another header than its constant' src/oplog/hooks.rs \
+  '        header: "# stw-oplog-refhook v1",' '        header: "# stw-oplog-refhook v2",' \
+  lib oplog::hooks::tests::each_script_carries_its_own_header_on_line_two
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

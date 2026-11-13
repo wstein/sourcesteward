@@ -585,7 +585,7 @@ fn a_log_directory_that_is_a_symbolic_link_is_not_written_through() {
     let o = r.stw(&["install", "--yes"]);
     assert_eq!(o.code, 0, "{}{}", o.out, o.err);
     assert!(
-        o.out.contains("note"),
+        o.out.contains("note") && o.out.contains("is a symbolic link"),
         "the missing install record is named: {}",
         o.out
     );
@@ -698,6 +698,11 @@ fn a_linked_worktree_installs_into_the_common_hooks_and_logs_there() {
     let s = r.stw_env(&wt, &["status"], &[]);
     assert_eq!(s.code, 0, "{}{}", s.out, s.err);
     assert!(s.out.contains("worktrees    2"), "{}", s.out);
+    assert!(
+        !s.out.contains(".."),
+        "the common dir is a plain path: {}",
+        s.out
+    );
 }
 
 #[test]
