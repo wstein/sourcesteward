@@ -434,3 +434,51 @@ fn readme_mentions_every_documented_field() {
         "README must say that `next_steps` is gone"
     );
 }
+
+/// A plan fetches instead of asking GitHub whether the upstream moved (`remote_moved` is for a run only).
+#[test]
+fn an_online_plan_does_not_ask_github_whether_the_remote_moved() {
+    let fx = root();
+    fx.set_origin_url("ssh://git@github.com/x/y.git");
+    // a fake git first on PATH: the fetch fails at once, nothing reaches a network
+    let shim = tempfile::tempdir().unwrap();
+    let git = shim.path().join("git");
+    std::fs::write(
+        &git,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'git version 2.47.3'; exit 0; fi\nexit 99\n",
+    )
+    .unwrap();
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&git, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let r = path_str(&fx.path);
+    let api = FakeApi::start(200, "{}");
+    let run = |args: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_stw"))
+            .env_clear()
+            .env("PATH", shim.path())
+            .env("HOME", "/nonexistent")
+            .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+            .env("GH_TOKEN", TOKEN)
+            .env("STW_GITHUB_API_URL", &api.url)
+            .args(args)
+            .args(["--root", &r, "--json"])
+            .output()
+            .unwrap()
+    };
+    let o = run(&["sync", "--plan"]);
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["repos"][0]["fetch"], "failed", "{v}");
+    assert!(
+        api.hits().is_empty(),
+        "the plan asked GitHub: {:?}",
+        api.hits()
+    );
+    assert!(v["repos"][0]["remote_moved"].is_null(), "{v}");
+    let _ = run(&["sync"]);
+    assert!(
+        !api.hits().is_empty(),
+        "control: a run asks the API for remote_moved"
+    );
+}

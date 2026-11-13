@@ -293,6 +293,13 @@ fn plan_no_prune_keeps_the_ref_even_with_fetch_prune_true() {
     let r = entry(&v, "ws");
     assert_eq!(r["prune"], "off");
     assert_eq!(r["pruned"], serde_json::json!([]));
+    assert!(
+        !r["reason"]
+            .as_str()
+            .unwrap()
+            .contains("the fetch would not prune"),
+        "that note is for the offline plan: {r}"
+    );
     assert!(d.tracking("gone").is_some());
     assert_eq!(d.tracking("main").as_deref(), Some(d.new.as_str()));
 }
@@ -318,17 +325,18 @@ fn the_offline_plan_with_prune_still_only_counts() {
 
 #[test]
 fn a_refspec_that_writes_outside_the_namespace_refuses_the_plan_before_any_fetch() {
-    for flags in [&[][..], &["--prune"][..], &["--no-prune"][..]] {
+    // the tags, a sibling remote, and a namespace that only starts like `refs/remotes/origin/`
+    let specs = [
+        "+refs/tags/*:refs/tags/*",
+        "+refs/heads/*:refs/remotes/other/*",
+        "+refs/heads/*:refs/remotes/origin-mirror/*",
+    ];
+    for (flags, spec) in [&[][..], &["--prune"][..], &["--no-prune"][..]]
+        .into_iter()
+        .flat_map(|f| specs.into_iter().map(move |s| (f, s)))
+    {
         let d = setup();
-        d.w.git(
-            &d.ws,
-            &[
-                "config",
-                "--add",
-                "remote.origin.fetch",
-                "+refs/tags/*:refs/tags/*",
-            ],
-        );
+        d.w.git(&d.ws, &["config", "--add", "remote.origin.fetch", spec]);
         let before = d.refs();
         let (code, v, _) = d.plan(flags);
         assert_eq!(code, 1, "{flags:?} {v}");
@@ -337,8 +345,11 @@ fn a_refspec_that_writes_outside_the_namespace_refuses_the_plan_before_any_fetch
         assert_eq!(r["fetch"], "failed", "{flags:?} {r}");
         assert_eq!(r["git_error"], "refused-refspec", "{flags:?} {r}");
         assert!(
-            r["error"].as_str().unwrap().contains("refs/tags/*"),
-            "{flags:?} {r}"
+            r["error"]
+                .as_str()
+                .unwrap()
+                .contains(spec.trim_start_matches('+')),
+            "{flags:?} {spec} {r}"
         );
         assert_eq!(d.refs(), before, "{flags:?} nothing was fetched");
     }
@@ -470,5 +481,33 @@ fn the_plan_never_prunes_a_tag_whatever_fetch_prune_tags_says() {
         entry(&v, "ws")["pruned"],
         serde_json::json!(["refs/remotes/origin/gone2"]),
         "{v}"
+    );
+}
+
+#[test]
+fn the_plan_text_after_a_failed_fetch_does_not_claim_that_refs_were_fetched() {
+    let d = setup();
+    d.w.git(
+        &d.ws,
+        &["remote", "set-url", "origin", "https://127.0.0.1:1/x/y.git"],
+    );
+    let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", &d.w.home)
+        .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
+        .args(["sync", "--plan", "--root"])
+        .arg(&d.ws)
+        .output()
+        .unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(
+        !text.contains("Only the remote-tracking refs were fetched"),
+        "{text}"
+    );
+    assert!(
+        text.contains("The fetch failed for 1 repository; its plan is based on the last fetch. Nothing else was written.\n"),
+        "{text}"
     );
 }
