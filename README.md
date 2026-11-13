@@ -24,7 +24,7 @@ detection, no warning, no test).
 
 ```
 stw status    [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
-              [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
+              [--all [--depth N] [--limit N]] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
 stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
@@ -345,6 +345,8 @@ with `--offline`.
 | `--review` | Also reads the review state of the open pull requests from their comments: one comment read per pull request (a list read of at most 500 comments, which is up to 6 requests of 100, none after the `--timeout`), at most 16 reads at a time, at most 200 pull requests per run (repository order, newest pull request first; the rest is `not read` with a notice). Each pull request line gets `review <state>` (`clear`, `clear-carried`, `findings`, `no-review`, `unverified-author`, `?`), each repository a line `reviews: 1 clear, 2 ?` and, with `--long`, the evidence per pull request. See "Review state in `stw status --review`". `Counts` do not change. Not with `--offline` (usage error, exit 2). |
 | `--icons unicode\|nerd\|ascii` | The marker in front of a repository line: attention `▲`, cannot be read `✖` (unicode), `U+F071` and `U+F057` of Font Awesome (nerd, needs a Nerd Font), `!` for both (ascii). Default: unicode when stdout is a terminal, the locale is UTF-8 (the first of `LC_ALL`, `LC_CTYPE`, `LANG` that is set decides) and `TERM` is not `dumb`; ascii otherwise (a pipe, a file). An explicit value always wins. Text only. |
 | `--timeout DURATION` | The overall deadline of the GitHub reads, 1s to 10m, default 90s, written as Go does (`90s`, `2m`, `1m30s`, `1.5s`). Every request is cut at the deadline and none starts after it (one request also takes at most 30 s). The cut reads are notices (`pull requests not read (deadline: ...)`), their counters `?`, exit 0. The fetch of `--fetch` and the local reads are not part of it. |
+| `--all` | Every repository of the workspace, the root and the nested submodules, in one line each with the stack of its current branch; `--json` is the same document plus `kind`, `depth`, `stack`. Not with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose` (usage error). See "`stw status --all`". |
+| `--depth N`, `--limit N` | Only with `--all`: how deep below the root submodules are listed (0 to 64, default 16; 0 is the root only; a cut is a notice) and the most repositories of a run (1 to 1024, default 256; more is a usage error, exit 2). |
 | `--stats` | One line after the summary: `stats: API: 4 reqs (4,896/5,000 left, reset 22:13 UTC) \| 1.4s elapsed (local 110ms, remote 1.3s)`. `local` includes the fetch of `--fetch`; `elapsed` ends before the `agent-rules` read. With `--json` the member `stats`. |
 | `--verbose` | Implies `--stats`. Before the stats line: `Diagnostic breakdown:` with the requests and the summed request time per repository and source (`pulls`, `issues`; the comment reads of `--review` count as `pulls`). With `--json` the breakdown and the stats line go to stderr, so stdout stays one document. |
 
@@ -385,6 +387,93 @@ with `--offline`.
 - `--review`: see "Review state in `stw status --review`" for the differences.
 - JSON: Go's schema 2 differs from the Rust one as a whole (see the migration plan); the new fields here are only additive to
   the Rust document, `schema_version` stays `2`.
+
+### `stw status --all`
+
+Port of the spike `spikes/stw/status-all` (new behavior without a Go counterpart; the owner accepted the spike live). A flag of
+`status`, not a command. It builds on the row of `status` (`collect_local`, `read_remote`, `reasons`, `collect_notices`, the
+GitHub client of `src/github.rs`) and on the walk of the nested submodules (`repo::list_repos`, the root as in
+"Submodules: the gitlinks of the index"); what it adds is the stack of the current branch, the depth bound and the one-line text
+(`src/status_all.rs`).
+
+Text (the blocks of the default text are not printed):
+
+    status --all  root=<abs>  repositories=<n>  depth<=<depth>
+
+    Repositories (<n>)
+    <mark> <name>  <branch>  <sync>  <dirty> stack <chain>  PRs <n> | Issues <n> [(<reason>)]
+
+    Totals  PRs <n> | Issues <n> | ahead <n> | behind <n>
+
+    Notices (<n>)                      (only when n > 0)
+      <text>
+
+    <a> of <n> repositories need attention
+
+`<mark>` is `!` when the repository has an attention reason (`reasons()` unchanged), else a blank; `<name>` is the name of
+`status` (the root by its directory name, a submodule by its path below the root, `outer/inner`), padded to 28 characters.
+`<sync>` is `<upstream> +<ahead>/-<behind>`, `no upstream`, `upstream gone`, `(unborn)` or `-` (detached; the branch column then
+shows `(<head>)`). `<dirty>` is `clean` or the non-zero counts `<n> conflicts <n> staged <n> unstaged <n> untracked`. `<chain>` is the
+local upstream chain of the current branch, top-most local parent first (`main<-a<-b`), `-` without a local parent. A local parent
+is `branch.<b>.remote = .` with `branch.<b>.merge = refs/heads/<p>` (upstream links only; no other stack source). Because a branch
+name may contain `<-`, the JSON `stack.chain` is an array. A repository that cannot be read is `! <name>  (<error>)`. The GitHub
+cell is `PRs n | Issues n` (`n+` at a full page), `?` for a failed read with the reason in brackets (`unauthorized`,
+`forbidden`, `not-found`, `rate-limited`, `timeout`, `unreadable`, `unreachable`, `error`; read from the message of the client),
+`n/a` with `no-github-origin`, `offline` or `no-token`. `Totals`: a number only when every repository with a GitHub origin gave
+one (`n+` when a page was full), else `n/a` (the JSON `totals` has the state); `ahead` and `behind` are sums over the rows.
+Exit codes as `status`: 1 when a repository cannot be read, 0 otherwise (a failed GitHub read is a notice); an unusable
+workspace or more than `--limit` repositories is exit 2.
+
+JSON (`--all --json`): the document of `status --json` (`schema_version` 2, `command` `status`) plus `options.all` (true),
+`options.depth`, `options.limit`, `options.timeout` (whole seconds of `--timeout`) and per repository `kind` (`root` or `submodule`),
+`depth` (0 for the root) and `stack` (`{"chain": [...] | null, "links": n}`; `null` for a detached or unborn head and for a
+repository that cannot be read; `links` is the number of branches of the repository with a local parent). Without `--all` none of
+these fields exists. Notices that only `--all` has: `depth-limit` (source `submodules`, `<name>: submodules below depth <n> not
+listed`) and `stack-cycle` (source `stack`, `<name>: stack cycle at <branch>`; the chain then ends with the branch that repeats).
+
+The status of a repository under `--all` does not look into its submodules (`--ignore-submodules=all`; each has its own row), so
+a changed submodule is not an `unstaged` path of its parent and an unreadable submodule does not make its parent unreadable.
+
+Deviations from the spike, one by one:
+
+1. GitHub: the product client (`src/github.rs`, token rules, no `gh`) instead of `gh api`; the reasons are read from its messages
+   (`classify`); `not-logged-in` and `gh-missing` do not exist, `no-token` does; the stop after a rate limit is the one of
+   `status` (none for the plain reads; `--review` has its own).
+2. Walk: `repo::list_repos`. An uninitialised submodule is not listed (spike: an error row `not initialised`) and a symlinked or
+   otherwise refused gitlink path is a `rejected-path` notice and no row (spike: an error row). Neither makes the exit code 1.
+3. Name: the root is its directory name in the text and in the JSON (spike: `.`).
+4. Notices: those of `status` (`offline`, `no-token`, `prs-not-read`, `issues-not-read`, `rejected-path`, ...) with their wording,
+   not the spike codes (`github-offline`, `github-read-failed`, ...). New: `depth-limit`, `stack-cycle`.
+5. Exit code of an unreadable repository: 1, the rule of `status` (spike: 0, its open question 7). Recommendation: keep 1.
+6. Exit code above the limit: 2, a usage error with the text of `status` (spike: 1; Go: 1 with the code `sync-limit`). The same
+   text and code as `status` without `--all`; the owner decides whether 1 is wanted (recommendation: keep 2, one rule for every
+   command).
+7. Text from outside is shown with escapes (`escape_for_text`: `\u{202e}`, `\u{1b}`, `\n`; cut at 300 characters), not as `?`.
+8. `reasons` contain `operation:*` (the spike left a running rebase out); the one-line row does not name the operation, only the
+   mark `!` shows it.
+9. Pull requests and issues are independent: one can be a number and the other `?` (spike: both `?`). `Totals` shows `n+` at a full
+   page (spike: the bare number).
+10. `--timeout DURATION` is the overall deadline of the GitHub reads (default 90s, not with `--offline`), as `status` (spike: seconds
+    per `gh` call, its open question 10, recommendation followed). `options.timeout` is its whole seconds; `options.offline` is
+    not added (the spike had it).
+11. `--all` is not combined with `--long`, `--icons`, `--worktrees`, `--review`, `--stats`, `--verbose` (the one-line text has no
+    place for them; spike open question 9 recommended one row builder for both, which is the case for the data, not for the text).
+    `--fetch` works.
+12. A submodule's state is not counted in its parent as in the spike, but only under `--all`: `status` without `--all` still counts
+    a changed submodule as one `unstaged` path of its parent and cannot read a parent whose submodule is unreadable. The JSON
+    `changes` of a parent can therefore differ between `status --json` and `status --all --json`.
+
+Open questions (recommendation each):
+
+- Spike question 4, stack source: upstream links only, as the spike (implemented); a richer source (toml, pull requests) later
+  through the same field `stack`. Not decided by the owner (the "Stapelmodell" is open).
+- Spike question 7, exit code of an unreadable submodule: exit 1 like `status` (deviation 5). Recommendation: keep.
+- Exit code above `--limit` (deviation 6): recommendation 2.
+- Deviation 12: recommendation, the same `--ignore-submodules=all` rule for `status` without `--all` (every submodule has its own
+  row there too); a change of the default `status`, so a decision of its own.
+- Should `kind` and `depth` also be in the default `status --json` (additive, the walk is nested there too)? Recommendation: yes,
+  later, with `stack`.
+- Mutations of this flag have the prefix `AL` (`SA` is taken by `stw add`).
 
 ## Backup branches
 
