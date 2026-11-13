@@ -1,7 +1,9 @@
-//! `stw oplog undo REF --to OLD --expect NEW --yes`: move one local branch back to an older reflog value, with a backup
-//! ref and a compare-and-swap update (`docs/oplog-format.md`, 8). The checks are those of `undo-plan` (same function);
-//! this module adds the backup namespace `refs/stw/backup/<run>/<k>`, the counter ref, the retention, the reflog entries
-//! (also with `core.logAllRefUpdates=false`) and the `refs.log` lines. A failed `refs.log` append never undoes the update.
+//! `stw oplog undo REF --to OLD --expect NEW [--keep] --yes`: move one local branch back to an older reflog value, with a
+//! backup ref and a compare-and-swap update (`docs/oplog-format.md`, 8). The checks are those of `undo-plan` (same
+//! function); this module adds the backup namespace `refs/stw/backup/<run>/<k>`, the counter ref, the retention, the reflog
+//! entries (also with `core.logAllRefUpdates=false`) and the `refs.log` lines. A failed `refs.log` append never undoes the
+//! update. With `--keep` the branch is the one the current worktree has checked out and `git reset --keep` (through the
+//! runner, the only git program of `oplog`) moves branch, index and work tree (`docs/oplog-format.md`, 8a).
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 
@@ -15,6 +17,7 @@ use super::undo_plan::{self, Plan};
 use super::write::{log_ref_update, RefUpdate};
 use super::Ctx;
 use crate::error::{Error, Result};
+use crate::git_runner::{self, Hex40, Op};
 use crate::github::reads::escape_untrusted;
 
 /// The counter ref: its blob holds `<run> <pid>-<nanos>`; a run number is never reused (spec 8, item 3).
@@ -32,6 +35,8 @@ pub struct Request {
     pub reference: String,
     pub to: String,
     pub expect: String,
+    /// The `--keep` path (a checked-out branch of the current worktree, moved with `git reset --keep`).
+    pub keep: bool,
 }
 
 pub struct Done {
@@ -43,6 +48,8 @@ pub struct Done {
     pub pruned: Vec<String>,
     pub notices: Vec<String>,
     pub way_back: String,
+    /// Done through `git reset --keep` (index and work tree moved with the branch).
+    pub keep: bool,
 }
 
 /// What `undo` returns: the plan that refused (nothing changed), or the done undo.
@@ -308,6 +315,7 @@ pub fn undo_hooked(
             reference: req.reference.clone(),
             to: Some(req.to.clone()),
             steps: None,
+            keep: req.keep,
         },
     )?;
     let mut plan = plan;
@@ -343,6 +351,23 @@ pub fn undo_hooked(
     let expect =
         ObjectId::from_hex(cur_s.as_bytes()).map_err(|e| Error::repository(e.to_string()))?;
     let to = ObjectId::from_hex(to_s.as_bytes()).map_err(|e| Error::repository(e.to_string()))?;
+
+    // `--keep` needs a usable git before anything is written (no backup ref for an undo that cannot start)
+    let keep_target = if req.keep {
+        match keep_prerequisites(&to_s) {
+            Ok(t) => Some(t),
+            Err(why) => {
+                plan.refused += 1;
+                plan.checks.push(undo_plan::Check {
+                    status: "refused",
+                    text: why,
+                });
+                return Ok(Outcome::Refused(Box::new(plan)));
+            }
+        }
+    } else {
+        None
+    };
 
     // the run number and the backup ref
     let (run, prev, blob) =
@@ -393,6 +418,11 @@ pub fn undo_hooked(
         Err(e) => notices.push(format!("backup retention not applied: {e}")),
     }
     before_update();
+    if let Some(target) = keep_target {
+        return keep_update(
+            repo, &plan, expect, to, target, backup_ref, run, pruned, notices,
+        );
+    }
     // CAS: the ref must still hold --expect; a change since the checks fails the update and leaves the backup
     let name = full_name(&plan.reference).map_err(Error::repository)?;
     edit_with_reflog(
@@ -416,8 +446,13 @@ pub fn undo_hooked(
             new: Some(to),
         },
     );
-    let way_back =
-        undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        false,
+    );
     Ok(Outcome::Done(Box::new(Done {
         reference: plan.reference,
         previous: expect.to_string(),
@@ -427,6 +462,97 @@ pub fn undo_hooked(
         pruned,
         notices,
         way_back,
+        keep: false,
+    })))
+}
+
+/// The target of `git reset --keep` as the runner takes it (40 hex digits), and a git that can run: the reasons a
+/// `--keep` undo is refused before any ref is written.
+pub fn keep_prerequisites(to: &str) -> std::result::Result<Hex40, String> {
+    let target = Hex40::parse(to).ok_or_else(|| {
+        format!(
+            "--keep supports 40-digit object ids only (the runner of git takes no other); the target is {}",
+            esc(to)
+        )
+    })?;
+    git_runner::shared()
+        .version()
+        .map_err(|e| format!("--keep needs a usable git: {e}"))?;
+    Ok(target)
+}
+
+/// The `--keep` update: the branch, the index and the work tree are moved by `git reset --keep <old>` in the worktree of
+/// `repo`. The ref is read again right before (it must still hold `expect` and HEAD must still be on it: git's own update
+/// has no compare-and-swap) and after (it must hold `to`). A failed git leaves the branch where it was; the backup stays.
+#[allow(clippy::too_many_arguments)]
+fn keep_update(
+    repo: &gix::Repository,
+    plan: &Plan,
+    expect: ObjectId,
+    to: ObjectId,
+    target: Hex40,
+    backup_ref: String,
+    run: u64,
+    pruned: Vec<String>,
+    notices: Vec<String>,
+) -> Result<Outcome> {
+    let stays = |why: String| {
+        Error::repository(format!(
+            "the branch was not changed ({why}). The backup {backup_ref} stays ({expect})"
+        ))
+    };
+    let Some(workdir) = repo.workdir().map(std::path::Path::to_path_buf) else {
+        return Err(stays("this repository has no work tree".into()));
+    };
+    let holds = |at: ObjectId| direct_value(repo, &plan.reference).map(|v| v == Some(at));
+    if !holds(expect).map_err(stays)? {
+        return Err(stays(
+            "it changed since the checks; nothing was moved".into(),
+        ));
+    }
+    let head_on_it = repo
+        .head_name()
+        .ok()
+        .flatten()
+        .is_some_and(|n| n.as_bstr() == plan.reference.as_bytes());
+    if !head_on_it {
+        return Err(stays(
+            "HEAD is no longer on the branch; nothing was moved".into(),
+        ));
+    }
+    git_runner::shared()
+        .run(&workdir, Op::ResetKeep { target })
+        .map_err(|e| stays(format!("git reset --keep failed: {}", esc(&e.to_string()))))?;
+    if !holds(to).map_err(stays)? {
+        return Err(Error::repository(format!(
+            "git reset --keep ran but the branch does not hold {to}; look at `git status` and `git reflog`. The backup {backup_ref} stays ({expect})"
+        )));
+    }
+    log_ref_update(
+        repo,
+        &RefUpdate {
+            refname: &plan.reference,
+            old: Some(expect),
+            new: Some(to),
+        },
+    );
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        true,
+    );
+    Ok(Outcome::Done(Box::new(Done {
+        reference: plan.reference.clone(),
+        previous: expect.to_string(),
+        current: to.to_string(),
+        backup_ref,
+        run,
+        pruned,
+        notices,
+        way_back,
+        keep: true,
     })))
 }
 
@@ -444,7 +570,13 @@ impl Done {
             self.backup_ref,
             self.previous,
             // the text is made to be pasted into a shell: the name is quoted there, the JSON field keeps the raw one
-            undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)
+            undo_plan::undo_command(
+                &self.reference,
+                &self.previous,
+                &self.current,
+                true,
+                self.keep
+            )
         );
         if !self.pruned.is_empty() {
             b.push_str(&format!(
@@ -455,7 +587,11 @@ impl Done {
         for n in &self.notices {
             b.push_str(&format!("notice: {}\n", esc(n)));
         }
-        b.push_str("Result: done. Only the ref was moved (index, working tree, other worktrees and pushes are not touched).\n");
+        if self.keep {
+            b.push_str("Result: done. The branch, the index and the work tree of this worktree were moved with `git reset --keep` (untracked files, other worktrees and pushes are not touched).\n");
+        } else {
+            b.push_str("Result: done. Only the ref was moved (index, working tree, other worktrees and pushes are not touched).\n");
+        }
         b
     }
 
@@ -465,6 +601,7 @@ impl Done {
             "ref": self.reference, "executed": true, "previous": self.previous, "current": self.current,
             "backup_ref": self.backup_ref, "run": self.run, "pruned": self.pruned,
             "way_back": self.way_back, "notices": self.notices,
+            "keep": self.keep, "via": self.keep.then_some(git_runner::VIA),
             "result": "done",
         })
     }

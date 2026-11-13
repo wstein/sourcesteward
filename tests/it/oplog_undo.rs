@@ -331,6 +331,7 @@ fn the_update_is_a_compare_and_swap_and_a_lost_race_keeps_the_backup() {
             reference: "work".into(),
             to: c2.to_string(),
             expect: c3.to_string(),
+            keep: false,
         },
         &mut || {
             // another process moves the branch after the checks
@@ -596,6 +597,7 @@ fn request(to: ObjectId, expect: ObjectId) -> undo::Request {
         reference: "work".into(),
         to: to.to_string(),
         expect: expect.to_string(),
+        keep: false,
     }
 }
 

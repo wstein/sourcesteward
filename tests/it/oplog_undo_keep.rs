@@ -220,7 +220,7 @@ fn without_keep_a_checked_out_branch_is_still_refused_and_the_text_names_keep() 
     );
     assert_eq!(r.code, 1, "{}{}", r.text, r.err);
     assert!(r.text.contains("checked out"), "{}", r.text);
-    assert!(r.text.contains("--keep"), "{}", r.text);
+    assert!(r.text.contains("add --keep"), "{}", r.text);
     assert!(before == tree_snapshot(&fx.path));
 }
 
@@ -487,4 +487,68 @@ fn the_help_names_keep() {
     assert!(r.text.contains("\n      --keep"), "{}", r.text);
     let r = run(&fx, &["undo-plan", "--help"]);
     assert!(r.text.contains("\n      --keep"), "{}", r.text);
+}
+
+#[test]
+fn core_sparse_checkout_refuses() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    let mut cfg = std::fs::read_to_string(fx.path.join(".git/config")).unwrap();
+    cfg.push_str("[core]\n\tsparseCheckout = true\n");
+    std::fs::write(fx.path.join(".git/config"), cfg).unwrap();
+    let b = before(&fx);
+    let r = run(&fx, &keep_args(&c2.to_string(), &c3.to_string()));
+    refused_and_untouched(&fx, &r, &["core.sparseCheckout"], &b);
+}
+
+// ---- the window between the checks and git ----------------------------------------------------------------------
+
+fn lib_request(to: ObjectId, expect: ObjectId) -> stw::oplog::undo::Request {
+    stw::oplog::undo::Request {
+        reference: "work".into(),
+        to: to.to_string(),
+        expect: expect.to_string(),
+        keep: true,
+    }
+}
+
+#[test]
+fn a_branch_that_moves_after_the_checks_is_not_reset_and_the_backup_stays() {
+    let (fx, [c1, c2, c3]) = keep_fx();
+    let ctx = stw::oplog::Ctx::open(&fx.path).unwrap();
+    let e = match stw::oplog::undo::undo_with(&ctx, &lib_request(c2, c3), &mut || {
+        fx.branch("work", c1);
+    }) {
+        Err(e) => e.to_string(),
+        Ok(_) => panic!("the update went through"),
+    };
+    assert!(e.contains("changed since"), "{e}");
+    assert!(e.contains("refs/stw/backup/1/1"), "{e}");
+    assert_eq!(fx.tip("work"), c1, "the other writer's value stays");
+    assert_eq!(
+        fx.read("f").as_deref(),
+        Some("c\n"),
+        "the work tree was not touched"
+    );
+    assert_eq!(refname_value(&fx, "refs/stw/backup/1/1"), Some(c3));
+}
+
+#[test]
+fn a_head_that_leaves_the_branch_after_the_checks_is_not_reset() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    let ctx = stw::oplog::Ctx::open(&fx.path).unwrap();
+    let e = match stw::oplog::undo::undo_with(&ctx, &lib_request(c2, c3), &mut || {
+        fx.set_head("main");
+    }) {
+        Err(e) => e.to_string(),
+        Ok(_) => panic!("the update went through"),
+    };
+    assert!(e.contains("HEAD is no longer on the branch"), "{e}");
+    assert_eq!(fx.tip("work"), c3);
+    assert_eq!(fx.read("f").as_deref(), Some("c\n"));
+}
+
+#[test]
+fn a_target_that_is_not_40_hex_is_refused_before_git_is_asked() {
+    let e = stw::oplog::undo::keep_prerequisites(&"a".repeat(64)).unwrap_err();
+    assert!(e.contains("40-digit"), "{e}");
 }

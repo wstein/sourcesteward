@@ -28,15 +28,16 @@ pub fn shell_word(s: &str) -> String {
     }
 }
 
-/// `stw oplog undo REF --to OLD --expect NEW --yes`. With `shell` the ref name is quoted for pasting into a shell (the
-/// text output); the JSON fields keep the raw name.
-pub fn undo_command(reference: &str, to: &str, expect: &str, shell: bool) -> String {
+/// `stw oplog undo REF --to OLD --expect NEW [--keep] --yes`. With `shell` the ref name is quoted for pasting into a shell
+/// (the text output); the JSON fields keep the raw name. `keep` adds `--keep` (the undo of a checked-out branch).
+pub fn undo_command(reference: &str, to: &str, expect: &str, shell: bool, keep: bool) -> String {
     let name = if shell {
         shell_word(reference)
     } else {
         reference.to_string()
     };
-    format!("stw oplog undo {name} --to {to} --expect {expect} --yes")
+    let keep = if keep { " --keep" } else { "" };
+    format!("stw oplog undo {name} --to {to} --expect {expect}{keep} --yes")
 }
 
 /// Files of a git directory that mean an operation is running there (the markers the spike checks).
@@ -56,6 +57,8 @@ pub struct Request {
     pub reference: String,
     pub to: Option<String>,
     pub steps: Option<u64>,
+    /// `--keep`: the branch is the one this worktree has checked out, and `git reset --keep` moves it (`undo.rs`).
+    pub keep: bool,
 }
 
 pub struct Check {
@@ -71,6 +74,8 @@ pub struct Plan {
     pub refused: usize,
     pub branch: bool,
     pub common: String,
+    /// The plan is for the `--keep` path.
+    pub keep: bool,
 }
 
 impl Plan {
@@ -116,6 +121,7 @@ pub fn plan(ctx: &Ctx, req: &Request) -> Result<Plan> {
         refused: 0,
         branch: reference.starts_with("refs/heads/"),
         common: esc(&ctx.common.to_string_lossy()),
+        keep: req.keep,
     };
 
     // the ref
@@ -171,6 +177,146 @@ pub fn plan(ctx: &Ctx, req: &Request) -> Result<Plan> {
     finish(ctx, req, p, cur)
 }
 
+/// The checks only `--keep` makes: the branch is checked out in this worktree (and nowhere else), no sparse checkout, a
+/// clean index and a clean work tree (untracked files are no change). `git reset --keep` would keep some local changes;
+/// stw does not rely on that.
+fn keep_checks(p: &mut Plan, repo: &gix::Repository, here_holds: bool, other_holds: bool) {
+    let reference = p.reference.clone();
+    if !here_holds {
+        if !other_holds {
+            let why = match repo.head_name() {
+                Ok(None) => "HEAD is detached".to_string(),
+                Ok(Some(n)) => format!("HEAD is on {}", esc(&n.as_bstr().to_string())),
+                Err(e) => format!("HEAD cannot be read: {}", esc(&e.to_string())),
+            };
+            p.push(
+                "refused",
+                format!(
+                    "{} is not checked out in this worktree ({why}); --keep moves the branch this worktree has checked out. Without --keep only the ref moves",
+                    esc(&reference)
+                ),
+            );
+        }
+        return;
+    }
+    p.push("ok", "checked out in this worktree".into());
+    if repo
+        .config_snapshot()
+        .boolean("core.sparseCheckout")
+        .unwrap_or(false)
+    {
+        p.push(
+            "refused",
+            "core.sparseCheckout is set: --keep does not handle a sparse checkout".into(),
+        );
+    }
+    match crate::status::changes_opts(repo, false, true) {
+        Err(e) => p.push(
+            "refused",
+            format!(
+                "the work tree status cannot be read ({}): treated as not clean",
+                esc(&e.to_string())
+            ),
+        ),
+        Ok(c) => {
+            let mut dirty = false;
+            if c.conflicts > 0 {
+                dirty = true;
+                p.push(
+                    "refused",
+                    format!(
+                        "{} unmerged path(s): resolve or abort the merge first",
+                        c.conflicts
+                    ),
+                );
+            }
+            if c.staged > 0 {
+                dirty = true;
+                p.push(
+                    "refused",
+                    format!(
+                        "index has staged changes ({} path(s)): --keep needs a clean index",
+                        c.staged
+                    ),
+                );
+            }
+            if c.unstaged > 0 {
+                dirty = true;
+                p.push(
+                    "refused",
+                    format!(
+                        "work tree has unstaged changes ({} path(s)): --keep needs a clean work tree",
+                        c.unstaged
+                    ),
+                );
+            }
+            if !dirty {
+                p.push(
+                    "ok",
+                    "index and work tree are clean (untracked files do not count)".into(),
+                );
+            }
+        }
+    }
+}
+
+/// `git reset --keep` leaves submodule checkouts alone, so a target whose tree has another gitlink than the current one
+/// would leave a submodule on the wrong commit: refused. Trees are compared by path, no rename tracking.
+fn keep_gitlink_check(p: &mut Plan, repo: &gix::Repository, cur: ObjectId, alt: ObjectId) {
+    use gix::diff::tree_with_rewrites::Change;
+    let trees = (|| -> std::result::Result<_, String> {
+        let tree_of = |id: ObjectId| {
+            repo.find_commit(id)
+                .map_err(|e| e.to_string())?
+                .tree()
+                .map_err(|e| e.to_string())
+        };
+        let (a, b) = (tree_of(cur)?, tree_of(alt)?);
+        let options = gix::diff::Options::default().with_rewrites(None);
+        repo.diff_tree_to_tree(&a, &b, options)
+            .map_err(|e| e.to_string())
+    })();
+    match trees {
+        Err(e) => p.push(
+            "refused",
+            format!("the trees of the two values cannot be compared ({}): --keep needs to know that no gitlink differs", esc(&e)),
+        ),
+        Ok(changes) => {
+            let hit = changes.iter().find_map(|c| match c {
+                Change::Addition {
+                    location,
+                    entry_mode,
+                    ..
+                }
+                | Change::Deletion {
+                    location,
+                    entry_mode,
+                    ..
+                } if entry_mode.is_commit() => Some(location.clone()),
+                Change::Modification {
+                    location,
+                    previous_entry_mode,
+                    entry_mode,
+                    ..
+                } if previous_entry_mode.is_commit() || entry_mode.is_commit() => {
+                    Some(location.clone())
+                }
+                _ => None,
+            });
+            match hit {
+                Some(path) => p.push(
+                    "refused",
+                    format!(
+                        "the two values differ in the gitlink {}: `git reset --keep` leaves submodule checkouts as they are, so one would stay on the wrong commit",
+                        esc(&path.to_string())
+                    ),
+                ),
+                None => p.push("ok", "no gitlink differs between the two values".into()),
+            }
+        }
+    }
+}
+
 fn finish(ctx: &Ctx, req: &Request, mut p: Plan, cur: ObjectId) -> Result<Plan> {
     let repo = ctx.repo()?;
     let reference = p.reference.clone();
@@ -185,16 +331,37 @@ fn finish(ctx: &Ctx, req: &Request, mut p: Plan, cur: ObjectId) -> Result<Plan> 
 
     // checked out, registrations without a readable git dir, running operations
     let wt = crate::repo::worktrees::scan(repo)?;
+    // the worktree this command runs in: the only one `--keep` may move
+    let here = repo.workdir().and_then(|d| std::fs::canonicalize(d).ok());
+    let (mut here_holds, mut other_holds) = (false, false);
     for (b, dir) in &wt.in_use {
-        if format!("refs/heads/{b}") == reference {
+        if format!("refs/heads/{b}") != reference {
+            continue;
+        }
+        if req.keep && here.is_some() && std::fs::canonicalize(dir).ok() == here {
+            here_holds = true;
+            continue;
+        }
+        other_holds = true;
+        let shown = esc(&crate::repo::worktrees::show(dir));
+        if req.keep {
             p.push(
                 "refused",
                 format!(
-                    "not executed: checked out in {}; merely resetting the ref leaves index/working tree inconsistent; use `git reset --keep`",
-                    esc(&crate::repo::worktrees::show(dir))
+                    "not executed: checked out in another worktree ({shown}); --keep moves only the branch of the worktree it runs in"
+                ),
+            );
+        } else {
+            p.push(
+                "refused",
+                format!(
+                    "not executed: checked out in {shown}; merely resetting the ref leaves index/working tree inconsistent; add --keep (clean index and work tree only) or use `git reset --keep`"
                 ),
             );
         }
+    }
+    if req.keep {
+        keep_checks(&mut p, repo, here_holds, other_holds);
     }
     for s in &wt.stale {
         p.push(
@@ -321,6 +488,9 @@ fn finish(ctx: &Ctx, req: &Request, mut p: Plan, cur: ObjectId) -> Result<Plan> 
         return Ok(p);
     };
     p.push("ok", "old value exists as a commit object".into());
+    if req.keep && p.refused == 0 {
+        keep_gitlink_check(&mut p, repo, cur, alt_id);
+    }
     let base = repo
         .merge_base(alt_id, cur)
         .ok()
@@ -415,7 +585,8 @@ impl Plan {
                     &self.reference,
                     self.target.as_deref().unwrap_or("?"),
                     self.current.as_deref().unwrap_or("?"),
-                    true
+                    true,
+                    self.keep
                 )
             )
         }
@@ -428,6 +599,7 @@ impl Plan {
             self.target.as_deref().unwrap_or("?"),
             self.current.as_deref().unwrap_or("?"),
             false,
+            self.keep,
         )
     }
 
@@ -447,6 +619,7 @@ impl Plan {
             "schema_version": SCHEMA_VERSION, "command": command, "engine": crate::output::engine(),
             "ref": self.reference, "repo": self.common, "current": self.current, "target": self.target,
             "checks": checks, "executable": self.executable(), "result": self.result(), "apply": apply,
+            "keep": self.keep,
         })
     }
 
