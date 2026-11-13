@@ -1398,3 +1398,49 @@ fn a_scan_leaves_out_the_agent_rules_checkout_unless_it_is_named() {
         ["grp/ws", "grp/ws/c", "grp/ws/c/n"]
     );
 }
+
+#[test]
+fn a_scanned_directory_without_a_repository_is_a_notice_and_exit_0() {
+    let (s, _) = grouped();
+    scan_tree(&s);
+    let b = &s.w.base;
+    let one = |path: &str| {
+        let r = at(&s, b, &[path], &["--json"]);
+        assert_eq!(r.code, 0, "{path}: {}{}", r.out, r.err);
+        r.json()
+    };
+    let note = |v: &Value| {
+        v["notices"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|n| n["code"] == "no-repositories")
+            .cloned()
+    };
+    // a bare repository has no work tree: it is named as such
+    let v = one("grp/bare.git");
+    assert_eq!(v["summary"]["total"], 0);
+    let n = note(&v).expect("a notice");
+    assert_eq!(n["source"], "scan");
+    assert_eq!(n["repos"], json!(["grp/bare.git"]));
+    assert_eq!(
+        n["message"],
+        "grp/bare.git: no repository found (a bare repository has no work tree and is not listed)"
+    );
+    // a directory with nothing in it
+    let v = one("grp/empty");
+    assert_eq!(
+        note(&v).unwrap()["message"],
+        "grp/empty: no repository found"
+    );
+    let r = at(&s, b, &["grp/empty"], &[]);
+    assert!(
+        r.out.contains("\n  grp/empty: no repository found\n"),
+        "{}",
+        r.out
+    );
+    // a directory with repositories, or whose repositories lie below the bound, has no such notice
+    assert!(note(&one("grp")).is_none());
+    let v = at(&s, b, &["grp"], &["--json", "--depth", "0"]).json();
+    assert!(note(&v).is_none(), "{v}");
+}

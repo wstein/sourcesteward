@@ -780,3 +780,31 @@ fn reasons_are_escaped_once_and_only_in_the_output() {
         "{v}"
     );
 }
+
+#[test]
+fn a_run_that_moved_the_superproject_to_a_raised_gitlink_and_the_submodule_is_restored_in_both() {
+    // upstream raises the gitlink to the new commit of the submodule: the run moves both, and the submodule then sits on the
+    // gitlink of the superproject. The restore moves the submodule back first or last: either way it is no local change
+    let j = setup();
+    j.w.git(
+        &j.ws_up,
+        &[
+            "update-index",
+            "--cacheinfo",
+            &format!("160000,{},sub", j.sub_new),
+        ],
+    );
+    j.w.git(&j.ws_up, &["commit", "-q", "-m", "raise sub"]);
+    j.w.git(
+        &j.ws_up,
+        &["push", "-q", j.ws_origin.to_str().unwrap(), "HEAD:main"],
+    );
+    let id = run(&j);
+    assert_eq!(j.tip(&j.sub), j.sub_new);
+    assert_eq!(j.w.git(&j.ws, &["status", "--porcelain"]), "", "{id}");
+    let (code, v, err) = restore(&j, &[]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(v["summary"]["restored"], 2, "{v}");
+    assert_eq!(j.tip(&j.ws), j.ws_old);
+    assert_eq!(j.tip(&j.sub), j.sub_old);
+}
