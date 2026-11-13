@@ -879,12 +879,6 @@ pub fn uninstall(ctx: &Ctx, yes: bool) -> Result<Outcome> {
     let mut removed = 0;
     for &n in &ours {
         let path = i.hooks_dir.join(HOOKS[n].name);
-        // read again right before the removal: the file may have changed since the inspection
-        if !matches!(state_of(&path, HOOKS[n].header), State::Ours { .. }) {
-            let _ = writeln!(t, "refused  {} changed meanwhile: not removed", show(&path));
-            failed = true;
-            continue;
-        }
         match fs::remove_file(&path) {
             Ok(()) => {
                 removed += 1;
@@ -974,6 +968,37 @@ mod tests {
         assert_eq!(
             parameters_value("'core.hooksPath=/a=b'", k),
             Some("/a=b".into())
+        );
+    }
+
+    #[test]
+    fn write_hook_never_replaces_an_existing_file_and_leaves_no_temporary_file() {
+        let d = tempfile::tempdir().unwrap();
+        let hooks = d.path().join("hooks");
+        fs::create_dir(&hooks).unwrap();
+        fs::write(hooks.join("post-rewrite"), "mine\n").unwrap();
+        let e = write_hook(&hooks, &HOOKS[0]).unwrap_err();
+        assert!(e.contains("appeared or cannot be linked"), "{e}");
+        assert_eq!(
+            fs::read_to_string(hooks.join("post-rewrite")).unwrap(),
+            "mine\n"
+        );
+        let names: Vec<_> = fs::read_dir(&hooks).unwrap().flatten().collect();
+        assert_eq!(names.len(), 1, "no temporary file stays: {names:?}");
+        // a missing directory is created
+        let fresh = d.path().join("new/hooks");
+        write_hook(&fresh, &HOOKS[1]).unwrap();
+        assert_eq!(
+            fs::read_to_string(fresh.join("reference-transaction")).unwrap(),
+            HOOKS[1].text
+        );
+        assert_eq!(
+            fs::metadata(fresh.join("reference-transaction"))
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
         );
     }
 

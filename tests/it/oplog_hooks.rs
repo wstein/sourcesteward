@@ -773,3 +773,171 @@ fn status_reports_absent_ours_foreign_and_not_executable() {
     let t = r.stw(&["status"]);
     assert!(t.out.contains("install would be refused"), "{}", t.out);
 }
+
+#[test]
+fn install_json_says_what_was_done_and_the_origin_of_hookspath_is_named() {
+    let r = R::new();
+    let j = r.stw_json(&["install", "--yes"]);
+    assert_eq!(j["executed"], true);
+    assert_eq!(j["refused"], false);
+    assert_eq!(j["result"], "installed");
+    assert_eq!(j["hooks"][0]["action"], "install");
+    assert_eq!(j["hooks"][1]["action"], "install");
+    let mode = |n: &str| {
+        std::fs::metadata(r.oplog_dir().join(n))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777
+    };
+    assert_eq!(mode("events.log"), 0o600);
+    assert_eq!(mode("events-refhook.log"), 0o600);
+    r.stw(&["uninstall", "--yes"]);
+
+    r.git(&["config", "core.hooksPath", "/nonexistent-hp/o"]);
+    let o = r.stw(&["install", "--yes"]);
+    assert!(
+        o.out.contains("from file ") && o.out.contains("/.git/config"),
+        "{}",
+        o.out
+    );
+    let env = [
+        ("GIT_CONFIG_COUNT", "1"),
+        ("GIT_CONFIG_KEY_0", "core.hooksPath"),
+        ("GIT_CONFIG_VALUE_0", "/nonexistent-hp/e"),
+    ];
+    let o = r.stw_env(&r.repo, &["install", "--yes"], &env);
+    assert!(
+        o.out.contains("/nonexistent-hp/e") && o.out.contains("GIT_CONFIG_COUNT"),
+        "{}",
+        o.out
+    );
+    let o = r.stw_env(
+        &r.repo,
+        &["install", "--yes"],
+        &[(
+            "GIT_CONFIG_PARAMETERS",
+            "'core.hookspath=/nonexistent-hp/p'",
+        )],
+    );
+    assert!(
+        o.out.contains("/nonexistent-hp/p") && o.out.contains("GIT_CONFIG_PARAMETERS"),
+        "{}",
+        o.out
+    );
+    let j = r.stw_json(&["install", "--yes"]);
+    assert_eq!(j["hooks_path"]["value"], "/nonexistent-hp/o");
+    assert_eq!(j["refused"], true);
+}
+
+#[test]
+fn the_chain_proposal_differs_per_hook() {
+    let r = R::new();
+    let hooks = r.dot_git().join("hooks");
+    std::fs::create_dir_all(&hooks).unwrap();
+    std::fs::write(hooks.join(REF), "#!/bin/sh\nexit 0\n").unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    assert_eq!(o.code, 1, "{}{}", o.out, o.err);
+    assert!(
+        o.out
+            .contains("stw oplog hooks print reference-transaction"),
+        "{}",
+        o.out
+    );
+    assert!(
+        o.out.contains("|| :"),
+        "the exit code of the prepared phase aborts the transaction: {}",
+        o.out
+    );
+    assert!(!o.out.contains("hooks print post-rewrite"), "{}", o.out);
+    std::fs::remove_file(hooks.join(REF)).unwrap();
+    std::fs::write(hooks.join(POST), "#!/bin/sh\nexit 0\n").unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    assert!(
+        o.out.contains("stw oplog hooks print post-rewrite"),
+        "{}",
+        o.out
+    );
+    assert!(!o.out.contains("|| :"), "{}", o.out);
+}
+
+#[test]
+fn install_adds_only_the_missing_hook_next_to_ours() {
+    let r = R::new();
+    r.install();
+    let post_before = std::fs::read(r.hook(POST)).unwrap();
+    std::fs::remove_file(r.hook(REF)).unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    assert_eq!(o.code, 0, "{}{}", o.out, o.err);
+    assert!(o.out.contains("already installed"), "{}", o.out);
+    assert!(is_exec(&r.hook(REF)));
+    assert_eq!(std::fs::read(r.hook(POST)).unwrap(), post_before);
+    assert_eq!(r.read(&r.oplog_dir().join("events.log")).lines().count(), 1);
+    assert_eq!(
+        r.read(&r.oplog_dir().join("events-refhook.log"))
+            .lines()
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn an_events_file_that_is_a_link_or_a_log_directory_that_is_a_file_is_not_written_through() {
+    let r = R::new();
+    let elsewhere = r.repo.join("elsewhere.txt");
+    std::fs::write(&elsewhere, "keep\n").unwrap();
+    std::fs::create_dir_all(r.oplog_dir()).unwrap();
+    std::os::unix::fs::symlink(&elsewhere, r.oplog_dir().join("events.log")).unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    assert_eq!(o.code, 0, "{}{}", o.out, o.err);
+    assert!(
+        o.out.contains("note") && o.out.contains("events.log"),
+        "{}",
+        o.out
+    );
+    assert_eq!(std::fs::read_to_string(&elsewhere).unwrap(), "keep\n");
+    assert_eq!(
+        r.read(&r.oplog_dir().join("events-refhook.log"))
+            .lines()
+            .count(),
+        1
+    );
+
+    let r = R::new();
+    std::fs::write(r.dot_git().join("stw"), "i am a file\n").unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    assert_eq!(o.code, 0, "{}{}", o.out, o.err);
+    assert!(
+        o.out.contains("note") && o.out.contains("not a directory"),
+        "{}",
+        o.out
+    );
+    assert_eq!(r.read(&r.dot_git().join("stw")), "i am a file\n");
+}
+
+#[test]
+fn a_hooks_directory_that_cannot_be_written_is_reported_and_nothing_changes() {
+    let r = R::new();
+    if unsafe { libc::geteuid() } == 0 {
+        eprintln!("root ignores directory modes: skipped");
+        return;
+    }
+    let hooks = r.dot_git().join("hooks");
+    std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let o = r.stw(&["install", "--yes"]);
+    std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(o.code, 1, "{}{}", o.out, o.err);
+    assert!(o.out.contains("refused  cannot write"), "{}", o.out);
+    assert!(!r.hook(POST).exists() && !r.oplog_dir().exists());
+
+    r.install();
+    std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o555)).unwrap();
+    let u = r.stw(&["uninstall", "--yes"]);
+    std::fs::set_permissions(&hooks, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert_eq!(u.code, 1, "{}{}", u.out, u.err);
+    assert!(u.out.contains("cannot remove"), "{}", u.out);
+    assert!(r.hook(POST).exists() && r.hook(REF).exists());
+    let j = r.stw_json(&["uninstall"]);
+    assert_eq!(j["hooks"][0]["action"], "remove");
+    assert_eq!(j["executed"], false);
+}
