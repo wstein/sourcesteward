@@ -51,7 +51,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
-| `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): what would be fast-forwarded and why not; no fetch | without `--plan`/`--dry-run`; `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
+| `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): like Go it fetches `origin` first (not with `--offline`) and says what would be fast-forwarded and why not | without `--plan`/`--dry-run`; with it only the remote-tracking refs of `origin` (and FETCH_HEAD, objects); `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
 
 Without a flag `sync` only fast-forwards: it never merges, rebases, stashes, resets or pushes. It refuses (exit 1,
 nothing changed) when a tracked local change overlaps a file the update touches, when untracked files are in the way,
@@ -65,7 +65,7 @@ Port of the Go flags (`internal/stwsync/apply.go`, `config.go`). `--rebase` reba
 branch (ahead and behind its upstream) onto the fetched upstream: `git rebase --no-update-refs --fork-point
 refs/remotes/origin/<branch>`; `--merge` merges the fetched tip: `git merge --no-edit --ff <commit>`. A branch that is only
 behind is fast-forwarded as without a flag (never a merge commit). `--plan` says `would rebase A local commit(s) onto B new`
-or `would merge B new commit(s) into A local`, changes nothing and fetches nothing. Both need Git 2.38 (rebase) or 2.36 (merge), checked before git starts.
+or `would merge B new commit(s) into A local`, fetches like a run (not with `--offline`) and changes nothing else. Both need Git 2.38 (rebase) or 2.36 (merge), checked before git starts.
 Tracked local changes (staged or not; untracked files do not count) refuse the run with the result `skip` ("cannot rebase
 with local changes (use --autostash)") unless `--autostash` is given; `--autostash` stashes and reapplies them (git's own
 autostash), `--no-autostash` is the default. The flag decides every time: the argument vector of git always carries
@@ -152,8 +152,9 @@ the walk, nested ones included, and refuses a workspace with more than one slug 
 
 ### `sync --prune`, `--no-prune`, `--submodules`
 
-Ported from the Go flags; like everything in `sync` they act in a run, not with `--plan`/`--dry-run`. The plan says what they would do and
-writes nothing (it never fetches).
+Ported from the Go flags; like everything in `sync` they act in a run. `--plan`/`--dry-run` fetches (and prunes) too, as Go's plan does,
+and writes nothing but the remote-tracking refs of `origin`, FETCH_HEAD and objects (see deviation 14 below); `--plan --offline` fetches
+nothing and only says what the flags would do.
 
 - `--prune`: the fetch of `origin` runs `git fetch --prune --no-prune-tags`, so remote-tracking refs that are gone on
   `origin` are deleted. `--no-prune` runs `git fetch --no-prune --no-prune-tags` (overrides `fetch.prune`). The two exclude each other (exit 2).
@@ -165,8 +166,8 @@ writes nothing (it never fetches).
   fetch, so it happens before the fast-forward: a branch whose upstream ref was pruned reads `skip: upstream branch is gone`.
   The refs of `refs/remotes/origin/*` are listed before and after the fetch, also after a failed one: the entry carries
   `pruned` (the deleted names, JSON), the reason says how many, and `summary.pruned` the total. Pruning is not undone.
-  Dry run: `prune` (`on`/`off`) and, with `--prune`, `tracking_refs` (how many refs could be reached); which of them are gone
-  is only known from the remote, so the dry run does not name them.
+  Plan: it prunes as a run does (`pruned`, `summary.pruned`). `--plan --offline` fetches nothing: it carries `prune` (`on`/`off`) and, with
+  `--prune`, `tracking_refs` (how many refs could be reached); which of them are gone is only known from the remote, so it does not name them.
 - `--submodules`: after every repository was synced, each pinned submodule (a gitlink of the index, checked out, detached HEAD) is
   moved to the commit the superproject's index records, when that is a fast-forward of its HEAD: `git submodule sync` and
   `git submodule update --no-fetch --checkout` in the superproject, through the runner (`GIT_ALLOW_PROTOCOL=none`, hooks off,
@@ -180,9 +181,7 @@ writes nothing (it never fetches).
 
 Deviations from Go in these flags:
 1. Like Go, `stw sync` acts by default and `--plan` and `--dry-run` (the same flag, in any combination) only report (owner
-   decision 2026-11-11; until then Rust was dry-run by default). Differences: (a) Go's `--plan` fetches the remote-tracking refs, the
-   Rust plan never fetches and writes nothing (not even FETCH_HEAD), so it knows only what was fetched before
-   (`remote_moved` asks GitHub read-only); (b) `--apply` is accepted as a hidden alias without effect (it is no Go flag; it is
+   decision 2026-11-11; until then Rust was dry-run by default). Differences: (a) the plan fetches like Go's, see deviation 14 below (until 2026-11-13 the Rust plan fetched nothing); (b) `--apply` is accepted as a hidden alias without effect (it is no Go flag; it is
    kept so that earlier calls work) and is not in the help; with `--plan` or `--dry-run` it is a usage error (exit 2); (c) the plan
    shows the prune scope and `would-move` for the submodules. It predicts a move from the gitlink in the index before the
    superproject's own fast-forward; a run takes the gitlink after it, so the two can differ.
@@ -215,7 +214,16 @@ Deviations from Go in these flags:
     followed (Go follows it: rebase, merge commit, autostash). A fast-forward stays a plain fast-forward, without stash and
     merge commit; a diverged branch is skipped, and when `pull.rebase` or `branch.<name>.rebase` is set the reason adds
     "stw sync never rebases (not ported)". `--rebase`, `--merge`, `--autostash`, `--no-autostash` are an open package.
-14. The plan line ends with "Nothing was fetched either: based on the last fetch": the plan never fetches (Go's `--plan` does).
+14. The plan fetches `origin` like Go's `--plan` (owner decision 2026-11-13) and prints "Only the remote-tracking refs were fetched; nothing
+    else was written" (offline: "Nothing was fetched either: based on the last fetch"). Differences from Go, one by one:
+    (a) the fetch is Rust's fetch of a run (`origin`, via `git` or gix, `--no-tags`, FETCH_HEAD written, `--no-prune-tags` with a prune flag),
+    not Go's argv (`fetch --no-tags --no-write-fetch-head --no-recurse-submodules -- <remote of the upstream>`); FETCH_HEAD is written
+    (Go: never), so `last_fetch_seconds_ago` and `status` see the plan's fetch; (b) `origin` is fetched for every repository the run would fetch,
+    also a detached or upstream-less one and a pinned submodule (Go skips the fetch when there is no upstream or HEAD is detached); a
+    repository without `origin` is `no-remote`, not an error; (c) a failed fetch is result `error` with `fetch: failed|unsupported|unsupported-remote`
+    and exit 1 (Go: result `failed`, exit 1, same); (d) the refspec check of Go's plan (`sync-refspec-unsafe`) is typed `refused-refspec`
+    (`git_error`) and applies with and without a prune flag; (e) `--plan --offline` fetches nothing (Go has no `--offline`); (f)
+    `remote_moved` is always null in a plan (it asked GitHub for the dry run before; the plan has the fetched state).
 
 ## agent-rules
 
@@ -321,7 +329,7 @@ would_fast_forward, skipped, errors}.
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
   Additive: top-level `run_id` (the ID of the run when it moved a branch, else null; always null with `--plan`/`--dry-run`) and per repository `journal` {n, recovery_ref, state} (only for a branch the run changed or tried to change after the checks: see "The journal of a `sync` run"), `prune` (`on`/`off`, only with `--prune`/`--no-prune`), `pruned` (names deleted by the fetch; with a flag, or when a ref was pruned),
-  `tracking_refs` (`--plan` with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules, dry_run (additive: true for `--plan`/`--dry-run`)}
+  `tracking_refs` (`--plan --offline` with `--prune`), `submodule` {state, old, new, note} (`--submodules`); top level `options` {prune: true/false/null, submodules, dry_run (additive: true for `--plan`/`--dry-run`)}
   and in `summary` `submodules_moved`, `would_move_submodules`, `pruned`.
 
 ## Status text
@@ -669,7 +677,7 @@ gix would start `ssh` or `git-upload-pack` itself for the first row; stw never h
 (`tests/it/remote_kinds.rs` puts fake `ssh`, `git-upload-pack` and `git` first on `PATH` and checks that only the runner
 starts `git`). `via`, and `git_error` (`not-found`, `version`, `unknown-option`, `timeout`, `output-limit`, `exit`,
 `spawn`, `repository`, `refused-config`) appear in the repository entry of `sync` and in `agent_rules` only when a fetch ran. Credentials in a remote URL
-and GitHub tokens are never printed. `status`, `tidy plan` and dry-run `sync` never fetch. `git://` was not exercised
+and GitHub tokens are never printed. `status` without `--fetch`, `tidy plan` and `sync --plan --offline` never fetch; `sync --plan` fetches like a run. `git://` was not exercised
 against a server (UNKNOWN beyond the error path).
 
 Runner rules (`src/git_runner.rs`):
@@ -1056,7 +1064,7 @@ SHA-256 repositories, a concurrent `git` writing the same refs.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 783 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 792 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1119,7 +1127,7 @@ with the planned new tip); after the move the record says `completed` (or `faile
 branch is not moved (`journal-failed`, `result: error`, exit 1). A refused check (local change on a touched file,
 untracked file in the way) leaves neither record nor recovery ref, and so does a repository that was not changed: a run
 without a change writes no journal and has `run_id: null`. `--plan`/`--dry-run` write neither (the test covers the file tree and
-`refs/stw`).
+`refs/stw`; the plan's own fetch writes the remote-tracking refs).
 
 Run ID: `YYYYMMDDTHHMMSS` + 6 digits of microseconds + `Z-` + 8 hex digits (UTC time and a random suffix, like Go); one ID for
 all repositories of a run. The latest run is the highest ID in this order. Record (`schema_version` 1): `type` `sync`, `run_id`,
