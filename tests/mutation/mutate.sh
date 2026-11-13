@@ -2242,7 +2242,7 @@ m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_pl
   oplog_read an_ambiguous_to_prefix_is_refused
 # `stw status --all` (prefix AL: SA is taken by `stw add`)
 m AL1 'the depth bound does not cut the walk' src/repo/mod.rs \
-  '    if depth >= w.max_depth && !subs.is_empty() {' '    if false && depth >= w.max_depth && !subs.is_empty() {' \
+  '    if depth >= w.max_depth && subs.iter()' '    if false && depth >= w.max_depth && subs.iter()' \
   status_all the_depth_bounds_the_walk_and_a_cut_is_a_notice
 m AL2 'a nested repository has the depth of its holder' src/repo/mod.rs \
   '        w.depths.push(depth + 1);' '        w.depths.push(depth);' \
@@ -2281,7 +2281,7 @@ m AL13 'a full page is shown as an exact count' src/status_all.rs \
   '        } => format!("{open}{}", if truncated { "+" } else { "" }),' '        } => format!("{open}{}", if truncated && false { "+" } else { "" }),' \
   status_all a_full_page_is_a_lower_bound
 m AL14 'HTTP 403 is not told from other errors' src/status_all.rs \
-  '    } else if message.contains("HTTP 403") {' '    } else if message.contains("HTTP 4030") {' \
+  '    } else if m.starts_with("HTTP 403") {' '    } else if m.starts_with("HTTP 4030") {' \
   status_all github_counts_failed_reads_and_totals
 m AL15 'no repository has an attention mark' src/status_all.rs \
   '        let mark = if status::reasons(s).is_empty() {' '        let mark = if true {' \
