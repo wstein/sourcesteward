@@ -2444,6 +2444,22 @@ m OW35 'oplog write: the worktree id is converted lossily' src/oplog/write.rs \
 m OW36 'oplog write: a lost mkdir race is a write failure (threads)' src/oplog/write.rs \
   'Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {' 'Err(e) if false && e.kind() == std::io::ErrorKind::AlreadyExists => {' \
   lib oplog::write::tests::many_writers_on_a_fresh_repository_lose_no_line
+m OW37 'oplog write: the wait for the lock of a log never ends' src/oplog/write.rs \
+  '        if left.is_zero() {
+            return false;
+        }' '        let _ = left;' \
+  lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
+m OW38 'oplog write: the lock of a log is tried once, no retry' src/oplog/write.rs \
+  '    let end = Instant::now() + budget;' '    let end = Instant::now();' \
+  lib oplog::write::tests::a_lock_that_is_released_within_the_budget_is_taken
+m OW39 'oplog write: a lock that stays held is a write failure' src/oplog/write.rs \
+  '    let _ = lock_within(&f, LOCK_BUDGET);' '    if !lock_within(&f, LOCK_BUDGET) {
+        return Err("locked".into());
+    }' \
+  lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
+m OW40 'oplog write: the lock budget is 30 s' src/oplog/write.rs \
+  'Duration::from_millis(300);' 'Duration::from_millis(30000);' \
+  lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
 m AL28 'the depth of a repository is looked up by its name' src/cli.rs \
   'ws.depths.get(&s.path)' 'ws.depths.get(&s.name)' \
   status_all a_submodule_named_like_the_root_directory_keeps_its_own_depth_and_kind
@@ -2477,7 +2493,7 @@ m LR3 'the tail check reads the byte at len - 1 only' src/oplog/write.rs \
         let n = read_at(&mut chunk[..1], at)?;' \
   lib oplog::write::tests::the_tail_check_follows_what_is_visible_not_only_the_size
 m LR4 'append_line takes no lock (FUSE: TMPDIR on the FUSE mount, probabilistic)' src/oplog/write.rs \
-  '    let _ = f.lock();' '    let _ = &f;' \
+  '    let _ = lock_within(&f, LOCK_BUDGET);' '    let _ = &f;' \
   lib oplog::write::tests::parallel_writers_leave_no_empty_line_and_lose_no_line
 m LR5 'the plan promises a merge that the merge options of the branch refuse' src/sync/mod.rs \
   '    if !o.apply && action == "merge" {' '    if false && action == "merge" {' \

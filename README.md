@@ -1014,7 +1014,7 @@ carries the file name instead of `-` (Q15); `rust-version` 1.89 (Q18).
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 690 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 703 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
