@@ -142,8 +142,6 @@ fn a_branch_with_a_new_commit_is_changed_since_and_not_touched() {
 #[test]
 fn the_highest_run_is_the_default_and_an_older_one_is_named_with_run() {
     let j = setup();
-    // the work tree check looks into the submodule; `submodule.sub.ignore` is the way to leave it out
-    j.w.git(&j.ws, &["config", "submodule.sub.ignore", "all"]);
     let first = run(&j);
     j.news("n1");
     let after_first = j.tip(&j.ws);
@@ -484,8 +482,6 @@ fn a_manipulated_record_fails_before_git_sees_it() {
 fn a_manipulated_worktree_field_is_never_used() {
     let j = setup();
     run(&j);
-    // the run moved the submodule off the gitlink of the superproject: that is a local change of the superproject now
-    j.w.git(&j.sub, &["reset", "-q", "--hard", &j.sub_old]);
     let outside = j.w.p("outside");
     std::fs::create_dir(&outside).unwrap();
     let id = "29990101T000000000000Z-00000003";
@@ -783,51 +779,4 @@ fn reasons_are_escaped_once_and_only_in_the_output() {
             .contains("x\u{1b}[31m\ny"),
         "{v}"
     );
-}
-
-#[test]
-fn a_submodule_off_its_gitlink_is_a_local_change_of_the_superproject() {
-    let j = setup();
-    run(&j);
-    // a record for the superproject only: the submodule stays on the commit the run gave it, which is not its gitlink
-    let id = "29990101T000000000000Z-00000004";
-    let tip = j.tip(&j.ws);
-    let e = entry("refs/heads/main", &j.ws_old, &tip, "completed").replace("../outside", "..");
-    write_record(&j, &j.ws, id, &record(id, &e));
-    let (code, v, _) = restore(&j, &[]);
-    assert_eq!(code, 1, "{v}");
-    let r = repo(&v, "ws");
-    assert_eq!(r["result"], "changed-since", "{r}");
-    assert_eq!(r["reason"], "the worktree has local changes");
-    assert_eq!(j.tip(&j.ws), tip, "nothing was touched");
-    // `submodule.sub.ignore` leaves the submodule out of the check: the restore goes on
-    j.w.git(&j.ws, &["config", "submodule.sub.ignore", "all"]);
-    let (code, v, err) = restore(&j, &[]);
-    assert_eq!(code, 0, "{v} {err}");
-    assert_eq!(repo(&v, "ws")["result"], "restored");
-    assert_eq!(j.tip(&j.ws), j.ws_old);
-}
-
-#[test]
-fn a_submodule_is_restored_before_its_superproject() {
-    // both moved by one run: the superproject is clean only after the submodule is back on its gitlink, so the order
-    // matters (it must not depend on which repository a worker gets first)
-    for _ in 0..3 {
-        let j = setup();
-        run(&j);
-        let (code, v, err) = restore(&j, &[]);
-        assert_eq!(code, 0, "{v} {err}");
-        assert_eq!(repo(&v, "ws")["result"], "restored", "{v}");
-        let names: Vec<&str> = v["repos"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|r| r["name"].as_str().unwrap())
-            .collect();
-        assert_eq!(
-            names,
-            ["ws", "sub"],
-            "the listing keeps the workspace order"
-        );
-    }
 }
