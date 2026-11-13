@@ -953,7 +953,7 @@ m SP6 "the deleted refs are not reported" src/sync/mod.rs \
   sync_flags prune_deletes_a_gone_remote_tracking_ref_and_nothing_else
 m SP7 "the dry run does not count the refs a prune could reach" src/sync/mod.rs \
   'let n = tracking_refs(&r.path).map(|s| s.len())?;' 'let n = 0;' \
-  sync_flags the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do
+  sync_flags the_offline_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do
 m SP8 "--prune and --no-prune do not exclude each other" src/cli.rs \
   '#[arg(long, conflicts_with = "no_prune")]' '#[arg(long)]' \
   sync_flags prune_and_no_prune_exclude_each_other
@@ -1416,10 +1416,8 @@ m SD6 "--apply is shown in the help" src/cli.rs \
 m SD7 "the JSON options carry the wrong mode" src/sync/mod.rs \
   '"dry_run": !apply}' '"dry_run": apply}' \
   sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
-m SD8 "a plan fetches" src/sync/mod.rs \
-  '    if o.apply {
-        if o.offline {' '    if true {
-        if o.offline {' \
+m SD8 "a plan fast-forwards the branch after its fetch" src/sync/mod.rs \
+  'if o.apply && result == "fast-forward" {' 'if result == "fast-forward" {' \
   sync_default every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run
 m SD9 "the plan text loses its marker" src/sync/mod.rs \
   '"dry run: {} would fast-forward, {} skipped"' '"preview: {} would fast-forward, {} skipped"' \
@@ -1439,7 +1437,7 @@ m SD12 "a run ignores an operation in progress" src/sync/mod.rs \
   sync_default a_run_still_leaves_diverged_and_in_progress_repositories_alone
 m SD13 "the plan does not report a failed fetch of a run as exit 1" src/cli.rs \
   'list.iter().any(|s| s.result == "error") || rules.action == "refused",' 'rules.action == "refused",' \
-  sync_default a_run_without_network_is_exit_1_and_a_plan_is_exit_0
+  sync_default a_run_without_network_is_exit_1_and_so_is_a_plan_unless_it_is_offline
 
 m SD14 "--rules acts under --plan (R1)" src/cli.rs \
   'update: a.rules,
@@ -1520,10 +1518,8 @@ m JR2 'the journal step before the move is never called' src/sync/fast_forward.r
 m JR3 'a failed journal step does not stop the move' src/sync/fast_forward.rs \
   '    before(head, target).map_err(FfError::Other)?;' '    let _ = before(head, target);' \
   sync_journal when_the_record_cannot_be_written_the_branch_does_not_move
-m JR4 'a plan fetches and moves, so it journals' src/sync/mod.rs \
-  '    if o.apply {
-        if o.offline {' '    if true {
-        if o.offline {' \
+m JR4 'a plan fetches and then moves the branch, so it journals' src/sync/mod.rs \
+  'if o.apply && result == "fast-forward" {' 'if result == "fast-forward" {' \
   sync_journal a_plan_writes_no_journal_and_no_refs
 m JR5 'retention keeps eleven runs' src/sync/journal.rs \
   'while done.len() > RETAINED_RUNS - 1 {' 'while done.len() > RETAINED_RUNS {' \
@@ -1990,6 +1986,40 @@ m SY30 'the first gate counts a changed submodule' src/sync/mod.rs \
 m SY31 'the gate after the fetch counts a changed submodule' src/sync/mod.rs \
   '        gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '        gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
   sync_pull a_changed_submodule_is_no_local_change_for_the_gate
+m SY32 'a plan does not fetch' src/sync/mod.rs \
+  '    if o.apply || !o.offline {
+        if o.offline {' '    if o.apply {
+        if o.offline {' \
+  sync_plan_fetch the_plan_fetches_the_new_commits_and_writes_nothing_but_the_tracking_refs
+m SY33 'an offline plan fetches' src/sync/mod.rs \
+  '    if o.apply || !o.offline {
+        if o.offline {' '    if true {
+        if o.offline && o.apply {' \
+  sync_plan_fetch the_offline_plan_fetches_nothing
+m SY34 'a plan fetches although a refspec writes outside refs/remotes/origin/' src/sync/mod.rs \
+  '                fetch::check_plan_scope(&repo)' '                Ok(())' \
+  sync_plan_fetch a_refspec_that_writes_outside_the_namespace_refuses_the_plan_before_any_fetch
+m SY35 'the plan does not ask again after its fetch whether a run would refuse the merge' src/sync/mod.rs \
+  '        (action, reason) = planned(&repo, &facts, op_now, o, gate_dirty);' '        (action, reason) = plan_of(&facts, op_now, o, gate_dirty);' \
+  sync_plan_fetch a_merge_that_the_run_would_refuse_stays_refused_in_the_plan_after_the_fetch
+m SY36 'an online plan with --prune only counts the refs instead of fetching them' src/sync/mod.rs \
+  'if !o.apply && o.offline && o.prune == Prune::On && repo' 'if !o.apply && o.prune == Prune::On && repo' \
+  sync_plan_fetch plan_prune_deletes_only_tracking_refs_of_origin_and_names_them
+m SY37 'a failed fetch of a plan is no error' src/sync/mod.rs \
+  '            result = "error".into();
+            reason = "fetch failed".into();' '            reason = "fetch failed".into();' \
+  sync_plan_fetch an_unreachable_remote_is_an_error_with_exit_1_and_changes_nothing
+m SY38 'an online plan says that nothing was fetched' src/sync/mod.rs \
+  '        out += if o.offline {' '        out += if true {' \
+  sync_plan_fetch the_plan_text_says_that_the_tracking_refs_were_fetched
+m SY39 'an online plan says that a run fetches the submodule first' src/sync/submodules.rs \
+  '                if o.apply || !o.offline {
+                    ""' '                if o.apply {
+                    ""' \
+  sync_flags a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_for_it
+m SY40 'a plan fetches without the prune choice' src/sync/mod.rs \
+  'Ok(()) => fetch::fetch_origin_with(&repo, gh, o.prune),' 'Ok(()) => fetch::fetch_origin_with(&repo, gh, Prune::Unset),' \
+  sync_plan_fetch plan_prune_deletes_only_tracking_refs_of_origin_and_names_them
 
 m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
