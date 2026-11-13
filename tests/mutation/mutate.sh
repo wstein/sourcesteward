@@ -2236,6 +2236,15 @@ m OL45 'oplog: the size limit of a log file is not applied' src/oplog/store.rs \
 m OL46 'oplog undo-plan: an ambiguous --to prefix is accepted' src/oplog/undo_plan.rs \
   'if olds.len() > 1 {' 'if false && olds.len() > 1 {' \
   oplog_read an_ambiguous_to_prefix_is_refused
+m OL47 'oplog: an empty line is a bad line' src/oplog/parse.rs \
+  '        .filter(|l| !l.is_empty())' '        .filter(|_| true)' \
+  lib oplog::parse::tests::empty_lines_are_skipped_and_are_neither_lines_nor_bad
+m OL48 'oplog: a line of white space is skipped like an empty one' src/oplog/parse.rs \
+  '        .filter(|l| !l.is_empty())' '        .filter(|l| !l.iter().all(u8::is_ascii_whitespace))' \
+  lib oplog::parse::tests::bad_lines_are_counted_and_skipped
+m OL49 'oplog: an empty line is a bad line in the gaps section of the timeline' src/oplog/parse.rs \
+  '        .filter(|l| !l.is_empty())' '        .filter(|_| true)' \
+  oplog_read empty_lines_are_not_bad_lines
 # `stw status PATH..` (prefix AL: SA is taken by `stw add`)
 m AL1 'the depth bound does not cut the walk of the submodules' src/repo/mod.rs \
   '    if depth >= w.max_depth && subs.iter()' '    if false && depth >= w.max_depth && subs.iter()' \

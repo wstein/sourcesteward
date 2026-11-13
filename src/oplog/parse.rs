@@ -63,18 +63,18 @@ pub fn parse_rewrites(data: &[u8]) -> Parsed<RewriteLine> {
 }
 
 /// The lines of a log: `None` for one that is skipped before any field is looked at (over 4 KB, NUL, not UTF-8).
-/// The piece after the last LF is a line only when it is not empty (a hook killed before its LF).
+/// An empty line is no line at all and not `bad` (a lost lock race of two writers can leave one; spec 9); the piece
+/// after the last LF is a line only when it is not empty (a hook killed before its LF). A line of white space is not
+/// empty: it has fewer than 5 fields and is `bad`.
 fn lines(data: &[u8]) -> impl Iterator<Item = Option<Vec<&str>>> {
-    let mut parts: Vec<&[u8]> = data.split(|b| *b == b'\n').collect();
-    if parts.last().is_some_and(|l| l.is_empty()) {
-        parts.pop();
-    }
-    parts.into_iter().map(|l| {
-        if l.len() > MAX_LINE || l.contains(&0) {
-            return None;
-        }
-        std::str::from_utf8(l).ok().map(|s| s.split('\t').collect())
-    })
+    data.split(|b| *b == b'\n')
+        .filter(|l| !l.is_empty())
+        .map(|l| {
+            if l.len() > MAX_LINE || l.contains(&0) {
+                return None;
+            }
+            std::str::from_utf8(l).ok().map(|s| s.split('\t').collect())
+        })
 }
 
 fn all_bytes(s: &str, ok: impl Fn(u8) -> bool) -> bool {
@@ -609,7 +609,7 @@ mod tests {
             format!("{T}\tamend\t{H1}\n"),
             format!("{T}\tamend\t{H1}\tnothex\t\tmain\n"),
             format!("{T}\tamend\t{H1}\t{}\t\tmain\n", &H2[..39]),
-            "\n".to_string(),
+            " \n".to_string(),
         ];
         for b in bad {
             let p = parse_rewrites(b.as_bytes());
