@@ -3060,7 +3060,7 @@ m OH27 'oplog hooks: the uninstall record has the install word' src/oplog/hooks.
   'append_event(&dir, HOOKS[n].events, "uninstall")' 'append_event(&dir, HOOKS[n].events, "install")' \
   oplog_hooks uninstall_removes_only_our_files_and_leaves_the_logs
 m OH28 'oplog hooks: the hooks directory is the git dir of the worktree, not the common dir' src/oplog/hooks.rs \
-  '    let hooks_dir = ctx.common.join("hooks");' '    let hooks_dir = ctx.repo.as_ref().map_or(ctx.common.clone(), |r| r.git_dir().to_path_buf()).join("hooks");' \
+  '    let hooks_dir = common.join("hooks");' '    let hooks_dir = ctx.repo.as_ref().map_or(common.clone(), |r| r.git_dir().to_path_buf()).join("hooks");' \
   oplog_hooks a_linked_worktree_installs_into_the_common_hooks_and_logs_there
 m OH29 'oplog hooks: status does not find submodule git directories' src/oplog/hooks.rs \
   'if p.join("HEAD").is_file() {' 'if p.join("HEADX").is_file() {' \
