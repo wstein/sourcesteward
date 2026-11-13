@@ -29,6 +29,7 @@ mod no_binaries;
 mod oplog_hooks;
 mod oplog_read;
 mod oplog_undo;
+mod oplog_undo_keep;
 mod oplog_write;
 mod patchid;
 mod patchid_props;

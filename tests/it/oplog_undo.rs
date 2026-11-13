@@ -44,7 +44,7 @@ fn json(fx: &Fx, args: &[&str]) -> Value {
 }
 
 /// Branch `work` at c3 (reflog: created at c1, then c2, c3); HEAD on `main` at c1.
-fn undo_fx() -> (Fx, [ObjectId; 3]) {
+pub fn undo_fx() -> (Fx, [ObjectId; 3]) {
     undo_fx_named("work")
 }
 
@@ -76,14 +76,14 @@ fn undo_args<'a>(to: &'a str, expect: &'a str) -> Vec<&'a str> {
     vec!["undo", "work", "--to", to, "--expect", expect, "--yes"]
 }
 
-fn refname_value(fx: &Fx, name: &str) -> Option<ObjectId> {
+pub fn refname_value(fx: &Fx, name: &str) -> Option<ObjectId> {
     fx.repo()
         .try_find_reference(name)
         .unwrap()
         .map(|mut r| r.peel_to_id().unwrap().detach())
 }
 
-fn refs_log(fx: &Fx) -> Vec<Vec<String>> {
+pub fn refs_log(fx: &Fx) -> Vec<Vec<String>> {
     std::fs::read_to_string(fx.path.join(".git/stw/oplog/refs.log"))
         .unwrap_or_default()
         .lines()
@@ -99,13 +99,13 @@ fn reflog_lines(fx: &Fx, name: &str) -> Vec<String> {
         .collect()
 }
 
-fn counter_text(fx: &Fx) -> String {
+pub fn counter_text(fx: &Fx) -> String {
     let id = refname_value(fx, COUNTER_REF).expect("counter ref");
     String::from_utf8(fx.repo().find_object(id).unwrap().detach().data).unwrap()
 }
 
 /// Everything under refs/stw: the names and values.
-fn stw_refs(fx: &Fx) -> Vec<(String, String)> {
+pub fn stw_refs(fx: &Fx) -> Vec<(String, String)> {
     let repo = fx.repo();
     let mut v: Vec<(String, String)> = repo
         .references()
