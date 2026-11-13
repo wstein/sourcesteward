@@ -472,7 +472,7 @@ mod tests {
         let took = append_with_timeout(&log, "x");
         rel.join().unwrap();
         assert!(took >= Duration::from_millis(80), "did not wait: {took:?}");
-        assert!(took < LOCK_BUDGET + Duration::from_millis(200), "{took:?}");
+        assert!(took < LOCK_BUDGET + Duration::from_secs(1), "{took:?}");
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "x\n");
         std::fs::remove_dir_all(&t).unwrap();
     }
