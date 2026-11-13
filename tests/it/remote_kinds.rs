@@ -74,10 +74,21 @@ fn ssh_and_local_remotes_go_through_the_git_runner_only() {
         local.clone(),
         format!("file://{local}"),
     ];
-    for url in urls {
-        fx.set_origin_url(&url);
+    // a plan fetches through the same runner as a run
+    for (url, mode) in urls.iter().flat_map(|u| [(u, "sync"), (u, "--plan")]) {
+        let url = format!("{url} ({mode})");
+        let url = url.as_str();
+        fx.set_origin_url(url.rsplit_once(" (").unwrap().0);
         let _ = std::fs::remove_file(&log);
-        let (o, v) = run_stw(&fx, shim.path(), &["sync"]);
+        let (o, v) = run_stw(
+            &fx,
+            shim.path(),
+            if mode == "sync" {
+                &["sync"]
+            } else {
+                &["sync", "--plan"]
+            },
+        );
         let r = &v["repos"][0];
         assert_eq!(o.status.code(), Some(1), "{url}: {v}");
         assert_eq!(r["fetch"], "failed", "{url}: {r}");
@@ -180,12 +191,16 @@ fn without_git_the_git_steps_are_unsupported_and_core_reads_still_work() {
     for args in [
         &["status", "--offline"][..],
         &["tidy", "plan", "--offline"][..],
-        &["sync", "--plan"][..],
         &["sync", "--plan", "--offline"][..],
     ] {
         let (o, v) = run_stw(&fx, std::path::Path::new(""), args);
         assert_eq!(o.status.code(), Some(0), "{args:?}: {v}");
     }
+    // a plan fetches, so without git it is as unsupported as a run
+    let (o, v) = run_stw(&fx, std::path::Path::new(""), &["sync", "--plan"]);
+    assert_eq!(o.status.code(), Some(1), "{v}");
+    assert_eq!(v["repos"][0]["fetch"], "unsupported", "{v}");
+    assert_eq!(v["repos"][0]["result"], "error", "{v}");
 }
 
 #[test]
@@ -244,10 +259,10 @@ fn a_local_path_remote_is_fetched_and_fast_forwarded_with_the_installed_git() {
 }
 
 #[test]
-fn dry_run_and_offline_never_look_at_the_remote_kind() {
+fn offline_never_looks_at_the_remote_kind() {
     let (fx, log, shim) = setup();
     fx.set_origin_url("ssh://git@example.invalid/x/y.git");
-    for extra in [&["--offline"][..], &["--plan"][..]] {
+    for extra in [&["--offline"][..], &["--plan", "--offline"][..]] {
         let o = Command::new(env!("CARGO_BIN_EXE_stw"))
             .env_clear()
             .env("PATH", shim.path())

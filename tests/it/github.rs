@@ -284,9 +284,14 @@ fn json_field_names_are_the_documented_ones() {
         doc(&["path", "locked", "lock_reason"])
     );
 
-    let sy: Value =
-        serde_json::from_slice(&stw(&api.url, &["sync", "--plan", "--root", &r, "--json"]).stdout)
-            .unwrap();
+    let sy: Value = serde_json::from_slice(
+        &stw(
+            &api.url,
+            &["sync", "--plan", "--offline", "--root", &r, "--json"],
+        )
+        .stdout,
+    )
+    .unwrap();
     assert_eq!(
         keys(&sy),
         doc(&[

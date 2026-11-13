@@ -66,6 +66,10 @@ fn markers(dir: &Path) -> Vec<String> {
 }
 
 fn run(fx: &Fx, args: &[&str]) {
+    run_expect(fx, args, 0);
+}
+
+fn run_expect(fx: &Fx, args: &[&str], code: i32) {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
         .env("PATH", "/usr/bin:/bin")
@@ -77,7 +81,7 @@ fn run(fx: &Fx, args: &[&str]) {
         .output()
         .unwrap();
     assert!(
-        o.status.code() == Some(0),
+        o.status.code() == Some(code),
         "{args:?}: {}{}",
         String::from_utf8_lossy(&o.stdout),
         String::from_utf8_lossy(&o.stderr)
@@ -109,12 +113,29 @@ fn tidy_plan_starts_no_program_named_by_the_repository() {
 #[test]
 fn sync_dry_run_and_offline_start_no_program_named_by_the_repository() {
     let (fx, m) = hostile();
-    run(&fx, &["sync", "--plan"]);
+    run(&fx, &["sync", "--plan", "--offline"]);
     run(&fx, &["sync", "--offline"]);
     assert_eq!(
         markers(m.path()),
         Vec::<String>::new(),
         "sync started a program"
+    );
+}
+
+#[test]
+fn sync_plan_fetching_a_local_remote_starts_no_program_named_by_the_repository() {
+    let (fx, m) = hostile();
+    let up = Fx::new();
+    let c0 = up.commit(None, &[("a.txt", Some("a\n"))], "c0");
+    up.branch("main", c0);
+    up.set_head("main");
+    fx.set_origin_url(&up.path.display().to_string());
+    // the runner refuses a repository whose own config names a credential helper: the plan is an error, no program ran
+    run_expect(&fx, &["sync", "--plan"], 1);
+    assert_eq!(
+        markers(m.path()),
+        Vec::<String>::new(),
+        "the fetch of a plan started a program"
     );
 }
 

@@ -78,13 +78,27 @@ fn fetch_and_fast_forward_a_clone_that_was_rewound_one_commit() {
     index.write(Default::default()).unwrap();
     drop(repo);
 
-    // dry run first: nothing may change
+    // an offline plan changes nothing and knows only the rewound tracking ref
     let r = RepoRef {
         name: "clone".into(),
         path: dir.clone(),
     };
     let gh = stw::github::Client::from_env();
-    let dry = sync_repo(
+    let offline = sync_repo(
+        &r,
+        gh.as_ref(),
+        &Opts {
+            apply: false,
+            offline: true,
+            ..Default::default()
+        },
+    );
+    assert_eq!(
+        offline.result, "none",
+        "tracking ref is rewound too, so locally there is nothing to pull: {offline:?}"
+    );
+    // an online plan fetches the tracking ref and sees the news, and still moves no branch
+    let plan = sync_repo(
         &r,
         gh.as_ref(),
         &Opts {
@@ -93,17 +107,8 @@ fn fetch_and_fast_forward_a_clone_that_was_rewound_one_commit() {
             ..Default::default()
         },
     );
-    assert_eq!(
-        dry.result, "none",
-        "tracking ref is rewound too, so locally there is nothing to pull: {dry:?}"
-    );
-    if gh.is_some() {
-        assert_eq!(
-            dry.remote_moved,
-            Some(true),
-            "REST check sees that origin has news: {dry:?}"
-        );
-    }
+    assert_eq!(plan.fetch, "ok", "{plan:?}");
+    assert_eq!(plan.result, "fast-forward", "{plan:?}");
     let repo = gix::open(&dir).unwrap();
     assert_eq!(repo.head_id().unwrap().detach(), parent);
     drop(repo);

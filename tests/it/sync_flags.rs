@@ -247,9 +247,9 @@ fn prune_and_no_prune_exclude_each_other() {
 }
 
 #[test]
-fn the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do() {
+fn the_offline_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do() {
     let p = prune_setup();
-    let (code, v, err) = p.w.stw(&p.ws, &["--plan", "--prune"]);
+    let (code, v, err) = p.w.stw(&p.ws, &["--plan", "--offline", "--prune"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = repo(&v, "ws");
     assert_eq!(v["mode"], "dry-run");
@@ -266,7 +266,7 @@ fn the_dry_run_prunes_nothing_fetches_nothing_and_says_what_prune_would_do() {
         "{reason}"
     );
     assert!(has_tracking(&p, "gone"));
-    let (_, v, _) = p.w.stw(&p.ws, &["--plan", "--no-prune"]);
+    let (_, v, _) = p.w.stw(&p.ws, &["--plan", "--offline", "--no-prune"]);
     assert!(repo(&v, "ws")["reason"]
         .as_str()
         .unwrap()
@@ -623,15 +623,50 @@ fn a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_f
         "{r}"
     );
     assert_eq!(s.head(), s.c1);
-    // the dry run only predicts
+    // the plan only predicts; it has fetched, so it does not say that a run fetches first (an offline plan does)
     let (code, v, _) = s.w.stw(&s.ws, &["--plan", "--submodules"]);
     assert_eq!(code, 0);
+    let reason = repo(&v, "c")["reason"].as_str().unwrap();
+    assert!(reason.starts_with("would be unreachable"), "{v}");
+    assert!(!reason.contains("a run fetches origin first"), "{v}");
+    let (_, v, _) = s.w.stw(&s.ws, &["--plan", "--offline", "--submodules"]);
     assert!(
         repo(&v, "c")["reason"]
             .as_str()
             .unwrap()
-            .starts_with("would be unreachable"),
+            .contains("a run fetches origin first"),
         "{v}"
+    );
+}
+
+#[test]
+fn the_plan_fetches_a_pinned_submodule_and_then_sees_the_commit_a_run_would_move_to() {
+    let s = sub_setup();
+    // the superproject records c2, which the submodule has not fetched yet
+    s.w.git(
+        &s.ws,
+        &["update-index", "--cacheinfo", &format!("160000,{},c", s.c2)],
+    );
+    let (code, v, err) = s.w.stw(&s.ws, &["--plan", "--offline", "--submodules"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert!(
+        repo(&v, "c")["reason"]
+            .as_str()
+            .unwrap()
+            .contains("a run fetches origin first"),
+        "an offline plan cannot know: {v}"
+    );
+    let (code, v, err) = s.w.stw(&s.ws, &["--plan", "--submodules"]);
+    assert_eq!(code, 0, "{v} {err}");
+    let r = repo(&v, "c");
+    assert_eq!(r["fetch"], "ok", "{r}");
+    assert_eq!(r["result"], "submodule-move", "{r}");
+    assert_eq!(r["submodule"]["state"], "would-move", "{r}");
+    assert_eq!(s.head(), s.c1, "the plan moved nothing");
+    assert_eq!(
+        s.w.git(&s.c, &["rev-parse", "refs/remotes/origin/main"]),
+        s.c2,
+        "the plan fetched the tracking ref of the submodule"
     );
 }
 
@@ -915,7 +950,9 @@ fn text_output_names_the_move_and_the_counts() {
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(text.contains("submodule-move"), "{text}");
     assert!(
-        text.contains("1 submodule(s) would move. Nothing was written."),
+        text.contains(
+            "1 submodule(s) would move. Only the remote-tracking refs were fetched; nothing else was written."
+        ),
         "{text}"
     );
 }

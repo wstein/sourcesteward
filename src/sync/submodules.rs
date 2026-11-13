@@ -54,7 +54,7 @@ fn put(rec: &mut SyncRec, result: &str, reason: String, sub: SubRec) {
 }
 
 fn unreachable_rec(rec: &mut SyncRec, o: &Opts, why: &str, sub: SubRec) {
-    // a dry run only predicts; the fetch of a run may still bring a missing commit
+    // a dry run only predicts; the fetch of a run may still bring a missing commit (a plan has fetched already)
     let (result, reason) = if o.apply {
         ("error", format!("unreachable: {why}"))
     } else {
@@ -228,7 +228,7 @@ fn step(root: &Path, rel: String, rec: &mut SyncRec, o: &Opts) {
             &format!(
                 "the recorded commit {} is not in the submodule; fetch it with plain git{}",
                 sh(&rec_s),
-                if o.apply {
+                if o.apply || !o.offline {
                     ""
                 } else {
                     " (a run fetches origin first)"

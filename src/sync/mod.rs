@@ -146,9 +146,32 @@ fn plan_of(f: &HeadFacts, op: Option<&str>, o: &Opts, dirty: usize) -> (&'static
     }
 }
 
+/// `plan_of`, and for a plan the refusal of a merge that a run would refuse (`config-refused`): the plan must not
+/// promise it. It is asked again after the fetch of a plan, because the fetch can change the facts.
+fn planned(
+    repo: &gix::Repository,
+    f: &HeadFacts,
+    op: Option<&str>,
+    o: &Opts,
+    dirty: usize,
+) -> (&'static str, String) {
+    let (mut action, mut reason) = plan_of(f, op, o, dirty);
+    if !o.apply && action == "merge" {
+        if let Some(why) = f
+            .branch
+            .as_deref()
+            .and_then(|b| pull::merge_options_refusal(repo, b))
+        {
+            (action, reason) = ("skip", format!("{why} (would be refused)"));
+        }
+    }
+    (action, reason)
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Opts {
-    /// Act (fetch, fast-forward, prune, move submodules); false is the dry run (`--plan`, `--dry-run`).
+    /// Act (fetch, fast-forward, prune, move submodules); false is the dry run (`--plan`, `--dry-run`): it fetches
+    /// `origin` (not with `offline`) and changes nothing but the remote-tracking refs, like Go's `--plan`.
     pub apply: bool,
     pub offline: bool,
     pub prune: Prune,
@@ -196,8 +219,8 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         .ok()
         .and_then(|t| std::time::SystemTime::now().duration_since(t).ok())
         .map(|d| d.as_secs());
-    // dry run: ask GitHub read-only whether the upstream branch moved (replaces `git ls-remote`)
-    if !o.offline {
+    // a run: ask GitHub read-only whether the upstream branch moved (replaces `git ls-remote`); a plan fetches instead
+    if !o.offline && o.apply {
         if let (Some(b), Some(_), Some(c)) = (&facts.branch, &facts.upstream.short, gh) {
             let remote = repo
                 .config_snapshot()
@@ -219,17 +242,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
             }
         }
     }
-    let (mut action, mut reason) = plan_of(&facts, op, o, gate_dirty);
-    if !o.apply && action == "merge" {
-        // the run refuses this merge (`config-refused`): the plan must not promise it
-        if let Some(why) = facts
-            .branch
-            .as_deref()
-            .and_then(|b| pull::merge_options_refusal(&repo, b))
-        {
-            (action, reason) = ("skip", format!("{why} (would be refused)"));
-        }
-    }
+    let (mut action, mut reason) = planned(&repo, &facts, op, o, gate_dirty);
     rec.pinned = op.is_none() && facts.branch.is_none();
     let mut result = action.to_string();
     let mut err = None;
@@ -239,24 +252,37 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         Prune::Off => Some("off"),
     };
     let mut prune_note = String::new();
-    if !o.apply && o.prune == Prune::On && repo.find_remote("origin").is_ok() {
-        // a dry run never fetches: it can only count what a prune could reach
+    if !o.apply && o.offline && o.prune == Prune::On && repo.find_remote("origin").is_ok() {
+        // an offline plan never fetches: it can only count what a prune could reach
         let n = tracking_refs(&r.path).map(|s| s.len())?;
         rec.tracking_refs = Some(n);
         prune_note = format!(
             "; --prune would delete the remote-tracking refs of origin that are gone there ({n} under {} checked)",
             fetch::PRUNE_SCOPE
         );
-    } else if !o.apply && o.prune == Prune::Off {
+    } else if !o.apply && o.offline && o.prune == Prune::Off {
         prune_note = "; --no-prune: the fetch would not prune".into();
     }
-    if o.apply {
+    if o.apply || !o.offline {
         if o.offline {
             rec.fetch = "skipped-offline".into();
         } else {
             // also without a flag: `fetch.prune` of the configuration prunes a fetch by the installed git
             let before = tracking_refs(&r.path)?;
-            let fetched = fetch::fetch_origin_with(&repo, gh, o.prune);
+            // a plan fetches too, but a refspec that writes outside `refs/remotes/origin/` would move a local ref
+            let refused = if o.apply {
+                Ok(())
+            } else {
+                fetch::check_plan_scope(&repo)
+            };
+            let fetched = match refused {
+                Ok(()) => fetch::fetch_origin_with(&repo, gh, o.prune),
+                Err(m) => fetch::Fetched {
+                    fetch: fetch::Fetch::Failed(m),
+                    via: None,
+                    git_error: Some("refused-refspec"),
+                },
+            };
             rec.fetch = fetched.label().into();
             rec.via = fetched.via.map(str::to_string);
             rec.git_error = fetched.git_error.map(str::to_string);
@@ -280,7 +306,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
         dirty = dirty_with_submodules(&repo, gate_dirty);
         let op_now = status::operation(&repo);
         rec.pinned = op_now.is_none() && facts.branch.is_none();
-        (action, reason) = plan_of(&facts, op_now, o, gate_dirty);
+        (action, reason) = planned(&repo, &facts, op_now, o, gate_dirty);
         result = action.to_string();
         if rec.fetch == "failed" {
             result = "error".into();
@@ -298,7 +324,7 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
             result = "error".into();
             reason = "fetch failed: use git directly for this remote kind".into();
         }
-        if result == "fast-forward" {
+        if o.apply && result == "fast-forward" {
             let up = facts.upstream.short.clone().unwrap_or_default();
             let tip = facts.upstream.tip.expect("behind implies tip");
             let branch = facts.branch.clone().expect("a fast-forward has a branch");
@@ -462,21 +488,12 @@ pub fn to_json(root: &str, apply: bool, list: &[SyncRec], o: &Opts) -> Value {
 pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
     let mut out = String::new();
     for s in list {
-        let mut note = String::new();
-        if !apply {
-            match s.remote_moved {
-                Some(true) => note = "  (remote has news: fetch needed)".into(),
-                Some(false) => note = "  (remote unchanged since last fetch)".into(),
-                None => {}
-            }
-        }
         out += &format!(
-            "{:<18} {:<26} {:<16} {}{}\n",
+            "{:<18} {:<26} {:<16} {}\n",
             escape_untrusted(&s.name, 200).0,
             escape_untrusted(s.branch.as_deref().unwrap_or("(detached)"), 200).0,
             s.result,
-            s.reason,
-            note
+            s.reason
         );
         if let Some(e) = &s.err {
             out += &format!("    error: {}\n", escape_untrusted(e, 600).0);
@@ -530,7 +547,11 @@ pub fn render_human(apply: bool, list: &[SyncRec], o: &Opts) -> String {
         if o.submodules {
             out += &format!(", {} submodule(s) would move", count("submodule-move"));
         }
-        out += ". Nothing was written. Nothing was fetched either: based on the last fetch.\n";
+        out += if o.offline {
+            ". Nothing was written. Nothing was fetched either: based on the last fetch.\n"
+        } else {
+            ". Only the remote-tracking refs were fetched; nothing else was written.\n"
+        };
     }
     out
 }

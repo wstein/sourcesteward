@@ -17,7 +17,7 @@ struct D {
 }
 
 /// `ws` is a clone of `origin` that is behind by one commit (`new`); origin is a local path (fetched by the runner).
-/// The clone has not fetched it: only a run (which fetches) can know.
+/// The clone has not fetched it: only a run or an online plan (which fetch) can know.
 fn setup() -> D {
     let w = World::new();
     let seed = w.p("seed");
@@ -42,7 +42,7 @@ fn setup() -> D {
     }
 }
 
-/// Like `setup`, and the clone has fetched: a plan (which never fetches) sees that it is behind.
+/// Like `setup`, and the clone has fetched: an offline plan sees that it is behind.
 fn setup_fetched() -> D {
     let d = setup();
     d.w.git(&d.ws, &["fetch", "-q", "origin"]);
@@ -77,6 +77,19 @@ fn snapshot(dir: &Path) -> BTreeMap<String, Vec<u8>> {
     let mut out = BTreeMap::new();
     walk(dir, dir, &mut out);
     out
+}
+
+/// A snapshot without what a fetch writes: objects, FETCH_HEAD, the remote-tracking refs of origin and their reflogs.
+fn without_fetch_writes(m: &BTreeMap<String, Vec<u8>>) -> BTreeMap<String, Vec<u8>> {
+    m.iter()
+        .filter(|(k, _)| {
+            !(k.starts_with(".git/objects")
+                || k.as_str() == ".git/FETCH_HEAD"
+                || k.starts_with(".git/refs/remotes/origin")
+                || k.starts_with(".git/logs/refs/remotes/origin"))
+        })
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect()
 }
 
 fn entry<'a>(v: &'a Value, name: &str) -> &'a Value {
@@ -127,7 +140,7 @@ fn every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run() {
         assert_eq!(v["options"]["dry_run"], false, "{flags:?}");
         assert_eq!(v["summary"]["fast_forwarded"], 1, "{flags:?}: {v}");
         assert_eq!(d.tip(), d.new, "{flags:?}");
-        // the preview in all three spellings: byte-identical repository, working tree and refs
+        // the offline preview in all three spellings: byte-identical repository, working tree and refs
         for plan in [
             &["--plan"][..],
             &["--dry-run"][..],
@@ -137,7 +150,12 @@ fn every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run() {
             let d = setup_fetched();
             let before = snapshot(&d.ws);
             let origin_before = snapshot(&d.origin);
-            let args: Vec<&str> = plan.iter().chain(flags.iter()).copied().collect();
+            let args: Vec<&str> = plan
+                .iter()
+                .chain(flags.iter())
+                .chain(["--offline"].iter())
+                .copied()
+                .collect();
             let (code, v, err) = d.run(&args);
             assert_eq!(code, 0, "{args:?}: {v} {err}");
             assert_eq!(v["mode"], "dry-run", "{args:?}");
@@ -165,9 +183,36 @@ fn every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run() {
             );
             assert!(v["run_id"].is_null(), "{args:?}: {v}");
         }
-        // a plan never creates FETCH_HEAD (it fetches nothing); a run does
+        // the online preview fetches: it changes the remote-tracking refs, FETCH_HEAD and objects, nothing else
+        for plan in [&["--plan"][..], &["--dry-run"][..]] {
+            let d = setup();
+            let before = without_fetch_writes(&snapshot(&d.ws));
+            let args: Vec<&str> = plan.iter().chain(flags.iter()).copied().collect();
+            let (code, v, err) = d.run(&args);
+            assert_eq!(code, 0, "{args:?}: {v} {err}");
+            let r = entry(&v, "ws");
+            assert_eq!(r["result"], "fast-forward", "{args:?}: {r}");
+            assert_eq!(r["fetch"], "ok", "{args:?}: {r}");
+            assert_eq!(d.tip(), d.old, "{args:?}");
+            assert_eq!(
+                d.w.git(&d.ws, &["rev-parse", "refs/remotes/origin/main"]),
+                d.new,
+                "{args:?}: the plan fetched"
+            );
+            assert!(
+                without_fetch_writes(&snapshot(&d.ws)) == before,
+                "{args:?} wrote more than the fetch"
+            );
+            assert!(!d.ws.join("b.txt").exists(), "{args:?}: working tree");
+            assert!(!d.ws.join(".git/stw").exists(), "{args:?}: journal");
+        }
+        // an offline plan never creates FETCH_HEAD (it fetches nothing); a run does
         let d = setup();
-        let args: Vec<&str> = ["--plan"].iter().chain(flags.iter()).copied().collect();
+        let args: Vec<&str> = ["--plan", "--offline"]
+            .iter()
+            .chain(flags.iter())
+            .copied()
+            .collect();
         d.run(&args);
         assert!(!d.ws.join(".git/FETCH_HEAD").exists(), "{args:?}");
     }
@@ -311,13 +356,18 @@ fn a_run_still_leaves_diverged_and_in_progress_repositories_alone() {
 }
 
 #[test]
-fn a_run_without_network_is_exit_1_and_a_plan_is_exit_0() {
+fn a_run_without_network_is_exit_1_and_so_is_a_plan_unless_it_is_offline() {
     let d = setup();
     d.w.git(
         &d.ws,
         &["remote", "set-url", "origin", "https://127.0.0.1:1/x/y.git"],
     );
     let (code, v, _) = d.run(&["--plan"]);
+    assert_eq!(code, 1, "{v}");
+    assert_eq!(entry(&v, "ws")["result"], "error");
+    assert_eq!(entry(&v, "ws")["fetch"], "failed");
+    assert_eq!(d.tip(), d.old);
+    let (code, v, _) = d.run(&["--plan", "--offline"]);
     assert_eq!(code, 0, "{v}");
     let (code, v, _) = d.run(&[]);
     assert_eq!(code, 1, "{v}");

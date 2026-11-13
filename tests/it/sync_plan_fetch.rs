@@ -361,7 +361,7 @@ fn the_plan_writes_no_branch_no_recovery_ref_and_no_journal_for_rebase_and_merge
 fn a_merge_that_the_run_would_refuse_stays_refused_in_the_plan_after_the_fetch() {
     let d = setup();
     d.w.commit(&d.ws, "local.txt", "l\n");
-    d.w.git(&d.ws, &["config", "merge.log", "5"]);
+    d.w.git(&d.ws, &["config", "branch.main.mergeoptions", "--no-ff"]);
     let (code, v, err) = d.plan(&["--merge"]);
     assert_eq!(code, 0, "{v} {err}");
     let r = entry(&v, "ws");

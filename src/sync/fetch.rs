@@ -91,6 +91,18 @@ pub fn fetch_origin(repo: &gix::Repository, gh: Option<&Client>) -> Fetched {
 /// Every configured fetch refspec of `origin` writes below `refs/remotes/origin/` (a negative refspec `^...` and an
 /// empty value are skipped), so that `fetch --prune` can delete nothing else. Err names the refspec.
 pub fn check_prune_scope(repo: &gix::Repository) -> std::result::Result<(), String> {
+    check_scope(repo, "--prune would delete refs there; nothing was fetched")
+}
+
+/// The same check for `--plan`, which fetches but must not move a local ref (Go: `checkRefspecs`).
+pub fn check_plan_scope(repo: &gix::Repository) -> std::result::Result<(), String> {
+    check_scope(
+        repo,
+        "a plan must not write a local ref; nothing was fetched",
+    )
+}
+
+fn check_scope(repo: &gix::Repository, consequence: &str) -> std::result::Result<(), String> {
     let snap = repo.config_snapshot();
     let specs = snap
         .plumbing()
@@ -108,7 +120,7 @@ pub fn check_prune_scope(repo: &gix::Repository) -> std::result::Result<(), Stri
         if !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {
             let (shown, _) = crate::github::reads::escape_untrusted(spec, 200);
             return Err(format!(
-                "the fetch refspec {shown:?} of origin writes outside {PRUNE_SCOPE}*: --prune would delete refs there; nothing was fetched"
+                "the fetch refspec {shown:?} of origin writes outside {PRUNE_SCOPE}*: {consequence}"
             ));
         }
     }
