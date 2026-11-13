@@ -177,12 +177,19 @@ pub fn sync_repo(r: &RepoRef, gh: Option<&Client>, o: &Opts) -> SyncRec {
     rec
 }
 
+/// The changed-file count shown for a repository: tracked changes including a changed submodule. A submodule that
+/// cannot be read makes that inspection fail; the count of the gate (no look into submodules) stands in then, so the
+/// repository stays readable for the run.
+fn dirty_with_submodules(repo: &gix::Repository, gate_dirty: usize) -> usize {
+    status::changes(repo, false).map_or(gate_dirty, |c| c.dirty_paths)
+}
+
 fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> Result<()> {
     let repo = repo::open(&r.path)?;
     let mut facts = status::head_facts(&repo)?;
-    let mut dirty = status::changes(&repo, false)?.dirty_paths;
     // the gate of --rebase and --merge ignores a changed submodule, as Go does (`--ignore-submodules=all`)
     let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;
+    let mut dirty = dirty_with_submodules(&repo, gate_dirty);
     let op = status::operation(&repo);
     rec.fetched_ago = std::fs::metadata(repo.git_dir().join("FETCH_HEAD"))
         .and_then(|m| m.modified())
@@ -269,8 +276,8 @@ fn sync_inner(r: &RepoRef, gh: Option<&Client>, o: &Opts, rec: &mut SyncRec) -> 
             }
         }
         facts = status::head_facts(&repo)?;
-        dirty = status::changes(&repo, false)?.dirty_paths;
         gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;
+        dirty = dirty_with_submodules(&repo, gate_dirty);
         let op_now = status::operation(&repo);
         rec.pinned = op_now.is_none() && facts.branch.is_none();
         (action, reason) = plan_of(&facts, op_now, o, gate_dirty);

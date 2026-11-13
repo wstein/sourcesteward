@@ -465,9 +465,10 @@ Deviations from the spike, one by one:
     a changed submodule as one `unstaged` path of its parent and cannot read a parent whose submodule is unreadable. The JSON
     `changes` of a parent can therefore differ between `status --json` and `status --all --json`. The same status function
     (`changes_opts(.., ignore_submodule_changes = true)`) also serves the gate of `sync --rebase/--merge` and `sync restore`;
-    it now skips the inspection of a submodule there too, as Go's `--ignore-submodules=all` does. Observable effect on `sync`:
-    none known, because `sync` reads the same repository once more with the inspection (`status::changes`) before the gate;
-    not proven by a test (ledger).
+    it now skips the inspection of a submodule there too, as Go's `--ignore-submodules=all` does. Effect on `sync`: a parent
+    whose submodule cannot be read stays readable for the gate and the run of `--rebase`/`--merge` (test in `sync_pull.rs`;
+    before, the extra read with the inspection (`status::changes`) failed the whole repository); the count `dirty_files`
+    falls back to the gate's count then. A fast-forward still reads with the inspection (`fast_forward.rs`, overlap check).
 13. A name can occur twice (the root `ws` and a submodule `ws`): `kind` and `depth` in the JSON tell them apart (by path), the
     text and the notices name both `ws` (ledger).
 

@@ -2498,6 +2498,18 @@ m LR10 'a source file imports open_opts under a short name' src/status.rs \
   'use gix::bstr::BString;' 'use gix::bstr::BString;
 use gix::open_opts as lr10_open;' \
   hostile_repo repositories_are_opened_only_through_repo_open
+m LR11 'a relative GIT_CEILING_DIRECTORIES entry is kept' src/repo/discover.rs \
+  '.filter(|p| p.is_absolute())' '.filter(|_| true)' \
+  lib repo::discover::tests::relative_ceiling_entries_are_ignored
+m LR12 'the first read of the changed files of sync fails on an unreadable submodule' src/sync/mod.rs \
+  '    let mut dirty = dirty_with_submodules(&repo, gate_dirty);' '    let mut dirty = status::changes(&repo, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR13 'the read after the fetch fails on an unreadable submodule' src/sync/mod.rs \
+  '        dirty = dirty_with_submodules(&repo, gate_dirty);' '        dirty = status::changes(&repo, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
+m LR14 'the gate of sync counts an unreadable submodule' src/sync/mod.rs \
+  '    let mut gate_dirty = status::changes_opts(&repo, false, true)?.dirty_paths;' '    let mut gate_dirty = status::changes_opts(&repo, false, false)?.dirty_paths;' \
+  sync_pull a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

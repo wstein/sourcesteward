@@ -642,6 +642,38 @@ fn a_changed_submodule_is_no_local_change_for_the_gate() {
     assert!(is_ancestor(&d, &d.upstream, "HEAD"));
 }
 
+#[test]
+fn a_submodule_that_cannot_be_read_does_not_stop_the_gate_or_the_run_of_the_superproject() {
+    // `status::changes_opts(.., ignore_submodule_changes = true)` serves the gate; Go: `--ignore-submodules=all`
+    let d = diverged();
+    let subsrc = d.w.p("subsrc");
+    std::fs::create_dir(&subsrc).unwrap();
+    d.w.git(&subsrc, &["init", "-q"]);
+    d.w.commit(&subsrc, "s.txt", "s\n");
+    d.w.git(
+        &d.ws,
+        &["submodule", "add", "-q", subsrc.to_str().unwrap(), "sub"],
+    );
+    d.w.git(&d.ws, &["commit", "-q", "-m", "add sub"]);
+    // the checkout of the submodule can no longer be read: its `.git` file points nowhere
+    std::fs::write(d.ws.join("sub/.git"), "gitdir: /nonexistent/stw/gitdir\n").unwrap();
+    d.w.git(&d.ws, &["fetch", "-q", "origin"]);
+    for args in [["--rebase", "--plan"], ["--merge", "--plan"]] {
+        let (_, v, _) = d.w.stw(&d.ws, &args);
+        let r = repo(&v, "ws");
+        assert!(r["error"].is_null(), "{args:?}: {r}");
+        assert_eq!(r["dirty_files"], 0, "{args:?}: {r}");
+        assert!(
+            matches!(r["result"].as_str(), Some("rebase" | "merge")),
+            "{args:?}: {r}"
+        );
+    }
+    let (_, v, err) = d.w.stw(&d.ws, &["--rebase"]);
+    let r = repo(&v, "ws");
+    assert_eq!(r["result"], "rebased", "{r} {err}");
+    assert!(is_ancestor(&d, &d.upstream, "HEAD"));
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // a git that answers in a way the real one rarely does (a wrapper first in PATH), and the retention
 // ---------------------------------------------------------------------------------------------------------
