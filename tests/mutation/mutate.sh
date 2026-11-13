@@ -958,7 +958,9 @@ m SP8 "--prune and --no-prune do not exclude each other" src/cli.rs \
   '#[arg(long, conflicts_with = "no_prune")]' '#[arg(long)]' \
   sync_flags prune_and_no_prune_exclude_each_other
 m SP9 "the fetch of the prune ops allows ext transports in the child" src/git_runner.rs \
-  'Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https",' 'Op::FetchOrigin | Op::FetchOriginPrune { .. } => "file:ssh:git:http:https:ext",' \
+  '            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchOriginNoPruneTags => {
+                "file:ssh:git:http:https"' '            Op::FetchOrigin | Op::FetchOriginPrune { .. } | Op::FetchOriginNoPruneTags => {
+                "file:ssh:git:http:https:ext"' \
   git_runner_sync_ops the_submodule_operations_allow_no_transport_and_prune_keeps_the_fetch_transports
 m SM1 "the submodule pass is never run" src/cli.rs \
   'if a.submodules {
@@ -2010,7 +2012,7 @@ m SY37 'a failed fetch of a plan is no error' src/sync/mod.rs \
             reason = "fetch failed".into();' '            reason = "fetch failed".into();' \
   sync_plan_fetch an_unreachable_remote_is_an_error_with_exit_1_and_changes_nothing
 m SY38 'an online plan says that nothing was fetched' src/sync/mod.rs \
-  '        out += if o.offline {' '        out += if true {' \
+  '        out += &if o.offline {' '        out += &if true {' \
   sync_plan_fetch the_plan_text_says_that_the_tracking_refs_were_fetched
 m SY39 'an online plan says that a run fetches the submodule first' src/sync/submodules.rs \
   '                if o.apply || !o.offline {
@@ -2018,8 +2020,52 @@ m SY39 'an online plan says that a run fetches the submodule first' src/sync/sub
                     ""' \
   sync_flags a_recorded_commit_the_submodule_lacks_is_unreachable_and_nothing_is_fetched_for_it
 m SY40 'a plan fetches without the prune choice' src/sync/mod.rs \
-  'Ok(()) => fetch::fetch_origin_with(&repo, gh, o.prune),' 'Ok(()) => fetch::fetch_origin_with(&repo, gh, Prune::Unset),' \
+  'Ok(()) => fetch::fetch_origin_plan(&repo, gh, o.prune),' 'Ok(()) => fetch::fetch_origin_plan(&repo, gh, Prune::Unset),' \
   sync_plan_fetch plan_prune_deletes_only_tracking_refs_of_origin_and_names_them
+m SY41 'the plan fetch prunes tags like a run (no --no-prune-tags)' src/sync/mod.rs \
+  'Ok(()) => fetch::fetch_origin_plan(&repo, gh, o.prune),' 'Ok(()) => fetch::fetch_origin_with(&repo, gh, o.prune),' \
+  sync_plan_fetch the_plan_never_prunes_a_tag_whatever_fetch_prune_tags_says
+m SY42 'the argument vector of the plan fetch has no --no-prune-tags' src/git_runner.rs \
+  '            Op::FetchOriginNoPruneTags => v(&[
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-recurse-submodules",
+                "--no-prune-tags",' '            Op::FetchOriginNoPruneTags => v(&[
+                "fetch",
+                "--quiet",
+                "--no-tags",
+                "--no-recurse-submodules",' \
+  git_runner_sync_ops the_new_operations_have_fixed_argument_vectors
+m SY43 'the scope check lets a sibling remote namespace through' src/sync/fetch.rs \
+  'if !dst.is_empty() && !dst.starts_with(PRUNE_SCOPE) {' 'if !dst.is_empty() && !dst.starts_with("refs/remotes/") {' \
+  sync_plan_fetch a_refspec_that_writes_outside_the_namespace_refuses_the_plan_before_any_fetch
+m SY44 'a plan asks GitHub whether the remote moved' src/sync/mod.rs \
+  '    if !o.offline && o.apply {' '    if !o.offline {' \
+  github an_online_plan_does_not_ask_github_whether_the_remote_moved
+m SY45 'the note of the offline plan about --no-prune appears in an online plan' src/sync/mod.rs \
+  '    } else if !o.apply && o.offline && o.prune == Prune::Off {' '    } else if !o.apply && o.prune == Prune::Off {' \
+  sync_plan_fetch plan_no_prune_keeps_the_ref_even_with_fetch_prune_true
+m SY46 'the plan of --rules does not fetch' src/sync/rules.rs \
+  '    } else if o.update {
+        // a plan fetches too' '    } else if o.update && o.apply {
+        // a plan fetches too' \
+  sync_rules the_rules_plan_fetches_a_local_origin_like_go_and_writes_only_the_tracking_ref
+m SY47 'the plan of --rules fetches with a refspec outside the namespace' src/sync/rules.rs \
+  'match fetch::check_plan_scope(&repo) {' 'match Ok::<(), String>(()) {' \
+  sync_rules the_rules_plan_refuses_a_refspec_that_writes_outside_the_namespace
+m SY48 'the plan text claims a fetch after a failed one' src/sync/mod.rs \
+  '        } else if failed > 0 {' '        } else if false {' \
+  sync_plan_fetch the_plan_text_after_a_failed_fetch_does_not_claim_that_refs_were_fetched
+m SY49 'the rules plan text says nothing was fetched after a fetch' src/sync/rules.rs \
+  '            out += if r.fetch == "ok" {' '            out += if false {' \
+  sync_rules the_rules_plan_fetches_a_local_origin_like_go_and_writes_only_the_tracking_ref
+m SY50 'the help of --plan says that it fetches nothing' src/cli.rs \
+  '/// Fetch the remote-tracking refs of origin (not with --offline) and print what a run would do; change nothing else' '/// Print what a run would do and change nothing: no fetch, no write' \
+  sync_default the_help_names_plan_and_dry_run_and_hides_apply
+m SY51 'the help of --prune says that a plan only says what it would do' src/cli.rs \
+  'With --plan it prunes as a run does' 'With --plan it only says what it would do' \
+  sync_default the_help_names_plan_and_dry_run_and_hides_apply
 
 m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
