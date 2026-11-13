@@ -1445,7 +1445,7 @@ m SD14 "--rules acts under --plan (R1)" src/cli.rs \
   'update: a.rules,
                 apply: execute,' 'update: a.rules,
                 apply: !a.plan,' \
-  sync_rules plan_and_dry_run_with_rules_fetch_and_move_nothing_online
+  sync_rules plan_and_dry_run_with_rules_fetch_the_tracking_ref_and_move_nothing_online
 m SD15 "the plan text loses the note about the last fetch" src/sync/mod.rs \
   ' Nothing was fetched either: based on the last fetch.' '' \
   sync_default the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it
