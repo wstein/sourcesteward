@@ -52,6 +52,9 @@ class TriggerTests(unittest.TestCase):
     def test_deployment_stays_main_push_only(self):
         self.assertIn("if: github.event_name == 'push' && github.ref == 'refs/heads/main'", job_text('pages'))
 
+    def test_deployment_is_off_until_the_pages_variable_is_true(self):
+        self.assertIn("&& vars.PAGES_ENABLED == 'true'", job_text('pages'))
+
 
 class CheckJobTests(unittest.TestCase):
     def test_check_job_runs_static_checks_and_plain_test_suite_once(self):
