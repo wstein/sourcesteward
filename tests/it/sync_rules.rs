@@ -253,19 +253,19 @@ fn dry_run_shows_the_result_and_changes_nothing() {
         None,
         &RulesOpts {
             apply: false,
-            offline: false,
+            offline: true,
             ..at(&r)
         },
     );
     assert_eq!(rec.action, "would-update");
-    assert_eq!(rec.fetch, "not-run", "a dry run never fetches");
+    assert_ne!(rec.fetch, "ok", "an offline dry run never fetches");
     assert_eq!(rec.commits.len(), 2);
     assert_eq!(rec.head.as_deref(), Some(r.old.to_string().as_str()));
     let text = render_human(&rec);
     assert!(text.contains("behind 2 commits of origin/main"), "{text}");
     assert!(text.contains("rules commit "), "{text}");
     assert!(
-        text.contains("dry run (--plan): would fast-forward"),
+        text.contains("dry run (--plan): would fast-forward; nothing was fetched or written"),
         "{text}"
     );
     untouched(&r);
@@ -707,7 +707,7 @@ fn the_rules_submodule_is_only_touched_by_rules_apply() {
 }
 
 #[test]
-fn plan_and_dry_run_with_rules_fetch_and_move_nothing_online() {
+fn plan_and_dry_run_with_rules_fetch_the_tracking_ref_and_move_nothing_online() {
     let (fx, origin, o1) = with_local_origin();
     // origin is two commits ahead of the checkout
     let o2 = origin.commit(Some(o1), &[("more.md", Some("more\n"))], "rules: more");
@@ -718,20 +718,6 @@ fn plan_and_dry_run_with_rules_fetch_and_move_nothing_online() {
     let rs = root.to_str().unwrap();
     let sub = root.join(".agents");
     let c0 = gix::open(&sub).unwrap().head_id().unwrap().detach();
-    // the plan only knows what was fetched before
-    let f = std::process::Command::new("git")
-        .env_clear()
-        .env("PATH", std::env::var_os("PATH").unwrap())
-        .env("HOME", "/nonexistent")
-        .env("GIT_CONFIG_NOSYSTEM", "1")
-        .env("GIT_CONFIG_GLOBAL", "/dev/null")
-        .args(["-c", "protocol.file.allow=always", "-C"])
-        .arg(&sub)
-        .args(["fetch", "-q", "origin"])
-        .output()
-        .unwrap();
-    assert!(f.status.success(), "{}", String::from_utf8_lossy(&f.stderr));
-    let fetch_head = std::fs::read(sub.join(".git/FETCH_HEAD")).unwrap();
     let run = |args: &[&str]| {
         std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
             .env("HOME", "/nonexistent")
@@ -756,16 +742,19 @@ fn plan_and_dry_run_with_rules_fetch_and_move_nothing_online() {
         args.push("--json");
         let o = run(&args);
         let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
-        assert_eq!(v["agent_rules"]["fetch"], "not-run", "{flags:?}: {v}");
+        // like Go, the plan of --rules fetches origin: it knows the two new commits without an earlier fetch
+        assert_eq!(v["agent_rules"]["fetch"], "ok", "{flags:?}: {v}");
         assert_eq!(v["agent_rules"]["action"], "would-update", "{flags:?}: {v}");
         assert_eq!(gix::open(&sub).unwrap().head_id().unwrap(), c0, "{flags:?}");
-        assert_eq!(
-            std::fs::read(sub.join(".git/FETCH_HEAD")).unwrap(),
-            fetch_head,
-            "{flags:?}"
-        );
         assert!(!sub.join("rules").exists(), "{flags:?}");
     }
+    let fetched = gix::open(&sub)
+        .unwrap()
+        .find_reference("refs/remotes/origin/main")
+        .unwrap()
+        .id()
+        .detach();
+    assert_eq!(fetched, o2, "the plan fetched the tracking ref");
     // without the flag the same checkout is fetched and moved to origin's tip
     let o = run(&["sync", "--rules", "--root", rs, "--json"]);
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
@@ -920,4 +909,102 @@ fn without_any_owner_identity_nothing_is_admitted() {
     assert_eq!(o.status.code(), Some(1), "{text}");
     assert!(text.contains("no owner identity"), "{text}");
     assert!(!root.join(".agents/rules").exists(), "nothing was written");
+}
+
+fn plan_opts(fx: &Fx, offline: bool) -> RulesOpts {
+    RulesOpts {
+        path: Some(fx.path.clone()),
+        update: true,
+        apply: false,
+        offline,
+        ..Default::default()
+    }
+}
+
+fn tracking_tip(fx: &Fx) -> gix::ObjectId {
+    gix::open(&fx.path)
+        .unwrap()
+        .find_reference("refs/remotes/origin/main")
+        .unwrap()
+        .id()
+        .detach()
+}
+
+#[test]
+fn the_rules_plan_fetches_a_local_origin_like_go_and_writes_only_the_tracking_ref() {
+    let (fx, _origin, o1) = with_local_origin();
+    let head = gix::open(&fx.path).unwrap().head_id().unwrap().detach();
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &plan_opts(&fx, false));
+    assert_eq!(rec.fetch, "ok", "{}", rec.reason);
+    assert_eq!(rec.action, "would-update", "{}", rec.reason);
+    assert_eq!(rec.commits.len(), 1);
+    assert_eq!(tracking_tip(&fx), o1);
+    assert_eq!(
+        gix::open(&fx.path).unwrap().head_id().unwrap().detach(),
+        head
+    );
+    assert!(
+        !fx.path.join("rules").exists(),
+        "the working tree did not move"
+    );
+    let text = render_human(&rec);
+    assert!(
+        text.contains(
+            "dry run (--plan): would fast-forward; only the remote-tracking refs were fetched"
+        ),
+        "{text}"
+    );
+}
+
+#[test]
+fn the_offline_rules_plan_fetches_nothing() {
+    let (fx, _origin, o1) = with_local_origin();
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &plan_opts(&fx, true));
+    assert_eq!(rec.fetch, "skipped-offline");
+    assert_ne!(tracking_tip(&fx), o1);
+}
+
+#[test]
+fn a_plan_without_rules_does_not_fetch_the_rules_checkout() {
+    let (fx, _origin, o1) = with_local_origin();
+    let mut o = plan_opts(&fx, false);
+    o.update = false;
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &o);
+    assert_eq!(rec.fetch, "not-run");
+    assert_ne!(tracking_tip(&fx), o1);
+}
+
+#[test]
+fn the_rules_plan_refuses_when_origin_cannot_be_fetched() {
+    let (fx, _origin, _o1) = with_local_origin();
+    let before = tracking_tip(&fx);
+    fx.set_origin_url(
+        fx.path
+            .parent()
+            .unwrap()
+            .join("no-such-origin")
+            .to_str()
+            .unwrap(),
+    );
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &plan_opts(&fx, false));
+    assert_eq!(rec.fetch, "failed", "{}", rec.reason);
+    assert_eq!(rec.action, "refused");
+    assert!(rec.reason.contains("fetch failed"), "{}", rec.reason);
+    assert_eq!(tracking_tip(&fx), before);
+}
+
+#[test]
+fn the_rules_plan_refuses_a_refspec_that_writes_outside_the_namespace() {
+    use std::io::Write;
+    let (fx, _origin, o1) = with_local_origin();
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(fx.path.join(".git/config"))
+        .unwrap()
+        .write_all(b"[remote \"origin\"]\n\tfetch = +refs/tags/*:refs/tags/*\n")
+        .unwrap();
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &plan_opts(&fx, false));
+    assert_eq!(rec.action, "refused", "{}", rec.reason);
+    assert!(rec.reason.contains("refs/tags/*"), "{}", rec.reason);
+    assert_ne!(tracking_tip(&fx), o1, "nothing was fetched");
 }

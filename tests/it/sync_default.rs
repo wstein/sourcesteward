@@ -310,6 +310,24 @@ fn the_help_names_plan_and_dry_run_and_hides_apply() {
     );
     assert!(!help.contains("--apply"), "{help}");
     assert!(!help.contains("dry run unless"), "{help}");
+    // the plan fetches (Go: "Fetch the remote-tracking refs and print what a run would do"); the old text said it did not
+    assert!(!help.contains("no fetch, no write"), "{help}");
+    assert!(!help.contains("it only says what it would do"), "{help}");
+    assert!(!help.contains("with --plan only report"), "{help}");
+    let flat = help.split_whitespace().collect::<Vec<_>>().join(" ");
+    assert!(
+        flat.contains("Fetch the remote-tracking refs of origin")
+            && flat.contains("change nothing else"),
+        "{help}"
+    );
+    assert!(
+        flat.contains("With --plan it prunes as a run does"),
+        "{help}"
+    );
+    assert!(
+        flat.contains("with --plan it fetches origin and only reports"),
+        "{help}"
+    );
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
         .arg("--help")
         .output()
