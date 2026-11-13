@@ -1,24 +1,214 @@
-//! `stw status --all`: every repository of the workspace (the root and the nested submodules, depth-first) in one line
-//! each, with the stack of the current branch. The rows are those of `stw status` (same `RepoStatus`, same attention
-//! reasons, same notices); this module adds the stack, the one-line text and the additive JSON fields. Read-only.
+//! `stw status PATH..`: the repositories at the given paths (a repository with its nested submodules, depth-first, or the
+//! repositories found below a directory) in one line each, with the stack of the current branch. The rows are those of
+//! `stw status` (same `RepoStatus`, same attention reasons, same notices); this module adds the stack, the one-line text
+//! and the additive JSON fields. Read-only.
+use std::path::{Path, PathBuf};
+
 use serde_json::{json, Value};
 
-use crate::repo;
+use crate::error::{Error, Result};
+use crate::repo::{self, RepoRef};
 use crate::status::{self, Notice, RepoStatus, Source};
 
-/// Default and bounds of `--depth` (how deep below the root submodules are listed; 0 is the root only).
+/// Default and bounds of `--depth` (how many levels below a scanned directory repositories and their submodules are
+/// listed; 0 lists nothing).
 pub const DEFAULT_DEPTH: usize = 16;
 pub const MAX_DEPTH: usize = 64;
 /// Bounds of `--limit` (the repositories of a run); the default is `repo::REPO_LIMIT`.
 pub const MAX_LIMIT: usize = 1024;
 
-/// What `--all` was asked for.
+/// What a scan of a directory was asked for (`--depth`, `--limit`, `--timeout`).
 #[derive(Clone, Copy, Debug)]
-pub struct AllOpts {
+pub struct ScanOpts {
     pub depth: usize,
     pub limit: usize,
     /// The overall deadline of the GitHub reads (`--timeout`), whole seconds.
     pub timeout_secs: u64,
+}
+
+/// One repository of a `status PATH..` run.
+#[derive(Clone, Debug)]
+pub struct Target {
+    pub repo: RepoRef,
+    /// The repository that was named or found; the gitlink state of a submodule is read against it.
+    pub top: PathBuf,
+    /// Submodule nesting depth below `top` (`top` itself is 0).
+    pub depth: usize,
+    /// Path relative to the current directory (see `key_of`).
+    pub key: String,
+}
+
+/// What the PATH arguments came to.
+#[derive(Debug, Default)]
+pub struct Resolved {
+    pub targets: Vec<Target>,
+    /// Paths of `.gitmodules` that are not accepted, below the key of their repository.
+    pub rejected: Vec<(String, String)>,
+    /// Keys of the repositories whose submodules the depth bound left out.
+    pub cut: Vec<String>,
+    /// Keys of the scanned directories with repositories below the depth bound.
+    pub beyond: Vec<String>,
+    /// Set when at least one PATH is a directory that was scanned.
+    pub scan: Option<(usize, usize)>,
+}
+
+/// The key of a repository: its path relative to the current directory (`.` for the directory itself, `..` components
+/// for a repository next to it), the absolute path when `absolute` (the argument was absolute) and it lies outside the
+/// current directory. Both paths are canonical.
+pub fn key_of(real: &Path, cwd: &Path, absolute: bool) -> String {
+    if let Ok(rel) = real.strip_prefix(cwd) {
+        return if rel.as_os_str().is_empty() {
+            ".".into()
+        } else {
+            crate::output::p2s(rel)
+        };
+    }
+    if absolute {
+        return crate::output::p2s(real);
+    }
+    let a: Vec<_> = real.components().collect();
+    let b: Vec<_> = cwd.components().collect();
+    let common = a.iter().zip(&b).take_while(|(x, y)| x == y).count();
+    let mut parts: Vec<String> = vec!["..".into(); b.len() - common];
+    parts.extend(
+        a[common..]
+            .iter()
+            .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+    );
+    parts.join("/")
+}
+
+fn canon(p: &Path) -> PathBuf {
+    std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf())
+}
+
+/// The repositories of the PATH arguments, in the order of the arguments. A PATH that holds a repository (a `.git`
+/// entry: a checkout or a linked worktree) is that repository with its nested submodules; any other directory is
+/// scanned for repositories below it (`depth` levels, `repo::scan_repos`), each with its submodules. A repository named
+/// more than once (the same path, a symlink to it, a submodule of an earlier repository) is listed at its first
+/// mention. A PATH that does not exist, is no directory or cannot be read is a usage error before anything is read.
+/// `rules` is the agent-rules checkout, which is never listed unless it is named.
+pub fn resolve(
+    paths: &[PathBuf],
+    cwd: &Path,
+    depth: Option<usize>,
+    limit: Option<usize>,
+    rules: &Path,
+) -> Result<Resolved> {
+    let cwd = canon(cwd);
+    struct Arg {
+        real: PathBuf,
+        absolute: bool,
+        repo: bool,
+    }
+    let mut args = Vec::new();
+    for p in paths {
+        let shown = p.display();
+        let real = std::fs::canonicalize(cwd.join(p))
+            .map_err(|e| Error::usage(format!("PATH {shown}: {e}")))?;
+        if !real.is_dir() {
+            return Err(Error::usage(format!("PATH {shown} is not a directory")));
+        }
+        if let Err(e) = std::fs::read_dir(&real) {
+            return Err(Error::usage(format!("PATH {shown} cannot be read: {e}")));
+        }
+        args.push(Arg {
+            repo: real.join(".git").exists(),
+            real,
+            absolute: p.is_absolute(),
+        });
+    }
+    let scanned = args.iter().any(|a| !a.repo);
+    if !scanned && (depth.is_some() || limit.is_some()) {
+        let flag = if depth.is_some() {
+            "--depth"
+        } else {
+            "--limit"
+        };
+        return Err(Error::usage(format!(
+            "{flag} applies only when a PATH is a directory that is scanned for repositories; every PATH here is a repository"
+        )));
+    }
+    let (depth, limit) = (
+        depth.unwrap_or(DEFAULT_DEPTH),
+        limit.unwrap_or(repo::REPO_LIMIT),
+    );
+    let mut out = Resolved {
+        scan: scanned.then_some((depth, limit)),
+        ..Default::default()
+    };
+    let mut seen: Vec<PathBuf> = Vec::new();
+    let explicit: Vec<PathBuf> = args
+        .iter()
+        .filter(|a| a.repo)
+        .map(|a| a.real.clone())
+        .collect();
+    let mut add =
+        |top: &Path, max_depth: usize, absolute: bool, out: &mut Resolved| -> Result<()> {
+            // the walk stops at `limit` + 1 repositories: when it has more, the count below fails
+            let l = repo::list_repos_depth(top, limit, max_depth);
+            let key = |p: &Path| key_of(&canon(p), &cwd, absolute);
+            for (r, d) in l.repos.iter().zip(&l.depths) {
+                let real = canon(&r.path);
+                if seen.contains(&real) {
+                    continue;
+                }
+                if *d > 0 && real == *rules && !explicit.contains(&real) {
+                    continue;
+                }
+                seen.push(real.clone());
+                out.targets.push(Target {
+                    repo: r.clone(),
+                    top: top.to_path_buf(),
+                    depth: *d,
+                    key: key(&r.path),
+                });
+            }
+            for c in &l.cut {
+                let k = key(&top.join(c));
+                if !out.cut.contains(&k) {
+                    out.cut.push(k);
+                }
+            }
+            let top_key = key(top);
+            for (p, why) in repo::rejected_paths(top) {
+                let shown = if top_key == "." {
+                    p
+                } else {
+                    format!("{top_key}/{p}")
+                };
+                if !out.rejected.iter().any(|(q, _)| *q == shown) {
+                    out.rejected.push((shown, why));
+                }
+            }
+            if out.targets.len() > limit {
+                return Err(Error::usage(format!(
+                    "the paths hold more than {limit} repositories"
+                )));
+            }
+            Ok(())
+        };
+    for a in &args {
+        if a.repo {
+            // a repository that is named is listed even when it is the agent-rules checkout
+            add(&a.real, usize::MAX, a.absolute, &mut out)?;
+            continue;
+        }
+        let s = repo::scan_repos(&a.real, depth);
+        if s.beyond {
+            let k = key_of(&a.real, &cwd, a.absolute);
+            if !out.beyond.contains(&k) {
+                out.beyond.push(k);
+            }
+        }
+        for (dir, level) in s.found {
+            if canon(&dir) == *rules {
+                continue;
+            }
+            add(&dir, depth - level, a.absolute, &mut out)?;
+        }
+    }
+    Ok(out)
 }
 
 /// The stack of the current branch: the chain of local upstreams (`branch.<b>.remote` is `.` and `branch.<b>.merge` is
@@ -82,13 +272,18 @@ pub fn stack_of(repo: &gix::Repository, branch: &str) -> StackFacts {
     }
 }
 
-/// The notices only `--all` has: a stack that meets itself, and the repositories whose submodules the depth bound left
-/// out (`cut`: their names, as `repo::list_repos_depth` gives them).
-pub fn extra_notices(list: &[RepoStatus], cut: &[String], depth: usize) -> Vec<Notice> {
+/// The notices only `status PATH` has: a stack that meets itself, the repositories whose submodules the depth bound left
+/// out (`cut`: their keys) and the scanned directories with repositories below the bound (`beyond`: their keys).
+pub fn extra_notices(
+    list: &[RepoStatus],
+    cut: &[String],
+    beyond: &[String],
+    depth: usize,
+) -> Vec<Notice> {
     let mut v = Vec::new();
     for s in list {
         if let Some(at) = s.stack.as_ref().and_then(|k| k.cycle_at.as_deref()) {
-            let name = status::escape_for_text(&s.name);
+            let name = status::escape_for_text(s.label());
             v.push(Notice {
                 code: "stack-cycle",
                 source: "stack",
@@ -108,17 +303,26 @@ pub fn extra_notices(list: &[RepoStatus], cut: &[String], depth: usize) -> Vec<N
             count: 1,
         });
     }
+    for b in beyond {
+        let name = status::escape_for_text(b);
+        v.push(Notice {
+            code: "depth-limit",
+            source: "scan",
+            repos: vec![name.clone()],
+            message: format!("{name}: repositories below depth {depth} not listed"),
+            count: 1,
+        });
+    }
     v
 }
 
-/// The additive fields of `--all` on the document of `status::to_json`: `options.all/depth/limit/timeout` and per
-/// repository `kind`, `depth`, `stack`. Nothing else changes.
-pub fn add_json(doc: &mut Value, list: &[RepoStatus], all: &AllOpts) {
-    if let Some(Value::Object(o)) = doc.get_mut("options") {
-        o.insert("all".into(), json!(true));
-        o.insert("depth".into(), json!(all.depth));
-        o.insert("limit".into(), json!(all.limit));
-        o.insert("timeout".into(), json!(all.timeout_secs));
+/// The additive fields of `status PATH` on the document of `status::to_json`: `options.depth/limit/timeout` when a
+/// directory was scanned and per repository `kind`, `depth`, `stack`. Nothing else changes.
+pub fn add_json(doc: &mut Value, list: &[RepoStatus], scan: Option<&ScanOpts>) {
+    if let (Some(scan), Some(Value::Object(o))) = (scan, doc.get_mut("options")) {
+        o.insert("depth".into(), json!(scan.depth));
+        o.insert("limit".into(), json!(scan.limit));
+        o.insert("timeout".into(), json!(scan.timeout_secs));
     }
     let Some(Value::Array(repos)) = doc.get_mut("repos") else {
         return;
@@ -239,20 +443,25 @@ fn total_cell(s: Source) -> String {
     }
 }
 
-/// The text of `status --all`; `note_code` is the code of the GitHub note of the run (`offline`, `no-token`).
+/// The text of `status PATH..`; `paths` are the arguments as given, `scan` is set when a directory was scanned and
+/// `note_code` is the code of the GitHub note of the run (`offline`, `no-token`).
 pub fn render(
-    root: &str,
+    paths: &[String],
     list: &[RepoStatus],
     notices: &[Notice],
-    all: &AllOpts,
+    scan: Option<&ScanOpts>,
     note_code: Option<&str>,
 ) -> String {
+    let paths: Vec<String> = paths.iter().map(|p| status::escape_for_text(p)).collect();
     let mut out = format!(
-        "status --all  root={}  repositories={}  depth<={}\n\n",
-        status::escape_for_text(root),
-        list.len(),
-        all.depth
+        "status  paths={}  repositories={}",
+        paths.join(","),
+        list.len()
     );
+    if let Some(o) = scan {
+        out += &format!("  depth<={}", o.depth);
+    }
+    out += "\n\n";
     out += &format!("Repositories ({})\n", list.len());
     let mut attention = 0;
     let (mut ahead, mut behind) = (0, 0);
@@ -263,7 +472,7 @@ pub fn render(
             attention += 1;
             '!'
         };
-        let name = status::escape_for_text(&s.name);
+        let name = status::escape_for_text(s.label());
         if let Some(e) = &s.error {
             out += &format!("{mark} {name:<28} ({})\n", status::escape_for_text(e));
             continue;

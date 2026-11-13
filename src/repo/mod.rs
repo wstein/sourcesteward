@@ -243,14 +243,15 @@ fn walk_root(root: &Path, limit: usize, max_depth: usize) -> Walk {
     w
 }
 
-/// The workspace as `stw status --all` lists it: the repositories of `list_repos` with their nesting depth (the root
-/// is 0), and the repositories whose gitlinks lie below `max_depth` and are therefore not followed.
+/// The repository at a path as `stw status PATH` lists it: the repositories of `list_repos` with their nesting depth
+/// (the repository itself is 0), and the repositories whose gitlinks lie below `max_depth` and are therefore not followed.
 #[derive(Debug)]
 pub struct Listing {
     pub repos: Vec<RepoRef>,
     /// Parallel to `repos`.
     pub depths: Vec<usize>,
-    /// Names of the repositories with gitlinks below the depth bound (the root by its own name).
+    /// Names (the path below the root, `outer/inner`; `""` is the root itself) of the repositories with gitlinks below
+    /// the depth bound.
     pub cut: Vec<String>,
     /// More than `limit` repositories (`repos` holds at most `limit` + 1).
     pub exceeded: bool,
@@ -260,23 +261,53 @@ pub struct Listing {
 /// followed (0 lists the root only).
 pub fn list_repos_depth(root: &Path, limit: usize, max_depth: usize) -> Listing {
     let w = walk_root(root, limit, max_depth);
-    let root_name = w.repos[0].name.clone();
-    let cut = w
-        .cut
-        .iter()
-        .map(|c| {
-            if c.is_empty() {
-                root_name.clone()
-            } else {
-                c.clone()
-            }
-        })
-        .collect();
     Listing {
         repos: w.repos,
         depths: w.depths,
-        cut,
+        cut: w.cut,
         exceeded: w.exceeded,
+    }
+}
+
+/// The repositories `stw status DIR` finds below a directory that is no repository itself.
+#[derive(Debug, Default)]
+pub struct Scan {
+    /// The directories that hold a repository (a `.git` entry), with their level below `dir` (a child of `dir` is 1), in
+    /// path order, depth-first. A repository is not entered: its submodules come from its gitlinks.
+    pub found: Vec<(PathBuf, usize)>,
+    /// Directories at level `max_level` + 1 with a `.git` entry: repositories the bound left out.
+    pub beyond: bool,
+}
+
+/// Looks for repositories below `dir`, at most `max_level` levels down (0 finds nothing). A symlink is not followed, a
+/// `.git` directory is not entered, a directory that cannot be read is skipped. Children are visited in byte order of
+/// their names.
+pub fn scan_repos(dir: &Path, max_level: usize) -> Scan {
+    let mut s = Scan::default();
+    scan_level(dir, 0, max_level, &mut s);
+    s
+}
+
+fn scan_level(dir: &Path, level: usize, max_level: usize, s: &mut Scan) {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return;
+    };
+    let mut kids: Vec<(std::ffi::OsString, PathBuf)> = rd
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|e| (e.file_name(), e.path()))
+        .filter(|(n, _)| n != ".git")
+        .collect();
+    kids.sort();
+    for (_, path) in kids {
+        let has_repo = path.join(".git").exists();
+        if level + 1 > max_level {
+            s.beyond |= has_repo;
+        } else if has_repo {
+            s.found.push((path, level + 1));
+        } else {
+            scan_level(&path, level + 1, max_level, s);
+        }
     }
 }
 

@@ -677,7 +677,7 @@ enum DevCommand {
 }
 
 /// Options every command shares.
-#[derive(Args)]
+#[derive(Args, Clone)]
 struct Common {
     /// Print one JSON object instead of text
     #[arg(long)]
@@ -889,18 +889,21 @@ struct StatusArgs {
     /// Glyph set of the text: unicode, nerd or ascii [default: unicode on a terminal with a UTF-8 locale, else ascii]
     #[arg(long, value_name = "SET", value_parser = ["unicode", "nerd", "ascii"])]
     icons: Option<String>,
-    /// Every repository of the workspace, nested submodules included, in one line each with the stack of its current
-    /// branch and the GitHub counts; with --json the same document plus `kind`, `depth` and `stack` per repository
-    #[arg(long, conflicts_with_all = ["long", "icons", "worktrees", "review", "stats", "verbose"])]
-    all: bool,
-    /// With --all: how deep below the root submodules are listed, 0 to 64 (0 is the root only); a cut is a notice
-    #[arg(long, value_name = "N", requires = "all", default_value_t = status_all::DEFAULT_DEPTH as u32,
-          value_parser = clap::value_parser!(u32).range(0..=status_all::MAX_DEPTH as i64))]
-    depth: u32,
-    /// With --all: the most repositories of a run, 1 to 1024; more is a usage error (exit 2)
-    #[arg(long, value_name = "N", requires = "all", default_value_t = repo::REPO_LIMIT as u32,
-          value_parser = clap::value_parser!(u32).range(1..=status_all::MAX_LIMIT as i64))]
-    limit: u32,
+    /// Only these repositories, in one line each with the stack of the current branch and the GitHub counts; with
+    /// --json the same document plus `kind`, `depth` and `stack` per repository. A PATH that is a repository (a checkout
+    /// or a linked worktree) shows it with its nested submodules; any other directory is scanned below for repositories.
+    /// The key of a repository is its path relative to the current directory. Not with --long, --icons, --worktrees,
+    /// --review, --stats, --verbose, --repo. Without a PATH: the repositories of the workspace
+    #[arg(value_name = "PATH", conflicts_with_all = ["long", "icons", "worktrees", "review", "stats", "verbose"])]
+    paths: Vec<PathBuf>,
+    /// Only when a PATH is a directory that is scanned: how many levels below it repositories and their submodules are
+    /// listed, 0 to 64 [default: 16]; a cut is a notice
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(0..=status_all::MAX_DEPTH as i64))]
+    depth: Option<u32>,
+    /// Only when a PATH is a directory that is scanned: the most repositories of a run, 1 to 1024 [default: 256]; more is
+    /// a usage error (exit 2)
+    #[arg(long, value_name = "N", value_parser = clap::value_parser!(u32).range(1..=status_all::MAX_LIMIT as i64))]
+    limit: Option<u32>,
 }
 
 /// The bounds of `--timeout`, the overall deadline of the remote half.
@@ -955,9 +958,6 @@ struct Workspace {
     /// `.gitmodules` paths that are not accepted (never in `repos`); empty when repositories were named.
     rejected: Vec<(String, String)>,
     github: GithubState,
-    /// `--all`: nesting depth of each repository by its path (a name can repeat: root `ws` and a submodule `ws`), and the repositories whose submodules the depth bound left out.
-    depths: std::collections::BTreeMap<String, usize>,
-    cut: Vec<String>,
 }
 
 /// Notices for the paths of `.gitmodules` that are not accepted: text lines and the JSON field
@@ -996,15 +996,6 @@ fn rejected_json(rejected: &[(String, String)]) -> Value {
 }
 
 fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
-    workspace_bounded(c, rules_path, None)
-}
-
-/// `workspace`; `bounds` is `(limit, depth)` of `status --all`: the repository limit and the nesting depth.
-fn workspace_bounded(
-    c: &Common,
-    rules_path: Option<&Path>,
-    bounds: Option<(usize, usize)>,
-) -> Result<Workspace> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let root = c
         .root
@@ -1022,27 +1013,7 @@ fn workspace_bounded(
         )));
     }
     let root = std::fs::canonicalize(&root).unwrap_or(root);
-    let mut depths = std::collections::BTreeMap::new();
-    let mut cut = Vec::new();
-    let mut repos = match bounds {
-        None => repo::list_repos_checked(&root)?,
-        Some((limit, depth)) => {
-            let l = repo::list_repos_depth(&root, limit, depth);
-            if l.exceeded {
-                return Err(Error::usage(format!(
-                    "the workspace has more than {limit} repositories"
-                )));
-            }
-            depths = l
-                .repos
-                .iter()
-                .zip(&l.depths)
-                .map(|(r, d)| (output::p2s(&r.path), *d))
-                .collect();
-            cut = l.cut;
-            l.repos
-        }
-    };
+    let mut repos = repo::list_repos_checked(&root)?;
     // the rules checkout is handled only by the agent-rules logic, never by the generic loop
     let rules = sync::rules::checkout_path(&root, rules_path);
     repos.retain(|r| std::fs::canonicalize(&r.path).unwrap_or(r.path.clone()) != rules);
@@ -1066,8 +1037,6 @@ fn workspace_bounded(
         repos,
         rejected,
         github: GithubState::discover(c.offline),
-        depths,
-        cut,
     })
 }
 
@@ -1289,31 +1258,94 @@ fn same_path(a: &str, b: &std::path::Path) -> bool {
         || matches!((std::fs::canonicalize(a), std::fs::canonicalize(b)), (Ok(x), Ok(y)) if x == y)
 }
 
+/// The workspace of `status PATH..`: the repositories of the paths. The root (the rules checkout, the JSON `root`) is
+/// `--root`, else the one `workspace` finds, else the current directory; no workspace is needed.
+fn path_workspace(
+    c: &Common,
+    rules_path: Option<&Path>,
+    a: &StatusArgs,
+) -> Result<(Workspace, status_all::Resolved)> {
+    if !c.repos.is_empty() {
+        return Err(Error::usage("--repo does not apply with a PATH"));
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = c
+        .root
+        .clone()
+        .or_else(|| repo::default_root(&cwd))
+        .unwrap_or_else(|| cwd.clone());
+    if !root.is_dir() {
+        return Err(Error::usage(format!(
+            "workspace root is not a directory: {}",
+            root.display()
+        )));
+    }
+    let root = std::fs::canonicalize(&root).unwrap_or(root);
+    let rules = sync::rules::checkout_path(&root, rules_path);
+    let resolved = status_all::resolve(
+        &a.paths,
+        &cwd,
+        a.depth.map(|d| d as usize),
+        a.limit.map(|l| l as usize),
+        &rules,
+    )?;
+    let ws = Workspace {
+        root: root.to_string_lossy().into_owned(),
+        repos: resolved.targets.iter().map(|t| t.repo.clone()).collect(),
+        rejected: resolved.rejected.clone(),
+        github: GithubState::discover(c.offline),
+    };
+    Ok((ws, resolved))
+}
+
 fn run_status(a: StatusArgs) -> Result<u8> {
     let started = std::time::Instant::now();
-    let c = a.common;
-    let all = a.all.then_some(status_all::AllOpts {
-        depth: a.depth as usize,
-        limit: a.limit as usize,
-        timeout_secs: a.timeout.as_secs(),
-    });
-    let ws = workspace_bounded(
-        &c,
-        a.rules_path.as_deref(),
-        all.as_ref().map(|o| (o.limit, o.depth)),
-    )?;
+    let c = a.common.clone();
+    if a.paths.is_empty() && (a.depth.is_some() || a.limit.is_some()) {
+        let flag = if a.depth.is_some() {
+            "--depth"
+        } else {
+            "--limit"
+        };
+        return Err(Error::usage(format!(
+            "{flag} applies only when a PATH is a directory that is scanned for repositories; no PATH is given"
+        )));
+    }
+    let (ws, res) = if a.paths.is_empty() {
+        (workspace(&c, a.rules_path.as_deref())?, None)
+    } else {
+        let (ws, res) = path_workspace(&c, a.rules_path.as_deref(), &a)?;
+        (ws, Some(res))
+    };
+    let scan = res
+        .as_ref()
+        .and_then(|r| r.scan)
+        .map(|(depth, limit)| status_all::ScanOpts {
+            depth,
+            limit,
+            timeout_secs: a.timeout.as_secs(),
+        });
     let root = PathBuf::from(&ws.root);
     let opts = status::StatusOpts {
         worktrees: a.worktrees,
         fetch: a.fetch,
         review: a.review,
-        all: all.is_some(),
+        stack: res.is_some(),
     };
-    let mut list = repo::for_each(&ws.repos, |r| {
-        status::collect_local(r, &root, &opts, ws.github.client())
-    });
-    for s in &mut list {
-        s.depth = ws.depths.get(&s.path).copied().unwrap_or(0);
+    let mut list = match &res {
+        Some(r) => repo::par_map(&r.targets, repo::MAX_PARALLEL, |t| {
+            status::collect_local(&t.repo, &t.top, &opts, ws.github.client())
+        }),
+        None => repo::for_each(&ws.repos, |r| {
+            status::collect_local(r, &root, &opts, ws.github.client())
+        }),
+    };
+    if let Some(r) = &res {
+        for (s, t) in list.iter_mut().zip(&r.targets) {
+            s.depth = t.depth;
+            s.key = t.key.clone();
+            s.path = t.key.clone();
+        }
     }
     let local_done = started.elapsed();
     if let Some(cl) = ws.github.client() {
@@ -1340,8 +1372,9 @@ fn run_status(a: StatusArgs) -> Result<u8> {
     );
     let mut notices =
         status::collect_notices(&ws.github, &rejected_status_notices(&ws.rejected), &list);
-    if let Some(o) = &all {
-        notices.extend(status_all::extra_notices(&list, &ws.cut, o.depth));
+    if let Some(r) = &res {
+        let depth = scan.map_or(status_all::DEFAULT_DEPTH, |o| o.depth);
+        notices.extend(status_all::extra_notices(&list, &r.cut, &r.beyond, depth));
     }
     if c.json {
         let mut v = status::to_json(
@@ -1352,8 +1385,12 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             &opts,
             diag.then(|| status_stats::to_json(&stats, &timings)),
         );
-        if let Some(o) = &all {
-            status_all::add_json(&mut v, &list, o);
+        if res.is_some() {
+            status_all::add_json(&mut v, &list, scan.as_ref());
+        }
+        if let Some(Value::Object(o)) = v.get_mut("options") {
+            let paths: Vec<String> = a.paths.iter().map(|p| output::p2s(p)).collect();
+            o.insert("paths".into(), json!(paths));
         }
         if let Value::Object(m) = &mut v {
             m.insert("agent_rules".into(), sync::rules::to_json(&rules));
@@ -1369,10 +1406,17 @@ fn run_status(a: StatusArgs) -> Result<u8> {
             );
             eprintln!("{}", status_stats::stats_line(&stats, &timings));
         }
-    } else if let Some(o) = &all {
+    } else if res.is_some() {
+        let paths: Vec<String> = a.paths.iter().map(|p| output::p2s(p)).collect();
         print!(
             "{}",
-            status_all::render(&ws.root, &list, &notices, o, ws.github.note_code())
+            status_all::render(
+                &paths,
+                &list,
+                &notices,
+                scan.as_ref(),
+                ws.github.note_code()
+            )
         );
     } else {
         let mut tail = String::new();

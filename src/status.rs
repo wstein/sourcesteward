@@ -25,37 +25,23 @@ pub struct Changes {
     pub paths: BTreeSet<BString>,
 }
 
-/// Run the index/worktree/HEAD status of `repo` through gix.
+/// Run the index/worktree/HEAD status of `repo` through gix. A submodule is looked into: its changed HEAD or work tree
+/// is an unstaged path of its parent, and a submodule that cannot be read makes the parent unreadable. The same check
+/// serves `status`, the gate of `sync` and `sync restore`.
 pub fn changes(repo: &gix::Repository, with_untracked: bool) -> Result<Changes> {
-    changes_opts(repo, with_untracked, false)
-}
-
-/// `changes`, optionally without the unstaged change of a submodule (its HEAD or work tree differs from the gitlink
-/// of the index: what `git status --ignore-submodules=all` leaves out of the work tree side). `stw sync restore` asks
-/// this way: a run that moved the superproject and a submodule makes the gitlink of the submodule look modified, which
-/// is no local work of the superproject.
-pub fn changes_opts(
-    repo: &gix::Repository,
-    with_untracked: bool,
-    ignore_submodule_changes: bool,
-) -> Result<Changes> {
     use gix::status::index_worktree::Item as W;
     use gix::status::Item;
     let mut staged: BTreeSet<BString> = BTreeSet::new();
     let mut unstaged: BTreeSet<BString> = BTreeSet::new();
     let mut conflicts: BTreeSet<BString> = BTreeSet::new();
     let mut untracked_paths: Vec<BString> = Vec::new();
-    let mut platform = repo
+    let platform = repo
         .status(gix::progress::Discard)?
         .untracked_files(if with_untracked {
             gix::status::UntrackedFiles::Collapsed
         } else {
             gix::status::UntrackedFiles::None
         });
-    if ignore_submodule_changes {
-        // `--ignore-submodules=all`: a submodule is not looked into, so one that cannot be read does not make its parent unreadable
-        platform = platform.index_worktree_submodules(None);
-    }
     for item in platform.into_iter(Vec::<BString>::new())? {
         match item? {
             Item::TreeIndex(ch) => {
@@ -76,9 +62,6 @@ pub fn changes_opts(
                     S::Conflict { .. } => {
                         conflicts.insert(rela_path);
                     }
-                    S::Change(
-                        gix::status::plumbing::index_as_worktree::Change::SubmoduleModification(_),
-                    ) if ignore_submodule_changes => {}
                     S::Change(_) => {
                         unstaged.insert(rela_path);
                     }
@@ -230,9 +213,8 @@ pub struct StatusOpts {
     pub fetch: bool,
     /// `--review`: read the review state of the open pull requests from their comments.
     pub review: bool,
-    /// `--all`: also read the stack of the current branch, and leave the state of a submodule out of the counts of its
-    /// parent (the submodule has its own row), as the spike did (`status_all`).
-    pub all: bool,
+    /// `status PATH`: also read the stack of the current branch (`status_all`).
+    pub stack: bool,
 }
 
 /// What `--fetch` did for one repository.
@@ -380,10 +362,24 @@ pub struct RepoStatus {
     pub worktree_list: Option<Vec<WorktreeInfo>>,
     /// `--fetch`.
     pub fetch: FetchFact,
-    /// `--all`: the stack of the current branch; None for a detached or unborn head and without `--all`.
+    /// `status PATH`: the stack of the current branch; None for a detached or unborn head and without a PATH.
     pub stack: Option<crate::status_all::StackFacts>,
-    /// `--all`: nesting depth below the root (the root is 0); 0 without `--all`.
+    /// `status PATH`: nesting depth below the repository that was found or named (that one is 0); 0 without a PATH.
     pub depth: usize,
+    /// `status PATH`: the key of the repository, its path relative to the current directory (the absolute path outside
+    /// it); empty without a PATH, where the name is the key. The name is only display.
+    pub key: String,
+}
+
+impl RepoStatus {
+    /// What text and notices call the repository: the key with a PATH, else the name.
+    pub fn label(&self) -> &str {
+        if self.key.is_empty() {
+            &self.name
+        } else {
+            &self.key
+        }
+    }
 }
 
 /// Remote-tracking branches of `origin` (`refs/remotes/origin/*` without `HEAD`), as of the last fetch.
@@ -426,6 +422,7 @@ fn blank(name: String, path: String) -> RepoStatus {
         fetch: FetchFact::not_run(),
         stack: None,
         depth: 0,
+        key: String::new(),
     }
 }
 
@@ -450,7 +447,7 @@ pub fn collect_local(
     let mut run = || -> Result<()> {
         let repo = repo::open(&r.path)?;
         s.facts = head_facts(&repo)?;
-        s.changes = changes_opts(&repo, true, opts.all)?;
+        s.changes = changes(&repo, true)?;
         s.stash = stash_count(&repo);
         s.branches_local = repo::local_branches(&repo).ok().map(|b| b.len());
         s.branches_remote = remote_branch_count(&repo).ok();
@@ -462,7 +459,7 @@ pub fn collect_local(
             s.worktree_list = wts.as_ref().map(worktree_list);
         }
         s.op = operation(&repo);
-        if let (true, Some(b), Some(_)) = (opts.all, &s.facts.branch, &s.facts.head) {
+        if let (true, Some(b), Some(_)) = (opts.stack, &s.facts.branch, &s.facts.head) {
             s.stack = Some(crate::status_all::stack_of(&repo, b));
         }
         s.slug = repo::slug(&repo);
@@ -832,7 +829,7 @@ pub fn collect_notices(gh: &GithubState, extra: &[Notice], list: &[RepoStatus]) 
         })
         .collect();
     for s in list {
-        let name = esc(&s.name);
+        let name = esc(s.label());
         let one = |code, source, message: String| Notice {
             code,
             source,
