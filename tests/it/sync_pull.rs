@@ -631,9 +631,9 @@ fn a_changed_submodule_is_no_local_change_for_the_gate() {
         &["commit", "-q", "--allow-empty", "-m", "moved"],
     );
     assert!(d.w.git(&d.ws, &["status", "--porcelain"]).contains("M sub"));
-    // the plan (it does not fetch) says the same as the run
+    // the offline plan (it does not fetch) says the same as the run; the first gate decides it
     d.w.git(&d.ws, &["fetch", "-q", "origin"]);
-    let (_, v, _) = d.w.stw(&d.ws, &["--rebase", "--plan"]);
+    let (_, v, _) = d.w.stw(&d.ws, &["--rebase", "--plan", "--offline"]);
     assert_eq!(repo(&v, "ws")["result"], "rebase", "{v}");
     let (code, v, err) = d.w.stw(&d.ws, &["--rebase"]);
     assert_eq!(code, 0, "{v} {err}");
