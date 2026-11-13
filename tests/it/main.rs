@@ -26,6 +26,7 @@ mod lint_pr_cmd;
 mod nested;
 mod network;
 mod no_binaries;
+mod oplog_hooks;
 mod oplog_read;
 mod oplog_undo;
 mod oplog_write;
