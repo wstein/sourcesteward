@@ -3208,18 +3208,18 @@ m OK12 'oplog undo --keep: the gitlink check is not run' src/oplog/undo_plan.rs 
   '    if req.keep && p.refused == 0 {' '    if false && req.keep && p.refused == 0 {' \
   oplog_undo_keep a_gitlink_that_differs_between_the_tips_refuses
 m OK13 'oplog undo --keep: an added or removed gitlink is not seen' src/oplog/undo_plan.rs \
-  '                } if entry_mode.is_commit() => Some(location.clone()),' '                } if false && entry_mode.is_commit() => Some(location.clone()),' \
+  '        } if entry_mode.is_commit() => Some(location.clone()),' '        } if false && entry_mode.is_commit() => Some(location.clone()),' \
   oplog_undo_keep a_gitlink_that_differs_between_the_tips_refuses
 m OK14 'oplog undo --keep: a gitlink that points elsewhere is not seen' src/oplog/undo_plan.rs \
-  '} if previous_entry_mode.is_commit() || entry_mode.is_commit() => {' '} if false && (previous_entry_mode.is_commit() || entry_mode.is_commit()) => {' \
+  '} if previous_entry_mode.is_commit() || entry_mode.is_commit() => Some(location.clone()),' '} if false && (previous_entry_mode.is_commit() || entry_mode.is_commit()) => Some(location.clone()),' \
   oplog_undo_keep a_gitlink_that_points_elsewhere_refuses
-m OK15 'oplog undo --keep: a git that cannot be asked does not refuse' src/oplog/undo.rs \
+m OK15 'oplog undo --keep: a git that cannot be asked does not refuse' src/oplog/undo_plan.rs \
   '.map_err(|e| format!("--keep needs a usable git: {e}"))?;' '.map_err(|e| format!("--keep needs a usable git: {e}")).unwrap_or(crate::git_runner::Version(9, 0, 0));' \
   oplog_undo_keep a_git_whose_version_cannot_be_read_refuses_before_any_ref_is_written
-m OK16 'oplog undo --keep: an old git does not refuse before the backup' src/oplog/undo.rs \
+m OK16 'oplog undo --keep: an old git does not refuse before the backup' src/oplog/undo_plan.rs \
   '    if found < needed {' '    if false && found < needed {' \
   oplog_undo_keep a_git_older_than_reset_keep_needs_refuses_before_any_ref_is_written
-m OK17 'oplog undo --keep: a 64-digit target is cut to 40 digits' src/oplog/undo.rs \
+m OK17 'oplog undo --keep: a 64-digit target is cut to 40 digits' src/oplog/undo_plan.rs \
   'let target = Hex40::parse(to).ok_or_else(' 'let target = Hex40::parse(&to[..40.min(to.len())]).ok_or_else(' \
   oplog_undo_keep a_target_that_is_not_40_hex_is_refused_before_git_is_asked
 m OK18 'oplog undo --keep: the branch value is not read again before git runs' src/oplog/undo.rs \
@@ -3229,8 +3229,8 @@ m OK19 'oplog undo --keep: HEAD is not read again before git runs' src/oplog/und
   '    if !head_on_it {' '    if false && !head_on_it {' \
   oplog_undo_keep a_head_that_leaves_the_branch_after_the_checks_is_not_reset
 m OK20 'oplog undo --keep: a failed git is not an error' src/oplog/undo.rs \
-  '        .map_err(|e| stays(format!("git reset --keep failed: {}", esc(&e.to_string()))))?;' '        .ok();' \
-  oplog_undo_keep an_untracked_file_in_the_way_makes_git_refuse_and_the_branch_stays
+  'if let Err(e) = git_runner::shared().run(&workdir, Op::ResetKeep { target }) {' 'if let Err(e) = git_runner::shared().run(&workdir, Op::ResetKeep { target }).map(|_| ()).or(Ok::<(), GitError>(())) {' \
+  oplog_undo_keep a_filter_driver_in_the_config_stops_the_runner_and_the_branch_stays
 m OK21 'oplog undo --keep: the op log line of the branch has no new value' src/oplog/undo.rs \
   '            new: Some(to),
         },
@@ -3308,8 +3308,60 @@ m OK32 'oplog undo --keep: the plain undo JSON says keep true' src/oplog/undo.rs
         keep: true,' \
   oplog_undo_keep a_plain_undo_json_says_keep_false
 m OK33 'oplog undo --keep: git resets to the current value instead of the target' src/oplog/undo.rs \
-  '        .run(&workdir, Op::ResetKeep { target })' '        .run(&workdir, Op::ResetKeep { target: Hex40::parse(&expect.to_string()).unwrap() })' \
+  'git_runner::shared().run(&workdir, Op::ResetKeep { target })' 'git_runner::shared().run(&workdir, Op::ResetKeep { target: Hex40::parse(&expect.to_string()).unwrap() })' \
   oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
+
+m OK34 'oplog undo --keep: a file in the way of an added path is not seen' src/oplog/undo_plan.rs \
+  'if !entry_mode.is_tree() && in_the_way(workdir, location.as_ref(), &deleted) {' 'if false && in_the_way(workdir, location.as_ref(), &deleted) {' \
+  oplog_undo_keep an_untracked_file_in_the_way_refuses_before_the_backup
+m OK35 'oplog undo --keep: a file where a directory is needed is not seen' src/oplog/undo_plan.rs \
+  '.is_ok_and(|m| !m.is_dir() && !deleted.contains(dir))' '.is_ok_and(|_| false)' \
+  oplog_undo_keep a_file_where_the_target_needs_a_directory_refuses
+m OK36 'oplog undo --keep: an existing entry at the added path is not seen' src/oplog/undo_plan.rs \
+  'if at(rel).symlink_metadata().is_ok() {' 'if false {' \
+  oplog_undo_keep an_ignored_file_in_the_way_refuses_before_the_backup
+m OK37 'oplog undo --keep: a file the target deletes itself counts as in the way' src/oplog/undo_plan.rs \
+  '!m.is_dir() && !deleted.contains(dir)' '!m.is_dir()' \
+  oplog_undo_keep a_tracked_file_that_the_target_turns_into_a_directory_is_not_in_the_way
+m OK38 'oplog undo --keep: a new directory is looked at instead of its entries' src/oplog/undo_plan.rs \
+  'if !entry_mode.is_tree() && in_the_way(workdir, location.as_ref(), &deleted) {' 'if entry_mode.is_tree() && in_the_way(workdir, location.as_ref(), &deleted) {' \
+  oplog_undo_keep an_ignored_file_in_the_way_refuses_before_the_backup
+m OK39 'oplog undo --keep: intent-to-add entries are not counted' src/oplog/undo_plan.rs \
+  'count(Flags::INTENT_TO_ADD),' 'count(Flags::empty()),' \
+  oplog_undo_keep an_intent_to_add_entry_refuses
+m OK40 'oplog undo --keep: assume-unchanged entries are not counted' src/oplog/undo_plan.rs \
+  'count(Flags::ASSUME_VALID | Flags::SKIP_WORKTREE),' 'count(Flags::SKIP_WORKTREE),' \
+  oplog_undo_keep assume_unchanged_and_skip_worktree_entries_refuse
+m OK41 'oplog undo --keep: skip-worktree entries are not counted' src/oplog/undo_plan.rs \
+  'count(Flags::ASSUME_VALID | Flags::SKIP_WORKTREE),' 'count(Flags::ASSUME_VALID),' \
+  oplog_undo_keep assume_unchanged_and_skip_worktree_entries_refuse
+m OK42 'oplog undo --keep: a repository without a work tree is not named' src/oplog/undo_plan.rs \
+  '    if repo.workdir().is_none() {' '    if false && repo.workdir().is_none() {' \
+  oplog_undo_keep a_repository_without_a_work_tree_says_so
+m OK43 'oplog undo-plan --keep: the git version is not checked in the plan' src/oplog/undo_plan.rs \
+  'if let Err(why) = keep_git_check(&alt.to_string()) {' 'if false && keep_git_check(&alt.to_string()).is_err() {' \
+  oplog_undo_keep undo_plan_keep_checks_the_git_version_like_undo
+m OK44 'oplog undo --keep: git 2.36.0 itself is refused' src/oplog/undo_plan.rs \
+  'if found < needed {' 'if found <= needed {' \
+  oplog_undo_keep git_2_36_0_is_enough_and_2_35_9_is_not
+m OK45 'oplog undo --keep: a git killed by a signal is reported as not having changed anything' src/oplog/undo.rs \
+  '| GitError::Exit { code: None, .. } => Error::repository(format!(' '| GitError::Exit { code: Some(255), .. } => Error::repository(format!(' \
+  oplog_undo_keep a_git_that_dies_during_the_reset_is_reported_as_possibly_changed
+m OK46 'oplog undo --keep: the path of a registered worktree is not made canonical' src/oplog/undo_plan.rs \
+  'std::fs::canonicalize(dir).ok() == here {' 'Some(dir.clone()) == here {' \
+  oplog_undo_keep a_worktree_registered_through_a_symbolic_link_is_still_this_one
+m OK47 'oplog undo --keep: the path of this worktree is not made canonical' src/oplog/undo_plan.rs \
+  'let here = repo.workdir().and_then(|d| std::fs::canonicalize(d).ok());' 'let here = repo.workdir().map(|d| d.to_path_buf());' \
+  oplog_undo_keep a_worktree_opened_through_a_symbolic_link_is_still_this_one
+m OK48 'oplog undo --keep: a file that becomes a gitlink is not seen' src/oplog/undo_plan.rs \
+  '} if previous_entry_mode.is_commit() || entry_mode.is_commit() => Some(location.clone()),' '} if previous_entry_mode.is_commit() => Some(location.clone()),' \
+  oplog_undo_keep a_file_that_becomes_a_gitlink_and_back_refuses
+m OK49 'oplog undo --keep: a gitlink that becomes a file is not seen' src/oplog/undo_plan.rs \
+  '} if previous_entry_mode.is_commit() || entry_mode.is_commit() => Some(location.clone()),' '} if entry_mode.is_commit() => Some(location.clone()),' \
+  oplog_undo_keep a_file_that_becomes_a_gitlink_and_back_refuses
+m OK50 'oplog undo --keep: changed submodule contents count as dirty' src/oplog/undo_plan.rs \
+  '    match crate::status::changes_opts(repo, false, true) {' '    match crate::status::changes_opts(repo, false, false) {' \
+  oplog_undo_keep changed_submodule_contents_do_not_count_as_dirty
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
