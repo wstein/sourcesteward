@@ -13,6 +13,7 @@ use super::store;
 use super::timeline::SCHEMA_VERSION;
 use super::Ctx;
 use crate::error::{Error, Result};
+use crate::git_runner::{self, Hex40, Op};
 use crate::github::reads::escape_untrusted;
 
 /// A word for a POSIX shell: unchanged when it holds only characters that no shell treats specially, else in single
@@ -182,6 +183,13 @@ pub fn plan(ctx: &Ctx, req: &Request) -> Result<Plan> {
 /// stw does not rely on that.
 fn keep_checks(p: &mut Plan, repo: &gix::Repository, here_holds: bool, other_holds: bool) {
     let reference = p.reference.clone();
+    if repo.workdir().is_none() {
+        p.push(
+            "refused",
+            "this repository has no work tree: --keep needs a checked-out branch".into(),
+        );
+        return;
+    }
     if !here_holds {
         if !other_holds {
             let why = match repo.head_name() {
@@ -210,6 +218,7 @@ fn keep_checks(p: &mut Plan, repo: &gix::Repository, here_holds: bool, other_hol
             "core.sparseCheckout is set: --keep does not handle a sparse checkout".into(),
         );
     }
+    keep_index_flags(p, repo);
     match crate::status::changes_opts(repo, false, true) {
         Err(e) => p.push(
             "refused",
@@ -260,10 +269,71 @@ fn keep_checks(p: &mut Plan, repo: &gix::Repository, here_holds: bool, other_hol
     }
 }
 
-/// `git reset --keep` leaves submodule checkouts alone, so a target whose tree has another gitlink than the current one
-/// would leave a submodule on the wrong commit: refused. Trees are compared by path, no rename tracking.
-fn keep_gitlink_check(p: &mut Plan, repo: &gix::Repository, cur: ObjectId, alt: ObjectId) {
+/// Index entries that status does not show as a change but that `git reset --keep` handles in its own way: intent-to-add
+/// (`git add -N`, the marker would be lost), assume-unchanged and skip-worktree (a local edit is invisible to status).
+fn keep_index_flags(p: &mut Plan, repo: &gix::Repository) {
+    use gix::index::entry::Flags;
+    let Ok(index) = repo.index_or_empty() else {
+        return;
+    };
+    let count = |f: Flags| {
+        index
+            .entries()
+            .iter()
+            .filter(|e| e.flags.intersects(f))
+            .count()
+    };
+    let (ita, hidden) = (
+        count(Flags::INTENT_TO_ADD),
+        count(Flags::ASSUME_VALID | Flags::SKIP_WORKTREE),
+    );
+    if ita > 0 {
+        p.push(
+            "refused",
+            format!("{ita} intent-to-add entr(ies) (`git add -N`): --keep would lose the marker; add or remove them first"),
+        );
+    }
+    if hidden > 0 {
+        p.push(
+            "refused",
+            format!("{hidden} assume-unchanged or skip-worktree entr(ies): a local change there is invisible to the status check; --keep does not handle them"),
+        );
+    }
+}
+
+/// The target of `git reset --keep` as the runner takes it (40 hex digits), and a git that can run and knows `reset
+/// --keep` (2.36): the reasons a `--keep` undo is refused before any ref is written. Starts `git --version` (once).
+pub fn keep_git_check(to: &str) -> std::result::Result<Hex40, String> {
+    let target = Hex40::parse(to).ok_or_else(|| {
+        format!(
+            "--keep supports 40-digit object ids only (the runner of git takes no other); the target is {}",
+            esc(to)
+        )
+    })?;
+    let found = git_runner::shared()
+        .version()
+        .map_err(|e| format!("--keep needs a usable git: {e}"))?;
+    let needed = Op::ResetKeep { target }.min_version();
+    if found < needed {
+        return Err(format!(
+            "--keep needs git {} or newer; the installed git is {found}",
+            needed.short()
+        ));
+    }
+    Ok(target)
+}
+
+/// What `git reset --keep` would do to the tree, looked at before anything is written: `git` itself, the gitlinks and the
+/// paths the target adds. `reset --keep` leaves submodule checkouts alone, so a target whose tree has another gitlink than
+/// the current one would leave a submodule on the wrong commit; and a path that the target adds is overwritten without
+/// a question when an untracked or an ignored file (or a file where a directory is needed) is there. Trees are compared
+/// by path, no rename tracking; the work tree is clean, so what is there and not in the current tree is untracked or ignored.
+fn keep_target_checks(p: &mut Plan, repo: &gix::Repository, cur: ObjectId, alt: ObjectId) {
     use gix::diff::tree_with_rewrites::Change;
+    if let Err(why) = keep_git_check(&alt.to_string()) {
+        p.push("refused", why);
+        return;
+    }
     let trees = (|| -> std::result::Result<_, String> {
         let tree_of = |id: ObjectId| {
             repo.find_commit(id)
@@ -276,45 +346,110 @@ fn keep_gitlink_check(p: &mut Plan, repo: &gix::Repository, cur: ObjectId, alt: 
         repo.diff_tree_to_tree(&a, &b, options)
             .map_err(|e| e.to_string())
     })();
-    match trees {
-        Err(e) => p.push(
+    let changes = match trees {
+        Err(e) => {
+            p.push(
+                "refused",
+                format!("the trees of the two values cannot be compared ({}): --keep needs to know that no gitlink differs and nothing is in the way", esc(&e)),
+            );
+            return;
+        }
+        Ok(c) => c,
+    };
+    let hit = changes.iter().find_map(|c| match c {
+        Change::Addition {
+            location,
+            entry_mode,
+            ..
+        }
+        | Change::Deletion {
+            location,
+            entry_mode,
+            ..
+        } if entry_mode.is_commit() => Some(location.clone()),
+        Change::Modification {
+            location,
+            previous_entry_mode,
+            entry_mode,
+            ..
+        } if previous_entry_mode.is_commit() || entry_mode.is_commit() => Some(location.clone()),
+        _ => None,
+    });
+    if let Some(path) = hit {
+        p.push(
             "refused",
-            format!("the trees of the two values cannot be compared ({}): --keep needs to know that no gitlink differs", esc(&e)),
-        ),
-        Ok(changes) => {
-            let hit = changes.iter().find_map(|c| match c {
-                Change::Addition {
-                    location,
-                    entry_mode,
-                    ..
-                }
-                | Change::Deletion {
-                    location,
-                    entry_mode,
-                    ..
-                } if entry_mode.is_commit() => Some(location.clone()),
-                Change::Modification {
-                    location,
-                    previous_entry_mode,
-                    entry_mode,
-                    ..
-                } if previous_entry_mode.is_commit() || entry_mode.is_commit() => {
-                    Some(location.clone())
-                }
-                _ => None,
-            });
-            match hit {
-                Some(path) => p.push(
-                    "refused",
-                    format!(
-                        "the two values differ in the gitlink {}: `git reset --keep` leaves submodule checkouts as they are, so one would stay on the wrong commit",
-                        esc(&path.to_string())
-                    ),
-                ),
-                None => p.push("ok", "no gitlink differs between the two values".into()),
+            format!(
+                "the two values differ in the gitlink {}: `git reset --keep` leaves submodule checkouts as they are, so one would stay on the wrong commit",
+                esc(&path.to_string())
+            ),
+        );
+        return;
+    }
+    p.push("ok", "no gitlink differs between the two values".into());
+    let Some(workdir) = repo.workdir() else {
+        return;
+    };
+    let deleted: std::collections::BTreeSet<Vec<u8>> = changes
+        .iter()
+        .filter_map(|c| match c {
+            Change::Deletion { location, .. } => Some(location.to_vec()),
+            _ => None,
+        })
+        .collect();
+    let mut blocked: Vec<String> = Vec::new();
+    for c in &changes {
+        // a directory is reported too, and its entries one by one: only the entries are looked at
+        if let Change::Addition {
+            location,
+            entry_mode,
+            ..
+        } = c
+        {
+            if !entry_mode.is_tree() && in_the_way(workdir, location.as_ref(), &deleted) {
+                blocked.push(esc(&location.to_string()));
             }
         }
     }
+    if blocked.is_empty() {
+        p.push(
+            "ok",
+            "no untracked or ignored file is in the way of a path the target adds".into(),
+        );
+    } else {
+        let more = blocked.len().saturating_sub(3);
+        let mut shown = blocked.into_iter().take(3).collect::<Vec<_>>().join(", ");
+        if more > 0 {
+            shown.push_str(&format!(" and {more} more"));
+        }
+        p.push(
+            "refused",
+            format!("the target adds {shown}, but an untracked or ignored file or directory is there (or in the way of its directory): `git reset --keep` would overwrite it; move it away first"),
+        );
+    }
+}
+
+/// An entry exists in the work tree where the target adds `location`, or a file stands where one of its directories
+/// is needed (a file that the target itself deletes does not count).
+fn in_the_way(
+    workdir: &std::path::Path,
+    location: &gix::bstr::BStr,
+    deleted: &std::collections::BTreeSet<Vec<u8>>,
+) -> bool {
+    use std::os::unix::ffi::OsStrExt;
+    let rel: &[u8] = location.as_ref();
+    let at = |bytes: &[u8]| workdir.join(std::ffi::OsStr::from_bytes(bytes));
+    if at(rel).symlink_metadata().is_ok() {
+        return true;
+    }
+    rel.iter()
+        .enumerate()
+        .filter(|(_, b)| **b == b'/')
+        .any(|(i, _)| {
+            let dir = &rel[..i];
+            at(dir)
+                .symlink_metadata()
+                .is_ok_and(|m| !m.is_dir() && !deleted.contains(dir))
+        })
 }
 
 fn finish(ctx: &Ctx, req: &Request, mut p: Plan, cur: ObjectId) -> Result<Plan> {
@@ -489,7 +624,7 @@ fn finish(ctx: &Ctx, req: &Request, mut p: Plan, cur: ObjectId) -> Result<Plan> 
     };
     p.push("ok", "old value exists as a commit object".into());
     if req.keep && p.refused == 0 {
-        keep_gitlink_check(&mut p, repo, cur, alt_id);
+        keep_target_checks(&mut p, repo, cur, alt_id);
     }
     let base = repo
         .merge_base(alt_id, cur)

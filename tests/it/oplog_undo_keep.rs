@@ -472,8 +472,8 @@ fn a_gitlink_that_differs_between_the_tips_refuses() {
     assert_eq!(fx.read("f").as_deref(), Some("a\n"));
 }
 
-#[test]
-fn an_untracked_file_in_the_way_makes_git_refuse_and_the_branch_stays() {
+/// `work` at c (g removed again), reflog a -> b (adds g) -> c.
+fn g_fx() -> (Fx, [ObjectId; 3]) {
     let fx = Fx::new();
     let a = fx.commit(None, &[("f", Some("a\n"))], "first");
     let b = fx.commit(Some(a), &[("g", Some("g\n"))], "add g");
@@ -490,19 +490,67 @@ fn an_untracked_file_in_the_way_makes_git_refuse_and_the_branch_stays() {
         ],
     );
     fx.checkout_head();
+    (fx, [a, b, c])
+}
+
+#[test]
+fn an_untracked_file_in_the_way_refuses_before_the_backup() {
+    let (fx, [_, b, c]) = g_fx();
     fx.write_plain("g", "untracked and precious\n");
+    let before_g = before(&fx);
     let r = run(&fx, &keep_args(&b.to_string(), &c.to_string()));
-    assert_eq!(r.code, 1, "{}{}", r.text, r.err);
-    assert!(
-        r.err.contains("git") && r.err.contains("not changed"),
-        "{}{}",
-        r.text,
-        r.err
-    );
-    assert_eq!(fx.tip("work"), c, "the branch stays");
+    refused_and_untouched(&fx, &r, &["untracked or ignored", "g"], &before_g);
     assert_eq!(fx.read("g").as_deref(), Some("untracked and precious\n"));
-    // the backup of the run stays, as after a lost compare-and-swap
-    assert_eq!(refname_value(&fx, "refs/stw/backup/1/1"), Some(c));
+    let p = run(
+        &fx,
+        &["undo-plan", "work", "--to", &b.to_string(), "--keep"],
+    );
+    assert_eq!(p.code, 1, "{}", p.text);
+}
+
+#[test]
+fn an_ignored_file_in_the_way_refuses_before_the_backup() {
+    let (fx, [_, b, c]) = g_fx();
+    fx.write_plain(".git/info/exclude", "g\n");
+    fx.write_plain("g", "PRECIOUS\n");
+    let before_g = before(&fx);
+    let r = run(&fx, &keep_args(&b.to_string(), &c.to_string()));
+    refused_and_untouched(&fx, &r, &["untracked or ignored", "g"], &before_g);
+    assert_eq!(fx.read("g").as_deref(), Some("PRECIOUS\n"));
+}
+
+#[test]
+fn a_file_where_the_target_needs_a_directory_refuses() {
+    let fx = Fx::new();
+    let a = fx.commit(None, &[("f", Some("a\n"))], "first");
+    let b = fx.commit(Some(a), &[("d/x", Some("x\n"))], "add d/x");
+    let c = fx.commit(Some(b), &[("d/x", None)], "remove d/x");
+    fx.branch("work", c);
+    fx.set_head("work");
+    set_reflog(
+        &fx,
+        "work",
+        &[
+            (Z.to_string(), a, "branch: Created"),
+            (a.to_string(), b, "commit: add"),
+            (b.to_string(), c, "commit: remove"),
+        ],
+    );
+    fx.checkout_head();
+    fx.write_plain("d", "a file named d\n");
+    let before_d = before(&fx);
+    let r = run(&fx, &keep_args(&b.to_string(), &c.to_string()));
+    refused_and_untouched(&fx, &r, &["untracked or ignored", "d/x"], &before_d);
+}
+
+#[test]
+fn an_untracked_file_that_is_not_in_the_way_stays_when_the_target_adds_another_path() {
+    let (fx, [_, b, c]) = g_fx();
+    fx.write_plain("other.txt", "mine\n");
+    let r = run(&fx, &keep_args(&b.to_string(), &c.to_string()));
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert_eq!(fx.read("g").as_deref(), Some("g\n"));
+    assert_eq!(fx.read("other.txt").as_deref(), Some("mine\n"));
 }
 
 #[test]
@@ -609,6 +657,277 @@ fn a_head_that_leaves_the_branch_after_the_checks_is_not_reset() {
 
 #[test]
 fn a_target_that_is_not_40_hex_is_refused_before_git_is_asked() {
-    let e = stw::oplog::undo::keep_prerequisites(&"a".repeat(64)).unwrap_err();
+    let e = stw::oplog::undo_plan::keep_git_check(&"a".repeat(64)).unwrap_err();
     assert!(e.contains("40-digit"), "{e}");
+}
+
+// ---- review findings: version in the plan, index flags, bare repository, git that dies, test gaps ---------------------
+
+#[test]
+fn undo_plan_keep_checks_the_git_version_like_undo() {
+    let (fx, _) = keep_fx();
+    let old = fake_git("git version 2.30.0");
+    let p = run_in(
+        &fx.path,
+        &old.path().to_string_lossy(),
+        &["undo-plan", "work", "--keep"],
+    );
+    assert_eq!(p.code, 1, "{}{}", p.text, p.err);
+    assert!(
+        p.text.contains("2.36") && p.text.contains("2.30.0"),
+        "{}",
+        p.text
+    );
+    assert!(!p.text.contains("all checks ok"), "{}", p.text);
+}
+
+#[test]
+fn git_2_36_0_is_enough_and_2_35_9_is_not() {
+    let (fx, _) = keep_fx();
+    let ok = fake_git("git version 2.36.0");
+    let p = run_in(
+        &fx.path,
+        &ok.path().to_string_lossy(),
+        &["undo-plan", "work", "--keep"],
+    );
+    assert_eq!(p.code, 0, "{}{}", p.text, p.err);
+    let no = fake_git("git version 2.35.9");
+    let p = run_in(
+        &fx.path,
+        &no.path().to_string_lossy(),
+        &["undo-plan", "work", "--keep"],
+    );
+    assert_eq!(p.code, 1, "{}{}", p.text, p.err);
+}
+
+#[test]
+fn an_intent_to_add_entry_refuses() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    fx.write_plain("h", "new\n");
+    let (code, out) = git(&fx.path, &["add", "-N", "h"]);
+    assert_eq!(code, 0, "{out}");
+    let b = before(&fx);
+    let r = run(&fx, &keep_args(&c2.to_string(), &c3.to_string()));
+    refused_and_untouched(&fx, &r, &["intent-to-add"], &b);
+}
+
+#[test]
+fn assume_unchanged_and_skip_worktree_entries_refuse() {
+    for flag in ["--assume-unchanged", "--skip-worktree"] {
+        let (fx, [_, c2, c3]) = keep_fx();
+        let (code, out) = git(&fx.path, &["update-index", flag, "f"]);
+        assert_eq!(code, 0, "{out}");
+        let b = before(&fx);
+        let r = run(&fx, &keep_args(&c2.to_string(), &c3.to_string()));
+        refused_and_untouched(&fx, &r, &["assume-unchanged"], &b);
+    }
+}
+
+#[test]
+fn a_repository_without_a_work_tree_says_so() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    let mut cfg = std::fs::read_to_string(fx.path.join(".git/config")).unwrap();
+    cfg.push_str("[core]\n\tbare = true\n");
+    std::fs::write(fx.path.join(".git/config"), cfg).unwrap();
+    let ctx = stw::oplog::Ctx::open(&fx.path.join(".git")).unwrap();
+    let plan = stw::oplog::undo_plan::plan(
+        &ctx,
+        &stw::oplog::undo_plan::Request {
+            reference: "work".into(),
+            to: Some(c2.to_string()),
+            steps: None,
+            keep: true,
+        },
+    )
+    .unwrap();
+    let text = plan.render_human();
+    assert!(text.contains("no work tree"), "{text}");
+    assert!(!text.contains("HEAD is on"), "{text}");
+    assert!(!plan.executable());
+    let _ = c3;
+}
+
+#[test]
+fn a_git_that_dies_during_the_reset_is_reported_as_possibly_changed() {
+    use std::os::unix::fs::PermissionsExt;
+    let (fx, [_, c2, c3]) = keep_fx();
+    let d = scratch();
+    let p = d.path().join("git");
+    std::fs::write(
+        &p,
+        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'git version 2.47.0'; else kill -9 $$; fi\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let r = run_in(
+        &fx.path,
+        &d.path().to_string_lossy(),
+        &keep_args(&c2.to_string(), &c3.to_string()),
+    );
+    assert_eq!(r.code, 1, "{}{}", r.text, r.err);
+    assert!(
+        r.err.contains("may be changed in part"),
+        "{}{}",
+        r.text,
+        r.err
+    );
+    assert!(!r.err.contains("was not changed"), "{}", r.err);
+}
+
+fn gitlink_chain(first_is_file: bool) -> (Fx, [ObjectId; 3]) {
+    // a: `sub` is a file (or a gitlink), b: the other kind, c: only f changes
+    let fx = Fx::new();
+    let a0 = fx.commit(None, &[("f", Some("a\n"))], "first");
+    let (a, b) = if first_is_file {
+        let a = fx.commit(Some(a0), &[("sub", Some("file\n"))], "sub file");
+        let b = fx.commit_gitlink(a0, "sub", a0, "sub gitlink");
+        (a, b)
+    } else {
+        let a = fx.commit_gitlink(a0, "sub", a0, "sub gitlink");
+        let b = fx.commit(Some(a0), &[("sub", Some("file\n"))], "sub file");
+        (a, b)
+    };
+    let c = fx.commit(Some(b), &[("f", Some("c\n"))], "third");
+    fx.branch("work", c);
+    fx.set_head("work");
+    set_reflog(
+        &fx,
+        "work",
+        &[
+            (Z.to_string(), a, "branch: Created"),
+            (a.to_string(), b, "commit: sub changes kind"),
+            (b.to_string(), c, "commit: third"),
+        ],
+    );
+    (fx, [a, b, c])
+}
+
+#[test]
+fn a_file_that_becomes_a_gitlink_and_back_refuses() {
+    for first_is_file in [true, false] {
+        let (fx, [_, b, c]) = gitlink_chain(first_is_file);
+        // c -> a: the type of `sub` differs between c (kind of b) and a
+        let a = {
+            let log = std::fs::read_to_string(fx.path.join(".git/logs/refs/heads/work")).unwrap();
+            log.lines()
+                .nth(1)
+                .unwrap()
+                .split(' ')
+                .next()
+                .unwrap()
+                .to_string()
+        };
+        fx.checkout_head();
+        let bf = before(&fx);
+        let r = run(&fx, &keep_args(&a, &c.to_string()));
+        refused_and_untouched(&fx, &r, &["gitlink", "sub"], &bf);
+        let _ = b;
+    }
+}
+
+fn linked_via_symlink(registered_through_link: bool) {
+    let (fx, [_, c2, c3]) = undo_fx();
+    fx.checkout_head();
+    let outer = scratch();
+    let real = outer.path().join("real");
+    std::fs::create_dir_all(&real).unwrap();
+    let link = outer.path().join("link");
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let wt_reg = if registered_through_link {
+        link.join("wt")
+    } else {
+        real.join("wt")
+    };
+    let wt = real_worktree_at(&fx, "w5", "work", &wt_reg);
+    let open_at = if registered_through_link {
+        real.join("wt")
+    } else {
+        link.join("wt")
+    };
+    let _ = wt;
+    let ctx = stw::oplog::Ctx::open(&open_at).unwrap();
+    let out = stw::oplog::undo::undo_with(&ctx, &lib_request(c2, c3), &mut || {}).unwrap();
+    assert!(
+        matches!(out, stw::oplog::undo::Outcome::Done(_)),
+        "a worktree reached through a symbolic link is still this worktree"
+    );
+}
+
+#[test]
+fn a_worktree_registered_through_a_symbolic_link_is_still_this_one() {
+    linked_via_symlink(true);
+}
+
+#[test]
+fn a_worktree_opened_through_a_symbolic_link_is_still_this_one() {
+    linked_via_symlink(false);
+}
+
+#[test]
+fn changed_submodule_contents_do_not_count_as_dirty() {
+    let fx = Fx::new();
+    let a = fx.commit(None, &[("f", Some("a\n"))], "first");
+    let x = fx.commit_gitlink(a, "sub", a, "sub");
+    let c = fx.commit(Some(x), &[("f", Some("c\n"))], "third");
+    fx.branch("work", c);
+    fx.set_head("work");
+    set_reflog(
+        &fx,
+        "work",
+        &[
+            (Z.to_string(), a, "branch: Created"),
+            (a.to_string(), x, "commit: sub"),
+            (x.to_string(), c, "commit: third"),
+        ],
+    );
+    fx.checkout_head();
+    // a real repository in `sub` whose HEAD is not the gitlink commit
+    let sub = fx.path.join("sub");
+    std::fs::create_dir_all(&sub).unwrap();
+    let (code, out) = git(&sub, &["init", "-q", "-b", "m"]);
+    assert_eq!(code, 0, "{out}");
+    fx.write_plain(
+        "sub/.git/config",
+        "[core]\n\trepositoryformatversion = 0\n[user]\n\tname = T\n\temail = t@example.com\n",
+    );
+    let (code, out) = git(&sub, &["commit", "-q", "--allow-empty", "-m", "own"]);
+    assert_eq!(code, 0, "{out}");
+    let r = run(&fx, &keep_args(&x.to_string(), &c.to_string()));
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert_eq!(fx.tip("work"), x);
+}
+
+#[test]
+fn a_tracked_file_that_the_target_turns_into_a_directory_is_not_in_the_way() {
+    let fx = Fx::new();
+    let a = fx.commit(
+        None,
+        &[("f", Some("a\n")), ("d", Some("file\n"))],
+        "d is a file",
+    );
+    let b = fx.commit(
+        Some(a),
+        &[("d", None), ("d/x", Some("x\n"))],
+        "d is a directory",
+    );
+    let c = fx.commit(
+        Some(b),
+        &[("d/x", None), ("d", Some("file again\n"))],
+        "d is a file again",
+    );
+    fx.branch("work", c);
+    fx.set_head("work");
+    set_reflog(
+        &fx,
+        "work",
+        &[
+            (Z.to_string(), a, "branch: Created"),
+            (a.to_string(), b, "commit: dir"),
+            (b.to_string(), c, "commit: file"),
+        ],
+    );
+    fx.checkout_head();
+    let r = run(&fx, &keep_args(&b.to_string(), &c.to_string()));
+    assert_eq!(r.code, 0, "{}{}", r.text, r.err);
+    assert_eq!(fx.read("d/x").as_deref(), Some("x\n"));
 }

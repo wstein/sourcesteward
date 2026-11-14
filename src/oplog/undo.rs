@@ -17,7 +17,7 @@ use super::undo_plan::{self, Plan};
 use super::write::{log_ref_update, RefUpdate};
 use super::Ctx;
 use crate::error::{Error, Result};
-use crate::git_runner::{self, Hex40, Op};
+use crate::git_runner::{self, GitError, Hex40, Op};
 use crate::github::reads::escape_untrusted;
 
 /// The counter ref: its blob holds `<run> <pid>-<nanos>`; a run number is never reused (spec 8, item 3).
@@ -354,7 +354,7 @@ pub fn undo_hooked(
 
     // `--keep` needs a usable git before anything is written (no backup ref for an undo that cannot start)
     let keep_target = if req.keep {
-        match keep_prerequisites(&to_s) {
+        match undo_plan::keep_git_check(&to_s) {
             Ok(t) => Some(t),
             Err(why) => {
                 plan.refused += 1;
@@ -466,28 +466,6 @@ pub fn undo_hooked(
     })))
 }
 
-/// The target of `git reset --keep` as the runner takes it (40 hex digits), and a git that can run: the reasons a
-/// `--keep` undo is refused before any ref is written.
-pub fn keep_prerequisites(to: &str) -> std::result::Result<Hex40, String> {
-    let target = Hex40::parse(to).ok_or_else(|| {
-        format!(
-            "--keep supports 40-digit object ids only (the runner of git takes no other); the target is {}",
-            esc(to)
-        )
-    })?;
-    let found = git_runner::shared()
-        .version()
-        .map_err(|e| format!("--keep needs a usable git: {e}"))?;
-    let needed = Op::ResetKeep { target }.min_version();
-    if found < needed {
-        return Err(format!(
-            "--keep needs git {} or newer; the installed git is {found}",
-            needed.short()
-        ));
-    }
-    Ok(target)
-}
-
 /// The `--keep` update: the branch, the index and the work tree are moved by `git reset --keep <old>` in the worktree of
 /// `repo`. The ref is read again right before (it must still hold `expect` and HEAD must still be on it: git's own update
 /// has no compare-and-swap, so a change inside git's own run is not caught). A failed git leaves the branch where it was;
@@ -528,9 +506,18 @@ fn keep_update(
             "HEAD is no longer on the branch; nothing was moved".into(),
         ));
     }
-    git_runner::shared()
-        .run(&workdir, Op::ResetKeep { target })
-        .map_err(|e| stays(format!("git reset --keep failed: {}", esc(&e.to_string()))))?;
+    if let Err(e) = git_runner::shared().run(&workdir, Op::ResetKeep { target }) {
+        let text = esc(&e.to_string());
+        // a git that was killed or stopped may have written part of the work tree; one that exited or never started did not
+        return Err(match e {
+            GitError::Timeout { .. }
+            | GitError::OutputLimit { .. }
+            | GitError::Exit { code: None, .. } => Error::repository(format!(
+                "git reset --keep did not finish ({text}): the branch and the work tree may be changed in part; look at `git status` and `git reflog`. The backup {backup_ref} stays ({expect})"
+            )),
+            _ => stays(format!("git reset --keep failed: {text}")),
+        });
+    }
     log_ref_update(
         repo,
         &RefUpdate {
@@ -591,7 +578,7 @@ impl Done {
             b.push_str(&format!("notice: {}\n", esc(n)));
         }
         if self.keep {
-            b.push_str("Result: done. The branch, the index and the work tree of this worktree were moved with `git reset --keep` (untracked files, other worktrees and pushes are not touched).\n");
+            b.push_str("Result: done. The branch, the index and the work tree of this worktree were moved with `git reset --keep` (untracked files that are not in the way, other worktrees and pushes are not touched).\n");
         } else {
             b.push_str("Result: done. Only the ref was moved (index, working tree, other worktrees and pushes are not touched).\n");
         }

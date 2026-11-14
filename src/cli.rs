@@ -476,7 +476,7 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
 
 const OPLOG_HELP: &str = "\
 New in stw (no Go counterpart); format and rules: docs/oplog-format.md. timeline, evolog and undo-plan are read-only:
-nothing is written. `undo` and `hooks install|uninstall` write (see below; `hooks` has its own help). Nothing here installs a hook except `hooks install --yes`. No git program runs, except `git reset --keep` of `undo --keep`. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
+nothing is written. `undo` and `hooks install|uninstall` write (see below; `hooks` has its own help). Nothing here installs a hook except `hooks install --yes`. No git program runs, except `git --version` of `undo-plan --keep` and `undo --keep` and the `git reset --keep` of `undo --keep`. The logs are `<git-common-dir>/stw/oplog/refs.log`, `rewrites.log` (written by
 the hooks of the spikes `stw-oplog-refhook` and `stw-oplog-hook`) and the reflogs of the repository. A log that is a
 symbolic link or not a regular file is not read. Reflogs are read for the files ref backend only.
 timeline  A reflog row and the log line of the same change are one entry (flag `covered`); a log line without a reflog
@@ -490,12 +490,13 @@ undo-plan REF is a branch name, a full ref name or HEAD. --to OLD (lower-case he
 undo      REF --to OLD --expect NEW [--keep] --yes: the same checks as undo-plan, then a backup ref refs/stw/backup/<run>/1
           on the current value, then the branch is set to OLD only if it still holds NEW (compare-and-swap). Local branches
           only; a branch that is checked out in a worktree is refused unless --keep is given. The newest 10 runs of backup
-          refs are kept. Reflog entries (message `stw oplog undo`) and refs.log lines are written. Without --keep only the
+          refs are kept. Reflog entries (message `stw oplog undo`; with --keep git writes its own) and refs.log lines are written. Without --keep only the
           ref moves: index, working tree, other worktrees and pushes are not covered. The result names the backup ref and
           the way back.
           --keep: the branch must be the one this worktree has checked out (not another worktree's, not a detached HEAD);
-          the index and the work tree must be clean (untracked files do not count), no merge or other operation may run and
-          no gitlink may differ between the two values. stw then runs `git reset --keep OLD` (the installed git, no hook,
+          the index and the work tree must be clean (untracked files do not count, but one that the target would overwrite
+          refuses, ignored ones too), no merge or other operation may run, no intent-to-add, assume-unchanged or
+          skip-worktree entry may exist and no gitlink may differ between the two values. stw then runs `git reset --keep OLD` (the installed git, no hook,
           no --hard); branch, index and work tree move together. A refusal writes nothing.
 
 Exit codes:
