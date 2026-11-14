@@ -287,7 +287,7 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 ## Output for agents
 
 stw executes what it does and never prints a command for someone else to run: no `next:` lines in the text output
-and no `next_steps` field in JSON. Notes say what happened or why something was skipped.
+and no `next_steps` field in JSON (one exception: the op log hook hint of `stw status` names `stw oplog hooks install`, owner decision 2026-11-13). Notes say what happened or why something was skipped.
 `--json` prints one compact JSON object. `schema_version` is `2` (version 1 had `next_steps` in `status`, `tidy-plan`
 and `sync`; there is no `next_steps` any more); fields are only added within a version, a
 removal or a changed meaning raises it. Common top-level fields: `schema_version`, `command` (`status`,
@@ -300,7 +300,7 @@ would_fast_forward, skipped, errors}.
 
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
   `changes{staged,unstaged,untracked,conflicts}`, `stash`, `operation`, `gitlink{recorded,state}`, `slug`,
-  `attention`, `reasons`, `pull_requests{read,error,open[{number,title,head,draft,author,review,review_state,hints,base,default_branch,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
+  `attention`, `reasons`, `oplog_hooks{state,reason,missing}` (null when the repository could not be read; see the hook hint under "`stw oplog hooks status | install | uninstall | print`"), `pull_requests{read,error,open[{number,title,head,draft,author,review,review_state,hints,base,default_branch,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
   Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons,review}` (`icons` is always null: the JSON carries no glyphs), per repository `pull_requests.review` (null without `--review`, and also with it when the pull request list of the repository was not read; else `{states{clear,clear_carried,findings,no_review,unverified_author,unknown},hints{clear_not_ready,base_not_default},not_read,limit}`), per pull request `review_state`, `hints`, `base` and `default_branch` (below) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
 - `status` notices: top level `notices`, an array that is always present (`[]` when there is nothing to say), additive in schema 2. It is made from the same list as the text block `Notices (N)`: N is its length, element i is line i, the order is fixed (the GitHub note; then per repository in list order `fetch-failed`, `prs-not-read`, `issues-not-read`, `review-not-read`, `review-limit`; then `rate-limited` of the run; then `rejected-path`). Element: `code` (string, below), `source` (string: `github`, `fetch`, `pulls`, `issues`, `reviews`, `submodules`), `repos` (array of repository names the notice is about, escaped and cut to 300 characters like in the text; `[]` for a notice of the run), `message` (string, the text line without its two leading spaces, text from outside escaped like in the text: no control character, no bidi override), `count` (integer, at least 1: the pull requests or reads the notice names; 1 for the others). `github_note`, `pull_requests.error`, `fetch_error` and the issues `state` stay as they are. Codes (a closed list; a new code is an additive change):
 
@@ -344,7 +344,7 @@ would_fast_forward, skipped, errors}.
 `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`; `n/a` is not read, `?` is failed, `n+` is a
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
 (why GitHub was not read, failed reads per repository; text from outside is shown with escapes; the JSON `notices` has the same list, see "Output for agents"), the `agent-rules` block, then the summary line. A failed GitHub read is
-a notice: exit 0. Exit 1 stays for a repository that cannot be read locally.
+a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
 
 ## Status flags
 
@@ -1091,13 +1091,15 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 - No git program runs (`PATH=/nonexistent` in the tests); the installed hooks are tested end to end with a real `git` (amend, tag, branch delete).
 `--json`: `schema_version` 1, `command` `oplog hooks <sub>`. Mutations `OH1` to `OH48`.
 
+The hint in `stw status` (new behavior without a Go counterpart; the owner accepts it live, recipe `scratch/abnahme-rezepte/rezept-stw-status-hook-hint.md`): under each repository that was read, one line when at least one of the two hooks is not ours, nothing when both are ours and nothing blocks them. `op log hooks: not installed (post-rewrite, reference-transaction); install with: stw oplog hooks install` names the hooks that are missing. Where `install` would refuse (`core.hooksPath` set, a hook that is not ours, a hooks directory that is a symbolic link) the line is `op log hooks: not active, install is refused here (<reason>); see: stw oplog hooks status`, without the install command. A set `core.hooksPath` or a linked hooks directory counts as blocked even when both files are ours, because git does not run them there. Only a hint: status installs nothing and writes nothing, starts no program, the exit code does not change, and a repository that could not be read has no line. It is the one place where stw prints a command (owner decision 2026-11-13); the JSON has the state only. JSON (additive, `schema_version` stays 2; also in `status PATH`, whose one-line text has no hint line): per repository `oplog_hooks`, null for a repository that could not be read, else `{state, reason, missing}`: `state` `installed`, `missing` or `blocked`; `reason` null, `hooks-path`, `foreign-hook` or `hooks-dir-symlink`; `missing` the names of the hooks that are not ours. There is no switch to hide the hint (no other status hint has one). Mutations `HH1` to `HH11`.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 897 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 908 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
