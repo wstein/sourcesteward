@@ -102,6 +102,14 @@ pub fn check_plan_scope(repo: &gix::Repository) -> std::result::Result<(), Strin
     )
 }
 
+/// The same check for the run of `sync --rules` (Go: `rulesFetch` calls `checkRefspecs` before its fetch, run and plan alike).
+pub fn check_rules_scope(repo: &gix::Repository) -> std::result::Result<(), String> {
+    check_scope(
+        repo,
+        "sync --rules must not write a local ref; nothing was fetched",
+    )
+}
+
 fn check_scope(repo: &gix::Repository, consequence: &str) -> std::result::Result<(), String> {
     let snap = repo.config_snapshot();
     let specs = snap

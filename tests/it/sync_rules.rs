@@ -1073,6 +1073,12 @@ fn the_rules_run_refuses_a_refspec_that_writes_outside_the_namespace_and_writes_
             "{spec}: {}",
             rec.reason
         );
+        assert!(
+            rec.reason
+                .contains("sync --rules must not write a local ref"),
+            "{spec}: {}",
+            rec.reason
+        );
         assert_ne!(tracking_tip(&fx), o1, "{spec}: nothing was fetched");
         assert_eq!(bytes_below(&fx.path), before, "{spec}: nothing was written");
     }

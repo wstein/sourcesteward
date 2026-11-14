@@ -313,19 +313,21 @@ pub fn agent_rules(root: &Path, gh: Option<&Client>, o: &RulesOpts) -> RulesRec 
     if o.update && o.offline {
         rec.fetch = "skipped-offline".into();
     } else if o.update {
-        // a plan fetches too, like Go's `--rules --plan` (`rulesFetch`): the refspecs must write below
-        // `refs/remotes/origin/` only, and a tag is never pruned
-        let f = if o.apply {
-            fetch::fetch_origin(&repo, gh)
+        // like Go's `rulesFetch`, a plan and a run check that the refspecs write below `refs/remotes/origin/` only
+        // before they fetch; a plan never prunes a tag
+        let scope = if o.apply {
+            fetch::check_rules_scope(&repo)
         } else {
-            match fetch::check_plan_scope(&repo) {
-                Ok(()) => fetch::fetch_origin_plan(&repo, gh, fetch::Prune::Unset),
-                Err(m) => fetch::Fetched {
-                    fetch: fetch::Fetch::Failed(m),
-                    via: None,
-                    git_error: Some("refused-refspec"),
-                },
-            }
+            fetch::check_plan_scope(&repo)
+        };
+        let f = match scope {
+            Ok(()) if o.apply => fetch::fetch_origin(&repo, gh),
+            Ok(()) => fetch::fetch_origin_plan(&repo, gh, fetch::Prune::Unset),
+            Err(m) => fetch::Fetched {
+                fetch: fetch::Fetch::Failed(m),
+                via: None,
+                git_error: Some("refused-refspec"),
+            },
         };
         rec.fetch = f.label().into();
         rec.via = f.via.map(str::to_string);
