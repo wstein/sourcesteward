@@ -3008,7 +3008,7 @@ m OH17 'oplog hooks: a symbolic stw directory is not named as such' src/oplog/ho
   '            Ok(m) if m.file_type().is_symlink() => {' '            Ok(m) if false && m.file_type().is_symlink() => {' \
   oplog_hooks a_log_directory_that_is_a_symbolic_link_is_not_written_through
 m OH18 'oplog hooks: a symbolic hooks directory is not detected' src/oplog/hooks.rs \
-  'is_ok_and(|m| m.file_type().is_symlink());' 'is_ok_and(|m| false && m.file_type().is_symlink());' \
+  'fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())' 'fs::symlink_metadata(p).is_ok_and(|m| false && m.file_type().is_symlink())' \
   oplog_hooks a_hooks_directory_that_is_a_symbolic_link_is_not_written_through
 m OH19 'oplog hooks: install writes through a symbolic hooks directory' src/oplog/hooks.rs \
   '    if i.dir_is_link {
