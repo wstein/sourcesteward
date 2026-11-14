@@ -1585,9 +1585,6 @@ fn git_command_label(command: &Command) -> &'static str {
             command: ReviewCommand::CarryOver(_),
         } => "review carry-over",
         Command::Prove(_) => "prove",
-        Command::Oplog {
-            command: OplogCommand::Undo(OplogUndoArgs { keep: true, .. }),
-        } => "oplog undo --keep",
         // these start no git (gix only); a new command must be named here on purpose
         Command::Tidy { .. }
         | Command::Restack { .. }

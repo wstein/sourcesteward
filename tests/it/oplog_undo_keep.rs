@@ -383,6 +383,66 @@ fn a_repository_without_git_refuses_before_any_ref_is_written() {
     refused_and_untouched(&fx, &r, &["git"], &b);
 }
 
+/// A directory with a `git` that prints `version_text` for everything.
+fn fake_git(version_text: &str) -> tempfile::TempDir {
+    use std::os::unix::fs::PermissionsExt;
+    let d = scratch();
+    let p = d.path().join("git");
+    std::fs::write(&p, format!("#!/bin/sh\necho '{version_text}'\n")).unwrap();
+    std::fs::set_permissions(&p, std::fs::Permissions::from_mode(0o755)).unwrap();
+    d
+}
+
+#[test]
+fn a_git_older_than_reset_keep_needs_refuses_before_any_ref_is_written() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    let g = fake_git("git version 2.30.0");
+    let b = before(&fx);
+    let path = g.path().to_string_lossy().into_owned();
+    let r = run_in(
+        &fx.path,
+        &path,
+        &keep_args(&c2.to_string(), &c3.to_string()),
+    );
+    refused_and_untouched(&fx, &r, &["2.36", "2.30.0"], &b);
+}
+
+#[test]
+fn a_git_whose_version_cannot_be_read_refuses_before_any_ref_is_written() {
+    let (fx, [_, c2, c3]) = keep_fx();
+    let g = fake_git("banana");
+    let b = before(&fx);
+    let path = g.path().to_string_lossy().into_owned();
+    let r = run_in(
+        &fx.path,
+        &path,
+        &keep_args(&c2.to_string(), &c3.to_string()),
+    );
+    refused_and_untouched(&fx, &r, &["usable git"], &b);
+}
+
+#[test]
+fn a_gitlink_that_points_elsewhere_refuses() {
+    let fx = Fx::new();
+    let a = fx.commit(None, &[("f", Some("a\n"))], "first");
+    let x = fx.commit_gitlink(a, "sub", a, "sub at a");
+    let y = fx.commit_gitlink(x, "sub", x, "sub at x");
+    fx.branch("work", y);
+    fx.set_head("work");
+    set_reflog(
+        &fx,
+        "work",
+        &[
+            (Z.to_string(), x, "branch: Created"),
+            (x.to_string(), y, "commit: sub moved"),
+        ],
+    );
+    fx.checkout_head();
+    let b = before(&fx);
+    let r = run(&fx, &keep_args(&x.to_string(), &y.to_string()));
+    refused_and_untouched(&fx, &r, &["gitlink", "sub"], &b);
+}
+
 #[test]
 fn a_gitlink_that_differs_between_the_tips_refuses() {
     let fx = Fx::new();

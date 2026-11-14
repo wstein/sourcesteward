@@ -475,15 +475,23 @@ pub fn keep_prerequisites(to: &str) -> std::result::Result<Hex40, String> {
             esc(to)
         )
     })?;
-    git_runner::shared()
+    let found = git_runner::shared()
         .version()
         .map_err(|e| format!("--keep needs a usable git: {e}"))?;
+    let needed = Op::ResetKeep { target }.min_version();
+    if found < needed {
+        return Err(format!(
+            "--keep needs git {} or newer; the installed git is {found}",
+            needed.short()
+        ));
+    }
     Ok(target)
 }
 
 /// The `--keep` update: the branch, the index and the work tree are moved by `git reset --keep <old>` in the worktree of
 /// `repo`. The ref is read again right before (it must still hold `expect` and HEAD must still be on it: git's own update
-/// has no compare-and-swap) and after (it must hold `to`). A failed git leaves the branch where it was; the backup stays.
+/// has no compare-and-swap, so a change inside git's own run is not caught). A failed git leaves the branch where it was;
+/// the backup stays.
 #[allow(clippy::too_many_arguments)]
 fn keep_update(
     repo: &gix::Repository,
@@ -523,11 +531,6 @@ fn keep_update(
     git_runner::shared()
         .run(&workdir, Op::ResetKeep { target })
         .map_err(|e| stays(format!("git reset --keep failed: {}", esc(&e.to_string()))))?;
-    if !holds(to).map_err(stays)? {
-        return Err(Error::repository(format!(
-            "git reset --keep ran but the branch does not hold {to}; look at `git status` and `git reflog`. The backup {backup_ref} stays ({expect})"
-        )));
-    }
     log_ref_update(
         repo,
         &RefUpdate {
