@@ -3363,6 +3363,40 @@ m OK50 'oplog undo --keep: changed submodule contents count as dirty' src/oplog/
   '    match crate::status::changes_opts(repo, false, true) {' '    match crate::status::changes_opts(repo, false, false) {' \
   oplog_undo_keep changed_submodule_contents_do_not_count_as_dirty
 
+m HH1 'status hint: every hook counts as missing' src/oplog/hooks.rs \
+  '.filter(|(_, s)| !matches!(s, State::Ours { .. }))' '.filter(|(_, _)| true)' \
+  status_hook_hint both_hooks_ours_show_nothing
+m HH2 'status hint: core.hooksPath does not block' src/oplog/hooks.rs \
+  'let reason = if hooks_path(repo).is_some() {' 'let reason = if false && hooks_path(repo).is_some() {' \
+  status_hook_hint core_hooks_path_gives_no_install_advice_even_with_our_hooks_in_the_git_dir
+m HH3 'status hint: a hooks directory that is a link does not block' src/oplog/hooks.rs \
+  '} else if link {' '} else if false && link {' \
+  status_hook_hint a_hooks_directory_that_is_a_link_is_blocked
+m HH4 'status hint: a foreign hook does not block' src/oplog/hooks.rs \
+  '} else if states.contains(&State::Foreign) {' '} else if false {' \
+  status_hook_hint a_foreign_hook_gives_no_install_advice
+m HH5 'status hint: both hooks ours are reported as missing' src/oplog/hooks.rs \
+  '(None, true) => "installed",' '(None, true) => "missing",' \
+  status_hook_hint both_hooks_ours_show_nothing
+m HH6 'status hint: a blocked repository gets the install advice' src/status.rs \
+  '"op log hooks: not active, install is refused here ({why}); see: stw oplog hooks status"' '"op log hooks: not active, install is refused here ({why}); install with: stw oplog hooks install"' \
+  status_hook_hint a_foreign_hook_gives_no_install_advice
+m HH7 'status hint: the text line is never printed' src/status.rs \
+  'if let Some(l) = s.oplog_hooks.as_ref().and_then(hooks_line) {' 'if let Some(l) = s.oplog_hooks.as_ref().and_then(hooks_line).filter(|_| false) {' \
+  status_hook_hint missing_hooks_give_one_line_with_the_install_command
+m HH8 'status hint: a repository that cannot be read reports installed hooks' src/status.rs \
+  '"oplog_hooks": s.oplog_hooks.as_ref().map_or(Value::Null, hooks_json),' '"oplog_hooks": s.oplog_hooks.as_ref().map_or(json!({"state": "installed", "reason": null, "missing": []}), hooks_json),' \
+  status_hook_hint a_repository_that_cannot_be_read_has_no_hint_and_a_null_field
+m HH9 'status hint: a foreign hook is not listed as missing' src/oplog/hooks.rs \
+  '.filter(|(_, s)| !matches!(s, State::Ours { .. }))' '.filter(|(_, s)| matches!(s, State::Absent))' \
+  status_hook_hint a_foreign_hook_gives_no_install_advice
+m HH10 'status hint: the reason word of a foreign hook changes' src/oplog/hooks.rs \
+  'Blocked::ForeignHook => "foreign-hook",' 'Blocked::ForeignHook => "foreign",' \
+  status_hook_hint a_foreign_hook_gives_no_install_advice
+m HH11 'status hint: the missing hooks are not listed by name' src/status.rs \
+  'h.missing.join(", ")' 'h.missing.len().to_string()' \
+  status_hook_hint one_hook_ours_names_only_the_missing_one
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
