@@ -1003,8 +1003,8 @@ after), no hook is installed and no `git` program runs. `--root PATH` and `--rep
   back, with the semantics of the spike: first of equal pairs wins, self pairs ignored, `merge=N`, `split=N`, `cycle`,
   `seen-above`, `limit`; an unknown kind is shown. The reflog of the branch is compared with the pairs (`commit (amend)`
   and `rebase ... (finish)` entries): `uncovered-rewrite`, `pre-install`, `hook-absent`, `unknown-window`.
-- `stw oplog undo-plan REF [--to OLD | --steps N]`: the checks of the spike: the ref exists and is no symbolic ref, a local
-  branch (other refs are previewed and marked not undoable), not checked out in any worktree (hint `git reset --keep`),
+- `stw oplog undo-plan REF [--to OLD | --steps N] [--keep]`: the checks of the spike: the ref exists and is no symbolic ref, a local
+  branch (other refs are previewed and marked not undoable), not checked out in any worktree (hint `--keep` or `git reset --keep`; with `--keep` see the section on `stw oplog undo`),
   no registration without a readable git dir, no running operation (`rebase-merge`, `rebase-apply`, `MERGE_HEAD`,
   `CHERRY_PICK_HEAD`, `REVERT_HEAD`, `BISECT_LOG`, `sequencer` in the git dirs), the ref still equals the newest reflog
   value, the target is not the creation entry and is a commit; notes: ancestry and the commits that only the reflog would
@@ -1054,9 +1054,18 @@ branch as the other writer left it. Reflog entries for the backup ref and the br
 also with `core.logAllRefUpdates=false`. `refs.log` lines (context `stw`) are written for the counter, the backup ref, each
 pruned ref and the branch update; a failed append is a notice and a `write-failed` gap, the undo stands.
 Refused with exit 1 and nothing written: a failed check of `undo-plan` (a branch checked out in a worktree gets the hint
-`git reset --keep`; there is no `--keep` path yet), `--expect` not equal to the current value.
+`--keep`), `--expect` not equal to the current value.
 Usage errors (exit 2): no `--yes`, `--expect` not a full lower-case hash, a ref that is no local branch.
 Only the ref moves: index, working tree, other worktrees and pushes are not covered.
+
+`--keep` (package 5; recipe: `scratch/abnahme-rezepte/rezept-stw-oplog-undo-keep.md`; rules and differences: `docs/oplog-format.md`, 8a):
+`stw oplog undo REF --to OLD --expect NEW --keep --yes` (and `undo-plan ... --keep`) undoes the branch that the current worktree has
+checked out. stw runs `git reset --keep OLD` through the runner (hooks off, no `--hard`), after the usual backup ref, and writes the
+`refs.log` line. Refused (exit 1, nothing written): the branch is not the `HEAD` branch of this worktree (detached, or another branch),
+another worktree holds it, a staged or unstaged change or an unmerged path (untracked files stay and do not count), a running merge or
+other operation, a gitlink that differs between the two values, `core.sparseCheckout`, no usable git or git older than 2.36, a target
+that is not 40 hex digits. A git failure after the backup (an untracked file in the way, a `filter.*` driver) is exit 1; the branch is
+unchanged and the backup stays. `--json` gains `keep` and, for `undo`, `via` (`git`). Mutations `OK1` to `OK33`.
 Output: backup ref and the way back as a command (`stw oplog undo REF --to <old> --expect <new> --yes`); in the text output (here and in `undo-plan`: `Apply with:`) a ref name with shell characters is written in POSIX single quotes, other names as they are; the JSON fields `way_back` and `apply` keep the raw name. `--json`
 (`schema_version` 1, `command` `oplog undo`): `ref`, `executed`, `previous`, `current`, `backup_ref`, `run`, `pruned`,
 `way_back`, `notices`; a refusal prints the `undo-plan` document with `command` `oplog undo` and `executed` false.
@@ -1088,7 +1097,7 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 847 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 880 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
