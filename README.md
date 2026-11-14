@@ -228,6 +228,12 @@ Deviations from Go in these flags:
     prune flag; (g) `--plan --offline` fetches nothing (Go has no `--offline`); (h) `remote_moved` is always null in a plan (the dry run asked
     GitHub before; the plan has the fetched state); (i) timeout: the runner cuts a git fetch after 120 s (Go: 5 minutes); the gix path for
     https has no bound (not changed); (j) `--rules --plan` fetches too, see "agent-rules".
+15. The run of `sync --rules` refuses a configured fetch refspec of `origin` that writes outside `refs/remotes/origin/` before it fetches
+    (the port of Go's `rulesFetch` -> `checkRefspecs`, `sync-refspec-unsafe`; the check is the one of the plan, `check_scope`, with the
+    text "sync --rules must not write a local ref; nothing was fetched"): exit 1, fetch `failed`, nothing written. Differences from Go, one by one:
+    (a) Go does not fetch then and goes on with the state "as of last fetch" (`as_of_last_fetch`) and can still fast-forward to the last fetched
+    `origin/<default>`; Rust refuses the whole run, as it does for a plan (and as for a failed fetch); (b) with `--offline` nothing is
+    fetched and no refspec is checked (as in Go with `noFetch`); (c) the refspec is shown escaped and cut at 200 characters.
 
 ## agent-rules
 
@@ -241,7 +247,8 @@ records); a plain checkout on the default branch works too. It is `--rules-path 
 `--rules --plan` (`rules.go` `rulesFetch`; not with `--offline`) and changes nothing else: it prints the current rules commit and what it
 would do (how far `origin/<default>` is ahead, the new commits and files). Differences from Go: a refspec that writes outside
 `refs/remotes/origin/` and a failed fetch refuse (exit 1) as in a run (Go notes "as of last fetch" and goes on); the plan passes
-`--no-prune-tags`; FETCH_HEAD is written by the git path (Go: `--no-write-fetch-head`). Otherwise it fetches `origin` (not with `--offline`) and fast-forwards HEAD to
+`--no-prune-tags`; FETCH_HEAD is written by the git path (Go: `--no-write-fetch-head`). The run (`--rules` without `--plan`) checks the refspecs of `origin` before it fetches, like Go's `rulesFetch`:
+one that writes outside `refs/remotes/origin/` refuses (exit 1, fetch `failed`, nothing written; deviation 15 of the flags). Otherwise it fetches `origin` (not with `--offline`) and fast-forwards HEAD to
 `origin/<default>`: the branch of a plain checkout, or the detached HEAD of a submodule. A checkout that is only ahead of
 `origin/<default>` (or already current) is not an error: nothing to fast-forward, exit 0. The rules checkout is never part
 of the generic repository loop: `sync` and `status` leave it out of the repositories list (the resolved `--rules-path` or
@@ -1099,7 +1106,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 908 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 911 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 

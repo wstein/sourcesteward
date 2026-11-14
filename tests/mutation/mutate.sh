@@ -2086,11 +2086,13 @@ m SY45 'the note of the offline plan about --no-prune appears in an online plan'
   sync_plan_fetch plan_no_prune_keeps_the_ref_even_with_fetch_prune_true
 m SY46 'the plan of --rules does not fetch' src/sync/rules.rs \
   '    } else if o.update {
-        // a plan fetches too' '    } else if o.update && o.apply {
-        // a plan fetches too' \
+        // like Go' '    } else if o.update && o.apply {
+        // like Go' \
   sync_rules the_rules_plan_fetches_a_local_origin_like_go_and_writes_only_the_tracking_ref
 m SY47 'the plan of --rules fetches with a refspec outside the namespace' src/sync/rules.rs \
-  'match fetch::check_plan_scope(&repo) {' 'match Ok::<(), String>(()) {' \
+  '            fetch::check_plan_scope(&repo)
+        };' '            Ok(())
+        };' \
   sync_rules the_rules_plan_refuses_a_refspec_that_writes_outside_the_namespace
 m SY48 'the plan text claims a fetch after a failed one' src/sync/mod.rs \
   '        } else if failed > 0 {' '        } else if false {' \
@@ -2104,6 +2106,21 @@ m SY50 'the help of --plan says that it fetches nothing' src/cli.rs \
 m SY51 'the help of --prune says that a plan only says what it would do' src/cli.rs \
   'With --plan it prunes as a run does' 'With --plan it only says what it would do' \
   sync_default the_help_names_plan_and_dry_run_and_hides_apply
+m SY52 'the run of --rules fetches with a refspec outside the namespace' src/sync/rules.rs \
+  '            fetch::check_rules_scope(&repo)
+        } else {' '            Ok(())
+        } else {' \
+  sync_rules the_rules_run_refuses_a_refspec_that_writes_outside_the_namespace_and_writes_nothing
+m SY53 'the run of --rules refuses with the text of the plan' src/sync/rules.rs \
+  '            fetch::check_rules_scope(&repo)
+        } else {' '            fetch::check_plan_scope(&repo)
+        } else {' \
+  sync_rules the_rules_run_refuses_a_refspec_that_writes_outside_the_namespace_and_writes_nothing
+m SY54 'the offline run of --rules checks the refspec although it fetches nothing' src/sync/rules.rs \
+  '    if o.update && o.offline {
+        rec.fetch = "skipped-offline"' '    if o.update && o.offline && fetch::check_rules_scope(&repo).is_ok() {
+        rec.fetch = "skipped-offline"' \
+  sync_rules the_rules_run_checks_the_refspec_only_when_it_fetches
 
 m GL1 'a path of the index that is no gitlink counts as a submodule' src/repo/mod.rs \
   '        .filter(|e| e.mode.is_submodule())
