@@ -78,6 +78,14 @@ expression: pretty
         "via": null,
         "error": null
       },
+      "oplog_hooks": {
+        "state": "missing",
+        "reason": null,
+        "missing": [
+          "post-rewrite",
+          "reference-transaction"
+        ]
+      },
       "fetch_error": null,
       "worktree_list": null,
       "pull_requests": {

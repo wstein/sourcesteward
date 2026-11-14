@@ -122,8 +122,7 @@ struct HooksPath {
 }
 
 /// `core.hooksPath` as git would see it (last value of all sources wins); `Some` also when it is empty or has no value.
-fn hooks_path(ctx: &Ctx) -> Result<Option<HooksPath>> {
-    let repo = ctx.repo()?;
+fn hooks_path(repo: &gix::Repository) -> Option<HooksPath> {
     let snap = repo.config_snapshot();
     let file = snap.plumbing();
     let mut found = None;
@@ -156,7 +155,7 @@ fn hooks_path(ctx: &Ctx) -> Result<Option<HooksPath>> {
             });
         }
     }
-    Ok(found)
+    found
 }
 
 /// The last value of `key` (lower case) in `GIT_CONFIG_PARAMETERS`: words of single-quoted pieces (`'` inside a piece is
@@ -225,7 +224,7 @@ fn inspect(ctx: &Ctx) -> Result<Inspect> {
     ];
     Ok(Inspect {
         common,
-        hooks_path: hooks_path(ctx)?,
+        hooks_path: hooks_path(ctx.repo()?),
         hooks_dir,
         dir_is_link,
         states,
@@ -260,6 +259,75 @@ fn hook_json(i: &Inspect, n: usize, action: &str) -> Value {
         "name": def.name, "file": i.hooks_dir.join(def.name).to_string_lossy(), "header": def.header,
         "state": i.states[n].word(), "executable": executable, "action": action,
     })
+}
+
+// ---- the hint of `stw status` ----------------------------------------------------------------------------------------
+
+/// Why `stw oplog hooks install` would refuse in this repository (the hint then points to `hooks status`).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Blocked {
+    HooksPath,
+    ForeignHook,
+    HooksDirSymlink,
+}
+
+impl Blocked {
+    pub fn word(self) -> &'static str {
+        match self {
+            Blocked::HooksPath => "hooks-path",
+            Blocked::ForeignHook => "foreign-hook",
+            Blocked::HooksDirSymlink => "hooks-dir-symlink",
+        }
+    }
+}
+
+/// What `stw status` says about the op log hooks of one repository.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct HookHint {
+    /// `installed` (both hooks are ours, nothing blocks them), `missing` (`install` would place them) or `blocked`.
+    pub state: &'static str,
+    pub reason: Option<Blocked>,
+    /// The names of the hooks that are not ours (all of them when blocked by `core.hooksPath` or a link).
+    pub missing: Vec<&'static str>,
+}
+
+/// The state of the two hooks of the repository `repo`, from the same reads as `hooks status`: `<common>/hooks/<name>`
+/// (no program, nothing written) and `core.hooksPath`. A set `core.hooksPath` or a link as the hooks directory means
+/// git does not run our files there, so it counts as `blocked` even when both are ours.
+pub fn hint_of(repo: &gix::Repository) -> HookHint {
+    let common =
+        fs::canonicalize(repo.common_dir()).unwrap_or_else(|_| repo.common_dir().to_path_buf());
+    let dir = common.join("hooks");
+    let states = [
+        state_of(&dir.join(HOOKS[0].name), HOOKS[0].header),
+        state_of(&dir.join(HOOKS[1].name), HOOKS[1].header),
+    ];
+    let missing: Vec<&'static str> = HOOKS
+        .iter()
+        .zip(states)
+        .filter(|(_, s)| !matches!(s, State::Ours { .. }))
+        .map(|(d, _)| d.name)
+        .collect();
+    let link = fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink());
+    let reason = if hooks_path(repo).is_some() {
+        Some(Blocked::HooksPath)
+    } else if link {
+        Some(Blocked::HooksDirSymlink)
+    } else if states.contains(&State::Foreign) {
+        Some(Blocked::ForeignHook)
+    } else {
+        None
+    };
+    let state = match (reason, missing.is_empty()) {
+        (Some(_), _) => "blocked",
+        (None, true) => "installed",
+        (None, false) => "missing",
+    };
+    HookHint {
+        state,
+        reason,
+        missing,
+    }
 }
 
 // ---- status ----------------------------------------------------------------------------------------------------------

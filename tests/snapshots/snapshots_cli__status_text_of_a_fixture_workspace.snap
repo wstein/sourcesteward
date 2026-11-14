@@ -11,6 +11,7 @@ Needs action (1)
 
 Repositories (1)
 ! repo               main                           origin/main up to date   1 untracked
+    op log hooks: not installed (post-rewrite, reference-transaction); install with: stw oplog hooks install
 
 Notices (1)
   GitHub not read: --offline

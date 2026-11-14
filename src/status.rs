@@ -8,6 +8,7 @@ use serde_json::{json, Value};
 
 use crate::error::Result;
 use crate::github::{Client, GithubState, IssueCounts, OpenPr, PAGE};
+use crate::oplog::hooks::{hint_of, Blocked, HookHint};
 use crate::output::*;
 use crate::repo::{self, RepoRef, Upstream};
 use crate::status_review;
@@ -378,6 +379,8 @@ pub struct RepoStatus {
     pub worktrees: Option<usize>,
     /// The linked worktrees, only with `--worktrees`.
     pub worktree_list: Option<Vec<WorktreeInfo>>,
+    /// The op log hooks of this repository (`oplog::hooks::hint_of`); None when it could not be read locally.
+    pub oplog_hooks: Option<HookHint>,
     /// `--fetch`.
     pub fetch: FetchFact,
     /// `status PATH`: the stack of the current branch; None for a detached or unborn head and without a PATH.
@@ -437,6 +440,7 @@ fn blank(name: String, path: String) -> RepoStatus {
         branches_remote: None,
         worktrees: None,
         worktree_list: None,
+        oplog_hooks: None,
         fetch: FetchFact::not_run(),
         stack: None,
         depth: 0,
@@ -477,6 +481,7 @@ pub fn collect_local(
             s.worktree_list = wts.as_ref().map(worktree_list);
         }
         s.op = operation(&repo);
+        s.oplog_hooks = Some(hint_of(&repo));
         if let (true, Some(b), Some(_)) = (opts.stack, &s.facts.branch, &s.facts.head) {
             s.stack = Some(crate::status_all::stack_of(&repo, b));
         }
@@ -932,6 +937,7 @@ pub fn to_json(
                 "reasons": rs,
                 "counts": counts_json(&counts_of(s)),
                 "fetch": s.fetch.json(),
+                "oplog_hooks": s.oplog_hooks.as_ref().map_or(Value::Null, hooks_json),
                 "fetch_error": jopt(s.fetch.error.as_deref()),
                 "worktree_list": s.worktree_list.as_ref().map_or(Value::Null, |l| Value::Array(l.iter().map(WorktreeInfo::json).collect())),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs,
@@ -954,6 +960,32 @@ pub fn to_json(
         m.insert("stats".into(), stats);
     }
     doc
+}
+
+/// The JSON of the op log hook hint: `state` (`installed`, `missing`, `blocked`), `reason` (null, or `hooks-path`,
+/// `foreign-hook`, `hooks-dir-symlink`), `missing` (the names of the hooks that are not ours). Only a state, no command.
+fn hooks_json(h: &HookHint) -> Value {
+    json!({"state": h.state, "reason": h.reason.map(Blocked::word), "missing": h.missing})
+}
+
+/// The hint line of the text, none when both hooks are ours. A repository where `install` would refuse gets no
+/// install advice, only the pointer to `stw oplog hooks status` (which names the reason in detail).
+fn hooks_line(h: &HookHint) -> Option<String> {
+    let why = match h.reason {
+        None if h.missing.is_empty() => return None,
+        None => {
+            return Some(format!(
+                "op log hooks: not installed ({}); install with: stw oplog hooks install",
+                h.missing.join(", ")
+            ))
+        }
+        Some(Blocked::HooksPath) => "core.hooksPath is set",
+        Some(Blocked::ForeignHook) => "another hook is in place",
+        Some(Blocked::HooksDirSymlink) => "the hooks directory is a symbolic link",
+    };
+    Some(format!(
+        "op log hooks: not active, install is refused here ({why}); see: stw oplog hooks status"
+    ))
 }
 
 /// The glyph set of the text output (`--icons`).
@@ -1266,6 +1298,9 @@ pub fn render_human(notices: &[Notice], list: &[RepoStatus], rules: &str, view: 
         }
         if let Some(e) = &s.fetch.error {
             out += &format!("    fetch failed: {}\n", esc(e));
+        }
+        if let Some(l) = s.oplog_hooks.as_ref().and_then(hooks_line) {
+            out += &format!("    {l}\n");
         }
         for wt in s.worktree_list.iter().flatten() {
             out += &format!(

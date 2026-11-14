@@ -192,6 +192,7 @@ fn json_field_names_are_the_documented_ones() {
             "fetch",
             "fetch_error",
             "worktree_list",
+            "oplog_hooks",
             "pull_requests",
             "error"
         ])

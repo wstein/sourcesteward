@@ -44,6 +44,7 @@ mod slug;
 mod status_all;
 mod status_counts;
 mod status_flags;
+mod status_hook_hint;
 mod status_notices;
 mod status_review;
 mod submodule_paths;
