@@ -1009,3 +1009,81 @@ fn the_rules_plan_refuses_a_refspec_that_writes_outside_the_namespace() {
     assert!(rec.reason.contains("refs/tags/*"), "{}", rec.reason);
     assert_ne!(tracking_tip(&fx), o1, "nothing was fetched");
 }
+
+/// Every file below `dir` (the `.git` directory included) with its bytes.
+fn bytes_below(dir: &std::path::Path) -> std::collections::BTreeMap<String, Vec<u8>> {
+    fn walk(
+        base: &std::path::Path,
+        dir: &std::path::Path,
+        out: &mut std::collections::BTreeMap<String, Vec<u8>>,
+    ) {
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            let rel = p.strip_prefix(base).unwrap().display().to_string();
+            if p.is_dir() {
+                out.insert(format!("{rel}/"), Vec::new());
+                walk(base, &p, out);
+            } else {
+                out.insert(rel, std::fs::read(&p).unwrap());
+            }
+        }
+    }
+    let mut out = std::collections::BTreeMap::new();
+    walk(dir, dir, &mut out);
+    out
+}
+
+fn add_origin_refspec(fx: &Fx, spec: &str) {
+    use std::io::Write;
+    std::fs::OpenOptions::new()
+        .append(true)
+        .open(fx.path.join(".git/config"))
+        .unwrap()
+        .write_all(format!("[remote \"origin\"]\n\tfetch = {spec}\n").as_bytes())
+        .unwrap();
+}
+
+fn run_opts(fx: &Fx, offline: bool) -> RulesOpts {
+    RulesOpts {
+        apply: true,
+        ..plan_opts(fx, offline)
+    }
+}
+
+// Go `rulesFetch` checks the refspecs (`checkRefspecs`) before it fetches, in a run as in a plan: a refspec that
+// writes outside refs/remotes/origin/ means no fetch. Rust refuses the run like the plan (deviation 15 (a)).
+#[test]
+fn the_rules_run_refuses_a_refspec_that_writes_outside_the_namespace_and_writes_nothing() {
+    for spec in [
+        "+refs/tags/*:refs/tags/*",
+        "+refs/heads/*:refs/heads/*",
+        "+refs/heads/*:refs/remotes/origin-mirror/*",
+    ] {
+        let (fx, _origin, o1) = with_local_origin();
+        add_origin_refspec(&fx, spec);
+        let before = bytes_below(&fx.path);
+        let rec = agent_rules(fx.path.parent().unwrap(), None, &run_opts(&fx, false));
+        assert_eq!(rec.action, "refused", "{spec}: {}", rec.reason);
+        assert_eq!(rec.fetch, "failed", "{spec}");
+        assert!(!rec.updated, "{spec}");
+        let shown = spec.trim_start_matches('+');
+        assert!(rec.reason.contains(shown), "{spec}: {}", rec.reason);
+        assert!(
+            rec.reason.contains("writes outside refs/remotes/origin/*"),
+            "{spec}: {}",
+            rec.reason
+        );
+        assert_ne!(tracking_tip(&fx), o1, "{spec}: nothing was fetched");
+        assert_eq!(bytes_below(&fx.path), before, "{spec}: nothing was written");
+    }
+}
+
+#[test]
+fn the_rules_run_checks_the_refspec_only_when_it_fetches() {
+    let (fx, _origin, o1) = with_local_origin();
+    add_origin_refspec(&fx, "+refs/tags/*:refs/tags/*");
+    let rec = agent_rules(fx.path.parent().unwrap(), None, &run_opts(&fx, true));
+    assert_eq!(rec.fetch, "skipped-offline");
+    assert!(!rec.reason.contains("refs/tags/*"), "{}", rec.reason);
+    assert_ne!(tracking_tip(&fx), o1);
+}
