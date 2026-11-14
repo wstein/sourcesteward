@@ -881,6 +881,10 @@ fn changed_submodule_contents_do_not_count_as_dirty() {
         ],
     );
     fx.checkout_head();
+    fx.write_plain(
+        ".gitmodules",
+        "[submodule \"sub\"]\n\tpath = sub\n\turl = ./sub\n",
+    );
     // a real repository in `sub` whose HEAD is not the gitlink commit
     let sub = fx.path.join("sub");
     std::fs::create_dir_all(&sub).unwrap();

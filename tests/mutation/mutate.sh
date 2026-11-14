@@ -3339,7 +3339,7 @@ m OK42 'oplog undo --keep: a repository without a work tree is not named' src/op
   '    if repo.workdir().is_none() {' '    if false && repo.workdir().is_none() {' \
   oplog_undo_keep a_repository_without_a_work_tree_says_so
 m OK43 'oplog undo-plan --keep: the git version is not checked in the plan' src/oplog/undo_plan.rs \
-  'if let Err(why) = keep_git_check(&alt.to_string()) {' 'if false && keep_git_check(&alt.to_string()).is_err() {' \
+  'if let Err(why) = keep_git_check(&alt.to_string()) {' 'if let Err(why) = keep_git_check(&alt.to_string()).or_else(|_| Hex40::parse(&alt.to_string()).ok_or(String::new())) {' \
   oplog_undo_keep undo_plan_keep_checks_the_git_version_like_undo
 m OK44 'oplog undo --keep: git 2.36.0 itself is refused' src/oplog/undo_plan.rs \
   'if found < needed {' 'if found <= needed {' \
