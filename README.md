@@ -1065,10 +1065,10 @@ checked out. stw runs `git reset --keep OLD` through the runner (hooks off, no `
 another worktree holds it, a staged or unstaged change or an unmerged path (untracked files stay and do not count), a running merge or
 other operation, a gitlink that differs between the two values, `core.sparseCheckout`, no usable git or git older than 2.36, a target
 that is not 40 hex digits. A git failure after the backup (an untracked file in the way, a `filter.*` driver) is exit 1; the branch is
-unchanged and the backup stays. `--json` gains `keep` and, for `undo`, `via` (`git`). Mutations `OK1` to `OK33`.
+unchanged and the backup stays; a git that was killed or timed out (120 s) may have written part of the work tree, and the message says so. Also refused: a path the target adds where an untracked or ignored file lies (the ignored ones are not protected by git), an intent-to-add, assume-unchanged or skip-worktree entry. `undo-plan --keep` starts `git --version`. `--json` gains `keep` (undo and undo-plan) and, for `undo`, `via` (`git`, else null): additive, `schema_version` stays 1. Mutations `OK1` to `OK50`.
 Output: backup ref and the way back as a command (`stw oplog undo REF --to <old> --expect <new> --yes`); in the text output (here and in `undo-plan`: `Apply with:`) a ref name with shell characters is written in POSIX single quotes, other names as they are; the JSON fields `way_back` and `apply` keep the raw name. `--json`
 (`schema_version` 1, `command` `oplog undo`): `ref`, `executed`, `previous`, `current`, `backup_ref`, `run`, `pruned`,
-`way_back`, `notices`; a refusal prints the `undo-plan` document with `command` `oplog undo` and `executed` false.
+`way_back`, `notices`, and with package 5 `keep`, `via` (additive, `schema_version` stays 1); a refusal prints the `undo-plan` document with `command` `oplog undo` and `executed` false.
 Deviations from the spec text: none in behavior; the spec sections 8 and Q12 now say the reflog mechanism works with
 gix 0.90, and Q7 (`<run>/<k>`) is decided by the owner (2026-11-13). UNKNOWN: macOS, ext4,
 SHA-256 repositories, a concurrent `git` writing the same refs.
@@ -1097,7 +1097,7 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 880 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 897 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
