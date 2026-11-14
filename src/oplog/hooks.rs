@@ -116,6 +116,11 @@ fn state_of(path: &Path, header: &str) -> State {
     }
 }
 
+/// A symbolic link (the hooks directory may be shared with other repositories: install and uninstall refuse).
+fn is_link(p: &Path) -> bool {
+    fs::symlink_metadata(p).is_ok_and(|m| m.file_type().is_symlink())
+}
+
 struct HooksPath {
     value: String,
     origin: String,
@@ -217,7 +222,7 @@ fn inspect(ctx: &Ctx) -> Result<Inspect> {
     // a linked worktree reports `<git-dir>/worktrees/<id>/../..`: show and use the plain path
     let common = fs::canonicalize(&ctx.common).unwrap_or_else(|_| ctx.common.clone());
     let hooks_dir = common.join("hooks");
-    let dir_is_link = fs::symlink_metadata(&hooks_dir).is_ok_and(|m| m.file_type().is_symlink());
+    let dir_is_link = is_link(&hooks_dir);
     let states = [
         state_of(&hooks_dir.join(HOOKS[0].name), HOOKS[0].header),
         state_of(&hooks_dir.join(HOOKS[1].name), HOOKS[1].header),
@@ -308,7 +313,7 @@ pub fn hint_of(repo: &gix::Repository) -> HookHint {
         .filter(|(_, s)| !matches!(s, State::Ours { .. }))
         .map(|(d, _)| d.name)
         .collect();
-    let link = fs::symlink_metadata(&dir).is_ok_and(|m| m.file_type().is_symlink());
+    let link = is_link(&dir);
     let reason = if hooks_path(repo).is_some() {
         Some(Blocked::HooksPath)
     } else if link {
