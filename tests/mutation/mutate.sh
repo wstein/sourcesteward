@@ -2298,7 +2298,7 @@ m OL30 'oplog evolog: an amend in the reflog is not compared' src/oplog/evolog.r
   'msg.starts_with("commit (amend)") ||' 'false ||' \
   oplog_read a_reflog_rewrite_without_a_hook_pair_is_uncovered
 m OL31 'oplog undo-plan: a branch checked out is not refused' src/oplog/undo_plan.rs \
-  'if format!("refs/heads/{b}") == reference {' 'if false {' \
+  'if format!("refs/heads/{b}") != reference {' 'if true {' \
   oplog_read the_plan_refuses_what_undo_would_refuse
 m OL32 'oplog undo-plan: a running operation is not refused' src/oplog/undo_plan.rs \
   'if d.join(m).symlink_metadata().is_ok() {' 'if false {' \
@@ -2823,7 +2823,27 @@ m OU20 'oplog undo: the backup creation has no refs.log line' src/oplog/undo.rs 
   '            refname: &backup_ref,' '            refname: "refs/stw/other",' \
   oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
 m OU21 'oplog undo: the undo update has no refs.log line' src/oplog/undo.rs \
-  '            refname: &plan.reference,' '            refname: "refs/stw/other",' \
+  '            refname: &plan.reference,
+            old: Some(expect),
+            new: Some(to),
+        },
+    );
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        false,' '            refname: "refs/stw/other",
+            old: Some(expect),
+            new: Some(to),
+        },
+    );
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        false,' \
   oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
 m OU22 'oplog undo: the prune has no refs.log lines' src/oplog/undo.rs \
   '                        refname: name,' '                        refname: "refs/stw/other",' \
@@ -2832,13 +2852,19 @@ m OU23 'oplog undo: the next run number is the counter, not counter plus one' sr
   'let run = counted.max(existing).saturating_add(1);' 'let run = counted.max(existing);' \
   oplog_undo the_counter_is_never_reused_after_the_backups_are_pruned
 m OU24 'oplog undo: the way back has --to and --expect swapped' src/oplog/undo.rs \
-  'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);' 'undo_plan::undo_command(&plan.reference, &to.to_string(), &expect.to_string(), false);' \
+  '        &expect.to_string(),
+        &to.to_string(),
+        false,
+        false,' '        &to.to_string(),
+        &expect.to_string(),
+        false,
+        false,' \
   oplog_undo json_names_backup_run_and_way_back
 m OU25 'oplog undo: a refs.log that is a symbolic link is written through' src/oplog/write.rs \
   '    refuse_link(path)?;' '    let _ = path;' \
   oplog_undo a_refs_log_that_is_a_symbolic_link_does_not_undo_the_undo
 m OU26 'oplog undo: undo-plan names the apply command with --to and --expect swapped' src/oplog/undo_plan.rs \
-  'format!("stw oplog undo {name} --to {to} --expect {expect} --yes")' 'format!("stw oplog undo {name} --to {expect} --expect {to} --yes")' \
+  'format!("stw oplog undo {name} --to {to} --expect {expect}{keep} --yes")' 'format!("stw oplog undo {name} --to {expect} --expect {to}{keep} --yes")' \
   oplog_undo expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written
 m OU27 'oplog undo: the run number ignores the runs that exist' src/oplog/undo.rs \
   'let run = counted.max(existing).saturating_add(1);' 'let run = counted.saturating_add(1);' \
@@ -2864,7 +2890,9 @@ m OU33 'oplog undo: undo-plan names a ref with shell characters unquoted' src/op
                     false' \
   oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
 m OU34 'oplog undo: the way back of the text output is unquoted' src/oplog/undo.rs \
-  'undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)' 'undo_plan::undo_command(&self.reference, &self.previous, &self.current, false)' \
+  '                &self.current,
+                true,' '                &self.current,
+                false,' \
   oplog_undo undo_quotes_the_way_back_and_json_keeps_the_raw_name
 m OU35 'oplog undo: a single quote in a name is not escaped' src/oplog/undo_plan.rs \
   "format!(\"'{}'\", s.replace('\\'', \"'\\\\''\"))" "format!(\"'{}'\", s)" \
@@ -2887,10 +2915,18 @@ m OU40 'oplog undo: the JSON apply field is quoted' src/oplog/undo_plan.rs \
             true,' \
   oplog_undo undo_plan_quotes_a_ref_name_with_shell_characters_and_json_keeps_the_raw_name
 m OU41 'oplog undo: the JSON way_back field is quoted' src/oplog/undo.rs \
-  'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), false);' 'undo_plan::undo_command(&plan.reference, &expect.to_string(), &to.to_string(), true);' \
+  '        &to.to_string(),
+        false,
+        false,' '        &to.to_string(),
+        true,
+        false,' \
   oplog_undo undo_quotes_the_way_back_and_json_keeps_the_raw_name
 m OU42 'oplog undo: the way back of the text output has --to and --expect swapped' src/oplog/undo.rs \
-  'undo_plan::undo_command(&self.reference, &self.previous, &self.current, true)' 'undo_plan::undo_command(&self.reference, &self.current, &self.previous, true)' \
+  '                &self.previous,
+                &self.current,
+                true,' '                &self.current,
+                &self.previous,
+                true,' \
   oplog_undo undo_moves_the_branch_and_writes_backup_counter_and_log_lines
 m OU43 'oplog undo: the backup ref is created without the create-only flag (a ref that appears after the lookup is replaced)' src/oplog/undo.rs \
   '            PreviousValue::MustNotExist,
@@ -3127,6 +3163,153 @@ m OH47 'oplog hooks: the common dir of a linked worktree is shown as <git-dir>/w
 m OH48 'oplog hooks: the script of a hook carries another header than its constant' src/oplog/hooks.rs \
   '        header: "# stw-oplog-refhook v1",' '        header: "# stw-oplog-refhook v2",' \
   lib oplog::hooks::tests::each_script_carries_its_own_header_on_line_two
+
+m OK1 'oplog undo --keep: the branch of this worktree is not recognized (a checked-out branch is always refused)' src/oplog/undo_plan.rs \
+  'if req.keep && here.is_some() && std::fs::canonicalize(dir).ok() == here {' 'if false && req.keep && here.is_some() && std::fs::canonicalize(dir).ok() == here {' \
+  oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
+m OK2 'oplog undo --keep: every worktree counts as this one (another worktree holding the branch is not refused)' src/oplog/undo_plan.rs \
+  'std::fs::canonicalize(dir).ok() == here {' 'std::fs::canonicalize(dir).ok() == here || true {' \
+  oplog_undo_keep a_branch_checked_out_in_another_worktree_is_refused
+m OK3 'oplog undo --keep: a second worktree that also holds the branch is not refused' src/oplog/undo_plan.rs \
+  '        other_holds = true;
+' '        other_holds = false;
+        if req.keep && here.is_some() { continue; }
+' \
+  oplog_undo_keep a_branch_that_a_second_worktree_also_holds_is_refused
+m OK4 'oplog undo --keep: a branch that is not checked out here is not refused' src/oplog/undo_plan.rs \
+  '        if !other_holds {
+            let why' '        if false {
+            let why' \
+  oplog_undo_keep a_branch_that_is_not_checked_out_here_is_refused_with_keep
+m OK5 'oplog undo --keep: a detached HEAD is not named as the reason' src/oplog/undo_plan.rs \
+  'Ok(None) => "HEAD is detached".to_string(),' 'Ok(None) => "HEAD has no branch".to_string(),' \
+  oplog_undo_keep a_detached_head_is_refused_with_keep
+m OK6 'oplog undo --keep: a sparse checkout is not refused' src/oplog/undo_plan.rs \
+  '.boolean("core.sparseCheckout")' '.boolean("core.sparseCheckoutX")' \
+  oplog_undo_keep core_sparse_checkout_refuses
+m OK7 'oplog undo --keep: unmerged paths are not refused' src/oplog/undo_plan.rs \
+  '            if c.conflicts > 0 {' '            if false && c.conflicts > 0 {' \
+  oplog_undo_keep a_merge_in_progress_and_unmerged_paths_refuse
+m OK8 'oplog undo --keep: staged changes are not refused' src/oplog/undo_plan.rs \
+  '            if c.staged > 0 {' '            if false && c.staged > 0 {' \
+  oplog_undo_keep a_staged_change_refuses_and_nothing_is_written
+m OK9 'oplog undo --keep: unstaged changes are not refused' src/oplog/undo_plan.rs \
+  '            if c.unstaged > 0 {' '            if false && c.unstaged > 0 {' \
+  oplog_undo_keep an_unstaged_change_refuses_and_nothing_is_written
+m OK10 'oplog undo --keep: untracked files count as changes' src/oplog/undo_plan.rs \
+  '    match crate::status::changes_opts(repo, false, true) {' '    match crate::status::changes_opts(repo, true, true).map(|mut c| { c.unstaged += c.untracked; c }) {' \
+  oplog_undo_keep untracked_files_do_not_refuse_and_stay
+m OK11 'oplog undo --keep: the cleanliness checks are not run' src/oplog/undo_plan.rs \
+  '    if req.keep {
+        keep_checks(' '    if false && req.keep {
+        keep_checks(' \
+  oplog_undo_keep an_unstaged_change_refuses_and_nothing_is_written
+m OK12 'oplog undo --keep: the gitlink check is not run' src/oplog/undo_plan.rs \
+  '    if req.keep && p.refused == 0 {' '    if false && req.keep && p.refused == 0 {' \
+  oplog_undo_keep a_gitlink_that_differs_between_the_tips_refuses
+m OK13 'oplog undo --keep: an added or removed gitlink is not seen' src/oplog/undo_plan.rs \
+  '                } if entry_mode.is_commit() => Some(location.clone()),' '                } if false && entry_mode.is_commit() => Some(location.clone()),' \
+  oplog_undo_keep a_gitlink_that_differs_between_the_tips_refuses
+m OK14 'oplog undo --keep: a gitlink that points elsewhere is not seen' src/oplog/undo_plan.rs \
+  '} if previous_entry_mode.is_commit() || entry_mode.is_commit() => {' '} if false && (previous_entry_mode.is_commit() || entry_mode.is_commit()) => {' \
+  oplog_undo_keep a_gitlink_that_points_elsewhere_refuses
+m OK15 'oplog undo --keep: a git that cannot be asked does not refuse' src/oplog/undo.rs \
+  '.map_err(|e| format!("--keep needs a usable git: {e}"))?;' '.map_err(|e| format!("--keep needs a usable git: {e}")).unwrap_or(crate::git_runner::Version(9, 0, 0));' \
+  oplog_undo_keep a_git_whose_version_cannot_be_read_refuses_before_any_ref_is_written
+m OK16 'oplog undo --keep: an old git does not refuse before the backup' src/oplog/undo.rs \
+  '    if found < needed {' '    if false && found < needed {' \
+  oplog_undo_keep a_git_older_than_reset_keep_needs_refuses_before_any_ref_is_written
+m OK17 'oplog undo --keep: a 64-digit target is cut to 40 digits' src/oplog/undo.rs \
+  'let target = Hex40::parse(to).ok_or_else(' 'let target = Hex40::parse(&to[..40.min(to.len())]).ok_or_else(' \
+  oplog_undo_keep a_target_that_is_not_40_hex_is_refused_before_git_is_asked
+m OK18 'oplog undo --keep: the branch value is not read again before git runs' src/oplog/undo.rs \
+  '    if !holds(expect).map_err(stays)? {' '    if false && !holds(expect).map_err(stays)? {' \
+  oplog_undo_keep a_branch_that_moves_after_the_checks_is_not_reset_and_the_backup_stays
+m OK19 'oplog undo --keep: HEAD is not read again before git runs' src/oplog/undo.rs \
+  '    if !head_on_it {' '    if false && !head_on_it {' \
+  oplog_undo_keep a_head_that_leaves_the_branch_after_the_checks_is_not_reset
+m OK20 'oplog undo --keep: a failed git is not an error' src/oplog/undo.rs \
+  '        .map_err(|e| stays(format!("git reset --keep failed: {}", esc(&e.to_string()))))?;' '        .ok();' \
+  oplog_undo_keep an_untracked_file_in_the_way_makes_git_refuse_and_the_branch_stays
+m OK21 'oplog undo --keep: the op log line of the branch has no new value' src/oplog/undo.rs \
+  '            new: Some(to),
+        },
+    );
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        true,' '            new: None,
+        },
+    );
+    let way_back = undo_plan::undo_command(
+        &plan.reference,
+        &expect.to_string(),
+        &to.to_string(),
+        false,
+        true,' \
+  oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
+m OK22 'oplog undo --keep: the way back has no --keep' src/oplog/undo.rs \
+  '        &to.to_string(),
+        false,
+        true,
+    );' '        &to.to_string(),
+        false,
+        false,
+    );' \
+  oplog_undo_keep keep_json_says_keep_via_git_and_the_way_back_has_keep
+m OK23 'oplog undo --keep: the result says keep false' src/oplog/undo.rs \
+  '        way_back,
+        keep: true,' '        way_back,
+        keep: false,' \
+  oplog_undo_keep keep_json_says_keep_via_git_and_the_way_back_has_keep
+m OK24 'oplog undo --keep: the JSON has no via' src/oplog/undo.rs \
+  '"via": self.keep.then_some(git_runner::VIA),' '"via": None::<&str>,' \
+  oplog_undo_keep keep_json_says_keep_via_git_and_the_way_back_has_keep
+m OK25 'oplog undo --keep: the text result claims only the ref moved' src/oplog/undo.rs \
+  '        if self.keep {
+            b.push_str("Result: done. The branch,' '        if false {
+            b.push_str("Result: done. The branch,' \
+  oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
+m OK26 'oplog undo --keep: the text apply command of the plan has no --keep' src/oplog/undo_plan.rs \
+  '                    true,
+                    self.keep
+' '                    true,
+                    false
+' \
+  oplog_undo_keep without_yes_keep_is_a_usage_error_and_undo_plan_keep_names_the_apply_command
+m OK27 'oplog undo --keep: the JSON apply command of the plan has no --keep' src/oplog/undo_plan.rs \
+  '            false,
+            self.keep,
+        )' '            false,
+            false,
+        )' \
+  oplog_undo_keep without_yes_keep_is_a_usage_error_and_undo_plan_keep_names_the_apply_command
+m OK28 'oplog undo --keep: the plan JSON has keep false' src/oplog/undo_plan.rs \
+  '"keep": self.keep,' '"keep": false,' \
+  oplog_undo_keep without_yes_keep_is_a_usage_error_and_undo_plan_keep_names_the_apply_command
+m OK29 'oplog undo --keep: the plain refusal does not name --keep' src/oplog/undo_plan.rs \
+  'add --keep (clean index and work tree only) or use' 'use' \
+  oplog_undo_keep without_keep_a_checked_out_branch_is_still_refused_and_the_text_names_keep
+m OK30 'oplog undo --keep: undo-plan ignores --keep' src/cli.rs \
+  '            steps: a.steps,
+            keep: a.keep,' '            steps: a.steps,
+            keep: false,' \
+  oplog_undo_keep without_yes_keep_is_a_usage_error_and_undo_plan_keep_names_the_apply_command
+m OK31 'oplog undo --keep: undo ignores --keep' src/cli.rs \
+  '            expect: a.expect,
+            keep: a.keep,' '            expect: a.expect,
+            keep: false,' \
+  oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
+m OK32 'oplog undo --keep: the plain undo JSON says keep true' src/oplog/undo.rs \
+  '        way_back,
+        keep: false,' '        way_back,
+        keep: true,' \
+  oplog_undo_keep a_plain_undo_json_says_keep_false
+m OK33 'oplog undo --keep: git resets to the current value instead of the target' src/oplog/undo.rs \
+  '        .run(&workdir, Op::ResetKeep { target })' '        .run(&workdir, Op::ResetKeep { target: Hex40::parse(&expect.to_string()).unwrap() })' \
+  oplog_undo_keep keep_moves_branch_index_and_worktree_and_writes_backup_and_log_lines
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
