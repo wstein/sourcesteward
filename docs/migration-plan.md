@@ -394,3 +394,62 @@ stack. Deviations and limits: README, "The op log readers". Package 2 (stw's own
 rotation, `truncated`) is built: README, "stw writes its own ref updates". Next packages, in this order: the backup refs and `stw oplog undo` with CAS (spec 8, including the `core.logAllRefUpdates=false` test);
 the hook install (opt-in per repository, `--yes`); the `--keep` path for a checked-out branch; then `stw restack
 apply|undo` (conflicts resolved later through the op log, owner decision 2026-11-11).
+
+
+## M6 preparation: first conflict-free apply and checked undo (2026-11-15)
+
+This section supersedes the older M5/M6 status and ordering statements above, not their historical decisions. At workspace
+`ed8a2bd`, `src/cli.rs` exposes `restack plan` only; M1 replay and M2 plan are present. The owner accepted `prove` and
+`restack plan` live on 2026-11-11 (LOGBOOK: 14 PASS, including `--old-parent`, binary and linked-worktree cases).
+The reflog spike was accepted; the hook-spike recipes and product `oplog undo`, `undo --keep` and hook-install live
+acceptances remain open (DAYBOARD). Current product has the oplog readers, writer, backup refs, undo, `--keep`, hook install
+and sync fetch. Issues #5, #6 and #8 describe earlier checkpoints; they do not supersede these later records.
+The owner selected explicit bottom-up local branches and an explicit onto/trunk (#8). Auto-detection in the existing plan
+is not an approval to infer inputs for this first apply. The owner also decided that conflict handling eventually continues
+through oplog/evolog; the conflict-free slice below does not implement or settle that later flow.
+
+**Proposed first package, not implemented:** a script in `spikes/stw/` followed by owner live acceptance, then a Rust
+package and independent review. Restrict the first demonstration to one explicitly named local branch and an explicit
+onto. Both resolve to pinned full commit IDs; the branch must be a direct, nonsymbolic local ref not checked out in any
+worktree. The plan must be conflict-free, with supported linear history and a valid configured Git identity; no inferred
+stack, checked-out branch, remote write, conflict continuation or automatic review carry-over. The operator sees the
+branch, onto, old and proposed new tips and range-diff before an explicit apply. If replay cannot reproduce the shown
+result, stop and require a new plan. The exact serialization, identity/time handling and lifetime of the plan are open
+implementation decisions: a displayed plan must bind the inputs and the result actually applied, rather than assume
+recomputed commit IDs are stable.
+
+**Apply and recovery contract to demonstrate:**
+
+1. Revalidate branch and onto identities and pinned tips, plan inputs, object availability, worktree occupancy and ongoing
+   operations immediately before mutation. Refuse a conflict, stale or ambiguous input, missing object, symbolic ref,
+   unsupported history, absent identity, unreadable checks or any selected branch checked out in any worktree. Never
+   silently switch to `--keep`. Show the reason; before recovery preparation a refusal changes no branch, index or worktree.
+2. Retain the original tip before the branch move using the existing oplog backup design: `refs/stw/backup/<run>/<k>`,
+   its monotonic counter, run retention and logging rules in `docs/oplog-format.md` section 8. Do not use the obsolete
+   `<n>` spelling above. A failed backup means no branch move. A later failure may leave counter, backup and pruning effects;
+   report the actual stage and retained ref. Log writes are best effort with a visible gap/notice, not proof of a transaction.
+3. Move the branch with a no-deref expected-old CAS; a lost race leaves the competing value untouched and the backup
+   available. The onto tip must also be protected from changing between revalidation and the ref update; choose and prove
+   a mechanism before implementation, or refuse rather than claim this guarantee. Ref CAS alone does not protect worktree
+   registration: the existing undo spec explicitly documents that race. Do not claim atomicity across worktree state,
+   refs, objects and logs. Record actual old/new tips and rewrite pairs needed for an actionable recovery report.
+4. Checked undo identifies that exact apply and moves the same branch from its recorded new tip back to its retained old
+   tip, only after fresh checks and an expected-current CAS. Preserve a backup of the current tip as required by section 8.
+   If the branch moved, is checked out, the record or object is missing, or another check is unreadable, refuse without
+   moving it. The output identifies the backup and recovery steps; a partial or interrupted operation is reported as such,
+   never as success. This is local ref recovery, not undo of pushes, arbitrary files, index state or other worktrees.
+
+**Acceptance evidence for the proposed slice:** in disposable repositories demonstrate a clean single-branch replay,
+compare its tree and history with Git and show the range-diff; apply and checked undo restore the exact original ref while
+other refs, index and worktrees stay unchanged. Exercise stale branch and onto, a competing ref update at CAS, checked-out
+branches in this and another worktree, conflict, dirty/ongoing or unreadable state, failed backup, interruption after backup
+and before/after branch movement, missing retained object and failed log append. For each assert the actual refs, retained
+backup and reported recovery state; targeted mutations must make each new safety check fail for its intended reason.
+Demonstrate backup survival through reflog expiry and GC only in a disposable repository. No full transaction or
+power-loss guarantee follows from these tests. Present the script and its recovery demonstration live to the owner; passing
+fixtures and prior plan acceptance do not constitute acceptance of apply or undo. Product implementation follows that gate.
+
+**Owner decisions still needed before the slice is finalized:** whether single-branch, unchecked-only scope is sufficient
+for the first acceptance; how the explicit plan and consent are presented; how a conflict-free subset relates to the later
+decided continue-on-conflict behavior; and the accepted handling of the onto and worktree-registration races. The existing
+`oplog undo --keep` live gate remains separate; this slice does not depend on claiming that it passed.
