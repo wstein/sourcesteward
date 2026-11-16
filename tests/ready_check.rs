@@ -508,3 +508,130 @@ fn cli_human_lists_all_conditions_on_failed_read() {
         assert!(text.contains(id), "{id}: {text}");
     }
 }
+
+#[test]
+fn dirty_without_mergeable_false_and_no_review_are_not_ready() {
+    let mut f = good();
+    f.mergeable_state = "dirty".into();
+    assert_eq!(evaluate(&f)[5].status, Status::Fail);
+    assert!(!ready(&evaluate(&f)));
+    let mut f = good();
+    f.review = "no-review".into();
+    assert_eq!(evaluate(&f)[1].status, Status::Fail);
+    assert!(!ready(&evaluate(&f)));
+}
+
+fn cli_with_checks(runs: serde_json::Value, statuses: Vec<serde_json::Value>) -> serde_json::Value {
+    use common::FakeRoutes;
+    let api = FakeRoutes::start(move |path, query| {
+        let sha = "a".repeat(40);
+        let body = if path == "/repos/o/r/pulls/7" {
+            serde_json::json!({"state":"open","draft":true,"body":"Blocker: none","head":{"sha":sha},"base":{"ref":"main"},"mergeable":true,"rebaseable":true,"mergeable_state":"clean"})
+        } else if path == "/repos/o/r" {
+            serde_json::json!({"default_branch":"main"})
+        } else if path.ends_with("/check-runs") {
+            if runs.is_object() {
+                runs.clone()
+            } else {
+                serde_json::json!({"check_runs":runs})
+            }
+        } else if path.ends_with("/statuses") {
+            let page = if query.contains("page=2") { 1 } else { 0 };
+            statuses
+                .get(page)
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]))
+        } else if path.ends_with("/issues/7/comments") {
+            serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])
+        } else {
+            return (404, vec![], "{}".into());
+        };
+        (200, vec![], body.to_string())
+    });
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", "/nonexistent")
+        .env("GH_TOKEN", "TEST-TOKEN")
+        .env("STW_GITHUB_API_URL", &api.url)
+        .args(["ready-check", "7", "--repo", "o/r", "--json"])
+        .output()
+        .unwrap();
+    let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(
+        result.status.code(),
+        Some(if doc["ready"] == true { 0 } else { 1 })
+    );
+    doc
+}
+
+#[test]
+fn newest_status_per_context_across_pages() {
+    let mut page = vec![serde_json::json!({"id":1,"context":"ci","state":"success"})];
+    page.extend(
+        (2..=100)
+            .map(|id| serde_json::json!({"id":id,"context":format!("job{id}"),"state":"success"})),
+    );
+    let old = serde_json::json!([{"id":101,"context":"ci","state":"failure"}]);
+    let doc = cli_with_checks(serde_json::json!([]), vec![page.into(), old]);
+    assert_eq!(doc["ready"], true, "{doc}");
+    let doc = cli_with_checks(
+        serde_json::json!([]),
+        vec![
+            serde_json::json!([{"id":1,"context":"ci","state":"success"},{"id":2,"context":"other","state":"failure"}]),
+        ],
+    );
+    assert_eq!(doc["conditions"][2]["status"], "fail");
+}
+
+#[test]
+fn malformed_and_missing_ci_evidence_is_unknown() {
+    use serde_json::json;
+    for run in [
+        json!({"id":1,"status":"completed","conclusion":99}),
+        json!({"id":1,"status":99,"conclusion":"success"}),
+        json!({"id":1,"name":99,"status":"completed","conclusion":"success"}),
+        json!({"id":1,"status":"completed","conclusion":"success","output":{"summary":99}}),
+        json!({"id":1,"status":"completed"}),
+        json!({"id":1,"conclusion":"success"}),
+    ] {
+        let doc = cli_with_checks(json!([run]), vec![json!([])]);
+        assert_eq!(doc["conditions"][2]["status"], "unknown", "{doc}");
+        assert_eq!(doc["ready"], false);
+    }
+    for status in [
+        json!({"id":1,"context":"ci","state":99}),
+        json!({"id":1,"context":99,"state":"success"}),
+        json!({"id":1,"context":"ci","state":"success","description":99}),
+        json!({"id":1,"context":"ci"}),
+    ] {
+        let doc = cli_with_checks(json!([]), vec![json!([status])]);
+        assert_eq!(doc["conditions"][2]["status"], "unknown", "{doc}");
+        assert_eq!(doc["ready"], false);
+    }
+    let doc = cli_with_checks(
+        json!([{"id":1,"status":"in_progress","conclusion":null}]),
+        vec![json!([])],
+    );
+    assert_eq!(doc["conditions"][2]["status"], "fail");
+}
+
+#[test]
+fn malformed_check_run_total_count_is_unknown() {
+    let doc = cli_with_checks(
+        serde_json::json!({"total_count":"wrong","check_runs":[{"id":1,"status":"completed","conclusion":"success"}]}),
+        vec![serde_json::json!([])],
+    );
+    assert_eq!(doc["conditions"][2]["status"], "unknown");
+    assert_eq!(doc["ready"], false);
+}
+
+#[test]
+fn truncated_status_context_is_unknown() {
+    let context = "x".repeat(201);
+    let doc = cli_with_checks(
+        serde_json::json!([]),
+        vec![serde_json::json!([{"id":1,"context":context,"state":"success"}])],
+    );
+    assert_eq!(doc["conditions"][2]["status"], "unknown");
+    assert_eq!(doc["ready"], false);
+}

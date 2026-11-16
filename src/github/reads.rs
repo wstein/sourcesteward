@@ -260,7 +260,27 @@ fn parse_review(v: &Value, b: &Budget) -> Option<Review> {
     })
 }
 
+fn string_or_null(v: &Value) -> bool {
+    v.is_null() || v.is_string()
+}
+
 fn parse_check_run(v: &Value, _b: &Budget) -> Option<CheckRun> {
+    if !v.is_object()
+        || !["name", "status", "conclusion"]
+            .iter()
+            .all(|k| string_or_null(&v[*k]))
+    {
+        return None;
+    }
+    let output = &v["output"];
+    if !output.is_null()
+        && (!output.is_object()
+            || !["title", "summary", "text"]
+                .iter()
+                .all(|k| string_or_null(&output[*k])))
+    {
+        return None;
+    }
     Some(CheckRun {
         id: v["id"].as_u64()?,
         name: esc(&v["name"], 200),
@@ -274,6 +294,20 @@ fn parse_check_run(v: &Value, _b: &Budget) -> Option<CheckRun> {
 }
 
 fn parse_status(v: &Value, b: &Budget) -> Option<CommitStatus> {
+    if !v.is_object()
+        || !["state", "context", "description"]
+            .iter()
+            .all(|k| string_or_null(&v[*k]))
+    {
+        return None;
+    }
+    // A truncated context cannot safely identify which history entries belong together.
+    if v["context"]
+        .as_str()
+        .is_some_and(|s| escape_untrusted(s, 200).1)
+    {
+        return None;
+    }
     Some(CommitStatus {
         id: v["id"].as_u64()?,
         state: esc(&v["state"], 40),
@@ -495,7 +529,13 @@ impl Client {
         Ok(self.list(
             &format!("/repos/{slug}/commits/{sha}/check-runs"),
             budget,
-            |v| v["check_runs"].as_array(),
+            |v| {
+                let total = &v["total_count"];
+                if !total.is_null() && total.as_i64().is_none() {
+                    return None;
+                }
+                v["check_runs"].as_array()
+            },
             parse_check_run,
         ))
     }

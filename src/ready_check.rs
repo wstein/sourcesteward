@@ -498,27 +498,51 @@ fn complete<T>(r: Result<Read<T>, String>) -> Result<Vec<T>, String> {
         Read::Failed(e) => Err(e),
     }
 }
-fn check_class(runs: &[CheckRun], statuses: &[CommitStatus]) -> &'static str {
+fn check_class(runs: &[CheckRun], statuses: &[CommitStatus]) -> Result<&'static str, String> {
+    use std::collections::HashSet;
     if runs.iter().any(|r| {
-        r.status == "completed"
-            && matches!(
-                r.conclusion.as_deref(),
-                Some("failure" | "timed_out" | "cancelled" | "action_required" | "startup_failure")
-            )
+        r.status.is_empty()
+            || (r.status == "completed" && r.conclusion.as_deref().is_none_or(str::is_empty))
     }) || statuses
         .iter()
-        .any(|s| matches!(s.state.as_str(), "failure" | "error"))
+        .any(|s| s.context.is_empty() || s.state.is_empty())
     {
-        "red"
-    } else if runs.iter().any(|r| r.status != "completed")
-        || statuses.iter().any(|s| s.state == "pending")
-    {
-        "pending"
-    } else if !runs.is_empty() || !statuses.is_empty() {
-        "green"
-    } else {
-        "none"
+        return Err("check runs or statuses lack state evidence".into());
     }
+    // The API orders statuses newest first. Keep the first observation of each context across pages.
+    let mut seen = HashSet::new();
+    let statuses: Vec<_> = statuses
+        .iter()
+        .filter(|s| seen.insert(&s.context))
+        .collect();
+    Ok(
+        if runs.iter().any(|r| {
+            r.status == "completed"
+                && matches!(
+                    r.conclusion.as_deref(),
+                    Some(
+                        "failure"
+                            | "timed_out"
+                            | "cancelled"
+                            | "action_required"
+                            | "startup_failure"
+                    )
+                )
+        }) || statuses
+            .iter()
+            .any(|s| matches!(s.state.as_str(), "failure" | "error"))
+        {
+            "red"
+        } else if runs.iter().any(|r| r.status != "completed")
+            || statuses.iter().any(|s| s.state == "pending")
+        {
+            "pending"
+        } else if !runs.is_empty() || !statuses.is_empty() {
+            "green"
+        } else {
+            "none"
+        },
+    )
 }
 /// Collect facts with GET reads only. Incomplete reads do not count as evidence.
 pub fn collect(src: &dyn Source, repo: &str, number: u64) -> (Facts, Vec<(&'static str, String)>) {
@@ -567,7 +591,7 @@ pub fn collect(src: &dyn Source, repo: &str, number: u64) -> (Facts, Vec<(&'stat
     }
     if f.pull_error.is_empty() {
         let result = complete(src.runs(repo, &f.head)).and_then(|runs| {
-            complete(src.statuses(repo, &f.head)).map(|statuses| check_class(&runs, &statuses))
+            complete(src.statuses(repo, &f.head)).and_then(|statuses| check_class(&runs, &statuses))
         });
         match result {
             Ok(class) => f.checks = class.into(),
