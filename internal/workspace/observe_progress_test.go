@@ -3,6 +3,7 @@ package workspace
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"sync"
@@ -42,6 +43,43 @@ func TestObserveProgressCarriesTheRepository(t *testing.T) {
 	}
 }
 
+// The sink may run concurrently, so item counts can arrive in any order within a phase.
+func checkObservePhaseCounts(events []ObserveEvent, phase ObservePhase, total int) error {
+	counts := make([]int, total+1)
+	for _, e := range events {
+		if e.Phase != phase {
+			continue
+		}
+		if e.Total != total || e.Done < 0 || e.Done > total {
+			return fmt.Errorf("%s: unexpected event %+v, total %d", phase, e, total)
+		}
+		counts[e.Done]++
+	}
+	for done, count := range counts {
+		if count != 1 {
+			return fmt.Errorf("%s: count %d reported %d times, want once", phase, done, count)
+		}
+	}
+	return nil
+}
+
+func TestObservePhaseCountsAllowReorderedCallbacks(t *testing.T) {
+	events := []ObserveEvent{
+		{Phase: ObservePhaseBranches, Total: 3},
+		{Phase: ObservePhaseBranches, Done: 3, Total: 3},
+		{Phase: ObservePhaseBranches, Done: 1, Total: 3},
+		{Phase: ObservePhaseBranches, Done: 2, Total: 3},
+	}
+	if err := checkObservePhaseCounts(events, ObservePhaseBranches, 3); err != nil {
+		t.Fatal(err)
+	}
+	for _, bad := range [][]ObserveEvent{events[:3], append(append([]ObserveEvent(nil), events...), events[2])} {
+		if err := checkObservePhaseCounts(bad, ObservePhaseBranches, 3); err == nil {
+			t.Fatalf("accepted missing or duplicate counts: %+v", bad)
+		}
+	}
+}
+
 func TestObserveReportsEveryPhaseWithCounts(t *testing.T) {
 	repo := observeRepo(t)
 	observeAdd(t, repo, "task-a")
@@ -69,15 +107,18 @@ func TestObserveReportsEveryPhaseWithCounts(t *testing.T) {
 		}
 	}
 	// Three worktrees (the primary and two linked), three local branches (main and the two tasks).
-	if e := last[ObservePhaseWorktrees]; e.Done != 3 || e.Total != 3 {
-		t.Fatalf("worktrees: %+v", e)
-	}
-	if e := last[ObservePhaseBranches]; e.Done != 3 || e.Total != 3 {
-		t.Fatalf("branches: %+v", e)
+	for _, phase := range []ObservePhase{ObservePhaseWorktrees, ObservePhaseBranches} {
+		if err := checkObservePhaseCounts(log.events, phase, 3); err != nil {
+			t.Error(err)
+		}
 	}
 	// Proofs: two linked worktrees and the branches that are not the base; the counts agree.
-	if e := last[ObservePhaseProofs]; e.Total == 0 || e.Done != e.Total {
-		t.Fatalf("proofs: %+v", e)
+	proofTotal := last[ObservePhaseProofs].Total
+	if proofTotal == 0 {
+		t.Fatal("no proofs reported")
+	}
+	if err := checkObservePhaseCounts(log.events, ObservePhaseProofs, proofTotal); err != nil {
+		t.Error(err)
 	}
 }
 
