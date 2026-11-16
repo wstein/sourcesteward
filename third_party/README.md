@@ -26,7 +26,7 @@ license and patent grant. Distinct safeexec, pflag, timezone and YAML terms/noti
 | github.com/muesli/termenv | v0.16.0 | [MIT](licenses/MIT.txt) |
 | github.com/rivo/uniseg | v0.4.7 | [MIT](licenses/MIT.txt) |
 | github.com/thlib/go-timezone-local | v0.0.9 | [Unlicense](licenses/Unlicense.txt); upstream is dual-licensed Unlicense OR Apache-2.0 and SourceSteward relies on the Unlicense, so no Apache text is retained |
-| golang.org/x/sys | v0.49.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
+| golang.org/x/sys | v0.50.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | golang.org/x/term | v0.47.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | golang.org/x/text | v0.43.0 | [BSD-3](licenses/BSD-3-Go.txt), [patent grant](licenses/Go-PATENTS.txt) |
 | gopkg.in/yaml.v3 | v3.0.1 | [MIT/Apache terms](licenses/yaml-LICENSE.txt), [NOTICE](licenses/yaml-NOTICE.txt) |
