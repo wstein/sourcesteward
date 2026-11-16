@@ -57,6 +57,8 @@ enum Command {
     /// Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
     #[command(after_help = EXIT_CODES)]
     Add(AddArgs),
+    /// Check the read-only preconditions for marking a pull request ready
+    ReadyCheck(ReadyCheckArgs),
     /// Review helpers (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Review {
@@ -89,6 +91,76 @@ enum Command {
         #[command(subcommand)]
         command: DevCommand,
     },
+}
+
+#[derive(Args)]
+struct ReadyCheckArgs {
+    /// Pull request number
+    number: String,
+    /// Repository OWNER/NAME (default: the single GitHub repository in the workspace)
+    #[arg(long)]
+    repo: Option<String>,
+    /// Print the human list (the default)
+    #[arg(long, conflicts_with = "json")]
+    human: bool,
+    /// Print one JSON object
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_ready_check(a: ReadyCheckArgs) -> Result<u8> {
+    let n = a
+        .number
+        .parse::<u64>()
+        .ok()
+        .filter(|n| *n > 0 && n.to_string() == a.number)
+        .ok_or_else(|| Error::usage("NUMBER must be a positive decimal integer"))?;
+    let repo = match a.repo {
+        Some(r) if lint_pr_cmd::valid_repo(&r) => r,
+        Some(_) => return Err(Error::usage("--repo must be OWNER/NAME")),
+        None => lint_pr_cmd::workspace_repo(None)?.0,
+    };
+    let gh = GithubState::discover(false);
+    let client = gh.client().ok_or_else(|| {
+        Error::github(format!(
+            "hosting-api-unavailable: {}",
+            gh.note.as_deref().unwrap_or_default()
+        ))
+    })?;
+    let (f, errors) = crate::ready_check::collect(client, &repo, n);
+    let doc = crate::ready_check::document(&repo, n, &f, &errors, crate::tidy::now_secs());
+    if a.json {
+        println!("{doc}");
+    } else {
+        let head: String = f.head.chars().take(7).collect();
+        println!(
+            "{}#{} head {}, draft {}",
+            repo,
+            n,
+            if head.is_empty() { "-" } else { &head },
+            if f.pull_error.is_empty() {
+                f.draft.to_string()
+            } else {
+                "-".into()
+            }
+        );
+        for c in crate::ready_check::evaluate(&f) {
+            println!("  {:<10} {:<7} {}", c.id, c.status.label(), c.evidence);
+        }
+        for (source, message) in &errors {
+            println!(
+                "  read error ({}): {}",
+                source,
+                crate::github::reads::escape_untrusted(message, 300).0
+            );
+        }
+        println!("Ready: {}", if doc["ready"] == true { "yes" } else { "no" });
+    }
+    Ok(if doc["ready"] == true {
+        exit::OK
+    } else {
+        exit::FAILED
+    })
 }
 
 #[derive(Subcommand)]
@@ -1586,6 +1658,7 @@ fn git_command_label(command: &Command) -> &'static str {
             command: ReviewCommand::CarryOver(_),
         } => "review carry-over",
         Command::Prove(_) => "prove",
+        Command::ReadyCheck(_) => "ready-check",
         // these start no git (gix only); a new command must be named here on purpose
         Command::Tidy { .. }
         | Command::Restack { .. }
@@ -1600,6 +1673,7 @@ fn run(command: Command) -> Result<u8> {
     let failed = |any: bool| if any { exit::FAILED } else { exit::OK };
     match command {
         Command::Status(a) => run_status(a),
+        Command::ReadyCheck(a) => run_ready_check(a),
         Command::Tidy {
             command: TidyCommand::Plan(a),
         } => {

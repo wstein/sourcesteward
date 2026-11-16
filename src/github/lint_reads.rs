@@ -44,7 +44,7 @@ fn too_large(comment_page: bool) -> Error {
 impl Client {
     /// `size_is_too_large`: as in Go, only comment pages report an oversized body as `page-too-large`; the other reads
     /// report `malformed-response`.
-    fn lint_get(&self, path: &str, size_is_too_large: bool) -> Result<LintPage> {
+    pub(crate) fn lint_get(&self, path: &str, size_is_too_large: bool) -> Result<LintPage> {
         let url = format!("{}{path}", self.base);
         let mut resp = self
             .agent
@@ -147,5 +147,13 @@ impl Client {
             ),
             true,
         )
+    }
+}
+
+impl Client {
+    /// Raw repository document, with the same bounds as a pull detail.
+    pub fn ready_repo(&self, slug: &str) -> Result<LintPage> {
+        Self::check_slug(slug)?;
+        self.lint_get(&format!("/repos/{slug}"), false)
     }
 }

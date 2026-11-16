@@ -754,3 +754,28 @@ impl Client {
         )
     }
 }
+
+/// An open pull request's branch, for finding a stack parent.
+#[derive(Clone, Debug)]
+pub struct ReadyParent {
+    pub number: u64,
+    pub head_ref: String,
+}
+impl Client {
+    pub fn ready_parents(&self, slug: &str, budget: &Budget) -> Result<Read<ReadyParent>> {
+        Self::check_slug(slug)?;
+        Ok(self.list(
+            &format!("/repos/{slug}/pulls"),
+            budget,
+            Value::as_array,
+            |v, _| {
+                let number = v["number"].as_u64().filter(|n| *n > 0)?;
+                let head_ref = v["head"]["ref"].as_str().filter(|s| !s.is_empty())?;
+                Some(ReadyParent {
+                    number,
+                    head_ref: head_ref.into(),
+                })
+            },
+        ))
+    }
+}

@@ -93,7 +93,7 @@ pub fn git_identity(dir: &Path) -> Option<Identity> {
 }
 
 /// The single GitHub repository of the workspace around `path` (default: the current directory).
-fn workspace_repo(path: Option<&str>) -> Result<(String, std::path::PathBuf)> {
+pub(crate) fn workspace_repo(path: Option<&str>) -> Result<(String, std::path::PathBuf)> {
     let start = match path {
         Some(p) => std::path::PathBuf::from(p),
         None => std::env::current_dir()

@@ -13,6 +13,7 @@ pub mod oplog;
 pub mod output;
 pub mod patch_id;
 pub mod prove;
+pub mod ready_check;
 pub mod replay;
 pub mod repo;
 pub mod restack_plan;

@@ -36,6 +36,7 @@ stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
+stw ready-check NUMBER [--repo OWNER/NAME] [--human | --json]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 ```
 
@@ -49,6 +50,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
+| `ready-check` | the seven read-only conditions for a pull request | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): like Go it fetches `origin` first (not with `--offline`) and says what would be fast-forwarded and why not | without `--plan`/`--dry-run`; with it only the remote-tracking refs of `origin` (and FETCH_HEAD, objects); `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
@@ -965,6 +967,12 @@ attribute and repository hazard refusals (replaced by `unknown`), the refusal of
 repository, the jj and GitButler refusal (decision 8), the exit status 3 (incomplete) and the result byte bound; (3) the replay is the
 gix engine, not `git merge-tree`: the kinds agree with git, the paths of `rename/rename`, `rename/delete`, `file/directory` and
 `directory-rename` differ (header of `src/replay.rs`); (4) exit codes: 0 only for `plan: clean` (Go: 0 for every complete plan); (5) own output and JSON layout (Go: its own schema).
+
+## Ready check: `stw ready-check`
+
+`stw ready-check NUMBER [--repo OWNER/NAME] [--human | --json]` reads one pull request and reports `open`, `review`, `checks`, `base`, `blocker`, `conflict`, and `rebaseable`. Every condition must pass; an unreadable or incomplete dependency is unknown and does not pass. Draft is reported but is not a condition. A non-default base passes only when another open pull request has that head branch; the lowest matching number is shown. Review state uses the same trusted-author and carry-over rules as `status --review`. Check runs and commit statuses are read at the exact head. The command uses GET only and does not mark ready or post anything.
+
+`--json` prints schema 2 with `command`, `time`, `host`, `repo`, `number`, `head`, `draft`, `ready`, `conditions` and `errors`. Text is the default. Exit 0 means all conditions pass, 1 means a condition did not pass or a read failed, and 2 means invalid arguments. `--repo` selects a repository; otherwise the workspace must contain exactly one GitHub repository. The GitHub API base follows `STW_GITHUB_API_URL`; there is no `--host` flag. Reads are bounded by the existing GitHub reader. A cut list is unknown.
 
 ## PR lint: `stw lint pr` (M8)
 
