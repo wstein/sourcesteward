@@ -199,30 +199,46 @@ fn an_old_committer_time_does_not_end_the_walk() {
 fn a_run_of_old_author_times_ends_the_walk_a_single_one_does_not() {
     let fx = Fx::new();
     let b = base(&fx);
-    let l = land(&fx, b, &cs(2), MERGE_SECS);
     let repo = fx.repo();
     let n = RB_STOP_RUN;
     let ancient = 1_000;
-    // n in a row: stop (the run itself is indexed)
-    let tip = old_commits(&fx, last(&l), n, ancient);
-    let idx = RebaseIndex::build(&repo, tip, Some(T0), RB_MAX_WINDOW).unwrap();
+    let walk = |tip| RebaseIndex::build(&repo, tip, Some(T0), RB_MAX_WINDOW).unwrap();
+    // n old commits in a row below two landed commits: stop (the run itself is indexed)
+    let tip = last(&land(
+        &fx,
+        old_commits(&fx, b, n, ancient),
+        &cs(2),
+        MERGE_SECS,
+    ));
+    let idx = walk(tip);
     assert_eq!((idx.len(), idx.stop()), (n + 2, Stop::Time));
-    // n - 1 in a row, a recent commit, n - 1 again: no stop, the root is reached
-    let t1 = old_commits(&fx, last(&l), n - 1, ancient);
-    let t2 = foreign(&fx, t1, 7);
-    let t3 = old_commits(&fx, t2, n - 1, ancient);
-    let idx = RebaseIndex::build(&repo, t3, Some(T0), RB_MAX_WINDOW).unwrap();
+    // n - 1 old, a recent commit, n - 1 old: no stop, the root is reached
+    let low = old_commits(&fx, b, n - 1, ancient);
+    let mid = foreign(&fx, low, 7);
+    let tip = last(&land(
+        &fx,
+        old_commits(&fx, mid, n - 1, ancient),
+        &cs(2),
+        MERGE_SECS,
+    ));
+    let idx = walk(tip);
     assert_eq!(idx.stop(), Stop::Root);
-    assert_eq!(idx.len(), (n - 1) + 1 + (n - 1) + 2 + 1);
+    assert_eq!(idx.len(), 2 + (n - 1) + 1 + (n - 1) + 1);
     // a single old commit never stops
-    let one = old_commits(&fx, last(&l), 1, ancient);
-    assert_eq!(
-        RebaseIndex::build(&repo, one, Some(T0), RB_MAX_WINDOW)
-            .unwrap()
-            .stop(),
-        Stop::Root
-    );
+    let tip = last(&land(
+        &fx,
+        old_commits(&fx, b, 1, ancient),
+        &cs(2),
+        MERGE_SECS,
+    ));
+    assert_eq!(walk(tip).stop(), Stop::Root);
     // without a time bound the chain is walked to its root
+    let tip = last(&land(
+        &fx,
+        old_commits(&fx, b, n, ancient),
+        &cs(2),
+        MERGE_SECS,
+    ));
     let idx = RebaseIndex::build(&repo, tip, None, RB_MAX_WINDOW).unwrap();
     assert_eq!(idx.stop(), Stop::Root);
 }
@@ -231,18 +247,20 @@ fn a_run_of_old_author_times_ends_the_walk_a_single_one_does_not() {
 fn the_age_bound_is_a_day_before_the_oldest_author_time_inclusive() {
     let fx = Fx::new();
     let b = base(&fx);
-    let l = land(&fx, b, &cs(1), MERGE_SECS);
     let repo = fx.repo();
     let n = RB_STOP_RUN as i64;
     let bound = T0 - RB_SLACK_SECS;
+    let walk = |first: i64| {
+        let lo = old_commits(&fx, b, RB_STOP_RUN, first);
+        let tip = last(&land(&fx, lo, &cs(1), MERGE_SECS));
+        RebaseIndex::build(&repo, tip, Some(T0), RB_MAX_WINDOW)
+            .unwrap()
+            .stop()
+    };
     // the newest of the run is exactly at the bound: not old, the run is broken
-    let at = old_commits(&fx, last(&l), RB_STOP_RUN, bound - n + 1);
-    let idx = RebaseIndex::build(&repo, at, Some(T0), RB_MAX_WINDOW).unwrap();
-    assert_eq!(idx.stop(), Stop::Root);
+    assert_eq!(walk(bound - n + 1), Stop::Root);
     // one second older: all are old
-    let below = old_commits(&fx, last(&l), RB_STOP_RUN, bound - n);
-    let idx = RebaseIndex::build(&repo, below, Some(T0), RB_MAX_WINDOW).unwrap();
-    assert_eq!(idx.stop(), Stop::Time);
+    assert_eq!(walk(bound - n), Stop::Time);
 }
 
 #[test]

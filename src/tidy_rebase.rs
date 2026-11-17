@@ -21,8 +21,8 @@ use crate::error::Result;
 use crate::patch_id::{changed_files, commit_patch_key};
 use crate::tidy_similarity::{mask_bytes, Limits, Sim, SimCache, Skip, LOW_PCT};
 
-/// The index stops at a commit whose committer time is older than the oldest author time of the branches by more
-/// than this (a rebase merge writes a committer time at or after the author time; this covers clock skew).
+/// A chain commit counts as old when its author time is older than the oldest author time of the branches by more
+/// than this.
 pub const RB_SLACK_SECS: i64 = 86_400;
 /// The walk stops after this many chain commits in a row with an author time older than the oldest author time of the
 /// branches minus `RB_SLACK_SECS`.
@@ -92,7 +92,7 @@ pub fn read_head(repo: &gix::Repository, id: ObjectId) -> Result<Head> {
 pub enum Stop {
     /// The first commit of the history.
     Root,
-    /// A commit older than the oldest author time minus `RB_SLACK_SECS`.
+    /// `RB_STOP_RUN` commits in a row older (by author time) than the oldest author time of the branch minus `RB_SLACK_SECS`.
     Time,
     /// `RB_MAX_WINDOW` commits (`bounds.window_cut`).
     Window,
@@ -125,22 +125,23 @@ impl RebaseIndex {
             stop: Stop::Root,
         };
         let mut next = Some(base_tip);
+        let mut old_run = 0;
         while let Some(id) = next {
             if idx.positions.len() >= max_window {
                 idx.stop = Stop::Window;
                 break;
             }
-            let head = match read_head(repo, id) {
-                Ok(h) => h,
-                Err(_) if !idx.positions.is_empty() => {
-                    idx.stop = Stop::Missing(id);
-                    break;
-                }
-                Err(e) => return Err(e),
-            };
-            if since.is_some_and(|s| head.committer_secs < s - RB_SLACK_SECS) {
-                idx.stop = Stop::Time;
+            // only a missing object ends the walk quietly (shallow or partial clone); any other error is an error
+            if !idx.positions.is_empty() && !repo.has_object(id) {
+                idx.stop = Stop::Missing(id);
                 break;
+            }
+            let head = read_head(repo, id)?;
+            // the committer time is not looked at: it can be set to anything
+            if since.is_some_and(|s| head.key.secs < s - RB_SLACK_SECS) {
+                old_run += 1;
+            } else {
+                old_run = 0;
             }
             let pos = idx.positions.len() as u32;
             if head.parents <= 1 {
@@ -153,6 +154,10 @@ impl RebaseIndex {
                 .next()
                 .map(|p| p.detach());
             idx.positions.push(head);
+            if old_run >= RB_STOP_RUN {
+                idx.stop = Stop::Time;
+                break;
+            }
         }
         Ok(idx)
     }
