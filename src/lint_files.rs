@@ -275,6 +275,17 @@ pub fn lint_pr_text(text: &str, ready: bool) -> Vec<Finding> {
     out
 }
 
+/// The text of a Blocker line that says there is none: `none` or `keiner`/`keine`, in any case, with or without a
+/// full stop, with blanks around it. Source: skill section 9 (`Blocker oder "keiner"`) and the core (a Draft starts
+/// with a named blocker; Ready means no other named blocker remains).
+fn means_none(rest: &str) -> bool {
+    let t = rest.trim();
+    let t = t.strip_suffix('.').unwrap_or(t);
+    ["none", "keiner", "keine"]
+        .iter()
+        .any(|w| lint_pr::fold(t) == *w)
+}
+
 fn blocker(text: &str, ready: bool, out: &mut Vec<Finding>) {
     // a line that reads like a Blocker line (markdown marks allowed): the rule of `lint pr`
     let lines: Vec<(usize, &str)> = text
@@ -298,10 +309,10 @@ fn blocker(text: &str, ready: bool, out: &mut Vec<Finding>) {
                     at,
                     "the line is not `Blocker: None.` or `Blocker: <text>`",
                 )),
-                Some("None.") if !ready => out.push(finding(
+                Some(rest) if !ready && means_none(rest) => out.push(finding(
                     lint_pr::BLOCKER_LINE,
                     at,
-                    "a Draft names its blocker; `Blocker: None.` only for a Ready PR (--ready)",
+                    "a Draft names its blocker; none (`Blocker: None.`) only for a Ready PR (--ready)",
                 )),
                 Some(rest) if ready && rest != "None." => out.push(finding(
                     lint_pr::BLOCKER_LINE,
