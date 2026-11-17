@@ -307,6 +307,55 @@ fn a_missing_parent_object_ends_the_walk_without_an_error() {
     );
 }
 
+/// A shallow boundary: `edge` has the key of `c(0)` but its parent object is not there.
+fn shallow_edge(fx: &Fx) -> (ObjectId, ObjectId) {
+    let ghost: ObjectId = "1234567890123456789012345678901234567890".parse().unwrap();
+    let c0 = c(0);
+    let author = Stamp::new(c0.name, c0.mail, c0.secs);
+    let edge = fx.commit_at_parents(
+        vec![ghost],
+        None,
+        &[(c0.file.as_str(), Some(c0.body.as_str()))],
+        &c0.subject,
+        author,
+        Stamp::new("Merger", "merger@example.com", MERGE_SECS),
+    );
+    (edge, ghost)
+}
+
+#[test]
+fn the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error() {
+    let fx = Fx::new();
+    let (edge, ghost) = shallow_edge(&fx);
+    let list = cs(2);
+    let l = land(&fx, edge, &list[1..], MERGE_SECS + 10);
+    let base_tip = last(&l);
+    // the branch: its first commit is the one at the boundary, the second landed on top of it
+    let b = base(&fx);
+    let br = branch(&fx, b, &list);
+    let repo = fx.repo();
+    let side = branch_side(&repo, base_tip, last(&br)).unwrap();
+    let index =
+        RebaseIndex::build(&repo, base_tip, side.oldest_author_secs, RB_MAX_WINDOW).unwrap();
+    assert_eq!(index.stop(), Stop::Missing(ghost));
+    // no error from the patch IDs (the boundary commit has no patch to read)
+    let hits = patch_hits(&repo, &index, &side.commits).unwrap();
+    assert_eq!(
+        hits.get(&br[1]),
+        Some(&last(&l)),
+        "the commit above the boundary has its patch"
+    );
+    let mut cache = SimCache::default();
+    let r = evaluate(&repo, &mut cache, &index, &side, &hits, &Limits::default()).unwrap();
+    // the identity finds the boundary commit; its content cannot be read: not vouched for
+    assert_eq!(r.mapping[0].main, Some(edge));
+    assert_eq!(r.mapping[0].value, None);
+    assert_eq!(r.mapped, 2);
+    assert!(!r.content_ok);
+    assert_eq!(r.strength, Strength::Hint);
+    assert_eq!(r.stop, Stop::Missing(ghost), "the reason is in the report");
+}
+
 // ---- the branch side ----
 
 #[test]
@@ -1550,6 +1599,23 @@ fn the_commits_behind_the_merge_commit_must_equal_the_pull_request_commits() {
         api(&fx, last(&l), last(&br), empty).kind,
         LandedKind::Unknown
     );
+}
+
+#[test]
+fn a_shallow_boundary_below_the_merge_commit_is_not_an_error() {
+    let fx = Fx::new();
+    let (edge, _) = shallow_edge(&fx);
+    let list = cs(5);
+    let b = base(&fx);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, edge, &list[2..], MERGE_SECS + 10);
+    // the pull request has 5 commits, main shows 3, the boundary commit and then nothing readable
+    let mut input = pr(&list, &br, last(&l));
+    input.merged_at = None;
+    let rep = api(&fx, last(&l), last(&br), input);
+    assert_eq!(rep.not_read, None);
+    assert_eq!(rep.kind, LandedKind::Unknown);
+    assert_eq!(rep.tip_matches_run, Some(false));
 }
 
 #[test]
