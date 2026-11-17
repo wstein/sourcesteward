@@ -1226,7 +1226,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1031 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1075 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1379,6 +1379,13 @@ on a single file), the ref is restored but files already written stay; `git stat
   Hunks come from gix-imara-diff (Myers), not from `git diff -U0`; whether the multisets differ from git's is UNKNOWN until the oracle. Limits: a commit with more
   than 20 000 keys or a blob over 1 MiB is `too_large` (no value, prevents `landed`). Reusable parts: `Keys::sum`, containment as (numerator, denominator),
   `tree_entries` (cumulative diff `base...tip`), `MainIndex::candidates` and `in_window` apart from the comparison. Mutations `TS1` to `TS51`.
+- Rebase-merge proof (`src/tidy_rebase.rs`, library only; not yet wired into `tidy plan`; specification in `spikes/stw/tidy-similarity/README.md`, section
+  package 1b): a rebase merge writes a branch commit again with the same author, author time and subject. `RebaseIndex` walks the first-parent chain
+  of main once; a branch commit maps to the chain commit with the same key (author mail in lower case, author seconds, subject) and the exact author
+  name, after an equal patch. Several commits with one key are assigned as a multiset by their neighbours (`ambiguous` without one). `contiguous`,
+  `in_order`, `gap`, `runs`: the targets form one block in branch order. Strong (class `rebase-identity`, decision `review`, never `delete`): all
+  commits mapped, one ordered block, content floor 50 %, at least one identity. The pull request (`evaluate_api`, on given inputs, no request) and
+  `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB44`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.
