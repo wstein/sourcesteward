@@ -177,6 +177,9 @@ impl Keys {
 }
 
 use crate::error::Result;
+use crate::patch_id::{changed_files, content, is_binary, mode_str};
+use gix::diff::blob::{Algorithm, Diff, InternedInput};
+use gix::objs::tree::EntryKind;
 use gix::ObjectId;
 
 /// Why a commit has no value.
@@ -239,11 +242,124 @@ pub enum Entries {
 }
 
 /// The entries of `commit` against its first parent.
-pub fn commit_entries(_repo: &gix::Repository, _commit: ObjectId, _lim: &Limits) -> Result<Entries> {
-    unimplemented!()
+pub fn commit_entries(repo: &gix::Repository, commit: ObjectId, lim: &Limits) -> Result<Entries> {
+    let c = repo.find_commit(commit)?;
+    let parents: Vec<ObjectId> = c.parent_ids().map(|p| p.detach()).collect();
+    if parents.len() > 1 {
+        return Ok(Entries::Skipped(Skip::Merge));
+    }
+    let new_tree = c.tree_id()?.detach();
+    let old_tree = match parents.first() {
+        Some(p) => repo.find_commit(*p)?.tree_id()?.detach(),
+        None => repo.empty_tree().id,
+    };
+    if old_tree == new_tree {
+        return Ok(Entries::Skipped(Skip::Empty));
+    }
+    tree_entries(repo, old_tree, new_tree, lim)
+}
+
+fn tree_of(repo: &gix::Repository, id: ObjectId) -> Result<gix::Tree<'_>> {
+    if id == repo.empty_tree().id {
+        return Ok(repo.empty_tree());
+    }
+    Ok(repo.find_tree(id)?)
 }
 
 /// The entries of the difference between two trees (the cumulative diff `base...tip` is `tree_entries(base tree, tip tree)`).
-pub fn tree_entries(_repo: &gix::Repository, _old: ObjectId, _new: ObjectId, _lim: &Limits) -> Result<Entries> {
-    unimplemented!()
+///
+/// Same tree diff as the patch ID (`patch_id::changed_files`, no rename detection). Hunks come from gix-imara-diff
+/// (Myers, no slider heuristic), not from `git diff -U0`: where git (xdiff, indent heuristic) picks another minimal diff,
+/// the multiset can differ; a hunk that only moves over equal lines does not change it.
+pub fn tree_entries(
+    repo: &gix::Repository,
+    old: ObjectId,
+    new: ObjectId,
+    lim: &Limits,
+) -> Result<Entries> {
+    let (old_tree, new_tree) = (tree_of(repo, old)?, tree_of(repo, new)?);
+    let mut out: Vec<Entry> = Vec::new();
+    for f in changed_files(repo, &old_tree, &new_tree)? {
+        let path = f.path.to_vec();
+        let plain = |sign: u8, line: Vec<u8>| Entry {
+            path: path.clone(),
+            sign,
+            line,
+        };
+        if let (Some((ko, _)), Some((kn, _))) = (f.old, f.new) {
+            if ko != kn {
+                out.push(plain(
+                    b'M',
+                    format!("{}>{}", mode_str(ko), mode_str(kn)).into_bytes(),
+                ));
+            }
+        }
+        for (kind, id) in [f.old, f.new].into_iter().flatten() {
+            if kind != EntryKind::Commit && repo.find_header(id)?.size() > lim.max_blob_bytes {
+                return Ok(Entries::Skipped(Skip::TooLarge));
+            }
+        }
+        let before = match f.old {
+            Some((k, id)) => content(repo, k, id)?,
+            None => Vec::new(),
+        };
+        let after = match f.new {
+            Some((k, id)) => content(repo, k, id)?,
+            None => Vec::new(),
+        };
+        if before == after {
+            // only the mode changed, or an empty file was added or deleted
+            if f.old.is_none() {
+                out.push(plain(b'N', Vec::new()));
+            } else if f.new.is_none() {
+                out.push(plain(b'X', Vec::new()));
+            }
+            continue;
+        }
+        if is_binary(&before) || is_binary(&after) {
+            let line = match (f.new, f.old) {
+                (Some((_, id)), _) => format!("bin {id}"),
+                (None, Some((_, id))) => format!("bin-deleted {id}"),
+                (None, None) => String::new(),
+            };
+            out.push(plain(b'B', line.into_bytes()));
+        } else {
+            push_hunk_lines(&mut out, &path, &before, &after);
+        }
+        if out.len() > lim.max_keys {
+            return Ok(Entries::Skipped(Skip::TooLarge));
+        }
+    }
+    if out.is_empty() {
+        return Ok(Entries::Skipped(Skip::Empty));
+    }
+    Ok(Entries::Lines(out))
+}
+
+/// `-` lines of the old side and `+` lines of the new side of every hunk (context 0), trimmed.
+fn push_hunk_lines(out: &mut Vec<Entry>, path: &[u8], before: &[u8], after: &[u8]) {
+    let input = InternedInput::new(before, after);
+    let mut diff = Diff::compute(Algorithm::Myers, &input);
+    diff.postprocess_no_heuristic(&input);
+    for h in diff.hunks() {
+        let sides = [
+            (
+                b'-',
+                &input.before[h.before.start as usize..h.before.end as usize],
+            ),
+            (
+                b'+',
+                &input.after[h.after.start as usize..h.after.end as usize],
+            ),
+        ];
+        for (sign, tokens) in sides {
+            for t in tokens {
+                out.push(Entry {
+                    path: path.to_vec(),
+                    sign,
+                    line: trim_line(input.interner[*t]).to_vec(),
+                });
+            }
+        }
+    }
 }

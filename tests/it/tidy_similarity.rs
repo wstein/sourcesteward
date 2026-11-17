@@ -53,7 +53,11 @@ fn threshold_is_at_or_above_in_integers() {
     let s = a.similarity(&b);
     assert_eq!(s.permille(), 950, "rounds up to 95.0");
     assert!(!s.ge_pct(95));
-    assert_eq!(s.shown(95), 949, "shown as 94.9 so that display and class agree");
+    assert_eq!(
+        s.shown(95),
+        949,
+        "shown as 94.9 so that display and class agree"
+    );
     assert_eq!(fmt_permille(s.shown(95)), "94.9");
 }
 
@@ -98,18 +102,34 @@ fn only_the_white_space_borders_are_trimmed() {
     assert_eq!(trim_line(b"x  y"), b"x  y", "inner white space stays");
     let a = Keys::from_entries(&[e("f", b'+', "    x();\r\n")]);
     let b = Keys::from_entries(&[e("f", b'+', "x();")]);
-    assert_eq!(a.similarity(&b).inter, 1, "indentation and CR do not matter");
+    assert_eq!(
+        a.similarity(&b).inter,
+        1,
+        "indentation and CR do not matter"
+    );
     let c = Keys::from_entries(&[e("f", b'+', "x( );")]);
     assert_eq!(a.similarity(&c).inter, 0, "inner white space does");
 }
 
 #[test]
 fn the_comparison_of_values_is_exact() {
-    let lo = Sim { inter: 1, a: 3, b: 3 };
-    let hi = Sim { inter: 2, a: 5, b: 5 };
+    let lo = Sim {
+        inter: 1,
+        a: 3,
+        b: 3,
+    };
+    let hi = Sim {
+        inter: 2,
+        a: 5,
+        b: 5,
+    };
     assert_eq!(lo.cmp_value(&hi), std::cmp::Ordering::Less);
     assert_eq!(hi.cmp_value(&lo), std::cmp::Ordering::Greater);
-    let same = Sim { inter: 2, a: 6, b: 6 };
+    let same = Sim {
+        inter: 2,
+        a: 6,
+        b: 6,
+    };
     assert_eq!(lo.cmp_value(&same), std::cmp::Ordering::Equal);
 }
 
@@ -122,8 +142,16 @@ fn a_sum_of_commits_and_containment() {
     assert_eq!(squash.len(), 3);
     let s = c1.similarity(&squash);
     assert_eq!(s.containment_in_a(), (2, 2), "all of c1 is in the squash");
-    assert_eq!(s.containment_in_b(), (2, 3), "two thirds of the squash are c1");
-    assert_eq!(c1.sum(&c2), c2.sum(&c1), "the sum does not depend on the order");
+    assert_eq!(
+        s.containment_in_b(),
+        (2, 3),
+        "two thirds of the squash are c1"
+    );
+    assert_eq!(
+        c1.sum(&c2),
+        c2.sum(&c1),
+        "the sum does not depend on the order"
+    );
 }
 
 // ---- keys from real commits (fixtures built with gix, no git binary) ----
@@ -221,7 +249,10 @@ fn an_edit_gives_one_minus_and_one_plus_without_context() {
     let edit = mk(
         &fx,
         Some(base),
-        &[put("f.txt", &lines(20, "x").replace("x10\n", "  new ten\r\n"))],
+        &[put(
+            "f.txt",
+            &lines(20, "x").replace("x10\n", "  new ten\r\n"),
+        )],
         "edit",
         T0 + 60,
     );
@@ -246,19 +277,6 @@ fn a_rename_is_a_deletion_and_an_addition() {
     let got = lines_of(&entries(&fx, ren));
     assert_eq!(got.len(), 4);
     assert!(got.contains(&s("old.txt", b'-', "a")) && got.contains(&s("new.txt", b'+', "b")));
-    // with the path they differ from the same change in place, without the path they are the same lines
-    let k = |c| match entries(&fx, c) {
-        Entries::Lines(v) => Keys::from_entries(&v),
-        _ => panic!(),
-    };
-    let edit = mk(
-        &fx,
-        Some(base),
-        &[put("old.txt", "")],
-        "empty it",
-        T0 + 61,
-    );
-    let _ = k(edit);
 }
 
 #[test]
@@ -266,9 +284,30 @@ fn a_binary_file_is_one_key_by_blob_id_without_content_lines() {
     let fx = Fx::new();
     let base = mk(&fx, None, &[put("a.txt", "x\n")], "base", T0);
     let bin = |d: &'static [u8]| -> Edit<'static> { (b"p.bin", Some((EntryKind::Blob, d))) };
-    let c1 = mk_full(&fx, &[base], Some(base), &[bin(b"\0\x01\x02")], "bin1", T0 + 60);
-    let c2 = mk_full(&fx, &[base], Some(base), &[bin(b"\0\x01\x02")], "bin1 again", T0 + 61);
-    let c3 = mk_full(&fx, &[base], Some(base), &[bin(b"\0\x09\x09")], "bin2", T0 + 62);
+    let c1 = mk_full(
+        &fx,
+        &[base],
+        Some(base),
+        &[bin(b"\0\x01\x02")],
+        "bin1",
+        T0 + 60,
+    );
+    let c2 = mk_full(
+        &fx,
+        &[base],
+        Some(base),
+        &[bin(b"\0\x01\x02")],
+        "bin1 again",
+        T0 + 61,
+    );
+    let c3 = mk_full(
+        &fx,
+        &[base],
+        Some(base),
+        &[bin(b"\0\x09\x09")],
+        "bin2",
+        T0 + 62,
+    );
     let k = |c| match entries(&fx, c) {
         Entries::Lines(v) => {
             assert_eq!(v.len(), 1, "one key, no lines");
@@ -285,26 +324,57 @@ fn a_binary_file_is_one_key_by_blob_id_without_content_lines() {
 fn crlf_and_lf_versions_of_a_change_have_equal_keys() {
     let fx = Fx::new();
     let lf = mk(&fx, None, &[put("f.txt", "a\nb\nc\n")], "lf base", T0);
-    let crlf = mk(&fx, None, &[put("f.txt", "a\r\nb\r\nc\r\n")], "crlf base", T0);
+    let crlf = mk(
+        &fx,
+        None,
+        &[put("f.txt", "a\r\nb\r\nc\r\n")],
+        "crlf base",
+        T0,
+    );
     let e_lf = mk(&fx, Some(lf), &[put("f.txt", "a\nX\nc\n")], "x", T0 + 60);
-    let e_crlf = mk(&fx, Some(crlf), &[put("f.txt", "a\r\nX\r\nc\r\n")], "x", T0 + 60);
-    assert_eq!(lines_of(&entries(&fx, e_lf)), lines_of(&entries(&fx, e_crlf)));
+    let e_crlf = mk(
+        &fx,
+        Some(crlf),
+        &[put("f.txt", "a\r\nX\r\nc\r\n")],
+        "x",
+        T0 + 60,
+    );
+    assert_eq!(
+        lines_of(&entries(&fx, e_lf)),
+        lines_of(&entries(&fx, e_crlf))
+    );
 }
 
 #[test]
 fn a_line_ending_conversion_counts_as_a_difference_to_the_real_change() {
     let fx = Fx::new();
     let base = mk(&fx, None, &[put("f.txt", "a\r\nb\r\nc\r\n")], "base", T0);
-    let conv = mk(&fx, Some(base), &[put("f.txt", "a\nb\nc\n")], "convert", T0 + 60);
+    let conv = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", "a\nb\nc\n")],
+        "convert",
+        T0 + 60,
+    );
     let got = lines_of(&entries(&fx, conv));
     assert_eq!(got.len(), 6, "every line is removed and added again");
-    let real = mk(&fx, Some(base), &[put("f.txt", "a\r\nB\r\nc\r\n")], "real", T0 + 61);
+    let real = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", "a\r\nB\r\nc\r\n")],
+        "real",
+        T0 + 61,
+    );
     let k = |c| match entries(&fx, c) {
         Entries::Lines(v) => Keys::from_entries(&v),
         _ => panic!(),
     };
     let sim = k(conv).similarity(&k(real));
-    assert!(!sim.ge_pct(95) && sim.permille() < 500, "{}", sim.permille());
+    assert!(
+        !sim.ge_pct(95) && sim.permille() < 500,
+        "{}",
+        sim.permille()
+    );
 }
 
 #[test]
@@ -313,7 +383,14 @@ fn merge_and_empty_commits_are_skipped_with_a_reason() {
     let base = mk(&fx, None, &[put("f.txt", "a\n")], "base", T0);
     let l = mk(&fx, Some(base), &[put("l.txt", "l\n")], "l", T0 + 60);
     let r = mk(&fx, Some(base), &[put("r.txt", "r\n")], "r", T0 + 61);
-    let merge = mk_full(&fx, &[l, r], Some(l), &[put("r.txt", "r\n")], "merge", T0 + 62);
+    let merge = mk_full(
+        &fx,
+        &[l, r],
+        Some(l),
+        &[put("r.txt", "r\n")],
+        "merge",
+        T0 + 62,
+    );
     assert_eq!(entries(&fx, merge), Entries::Skipped(Skip::Merge));
     let empty = mk(&fx, Some(base), &[], "empty", T0 + 63);
     assert_eq!(entries(&fx, empty), Entries::Skipped(Skip::Empty));
@@ -323,13 +400,37 @@ fn merge_and_empty_commits_are_skipped_with_a_reason() {
 fn a_commit_over_the_limits_is_too_large() {
     let fx = Fx::new();
     let base = mk(&fx, None, &[put("a.txt", "x\n")], "base", T0);
-    let big = mk(&fx, Some(base), &[put("f.txt", &lines(10, "n"))], "ten lines", T0 + 60);
-    let lim = Limits { max_keys: 9, ..Limits::default() };
-    assert_eq!(commit_entries(&fx.repo(), big, &lim).unwrap(), Entries::Skipped(Skip::TooLarge));
-    let lim = Limits { max_keys: 10, ..Limits::default() };
-    assert!(matches!(commit_entries(&fx.repo(), big, &lim).unwrap(), Entries::Lines(v) if v.len() == 10));
-    let lim = Limits { max_blob_bytes: 5, ..Limits::default() };
-    assert_eq!(commit_entries(&fx.repo(), big, &lim).unwrap(), Entries::Skipped(Skip::TooLarge), "blob over the byte limit");
+    let big = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(10, "n"))],
+        "ten lines",
+        T0 + 60,
+    );
+    let lim = Limits {
+        max_keys: 9,
+        ..Limits::default()
+    };
+    assert_eq!(
+        commit_entries(&fx.repo(), big, &lim).unwrap(),
+        Entries::Skipped(Skip::TooLarge)
+    );
+    let lim = Limits {
+        max_keys: 10,
+        ..Limits::default()
+    };
+    assert!(
+        matches!(commit_entries(&fx.repo(), big, &lim).unwrap(), Entries::Lines(v) if v.len() == 10)
+    );
+    let lim = Limits {
+        max_blob_bytes: 5,
+        ..Limits::default()
+    };
+    assert_eq!(
+        commit_entries(&fx.repo(), big, &lim).unwrap(),
+        Entries::Skipped(Skip::TooLarge),
+        "blob over the byte limit"
+    );
 }
 
 #[test]
@@ -360,9 +461,15 @@ fn a_mode_change_and_an_empty_new_file_have_their_own_keys() {
         "chmod",
         T0 + 60,
     );
-    assert_eq!(lines_of(&entries(&fx, exec)), vec![s("run.sh", b'M', "100644>100755")]);
+    assert_eq!(
+        lines_of(&entries(&fx, exec)),
+        vec![s("run.sh", b'M', "100644>100755")]
+    );
     let empty_file = mk(&fx, Some(base), &[put("e.txt", "")], "empty file", T0 + 61);
-    assert_eq!(lines_of(&entries(&fx, empty_file)), vec![s("e.txt", b'N', "")]);
+    assert_eq!(
+        lines_of(&entries(&fx, empty_file)),
+        vec![s("e.txt", b'N', "")]
+    );
 }
 
 #[test]
@@ -401,7 +508,8 @@ fn the_cumulative_diff_of_disjoint_commits_is_the_sum_of_their_keys() {
     };
     let lim = Limits::default();
     let cumulative = k(tree_entries(&repo, tree(base), tree(c2), &lim).unwrap());
-    let parts = k(commit_entries(&repo, c1, &lim).unwrap()).sum(&k(commit_entries(&repo, c2, &lim).unwrap()));
+    let parts = k(commit_entries(&repo, c1, &lim).unwrap())
+        .sum(&k(commit_entries(&repo, c2, &lim).unwrap()));
     assert_eq!(cumulative, parts);
     assert_eq!(cumulative.len(), 3);
 }
@@ -411,8 +519,25 @@ fn a_commit_and_its_cherry_pick_on_another_base_are_100_percent_and_a_wrong_pair
     // counter-check of the handover: a `-` commit (main side) against its partner is 100.0
     let fx = Fx::new();
     let b1 = mk(&fx, None, &[put("f.txt", &lines(30, "x"))], "base", T0);
-    let b2 = mk(&fx, None, &[put("f.txt", &format!("top\n{}", lines(30, "x")))], "other base", T0);
-    let edit = |p: ObjectId, pre: &str| mk(&fx, Some(p), &[put("f.txt", &format!("{pre}{}", lines(30, "x").replace("x7\n", "seven\n")))], "edit", T0 + 60);
+    let b2 = mk(
+        &fx,
+        None,
+        &[put("f.txt", &format!("top\n{}", lines(30, "x")))],
+        "other base",
+        T0,
+    );
+    let edit = |p: ObjectId, pre: &str| {
+        mk(
+            &fx,
+            Some(p),
+            &[put(
+                "f.txt",
+                &format!("{pre}{}", lines(30, "x").replace("x7\n", "seven\n")),
+            )],
+            "edit",
+            T0 + 60,
+        )
+    };
     let a = edit(b1, "");
     let b = edit(b2, "top\n");
     let k = |c| match entries(&fx, c) {
@@ -420,6 +545,12 @@ fn a_commit_and_its_cherry_pick_on_another_base_are_100_percent_and_a_wrong_pair
         _ => panic!(),
     };
     assert_eq!(shown(k(a).similarity(&k(b))), "100.0");
-    let wrong = mk(&fx, Some(b1), &[put("g.txt", &lines(30, "q"))], "unrelated", T0 + 61);
+    let wrong = mk(
+        &fx,
+        Some(b1),
+        &[put("g.txt", &lines(30, "q"))],
+        "unrelated",
+        T0 + 61,
+    );
     assert_eq!(shown(k(a).similarity(&k(wrong))), "0.0");
 }
