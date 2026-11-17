@@ -3640,6 +3640,175 @@ m CM29 'action_required is not a failing check' src/ready_check.rs \
 m CM30 'an Actions run keeps no conclusion, every run is a success' src/status_ci.rs \
   'conclusion: r.conclusion.clone(),' 'conclusion: r.conclusion.as_ref().map(|_| "success".into()),' \
   status_ci_main the_actions_runs_are_classified_with_the_rule_of_the_check_runs
+m TS1 'default high threshold 95 becomes 99' src/tidy_similarity.rs \
+  'pub const HIGH_PCT: u32 = 95;' 'pub const HIGH_PCT: u32 = 99;' \
+  tidy_similarity the_defaults_are_95_70_and_seven_days
+m TS2 'default low threshold 70 becomes 60' src/tidy_similarity.rs \
+  'pub const LOW_PCT: u32 = 70;' 'pub const LOW_PCT: u32 = 60;' \
+  tidy_similarity the_defaults_are_95_70_and_seven_days
+m TS3 'exactly at the threshold no longer counts (>= becomes >)' src/tidy_similarity.rs \
+  '200 * self.inter >= pct as u64 * self.total()' '200 * self.inter > pct as u64 * self.total()' \
+  tidy_similarity threshold_is_at_or_above_in_integers
+m TS4 'the sign is not part of the key' src/tidy_similarity.rs \
+  'h.write_u8(sign);' 'h.write_u8(0);' \
+  tidy_similarity the_sign_is_part_of_the_key
+m TS5 'the path is not part of the key with path' src/tidy_similarity.rs \
+  '.map(|e| hash_key(Some(&e.path), e.sign, &e.line))' '.map(|e| hash_key(None, e.sign, &e.line))' \
+  tidy_similarity the_path_is_part_of_the_key_but_not_of_the_no_path_value
+m TS6 'the time window is removed' src/tidy_similarity.rs \
+  'candidate_time >= commit_time - window_secs' 'candidate_time >= i64::MIN' \
+  tidy_similarity the_window_is_seven_days_by_author_time
+m TS7 'the window excludes exactly 7 days (>= becomes >)' src/tidy_similarity.rs \
+  'candidate_time >= commit_time - window_secs' 'candidate_time > commit_time - window_secs' \
+  tidy_similarity the_window_is_seven_days_by_author_time
+m TS8 'candidates by file overlap are never accepted' src/tidy_similarity.rs \
+  '&& !seen.contains(n)
+                    && 2 * *k >=' '&& !seen.contains(n)
+                    && false
+                    && 2 * *k >=' \
+  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
+m TS9 'the prefix-less subject is not looked up stripped' src/tidy_similarity.rs \
+  '.get(strip_type_scope(&c.subject))' '.get(&c.subject)' \
+  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
+m TS10 'file overlap needs only one file in common' src/tidy_similarity.rs \
+  '2 * *k >=' '*k >=' \
+  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
+m TS11 'file overlap accepts less than half' src/tidy_similarity.rs \
+  '2 * *k >=' '3 * *k >=' \
+  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
+m TS12 'multiset becomes set' src/tidy_similarity.rs \
+  'with_path.sort_unstable();' 'with_path.sort_unstable();
+        with_path.dedup();' \
+  tidy_similarity a_line_that_occurs_twice_counts_twice
+m TS13 'lines are not trimmed' src/tidy_similarity.rs \
+  'let ws = |b: &u8| matches!(b, b'\'' '\'' | b'\''\t'\'' | b'\''\r'\'' | b'\''\n'\'' | 0x0b | 0x0c);' 'let ws = |_: &u8| false;' \
+  tidy_similarity only_the_white_space_borders_are_trimmed
+m TS14 'CR is not a white-space border' src/tidy_similarity.rs \
+  'b'\'' '\'' | b'\''\t'\'' | b'\''\r'\'' | b'\''\n'\''' 'b'\'' '\'' | b'\''\t'\'' | b'\''\n'\''' \
+  tidy_similarity only_the_white_space_borders_are_trimmed
+m TS15 'the minimum is the maximum' src/tidy_similarity.rs \
+  '.min_by(|a, b| a.cmp_value(b))' '.max_by(|a, b| a.cmp_value(b))' \
+  tidy_similarity figures_count_minimum_and_median
+m TS16 'the median of an even count takes the lower middle' src/tidy_similarity.rs \
+  'Some((shown[n / 2 - 1] + shown[n / 2]).div_ceil(2))' 'Some(shown[n / 2 - 1])' \
+  tidy_similarity figures_count_minimum_and_median
+m TS17 'the median is taken from an unsorted list' src/tidy_similarity.rs \
+  'shown.sort_unstable();' 'let _ = &shown;' \
+  tidy_similarity figures_count_minimum_and_median
+m TS18 'the low boundary is exclusive' src/tidy_similarity.rs \
+  '.any(|s| !s.ge_pct(low))' '.any(|s| !s.ge_pct(low + 1))' \
+  tidy_similarity class_boundaries_are_inclusive
+m TS19 'a commit without candidate does not prevent landed' src/tidy_similarity.rs \
+  'without + skipped.too_large' 'skipped.too_large' \
+  tidy_similarity class_boundaries_are_inclusive
+m TS20 'a too_large commit does not prevent landed' src/tidy_similarity.rs \
+  'without + skipped.too_large' 'without' \
+  tidy_similarity a_commit_without_value_prevents_landed
+m TS21 'merge commits count as judged' src/tidy_similarity.rs \
+  'Outcome::Skipped(Skip::Merge | Skip::Empty)' 'Outcome::Skipped(Skip::Empty)' \
+  tidy_similarity no_plus_commit_is_class_none_and_merges_and_empty_commits_are_counted
+m TS22 'a tie goes to the larger commit ID' src/tidy_similarity.rs \
+  'Ordering::Equal => cand.id < b.id,' 'Ordering::Equal => cand.id > b.id,' \
+  tidy_similarity the_best_candidate_is_the_highest_and_a_tie_goes_to_the_smaller_id
+m TS23 'the best candidate is the first, not the highest' src/tidy_similarity.rs \
+  'Ordering::Greater => true,' 'Ordering::Greater => false,' \
+  tidy_similarity the_best_candidate_is_the_highest_and_a_tie_goes_to_the_smaller_id
+m TS24 'a binary file has no key' src/tidy_similarity.rs \
+  'out.push(plain(b'\''B'\'', line.into_bytes()));' 'let _ = line;' \
+  tidy_similarity a_binary_file_is_one_key_by_blob_id_without_content_lines
+m TS25 'the key limit is exclusive (> becomes >=)' src/tidy_similarity.rs \
+  'if out.len() > lim.max_keys {' 'if out.len() >= lim.max_keys {' \
+  tidy_similarity a_commit_over_the_limits_is_too_large
+m TS26 'the key limit is not applied' src/tidy_similarity.rs \
+  'if out.len() > lim.max_keys {' 'if false && out.len() > lim.max_keys {' \
+  tidy_similarity a_commit_over_the_limits_is_too_large
+m TS27 'the blob size limit is not applied' src/tidy_similarity.rs \
+  'repo.find_header(id)?.size() > lim.max_blob_bytes' 'false && repo.find_header(id)?.size() > lim.max_blob_bytes' \
+  tidy_similarity a_commit_over_the_limits_is_too_large
+m TS28 'evidence is not cut at the maximum' src/tidy_similarity.rs \
+  '.take(max)' '.take(usize::MAX)' \
+  tidy_similarity evidence_names_the_biggest_differences_masked_and_at_most_five
+m TS29 'evidence lists the smallest difference first' src/tidy_similarity.rs \
+  'd(&q.1).cmp(&d(&p.1))' 'd(&p.1).cmp(&d(&q.1))' \
+  tidy_similarity evidence_orders_by_difference_then_key
+m TS30 'text is not escaped' src/tidy_similarity.rs \
+  's.push_str(&escape_untrusted(chunk.valid(), usize::MAX).0);' 's.push_str(chunk.valid());' \
+  tidy_similarity masking_handles_bytes_controls_and_length
+m TS31 'bytes that are not UTF-8 are not marked' src/tidy_similarity.rs \
+  's.push_str(&format!("\\x{byte:02x}"));' 's.push('\''?'\'');' \
+  tidy_similarity masking_handles_bytes_controls_and_length
+m TS32 'the display is not clamped below the threshold' src/tidy_similarity.rs \
+  '            t - 1
+' '            t
+' \
+  tidy_similarity threshold_is_at_or_above_in_integers
+m TS33 'rounding is truncation' src/tidy_similarity.rs \
+  '((4000 * self.inter + s) / (2 * s)) as u32' '((4000 * self.inter) / (2 * s)) as u32' \
+  tidy_similarity dice_numbers
+m TS34 'values are ordered the wrong way round' src/tidy_similarity.rs \
+  '_ => l.cmp(&r),' '_ => r.cmp(&l),' \
+  tidy_similarity the_comparison_of_values_is_exact
+m TS35 'the sum is not sorted' src/tidy_similarity.rs \
+  'v.sort_unstable();' '' \
+  tidy_similarity a_sum_of_commits_and_containment
+m TS36 'containment in the first set uses the second size' src/tidy_similarity.rs \
+  'pub fn containment_in_a(&self) -> (u64, u64) {
+        (self.inter, self.a)' 'pub fn containment_in_a(&self) -> (u64, u64) {
+        (self.inter, self.b)' \
+  tidy_similarity a_sum_of_commits_and_containment
+m TS37 'a merge commit has keys' src/tidy_similarity.rs \
+  'if parents.len() > 1 {
+        return Ok(Entries::Skipped(Skip::Merge));' 'if parents.len() > 5 {
+        return Ok(Entries::Skipped(Skip::Merge));' \
+  tidy_similarity merge_and_empty_commits_are_skipped_with_a_reason
+m TS38 'an empty cumulative diff has keys' src/tidy_similarity.rs \
+  '    if out.is_empty() {
+        return Ok(Entries::Skipped(Skip::Empty));' '    if false && out.is_empty() {
+        return Ok(Entries::Skipped(Skip::Empty));' \
+  tidy_similarity the_cumulative_diff_of_equal_trees_is_empty
+m TS39 'a mode change has no key' src/tidy_similarity.rs \
+  'if ko != kn {' 'if false && ko != kn {' \
+  tidy_similarity a_mode_change_and_an_empty_new_file_have_their_own_keys
+m TS40 'an empty new file has no key' src/tidy_similarity.rs \
+  'if f.old.is_none() {
+                out.push(plain(b'\''N'\''' 'if false {
+                out.push(plain(b'\''N'\''' \
+  tidy_similarity a_mode_change_and_an_empty_new_file_have_their_own_keys
+m TS41 'the prefix check of the subject is skipped' src/tidy_similarity.rs \
+  'if subject.get(i) != Some(&b'\'':'\'') {' 'if false {' \
+  tidy_similarity the_subject_prefix_is_stripped_like_conventional_commits
+m TS42 'the cut flag is never set' src/tidy_similarity.rs \
+  'let cut = out.len() > lim.max_candidates;' 'let cut = false;' \
+  tidy_similarity candidates_are_cut_at_the_limit_and_the_cut_is_reported
+m TS43 'candidates are not truncated' src/tidy_similarity.rs \
+  'out.truncate(lim.max_candidates);' '' \
+  tidy_similarity candidates_are_cut_at_the_limit_and_the_cut_is_reported
+m TS44 'the since filter of the main index is off' src/tidy_similarity.rs \
+  'if since.is_some_and(|t| info.author_time < t) {' 'if false {' \
+  tidy_similarity a_main_commit_older_than_since_is_not_indexed
+m TS45 'merges on main are indexed' src/tidy_similarity.rs \
+  'if parents.len() > 1 {
+            None' 'if parents.len() > 100 {
+            None' \
+  tidy_similarity a_walk_over_main_leaves_out_merges
+m TS46 'duplicate plus commits are not removed' src/tidy_similarity.rs \
+  'ids.dedup();' '' \
+  tidy_similarity the_same_input_gives_the_same_output_in_any_order
+m TS47 'plus commits are not sorted' src/tidy_similarity.rs \
+  'ids.sort();' '' \
+  tidy_similarity the_same_input_gives_the_same_output_in_any_order
+m TS48 'evidence is given at or above the high threshold too' src/tidy_similarity.rs \
+  'let ev = if sim.ge_pct(high) {' 'let ev = if false {' \
+  tidy_similarity a_rebase_with_a_small_conflict_resolution_has_the_same_subject_and_less_than_100
+m TS49 'the value without the path is the value with the path' src/tidy_similarity.rs \
+  'best = Some((cand, sim, keys.similarity_no_path(&ck)));' 'best = Some((cand, sim, keys.similarity(&ck)));' \
+  tidy_similarity a_rename_shows_only_in_the_value_without_the_path
+m TS50 'the value without the path decides the class' src/tidy_similarity.rs \
+  'Outcome::Compared(x) => sims.push(x.sim),' 'Outcome::Compared(x) => sims.push(x.no_path),' \
+  tidy_similarity a_rename_shows_only_in_the_value_without_the_path
+m TS51 'subject candidates come after the file candidates only by reason order (reason sort removed)' src/tidy_similarity.rs \
+  'by_subject.sort_by_key(|x| (x.reason, x.id));' '' \
+  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
