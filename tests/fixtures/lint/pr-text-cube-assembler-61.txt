@@ -21,4 +21,3 @@ Blocker: None.
 Manual steps are in docs/orientation-recovery.md. Local before/after desktop and touch captures accompany the author report.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-

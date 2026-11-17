@@ -8,4 +8,3 @@ Validation: exact-match one-span edit on root `AGENTS.md`; independent review CL
 
 Blocker: None.
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-

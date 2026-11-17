@@ -18,4 +18,3 @@ Review CLEAR at this head (comment); CI Test success; no workflow reads `ci-full
 Blocker: None.
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
-
