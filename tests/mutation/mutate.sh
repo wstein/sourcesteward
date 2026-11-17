@@ -1713,12 +1713,6 @@ m LF6 'lint review: 16 lines are allowed' src/lint_files.rs \
     if n > r.limit {' 'let r = lint_pr::rule(lint_pr::REVIEW_LENGTH);
     if n > r.limit + 1 {' \
   lint_files a_review_comment_has_at_most_15_lines
-m LF7 'lint review: the word session is not looked for' src/lint_files.rs \
-  'if rest.contains("session") {' 'if rest.contains("sessionX") {' \
-  lint_files the_word_session_only_as_no_session_links
-m LF8 'lint review: no session links is not allowed' src/lint_files.rs \
-  '.replace("no session links", "")' '.replace("no session linksX", "")' \
-  lint_files the_word_session_only_as_no_session_links
 m LF9 'lint files: a session link is not looked for' src/lint_files.rs \
   'if lint_pr::session_pattern(l) {' 'if false && lint_pr::session_pattern(l) {' \
   lint_files a_session_link_is_an_error

@@ -19,7 +19,6 @@ use crate::review::{self, Line, PrRef};
 // has too are in `lint_pr`: `session-link`, `pr-body-length`, `pr-blocker-line`, `review-line-format`,
 // `review-comment-length`.
 pub const TEXT_LINE_ENDINGS: &str = "text-line-endings";
-pub const REVIEW_SESSION_WORD: &str = "review-session-word";
 pub const REVIEW_PATCH_ID: &str = "review-patch-id";
 pub const REVIEW_HEAD: &str = "review-head";
 pub const PR_GENERATED_LINE: &str = "pr-generated-line";
@@ -34,22 +33,13 @@ const SOURCE_CORE: &str = "claude/CLAUDE.md";
 const SOURCE_SKILL: &str = "claude/skills/agent-workflow/SKILL.md";
 
 /// The rules only the file commands have. `source` and `anchor` as in `lint_pr::Rule`.
-pub const FILE_RULES: [Rule; 5] = [
+pub const FILE_RULES: [Rule; 4] = [
     Rule {
         id: TEXT_LINE_ENDINGS,
         severity: Severity::Error,
         source: SOURCE_SKILL,
         summary: "The text has no carriage return (no CRLF, no lone CR).",
         anchor: "kein Markdown, kein CRLF",
-        limit: 0,
-        hard: 0,
-    },
-    Rule {
-        id: REVIEW_SESSION_WORD,
-        severity: Severity::Error,
-        source: SOURCE_CORE,
-        summary: "The word session occurs in a review comment only as `no session links`.",
-        anchor: "Keine Session-Links",
         limit: 0,
         hard: 0,
     },
@@ -90,12 +80,11 @@ fn file_rule(id: &str) -> &'static Rule {
 }
 
 /// The rules `stw lint review` applies, in the order findings are reported.
-pub const REVIEW_RULE_IDS: [&str; 7] = [
+pub const REVIEW_RULE_IDS: [&str; 6] = [
     lint_pr::REVIEW_LINE,
     REVIEW_PATCH_ID,
     REVIEW_HEAD,
     lint_pr::REVIEW_LENGTH,
-    REVIEW_SESSION_WORD,
     lint_pr::SESSION_LINK,
     TEXT_LINE_ENDINGS,
 ];
@@ -228,16 +217,6 @@ pub fn lint_review(text: &str, opts: &ReviewOpts) -> Vec<Finding> {
             0,
             format!("{n} lines, at most {}", r.limit),
         ));
-    }
-    for (i, l) in text.split('\n').enumerate() {
-        let rest = lint_pr::fold(l).replace("no session links", "");
-        if rest.contains("session") {
-            out.push(finding(
-                REVIEW_SESSION_WORD,
-                i + 1,
-                "the word session, other than in `no session links`",
-            ));
-        }
     }
     session_links(text, &mut out);
     line_endings(text, &mut out);

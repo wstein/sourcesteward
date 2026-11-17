@@ -120,7 +120,10 @@ fn json_document_shape() {
     ] {
         assert!(ids.contains(&id), "rule {id} listed: {ids:?}");
     }
-    assert!(!ids.contains(&"review-session-word"), "no rule on the word session: {ids:?}");
+    assert!(
+        !ids.contains(&"review-session-word"),
+        "no rule on the word session: {ids:?}"
+    );
     assert_eq!(v["summary"]["errors"], 0);
     assert_eq!(v["summary"]["warnings"], 0);
 }

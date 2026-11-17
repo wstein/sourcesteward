@@ -295,8 +295,7 @@ New in stw (no Go counterpart). Reads the text of one review comment from FILE (
 violated rule with the rule ID, the severity and the line. Rules: the first line is exactly
 `Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n|none>` or
 `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex> pr=<n|none>` (fixed keys and order, lower-case hex, read by the
-strict parser of `review lines`); at most 15 lines; no carriage return anywhere; the word session only as `no session
-links`; no session link. With --pr the `pr=` field must equal it. With --base and --head (both) the patch-id of
+strict parser of `review lines`); at most 15 lines; no carriage return anywhere; no session link. With --pr the `pr=` field must equal it. With --base and --head (both) the patch-id of
 `BASE...HEAD` is computed in the repository (the same value as the first field of `git diff BASE...HEAD | git patch-id
 --stable`) and compared with `patch-id=`, and `head=` (`to=` of the Carried-over form) is compared with the id HEAD
 resolves to. The repository is --checkout or the one around the current directory. Reads FILE and the repository only;

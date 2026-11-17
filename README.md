@@ -1006,14 +1006,14 @@ Both read one UTF-8 text from FILE and report findings in the shape of `lint pr`
 `lint review` or `lint pr-text`, `time`, `file`, `options`, `rules`, `findings` with `rule`, `severity`, `location` (`kind`
 `file`, `line`), `message`, `summary`). Shared rule IDs and functions with `lint pr`: `session-link`, `pr-body-length`,
 `pr-blocker-line`, `review-line-format`, `review-comment-length` (`src/lint_files.rs` calls `lint_pr`); the first line is read by
-`review::parse_strict`, no second grammar. Own IDs: `text-line-endings`, `review-session-word`, `review-patch-id`, `review-head`,
+`review::parse_strict`, no second grammar. Own IDs: `text-line-endings`, `review-patch-id`, `review-head`,
 `pr-generated-line` (`FILE_RULES`). Exit 0 no error finding (a warning does not fail), 3 an error finding, 2 usage.
 
 `stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH]`: the first line is exactly
 `Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n|none>` or `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex>
 pr=<n|none>` (fixed keys and order, lower-case hex, no markdown, no blank line before it); at most 15 lines (blank lines at the end
-do not count); no carriage return in any line; the word `session` only as `no session links` (any case); no session trailer or
-code-session URL. `--pr` compares `pr=`. `--base` and `--head` (only together; `--checkout` or the repository around the current
+do not count); no carriage return in any line; no session trailer or
+code-session URL (the word session alone is no finding). `--pr` compares `pr=`. `--base` and `--head` (only together; `--checkout` or the repository around the current
 directory; names or ids) compute the patch-id of `BASE...HEAD` (the first field of `git diff BASE...HEAD | git patch-id --stable`)
 and compare it with `patch-id=`, and compare `head=` (`to=`) with the id HEAD resolves to. An empty diff has no patch-id and never
 matches.
