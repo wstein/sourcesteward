@@ -562,7 +562,7 @@ fn files_of(repo: &gix::Repository, id: ObjectId) -> Result<(Vec<String>, usize)
 
 /// Subject (or any text of a commit) for output: masked and cut.
 fn show(text: &[u8]) -> String {
-    String::from_utf8_lossy(text).into_owned()
+    mask_bytes(text, RB_SUBJECT_CHARS)
 }
 
 /// Where the similarity (a gap of one between two mapped neighbours) and the content value come in. Fills the
@@ -576,12 +576,70 @@ fn refine(
     value: &mut [Option<u32>],
     lim: &Limits,
 ) -> Result<bool> {
-    Ok(true)
+    let n = heads.len();
+    let mut floor_ok = true;
+    // a commit between two mapped neighbours with exactly one free position between them: similarity decides
+    for i in 1..n.saturating_sub(1) {
+        let (Some(up), Some(down)) = (a.pos[i - 1], a.pos[i + 1]) else {
+            continue;
+        };
+        if a.pos[i].is_some() || up != down + 2 {
+            continue;
+        }
+        let q = down + 1;
+        if index.positions[q as usize].parents > 1 || a.pos.contains(&Some(q)) {
+            continue;
+        }
+        if let Content::Value(sim) = content_of(
+            repo,
+            cache,
+            heads[i].id,
+            index.positions[q as usize].id,
+            lim,
+        )? {
+            if sim.ge_pct(LOW_PCT) {
+                a.pos[i] = Some(q);
+                a.method[i] = Method::Similarity;
+                value[i] = Some(sim.shown(LOW_PCT));
+            }
+        }
+    }
+    // content value of the identity matches: a plausibility floor against "same metadata, other content"
+    for i in 0..n {
+        let (Some(p), Method::Identity) = (a.pos[i], a.method[i]) else {
+            continue;
+        };
+        match content_of(
+            repo,
+            cache,
+            heads[i].id,
+            index.positions[p as usize].id,
+            lim,
+        )? {
+            Content::Value(sim) => {
+                value[i] = Some(sim.permille());
+                floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);
+            }
+            Content::BothEmpty => {}
+            Content::Unknown => floor_ok = false,
+        }
+    }
+    Ok(floor_ok)
 }
 
 /// The commits without a target, with their files.
 fn remaining_of(repo: &gix::Repository, mapping: &[MapEntry]) -> Result<Vec<Remaining>> {
-    Ok(Vec::new())
+    let mut remaining = Vec::new();
+    for e in mapping.iter().filter(|e| e.main.is_none()) {
+        let (files, files_total) = files_of(repo, e.commit)?;
+        remaining.push(Remaining {
+            commit: e.commit,
+            subject: e.subject.clone(),
+            files,
+            files_total,
+        });
+    }
+    Ok(remaining)
 }
 
 /// The shape of the mapped positions and the strength of the proof.
