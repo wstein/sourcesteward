@@ -29,8 +29,6 @@ pub const RB_SLACK_SECS: i64 = 86_400;
 pub const RB_STOP_RUN: usize = 64;
 /// At most this many commits of the first-parent chain are indexed.
 pub const RB_MAX_WINDOW: usize = 50_000;
-/// An identity match whose content similarity is below this percentage is only a hint (same metadata, other content).
-pub const RB_CONTENT_FLOOR: u32 = 50;
 /// A proof needs this content similarity (percent) per commit; from `LOW_PCT` up to this a commit is `modified`.
 pub const RB_CONTENT_HIGH: u32 = 95;
 /// At most this many files per commit in `remaining`.
@@ -398,9 +396,8 @@ pub struct RebaseReport {
     pub run_len: usize,
     /// Some but not all commits are mapped, as one ordered block.
     pub partial: bool,
-    /// No identity match has a content value below `RB_CONTENT_FLOOR` and none is unknown.
-    pub content_floor_ok: bool,
-    /// Every commit has a content value of at least `RB_CONTENT_HIGH` and none is a later version.
+    /// Every commit has a content value of at least `RB_CONTENT_HIGH` and none is a later version (committed after
+    /// the main commit, an amend or fixup after landing).
     pub content_ok: bool,
     /// Some value is below `RB_CONTENT_HIGH` but all are at least `LOW_PCT`.
     pub modified: bool,
@@ -516,7 +513,7 @@ fn assign(
     a
 }
 
-/// Content of a pair of commits for the floor: the similarity, or why there is none.
+/// Content of a pair of commits: the similarity, or why there is none.
 enum Content {
     Value(Sim),
     /// Both commits are empty: nothing to compare, nothing against it.
@@ -579,7 +576,7 @@ fn show(text: &[u8]) -> String {
 }
 
 /// Where the similarity (a gap of one between two mapped neighbours) and the content value come in. Fills the
-/// positions in `a` and the values; returns whether the content floor holds.
+/// positions in `a` and the values; returns (all values at least `RB_CONTENT_HIGH`, all at least `LOW_PCT`).
 fn refine(
     repo: &gix::Repository,
     cache: &mut SimCache,
@@ -588,9 +585,10 @@ fn refine(
     a: &mut Assigned,
     value: &mut [Option<u32>],
     lim: &Limits,
-) -> Result<bool> {
+) -> Result<(bool, bool)> {
     let n = heads.len();
-    let mut floor_ok = true;
+    // every value at least `RB_CONTENT_HIGH`; every value at least `LOW_PCT`
+    let (mut high, mut low) = (true, true);
     // a commit between two mapped neighbours with exactly one free position between them: similarity decides
     for i in 1..n.saturating_sub(1) {
         let (Some(up), Some(down)) = (a.pos[i - 1], a.pos[i + 1]) else {
@@ -614,10 +612,11 @@ fn refine(
                 a.pos[i] = Some(q);
                 a.method[i] = Method::Similarity;
                 value[i] = Some(sim.shown(LOW_PCT));
+                high &= sim.ge_pct(RB_CONTENT_HIGH);
             }
         }
     }
-    // content value of the identity matches: a plausibility floor against "same metadata, other content"
+    // content value of the identity matches: same metadata with other content is no proof
     for i in 0..n {
         let (Some(p), Method::Identity) = (a.pos[i], a.method[i]) else {
             continue;
@@ -631,13 +630,14 @@ fn refine(
         )? {
             Content::Value(sim) => {
                 value[i] = Some(sim.permille());
-                floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);
+                high &= sim.ge_pct(RB_CONTENT_HIGH);
+                low &= sim.ge_pct(LOW_PCT);
             }
             Content::BothEmpty => {}
-            Content::Unknown => floor_ok = false,
+            Content::Unknown => (high, low) = (false, false),
         }
     }
-    Ok(floor_ok)
+    Ok((high, low))
 }
 
 /// The commits without a target, with their files.
@@ -667,7 +667,7 @@ struct Shape {
 }
 
 /// `mapped_at` holds (branch index, chain position) of the mapped commits in branch order.
-fn shape(mapped_at: &[(usize, u32)], n: usize, floor_ok: bool, identity_backed: bool) -> Shape {
+fn shape(mapped_at: &[(usize, u32)], n: usize, content_ok: bool, identity_backed: bool) -> Shape {
     let mapped = mapped_at.len();
     let in_order = mapped_at.windows(2).all(|w| w[0].1 > w[1].1);
     let (lo, hi) = (
@@ -690,14 +690,14 @@ fn shape(mapped_at: &[(usize, u32)], n: usize, floor_ok: bool, identity_backed: 
         }
         run_len = run_len.max(cur);
     }
-    let strength = if n >= 1 && mapped == n && contiguous && in_order && floor_ok && identity_backed
-    {
-        Strength::Strong
-    } else if mapped >= 1 {
-        Strength::Hint
-    } else {
-        Strength::None
-    };
+    let strength =
+        if n >= 1 && mapped == n && contiguous && in_order && content_ok && identity_backed {
+            Strength::Strong
+        } else if mapped >= 1 {
+            Strength::Hint
+        } else {
+            Strength::None
+        };
     Shape {
         contiguous,
         in_order,
@@ -726,7 +726,16 @@ pub fn evaluate(
     let n = ids.len();
     let mut a = assign(index, &heads, ids, hits);
     let mut value: Vec<Option<u32>> = vec![None; n];
-    let floor_ok = refine(repo, cache, index, &heads, &mut a, &mut value, lim)?;
+    let (high, low) = refine(repo, cache, index, &heads, &mut a, &mut value, lim)?;
+    // an identity match committed after the main commit is a later version than the landed one
+    let later: Vec<bool> = (0..n)
+        .map(|i| match (a.pos[i], a.method[i]) {
+            (Some(p), Method::Identity) => {
+                heads[i].committer_secs > index.positions[p as usize].committer_secs
+            }
+            _ => false,
+        })
+        .collect();
 
     let mut mapping = Vec::with_capacity(n);
     for i in 0..n {
@@ -748,7 +757,7 @@ pub fn evaluate(
             identity: a.identity[i],
             tz_differs: tz,
             ambiguous: a.ambiguous[i],
-            later: false,
+            later: later[i],
         });
     }
     let remaining = remaining_of(repo, &mapping)?;
@@ -756,7 +765,8 @@ pub fn evaluate(
     let mapped_at: Vec<(usize, u32)> = (0..n).filter_map(|i| a.pos[i].map(|p| (i, p))).collect();
     let mapped = mapped_at.len();
     let identity_backed = (0..n).any(|i| a.pos[i].is_some() && a.identity[i]);
-    let sh = shape(&mapped_at, n, floor_ok, identity_backed);
+    let content_ok = high && !later.iter().any(|x| *x);
+    let sh = shape(&mapped_at, n, content_ok, identity_backed);
     let count = |m: Method| {
         (0..n)
             .filter(|i| a.pos[*i].is_some() && a.method[*i] == m)
@@ -777,9 +787,8 @@ pub fn evaluate(
         runs: sh.runs,
         run_len: sh.run_len,
         partial: sh.partial,
-        content_floor_ok: floor_ok,
-        content_ok: floor_ok,
-        modified: false,
+        content_ok,
+        modified: !high && low,
         skipped: side.skipped,
         stop: index.stop(),
         window_commits: index.len(),

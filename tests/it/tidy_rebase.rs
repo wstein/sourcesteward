@@ -184,7 +184,16 @@ fn an_old_committer_time_does_not_end_the_walk() {
     let fx = Fx::new();
     let b = base(&fx);
     let list = cs(3);
-    let br = branch(&fx, b, &list);
+    let mut br = Vec::new();
+    for c in &list {
+        let p = br.last().copied().unwrap_or(b);
+        br.push(put(
+            &fx,
+            Some(p),
+            c,
+            Stamp::new(NAME, MAIL, T0 - 6 * 86_400),
+        ));
+    }
     let l = land(&fx, b, &list, T0 - 5 * 86_400);
     let f = foreign(&fx, last(&l), 1);
     let repo = fx.repo();
@@ -1153,7 +1162,7 @@ fn an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint() {
 }
 
 #[test]
-fn an_empty_commit_against_a_commit_with_changes_is_below_the_floor() {
+fn an_empty_commit_against_a_commit_with_changes_is_not_a_proof() {
     let fx = Fx::new();
     let b = base(&fx);
     let es = Stamp::new(NAME, MAIL, T0);
