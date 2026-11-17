@@ -3549,6 +3549,86 @@ m HH11 'status hint: the missing hooks are not listed by name' src/status.rs \
   'h.missing.join(", ")' 'h.missing.len().to_string()' \
   status_hook_hint one_hook_ours_names_only_the_missing_one
 
+# stw status: the CI of the default branch, ci-main (src/status_ci.rs, tests/it/status_ci_main.rs, status_ci_main_text.rs)
+m CM1 'a list query already in the path gets a second ?' src/github/reads.rs \
+  $'let sep = if path.contains(\'?\') { \'&\' } else { \'?\' };' $'let sep = \'?\';' \
+  github_reads workflow_runs_of_a_commit_are_read_across_pages_with_the_commit_in_every_request
+m CM2 'workflow runs are read from the check_runs key' src/github/reads.rs \
+  $'v["workflow_runs"].as_array()' $'v["check_runs"].as_array()' \
+  github_reads workflow_runs_of_a_commit_are_read_across_pages_with_the_commit_in_every_request
+m CM3 'a workflow run without a status is accepted' src/github/reads.rs \
+  $'        || !v["status"].is_string()\n' $'' \
+  github_reads workflow_run_text_is_escaped_and_a_malformed_entry_makes_the_list_partial
+m CM4 'a default branch with .. goes into a path' src/github/reads.rs \
+  $'        && !b.ends_with(\'/\')\n        && !b.contains("..")\n' $'        && !b.ends_with(\'/\')\n' \
+  github_reads a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is_an_error
+m CM5 'a default branch with // goes into a path' src/github/reads.rs \
+  $'        && !b.contains("//")\n        && b.bytes()\n            .all(|c| c.is_ascii_alphanumeric()' $'        && b.bytes()\n            .all(|c| c.is_ascii_alphanumeric()' \
+  github_reads a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is_an_error
+m CM6 'a default branch with a percent sign goes into a path' src/github/reads.rs \
+  $'matches!(c, b\'.\' | b\'_\' | b\'-\' | b\'/\')' $'matches!(c, b\'.\' | b\'_\' | b\'-\' | b\'/\' | b\'%\')' \
+  github_reads a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is_an_error
+m CM7 'the head of the branch is not checked for a commit id' src/github/reads.rs \
+  $'hex_id(&doc["commit"]["sha"])' $'doc["commit"]["sha"].as_str().map(str::to_string)' \
+  github_reads a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is_an_error
+m CM8 'any denial, not only 403, tries the Actions runs' src/status_ci.rs \
+  $'Read::Denied {\n            kind: Denial::Forbidden,\n            ..\n        } => Err(Gap::Forbidden),' $'Read::Denied { .. } => Err(Gap::Forbidden),' \
+  status_ci_main only_a_403_on_check_runs_tries_the_actions_runs
+m CM9 'the newest run counts per workflow only, not per event' src/status_ci.rs \
+  $'let key = (r.workflow_id, r.event.as_str());' $'let key = (r.workflow_id, "");' \
+  status_ci_main every_workflow_and_every_event_is_counted_once
+m CM10 'the run attempt does not rank runs' src/status_ci.rs \
+  $'(r.created_at.clone(), r.run_attempt, r.id)' $'(r.created_at.clone(), 0, r.id)' \
+  status_ci_main a_higher_run_attempt_wins_at_the_same_time
+m CM11 'the oldest run of a workflow counts' src/status_ci.rs \
+  $'rank(r) > rank(old)' $'rank(r) < rank(old)' \
+  status_ci_main the_newest_run_of_a_workflow_and_event_counts
+m CM12 'a run of another commit counts' src/status_ci.rs \
+  $'.filter(|r| r.head_sha.as_deref() == Some(sha))' $'.filter(|_| true)' \
+  status_ci_main an_actions_run_of_another_commit_is_ignored
+m CM13 'commit statuses are not counted' src/status_ci.rs \
+  $'check_class(&runs, &statuses)?' $'check_class(&runs, &[])?' \
+  status_ci_main commit_statuses_are_counted_in_both_ways
+m CM14 'the forbidden cause does not name the Actions right' src/status_ci.rs \
+  $' or Actions: Read";' $'";' \
+  status_ci_main both_ways_refused_stays_forbidden_and_names_both_rights
+m CM15 'the Actions way is labeled as check runs' src/status_ci.rs \
+  $'Ok(runs) => (latest_runs(&runs, &head), VIA_ACTIONS_RUNS),' $'Ok(runs) => (latest_runs(&runs, &head), VIA_CHECK_RUNS),' \
+  status_ci_main a_403_on_check_runs_falls_back_to_the_actions_runs_of_the_head
+m CM16 'a partial list gives a class' src/status_ci.rs \
+  $'Read::Observed(o) if o.incomplete.is_none() => Ok(o.items),' $'Read::Observed(o) => Ok(o.items),' \
+  status_ci_main an_incomplete_list_or_a_run_without_state_is_not_read_never_a_class
+m CM17 'the text names the wrong way' src/status_ci.rs \
+  $'"via Actions runs"' $'"via check runs"' \
+  status_ci_main_text the_line_of_a_repository_says_the_class_the_head_and_the_way
+m CM18 'a red head is no attention reason' src/status.rs \
+  $'if s.ci_main.as_ref().is_some_and(|m| m.class == "red") {\n        v.push("main-red".into());' $'if s.ci_main.as_ref().is_some_and(|m| m.class == "pending") {\n        v.push("main-red".into());' \
+  status_ci_main_text only_a_red_head_needs_action_and_the_other_classes_do_not
+m CM19 'the CI notice has the code of the issues notice' src/status.rs \
+  $'"ci-not-read",' $'"issues-not-read",' \
+  status_ci_main_text a_ci_read_that_failed_is_a_line_a_notice_and_exit_0
+m CM20 'the CI notice has the source pulls' src/status.rs \
+  $'                "ci",\n' $'                "pulls",\n' \
+  status_ci_main_text a_ci_read_that_failed_is_a_line_a_notice_and_exit_0
+m CM21 'the JSON ci_main has no source' src/status.rs \
+  $'"class": m.class, "source": m.source}' $'"class": m.class, "source": null}' \
+  status_ci_main the_json_names_the_branch_the_head_and_the_way
+m CM22 'the JSON ci_main says not read after a read' src/status.rs \
+  $'Some(m) => json!({"read": true,' $'Some(m) => json!({"read": false,' \
+  status_ci_main the_json_names_the_branch_the_head_and_the_way
+m CM23 'the row of status PATH has no cell for a red head' src/status_all.rs \
+  $'cell += " | main red";' $'cell += "";' \
+  status_ci_main_text status_path_carries_the_ci_main_in_the_json_the_notice_and_the_attention
+m CM24 'the commit reads are not counted as ci-main' src/github.rs \
+  $'None | Some("branches" | "commits" | "actions") => "ci-main",' $'None | Some("branches" | "actions") => "ci-main",' \
+  status_ci_main the_requests_of_the_source_are_counted_under_ci_main_in_the_stats
+m CM25 'ready-check takes a denied check run read as no check' src/ready_check.rs \
+  $'        self.check_runs(r, h, &Budget::default())\n            .map_err(|e| e.to_string())' $'        self.check_runs(r, h, &Budget::default())\n            .map(|x| match x {\n                Read::Denied { .. } => Read::Observed(crate::github::reads::Observed { items: vec![], pages: 0, incomplete: None }),\n                o => o,\n            })\n            .map_err(|e| e.to_string())' \
+  ready_check cli_ready_check_stays_strict_a_403_on_check_runs_is_unknown_and_no_actions_run_is_read
+m CM26 'the default branch is not read from the repository document' src/github/reads.rs \
+  $'let doc = self.get(&format!("{api}/repos/{slug}/branches/{branch}"))?;' $'let doc = self.get(&format!("{api}/repos/{slug}/branches/main"))?;' \
+  github_reads the_default_branch_and_its_head_are_read_from_two_documents
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
