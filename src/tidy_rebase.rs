@@ -43,7 +43,10 @@ pub const RB_DECISION: &str = "review";
 
 /// First line of a message, white space at the right end removed (bytes; no prefix strip, no `(#N)` strip).
 pub fn subject_of(msg: &[u8]) -> Vec<u8> {
-    Vec::new()
+    let first = msg.lines().next().unwrap_or_default();
+    let ws = |b: &u8| matches!(b, b' ' | b'\t' | b'\r' | b'\n' | 0x0b | 0x0c);
+    let end = first.iter().rposition(|b| !ws(b)).map_or(0, |i| i + 1);
+    first[..end].to_vec()
 }
 
 /// What a rebase keeps: author mail (ASCII lower case), author seconds and subject.
@@ -67,17 +70,20 @@ pub struct Head {
 }
 
 pub fn read_head(repo: &gix::Repository, id: ObjectId) -> Result<Head> {
+    let c = repo.find_commit(id)?;
+    let a = c.author()?;
+    let time = a.time()?;
     Ok(Head {
         id,
-        name: Vec::new(),
+        name: a.name.to_vec(),
         key: Key {
-            mail: Vec::new(),
-            secs: 0,
-            subject: Vec::new(),
+            mail: a.email.to_ascii_lowercase().to_vec(),
+            secs: a.seconds(),
+            subject: subject_of(c.message_raw()?),
         },
-        offset: 0,
-        committer_secs: 0,
-        parents: 0,
+        offset: time.offset,
+        committer_secs: c.committer()?.seconds(),
+        parents: c.parent_ids().count(),
     })
 }
 
@@ -112,12 +118,43 @@ impl RebaseIndex {
         since: Option<i64>,
         max_window: usize,
     ) -> Result<RebaseIndex> {
-        Ok(RebaseIndex {
+        let mut idx = RebaseIndex {
             positions: Vec::new(),
             by_key: HashMap::new(),
             by_id: HashMap::new(),
             stop: Stop::Root,
-        })
+        };
+        let mut next = Some(base_tip);
+        while let Some(id) = next {
+            if idx.positions.len() >= max_window {
+                idx.stop = Stop::Window;
+                break;
+            }
+            let head = match read_head(repo, id) {
+                Ok(h) => h,
+                Err(_) if !idx.positions.is_empty() => {
+                    idx.stop = Stop::Missing(id);
+                    break;
+                }
+                Err(e) => return Err(e),
+            };
+            if since.is_some_and(|s| head.committer_secs < s - RB_SLACK_SECS) {
+                idx.stop = Stop::Time;
+                break;
+            }
+            let pos = idx.positions.len() as u32;
+            if head.parents <= 1 {
+                idx.by_key.entry(head.key.clone()).or_default().push(pos);
+            }
+            idx.by_id.insert(id, pos);
+            next = repo
+                .find_commit(id)?
+                .parent_ids()
+                .next()
+                .map(|p| p.detach());
+            idx.positions.push(head);
+        }
+        Ok(idx)
     }
 
     pub fn len(&self) -> usize {
@@ -165,7 +202,62 @@ pub struct BranchSide {
 }
 
 pub fn branch_side(repo: &gix::Repository, base: ObjectId, tip: ObjectId) -> Result<BranchSide> {
-    Ok(BranchSide::default())
+    let mut set: HashMap<ObjectId, Head> = HashMap::new();
+    let mut parents_of: HashMap<ObjectId, Vec<ObjectId>> = HashMap::new();
+    for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
+        let id = info?.id;
+        let c = repo.find_commit(id)?;
+        parents_of.insert(id, c.parent_ids().map(|p| p.detach()).collect());
+        set.insert(id, read_head(repo, id)?);
+    }
+    // Kahn: a commit is ready when its parents inside the set are done
+    let mut waiting: HashMap<ObjectId, usize> = parents_of
+        .iter()
+        .map(|(id, ps)| (*id, ps.iter().filter(|p| set.contains_key(*p)).count()))
+        .collect();
+    let mut children: HashMap<ObjectId, Vec<ObjectId>> = HashMap::new();
+    for (id, ps) in &parents_of {
+        for p in ps.iter().filter(|p| set.contains_key(*p)) {
+            children.entry(*p).or_default().push(*id);
+        }
+    }
+    let order_key = |id: &ObjectId| (set[id].key.secs, *id);
+    let mut ready: Vec<ObjectId> = waiting
+        .iter()
+        .filter(|(_, n)| **n == 0)
+        .map(|(id, _)| *id)
+        .collect();
+    let mut out = BranchSide::default();
+    while !ready.is_empty() {
+        ready.sort_by_key(|id| std::cmp::Reverse(order_key(id)));
+        let id = ready.pop().expect("not empty");
+        for ch in children.get(&id).into_iter().flatten() {
+            let w = waiting.get_mut(ch).expect("child is in the set");
+            *w -= 1;
+            if *w == 0 {
+                ready.push(*ch);
+            }
+        }
+        let head = &set[&id];
+        if head.parents > 1 {
+            out.skipped.merges += 1;
+            continue;
+        }
+        let c = repo.find_commit(id)?;
+        let old_tree = match c.parent_ids().next() {
+            Some(p) => repo.find_commit(p.detach())?.tree_id()?.detach(),
+            None => repo.empty_tree().id,
+        };
+        if old_tree == c.tree_id()?.detach() {
+            out.skipped.empty += 1;
+        }
+        out.oldest_author_secs = Some(
+            out.oldest_author_secs
+                .map_or(head.key.secs, |o| o.min(head.key.secs)),
+        );
+        out.commits.push(id);
+    }
+    Ok(out)
 }
 
 /// Patch ID matches: branch commit -> commit on the chain with an equal patch (ID and white-space digest). The
@@ -176,7 +268,37 @@ pub fn patch_hits(
     index: &RebaseIndex,
     commits: &[ObjectId],
 ) -> Result<HashMap<ObjectId, ObjectId>> {
-    Ok(HashMap::new())
+    let mut wanted: HashMap<(ObjectId, ObjectId), Vec<ObjectId>> = HashMap::new();
+    for c in commits {
+        if let Some(k) = commit_patch_key(repo, *c)? {
+            wanted.entry(k).or_default().push(*c);
+        }
+    }
+    let mut hits = HashMap::new();
+    if wanted.is_empty() {
+        return Ok(hits);
+    }
+    // newest first on the chain; the oldest branch commit is the last of its list and meets the oldest chain commit
+    let mut on_main: HashMap<(ObjectId, ObjectId), Vec<ObjectId>> = HashMap::new();
+    for h in &index.positions {
+        if h.parents > 1 {
+            continue;
+        }
+        if let Some(k) = commit_patch_key(repo, h.id)? {
+            if wanted.contains_key(&k) {
+                on_main.entry(k).or_default().push(h.id);
+            }
+        }
+    }
+    for (k, branch) in wanted {
+        let mut main = on_main.remove(&k).unwrap_or_default();
+        for b in branch {
+            if let Some(m) = main.pop() {
+                hits.insert(b, m);
+            }
+        }
+    }
+    Ok(hits)
 }
 
 /// How a branch commit was found on main.
