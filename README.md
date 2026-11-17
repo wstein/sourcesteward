@@ -359,7 +359,7 @@ would_fast_forward, skipped, errors}.
 `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`; `n/a` is not read, `?` is failed, `n+` is a
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
 (why GitHub was not read, failed reads per repository; text from outside is shown with escapes; the JSON `notices` has the same list, see "Output for agents"), the `agent-rules` block, then the summary line. A failed GitHub read is
-a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository of a GitHub origin a line `main CI green (main@163ada5, via check runs)` says what the CI of the head of the default branch is (`none`, `pending`, `green`, `red`; `via Actions runs` when check runs were denied), or `main CI not read (cause)`; a red head is the attention reason `main-red` (see "CI of the default branch in `stw status`"). Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
+a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository of a GitHub origin a line `main CI green (main@163ada585103, via check runs)` says what the CI of the head of the default branch is (`none`, `pending`, `green`, `red`; `via Actions runs` when check runs were denied), or `main CI not read (cause)`; a red head is the attention reason `main-red` (see "CI of the default branch in `stw status`"). Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
 
 ## Status flags
 
@@ -433,17 +433,28 @@ Which runs are read depends on the answer of GitHub, never on the kind of the to
 
 1. `GET /repos/OWNER/NAME/commits/SHA/check-runs` (needs `Checks: Read`; a classic token with the scope `repo` has it). `source` is `check-runs`.
 2. Only when that answers 403 (not 401, 404, 429, 5xx, not a rate limit): `GET /repos/OWNER/NAME/actions/runs?head_sha=SHA&per_page=100`
-   (`Actions: Read`; fine-grained tokens have no `Checks` right, so they end here). Per workflow and event the newest run of
+   (`Actions: Read`; a private repository gives a fine-grained token no check runs, because `Checks` is not offered for fine-grained tokens, so that read ends here). Per workflow and event the newest run of
    that commit counts (`created_at`, then `run_attempt`, then `id`); a run of another commit is ignored; the run is classified
-   like a check run. No run is the class `none`: that is a repository without CI (for example one without workflows), not an error and
-   no finding. `source` is `actions-runs`.
+   like a check run. No run is the class `none`: that says there is no Actions run for the head, not that there is no CI (see
+   "What the two ways see"); it is not an error and no finding. `source` is `actions-runs`.
 3. `GET /repos/OWNER/NAME/commits/SHA/statuses` in both ways, as Go.
+
+What the two ways see differs, and the `source` says which one was used:
+
+- `check-runs` lists every execution of every app that reports checks (Actions and other apps) as its own entry.
+- `actions-runs` sees Actions workflows only. Check runs of other apps are invisible, so `none` there means: no Actions run for this
+  commit (a repository with checks of another app can still have a CI).
+- The rule "the newest run per workflow and event" keeps one run of several independent runs of the same workflow and event (for example
+  the `dynamic` runs of Dependabot updates, or `issue_comment` runs): an older red run is hidden by a newer green one, while
+  `check-runs` shows it red. Observed on `cli/cli` at `trunk`: `check-runs` listed each of three Dependabot executions, the Actions way
+  kept one per workflow and event.
+- Observed 2026-11-17: the same fine-grained token read check runs of public repositories (`via check runs`) and got 403 for a private one.
 
 When both ways are refused the read is `forbidden` and the cause names both rights: `forbidden: the token can read neither check
 runs nor Actions runs; it needs Checks: Read (classic token: scope repo) or Actions: Read`. Any other failure (401, 404, rate limit,
 5xx, network, an unusable answer, `--timeout`) is `not read` with its cause.
 
-Output. Text, under the repository: `main CI green (main@163ada5, via check runs)`, `... via Actions runs)`, or
+Output. Text, under the repository: `main CI green (main@163ada585103, via check runs)`, `... via Actions runs)`, or
 `main CI not read (cause)`; no line without a read. A red head is the attention reason `main-red` (Go: the red action
 `main-red`); `--long` explains it without a command. A read that failed is the notice `ci-not-read` (source `ci`), and exit 0.
 JSON, per repository `ci_main{read,error,branch,head,class,source}`: `read` true with `branch`, `head` (full commit id), `class`
@@ -457,12 +468,12 @@ Mutations of this source have the prefix `CM`.
 Deviations from Go, one by one:
 
 1. The fallback to the Actions runs on a 403 for check runs is new (Go reports `forbidden`); it makes a fine-grained token without `Checks`
-   usable. A repository without any CI is the class `none` (Go: the same class for an empty check list), and no finding.
+   usable for a private repository. An empty list is the class `none` (Go: the same class for an empty check list), and no finding.
 2. Go's `ci-main` also says whether the local clone lacks the head of origin (`behind_origin`, the action `main-behind-origin`). Rust does
    not: `status` already shows `behind` of the branch against its upstream, and the commit is not looked up in the object store here.
 3. Go reads the default branch from its `repo` source (one read for several sources) and the head with the branch read; Rust reads the
    repository document and the branch itself, two requests per repository, counted as `ci-main`. A default branch whose name has a
-   character outside `A-Z a-z 0-9 . _ - /` (or `..`, `//`, a leading or trailing `/`) is not read (`not read`), it is never escaped into a path.
+   character outside `A-Z a-z 0-9 . _ - /`, a name longer than 200 characters (Go: 255), a `..`, a `//` or a leading or trailing `/` is not read (`not read`), it is never escaped into a path.
 4. Go reads at most a bounded number of pages and uses what it got; Rust takes the bounds of the list reads (100 per page, 10 pages, 500
    items, 60 s) and treats a list that hit one of them, or that had a malformed entry, as not read (no class from partial evidence).
    Go's check run text (title, summary, text) is not read: no shape classification of a red head.
@@ -473,6 +484,10 @@ Deviations from Go, one by one:
 7. Exit code: Go exits 1 when a source could not be read; Rust exits 0 for a failed GitHub read in `status` (the existing rule, see "Exit codes"). Unchanged.
 8. Go has the JSON source `ci_main` with `branch`, `head`, `class`, `behind_origin`; Rust has `ci_main{read,error,branch,head,class,source}` per
    repository (no `behind_origin`; `source` and `read`, `error` are new).
+9. The two ways see different things (new, see "What the two ways see"): `none` via Actions runs means no Actions run, not no CI; checks of other apps are
+   invisible there; the newest run per workflow and event hides older independent runs of the same pair, which `check-runs` lists one by one (Go has
+   no second way). Use `source` to tell which one an answer is.
+10. The text line: Go prints `remote: ..., main CI red` as part of one `remote:` line of the repository; Rust prints its own line `main CI red (main@..., via ...)`.
 
 ### `stw status PATH`
 
@@ -700,8 +715,8 @@ Token order: `GH_TOKEN`, `GITHUB_TOKEN`, `~/.config/gh/hosts.yml` (`oauth_token`
 creates). The token is never printed or logged. Without a token everything works except pull request data
 (and the notes say so) and fetching private repositories (the error says to set `GH_TOKEN` or `GITHUB_TOKEN`).
 Only `github.com` remotes are used for REST; the fetch offers the token to `github.com` over https only, as user
-`x-access-token`. The check class of a head needs `Checks: Read` (`ready-check`, and `status` first; a classic token has it with the scope `repo`, fine-grained
-tokens have no `Checks` right), or `Actions: Read`, which `status` (not `ready-check`) tries when GitHub answers 403 for check runs (see "CI of the default branch in `stw status`"). `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
+`x-access-token`. The check class of a head needs `Checks: Read` (`ready-check`, and `status` first; a classic token has it with the scope `repo`; `Checks` is not offered for fine-grained tokens, which get 403 for check runs of a private
+repository), or `Actions: Read`, which `status` (not `ready-check`) tries when GitHub answers 403 for check runs (see "CI of the default branch in `stw status`"). Both ways also read `/statuses`, which needs `Commit statuses: Read`. `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
 
 ## stw add
 
