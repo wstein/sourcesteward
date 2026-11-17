@@ -3628,6 +3628,18 @@ m CM25 'ready-check takes a denied check run read as no check' src/ready_check.r
 m CM26 'the default branch is not read from the repository document' src/github/reads.rs \
   $'let doc = self.get(&format!("{api}/repos/{slug}/branches/{branch}"))?;' $'let doc = self.get(&format!("{api}/repos/{slug}/branches/main"))?;' \
   github_reads the_default_branch_and_its_head_are_read_from_two_documents
+m CM27 'a default branch name of 201 characters is read' src/github/reads.rs \
+  $'        && b.len() <= 200\n' $'        && b.len() <= 201\n' \
+  github_reads a_default_branch_name_of_200_characters_is_read_and_one_of_201_is_not
+m CM28 'the creation time does not rank the runs of a workflow' src/status_ci.rs \
+  'let rank = |r: &WorkflowRun| (r.created_at.clone(), r.run_attempt, r.id);' 'let rank = |r: &WorkflowRun| (String::new(), r.run_attempt, r.id);' \
+  status_ci_main the_newest_run_of_a_workflow_and_event_counts
+m CM29 'action_required is not a failing check' src/ready_check.rs \
+  $'                            | "action_required"\n' $'' \
+  status_ci_main check_runs_give_the_class_green_pending_or_red
+m CM30 'an Actions run keeps no conclusion, every run is a success' src/status_ci.rs \
+  'conclusion: r.conclusion.clone(),' 'conclusion: r.conclusion.as_ref().map(|_| "success".into()),' \
+  status_ci_main the_actions_runs_are_classified_with_the_rule_of_the_check_runs
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
