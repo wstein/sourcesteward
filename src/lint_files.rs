@@ -130,6 +130,12 @@ fn first_line(text: &str) -> &str {
     text.split('\n').next().unwrap_or("")
 }
 
+/// The bound of `lint pr` (`lint_pr::parse_review_line`): `pr=` has at most nine digits; `none` is allowed here.
+fn pr_in_range(l: &Line) -> bool {
+    let (Line::Review { pr, .. } | Line::Carried { pr, .. }) = l;
+    !matches!(pr, PrRef::Number(n) if *n > 999_999_999)
+}
+
 fn pr_text(p: PrRef) -> String {
     match p {
         PrRef::Number(n) => n.to_string(),
@@ -162,7 +168,7 @@ fn session_links(text: &str, out: &mut Vec<Finding>) {
 pub fn lint_review(text: &str, opts: &ReviewOpts) -> Vec<Finding> {
     let mut out = Vec::new();
     let line = first_line(text);
-    match review::parse_strict(line) {
+    match review::parse_strict(line).filter(pr_in_range) {
         None => out.push(finding(
             lint_pr::REVIEW_LINE,
             1,
