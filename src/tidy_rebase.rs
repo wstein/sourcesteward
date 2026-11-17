@@ -1014,7 +1014,6 @@ pub fn evaluate_api(
     rep.tip_matches_run = Some(matches);
     if matches {
         rep.kind = LandedKind::Rebase;
-        rep.strength = Strength::Strong;
         let ids: HashMap<ObjectId, usize> = pr
             .commits
             .iter()
@@ -1051,6 +1050,11 @@ pub fn evaluate_api(
                 }
             }
         }
+        rep.strength = if rep.remaining.is_empty() && rep.head_in_branch == Some(true) {
+            Strength::Strong
+        } else {
+            Strength::Hint
+        };
     } else if pr
         .merged_at
         .is_some_and(|t| (merge_head.key.secs - t).abs() <= RB_API_TIME_TOLERANCE)
@@ -1113,7 +1117,7 @@ pub fn landed_via(
     }
     if let Some(a) = api.filter(|a| a.not_read.is_none()) {
         if a.kind != LandedKind::Unknown {
-            return via(a.kind, Basis::PrApi, Strength::Strong);
+            return via(a.kind, Basis::PrApi, a.strength);
         }
     }
     if rebase.is_some_and(|r| r.n == 1 && r.by_patch_id == 1 && r.mapped == 1) {
