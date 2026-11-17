@@ -244,6 +244,9 @@ enum LintCommand {
     /// Check the text of a review comment from a file against the review line rules (read-only, no network)
     #[command(after_help = LINT_REVIEW_HELP)]
     Review(LintReviewArgs),
+    /// Check the text of a pull request from a file: length, Blocker line, attribution line, session link (read-only, no network)
+    #[command(name = "pr-text", after_help = LINT_PR_TEXT_HELP)]
+    PrText(LintPrTextArgs),
 }
 
 const LINT_PR_HELP: &str = "\
@@ -327,6 +330,48 @@ struct LintReviewArgs {
     /// Print one JSON object instead of text
     #[arg(long)]
     json: bool,
+}
+
+const LINT_PR_TEXT_HELP: &str = "\
+New in stw (no Go counterpart). Reads the text of one pull request from FILE (UTF-8) and reports one finding per violated
+rule with the rule ID, the severity and the line. Rules: the text is about 25 lines (warning above 25, error above 30,
+the limits of `lint pr`); exactly one Blocker line of the form `Blocker: <text>` (a Draft names its blocker) or, with
+--ready, exactly `Blocker: None.`; the last non-blank line is `🤖 Generated with [Claude Code](https://claude.com/claude-code)`;
+no session link; no carriage return. A reference `#n` to the wrong repository is not checked. Reads FILE only; no network,
+nothing is written. `--json` lists the rule table.
+
+Exit codes:
+  0  no finding of severity error (warnings do not fail)
+  1  at least one error finding (the output is printed)
+  2  usage error (also: FILE not readable or not UTF-8)";
+
+#[derive(Args)]
+struct LintPrTextArgs {
+    /// File with the text of the pull request
+    #[arg(value_name = "FILE")]
+    file: PathBuf,
+    /// The pull request is to be set Ready: `Blocker: None.` is required (without it, a Draft: a named blocker is required)
+    #[arg(long)]
+    ready: bool,
+    /// Print the human list (the default)
+    #[arg(long, conflicts_with = "json")]
+    human: bool,
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+}
+
+fn run_lint_pr_text(a: LintPrTextArgs) -> Result<u8> {
+    let text = lint_files::read_text(&a.file)?;
+    let report = lint_files::Report {
+        command: "lint pr-text",
+        file: a.file.display().to_string(),
+        lines: lint_pr::line_count(&text),
+        rule_ids: &lint_files::PR_TEXT_RULE_IDS,
+        options: json!({"ready": a.ready}),
+        findings: lint_files::lint_pr_text(&text, a.ready),
+    };
+    Ok(print_file_report(&report, a.json))
 }
 
 /// Prints a file report and returns the exit status: 0 without an error finding, 1 with one.
@@ -1977,6 +2022,9 @@ fn run(command: Command) -> Result<u8> {
         Command::Lint {
             command: LintCommand::Review(a),
         } => run_lint_review(a),
+        Command::Lint {
+            command: LintCommand::PrText(a),
+        } => run_lint_pr_text(a),
         Command::Dev {
             command: DevCommand::PatchId { repo, revs },
         } => {
