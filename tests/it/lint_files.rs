@@ -425,3 +425,208 @@ fn usage_errors_exit_two() {
     std::fs::write(&f, [0xff, 0xfe, b'\n']).unwrap();
     assert_eq!(code(&stw(&["review", fs])), 2);
 }
+
+const GEN: &str = "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
+
+/// A PR text in a file of its own; returns the run of `lint pr-text FILE --json EXTRA`.
+fn pr_text_of(text: &str, extra: &[&str]) -> Output {
+    let dir = scratch();
+    let f = dir.path().join("pr.txt");
+    std::fs::write(&f, text).unwrap();
+    let mut args = vec!["pr-text", f.to_str().unwrap(), "--json"];
+    args.extend(extra);
+    stw(&args)
+}
+
+fn good_pr(blocker: &str) -> String {
+    format!("Purpose.\n\nChanges\n- one\n\nTests: 3 passed\nNot verified: nothing\n{blocker}\n\n{GEN}\n")
+}
+
+#[test]
+fn real_pr_texts_pass_as_ready() {
+    for name in [
+        "pr-text-cubelab-49.txt",
+        "pr-text-dotagents-99.txt",
+        "pr-text-cube-assembler-61.txt",
+    ] {
+        let f = fixture(name);
+        let o = stw(&["pr-text", f.to_str().unwrap(), "--ready", "--json"]);
+        assert_eq!(code(&o), 0, "{name}: {}", out_text(&o));
+        let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+        assert_eq!(v["command"], "lint pr-text");
+        assert_eq!(v["summary"]["passed"], true, "{name}");
+        // the same text is no Draft text: it has `Blocker: None.`
+        let o = stw(&["pr-text", f.to_str().unwrap(), "--json"]);
+        assert_eq!(code(&o), 1, "{name}");
+        assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name}");
+    }
+}
+
+#[test]
+fn a_draft_names_its_blocker_a_ready_pr_has_none() {
+    let draft = good_pr("Blocker: Independent review pending");
+    let o = pr_text_of(&draft, &[]);
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+    let o = pr_text_of(&draft, &["--ready"]);
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["pr-blocker-line"]);
+    let ready = good_pr("Blocker: None.");
+    assert_eq!(code(&pr_text_of(&ready, &["--ready"])), 0);
+    let o = pr_text_of(&ready, &[]);
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["pr-blocker-line"]);
+}
+
+#[test]
+fn the_blocker_line_is_exactly_one_line_of_the_fixed_form() {
+    for (name, text) in [
+        ("missing", good_pr("Tests again: 3 passed")),
+        ("empty", good_pr("Blocker: ")),
+        ("blank only", good_pr("Blocker:    ")),
+        ("no blank after the colon", good_pr("Blocker:None.")),
+        ("lower case", good_pr("blocker: None.")),
+        ("markdown", good_pr("**Blocker:** None.")),
+        ("plural", good_pr("Blockers: None.")),
+        ("two lines", good_pr("Blocker: None.\nBlocker: None.")),
+    ] {
+        let o = pr_text_of(&text, &["--ready"]);
+        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
+        assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name}");
+    }
+    // `None.` needs the full stop
+    let o = pr_text_of(&good_pr("Blocker: None"), &["--ready"]);
+    assert_eq!(rules(&o), vec!["pr-blocker-line"]);
+}
+
+#[test]
+fn the_last_non_blank_line_is_the_attribution_line() {
+    let body = "Purpose.\nBlocker: None.\n";
+    assert_eq!(code(&pr_text_of(&format!("{body}{GEN}"), &["--ready"])), 0);
+    assert_eq!(
+        code(&pr_text_of(&format!("{body}{GEN}\n\n\n"), &["--ready"])),
+        0
+    );
+    for (name, text) in [
+        ("missing", body.to_string()),
+        ("not last", format!("{body}{GEN}\nCloses #1\n")),
+        ("other text", format!("{body}Generated with Claude Code\n")),
+        (
+            "other url",
+            format!("{body}🤖 Generated with [Claude Code](https://claude.ai/code)\n"),
+        ),
+        (
+            "no robot",
+            format!("{body}Generated with [Claude Code](https://claude.com/claude-code)\n"),
+        ),
+        ("trailing blank", format!("{body}{GEN} \n")),
+        ("empty file", String::new()),
+    ] {
+        let o = pr_text_of(&text, &["--ready"]);
+        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
+        assert!(
+            rules(&o).contains(&"pr-generated-line".to_string()),
+            "{name}"
+        );
+    }
+}
+
+#[test]
+fn a_session_link_and_a_carriage_return_are_errors() {
+    let trailer = concat!("Claude", "-Session: https://example.invalid/x");
+    let url = concat!("https://claude", ".ai/code/session_", "01ABC");
+    for t in [trailer, url] {
+        let text = format!("Purpose.\n{t}\nBlocker: None.\n\n{GEN}\n");
+        let o = pr_text_of(&text, &["--ready"]);
+        assert_eq!(code(&o), 1, "{t}");
+        assert_eq!(rules(&o), vec!["session-link"], "{t}");
+    }
+    let o = pr_text_of(
+        &good_pr("Blocker: None.").replace('\n', "\r\n"),
+        &["--ready"],
+    );
+    assert_eq!(code(&o), 1);
+    let r = rules(&o);
+    assert!(r.contains(&"text-line-endings".to_string()), "{r:?}");
+    // CR before the line feed does not make the Blocker or the attribution line wrong on their own
+    assert!(!r.contains(&"pr-blocker-line".to_string()), "{r:?}");
+    // the word session is no finding in a PR text
+    let o = pr_text_of(
+        &format!("Purpose: session handling.\nBlocker: None.\n{GEN}\n"),
+        &["--ready"],
+    );
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+}
+
+#[test]
+fn the_length_warns_above_25_and_fails_above_30() {
+    let text = |n: usize| {
+        let mut t = String::from("Purpose.\nBlocker: None.\n");
+        for i in 3..n {
+            t.push_str(&format!("line {i}\n"));
+        }
+        t.push_str(GEN);
+        t.push('\n');
+        t
+    };
+    for n in [10, 25] {
+        let o = pr_text_of(&text(n), &["--ready"]);
+        assert_eq!(code(&o), 0, "{n}: {}", out_text(&o));
+        assert!(rules(&o).is_empty(), "{n}");
+    }
+    for n in [26, 30] {
+        let o = pr_text_of(&text(n), &["--ready"]);
+        assert_eq!(code(&o), 0, "{n}: a warning does not fail");
+        assert_eq!(rules(&o), vec!["pr-body-length"], "{n}");
+        let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+        assert_eq!(v["findings"][0]["severity"], "warning");
+        assert_eq!(v["summary"]["warnings"], 1);
+    }
+    let o = pr_text_of(&text(31), &["--ready"]);
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["pr-body-length"]);
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["findings"][0]["severity"], "error");
+}
+
+#[test]
+fn pr_text_json_and_usage() {
+    let o = pr_text_of(&good_pr("Blocker: None."), &["--ready"]);
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["schema_version"], 1);
+    assert_eq!(v["options"]["ready"], true);
+    let ids: Vec<&str> = v["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            "pr-body-length",
+            "pr-blocker-line",
+            "pr-generated-line",
+            "session-link",
+            "text-line-endings"
+        ]
+    );
+    // human list
+    let dir = scratch();
+    let f = dir.path().join("pr.txt");
+    std::fs::write(&f, "Purpose.\n").unwrap();
+    let o = stw(&["pr-text", f.to_str().unwrap()]);
+    assert_eq!(code(&o), 1);
+    let t = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(t.contains("FAIL, 2 errors, 0 warnings"), "{t}");
+    assert!(t.contains("pr-blocker-line"), "{t}");
+    assert!(t.contains("pr-generated-line"), "{t}");
+    for args in [
+        vec!["pr-text", "/nonexistent/stw-lintfiles/pr.txt"],
+        vec!["pr-text"],
+        vec!["pr-text", f.to_str().unwrap(), "--json", "--human"],
+    ] {
+        assert_eq!(code(&stw(&args)), 2, "{args:?}");
+    }
+    std::fs::write(&f, [0xff, 0xfe]).unwrap();
+    assert_eq!(code(&stw(&["pr-text", f.to_str().unwrap()])), 2);
+}
