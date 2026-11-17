@@ -91,11 +91,12 @@ impl Hasher {
     }
 }
 
-fn is_binary(data: &[u8]) -> bool {
+/// NUL in the first 8000 bytes, as git decides.
+pub(crate) fn is_binary(data: &[u8]) -> bool {
     data[..data.len().min(8000)].contains(&0)
 }
 
-fn mode_str(kind: EntryKind) -> &'static str {
+pub(crate) fn mode_str(kind: EntryKind) -> &'static str {
     match kind {
         EntryKind::Blob => "100644",
         EntryKind::BlobExecutable => "100755",
@@ -106,7 +107,7 @@ fn mode_str(kind: EntryKind) -> &'static str {
 }
 
 /// Content that git diffs for an entry: the blob, or `Subproject commit <id>` for a gitlink.
-fn content(repo: &gix::Repository, kind: EntryKind, id: ObjectId) -> Result<Vec<u8>> {
+pub(crate) fn content(repo: &gix::Repository, kind: EntryKind, id: ObjectId) -> Result<Vec<u8>> {
     if kind == EntryKind::Commit {
         return Ok(format!("Subproject commit {id}\n").into_bytes());
     }
@@ -165,10 +166,11 @@ fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_
     }
 }
 
-struct FileChange {
-    path: BString,
-    old: Option<(EntryKind, ObjectId)>,
-    new: Option<(EntryKind, ObjectId)>,
+/// One changed file of a tree diff without rename detection (a rename is a deletion and an addition).
+pub(crate) struct FileChange {
+    pub(crate) path: BString,
+    pub(crate) old: Option<(EntryKind, ObjectId)>,
+    pub(crate) new: Option<(EntryKind, ObjectId)>,
 }
 
 fn kind_of(m: gix::objs::tree::EntryMode) -> Option<EntryKind> {
@@ -227,12 +229,12 @@ pub fn commit_patch_text(repo: &gix::Repository, commit: ObjectId) -> Result<Str
     Ok(String::from_utf8_lossy(&log).into_owned())
 }
 
-fn tree_diff_inner(
+/// The files that differ between two trees (no trees, no renames), sorted by path.
+pub(crate) fn changed_files(
     repo: &gix::Repository,
     old: &gix::Tree<'_>,
     new: &gix::Tree<'_>,
-    log: bool,
-) -> Result<((ObjectId, ObjectId), Vec<u8>)> {
+) -> Result<Vec<FileChange>> {
     use gix::diff::tree::recorder::Change;
     let mut rec = gix::diff::tree::Recorder::default();
     let mut state = gix::diff::tree::State::default();
@@ -286,6 +288,16 @@ fn tree_diff_inner(
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
+    Ok(files)
+}
+
+fn tree_diff_inner(
+    repo: &gix::Repository,
+    old: &gix::Tree<'_>,
+    new: &gix::Tree<'_>,
+    log: bool,
+) -> Result<((ObjectId, ObjectId), Vec<u8>)> {
+    let files = changed_files(repo, old, new)?;
     let mut h = Hasher::new();
     if log {
         h.log = Some(Vec::new());
