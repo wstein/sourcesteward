@@ -363,3 +363,571 @@ fn push_hunk_lines(out: &mut Vec<Entry>, path: &[u8], before: &[u8], after: &[u8
         }
     }
 }
+
+// ---- candidates, evaluation, classes ----
+
+use crate::github::reads::escape_untrusted;
+use std::collections::{BTreeMap, HashMap};
+use std::sync::Arc;
+
+use gix::bstr::ByteSlice;
+
+/// Author time and the first line of the message of a commit.
+#[derive(Clone, Debug)]
+pub struct CommitInfo {
+    pub id: ObjectId,
+    pub author_time: i64,
+    pub subject: Vec<u8>,
+}
+
+pub fn commit_info(repo: &gix::Repository, id: ObjectId) -> Result<CommitInfo> {
+    let c = repo.find_commit(id)?;
+    let author_time = c.author()?.seconds();
+    let msg = c.message_raw()?;
+    let first = msg.lines().next().unwrap_or_default();
+    let subject = trim_line(first).to_vec();
+    Ok(CommitInfo {
+        id,
+        author_time,
+        subject,
+    })
+}
+
+/// The subject without a leading `type(scope):` (also `type!:` and `type(scope)!:`), and the white space after it.
+/// A subject without such a prefix is returned unchanged.
+pub fn strip_type_scope(subject: &[u8]) -> &[u8] {
+    let mut i = 0;
+    while i < subject.len()
+        && (subject[i].is_ascii_lowercase() || subject[i].is_ascii_digit() || subject[i] == b'-')
+    {
+        i += 1;
+    }
+    if i == 0 {
+        return subject;
+    }
+    if subject.get(i) == Some(&b'(') {
+        match subject[i..].iter().position(|b| *b == b')') {
+            Some(close) => i += close + 1,
+            None => return subject,
+        }
+    }
+    if subject.get(i) == Some(&b'!') {
+        i += 1;
+    }
+    if subject.get(i) != Some(&b':') {
+        return subject;
+    }
+    let rest = trim_line(&subject[i + 1..]);
+    if rest.is_empty() {
+        subject
+    } else {
+        rest
+    }
+}
+
+/// The window rule: a candidate is at most `window_secs` older than the commit (author time); newer is fine.
+pub fn in_window(commit_time: i64, candidate_time: i64, window_secs: i64) -> bool {
+    candidate_time >= commit_time - window_secs
+}
+
+/// Results per commit, shared by all branches of a repository: keys and path sets are computed once.
+#[derive(Default)]
+pub struct SimCache {
+    keys: HashMap<ObjectId, std::result::Result<Arc<Keys>, Skip>>,
+    files: HashMap<ObjectId, Option<Arc<Vec<u64>>>>,
+}
+
+impl SimCache {
+    /// The keys of `commit`, or why it has none.
+    pub fn keys(
+        &mut self,
+        repo: &gix::Repository,
+        commit: ObjectId,
+        lim: &Limits,
+    ) -> Result<std::result::Result<Arc<Keys>, Skip>> {
+        if let Some(v) = self.keys.get(&commit) {
+            return Ok(v.clone());
+        }
+        let v = match commit_entries(repo, commit, lim)? {
+            Entries::Lines(e) => Ok(Arc::new(Keys::from_entries(&e))),
+            Entries::Skipped(s) => Err(s),
+        };
+        self.keys.insert(commit, v.clone());
+        Ok(v)
+    }
+
+    /// The changed paths of `commit` as sorted, distinct hashes; `None` for a merge.
+    pub fn files(
+        &mut self,
+        repo: &gix::Repository,
+        commit: ObjectId,
+    ) -> Result<Option<Arc<Vec<u64>>>> {
+        if let Some(v) = self.files.get(&commit) {
+            return Ok(v.clone());
+        }
+        let c = repo.find_commit(commit)?;
+        let parents: Vec<ObjectId> = c.parent_ids().map(|p| p.detach()).collect();
+        let v = if parents.len() > 1 {
+            None
+        } else {
+            let new_tree = c.tree_id()?.detach();
+            let old_tree = match parents.first() {
+                Some(p) => repo.find_commit(*p)?.tree_id()?.detach(),
+                None => repo.empty_tree().id,
+            };
+            let mut h: Vec<u64> =
+                changed_files(repo, &tree_of(repo, old_tree)?, &tree_of(repo, new_tree)?)?
+                    .iter()
+                    .map(|f| hash_key(None, 0, &f.path))
+                    .collect();
+            h.sort_unstable();
+            h.dedup();
+            Some(Arc::new(h))
+        };
+        self.files.insert(commit, v.clone());
+        Ok(v)
+    }
+}
+
+/// Why a main commit is a candidate; the first that applies, in this order.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Reason {
+    Subject,
+    SubjectStripped,
+    Files,
+}
+
+impl Reason {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Reason::Subject => "subject",
+            Reason::SubjectStripped => "subject-stripped",
+            Reason::Files => "files",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Candidate {
+    pub id: ObjectId,
+    pub author_time: i64,
+    pub reason: Reason,
+}
+
+struct MainCommit {
+    info: CommitInfo,
+    files: Arc<Vec<u64>>,
+}
+
+/// The commits of main (no merges) with indexes by subject, subject without prefix and changed file.
+pub struct MainIndex {
+    commits: Vec<MainCommit>,
+    by_subject: HashMap<Vec<u8>, Vec<usize>>,
+    by_stripped: HashMap<Vec<u8>, Vec<usize>>,
+    by_file: HashMap<u64, Vec<usize>>,
+}
+
+impl MainIndex {
+    /// Index `ids` (merges are left out). Commits with an author time before `since` are left out: nothing older
+    /// than the oldest `+` commit minus the window can be a candidate.
+    pub fn build(
+        repo: &gix::Repository,
+        cache: &mut SimCache,
+        ids: &[ObjectId],
+        since: Option<i64>,
+    ) -> Result<MainIndex> {
+        let mut idx = MainIndex {
+            commits: Vec::new(),
+            by_subject: HashMap::new(),
+            by_stripped: HashMap::new(),
+            by_file: HashMap::new(),
+        };
+        for id in ids {
+            let info = commit_info(repo, *id)?;
+            if since.is_some_and(|t| info.author_time < t) {
+                continue;
+            }
+            let Some(files) = cache.files(repo, *id)? else {
+                continue;
+            };
+            let n = idx.commits.len();
+            idx.by_subject
+                .entry(info.subject.clone())
+                .or_default()
+                .push(n);
+            idx.by_stripped
+                .entry(strip_type_scope(&info.subject).to_vec())
+                .or_default()
+                .push(n);
+            for f in files.iter() {
+                idx.by_file.entry(*f).or_default().push(n);
+            }
+            idx.commits.push(MainCommit { info, files });
+        }
+        Ok(idx)
+    }
+
+    /// One walk over everything reachable from `main_tip`.
+    pub fn build_from_walk(
+        repo: &gix::Repository,
+        cache: &mut SimCache,
+        main_tip: ObjectId,
+        since: Option<i64>,
+    ) -> Result<MainIndex> {
+        let mut ids = Vec::new();
+        for info in repo.rev_walk([main_tip]).all()? {
+            ids.push(info?.id);
+        }
+        MainIndex::build(repo, cache, &ids, since)
+    }
+
+    pub fn len(&self) -> usize {
+        self.commits.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.commits.is_empty()
+    }
+
+    /// Candidates for `c` (whose changed paths are `files`): same subject, same subject without prefix, then at least
+    /// half of the files in common (`2 * common >= max(|F(c)|, |F(m)|)`), all inside the window. Order: subject
+    /// matches by commit ID, then file matches by common files (descending) and commit ID. At most
+    /// `lim.max_candidates`; the flag says that more were cut. Search and window rule are separate from the comparison.
+    pub fn candidates(
+        &self,
+        c: &CommitInfo,
+        files: &[u64],
+        lim: &Limits,
+    ) -> (Vec<Candidate>, bool) {
+        let ok = |n: usize| {
+            in_window(
+                c.author_time,
+                self.commits[n].info.author_time,
+                lim.window_secs,
+            )
+        };
+        let cand = |n: usize, reason: Reason| Candidate {
+            id: self.commits[n].info.id,
+            author_time: self.commits[n].info.author_time,
+            reason,
+        };
+        let mut seen: Vec<usize> = Vec::new();
+        let mut out: Vec<Candidate> = Vec::new();
+        let mut by_subject: Vec<Candidate> = Vec::new();
+        for n in self.by_subject.get(&c.subject).into_iter().flatten() {
+            if ok(*n) && !seen.contains(n) {
+                seen.push(*n);
+                by_subject.push(cand(*n, Reason::Subject));
+            }
+        }
+        for n in self
+            .by_stripped
+            .get(strip_type_scope(&c.subject))
+            .into_iter()
+            .flatten()
+        {
+            if ok(*n) && !seen.contains(n) {
+                seen.push(*n);
+                by_subject.push(cand(*n, Reason::SubjectStripped));
+            }
+        }
+        by_subject.sort_by_key(|x| (x.reason, x.id));
+        out.extend(by_subject);
+        let mut common: HashMap<usize, u64> = HashMap::new();
+        for f in files {
+            for n in self.by_file.get(f).into_iter().flatten() {
+                *common.entry(*n).or_default() += 1;
+            }
+        }
+        let mut by_files: Vec<(u64, Candidate)> = common
+            .into_iter()
+            .filter(|(n, k)| {
+                ok(*n)
+                    && !seen.contains(n)
+                    && 2 * *k >= (files.len().max(self.commits[*n].files.len())) as u64
+            })
+            .map(|(n, k)| (k, cand(n, Reason::Files)))
+            .collect();
+        by_files.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.id.cmp(&b.1.id)));
+        out.extend(by_files.into_iter().map(|x| x.1));
+        let cut = out.len() > lim.max_candidates;
+        out.truncate(lim.max_candidates);
+        (out, cut)
+    }
+}
+
+/// One line of evidence: a key whose multiplicity differs most between the commit and its candidate.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Evidence {
+    pub path: String,
+    pub sign: char,
+    pub line: String,
+    pub count_a: u64,
+    pub count_b: u64,
+}
+
+/// Text from a commit made safe for any output: bytes that are not UTF-8 as `\xNN`, then the project's escape rule
+/// (`escape_untrusted`: control, invisible and direction characters), cut at `max_chars` characters with `…`.
+pub fn mask_bytes(b: &[u8], max_chars: usize) -> String {
+    let mut s = String::new();
+    for chunk in b.utf8_chunks() {
+        s.push_str(&escape_untrusted(chunk.valid(), usize::MAX).0);
+        for byte in chunk.invalid() {
+            s.push_str(&format!("\\x{byte:02x}"));
+        }
+    }
+    if s.chars().count() > max_chars {
+        let mut cut: String = s.chars().take(max_chars).collect();
+        cut.push('\u{2026}');
+        return cut;
+    }
+    s
+}
+
+/// The `max` keys with the biggest difference in multiplicity (ties: path, sign, line), `a` is the commit.
+pub fn evidence(a: &[Entry], b: &[Entry], max: usize) -> Vec<Evidence> {
+    type K = (Vec<u8>, u8, Vec<u8>);
+    let mut m: BTreeMap<K, (u64, u64)> = BTreeMap::new();
+    for e in a {
+        m.entry((e.path.clone(), e.sign, e.line.clone()))
+            .or_default()
+            .0 += 1;
+    }
+    for e in b {
+        m.entry((e.path.clone(), e.sign, e.line.clone()))
+            .or_default()
+            .1 += 1;
+    }
+    let mut v: Vec<(K, (u64, u64))> = m.into_iter().filter(|(_, (x, y))| x != y).collect();
+    v.sort_by(|p, q| {
+        let d = |c: &(u64, u64)| c.0.abs_diff(c.1);
+        d(&q.1).cmp(&d(&p.1)).then(p.0.cmp(&q.0))
+    });
+    v.into_iter()
+        .take(max)
+        .map(|((path, sign, line), (count_a, count_b))| Evidence {
+            path: mask_bytes(&path, 200),
+            sign: sign as char,
+            line: mask_bytes(&line, 80),
+            count_a,
+            count_b,
+        })
+        .collect()
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Compared {
+    pub candidate: ObjectId,
+    pub candidate_subject: String,
+    pub reason: Reason,
+    pub sim: Sim,
+    /// The value without the path; shown, never part of the class.
+    pub no_path: Sim,
+    /// Only for a commit below the high threshold.
+    pub evidence: Vec<Evidence>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Skipped(Skip),
+    NoCandidate,
+    Compared(Compared),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CommitReport {
+    pub commit: ObjectId,
+    pub subject: String,
+    pub outcome: Outcome,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Class {
+    /// Every `+` commit is at or above the high threshold.
+    Landed,
+    /// Every `+` commit is at or above the low threshold, at least one below the high one.
+    Modified,
+    /// A commit without candidate, without value, or below the low threshold.
+    Partial,
+    /// No `+` commit to judge.
+    None,
+}
+
+impl Class {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Class::Landed => "landed",
+            Class::Modified => "modified",
+            Class::Partial => "partial",
+            Class::None => "none",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SkippedCounts {
+    pub merges: usize,
+    pub empty: usize,
+    pub too_large: usize,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BranchReport {
+    pub class: Class,
+    /// Commits that were judged: all but merges and empty commits (a `too_large` commit counts).
+    pub plus_commits: usize,
+    pub at_or_above: usize,
+    /// The lowest value (exact); None when no commit has one.
+    pub min: Option<Sim>,
+    /// Median of the shown values in tenths of a percent (two middle values: mean, rounded half up).
+    pub median_permille: Option<u32>,
+    pub without_candidate: usize,
+    pub skipped: SkippedCounts,
+    pub candidates_cut: bool,
+    /// Sorted by commit ID.
+    pub commits: Vec<CommitReport>,
+}
+
+/// Judge the `+` commits of one branch against main. `high` and `low` are percentages.
+pub fn evaluate_branch(
+    repo: &gix::Repository,
+    cache: &mut SimCache,
+    index: &MainIndex,
+    plus: &[ObjectId],
+    high: u32,
+    low: u32,
+    lim: &Limits,
+) -> Result<BranchReport> {
+    let mut ids: Vec<ObjectId> = plus.to_vec();
+    ids.sort();
+    ids.dedup();
+    let mut commits = Vec::new();
+    let mut skipped = SkippedCounts::default();
+    let mut cut_any = false;
+    for id in ids {
+        let info = commit_info(repo, id)?;
+        let subject = mask_bytes(&info.subject, 120);
+        let keys = match cache.keys(repo, id, lim)? {
+            Ok(k) => k,
+            Err(s) => {
+                match s {
+                    Skip::Merge => skipped.merges += 1,
+                    Skip::Empty => skipped.empty += 1,
+                    Skip::TooLarge => skipped.too_large += 1,
+                }
+                commits.push(CommitReport {
+                    commit: id,
+                    subject,
+                    outcome: Outcome::Skipped(s),
+                });
+                continue;
+            }
+        };
+        let files = cache.files(repo, id)?.unwrap_or_default();
+        let (cands, cut) = index.candidates(&info, &files, lim);
+        cut_any |= cut;
+        let mut best: Option<(Candidate, Sim, Sim)> = None;
+        for cand in cands {
+            let Ok(ck) = cache.keys(repo, cand.id, lim)? else {
+                continue;
+            };
+            let sim = keys.similarity(&ck);
+            let better = match &best {
+                None => true,
+                Some((b, bs, _)) => match sim.cmp_value(bs) {
+                    Ordering::Greater => true,
+                    Ordering::Equal => cand.id < b.id,
+                    Ordering::Less => false,
+                },
+            };
+            if better {
+                best = Some((cand, sim, keys.similarity_no_path(&ck)));
+            }
+        }
+        let outcome = match best {
+            None => Outcome::NoCandidate,
+            Some((cand, sim, no_path)) => {
+                let ev = if sim.ge_pct(high) {
+                    Vec::new()
+                } else {
+                    match (
+                        commit_entries(repo, id, lim)?,
+                        commit_entries(repo, cand.id, lim)?,
+                    ) {
+                        (Entries::Lines(a), Entries::Lines(b)) => {
+                            evidence(&a, &b, lim.max_evidence)
+                        }
+                        _ => Vec::new(),
+                    }
+                };
+                Outcome::Compared(Compared {
+                    candidate: cand.id,
+                    candidate_subject: mask_bytes(&commit_info(repo, cand.id)?.subject, 120),
+                    reason: cand.reason,
+                    sim,
+                    no_path,
+                    evidence: ev,
+                })
+            }
+        };
+        commits.push(CommitReport {
+            commit: id,
+            subject,
+            outcome,
+        });
+    }
+    Ok(summarize(commits, skipped, cut_any, high, low))
+}
+
+/// Classes and figures from the per-commit results.
+pub fn summarize(
+    commits: Vec<CommitReport>,
+    skipped: SkippedCounts,
+    candidates_cut: bool,
+    high: u32,
+    low: u32,
+) -> BranchReport {
+    let judged = commits
+        .iter()
+        .filter(|c| !matches!(c.outcome, Outcome::Skipped(Skip::Merge | Skip::Empty)))
+        .count();
+    let mut sims: Vec<Sim> = Vec::new();
+    let mut without = 0;
+    for c in &commits {
+        match &c.outcome {
+            Outcome::Compared(x) => sims.push(x.sim),
+            Outcome::NoCandidate => without += 1,
+            Outcome::Skipped(_) => {}
+        }
+    }
+    let at_or_above = sims.iter().filter(|s| s.ge_pct(high)).count();
+    let min = sims.iter().copied().min_by(|a, b| a.cmp_value(b));
+    let mut shown: Vec<u32> = sims.iter().map(|s| s.shown(high)).collect();
+    shown.sort_unstable();
+    let median_permille = match shown.len() {
+        0 => None,
+        n if n % 2 == 1 => Some(shown[n / 2]),
+        n => Some((shown[n / 2 - 1] + shown[n / 2]).div_ceil(2)),
+    };
+    let without_value = without + skipped.too_large;
+    let class = if judged == 0 {
+        Class::None
+    } else if without_value > 0 || sims.iter().any(|s| !s.ge_pct(low)) {
+        Class::Partial
+    } else if at_or_above == sims.len() {
+        Class::Landed
+    } else {
+        Class::Modified
+    };
+    BranchReport {
+        class,
+        plus_commits: judged,
+        at_or_above,
+        min,
+        median_permille,
+        without_candidate: without,
+        skipped,
+        candidates_cut,
+        commits,
+    }
+}

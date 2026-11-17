@@ -1350,6 +1350,8 @@ fn evidence_orders_by_difference_then_key() {
         en("f", b'+', "x"),
         en("f", b'+', "y"),
         en("a", b'+', "z"),
+        en("f", b'+', "same"),
+        en("f", b'+', "same"),
     ];
     let b = vec![
         en("f", b'+', "y"),
