@@ -136,7 +136,7 @@ fn class_via(s: Scn) -> (String, String) {
 
 #[test]
 fn check_runs_give_the_class_green_pending_or_red() {
-    let cases: [(Vec<Value>, &str); 8] = [
+    let cases: [(Vec<Value>, &str); 9] = [
         (vec![cr("a", "completed", Some("success"))], "green"),
         (
             vec![
@@ -157,6 +157,7 @@ fn check_runs_give_the_class_green_pending_or_red() {
         (vec![cr("a", "completed", Some("failure"))], "red"),
         (vec![cr("a", "completed", Some("cancelled"))], "red"),
         (vec![cr("a", "completed", Some("timed_out"))], "red"),
+        (vec![cr("a", "completed", Some("action_required"))], "red"),
         (
             vec![
                 cr("a", "in_progress", None),
@@ -246,7 +247,7 @@ fn a_403_on_check_runs_falls_back_to_the_actions_runs_of_the_head() {
 
 #[test]
 fn the_actions_runs_are_classified_with_the_rule_of_the_check_runs() {
-    let cases: [(&str, &str, Option<&str>, &str); 9] = [
+    let cases: [(&str, &str, Option<&str>, &str); 10] = [
         ("success", "completed", Some("success"), "green"),
         ("skipped", "completed", Some("skipped"), "green"),
         ("failure", "completed", Some("failure"), "red"),
@@ -256,6 +257,12 @@ fn the_actions_runs_are_classified_with_the_rule_of_the_check_runs() {
             "startup_failure",
             "completed",
             Some("startup_failure"),
+            "red",
+        ),
+        (
+            "action_required",
+            "completed",
+            Some("action_required"),
             "red",
         ),
         ("in_progress", "in_progress", None, "pending"),
@@ -353,6 +360,31 @@ fn the_newest_run_of_a_workflow_and_event_counts() {
     let s = Scn {
         check_runs: forbidden(),
         actions: actions(vec![new_ok, old_bad]),
+        ..Scn::default()
+    };
+    assert_eq!(class_via(s).0, "green");
+    // the time ranks before the id: an older failure with a higher id does not win
+    let old_bad_high_id = wr(
+        9,
+        7,
+        "push",
+        "2026-11-17T10:00:00Z",
+        1,
+        "completed",
+        Some("failure"),
+    );
+    let new_ok_low_id = wr(
+        2,
+        7,
+        "push",
+        "2026-11-17T12:00:00Z",
+        1,
+        "completed",
+        Some("success"),
+    );
+    let s = Scn {
+        check_runs: forbidden(),
+        actions: actions(vec![old_bad_high_id, new_ok_low_id]),
         ..Scn::default()
     };
     assert_eq!(class_via(s).0, "green");

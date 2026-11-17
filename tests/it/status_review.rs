@@ -920,7 +920,7 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
             h.contains("/pulls?")
                 || h.contains("GET /repos/test/fixture HTTP")
                 || h.contains("/branches/main")
-                || h.contains("/commits/")
+                || h.contains(&format!("/commits/{CI_SHA}/"))
                 || h.contains("/pulls/")
                 || h.contains("/comments?")
                 || h.contains("/issues?"),

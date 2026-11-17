@@ -756,3 +756,22 @@ fn a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is
         assert!(!e.contains(TOKEN));
     }
 }
+
+#[test]
+fn a_default_branch_name_of_200_characters_is_read_and_one_of_201_is_not() {
+    for (len, ok) in [(200usize, true), (201, false)] {
+        let name = "a".repeat(len);
+        let n = name.clone();
+        let api = FakeRoutes::start(move |path, _| {
+            let body = if path == "/repos/cli/cli" {
+                serde_json::json!({"default_branch": n})
+            } else {
+                serde_json::json!({"commit": {"sha": SHA}})
+            };
+            (200, vec![], body.to_string())
+        });
+        let r = client(&api).default_branch_head(SLUG);
+        assert_eq!(r.is_ok(), ok, "{len}");
+        assert_eq!(api.hits().len(), if ok { 2 } else { 1 }, "{len}");
+    }
+}
