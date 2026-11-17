@@ -544,3 +544,214 @@ fn a_list_read_obeys_the_overall_deadline() {
     assert!(api.hits().is_empty(), "no request after the deadline");
     assert_eq!(c.stats().requests, 0);
 }
+
+fn run(
+    id: u64,
+    workflow: u64,
+    name: &str,
+    event: &str,
+    status: &str,
+    conclusion: Option<&str>,
+) -> Value {
+    serde_json::json!({"id": id, "workflow_id": workflow, "name": name, "event": event, "status": status,
+        "conclusion": conclusion, "head_sha": SHA, "created_at": "2026-11-17T17:32:44Z", "run_attempt": 1})
+}
+
+#[test]
+fn workflow_runs_of_a_commit_are_read_across_pages_with_the_commit_in_every_request() {
+    let runs: Vec<Value> = (1..=5)
+        .map(|i| run(i, 7, "Test", "push", "completed", Some("success")))
+        .collect();
+    let api = FakeRoutes::start(move |path, q| {
+        assert_eq!(path, format!("/repos/{SLUG}/actions/runs"));
+        assert!(q.contains(&format!("head_sha={SHA}")), "{q}");
+        (200, vec![], paged(runs.clone(), Some("workflow_runs"), q))
+    });
+    let b = Budget {
+        per_page: 2,
+        ..Budget::default()
+    };
+    let o = observed(client(&api).workflow_runs(SLUG, SHA, &b).unwrap());
+    assert!(o.is_complete());
+    assert_eq!(o.pages, 3);
+    assert_eq!(o.items.len(), 5);
+    let first = &o.items[0];
+    assert_eq!(
+        (
+            first.id,
+            first.workflow_id,
+            first.name.as_str(),
+            first.event.as_str()
+        ),
+        (1, 7, "Test", "push")
+    );
+    assert_eq!(first.status, "completed");
+    assert_eq!(first.conclusion.as_deref(), Some("success"));
+    assert_eq!(first.head_sha.as_deref(), Some(SHA));
+    assert_eq!(
+        (first.created_at.as_str(), first.run_attempt),
+        ("2026-11-17T17:32:44Z", 1)
+    );
+    assert_eq!(api.hits().len(), 3, "{:?}", api.hits());
+}
+
+#[test]
+fn workflow_run_text_is_escaped_and_a_malformed_entry_makes_the_list_partial() {
+    let mut hostile = run(
+        1,
+        7,
+        "Te\u{1b}[31mst\nx",
+        "push",
+        "completed",
+        Some("failure"),
+    );
+    hostile["head_sha"] = Value::String(SHA.to_uppercase());
+    let bad = serde_json::json!({"id": 2, "workflow_id": 7, "name": 5, "status": "completed"});
+    let no_status = serde_json::json!({"id": 3, "workflow_id": 7, "name": "x"});
+    let body = serde_json::json!({"total_count": 3, "workflow_runs": [hostile, bad, no_status]})
+        .to_string();
+    let api = status_server(200, vec![], body);
+    let o = observed(
+        client(&api)
+            .workflow_runs(SLUG, SHA, &Budget::default())
+            .unwrap(),
+    );
+    assert!(!o.is_complete(), "{o:?}");
+    assert_eq!(o.items.len(), 1);
+    no_control(&o.items[0].name);
+    assert!(
+        o.items[0].name.contains("\\u{1b}") && o.items[0].name.contains("\\n"),
+        "{:?}",
+        o.items[0].name
+    );
+    assert_eq!(
+        o.items[0].head_sha, None,
+        "an upper-case id is no commit id"
+    );
+}
+
+#[test]
+fn denied_missing_and_broken_answers_of_workflow_runs_are_typed() {
+    let cases: [(u16, Vec<(String, String)>, &str, &str); 7] = [
+        (403, vec![], "{}", "denied"),
+        (
+            403,
+            vec![("x-ratelimit-remaining".into(), "0".into())],
+            "{}",
+            "denied",
+        ),
+        (401, vec![], "{}", "denied"),
+        (404, vec![], "{}", "not-found"),
+        (500, vec![], "{}", "failed"),
+        (200, vec![], "not json", "failed"),
+        (200, vec![], "{\"message\":\"x\"}", "failed"),
+    ];
+    for (status, headers, body, state) in cases {
+        let api = status_server(status, headers, body.into());
+        let r = client(&api)
+            .workflow_runs(SLUG, SHA, &Budget::default())
+            .unwrap();
+        assert_eq!(r.state(), state, "HTTP {status}");
+        assert!(!r.is_complete());
+        assert!(!format!("{r:?}").contains(TOKEN));
+    }
+    let api = status_server(403, vec![], "{}".into());
+    let r = client(&api)
+        .workflow_runs(SLUG, SHA, &Budget::default())
+        .unwrap();
+    assert!(
+        matches!(
+            r,
+            Read::Denied {
+                kind: Denial::Forbidden,
+                status: 403,
+                ..
+            }
+        ),
+        "{r:?}"
+    );
+}
+
+#[test]
+fn the_pieces_of_a_workflow_runs_request_are_validated_before_any_request() {
+    let api = status_server(200, vec![], "{}".into());
+    let c = client(&api);
+    let b = Budget::default();
+    for slug in ["", "a", "a/b/c", "a/../b", "a b/c", "a/b?x=1"] {
+        assert!(c.workflow_runs(slug, SHA, &b).is_err(), "{slug:?}");
+        assert!(c.default_branch_head(slug).is_err(), "{slug:?}");
+    }
+    for sha in [
+        "",
+        "abc",
+        &SHA.to_uppercase(),
+        &format!("{SHA}&x=1"),
+        "main",
+    ] {
+        assert!(c.workflow_runs(SLUG, sha, &b).is_err(), "{sha:?}");
+    }
+    assert!(api.hits().is_empty(), "{:?}", api.hits());
+}
+
+#[test]
+fn the_default_branch_and_its_head_are_read_from_two_documents() {
+    let api = FakeRoutes::start(|path, _| {
+        let body = match path {
+            "/repos/cli/cli" => serde_json::json!({"default_branch": "trunk/main"}),
+            "/repos/cli/cli/branches/trunk/main" => serde_json::json!({"commit": {"sha": SHA}}),
+            _ => return (404, vec![], "{}".into()),
+        };
+        (200, vec![], body.to_string())
+    });
+    let (branch, head) = client(&api).default_branch_head(SLUG).unwrap();
+    assert_eq!((branch.as_str(), head.as_str()), ("trunk/main", SHA));
+    assert_eq!(api.hits().len(), 2, "{:?}", api.hits());
+}
+
+#[test]
+fn a_default_branch_that_cannot_go_into_a_path_or_a_head_that_is_no_commit_id_is_an_error() {
+    for name in [
+        "a b", "x?y=1", "a/../b", "x%2f", "x#f", "/x", "x/", "a//b", "",
+    ] {
+        let n = name.to_string();
+        let api = FakeRoutes::start(move |path, _| {
+            let body = if path == "/repos/cli/cli" {
+                serde_json::json!({"default_branch": n})
+            } else {
+                serde_json::json!({"commit": {"sha": SHA}})
+            };
+            (200, vec![], body.to_string())
+        });
+        assert!(client(&api).default_branch_head(SLUG).is_err(), "{name:?}");
+        assert_eq!(
+            api.hits().len(),
+            1,
+            "{name:?}: only the repository is read: {:?}",
+            api.hits()
+        );
+    }
+    for sha in [
+        serde_json::json!(null),
+        serde_json::json!("abc"),
+        serde_json::json!(5),
+    ] {
+        let api = FakeRoutes::start(move |path, _| {
+            let body = if path == "/repos/cli/cli" {
+                serde_json::json!({"default_branch": "main"})
+            } else {
+                serde_json::json!({"commit": {"sha": sha.clone()}})
+            };
+            (200, vec![], body.to_string())
+        });
+        assert!(client(&api).default_branch_head(SLUG).is_err());
+    }
+    for status in [401u16, 403, 404, 500] {
+        let api = status_server(status, vec![], "{}".into());
+        let e = client(&api)
+            .default_branch_head(SLUG)
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains(&format!("HTTP {status}")), "{e}");
+        assert!(!e.contains(TOKEN));
+    }
+}

@@ -166,6 +166,25 @@ pub struct CommitStatus {
     pub updated_at: String,
 }
 
+/// One run of an Actions workflow (`actions/runs`), the fields `stw status` needs for the default branch CI.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WorkflowRun {
+    pub id: u64,
+    pub workflow_id: u64,
+    /// The workflow name (escaped and cut).
+    pub name: String,
+    /// `push`, `pull_request`, `schedule`, ... (escaped and cut).
+    pub event: String,
+    /// `queued`, `in_progress`, `completed`, `waiting`, `requested`, `pending`.
+    pub status: String,
+    /// None while not completed.
+    pub conclusion: Option<String>,
+    pub head_sha: Option<String>,
+    pub created_at: String,
+    /// Which attempt of the run this is (1 when the answer has none).
+    pub run_attempt: u64,
+}
+
 /// Escape untrusted text for any output. Cuts at `max_chars` characters first (the flag says so), then
 /// replaces `\` by `\\`, line feed, carriage return and tab by `\n`, `\r`, `\t`, other control characters and
 /// invisible or direction-changing characters (zero-width, bidi, line/paragraph separators, BOM, soft hyphen)
@@ -323,6 +342,28 @@ fn parse_status(v: &Value, b: &Budget) -> Option<CommitStatus> {
     })
 }
 
+fn parse_workflow_run(v: &Value, _b: &Budget) -> Option<WorkflowRun> {
+    if !v.is_object()
+        || !["name", "event", "conclusion", "created_at"]
+            .iter()
+            .all(|k| string_or_null(&v[*k]))
+        || !v["status"].is_string()
+    {
+        return None;
+    }
+    Some(WorkflowRun {
+        id: v["id"].as_u64()?,
+        workflow_id: v["workflow_id"].as_u64()?,
+        name: esc(&v["name"], 200),
+        event: esc(&v["event"], 40),
+        status: esc(&v["status"], 40),
+        conclusion: esc_opt(&v["conclusion"], 40),
+        head_sha: hex_id(&v["head_sha"]),
+        created_at: esc(&v["created_at"], 40),
+        run_attempt: v["run_attempt"].as_u64().unwrap_or(1),
+    })
+}
+
 /// One answer of the API.
 enum Page {
     Json(Value),
@@ -417,7 +458,8 @@ impl Client {
                 incomplete = Some("time budget reached".into());
                 break;
             }
-            let url = format!("{}{path}?per_page={per_page}&page={page}", self.base);
+            let sep = if path.contains('?') { '&' } else { '?' };
+            let url = format!("{}{path}{sep}per_page={per_page}&page={page}", self.base);
             // each request gets what is left of the list's time budget
             let left = budget.time.saturating_sub(start.elapsed());
             let v = match self.page(
@@ -556,6 +598,60 @@ impl Client {
             parse_status,
         ))
     }
+
+    /// Actions runs of one commit (`actions/runs?head_sha=`), newest first as GitHub sends them. The fallback of the
+    /// default branch CI when a token cannot read check runs: it needs `Actions: read`. Read-only.
+    pub fn workflow_runs(
+        &self,
+        slug: &str,
+        sha: &str,
+        budget: &Budget,
+    ) -> Result<Read<WorkflowRun>> {
+        Self::check_slug(slug)?;
+        Self::check_sha(sha)?;
+        Ok(self.list(
+            &format!("/repos/{slug}/actions/runs?head_sha={sha}"),
+            budget,
+            |v| {
+                let total = &v["total_count"];
+                if !total.is_null() && total.as_i64().is_none() {
+                    return None;
+                }
+                v["workflow_runs"].as_array()
+            },
+            parse_workflow_run,
+        ))
+    }
+
+    /// The default branch of a repository and the commit its head points to: `GET /repos/{slug}` for the name,
+    /// `GET /repos/{slug}/branches/{name}` for the head. The name is put into a path only when it has no character
+    /// outside `A-Z a-z 0-9 . _ - /` (and no `..`); anything else is an error, not an escaped request.
+    pub fn default_branch_head(&self, slug: &str) -> Result<(String, String)> {
+        Self::check_slug(slug)?;
+        let api = &self.base;
+        let repo = self.get(&format!("{api}/repos/{slug}"))?;
+        let branch = repo["default_branch"]
+            .as_str()
+            .filter(|b| plain_branch_name(b))
+            .ok_or_else(|| Error::github("the repository answer has no usable default branch"))?
+            .to_string();
+        let doc = self.get(&format!("{api}/repos/{slug}/branches/{branch}"))?;
+        let sha = hex_id(&doc["commit"]["sha"])
+            .ok_or_else(|| Error::github("the branch answer has no usable head commit"))?;
+        Ok((branch, sha))
+    }
+}
+
+/// A branch name that can go into a URL path as it is.
+fn plain_branch_name(b: &str) -> bool {
+    !b.is_empty()
+        && b.len() <= 200
+        && !b.starts_with('/')
+        && !b.ends_with('/')
+        && !b.contains("..")
+        && !b.contains("//")
+        && b.bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'_' | b'-' | b'/'))
 }
 
 // ---- branch rules and repository merge settings --------------------------------------------------
