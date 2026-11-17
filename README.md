@@ -44,7 +44,7 @@ stw lint pr-text FILE [--ready] [--human | --json]
 
 | Command | What it does | Writes |
 | --- | --- | --- |
-| `status` | counts per repository and in total, then per repository: branch, upstream ahead/behind, staged/unstaged/untracked/conflicts, stash, running operation, submodule pin drift, open pull requests | nothing; with `--fetch` only the remote-tracking refs of `origin` (and FETCH_HEAD, objects) |
+| `status` | counts per repository and in total, then per repository: branch, upstream ahead/behind, staged/unstaged/untracked/conflicts, stash, running operation, submodule pin drift, open pull requests, the CI of the default branch (`ci-main`, see "CI of the default branch in `stw status`") | nothing; with `--fetch` only the remote-tracking refs of `origin` (and FETCH_HEAD, objects) |
 | `tidy plan` | the plan only: per local branch `delete`, `review` or `keep`, with the proof. `tidy` alone prints the usage (exit 2) | nothing |
 | `tidy apply` | carries the plan out: deletes the local branches it marks `delete`, removes clean linked worktrees of such branches and dead worktree registrations. No confirmation flag; `--yes` is an unknown flag | local branches, worktrees, a manifest outside the repository |
 | `tidy restore` | re-creates the branches of a run from its manifest | local branches |
@@ -314,9 +314,9 @@ would_fast_forward, skipped, errors}.
 
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
   `changes{staged,unstaged,untracked,conflicts}`, `stash`, `operation`, `gitlink{recorded,state}`, `slug`,
-  `attention`, `reasons`, `oplog_hooks{state,reason,missing}` (null when the repository could not be read; see the hook hint under "`stw oplog hooks status | install | uninstall | print`"), `pull_requests{read,error,open[{number,title,head,draft,author,review,review_state,hints,base,default_branch,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
+  `attention`, `reasons`, `oplog_hooks{state,reason,missing}` (null when the repository could not be read; see the hook hint under "`stw oplog hooks status | install | uninstall | print`"), `ci_main{read,error,branch,head,class,source}` (the CI of the default branch, null members when it was not read; see "CI of the default branch in `stw status`"), `pull_requests{read,error,open[{number,title,head,draft,author,review,review_state,hints,base,default_branch,merge_state}]}`. `review` of a pull request is null unless `--review` read it (REST has no `reviewDecision`; then the status label of the review state, see "Review state in `stw status --review`"); `review_state` is null or the state document; `merge_state` is gh's `mergeStateStatus` value, taken from REST `mergeable_state`.
   Additive, from the flags (see "Status flags"): top level `options{fetch,worktrees,icons,review}` (`icons` is always null: the JSON carries no glyphs), per repository `pull_requests.review` (null without `--review`, and also with it when the pull request list of the repository was not read; else `{states{clear,clear_carried,findings,no_review,unverified_author,unknown},hints{clear_not_ready,base_not_default},not_read,limit}`), per pull request `review_state`, `hints`, `base` and `default_branch` (below) and, only with `--stats` or `--verbose`, `stats{requests,rate_limit_limit,rate_limit_remaining,rate_limit_reset,duration_ms}` (the three rate-limit values are null until GitHub reported them; `rate_limit_reset` is `YYYY-MM-DDTHH:MM:SSZ`; no URL, no token); per repository `fetch{state,via,error}` (`state`: `not-run`, `ok`, `no-remote`, `failed`, `unsupported-remote`, `unsupported`; `via`: `git`, `gix` or null), `fetch_error` (the error text of a failed fetch, else null) and `worktree_list` (null without `--worktrees`, else `[{path,branch,detached,dirty,missing,locked,prunable}]`: `locked` is null or the lock reason, empty when none was given; the main checkout is not in it).
-- `status` notices: top level `notices`, an array that is always present (`[]` when there is nothing to say), additive in schema 2. It is made from the same list as the text block `Notices (N)`: N is its length, element i is line i, the order is fixed (the GitHub note; then per repository in list order `fetch-failed`, `prs-not-read`, `issues-not-read`, `review-not-read`, `review-limit`; then `rate-limited` of the run; then `rejected-path`). Element: `code` (string, below), `source` (string: `github`, `fetch`, `pulls`, `issues`, `reviews`, `submodules`), `repos` (array of repository names the notice is about, escaped and cut to 300 characters like in the text; `[]` for a notice of the run), `message` (string, the text line without its two leading spaces, text from outside escaped like in the text: no control character, no bidi override), `count` (integer, at least 1: the pull requests or reads the notice names; 1 for the others). `github_note`, `pull_requests.error`, `fetch_error` and the issues `state` stay as they are. Codes (a closed list; a new code is an additive change):
+- `status` notices: top level `notices`, an array that is always present (`[]` when there is nothing to say), additive in schema 2. It is made from the same list as the text block `Notices (N)`: N is its length, element i is line i, the order is fixed (the GitHub note; then per repository in list order `fetch-failed`, `prs-not-read`, `issues-not-read`, `ci-not-read`, `review-not-read`, `review-limit`; then `rate-limited` of the run; then `rejected-path`). Element: `code` (string, below), `source` (string: `github`, `fetch`, `pulls`, `issues`, `ci`, `reviews`, `submodules`), `repos` (array of repository names the notice is about, escaped and cut to 300 characters like in the text; `[]` for a notice of the run), `message` (string, the text line without its two leading spaces, text from outside escaped like in the text: no control character, no bidi override), `count` (integer, at least 1: the pull requests or reads the notice names; 1 for the others). `github_note`, `pull_requests.error`, `fetch_error` and the issues `state` stay as they are. Codes (a closed list; a new code is an additive change):
 
   | `code` | `source` | `repos` | `count` | meaning (Go: same meaning) |
   |---|---|---|---|---|
@@ -326,12 +326,13 @@ would_fast_forward, skipped, errors}.
   | `fetch-failed` | `fetch` | the repository | 1 | `--fetch` failed for it; the cause is in `message` |
   | `prs-not-read` | `pulls` | the repository | 1 | the open pull requests could not be read (401, 403, 404, 429, 5xx, unreadable answer, `deadline:` of `--timeout`); the cause is in `message` |
   | `issues-not-read` | `issues` | the repository | 1 | the open issues could not be read; same causes |
+  | `ci-not-read` | `ci` | the repository | 1 | the CI of the default branch could not be read (denied: 403 on check runs and on Actions runs, 401, 404, 429, 5xx, an unusable or incomplete answer, `deadline:`); the cause is in `message` (Go: a notice per error code, "forbidden: default branch CI of 2 repositories not read") |
   | `review-not-read` | `reviews` | the repository | pull requests whose comments were not read | `--review`: review state `?` for them (denied, missing, over a bound, `--timeout`); first cause in `message` |
   | `review-limit` | `reviews` | the repository | pull requests beyond the limit of 200 | `--review`: not read because of the limit |
   | `rate-limited` | `reviews` | none | reads not started | `--review`: a rate limit stopped the comment reads (Go reason `rate-limited`) |
   | `rejected-path` | `submodules` | none | 1 | a `.gitmodules` path that is not a plain directory below the root was not used; the path is in `message` |
 
-  The cause of a failed read (rate limit, 401, 403, `deadline`) is not a code of its own: it is part of `message` (Rust has no typed error there; Go's `unauthorized`, `forbidden`, `deadline` reasons have no counterpart as codes). A repository that cannot be read locally has no notice: its `error` is set and the exit code is 1. Differences to the notice of Go (`legacy/sourcesteward/internal/overview/notice.go`), one by one: (1) Go creates no notice for `offline` (it skips that reason), Rust creates `offline`; (2) Go sets `source` to `remote` for `no-token`, `deadline` and `rate-limited`, Rust uses `github`, `pulls`, `issues`, `reviews`, `fetch`, `submodules`; (3) Go groups all repositories of one code and source into ONE notice (`repos` lists them, also for `no-token`), Rust creates one notice per repository and source, and for `offline`, `no-token`, `rate-limited` and `rejected-path` `repos` is `[]`; (4) Go names a repository `OWNER/NAME` when the slug is valid, Rust uses the local name; (5) Go sorts by code, source, message, Rust has the fixed order above; (6) the Go schema limits `message` to 512 characters (I did not find the cut in the code), Rust escapes it and cuts the text from outside (300 characters for names, 200 for causes); (7) `count` exists only in Rust; (8) Go's codes `unauthorized`, `forbidden`, `deadline`, `drafts-not-visible` and the others have no counterpart in Rust. The Rust document is not valid against the Go schema v2 anyway (fields are missing), `count` does not change that. `notices[].repos` is not a join key for hostile names: `repos[].name` is raw, `notices[].repos` is escaped and cut.
+  The cause of a failed read (rate limit, 401, 403, `deadline`) is not a code of its own: it is part of `message` (Rust has no typed error there; Go's `unauthorized`, `forbidden`, `deadline` reasons have no counterpart as codes). A repository that cannot be read locally has no notice: its `error` is set and the exit code is 1. Differences to the notice of Go (`legacy/sourcesteward/internal/overview/notice.go`), one by one: (1) Go creates no notice for `offline` (it skips that reason), Rust creates `offline`; (2) Go sets `source` to `remote` for `no-token`, `deadline` and `rate-limited`, Rust uses `github`, `pulls`, `issues`, `reviews`, `fetch`, `submodules`; (3) Go groups all repositories of one code and source into ONE notice (`repos` lists them, also for `no-token`), Rust creates one notice per repository and source, and for `offline`, `no-token`, `rate-limited` and `rejected-path` `repos` is `[]`; (4) Go names a repository `OWNER/NAME` when the slug is valid, Rust uses the local name; (5) Go sorts by code, source, message, Rust has the fixed order above; (6) the Go schema limits `message` to 512 characters (I did not find the cut in the code), Rust escapes it and cuts the text from outside (300 characters for names, 200 for causes); (7) `count` exists only in Rust; (8) Go's codes `unauthorized`, `forbidden`, `deadline`, `drafts-not-visible` and the others have no counterpart in Rust; (9) the failed `ci-main` source is the code `ci-not-read` per repository with the cause in `message` (Go: the error code of the read, e.g. `forbidden`, grouped over repositories). The Rust document is not valid against the Go schema v2 anyway (fields are missing), `count` does not change that. `notices[].repos` is not a join key for hostile names: `repos[].name` is raw, `notices[].repos` is escaped and cut.
 - `status` counts: per repository `counts`, in total the top-level `totals`, same shape: `pull_requests{state,open,bot,truncated}`,
   `issues{state,open,bug,truncated}`, `branches{local,remote}`, `worktrees`, `stash` (all numbers or null). `state` is `ok`,
   `not-read` (`--offline` or no token), `no-remote` (no GitHub origin; left out of a total) or `failed` (the read failed or the
@@ -358,7 +359,7 @@ would_fast_forward, skipped, errors}.
 `PRs n (bot n) | Issues n (bug n) | Branches local/remote | Worktrees n | Stash n`; `n/a` is not read, `?` is failed, `n+` is a
 lower bound at a full page), `Needs action (N)` (repositories with an attention reason), `Repositories (N)`, `Notices (N)`
 (why GitHub was not read, failed reads per repository; text from outside is shown with escapes; the JSON `notices` has the same list, see "Output for agents"), the `agent-rules` block, then the summary line. A failed GitHub read is
-a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
+a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository of a GitHub origin a line `main CI green (main@163ada5, via check runs)` says what the CI of the head of the default branch is (`none`, `pending`, `green`, `red`; `via Actions runs` when check runs were denied), or `main CI not read (cause)`; a red head is the attention reason `main-red` (see "CI of the default branch in `stw status`"). Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
 
 ## Status flags
 
@@ -385,8 +386,8 @@ with `--offline`.
   not compact: it already prints the detail lines of Go's long layout (operation, stash, gitlink drift, pull requests), and
   `--long` adds the card and the explanations on top. There is no compact mode. The explanations are sentences from the facts;
   Go prints the suggested command (`run:`) and a `hint:` per item, Rust never prints a command (see "Output for agents"). Go's
-  action items with priorities (red to violet), their links and the sources release drafts, tags and CI do not exist in Rust:
-  the remote half is pull requests and issues.
+  action items with priorities (red to violet), their links and the sources release drafts and tags do not exist in Rust:
+  the remote half is pull requests, issues and the CI of the default branch (`ci-main`, below).
 - `--icons`: Rust has one marker per repository line and no priority levels, so the glyph sets cover the two markers only
   (Go also puts the priority glyph in front of every action line). The glyphs are those of Go. Go keeps the ascii marker in its
   local layout unless `--icons` is given; Rust has one layout, so the terminal default applies to every run, `--offline` and a run
@@ -400,10 +401,10 @@ with `--offline`.
 - Correction candidate, not changed: `sync` without `--prune`/`--no-prune` runs `git fetch --no-tags` without
   `--no-prune-tags` (as Go `stwsync` does), so `fetch.pruneTags=true` or `remote.origin.pruneTags=true` makes it create tags.
   `sync` is a mutating command and keeps the Go behavior until the owner decides.
-- `--timeout`: Go's deadline also covers its other sources (repo, releases, tags, CI, viewer) and cuts a request at 15 s; Rust cuts
+- `--timeout`: Go's deadline also covers its other sources (repo, releases, tags, ci-release, viewer) and cuts a request at 15 s; Rust cuts
   at 30 s. A failed GitHub read is a notice and exit 0 in Rust (Go: exit 1), see "Exit codes". The notices come per repository
   (Go: once per source).
-- `--stats`, `--verbose`: Go counts every source it has; Rust has `pulls` and `issues` (and `other`). `cached 304s` is always 0
+- `--stats`, `--verbose`: Go counts every source it has; Rust has `pulls`, `issues`, `ci-main` (the reads of the default branch CI: repository, branch, check runs, statuses, Actions runs) and `other`. `cached 304s` is always 0
   (Rust sends no ETags) and `consumed` equals the requests. There is no `viewer` line. The rate limit is the one of the answer
   with the smallest remaining count. Go's `--verbose` text output puts the breakdown before the stats line as Rust does.
 - `--worktrees`: Go counts missing and prunable registrations as linked worktrees and shows, even without the flag, a line
@@ -416,6 +417,62 @@ with `--offline`.
 - `--review`: see "Review state in `stw status --review`" for the differences.
 - JSON: Go's schema 2 differs from the Rust one as a whole (see the migration plan); the new fields here are only additive to
   the Rust document, `schema_version` stays `2`.
+
+### CI of the default branch in `stw status`
+
+The source `ci-main` of Go, ported (owner decision 2026-11-17; before that the Go sources CI, release drafts and tags were
+left out on purpose). For every repository with a GitHub origin and a token (not with `--offline`) `status` reads the default
+branch (`GET /repos/OWNER/NAME`, then `GET /repos/OWNER/NAME/branches/NAME` for its head) and the CI of that head, and gives it
+one class: `none` (no check run, no run, no status), `pending`, `green` or `red`. The class is the one of `ready-check`
+(`ready_check::check_class`; a failed, cancelled, timed out, `action_required` or `startup_failure` run or a failed or
+errored status is `red`, a run that is not completed or a pending status is `pending`, else `green`): one rule for both commands.
+Of the commit statuses the newest of every context counts, as in Go. A list that was read only in part, or a run without a
+state, is not read (no class): partial evidence could hide a failure.
+
+Which runs are read depends on the answer of GitHub, never on the kind of the token:
+
+1. `GET /repos/OWNER/NAME/commits/SHA/check-runs` (needs `Checks: Read`; a classic token with the scope `repo` has it). `source` is `check-runs`.
+2. Only when that answers 403 (not 401, 404, 429, 5xx, not a rate limit): `GET /repos/OWNER/NAME/actions/runs?head_sha=SHA&per_page=100`
+   (`Actions: Read`; fine-grained tokens have no `Checks` right, so they end here). Per workflow and event the newest run of
+   that commit counts (`created_at`, then `run_attempt`, then `id`); a run of another commit is ignored; the run is classified
+   like a check run. No run is the class `none`: that is a repository without CI (for example one without workflows), not an error and
+   no finding. `source` is `actions-runs`.
+3. `GET /repos/OWNER/NAME/commits/SHA/statuses` in both ways, as Go.
+
+When both ways are refused the read is `forbidden` and the cause names both rights: `forbidden: the token can read neither check
+runs nor Actions runs; it needs Checks: Read (classic token: scope repo) or Actions: Read`. Any other failure (401, 404, rate limit,
+5xx, network, an unusable answer, `--timeout`) is `not read` with its cause.
+
+Output. Text, under the repository: `main CI green (main@163ada5, via check runs)`, `... via Actions runs)`, or
+`main CI not read (cause)`; no line without a read. A red head is the attention reason `main-red` (Go: the red action
+`main-red`); `--long` explains it without a command. A read that failed is the notice `ci-not-read` (source `ci`), and exit 0.
+JSON, per repository `ci_main{read,error,branch,head,class,source}`: `read` true with `branch`, `head` (full commit id), `class`
+and `source` (`check-runs` or `actions-runs`); `read` false with `error` (the cause, null when nothing was asked: `--offline`, no
+token, no GitHub origin) and the rest null. `schema_version` stays `2` (additive, see "Output for agents"). `status PATH..` reads
+the same source and carries it in the JSON, in the notices and in the attention mark; its one-line row adds ` | main red` for a red head and
+nothing for the other classes. The requests are counted as `ci-main` in `--stats` and `--verbose`. `ready-check` is unchanged: it
+reads check runs only, a 403 there is unknown evidence, and it never reads Actions runs.
+Mutations of this source have the prefix `CM`.
+
+Deviations from Go, one by one:
+
+1. The fallback to the Actions runs on a 403 for check runs is new (Go reports `forbidden`); it makes a fine-grained token without `Checks`
+   usable. A repository without any CI is the class `none` (Go: the same class for an empty check list), and no finding.
+2. Go's `ci-main` also says whether the local clone lacks the head of origin (`behind_origin`, the action `main-behind-origin`). Rust does
+   not: `status` already shows `behind` of the branch against its upstream, and the commit is not looked up in the object store here.
+3. Go reads the default branch from its `repo` source (one read for several sources) and the head with the branch read; Rust reads the
+   repository document and the branch itself, two requests per repository, counted as `ci-main`. A default branch whose name has a
+   character outside `A-Z a-z 0-9 . _ - /` (or `..`, `//`, a leading or trailing `/`) is not read (`not read`), it is never escaped into a path.
+4. Go reads at most a bounded number of pages and uses what it got; Rust takes the bounds of the list reads (100 per page, 10 pages, 500
+   items, 60 s) and treats a list that hit one of them, or that had a malformed entry, as not read (no class from partial evidence).
+   Go's check run text (title, summary, text) is not read: no shape classification of a red head.
+5. Go ranks a red head as the red action `main-red` among its priorities; Rust has no priorities: a red head is the reason `main-red`
+   (the repository needs attention); the other classes name no reason. A class `pending` is not an attention reason (Go: no action either).
+6. The notice: Go groups the repositories of one error code (`forbidden: default branch CI of 2 repositories not read`); Rust has one
+   notice `ci-not-read` per repository with the cause in the message (see the notice differences above).
+7. Exit code: Go exits 1 when a source could not be read; Rust exits 0 for a failed GitHub read in `status` (the existing rule, see "Exit codes"). Unchanged.
+8. Go has the JSON source `ci_main` with `branch`, `head`, `class`, `behind_origin`; Rust has `ci_main{read,error,branch,head,class,source}` per
+   repository (no `behind_origin`; `source` and `read`, `error` are new).
 
 ### `stw status PATH`
 
@@ -517,6 +574,9 @@ Deviations from the spike and from Go, one by one:
     (`--ignore-submodules=all`) leave a changed submodule out of its parent, and the earlier `--all` of the Rust product did too. Owner decision 2026-11-13:
     only `status` checks in full; the gate of `sync --rebase/--merge` and `sync restore` keep the check of Go (`status::changes_opts(.., ignore_submodule_changes = true)`):
     a changed submodule is no local change of its superproject there, and one that cannot be read does not stop it (unchanged from `3dece37`).
+15. The CI of the default branch (`ci-main`, see "CI of the default branch in `stw status`") is read for every repository with a GitHub origin as in `status` without a PATH. Its
+    data is in the JSON (`repos[].ci_main`), its failure is the notice `ci-not-read`, a red head is the attention reason `main-red` (mark `!`) and ` | main red` in the row;
+    the other classes have no cell (the compact row stays as it was). Neither Go nor the spike has `status PATH`.
 
 Open questions (recommendation each):
 
@@ -640,7 +700,8 @@ Token order: `GH_TOKEN`, `GITHUB_TOKEN`, `~/.config/gh/hosts.yml` (`oauth_token`
 creates). The token is never printed or logged. Without a token everything works except pull request data
 (and the notes say so) and fetching private repositories (the error says to set `GH_TOKEN` or `GITHUB_TOKEN`).
 Only `github.com` remotes are used for REST; the fetch offers the token to `github.com` over https only, as user
-`x-access-token`. `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
+`x-access-token`. The check class of a head needs `Checks: Read` (`ready-check`, and `status` first; a classic token has it with the scope `repo`, fine-grained
+tokens have no `Checks` right), or `Actions: Read`, which `status` (not `ready-check`) tries when GitHub answers 403 for check runs (see "CI of the default branch in `stw status`"). `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
 
 ## stw add
 
