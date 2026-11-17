@@ -762,3 +762,203 @@ fn a_commit_off_the_first_parent_chain_is_not_a_target() {
     let r = run(&fx, mg, last(&br));
     assert_eq!(r.mapped, 0);
 }
+
+// ---- (b) one contiguous run, strength, class ----
+
+#[test]
+fn a_clean_rebase_merge_is_a_strong_proof_and_the_class_is_review() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    for r in [
+        run(&fx, last(&l), last(&br)),
+        run_hits(&fx, last(&l), last(&br)),
+    ] {
+        assert_eq!(r.strength, Strength::Strong);
+        assert!(r.contiguous && r.in_order && !r.partial && r.content_floor_ok);
+        assert_eq!((r.gap, r.runs, r.run_len), (0, 1, 3));
+        assert_eq!(evidence_class(&r), Some(("rebase-identity", "review")));
+    }
+}
+
+#[test]
+fn a_hint_or_nothing_gives_no_class_and_the_decision_is_never_delete() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let none = run(&fx, b, last(&br));
+    assert_eq!(none.strength, Strength::None);
+    assert_eq!(evidence_class(&none), None);
+    let l = land(&fx, b, &list[..2], MERGE_SECS);
+    let hint = run(&fx, last(&l), last(&br));
+    assert_eq!(hint.strength, Strength::Hint);
+    assert_eq!(evidence_class(&hint), None);
+    assert_eq!(RB_DECISION, "review");
+    assert_ne!(RB_DECISION, "delete");
+}
+
+#[test]
+fn a_foreign_commit_between_the_targets_breaks_the_run() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l1 = land(&fx, b, &list[..2], MERGE_SECS);
+    let f = foreign(&fx, last(&l1), 1);
+    let l2 = land(&fx, f, &list[2..], MERGE_SECS + 100);
+    let r = run(&fx, last(&l2), last(&br));
+    assert_eq!(r.mapped, 3);
+    assert_eq!(positions(&r), [Some(3), Some(2), Some(0)]);
+    assert!(!r.contiguous);
+    assert!(r.in_order);
+    assert_eq!(r.gap, 1);
+    assert_eq!((r.runs, r.run_len), (2, 2));
+    assert_eq!(
+        r.strength,
+        Strength::Hint,
+        "identity without a run is a hint"
+    );
+    assert_eq!(evidence_class(&r), None);
+}
+
+#[test]
+fn the_same_commits_in_another_order_are_a_hint() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let swapped = [list[1].clone(), list[0].clone(), list[2].clone()];
+    let l = land(&fx, b, &swapped, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapped, 3);
+    assert_eq!(positions(&r), [Some(1), Some(2), Some(0)]);
+    assert!(r.contiguous, "the positions are one block");
+    assert!(!r.in_order);
+    assert_eq!(r.strength, Strength::Hint);
+}
+
+#[test]
+fn a_merge_commit_on_main_between_the_targets_is_a_gap() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l1 = land(&fx, b, &list[..1], MERGE_SECS);
+    let side = foreign(&fx, b, 1);
+    let s = Stamp::new("M", "m@example.com", MERGE_SECS + 50);
+    // a merge commit with the key of the third commit: it must not become its target
+    let key3 = Stamp::new(NAME, MAIL, list[2].secs);
+    let mg = fx.commit_at_parents(
+        vec![last(&l1), side],
+        Some(last(&l1)),
+        &[],
+        "step 2",
+        key3,
+        s,
+    );
+    let l2 = land(&fx, mg, &list[1..2], MERGE_SECS + 100);
+    let r = run(&fx, last(&l2), last(&br));
+    assert_eq!(positions(&r), [Some(2), Some(0), None]);
+    assert_eq!(r.mapping[2].main, None, "a merge commit is never a target");
+    assert_eq!((r.mapped, r.gap), (2, 1));
+    assert!(!r.contiguous);
+    assert_eq!(r.strength, Strength::Hint);
+}
+
+#[test]
+fn a_part_of_the_branch_that_landed_as_one_run_is_partial() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(5);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list[..3], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.n, r.mapped, r.unmapped), (5, 3, 2));
+    assert!(r.partial && r.contiguous && r.in_order);
+    assert_eq!((r.runs, r.run_len, r.gap), (1, 3, 0));
+    assert_eq!(
+        r.strength,
+        Strength::Hint,
+        "all commits must be mapped for a proof"
+    );
+    // the rest is the newest part of the branch
+    assert!(r.mapping[3].main.is_none() && r.mapping[4].main.is_none());
+}
+
+#[test]
+fn nothing_found_is_none_and_every_commit_is_unmapped() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let br = branch(&fx, b, &cs(3));
+    let f = foreign(&fx, b, 1);
+    let r = run(&fx, f, last(&br));
+    assert_eq!((r.n, r.mapped, r.unmapped), (3, 0, 3));
+    assert_eq!(r.strength, Strength::None);
+    assert!(!r.contiguous && !r.partial);
+    assert_eq!((r.gap, r.runs, r.run_len), (0, 0, 0));
+}
+
+#[test]
+fn an_empty_branch_has_no_proof() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let r = run(&fx, b, b);
+    assert_eq!((r.n, r.mapped), (0, 0));
+    assert_eq!(r.strength, Strength::None);
+}
+
+#[test]
+fn one_commit_is_enough_for_a_proof_when_it_has_the_identity() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(1);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.strength, Strength::Strong);
+    // an equal patch alone (another author time) is not an identity
+    let mut other = list.clone();
+    other[0].secs += 40;
+    let l = land(&fx, b, &other, MERGE_SECS);
+    let r = run_hits(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.by_patch_id, r.by_identity), (1, 1, 0));
+    assert!(!r.mapping[0].identity);
+    assert_eq!(r.strength, Strength::Hint);
+}
+
+#[test]
+fn merge_commits_of_the_branch_are_not_counted_and_empty_commits_are() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let m1 = foreign(&fx, b, 1);
+    let list = cs(2);
+    let b0 = put(&fx, Some(b), &list[0], Stamp::new(NAME, MAIL, list[0].secs));
+    let s = Stamp::new(NAME, MAIL, T0 + 120);
+    let mg = fx.commit_at_parents(vec![b0, m1], Some(b0), &[], "Merge main", s, s);
+    let es = Stamp::new(NAME, MAIL, T0 + 150);
+    let be = fx.commit_at(Some(mg), &[], "empty", es, es);
+    let b1 = put(
+        &fx,
+        Some(be),
+        &list[1],
+        Stamp::new(NAME, MAIL, list[1].secs),
+    );
+    // main: m1, then the same three commits written again, the empty one included
+    let merger = |k: i64| Stamp::new("M", "m@example.com", MERGE_SECS + k);
+    let x = put(&fx, Some(m1), &list[0], merger(0));
+    let y = fx.commit_at(Some(x), &[], "empty", es, merger(1));
+    let z = put(&fx, Some(y), &list[1], merger(2));
+    let r = run(&fx, z, b1);
+    assert_eq!(
+        r.skipped,
+        SideSkipped {
+            merges: 1,
+            empty: 1
+        }
+    );
+    assert_eq!((r.n, r.mapped), (3, 3));
+    assert_eq!(r.strength, Strength::Strong);
+}
