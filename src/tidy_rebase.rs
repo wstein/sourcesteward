@@ -433,12 +433,74 @@ fn assign(
     hits: &HashMap<ObjectId, ObjectId>,
 ) -> Assigned {
     let n = heads.len();
-    Assigned {
+    let cands: Vec<Vec<u32>> = heads
+        .iter()
+        .map(|h| identity_candidates(index, h))
+        .collect();
+    let mut a = Assigned {
         pos: vec![None; n],
         method: vec![Method::None; n],
         identity: vec![false; n],
         ambiguous: vec![false; n],
+    };
+    let mut used: HashSet<u32> = HashSet::new();
+    for i in 0..n {
+        let hit = hits
+            .get(&ids[i])
+            .and_then(|m| index.pos_of(*m))
+            .filter(|p| index.positions[*p as usize].parents <= 1);
+        if let Some(p) = hit {
+            if used.insert(p) {
+                a.pos[i] = Some(p);
+                a.method[i] = Method::PatchId;
+                a.identity[i] = cands[i].contains(&p);
+            }
+        }
     }
+    loop {
+        let mut progress = false;
+        for i in 0..n {
+            if a.pos[i].is_some() {
+                continue;
+            }
+            let free: Vec<u32> = cands[i]
+                .iter()
+                .copied()
+                .filter(|p| !used.contains(p))
+                .collect();
+            let pick = match free.len() {
+                0 => None,
+                1 => Some(free[0]),
+                _ => {
+                    let before = i
+                        .checked_sub(1)
+                        .and_then(|j| a.pos[j])
+                        .and_then(|p| p.checked_sub(1));
+                    let after = a.pos.get(i + 1).copied().flatten().map(|p| p + 1);
+                    [before, after]
+                        .into_iter()
+                        .flatten()
+                        .find(|p| free.contains(p))
+                }
+            };
+            if let Some(p) = pick {
+                used.insert(p);
+                a.pos[i] = Some(p);
+                a.method[i] = Method::Identity;
+                a.identity[i] = true;
+                progress = true;
+            }
+        }
+        if !progress {
+            break;
+        }
+    }
+    for i in 0..n {
+        if a.pos[i].is_none() && cands[i].iter().filter(|p| !used.contains(p)).count() > 1 {
+            a.ambiguous[i] = true;
+        }
+    }
+    a
 }
 
 /// Content of a pair of commits for the floor: the similarity, or why there is none.
