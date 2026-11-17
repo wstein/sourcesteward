@@ -895,6 +895,8 @@ pub struct ApiReport {
     /// The PR head is the branch tip or an ancestor of it.
     pub head_in_branch: Option<bool>,
     pub kind: LandedKind,
+    /// Merge and squash are strong. A rebase is strong when nothing remains and the PR head is in the branch.
+    pub strength: Strength,
     /// Branch commits that are PR commits, with their rewritten counterparts (method `api`).
     pub mapping: Vec<MapEntry>,
     /// Branch commits that are not PR commits (added after the PR head).
@@ -912,6 +914,7 @@ impl ApiReport {
             tip_matches_run: None,
             head_in_branch: None,
             kind: LandedKind::Unknown,
+            strength: Strength::None,
             mapping: Vec::new(),
             remaining: Vec::new(),
         }
@@ -977,11 +980,13 @@ pub fn evaluate_api(
         tip_matches_run: None,
         head_in_branch: Some(crate::repo::is_ancestor(repo, pr.head, tip)?),
         kind: LandedKind::Unknown,
+        strength: Strength::None,
         mapping: Vec::new(),
         remaining: Vec::new(),
     };
     if merge_head.parents == 2 {
         rep.kind = LandedKind::Merge;
+        rep.strength = Strength::Strong;
         return Ok(rep);
     }
     if merge_head.parents != 1 {
@@ -1009,6 +1014,7 @@ pub fn evaluate_api(
     rep.tip_matches_run = Some(matches);
     if matches {
         rep.kind = LandedKind::Rebase;
+        rep.strength = Strength::Strong;
         let ids: HashMap<ObjectId, usize> = pr
             .commits
             .iter()
@@ -1050,6 +1056,7 @@ pub fn evaluate_api(
         .is_some_and(|t| (merge_head.key.secs - t).abs() <= RB_API_TIME_TOLERANCE)
     {
         rep.kind = LandedKind::Squash;
+        rep.strength = Strength::Strong;
     }
     Ok(rep)
 }

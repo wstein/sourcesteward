@@ -1494,10 +1494,23 @@ fn commits_after_the_pull_request_head_remain() {
     assert_eq!(rep.remaining[0].commit, br[3]);
     assert_eq!(rep.remaining[0].files, ["f3.txt"]);
     assert_eq!(rep.head_in_branch, Some(true));
+    // the pull request landed but the branch has more: a hint, not strong
+    assert_eq!(rep.strength, Strength::Hint);
+    let v = landed_via(false, None, Some(&rep));
+    assert_eq!(
+        (v.kind, v.basis, v.strength),
+        (LandedKind::Rebase, Basis::PrApi, Strength::Hint)
+    );
     // a head that is not in the branch (the branch was rewritten after the merge)
     input.head = foreign(&fx, b, 9);
     let rep = api(&fx, last(&l), last(&br), input);
     assert_eq!(rep.head_in_branch, Some(false));
+    assert_eq!(rep.strength, Strength::Hint);
+    // all commits remain none and the head is in the branch: strong
+    let all = land(&fx, b, &list, MERGE_SECS);
+    let rep = api(&fx, last(&all), last(&br), pr(&list, &br, last(&all)));
+    assert_eq!((rep.remaining.len(), rep.head_in_branch), (0, Some(true)));
+    assert_eq!(rep.strength, Strength::Strong);
 }
 
 #[test]
