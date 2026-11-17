@@ -31,6 +31,8 @@ pub const RB_STOP_RUN: usize = 64;
 pub const RB_MAX_WINDOW: usize = 50_000;
 /// An identity match whose content similarity is below this percentage is only a hint (same metadata, other content).
 pub const RB_CONTENT_FLOOR: u32 = 50;
+/// A proof needs this content similarity (percent) per commit; from `LOW_PCT` up to this a commit is `modified`.
+pub const RB_CONTENT_HIGH: u32 = 95;
 /// At most this many files per commit in `remaining`.
 pub const RB_MAX_REMAINING_FILES: usize = 20;
 /// A squash commit has the author time of the merge: `merged_at` plus or minus this many seconds.
@@ -344,6 +346,8 @@ pub struct MapEntry {
     pub tz_differs: bool,
     /// More than one free main commit has the key and no neighbour decides: counts as not mapped.
     pub ambiguous: bool,
+    /// The branch commit was committed after the main commit: a later version than the landed one.
+    pub later: bool,
 }
 
 /// A commit without a target.
@@ -396,6 +400,10 @@ pub struct RebaseReport {
     pub partial: bool,
     /// No identity match has a content value below `RB_CONTENT_FLOOR` and none is unknown.
     pub content_floor_ok: bool,
+    /// Every commit has a content value of at least `RB_CONTENT_HIGH` and none is a later version.
+    pub content_ok: bool,
+    /// Some value is below `RB_CONTENT_HIGH` but all are at least `LOW_PCT`.
+    pub modified: bool,
     pub skipped: SideSkipped,
     pub stop: Stop,
     pub window_commits: usize,
@@ -740,6 +748,7 @@ pub fn evaluate(
             identity: a.identity[i],
             tz_differs: tz,
             ambiguous: a.ambiguous[i],
+            later: false,
         });
     }
     let remaining = remaining_of(repo, &mapping)?;
@@ -769,6 +778,8 @@ pub fn evaluate(
         run_len: sh.run_len,
         partial: sh.partial,
         content_floor_ok: floor_ok,
+        content_ok: floor_ok,
+        modified: false,
         skipped: side.skipped,
         stop: index.stop(),
         window_commits: index.len(),
@@ -996,6 +1007,7 @@ pub fn evaluate_api(
                         identity: true,
                         tz_differs: m.offset != h.offset,
                         ambiguous: false,
+                        later: false,
                     });
                 }
                 None => {

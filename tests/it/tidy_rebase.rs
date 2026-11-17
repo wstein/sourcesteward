@@ -843,7 +843,7 @@ fn a_clean_rebase_merge_is_a_strong_proof_and_the_class_is_review() {
         run_hits(&fx, last(&l), last(&br)),
     ] {
         assert_eq!(r.strength, Strength::Strong);
-        assert!(r.contiguous && r.in_order && !r.partial && r.content_floor_ok);
+        assert!(r.contiguous && r.in_order && !r.partial && r.content_ok && !r.modified);
         assert_eq!((r.gap, r.runs, r.run_len), (0, 1, 3));
         assert_eq!(evidence_class(&r), Some(("rebase-identity", "review")));
     }
@@ -1070,25 +1070,86 @@ fn a_conflict_resolution_keeps_the_identity_with_a_content_value() {
     assert_eq!(mapped_methods(&r), ["patch-id", "identity", "patch-id"]);
     assert_eq!(r.mapping[1].value, Some(900));
     assert_eq!(r.mapping[0].value, Some(1000));
-    assert_eq!(r.strength, Strength::Strong);
-    assert!(r.content_floor_ok);
+    // 90.0 % is a modified commit: a hint, no proof
+    assert_eq!(r.strength, Strength::Hint);
+    assert!(!r.content_ok && r.modified);
 }
 
 #[test]
-fn the_content_floor_is_fifty_percent_inclusive() {
-    // 10 of 20 lines changed: Dice 50.0 %
-    let r = resolved(10);
-    assert_eq!(r.mapping[1].value, Some(500));
-    assert!(r.content_floor_ok);
+fn a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof() {
+    assert_eq!(RB_CONTENT_HIGH, 95);
+    // 1 of 20 lines changed: Dice 95.0 %, inclusive
+    let r = resolved(1);
+    assert_eq!(r.mapping[1].value, Some(950));
+    assert!(r.content_ok && !r.modified);
     assert_eq!(r.strength, Strength::Strong);
-    // 11 of 20: 45.0 %, same metadata but another content
-    let r = resolved(11);
-    assert_eq!(r.mapping[1].value, Some(450));
-    assert!(!r.content_floor_ok);
+    // 2 of 20: 90.0 %, modified
+    let r = resolved(2);
+    assert_eq!(r.mapping[1].value, Some(900));
+    assert!(!r.content_ok && r.modified);
+    assert_eq!((r.mapped, r.strength), (3, Strength::Hint));
+    assert_eq!(evidence_class(&r), None);
+    // 6 of 20: 70.0 % is still modified, 7 of 20: 65.0 % is not
+    let r = resolved(6);
+    assert_eq!(r.mapping[1].value, Some(700));
+    assert!(r.modified);
+    let r = resolved(7);
+    assert_eq!(r.mapping[1].value, Some(650));
+    assert!(!r.content_ok && !r.modified);
     assert_eq!(r.mapped, 3, "the identity still maps it");
     assert_eq!(r.strength, Strength::Hint);
+}
+
+/// One commit amended after it landed: the author is unchanged, the committer is `committer_secs`; `changed` of its
+/// 20 lines differ from the landed version.
+fn amended(changed: usize, committer_secs: i64, hits: bool) -> (RebaseReport, ObjectId) {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list[..2]);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let mut v = list[2].clone();
+    v.body = edited("c2", changed);
+    let amend = put(
+        &fx,
+        Some(last(&br)),
+        &v,
+        Stamp::new(NAME, MAIL, committer_secs),
+    );
+    let r = if hits {
+        run_hits(&fx, last(&l), amend)
+    } else {
+        run(&fx, last(&l), amend)
+    };
+    (r, l[2])
+}
+
+#[test]
+fn an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint() {
+    // 19 of 20 lines equal (95.0 %): the content alone would pass; the committer time is later than the one on main
+    let (r, target) = amended(1, MERGE_SECS + 3600, false);
+    assert_eq!(
+        r.mapping[2].main,
+        Some(target),
+        "the identity still finds it"
+    );
+    assert!(r.mapping[2].later);
+    assert!(!r.mapping[0].later && !r.mapping[1].later);
+    assert_eq!(r.mapped, 3);
+    assert_eq!(r.strength, Strength::Hint);
     assert_eq!(evidence_class(&r), None);
-    assert_eq!(RB_CONTENT_FLOOR, 50);
+    // a version from before the merge (a conflict resolution in the branch) is no later version
+    let (r, _) = amended(1, MERGE_SECS - 3600, false);
+    assert!(!r.mapping[2].later);
+    assert_eq!(r.strength, Strength::Strong);
+    // the committer time equal to the one on main is not later
+    let (r, _) = amended(1, MERGE_SECS + 2, false);
+    assert!(!r.mapping[2].later);
+    // an equal patch is the landed version whatever the committer time says (rebased again after landing)
+    let (r, _) = amended(0, MERGE_SECS + 3600, true);
+    assert_eq!(r.mapping[2].method, Method::PatchId);
+    assert!(!r.mapping[2].later);
+    assert_eq!(r.strength, Strength::Strong);
 }
 
 #[test]
@@ -1101,7 +1162,7 @@ fn an_empty_commit_against_a_commit_with_changes_is_below_the_floor() {
     let r = run(&fx, last(&l), empty);
     assert_eq!(r.mapped, 1);
     assert_eq!(r.mapping[0].value, Some(0));
-    assert!(!r.content_floor_ok);
+    assert!(!r.content_ok);
     assert_eq!(r.strength, Strength::Hint);
 }
 
@@ -1116,7 +1177,7 @@ fn a_commit_too_large_to_compare_is_not_vouched_for() {
     let r = run(&fx, last(&l), last(&br));
     assert_eq!(r.mapped, 1);
     assert_eq!(r.mapping[0].value, None);
-    assert!(!r.content_floor_ok);
+    assert!(!r.content_ok);
     assert_eq!(r.strength, Strength::Hint);
 }
 
