@@ -382,3 +382,383 @@ fn a_commit_without_an_equal_patch_has_no_hit() {
     assert!(patch_hits(&repo, &idx, &br).unwrap().is_empty());
     assert!(patch_hits(&repo, &idx, &[]).unwrap().is_empty());
 }
+
+// ---- (a) identity ----
+
+use std::collections::HashMap;
+use stw::tidy_similarity::{Limits, SimCache};
+
+/// Index, branch side and (optionally) patch hits for `base..tip` against `main`, then the proof.
+fn run_full(
+    fx: &Fx,
+    main: ObjectId,
+    tip: ObjectId,
+    hits: bool,
+    window: usize,
+) -> (RebaseReport, RebaseIndex) {
+    let repo = fx.repo();
+    let side = branch_side(&repo, main, tip).unwrap();
+    let index = RebaseIndex::build(&repo, main, side.oldest_author_secs, window).unwrap();
+    let hit = if hits {
+        patch_hits(&repo, &index, &side.commits).unwrap()
+    } else {
+        HashMap::new()
+    };
+    let mut cache = SimCache::default();
+    let rep = evaluate(&repo, &mut cache, &index, &side, &hit, &Limits::default()).unwrap();
+    (rep, index)
+}
+
+/// The identity proof alone (no patch IDs).
+fn run(fx: &Fx, main: ObjectId, tip: ObjectId) -> RebaseReport {
+    run_full(fx, main, tip, false, RB_MAX_WINDOW).0
+}
+
+fn run_hits(fx: &Fx, main: ObjectId, tip: ObjectId) -> RebaseReport {
+    run_full(fx, main, tip, true, RB_MAX_WINDOW).0
+}
+
+fn positions(r: &RebaseReport) -> Vec<Option<u32>> {
+    r.mapping.iter().map(|e| e.position).collect()
+}
+
+fn mapped_methods(r: &RebaseReport) -> Vec<&'static str> {
+    r.mapping.iter().map(|e| e.method.as_str()).collect()
+}
+
+#[test]
+fn a_rebase_merge_is_found_by_author_mail_time_and_subject() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(
+        (r.n, r.mapped, r.by_identity, r.by_patch_id, r.unmapped),
+        (3, 3, 3, 0, 0)
+    );
+    assert_eq!(mapped_methods(&r), ["identity"; 3]);
+    // the oldest commit has the greatest position
+    assert_eq!(positions(&r), [Some(2), Some(1), Some(0)]);
+    for (e, (bc, m)) in r.mapping.iter().zip(br.iter().zip(&l)) {
+        assert_eq!((e.commit, e.main), (*bc, Some(*m)));
+        assert!(e.identity && !e.ambiguous && !e.tz_differs);
+    }
+}
+
+#[test]
+fn an_equal_patch_comes_first_and_the_identity_is_noted_on_the_same_target() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run_hits(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.by_patch_id, r.by_identity), (3, 3, 0));
+    assert_eq!(mapped_methods(&r), ["patch-id"; 3]);
+    assert!(
+        r.mapping.iter().all(|e| e.identity),
+        "the identity key matches the same commit"
+    );
+    assert_eq!(positions(&r), [Some(2), Some(1), Some(0)]);
+}
+
+#[test]
+fn an_equal_patch_on_another_commit_wins_over_the_identity() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let one = c(0);
+    let br = branch(&fx, b, std::slice::from_ref(&one));
+    // main: first a cherry-pick of the content with other author data, then the commit with the identity but other content
+    let pick = C {
+        secs: one.secs + 7,
+        subject: b"picked".to_vec(),
+        ..one.clone()
+    };
+    let m1 = land(&fx, b, &[pick], MERGE_SECS);
+    let ident = C {
+        body: lines("different", 20),
+        ..one.clone()
+    };
+    let m2 = land(&fx, last(&m1), &[ident], MERGE_SECS + 100);
+    let r = run_hits(&fx, last(&m2), last(&br));
+    assert_eq!(r.mapping[0].main, Some(m1[0]));
+    assert_eq!(r.mapping[0].method, Method::PatchId);
+    assert!(!r.mapping[0].identity);
+    // without patch IDs the identity decides
+    let r = run(&fx, last(&m2), last(&br));
+    assert_eq!(r.mapping[0].main, Some(m2[0]));
+    assert_eq!(r.mapping[0].method, Method::Identity);
+}
+
+#[test]
+fn an_amend_in_the_branch_before_landing_keeps_the_author_time() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    // committed again an hour later (amend, rebase): the committer changes, the author does not
+    let mut parent = b;
+    let mut br = Vec::new();
+    for c in &list {
+        parent = put(&fx, Some(parent), c, Stamp::new(NAME, MAIL, c.secs + 3600));
+        br.push(parent);
+    }
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.by_identity), (3, 3));
+}
+
+#[test]
+fn an_amend_after_landing_changes_the_author_time_and_there_is_no_identity() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let mut again = list.clone();
+    for c in &mut again {
+        c.secs += 5_000; // `--reset-author`, `--date`: a new author time
+        c.body = lines(&format!("new-{}", c.file), 20);
+    }
+    let br = branch(&fx, b, &again);
+    let r = run_hits(&fx, last(&l), last(&br));
+    assert_eq!(
+        (r.mapped, r.by_identity, r.by_patch_id, r.unmapped),
+        (0, 0, 0, 3)
+    );
+    assert!(r
+        .mapping
+        .iter()
+        .all(|e| e.main.is_none() && e.method == Method::None));
+}
+
+#[test]
+fn one_second_more_or_less_is_another_commit() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let mut shifted = list.clone();
+    shifted[1].secs += 1;
+    let l = land(&fx, b, &shifted, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapped, 1);
+    assert!(r.mapping[0].main.is_some() && r.mapping[1].main.is_none());
+}
+
+#[test]
+fn the_mail_is_compared_in_lower_case_and_the_name_exactly() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let mut main_side = list.clone();
+    main_side[0].mail = "W@EXAMPLE.com"; // same mail, other case
+    main_side[1].mail = "w@example.org"; // another mail
+    main_side[2].name = "werner stein"; // another name
+    let l = land(&fx, b, &main_side, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(
+        r.mapping[0].main,
+        Some(l[0]),
+        "the mail case does not matter"
+    );
+    assert_eq!(r.mapping[1].main, None, "another mail is another author");
+    assert_eq!(r.mapping[2].main, None, "another name is another author");
+}
+
+#[test]
+fn the_subject_is_the_whole_first_line_right_trimmed() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let a = C {
+        subject: b"feat(core): a long subject that only differs at the very end - one".to_vec(),
+        ..c(0)
+    };
+    let main_a = C {
+        subject: b"feat(core): a long subject that only differs at the very end - two".to_vec(),
+        ..a.clone()
+    };
+    let t = C {
+        subject: b"tail".to_vec(),
+        ..c(1)
+    };
+    let t_main = C {
+        subject: b"tail \t\r".to_vec(),
+        ..t.clone()
+    };
+    let br = branch(&fx, b, &[a, t]);
+    let l = land(&fx, b, &[main_a, t_main], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(
+        r.mapping[0].main, None,
+        "a subject is compared whole, not by its first characters"
+    );
+    assert_eq!(
+        r.mapping[1].main,
+        Some(l[1]),
+        "trailing white space is not part of the subject"
+    );
+}
+
+#[test]
+fn a_squash_subject_with_a_pull_request_number_is_not_the_subject_of_the_commit() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let one = c(0);
+    let br = branch(&fx, b, std::slice::from_ref(&one));
+    let sq = C {
+        subject: b"step 0 (#7)".to_vec(),
+        ..one.clone()
+    };
+    let l = land(&fx, b, &[sq], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(
+        r.mapped, 0,
+        "a rebase does not change the subject: (#N) belongs to a squash"
+    );
+}
+
+#[test]
+fn several_commits_with_one_subject_are_found_by_their_seconds() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let mut list = cs(3);
+    for c in &mut list {
+        c.subject = b"wip".to_vec();
+    }
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.ambiguous), (3, 0));
+    assert_eq!(positions(&r), [Some(2), Some(1), Some(0)]);
+}
+
+#[test]
+fn the_same_second_in_two_commits_needs_the_subject() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let mut list = cs(3);
+    list[1].secs = list[0].secs; // 14 of 31 measured pull requests have this
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.ambiguous), (3, 0));
+    // the first commit is not on main, the second is: the subject keeps them apart
+    let l = land(&fx, b, &list[1..], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapping[0].main, None);
+    assert_eq!(r.mapping[1].main, Some(l[0]));
+    assert_eq!(r.mapping[2].main, Some(l[1]));
+}
+
+fn twins() -> Vec<C> {
+    let mut list = cs(3);
+    list[0].subject = b"wip".to_vec();
+    list[1].subject = b"wip".to_vec();
+    list[1].secs = list[0].secs; // the same mail, second and subject twice
+    list
+}
+
+#[test]
+fn the_same_key_twice_is_a_multiset_and_the_neighbour_decides() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = twins();
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.ambiguous), (3, 0));
+    assert_eq!(r.mapping[0].main, Some(l[0]));
+    assert_eq!(r.mapping[1].main, Some(l[1]));
+    assert_eq!(r.mapping[2].main, Some(l[2]));
+    // the unique commit is the oldest: the twins follow it
+    let u = C {
+        secs: T0 - 100,
+        ..c(0)
+    };
+    let t1 = C {
+        subject: b"wip".to_vec(),
+        secs: T0 + 500,
+        ..c(1)
+    };
+    let t2 = C {
+        subject: b"wip".to_vec(),
+        secs: T0 + 500,
+        ..c(2)
+    };
+    let list = [u, t1, t2];
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.ambiguous), (3, 0), "{:?}", positions(&r));
+    assert_eq!(positions(&r), [Some(2), Some(1), Some(0)]);
+}
+
+#[test]
+fn the_same_key_twice_without_a_neighbour_is_ambiguous_and_not_mapped() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = &twins()[..2];
+    let br = branch(&fx, b, list);
+    let l = land(&fx, b, list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!((r.mapped, r.ambiguous, r.unmapped), (0, 2, 2));
+    assert!(r
+        .mapping
+        .iter()
+        .all(|e| e.ambiguous && e.main.is_none() && e.method == Method::None));
+}
+
+#[test]
+fn a_position_is_taken_once_two_branch_commits_do_not_share_one_main_commit() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = &twins()[..2];
+    let br = branch(&fx, b, list);
+    // main has only one commit with that key
+    let l = land(&fx, b, &list[..1], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapped, 1);
+    assert_eq!(r.mapping[0].main, Some(l[0]), "the older commit takes it");
+    assert_eq!(r.mapping[1].main, None);
+    assert_eq!(r.unmapped, 1);
+}
+
+#[test]
+fn a_zone_offset_that_differs_is_noted_and_the_epoch_second_decides() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let mut main_side = list.clone();
+    main_side[1].offset = 7200;
+    let l = land(&fx, b, &main_side, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapped, 2);
+    assert!(!r.mapping[0].tz_differs);
+    assert!(r.mapping[1].tz_differs);
+}
+
+#[test]
+fn a_commit_off_the_first_parent_chain_is_not_a_target() {
+    // the identity is looked up on the first-parent chain of the base only
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(1);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let side_commit = foreign(&fx, b, 1);
+    let s = Stamp::new("M", "m@example.com", MERGE_SECS + 50);
+    // the landed commit is only the second parent of a merge: not on the first-parent chain
+    let mg = fx.commit_at_parents(
+        vec![side_commit, last(&l)],
+        Some(side_commit),
+        &[],
+        "Merge",
+        s,
+        s,
+    );
+    let r = run(&fx, mg, last(&br));
+    assert_eq!(r.mapped, 0);
+}
