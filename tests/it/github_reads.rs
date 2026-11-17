@@ -632,7 +632,8 @@ fn workflow_run_text_is_escaped_and_a_malformed_entry_makes_the_list_partial() {
 
 #[test]
 fn denied_missing_and_broken_answers_of_workflow_runs_are_typed() {
-    let cases: [(u16, Vec<(String, String)>, &str, &str); 7] = [
+    type Case = (u16, Vec<(String, String)>, &'static str, &'static str);
+    let cases: [Case; 7] = [
         (403, vec![], "{}", "denied"),
         (
             403,
