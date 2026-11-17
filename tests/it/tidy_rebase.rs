@@ -962,3 +962,257 @@ fn merge_commits_of_the_branch_are_not_counted_and_empty_commits_are() {
     assert_eq!((r.n, r.mapped), (3, 3));
     assert_eq!(r.strength, Strength::Strong);
 }
+
+// ---- (c) content value, runs filled by similarity, mapping table, remaining ----
+
+/// `lines(tag, 20)` with the first `changed` lines replaced.
+fn edited(tag: &str, changed: usize) -> String {
+    (0..20)
+        .map(|k| {
+            if k < changed {
+                format!("edit {tag} {k}\n")
+            } else {
+                format!("{tag} line {k}\n")
+            }
+        })
+        .collect()
+}
+
+/// The same three commits, the middle one landed with `changed` of its 20 lines different.
+fn resolved(changed: usize) -> RebaseReport {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let mut main_side = list.clone();
+    main_side[1].body = edited("c1", changed);
+    let l = land(&fx, b, &main_side, MERGE_SECS);
+    run(&fx, last(&l), last(&br))
+}
+
+#[test]
+fn a_conflict_resolution_keeps_the_identity_with_a_content_value() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let mut main_side = list.clone();
+    main_side[1].body = edited("c1", 2); // 18 of 20 lines equal: 90.0 %
+    let l = land(&fx, b, &main_side, MERGE_SECS);
+    // the patch ID differs for the middle commit, the identity carries it
+    let r = run_hits(&fx, last(&l), last(&br));
+    assert_eq!(mapped_methods(&r), ["patch-id", "identity", "patch-id"]);
+    assert_eq!(r.mapping[1].value, Some(900));
+    assert_eq!(r.mapping[0].value, Some(1000));
+    assert_eq!(r.strength, Strength::Strong);
+    assert!(r.content_floor_ok);
+}
+
+#[test]
+fn the_content_floor_is_fifty_percent_inclusive() {
+    // 10 of 20 lines changed: Dice 50.0 %
+    let r = resolved(10);
+    assert_eq!(r.mapping[1].value, Some(500));
+    assert!(r.content_floor_ok);
+    assert_eq!(r.strength, Strength::Strong);
+    // 11 of 20: 45.0 %, same metadata but another content
+    let r = resolved(11);
+    assert_eq!(r.mapping[1].value, Some(450));
+    assert!(!r.content_floor_ok);
+    assert_eq!(r.mapped, 3, "the identity still maps it");
+    assert_eq!(r.strength, Strength::Hint);
+    assert_eq!(evidence_class(&r), None);
+    assert_eq!(RB_CONTENT_FLOOR, 50);
+}
+
+#[test]
+fn an_empty_commit_against_a_commit_with_changes_is_below_the_floor() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let es = Stamp::new(NAME, MAIL, T0);
+    let empty = fx.commit_at(Some(b), &[], "step 0", es, es);
+    let l = land(&fx, b, &[c(0)], MERGE_SECS);
+    let r = run(&fx, last(&l), empty);
+    assert_eq!(r.mapped, 1);
+    assert_eq!(r.mapping[0].value, Some(0));
+    assert!(!r.content_floor_ok);
+    assert_eq!(r.strength, Strength::Hint);
+}
+
+#[test]
+fn a_commit_too_large_to_compare_is_not_vouched_for() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let huge = "x".repeat(1_100_000) + "\n";
+    let one = C { body: huge, ..c(0) };
+    let br = branch(&fx, b, std::slice::from_ref(&one));
+    let l = land(&fx, b, &[one], MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapped, 1);
+    assert_eq!(r.mapping[0].value, None);
+    assert!(!r.content_floor_ok);
+    assert_eq!(r.strength, Strength::Hint);
+}
+
+/// c0, a commit of somebody else with the content of c1, c2: on main, and the branch c0, c1, c2.
+fn between(foreign_body: Option<String>) -> RebaseReport {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l1 = land(&fx, b, &list[..1], MERGE_SECS);
+    let other = C {
+        name: "Other",
+        mail: "o@example.com",
+        subject: b"unrelated".to_vec(),
+        body: foreign_body.unwrap_or_else(|| list[1].body.clone()),
+        ..list[1].clone()
+    };
+    let g = land(&fx, last(&l1), &[other], MERGE_SECS + 10);
+    let l2 = land(&fx, last(&g), &list[2..], MERGE_SECS + 20);
+    run(&fx, last(&l2), last(&br))
+}
+
+#[test]
+fn a_gap_of_one_between_two_mapped_commits_is_filled_by_similarity() {
+    let r = between(None);
+    assert_eq!(mapped_methods(&r), ["identity", "similarity", "identity"]);
+    assert_eq!(r.mapping[1].value, Some(1000));
+    assert_eq!(r.mapping[1].position, Some(1));
+    assert!(!r.mapping[1].identity);
+    assert_eq!((r.by_identity, r.by_similarity, r.mapped), (2, 1, 3));
+    assert_eq!(r.strength, Strength::Strong);
+    assert_eq!(r.runs, 1);
+    // below the low threshold of 70 % the commit stays unmapped
+    let r = between(Some(edited("c1", 8))); // 12 of 20 equal: 60.0 %
+    assert_eq!(r.mapped, 2);
+    assert!(r.mapping[1].main.is_none());
+    assert_eq!(r.strength, Strength::Hint);
+    // exactly 70 % is enough
+    let r = between(Some(edited("c1", 6))); // 14 of 20 equal
+    assert_eq!(r.mapping[1].method, Method::Similarity);
+    assert_eq!(r.mapping[1].value, Some(700));
+}
+
+#[test]
+fn similarity_is_not_used_without_the_neighbours_on_both_sides_of_one_free_position() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l1 = land(&fx, b, &list[..1], MERGE_SECS);
+    let x = foreign(&fx, last(&l1), 1);
+    let twin = C {
+        name: "Other",
+        mail: "o@example.com",
+        subject: b"unrelated".to_vec(),
+        ..list[1].clone()
+    };
+    let g = land(&fx, x, std::slice::from_ref(&twin), MERGE_SECS + 10);
+    let l2 = land(&fx, last(&g), &list[2..], MERGE_SECS + 20);
+    // two free positions between the neighbours: the content twin is not tied to them
+    let r = run(&fx, last(&l2), last(&br));
+    assert_eq!(r.mapped, 2);
+    assert!(r.mapping[1].main.is_none());
+    assert_eq!(r.by_similarity, 0);
+    // the last commit has no neighbour behind it
+    let l3 = land(&fx, b, &list[..2], MERGE_SECS);
+    let g3 = land(
+        &fx,
+        last(&l3),
+        &[C {
+            name: "Other",
+            mail: "o@example.com",
+            subject: b"unrelated".to_vec(),
+            ..list[2].clone()
+        }],
+        MERGE_SECS + 10,
+    );
+    let r = run(&fx, last(&g3), last(&br));
+    assert_eq!(r.mapped, 2);
+    assert_eq!(r.by_similarity, 0);
+}
+
+#[test]
+fn the_mapping_has_one_row_per_commit_with_masked_subjects() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let mut list = cs(3);
+    list[0].subject = b"bad \x1b[31m \xff end \xe2\x80\xae".to_vec();
+    list[1].subject = format!("long {}", "x".repeat(200)).into_bytes();
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(r.mapping.len(), 3);
+    assert_eq!(r.mapped, 3);
+    assert_eq!(r.mapping[0].subject, "bad \\u{1b}[31m \\xff end \\u{202e}");
+    assert_eq!(r.mapping[1].subject.chars().count(), RB_SUBJECT_CHARS + 1);
+    assert!(r.mapping[1].subject.ends_with('\u{2026}'));
+    assert_eq!(r.mapping[2].subject, "step 2");
+}
+
+#[test]
+fn what_is_not_mapped_is_listed_with_its_files() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let big_files: Vec<String> = (0..25).map(|k| format!("d/{k:02}.txt")).collect();
+    let edits: Vec<(&str, Option<&str>)> = big_files
+        .iter()
+        .map(|f| (f.as_str(), Some("x\n")))
+        .collect();
+    let s = Stamp::new(NAME, MAIL, T0 + 300);
+    let big = fx.commit_at(
+        Some(last(&branch(&fx, b, &list))),
+        &edits,
+        "big\x1b[0m change",
+        s,
+        s,
+    );
+    let br_tip = big;
+    let l = land(&fx, b, &list[..2], MERGE_SECS);
+    let r = run(&fx, last(&l), br_tip);
+    assert_eq!((r.n, r.mapped, r.unmapped), (4, 2, 2));
+    assert_eq!(r.remaining.len(), 2);
+    assert_eq!(r.remaining[0].subject, "step 2");
+    assert_eq!(r.remaining[0].files, ["f2.txt"]);
+    assert_eq!(r.remaining[0].files_total, 1);
+    assert_eq!(r.remaining[1].subject, "big\\u{1b}[0m change");
+    assert_eq!(r.remaining[1].files.len(), RB_MAX_REMAINING_FILES);
+    assert_eq!(r.remaining[1].files_total, 25);
+    assert_eq!(r.remaining[1].files[0], "d/00.txt");
+    assert_eq!(r.remaining[1].files[19], "d/19.txt");
+    assert_eq!(r.remaining[1].commit, br_tip);
+}
+
+#[test]
+fn nothing_remains_when_everything_is_mapped_and_ambiguous_commits_remain() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    assert!(run(&fx, last(&l), last(&br)).remaining.is_empty());
+    let tw = &twins()[..2];
+    let br = branch(&fx, b, tw);
+    let l = land(&fx, b, tw, MERGE_SECS);
+    let r = run(&fx, last(&l), last(&br));
+    assert_eq!(
+        r.remaining.len(),
+        2,
+        "an ambiguous commit is not mapped: it remains"
+    );
+}
+
+#[test]
+fn the_same_input_gives_the_same_report() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = twins();
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let a = run_hits(&fx, last(&l), last(&br));
+    let c = run_hits(&fx, last(&l), last(&br));
+    assert_eq!(a.mapping, c.mapping);
+    assert_eq!(a.remaining, c.remaining);
+}
