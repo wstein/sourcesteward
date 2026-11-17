@@ -214,6 +214,19 @@ fn the_first_line_follows_the_fixed_grammar() {
 }
 
 #[test]
+fn pr_has_at_most_nine_digits_as_in_lint_pr() {
+    let line = |pr: &str| format!("Review: CLEAR head={HEAD} patch-id={PATCH} pr={pr}\nbody\n");
+    assert_eq!(code(&review_of(&line("999999999"), &[])), 0);
+    for pr in ["1000000000", "99999999999", "18446744073709551616"] {
+        let o = review_of(&line(pr), &[]);
+        assert_eq!(code(&o), 3, "pr={pr}");
+        assert_eq!(rules(&o), vec!["review-line-format"], "pr={pr}");
+    }
+    let carried = format!("Carried-over: from={HEAD} to={HEAD} patch-id={PATCH} pr=1000000000\n");
+    assert_eq!(rules(&review_of(&carried, &[])), vec!["review-line-format"]);
+}
+
+#[test]
 fn carriage_returns_are_errors_anywhere() {
     // `pr=49\r`: CRLF line ends
     let o = review_of(&format!("{}\r\nbody\r\n", good_line()), &[]);
