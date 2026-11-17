@@ -1216,3 +1216,361 @@ fn the_same_input_gives_the_same_report() {
     assert_eq!(a.mapping, c.mapping);
     assert_eq!(a.remaining, c.remaining);
 }
+
+// ---- (d) the pull request, landed_via ----
+
+fn pr_commit(c: &C, id: ObjectId) -> PrCommit {
+    PrCommit {
+        id,
+        name: c.name.as_bytes().to_vec(),
+        mail: c.mail.as_bytes().to_vec(),
+        secs: c.secs,
+        subject: c.subject.clone(),
+    }
+}
+
+fn pr(list: &[C], ids: &[ObjectId], merge_commit: ObjectId) -> PrInput {
+    PrInput {
+        number: 7,
+        merged: true,
+        merge_commit,
+        merged_at: Some(MERGE_SECS + 5),
+        head: last(ids),
+        commits: list
+            .iter()
+            .zip(ids)
+            .map(|(c, i)| pr_commit(c, *i))
+            .collect(),
+    }
+}
+
+fn api(fx: &Fx, base_tip: ObjectId, tip: ObjectId, input: PrInput) -> ApiReport {
+    let repo = fx.repo();
+    let side = branch_side(&repo, base_tip, tip).unwrap();
+    evaluate_api(&repo, base_tip, &side, tip, &ApiInput::Pr(input)).unwrap()
+}
+
+#[test]
+fn a_pull_request_with_one_parent_and_identity_equal_commits_is_a_rebase() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let f = foreign(&fx, last(&l), 1);
+    let rep = api(&fx, f, last(&br), pr(&list, &br, last(&l)));
+    assert_eq!(rep.not_read, None);
+    assert_eq!(rep.kind, LandedKind::Rebase);
+    assert_eq!(
+        (rep.pr, rep.k, rep.merge_parents),
+        (Some(7), Some(3), Some(1))
+    );
+    assert_eq!(rep.merge_commit, Some(last(&l)));
+    assert_eq!(
+        (rep.tip_matches_run, rep.head_in_branch),
+        (Some(true), Some(true))
+    );
+    assert_eq!(rep.mapping.len(), 3);
+    for (j, e) in rep.mapping.iter().enumerate() {
+        assert_eq!(
+            (e.commit, e.main, e.method),
+            (br[j], Some(l[j]), Method::Api)
+        );
+        assert_eq!(
+            e.position,
+            Some(3 - j as u32),
+            "counted from the base tip: one foreign commit first"
+        );
+    }
+    assert!(rep.remaining.is_empty());
+    let via = landed_via(false, None, Some(&rep));
+    assert_eq!(
+        (via.kind, via.basis, via.strength),
+        (LandedKind::Rebase, Basis::PrApi, Strength::Strong)
+    );
+}
+
+#[test]
+fn commits_after_the_pull_request_head_remain() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(4);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list[..3], MERGE_SECS);
+    let mut input = pr(&list[..3], &br[..3], last(&l));
+    let rep = api(&fx, last(&l), last(&br), input.clone());
+    assert_eq!(rep.kind, LandedKind::Rebase);
+    assert_eq!(rep.mapping.len(), 3);
+    assert_eq!(rep.remaining.len(), 1);
+    assert_eq!(rep.remaining[0].commit, br[3]);
+    assert_eq!(rep.remaining[0].files, ["f3.txt"]);
+    assert_eq!(rep.head_in_branch, Some(true));
+    // a head that is not in the branch (the branch was rewritten after the merge)
+    input.head = foreign(&fx, b, 9);
+    let rep = api(&fx, last(&l), last(&br), input);
+    assert_eq!(rep.head_in_branch, Some(false));
+}
+
+#[test]
+fn a_merge_commit_with_two_parents_is_a_merge() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let f = foreign(&fx, b, 1);
+    let s = Stamp::new("M", "m@example.com", MERGE_SECS);
+    let m = fx.commit_at_parents(
+        vec![f, last(&br)],
+        Some(last(&br)),
+        &[],
+        "Merge pull request #7",
+        s,
+        s,
+    );
+    let rep = api(&fx, m, last(&br), pr(&list, &br, m));
+    assert_eq!(rep.kind, LandedKind::Merge);
+    assert_eq!(rep.merge_parents, Some(2));
+    assert!(rep.mapping.is_empty());
+    let via = landed_via(false, None, Some(&rep));
+    assert_eq!(
+        (via.kind, via.basis, via.strength),
+        (LandedKind::Merge, Basis::PrApi, Strength::Strong)
+    );
+}
+
+#[test]
+fn a_commit_with_the_time_of_the_merge_is_a_squash() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let m = Stamp::new("Merger", "merger@example.com", MERGE_SECS + 5);
+    let mut all = String::new();
+    for c in &list {
+        all += &c.body;
+    }
+    let sq_author = Stamp::new("GitHub", "noreply@github.com", MERGE_SECS + 6);
+    let sq = fx.commit_at(
+        Some(b),
+        &[("all.txt", Some(all.as_str()))],
+        "step 2 (#7)",
+        sq_author,
+        m,
+    );
+    let rep = api(&fx, sq, last(&br), pr(&list, &br, sq));
+    assert_eq!(
+        (rep.kind, rep.tip_matches_run),
+        (LandedKind::Squash, Some(false))
+    );
+    let via = landed_via(false, None, Some(&rep));
+    assert_eq!(
+        (via.kind, via.basis, via.strength),
+        (LandedKind::Squash, Basis::PrApi, Strength::Strong)
+    );
+    // three seconds off is not the merge time any more
+    let sq_author = Stamp::new("GitHub", "noreply@github.com", MERGE_SECS + 8);
+    let sq2 = fx.commit_at(
+        Some(b),
+        &[("all.txt", Some(all.as_str()))],
+        "step 2 (#7)",
+        sq_author,
+        m,
+    );
+    let rep = api(&fx, sq2, last(&br), pr(&list, &br, sq2));
+    assert_eq!(rep.kind, LandedKind::Unknown);
+    let mut no_time = pr(&list, &br, sq);
+    no_time.merged_at = None;
+    assert_eq!(api(&fx, sq, last(&br), no_time).kind, LandedKind::Unknown);
+}
+
+#[test]
+fn the_commits_behind_the_merge_commit_must_equal_the_pull_request_commits() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let mut other = list.clone();
+    other[2].subject = b"another subject".to_vec();
+    let l = land(&fx, b, &other, MERGE_SECS);
+    let mut input = pr(&list, &br, last(&l));
+    input.merged_at = Some(MERGE_SECS - 5_000);
+    let rep = api(&fx, last(&l), last(&br), input);
+    assert_eq!(rep.tip_matches_run, Some(false));
+    assert_eq!(rep.kind, LandedKind::Unknown);
+    assert!(rep.mapping.is_empty());
+    // fewer commits on main than the pull request has
+    let l = land(&fx, b, &list[..2], MERGE_SECS);
+    let mut input = pr(&list, &br, last(&l));
+    input.merged_at = None;
+    assert_eq!(
+        api(&fx, last(&l), last(&br), input).kind,
+        LandedKind::Unknown
+    );
+    // no commits at all
+    let mut empty = pr(&list, &br, last(&l));
+    empty.commits.clear();
+    empty.merged_at = None;
+    assert_eq!(
+        api(&fx, last(&l), last(&br), empty).kind,
+        LandedKind::Unknown
+    );
+}
+
+#[test]
+fn without_a_pull_request_mapping_the_reason_is_kept_and_nothing_fails() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let br = branch(&fx, b, &cs(1));
+    let repo = fx.repo();
+    let side = branch_side(&repo, b, last(&br)).unwrap();
+    for reason in [
+        ApiReason::Offline,
+        ApiReason::NoToken,
+        ApiReason::NoPullRequest,
+        ApiReason::RateLimited,
+    ] {
+        let rep = evaluate_api(&repo, b, &side, last(&br), &ApiInput::NotRead(reason)).unwrap();
+        assert_eq!(rep.not_read, Some(reason));
+        assert_eq!(rep.kind, LandedKind::Unknown);
+        assert!(rep.mapping.is_empty() && rep.pr.is_none());
+    }
+    assert_eq!(ApiReason::Offline.as_str(), "offline");
+    assert_eq!(ApiReason::RateLimited.as_str(), "rate-limited");
+    assert_eq!(
+        ApiReason::MergeCommitNotInClone.as_str(),
+        "merge-commit-not-in-clone"
+    );
+}
+
+#[test]
+fn a_pull_request_that_cannot_be_checked_locally_says_why() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let good = pr(&list, &br, last(&l));
+    let mut open = good.clone();
+    open.merged = false;
+    assert_eq!(
+        api(&fx, last(&l), last(&br), open).not_read,
+        Some(ApiReason::NotMerged)
+    );
+    let mut ghost = good.clone();
+    ghost.merge_commit = "1234567890123456789012345678901234567890".parse().unwrap();
+    assert_eq!(
+        api(&fx, last(&l), last(&br), ghost).not_read,
+        Some(ApiReason::MergeCommitNotInClone)
+    );
+    // a commit that is not on the first-parent chain of the base
+    let side = foreign(&fx, b, 3);
+    let mut off = good.clone();
+    off.merge_commit = side;
+    assert_eq!(
+        api(&fx, last(&l), last(&br), off).not_read,
+        Some(ApiReason::NotOnBase)
+    );
+    assert_eq!(api(&fx, last(&l), last(&br), good).not_read, None);
+}
+
+#[test]
+fn landed_via_follows_the_precedence() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let strong = run(&fx, last(&l), last(&br));
+    assert_eq!(strong.strength, Strength::Strong);
+    let nothing = landed_via(false, None, None);
+    assert_eq!(
+        (nothing.kind, nothing.basis, nothing.strength),
+        (LandedKind::Unknown, Basis::None, Strength::None)
+    );
+    let v = landed_via(true, Some(&strong), None);
+    assert_eq!(
+        (v.kind, v.basis, v.strength),
+        (LandedKind::Merge, Basis::Ancestor, Strength::Strong)
+    );
+    let v = landed_via(false, Some(&strong), None);
+    assert_eq!(
+        (v.kind, v.basis, v.strength),
+        (LandedKind::Rebase, Basis::CommitMap, Strength::Strong)
+    );
+    // a pull request that was not read says nothing
+    let mut squash = evaluate_api(
+        &fx.repo(),
+        b,
+        &branch_side(&fx.repo(), b, last(&br)).unwrap(),
+        last(&br),
+        &ApiInput::NotRead(ApiReason::Offline),
+    )
+    .unwrap();
+    squash.kind = LandedKind::Squash;
+    assert_eq!(
+        landed_via(false, None, Some(&squash)).kind,
+        LandedKind::Unknown
+    );
+    // a strong run beats a pull request that looks like a squash
+    squash.not_read = None;
+    assert_eq!(
+        landed_via(false, Some(&strong), Some(&squash)).kind,
+        LandedKind::Rebase
+    );
+    assert_eq!(
+        landed_via(false, None, Some(&squash)).kind,
+        LandedKind::Squash
+    );
+}
+
+#[test]
+fn a_partial_or_weak_mapping_is_unknown() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(5);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list[..3], MERGE_SECS);
+    let partial = run(&fx, last(&l), last(&br));
+    assert!(partial.partial);
+    let v = landed_via(false, Some(&partial), None);
+    assert_eq!(
+        (v.kind, v.basis, v.strength),
+        (LandedKind::Unknown, Basis::None, Strength::None)
+    );
+    // identity without a run
+    let f = foreign(&fx, last(&l), 1);
+    let l2 = land(&fx, f, &list[3..], MERGE_SECS + 50);
+    let hint = run(&fx, last(&l2), last(&br));
+    assert_eq!((hint.mapped, hint.strength), (5, Strength::Hint));
+    assert_eq!(
+        landed_via(false, Some(&hint), None).kind,
+        LandedKind::Unknown
+    );
+}
+
+#[test]
+fn one_commit_with_an_equal_patch_and_no_identity_is_a_hint_for_a_squash() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let one = cs(1);
+    let br = branch(&fx, b, &one);
+    let mut other = one.clone();
+    other[0].secs += 40;
+    let l = land(&fx, b, &other, MERGE_SECS);
+    let r = run_hits(&fx, last(&l), last(&br));
+    let v = landed_via(false, Some(&r), None);
+    assert_eq!(
+        (v.kind, v.basis, v.strength),
+        (LandedKind::Unknown, Basis::SingleCommitMap, Strength::Hint)
+    );
+    // three such commits are not that case
+    let three = cs(3);
+    let br = branch(&fx, b, &three);
+    let mut shifted = three.clone();
+    for c in &mut shifted {
+        c.secs += 40;
+    }
+    let l = land(&fx, b, &shifted, MERGE_SECS);
+    let r = run_hits(&fx, last(&l), last(&br));
+    assert_eq!(landed_via(false, Some(&r), None).basis, Basis::None);
+}
