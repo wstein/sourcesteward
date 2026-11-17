@@ -1,0 +1,427 @@
+//! `stw lint review FILE` and `stw lint pr-text FILE` (new, no Go counterpart): the text of a review comment or of a
+//! PR text from a file, read-only, no network. Fixtures: real comments and PR texts, `tests/fixtures/lint/`.
+//! Harness confinement: repositories and files live in tempdirs created here; the binary runs with a scrubbed
+//! environment and starts no network.
+use std::path::{Path, PathBuf};
+use std::process::{Command, Output};
+
+use crate::common::*;
+use serde_json::Value;
+
+const HEAD: &str = "82dc939a0115b4f116c8ac71fb73eb3b96a1d01b";
+const PATCH: &str = "8a7ecc88da6cff3f867a0e932184ca39f5bd151a";
+
+fn fixture(name: &str) -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/lint")
+        .join(name)
+}
+
+fn stw(args: &[&str]) -> Output {
+    let home = scratch();
+    Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("PATH", std::env::var_os("PATH").unwrap())
+        .env("HOME", home.path())
+        .current_dir(home.path())
+        .arg("lint")
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+fn code(o: &Output) -> i32 {
+    o.status.code().unwrap()
+}
+
+fn out_text(o: &Output) -> String {
+    format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&o.stdout),
+        String::from_utf8_lossy(&o.stderr)
+    )
+}
+
+/// The rule IDs of the findings of a `--json` run, in order.
+fn rules(o: &Output) -> Vec<String> {
+    let v: Value =
+        serde_json::from_slice(&o.stdout).unwrap_or_else(|e| panic!("{e}: {}", out_text(o)));
+    v["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|f| f["rule"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// A review text in a file of its own; returns the run of `lint review FILE --json EXTRA`.
+fn review_of(text: &str, extra: &[&str]) -> Output {
+    let dir = scratch();
+    let f = dir.path().join("comment.txt");
+    std::fs::write(&f, text).unwrap();
+    let mut args = vec!["review", f.to_str().unwrap(), "--json"];
+    args.extend(extra);
+    stw(&args)
+}
+
+fn good_line() -> String {
+    format!("Review: CLEAR head={HEAD} patch-id={PATCH} pr=49")
+}
+
+fn good_text() -> String {
+    format!(
+        "{}\nRound 1: nothing found.\nPR body: 7 lines, no session links.\n",
+        good_line()
+    )
+}
+
+#[test]
+fn real_review_comments_pass() {
+    for name in [
+        "review-cubelab-49-clear.txt",
+        "review-dotagents-99-findings.txt",
+        "review-dotagents-99-clear.txt",
+        "carried-over-cube-assembler-61.txt",
+    ] {
+        let f = fixture(name);
+        let o = stw(&["review", f.to_str().unwrap(), "--json"]);
+        assert_eq!(code(&o), 0, "{name}: {}", out_text(&o));
+        let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+        assert_eq!(v["summary"]["passed"], true, "{name}");
+        assert_eq!(v["findings"].as_array().unwrap().len(), 0, "{name}");
+    }
+}
+
+#[test]
+fn json_document_shape() {
+    let f = fixture("review-cubelab-49-clear.txt");
+    let o = stw(&["review", f.to_str().unwrap(), "--json"]);
+    let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["schema_version"], 1);
+    assert_eq!(v["command"], "lint review");
+    assert!(v["time"].as_str().unwrap().ends_with('Z'));
+    assert!(v["file"]
+        .as_str()
+        .unwrap()
+        .ends_with("review-cubelab-49-clear.txt"));
+    let ids: Vec<&str> = v["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["id"].as_str().unwrap())
+        .collect();
+    for id in [
+        "review-line-format",
+        "review-patch-id",
+        "review-head",
+        "review-comment-length",
+        "review-session-word",
+        "session-link",
+        "text-line-endings",
+    ] {
+        assert!(ids.contains(&id), "rule {id} listed: {ids:?}");
+    }
+    assert_eq!(v["summary"]["errors"], 0);
+    assert_eq!(v["summary"]["warnings"], 0);
+}
+
+#[test]
+fn human_output_lists_each_finding() {
+    let dir = scratch();
+    let f = dir.path().join("c.txt");
+    std::fs::write(&f, format!("{}\nsession here\n", good_line())).unwrap();
+    let o = stw(&["review", f.to_str().unwrap()]);
+    assert_eq!(code(&o), 1, "{}", out_text(&o));
+    let text = String::from_utf8_lossy(&o.stdout).into_owned();
+    assert!(text.contains("FAIL, 1 errors, 0 warnings"), "{text}");
+    assert!(text.contains("review-session-word"), "{text}");
+    assert!(text.contains("file:2"), "{text}");
+}
+
+#[test]
+fn the_first_line_follows_the_fixed_grammar() {
+    let h = HEAD;
+    let p = PATCH;
+    let bad: Vec<(&str, String)> = vec![
+        (
+            "uppercase hex",
+            format!("Review: CLEAR head={} patch-id={p} pr=49", h.to_uppercase()),
+        ),
+        (
+            "uppercase patch-id",
+            format!("Review: CLEAR head={h} patch-id={} pr=49", p.to_uppercase()),
+        ),
+        (
+            "short head",
+            "Review: CLEAR head=82dc939 patch-id=8a7ecc88da6cff3f867a0e932184ca39f5bd151a pr=49"
+                .into(),
+        ),
+        (
+            "order",
+            format!("Review: CLEAR patch-id={p} head={h} pr=49"),
+        ),
+        (
+            "verdict",
+            format!("Review: clear head={h} patch-id={p} pr=49"),
+        ),
+        (
+            "zero pr",
+            format!("Review: CLEAR head={h} patch-id={p} pr=0"),
+        ),
+        (
+            "leading zero pr",
+            format!("Review: CLEAR head={h} patch-id={p} pr=049"),
+        ),
+        (
+            "markdown",
+            format!("**Review: CLEAR** head={h} patch-id={p} pr=49"),
+        ),
+        (
+            "double blank",
+            format!("Review:  CLEAR head={h} patch-id={p} pr=49"),
+        ),
+        (
+            "trailing blank",
+            format!("Review: CLEAR head={h} patch-id={p} pr=49 "),
+        ),
+        (
+            "extra field",
+            format!("Review: CLEAR head={h} patch-id={p} pr=49 x=1"),
+        ),
+        ("empty", String::new()),
+    ];
+    for (name, line) in bad {
+        let o = review_of(&format!("{line}\nbody\n"), &[]);
+        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
+        assert!(
+            rules(&o).contains(&"review-line-format".to_string()),
+            "{name}"
+        );
+    }
+    // the first line is the first line: a blank line before it is no review line
+    let o = review_of(&format!("\n{}\n", good_line()), &[]);
+    assert_eq!(code(&o), 1);
+    assert!(rules(&o).contains(&"review-line-format".to_string()));
+    // pr=none is the local form
+    let o = review_of(
+        &format!("Review: FINDINGS head={HEAD} patch-id={PATCH} pr=none\n"),
+        &[],
+    );
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+}
+
+#[test]
+fn carriage_returns_are_errors_anywhere() {
+    // `pr=49\r`: CRLF line ends
+    let o = review_of(&format!("{}\r\nbody\r\n", good_line()), &[]);
+    assert_eq!(code(&o), 1);
+    let r = rules(&o);
+    assert!(r.contains(&"text-line-endings".to_string()), "{r:?}");
+    assert!(r.contains(&"review-line-format".to_string()), "{r:?}");
+    // a CR in a later line only
+    let o = review_of(&format!("{}\nbody\r\nmore\n", good_line()), &[]);
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["text-line-endings"]);
+    // a lone CR inside a line
+    let o = review_of(&format!("{}\nbo\rdy\n", good_line()), &[]);
+    assert_eq!(rules(&o), vec!["text-line-endings"]);
+}
+
+#[test]
+fn the_carried_over_form_is_fixed_too() {
+    let from = "5da6a04090ad10bb55a9a012cd17c4fa2755a1a6";
+    let to = "bfbf79cc1d3372c874bd7c3db028a416e3208f94";
+    let p = "c9d382d0ef112f55ea237acfc0d8bb3e380c46b5";
+    let ok = format!("Carried-over: from={from} to={to} patch-id={p} pr=61\nline 2\n");
+    assert_eq!(code(&review_of(&ok, &[])), 0);
+    for (name, line) in [
+        (
+            "order",
+            format!("Carried-over: to={to} from={from} patch-id={p} pr=61"),
+        ),
+        (
+            "uppercase",
+            format!(
+                "Carried-over: from={from} to={} patch-id={p} pr=61",
+                to.to_uppercase()
+            ),
+        ),
+        (
+            "short",
+            format!("Carried-over: from=5da6a04 to={to} patch-id={p} pr=61"),
+        ),
+        (
+            "key",
+            format!("Carried-over: from={from} head={to} patch-id={p} pr=61"),
+        ),
+        (
+            "carried-over",
+            format!("Carried-Over: from={from} to={to} patch-id={p} pr=61"),
+        ),
+    ] {
+        let o = review_of(&format!("{line}\nline 2\n"), &[]);
+        assert_eq!(code(&o), 1, "{name}");
+        assert_eq!(rules(&o), vec!["review-line-format"], "{name}");
+    }
+}
+
+#[test]
+fn a_review_comment_has_at_most_15_lines() {
+    let body = |n: usize| {
+        let mut t = good_line();
+        for i in 2..=n {
+            t.push_str(&format!("\nline {i}"));
+        }
+        t.push('\n');
+        t
+    };
+    for n in [1, 14, 15] {
+        let o = review_of(&body(n), &[]);
+        assert_eq!(code(&o), 0, "{n} lines: {}", out_text(&o));
+    }
+    let o = review_of(&body(16), &[]);
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["review-comment-length"]);
+    // trailing blank lines do not count
+    let o = review_of(&format!("{}\n\n\n", body(15)), &[]);
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+}
+
+#[test]
+fn the_word_session_only_as_no_session_links() {
+    let ok = format!("{}\nPR body: 7 lines, no session links.\n", good_line());
+    assert_eq!(code(&review_of(&ok, &[])), 0);
+    for text in [
+        "the session ended",
+        "Session-Link check: 0",
+        "no session link",
+        "no session links, session ids none",
+    ] {
+        let o = review_of(&format!("{}\n{text}\n", good_line()), &[]);
+        assert_eq!(code(&o), 1, "{text}");
+        assert_eq!(rules(&o), vec!["review-session-word"], "{text}");
+    }
+}
+
+#[test]
+fn a_session_link_is_an_error() {
+    // assembled so that this file does not hold the patterns in plain text
+    let trailer = concat!("Claude", "-Session: https://example.invalid/x");
+    let url = concat!("https://claude", ".ai/code/session_", "01ABC");
+    for text in [trailer, url] {
+        let o = review_of(&format!("{}\n{text}\n", good_line()), &[]);
+        assert_eq!(code(&o), 1, "{text}");
+        assert!(rules(&o).contains(&"session-link".to_string()), "{text}");
+    }
+}
+
+/// A repository with `base` and a `head` that adds a file; returns the checkout, base, head and the patch-id of
+/// `base...head` as `stw dev patch-id` computes it for the head commit (one commit above the base).
+fn repo_with_change() -> (Fx, String, String, String) {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("a\n"))], "base");
+    let head = fx.commit(Some(base), &[("a.txt", Some("a\nb\n"))], "head");
+    let patch = stw::patch_id::commit_patch_id(&fx.repo(), head)
+        .unwrap()
+        .expect("a patch")
+        .to_string();
+    (fx, base.to_string(), head.to_string(), patch)
+}
+
+#[test]
+fn patch_id_and_head_are_compared_with_the_repository() {
+    let (fx, base, head, patch) = repo_with_change();
+    let co = fx.path.to_str().unwrap();
+    let args = |extra: &[&'static str]| {
+        let mut a = vec![
+            "--base",
+            base.as_str(),
+            "--head",
+            head.as_str(),
+            "--checkout",
+            co,
+        ];
+        a.extend(extra);
+        a.into_iter().map(String::from).collect::<Vec<_>>()
+    };
+    let run = |text: &str, a: Vec<String>| {
+        let r: Vec<&str> = a.iter().map(String::as_str).collect();
+        review_of(text, &r)
+    };
+    let good = format!("Review: CLEAR head={head} patch-id={patch} pr=7\nok\n");
+    let o = run(&good, args(&[]));
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+    // the revisions may be names: the head= field is compared with the resolved id
+    fx.branch("topic", head.parse().unwrap());
+    let o = run(&good, {
+        let mut a = args(&[]);
+        a[3] = "topic".into();
+        a
+    });
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+    // a wrong patch-id
+    let wrong = "0".repeat(40);
+    let o = run(
+        &format!("Review: CLEAR head={head} patch-id={wrong} pr=7\n"),
+        args(&[]),
+    );
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["review-patch-id"]);
+    // a wrong head
+    let other = "1".repeat(40);
+    let o = run(
+        &format!("Review: CLEAR head={other} patch-id={patch} pr=7\n"),
+        args(&[]),
+    );
+    assert_eq!(rules(&o), vec!["review-head"]);
+    // a wrong pr
+    let o = run(&good, args(&["--pr", "8"]));
+    assert_eq!(code(&o), 1);
+    assert_eq!(rules(&o), vec!["review-line-format"]);
+    let o = run(&good, args(&["--pr", "7"]));
+    assert_eq!(code(&o), 0, "{}", out_text(&o));
+    // the Carried-over form: `to` is the head
+    let carried = format!("Carried-over: from={other} to={head} patch-id={patch} pr=7\n");
+    assert_eq!(code(&run(&carried, args(&[]))), 0);
+    let carried_bad = format!("Carried-over: from={other} to={other} patch-id={patch} pr=7\n");
+    assert_eq!(rules(&run(&carried_bad, args(&[]))), vec!["review-head"]);
+    let carried_wrong = format!("Carried-over: from={other} to={head} patch-id={wrong} pr=7\n");
+    assert_eq!(
+        rules(&run(&carried_wrong, args(&[]))),
+        vec!["review-patch-id"]
+    );
+}
+
+#[test]
+fn usage_errors_exit_two() {
+    let (fx, base, head, _) = repo_with_change();
+    let co = fx.path.to_str().unwrap();
+    let dir = scratch();
+    let f = dir.path().join("c.txt");
+    std::fs::write(&f, good_text()).unwrap();
+    let fs = f.to_str().unwrap();
+    for args in [
+        vec!["review", fs, "--base", base.as_str(), "--checkout", co],
+        vec!["review", fs, "--head", head.as_str(), "--checkout", co],
+        vec![
+            "review",
+            fs,
+            "--base",
+            "nope",
+            "--head",
+            head.as_str(),
+            "--checkout",
+            co,
+        ],
+        vec!["review", fs, "--pr", "0"],
+        vec!["review", fs, "--pr", "x"],
+        vec!["review", "/nonexistent/stw-lintfiles/comment.txt"],
+        vec!["review"],
+    ] {
+        let o = stw(&args);
+        assert_eq!(code(&o), 2, "{args:?}: {}", out_text(&o));
+    }
+    // not UTF-8
+    std::fs::write(&f, [0xff, 0xfe, b'\n']).unwrap();
+    assert_eq!(code(&stw(&["review", fs])), 2);
+}

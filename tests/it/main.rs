@@ -21,6 +21,7 @@ mod github_rules;
 mod gitlinks;
 mod hostile_repo;
 mod identity;
+mod lint_files;
 mod lint_pr;
 mod lint_pr_cmd;
 mod nested;
