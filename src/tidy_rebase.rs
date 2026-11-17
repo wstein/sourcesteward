@@ -12,9 +12,6 @@
 //!
 //! Not applied: mailmap (raw header values are compared), `Co-authored-by`, committer (a rebase merge writes a new one).
 //! Zones: only seconds since the epoch are compared; a different offset is noted (`tz_differs`).
-// Shell while the tests of a stage are written first: the functions of later stages are inert.
-#![allow(dead_code, unused_imports, unused_variables)]
-
 use std::collections::{HashMap, HashSet};
 
 use gix::bstr::ByteSlice;
@@ -905,7 +902,112 @@ pub fn evaluate_api(
     tip: ObjectId,
     input: &ApiInput,
 ) -> Result<ApiReport> {
-    Ok(ApiReport::not_read(ApiReason::NoPullRequest))
+    let pr = match input {
+        ApiInput::NotRead(r) => return Ok(ApiReport::not_read(*r)),
+        ApiInput::Pr(p) => p,
+    };
+    if !pr.merged {
+        return Ok(ApiReport::not_read(ApiReason::NotMerged));
+    }
+    if repo.find_commit(pr.merge_commit).is_err() {
+        return Ok(ApiReport::not_read(ApiReason::MergeCommitNotInClone));
+    }
+    // distance of the merge commit from the base tip on the first-parent chain
+    let mut dist = 0usize;
+    let mut cur = base_tip;
+    while cur != pr.merge_commit {
+        let next = repo
+            .find_commit(cur)
+            .ok()
+            .and_then(|c| c.parent_ids().next());
+        match next {
+            Some(p) if dist < RB_MAX_WINDOW => {
+                cur = p.detach();
+                dist += 1;
+            }
+            _ => return Ok(ApiReport::not_read(ApiReason::NotOnBase)),
+        }
+    }
+    let merge_head = read_head(repo, pr.merge_commit)?;
+    let k = pr.commits.len();
+    let mut rep = ApiReport {
+        not_read: None,
+        pr: Some(pr.number),
+        merge_commit: Some(pr.merge_commit),
+        merge_parents: Some(merge_head.parents),
+        k: Some(k),
+        tip_matches_run: None,
+        head_in_branch: Some(crate::repo::is_ancestor(repo, pr.head, tip)?),
+        kind: LandedKind::Unknown,
+        mapping: Vec::new(),
+        remaining: Vec::new(),
+    };
+    if merge_head.parents == 2 {
+        rep.kind = LandedKind::Merge;
+        return Ok(rep);
+    }
+    if merge_head.parents != 1 {
+        return Ok(rep);
+    }
+    let mut chain: Vec<Head> = Vec::new();
+    let mut next = Some(pr.merge_commit);
+    while let (Some(id), true) = (next, chain.len() < k) {
+        chain.push(read_head(repo, id)?);
+        next = repo
+            .find_commit(id)?
+            .parent_ids()
+            .next()
+            .map(|p| p.detach());
+    }
+    // chain[0] is the newest; the PR commit j (oldest first) is chain[k - 1 - j]
+    let matches = k >= 1
+        && chain.len() == k
+        && (0..k).all(|j| same_identity(&chain[k - 1 - j], &pr.commits[j]));
+    rep.tip_matches_run = Some(matches);
+    if matches {
+        rep.kind = LandedKind::Rebase;
+        let ids: HashMap<ObjectId, usize> = pr
+            .commits
+            .iter()
+            .enumerate()
+            .map(|(j, c)| (c.id, j))
+            .collect();
+        for id in &side.commits {
+            let h = read_head(repo, *id)?;
+            let subject = show(&h.key.subject);
+            match ids.get(id) {
+                Some(j) => {
+                    let m = &chain[k - 1 - j];
+                    rep.mapping.push(MapEntry {
+                        commit: *id,
+                        subject,
+                        main: Some(m.id),
+                        position: Some((dist + k - 1 - j) as u32),
+                        method: Method::Api,
+                        value: None,
+                        identity: true,
+                        tz_differs: m.offset != h.offset,
+                        ambiguous: false,
+                    });
+                }
+                None => {
+                    let (files, files_total) = files_of(repo, *id)?;
+                    rep.remaining.push(Remaining {
+                        commit: *id,
+                        subject,
+                        files,
+                        files_total,
+                    });
+                }
+            }
+        }
+    } else if pr
+        .merged_at
+        .is_some_and(|t| (merge_head.key.secs - t).abs() <= RB_API_TIME_TOLERANCE)
+    {
+        rep.kind = LandedKind::Squash;
+    }
+    Ok(rep)
 }
 
 // ---- landed_via ----
@@ -947,9 +1049,24 @@ pub fn landed_via(
     rebase: Option<&RebaseReport>,
     api: Option<&ApiReport>,
 ) -> LandedVia {
-    LandedVia {
-        kind: LandedKind::Unknown,
-        basis: Basis::None,
-        strength: Strength::None,
+    let via = |kind, basis, strength| LandedVia {
+        kind,
+        basis,
+        strength,
+    };
+    if ancestor {
+        return via(LandedKind::Merge, Basis::Ancestor, Strength::Strong);
     }
+    if rebase.is_some_and(|r| r.strength == Strength::Strong) {
+        return via(LandedKind::Rebase, Basis::CommitMap, Strength::Strong);
+    }
+    if let Some(a) = api.filter(|a| a.not_read.is_none()) {
+        if a.kind != LandedKind::Unknown {
+            return via(a.kind, Basis::PrApi, Strength::Strong);
+        }
+    }
+    if rebase.is_some_and(|r| r.n == 1 && r.by_patch_id == 1 && r.mapped == 1) {
+        return via(LandedKind::Unknown, Basis::SingleCommitMap, Strength::Hint);
+    }
+    via(LandedKind::Unknown, Basis::None, Strength::None)
 }
