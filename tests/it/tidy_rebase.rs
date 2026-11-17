@@ -163,38 +163,86 @@ fn a_merge_commit_on_the_chain_is_a_position_but_never_a_target() {
     assert!(idx.with_key(&h.key).is_empty(), "but nobody can match it");
 }
 
+/// `n` commits of somebody else on `parent`, author (and committer) seconds `secs`, `secs + 1`, ...
+fn old_commits(fx: &Fx, mut parent: ObjectId, n: usize, secs: i64) -> ObjectId {
+    for k in 0..n {
+        let s = Stamp::new("Other", "o@example.com", secs + k as i64);
+        parent = fx.commit_at(
+            Some(parent),
+            &[(format!("o{k}.txt").as_str(), Some("o\n"))],
+            format!("old {k}"),
+            s,
+            s,
+        );
+    }
+    parent
+}
+
 #[test]
-fn the_walk_stops_a_day_before_the_oldest_author_time_and_not_earlier() {
+fn an_old_committer_time_does_not_end_the_walk() {
+    // `--committer-date-is-author-date` and old clocks: the committer time says nothing about the target
     let fx = Fx::new();
     let b = base(&fx);
-    let old = fx.commit_at(
-        Some(b),
-        &[("old.txt", Some("o\n"))],
-        "old",
-        Stamp::new("Other", "o@example.com", 1_000),
-        Stamp::new("Other", "o@example.com", 1_000),
-    );
-    // a committer clock an hour behind the author time is inside the slack
-    let l = land(&fx, old, &cs(2), T0 - 3600);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, T0 - 5 * 86_400);
+    let f = foreign(&fx, last(&l), 1);
     let repo = fx.repo();
-    let idx = RebaseIndex::build(&repo, last(&l), Some(T0), RB_MAX_WINDOW).unwrap();
-    assert_eq!(idx.stop(), Stop::Time);
+    let idx = RebaseIndex::build(&repo, f, Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!((idx.len(), idx.stop()), (5, Stop::Root));
+    let r = run(&fx, f, last(&br));
+    assert_eq!(r.mapped, 3);
+    assert_eq!(r.strength, Strength::Strong);
+}
+
+#[test]
+fn a_run_of_old_author_times_ends_the_walk_a_single_one_does_not() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let l = land(&fx, b, &cs(2), MERGE_SECS);
+    let repo = fx.repo();
+    let n = RB_STOP_RUN;
+    let ancient = 1_000;
+    // n in a row: stop (the run itself is indexed)
+    let tip = old_commits(&fx, last(&l), n, ancient);
+    let idx = RebaseIndex::build(&repo, tip, Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!((idx.len(), idx.stop()), (n + 2, Stop::Time));
+    // n - 1 in a row, a recent commit, n - 1 again: no stop, the root is reached
+    let t1 = old_commits(&fx, last(&l), n - 1, ancient);
+    let t2 = foreign(&fx, t1, 7);
+    let t3 = old_commits(&fx, t2, n - 1, ancient);
+    let idx = RebaseIndex::build(&repo, t3, Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!(idx.stop(), Stop::Root);
+    assert_eq!(idx.len(), (n - 1) + 1 + (n - 1) + 2 + 1);
+    // a single old commit never stops
+    let one = old_commits(&fx, last(&l), 1, ancient);
     assert_eq!(
-        idx.len(),
-        2,
-        "both landed commits are indexed, the old ones are not"
+        RebaseIndex::build(&repo, one, Some(T0), RB_MAX_WINDOW)
+            .unwrap()
+            .stop(),
+        Stop::Root
     );
-    assert!(idx.pos_of(old).is_none());
-    // exactly at the bound is still indexed
-    let l2 = land(&fx, old, &cs(1), T0 - RB_SLACK_SECS);
-    let idx = RebaseIndex::build(&repo, last(&l2), Some(T0), RB_MAX_WINDOW).unwrap();
-    assert_eq!(idx.len(), 1, "the commit at the bound and nothing older");
-    let l3 = land(&fx, old, &cs(1), T0 - RB_SLACK_SECS - 1);
-    let idx = RebaseIndex::build(&repo, last(&l3), Some(T0), RB_MAX_WINDOW).unwrap();
-    assert_eq!(idx.len(), 0, "one second below the bound is not indexed");
     // without a time bound the chain is walked to its root
-    let idx = RebaseIndex::build(&repo, last(&l), None, RB_MAX_WINDOW).unwrap();
-    assert_eq!((idx.len(), idx.stop()), (4, Stop::Root));
+    let idx = RebaseIndex::build(&repo, tip, None, RB_MAX_WINDOW).unwrap();
+    assert_eq!(idx.stop(), Stop::Root);
+}
+
+#[test]
+fn the_age_bound_is_a_day_before_the_oldest_author_time_inclusive() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let l = land(&fx, b, &cs(1), MERGE_SECS);
+    let repo = fx.repo();
+    let n = RB_STOP_RUN as i64;
+    let bound = T0 - RB_SLACK_SECS;
+    // the newest of the run is exactly at the bound: not old, the run is broken
+    let at = old_commits(&fx, last(&l), RB_STOP_RUN, bound - n + 1);
+    let idx = RebaseIndex::build(&repo, at, Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!(idx.stop(), Stop::Root);
+    // one second older: all are old
+    let below = old_commits(&fx, last(&l), RB_STOP_RUN, bound - n);
+    let idx = RebaseIndex::build(&repo, below, Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!(idx.stop(), Stop::Time);
 }
 
 #[test]

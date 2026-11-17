@@ -24,6 +24,9 @@ use crate::tidy_similarity::{mask_bytes, Limits, Sim, SimCache, Skip, LOW_PCT};
 /// The index stops at a commit whose committer time is older than the oldest author time of the branches by more
 /// than this (a rebase merge writes a committer time at or after the author time; this covers clock skew).
 pub const RB_SLACK_SECS: i64 = 86_400;
+/// The walk stops after this many chain commits in a row with an author time older than the oldest author time of the
+/// branches minus `RB_SLACK_SECS`.
+pub const RB_STOP_RUN: usize = 64;
 /// At most this many commits of the first-parent chain are indexed.
 pub const RB_MAX_WINDOW: usize = 50_000;
 /// An identity match whose content similarity is below this percentage is only a hint (same metadata, other content).
