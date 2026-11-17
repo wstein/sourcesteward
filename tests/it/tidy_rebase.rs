@@ -202,6 +202,22 @@ fn an_old_committer_time_does_not_end_the_walk() {
     let r = run(&fx, f, last(&br));
     assert_eq!(r.mapped, 3);
     assert_eq!(r.strength, Strength::Strong);
+    // a whole run of old committer times with recent author times does not stop it either
+    let mut parent = b;
+    for k in 0..RB_STOP_RUN {
+        let s = Stamp::new("Other", "o@example.com", T0 + 10 + k as i64);
+        let old = Stamp::new("Other", "o@example.com", 1_000 + k as i64);
+        parent = fx.commit_at(
+            Some(parent),
+            &[(format!("p{k}.txt").as_str(), Some("p\n"))],
+            format!("pre {k}"),
+            s,
+            old,
+        );
+    }
+    let l2 = land(&fx, parent, &list, T0 - 5 * 86_400);
+    let idx = RebaseIndex::build(&repo, last(&l2), Some(T0), RB_MAX_WINDOW).unwrap();
+    assert_eq!((idx.stop(), idx.len()), (Stop::Root, RB_STOP_RUN + 3 + 1));
 }
 
 #[test]
@@ -1281,6 +1297,8 @@ fn a_gap_of_one_between_two_mapped_commits_is_filled_by_similarity() {
     let r = between(Some(edited("c1", 6))); // 14 of 20 equal
     assert_eq!(r.mapping[1].method, Method::Similarity);
     assert_eq!(r.mapping[1].value, Some(700));
+    assert_eq!(r.strength, Strength::Hint, "70 % is modified, not a proof");
+    assert!(r.modified && !r.content_ok);
 }
 
 #[test]
@@ -1583,6 +1601,66 @@ fn a_commit_with_the_time_of_the_merge_is_a_squash() {
     let mut no_time = pr(&list, &br, sq);
     no_time.merged_at = None;
     assert_eq!(api(&fx, sq, last(&br), no_time).kind, LandedKind::Unknown);
+}
+
+#[test]
+fn the_squash_time_tolerance_is_two_seconds_inclusive_in_both_directions() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    let m = Stamp::new("Merger", "merger@example.com", MERGE_SECS + 5);
+    let at = |delta: i64| {
+        let a = Stamp::new("GitHub", "noreply@github.com", MERGE_SECS + 5 + delta);
+        let sq = fx.commit_at(Some(b), &[("all.txt", Some("x\n"))], "step 2 (#7)", a, m);
+        api(&fx, sq, last(&br), pr(&list, &br, sq)).kind
+    };
+    assert_eq!(at(2), LandedKind::Squash);
+    assert_eq!(at(-2), LandedKind::Squash);
+    assert_eq!(at(3), LandedKind::Unknown);
+    assert_eq!(at(-3), LandedKind::Unknown);
+}
+
+#[test]
+fn the_pull_request_commits_are_compared_by_name_and_by_mail_in_lower_case() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let l = land(&fx, b, &list, MERGE_SECS);
+    let good = pr(&list, &br, last(&l));
+    assert_eq!(
+        api(&fx, last(&l), last(&br), good.clone()).kind,
+        LandedKind::Rebase
+    );
+    let mut other_name = good.clone();
+    other_name.commits[0].name = b"Somebody Else".to_vec();
+    other_name.merged_at = None;
+    assert_eq!(
+        api(&fx, last(&l), last(&br), other_name).kind,
+        LandedKind::Unknown
+    );
+    let mut upper = good.clone();
+    upper.commits[1].mail = MAIL.to_uppercase().into_bytes();
+    assert_eq!(
+        api(&fx, last(&l), last(&br), upper).kind,
+        LandedKind::Rebase
+    );
+}
+
+#[test]
+fn a_different_zone_offset_of_a_pull_request_commit_is_noted() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(2);
+    let br = branch(&fx, b, &list);
+    let mut main_side = list.clone();
+    main_side[1].offset = 3600;
+    let l = land(&fx, b, &main_side, MERGE_SECS);
+    let rep = api(&fx, last(&l), last(&br), pr(&list, &br, last(&l)));
+    assert_eq!(rep.kind, LandedKind::Rebase);
+    assert!(!rep.mapping[0].tz_differs);
+    assert!(rep.mapping[1].tz_differs);
 }
 
 #[test]
