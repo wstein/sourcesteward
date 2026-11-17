@@ -688,3 +688,234 @@ fn pr_text_json_and_usage() {
     std::fs::write(&f, [0xff, 0xfe]).unwrap();
     assert_eq!(code(&stw(&["pr-text", f.to_str().unwrap()])), 2);
 }
+
+// ---- the patch-id against real git -------------------------------------------------------------------------
+
+fn git_available() -> bool {
+    Command::new("git")
+        .arg("--version")
+        .output()
+        .is_ok_and(|o| o.status.success())
+}
+
+/// Runs real git in `dir` with the identity of the global configuration (nothing is overridden or written).
+fn git(dir: &Path, args: &[&str]) -> String {
+    assert!(dir.is_absolute(), "unconfined");
+    let o = Command::new("git")
+        .current_dir(dir)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .args(args)
+        .output()
+        .unwrap();
+    assert!(
+        o.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+fn put(dir: &Path, name: &str, bytes: &[u8]) {
+    std::fs::write(dir.join(name), bytes).unwrap();
+}
+
+fn commit(dir: &Path, msg: &str) -> String {
+    git(dir, &["add", "-A"]);
+    git(dir, &["commit", "-q", "--no-gpg-sign", "-m", msg]);
+    git(dir, &["rev-parse", "HEAD"])
+}
+
+fn text(n: usize) -> Vec<u8> {
+    (0..n)
+        .map(|i| format!("line {i} of a text that is long enough to be a rename\n"))
+        .collect::<String>()
+        .into_bytes()
+}
+
+/// `git diff BASE...HEAD | git patch-id --stable`, first field: the reference of the review line.
+fn git_patch_id(dir: &Path, base: &str, head: &str) -> String {
+    let o = Command::new("sh")
+        .current_dir(dir)
+        .arg("-c")
+        .arg(format!(
+            "git diff {base}...{head} | git patch-id --stable | cut -d' ' -f1"
+        ))
+        .output()
+        .unwrap();
+    String::from_utf8_lossy(&o.stdout).trim().to_string()
+}
+
+/// A repository with an initial commit; returns its directory and the first commit.
+fn real_repo() -> (tempfile::TempDir, String) {
+    let t = scratch();
+    let d = t.path().to_path_buf();
+    git(&d, &["init", "-q", "-b", "main"]);
+    put(&d, "a.txt", &text(20));
+    put(&d, "run.sh", b"#!/bin/sh\necho hi\n");
+    put(&d, "bin.dat", &[0, 1, 2, 3, 0, 255, 7, 8]);
+    let c = commit(&d, "base");
+    (t, c)
+}
+
+/// Runs `lint review` with the patch-id real git gives; the head is `head` as the line names it.
+fn lint_against_git(dir: &Path, base: &str, head_rev: &str, head_id: &str) -> Output {
+    let patch = git_patch_id(dir, base, head_rev);
+    assert_eq!(patch.len(), 40, "git gives a patch-id: {patch:?}");
+    review_of(
+        &format!("Review: CLEAR head={head_id} patch-id={patch} pr=5\nok\n"),
+        &[
+            "--base",
+            base,
+            "--head",
+            head_rev,
+            "--checkout",
+            dir.to_str().unwrap(),
+        ],
+    )
+}
+
+#[test]
+fn the_patch_id_is_the_one_of_real_git() {
+    if !git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    type Change = fn(&Path);
+    let cases: Vec<(&str, Change)> = vec![
+        ("linear", |d| {
+            put(d, "a.txt", &[&text(20)[..], b"added\n"].concat())
+        }),
+        ("rename", |d| {
+            git(d, &["mv", "a.txt", "b.txt"]);
+        }),
+        ("rename and change", |d| {
+            git(d, &["mv", "a.txt", "b.txt"]);
+            put(d, "b.txt", &[&text(20)[..], b"changed\n"].concat());
+        }),
+        ("binary modified", |d| {
+            put(d, "bin.dat", &[0, 9, 9, 9, 0, 255, 7, 8, 1])
+        }),
+        ("binary new", |d| put(d, "new.dat", &[0, 5, 6, 7, 0, 1])),
+        ("delete", |d| {
+            git(d, &["rm", "-q", "a.txt"]);
+        }),
+        ("mode", |d| {
+            git(d, &["update-index", "--chmod=+x", "a.txt"]);
+        }),
+        ("no final line feed", |d| {
+            put(d, "a.txt", b"no final line feed")
+        }),
+        ("several files", |d| {
+            put(d, "a.txt", &[&text(20)[..], b"x\n"].concat());
+            put(d, "z.txt", b"new\n");
+            git(d, &["rm", "-q", "run.sh"]);
+        }),
+    ];
+    for (name, change) in cases {
+        let (t, base) = real_repo();
+        let d = t.path();
+        change(d);
+        let head = commit(d, name);
+        let o = lint_against_git(d, &base, &head, &head);
+        assert_eq!(code(&o), 0, "{name}: {}", out_text(&o));
+        // a changed patch-id is found
+        let o = review_of(
+            &format!(
+                "Review: CLEAR head={head} patch-id={} pr=5\n",
+                "1".repeat(40)
+            ),
+            &[
+                "--base",
+                &base,
+                "--head",
+                &head,
+                "--checkout",
+                d.to_str().unwrap(),
+            ],
+        );
+        assert_eq!(code(&o), 3, "{name}");
+        assert_eq!(rules(&o), vec!["review-patch-id"], "{name}");
+    }
+}
+
+#[test]
+fn the_patch_id_of_a_merge_head_and_of_a_head_that_is_no_descendant_is_the_one_of_real_git() {
+    if !git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    // BASE...HEAD of a merge commit
+    let (t, base) = real_repo();
+    let d = t.path();
+    git(d, &["checkout", "-q", "-b", "topic"]);
+    put(d, "t.txt", b"topic\n");
+    commit(d, "topic");
+    git(d, &["checkout", "-q", "main"]);
+    put(d, "a.txt", &[&text(20)[..], b"main\n"].concat());
+    commit(d, "main moves");
+    git(
+        d,
+        &[
+            "merge",
+            "-q",
+            "--no-ff",
+            "--no-gpg-sign",
+            "-m",
+            "merge",
+            "topic",
+        ],
+    );
+    let head = git(d, &["rev-parse", "HEAD"]);
+    let o = lint_against_git(d, &base, &head, &head);
+    assert_eq!(code(&o), 0, "merge: {}", out_text(&o));
+    // the base is no ancestor of the head: the merge base is used
+    let (t, _) = real_repo();
+    let d = t.path();
+    git(d, &["checkout", "-q", "-b", "other"]);
+    put(d, "o.txt", b"other\n");
+    let other = commit(d, "other");
+    git(d, &["checkout", "-q", "main"]);
+    put(d, "m.txt", b"main\n");
+    let main_tip = commit(d, "main");
+    let o = lint_against_git(d, &other, &main_tip, &main_tip);
+    assert_eq!(code(&o), 0, "no ancestor: {}", out_text(&o));
+}
+
+#[test]
+fn an_annotated_tag_is_peeled_and_a_missing_merge_base_is_a_read_error() {
+    if !git_available() {
+        eprintln!("git not installed: not run");
+        return;
+    }
+    let (t, base) = real_repo();
+    let d = t.path();
+    put(d, "a.txt", &[&text(20)[..], b"tagged\n"].concat());
+    let head = commit(d, "tagged");
+    git(
+        d,
+        &["tag", "-a", "-m", "annotated", "--no-sign", "v1", &head],
+    );
+    let tag_object = git(d, &["rev-parse", "v1"]);
+    assert_ne!(tag_object, head, "an annotated tag is an object of its own");
+    let patch = git_patch_id(d, &base, &head);
+    let line = format!("Review: CLEAR head={head} patch-id={patch} pr=5\nok\n");
+    let co = d.to_str().unwrap();
+    for rev in ["v1", tag_object.as_str()] {
+        let o = review_of(&line, &["--base", &base, "--head", rev, "--checkout", co]);
+        assert_eq!(code(&o), 0, "head {rev}: {}", out_text(&o));
+    }
+    let o = review_of(&line, &["--base", "v1", "--head", &head, "--checkout", co]);
+    assert_eq!(code(&o), 0, "base as tag: {}", out_text(&o));
+    // two unrelated histories have no merge base
+    git(d, &["checkout", "-q", "--orphan", "unrelated"]);
+    git(d, &["rm", "-rfq", "."]);
+    put(d, "u.txt", b"unrelated\n");
+    let unrelated = commit(d, "unrelated");
+    let o = review_of(
+        &line,
+        &["--base", &base, "--head", &unrelated, "--checkout", co],
+    );
+    assert_eq!(code(&o), 2, "{}", out_text(&o));
+    assert!(out_text(&o).contains("no merge base"), "{}", out_text(&o));
+}

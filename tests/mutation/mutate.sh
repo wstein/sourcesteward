@@ -1748,7 +1748,7 @@ m LF18 'lint pr-text: a blank Blocker text passes in a Draft' src/lint_files.rs 
   'Some(rest) if rest.trim().is_empty() => out.push(finding(' 'Some(rest) if rest.is_empty() => out.push(finding(' \
   lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
 m LF19 'lint pr-text: a Draft may say Blocker: None.' src/lint_files.rs \
-  'Some("None.") if !ready => out.push(finding(' 'Some("None.") if false => out.push(finding(' \
+  'Some(rest) if !ready && means_none(rest) => out.push(finding(' 'Some(rest) if false && means_none(rest) => out.push(finding(' \
   lint_files a_draft_names_its_blocker_a_ready_pr_has_none
 m LF20 'lint pr-text: a Ready PR may name a blocker' src/lint_files.rs \
   'Some(rest) if ready && rest != "None." => out.push(finding(' 'Some(rest) if false && ready && rest != "None." => out.push(finding(' \
