@@ -3810,6 +3810,144 @@ m TS51 'candidates of one reason are not ordered by commit ID' src/tidy_similari
   'by_subject.sort_by_key(|x| (x.reason, x.id));' '' \
   tidy_similarity candidates_are_cut_at_the_limit_and_the_cut_is_reported
 
+m RB1 'the author time is not part of the key' src/tidy_rebase.rs \
+  'secs: a.seconds(),' 'secs: 0,' \
+  tidy_rebase one_second_more_or_less_is_another_commit
+m RB2 'the mail is not part of the key' src/tidy_rebase.rs \
+  'mail: a.email.to_ascii_lowercase().to_vec(),' 'mail: Vec::new(),' \
+  tidy_rebase the_mail_is_compared_in_lower_case_and_the_name_exactly
+m RB3 'the order of the targets is not checked' src/tidy_rebase.rs \
+  'let in_order = mapped_at.windows(2).all(|w| w[0].1 > w[1].1);' 'let in_order = true;' \
+  tidy_rebase the_same_commits_in_another_order_are_a_hint
+m RB4 'the run (no foreign commit between the targets) is not required' src/tidy_rebase.rs \
+  'let contiguous = mapped > 0 && gap == 0;' 'let contiguous = mapped > 0;' \
+  tidy_rebase a_foreign_commit_between_the_targets_breaks_the_run
+m RB5 'the subject is cut to its first 30 bytes' src/tidy_rebase.rs \
+  'subject: subject_of(c.message_raw()?),' 'subject: subject_of(c.message_raw()?).into_iter().take(30).collect(),' \
+  tidy_rebase the_subject_is_the_whole_first_line_right_trimmed
+m RB6 'the author time is rounded to the minute' src/tidy_rebase.rs \
+  'secs: a.seconds(),' 'secs: a.seconds() / 60,' \
+  tidy_rebase one_second_more_or_less_is_another_commit
+m RB7 'the subject is not part of the key (key collision)' src/tidy_rebase.rs \
+  'subject: subject_of(c.message_raw()?),' 'subject: Vec::new(),' \
+  tidy_rebase the_same_second_in_two_commits_needs_the_subject
+m RB8 'the author name is not compared' src/tidy_rebase.rs \
+  '.filter(|p| index.positions[*p as usize].name == h.name)' '.filter(|_| true)' \
+  tidy_rebase the_mail_is_compared_in_lower_case_and_the_name_exactly
+m RB9 'a pull request number is stripped from the subject' src/tidy_rebase.rs \
+  'first[..end].to_vec()' 'first[..end].strip_suffix(b" (#7)").unwrap_or(&first[..end]).to_vec()' \
+  tidy_rebase a_squash_subject_with_a_pull_request_number_is_not_the_subject_of_the_commit
+m RB10 'one mapped commit is enough for a proof' src/tidy_rebase.rs \
+  'n >= 1 && mapped == n && contiguous' 'n >= 1 && mapped >= 1 && contiguous' \
+  tidy_rebase a_part_of_the_branch_that_landed_as_one_run_is_partial
+m RB11 'the decision of the proof is delete' src/tidy_rebase.rs \
+  'pub const RB_DECISION: &str = "review";' 'pub const RB_DECISION: &str = "delete";' \
+  tidy_rebase a_clean_rebase_merge_is_a_strong_proof_and_the_class_is_review
+m RB12 'a hint gets the class too (replaces the plan-order mutation of package 2)' src/tidy_rebase.rs \
+  '(r.strength == Strength::Strong).then_some((RB_CLASS, RB_DECISION))' '(r.strength != Strength::None).then_some((RB_CLASS, RB_DECISION))' \
+  tidy_rebase a_hint_or_nothing_gives_no_class_and_the_decision_is_never_delete
+m RB13 'a merge commit of the chain is a target' src/tidy_rebase.rs \
+  'if head.parents <= 1 {' 'if true {' \
+  tidy_rebase a_merge_commit_on_the_chain_is_a_position_but_never_a_target
+m RB14 'a set instead of a multiset: a position is taken twice' src/tidy_rebase.rs \
+  '                .filter(|p| !used.contains(p))
+                .collect();' '                .filter(|_| true)
+                .collect();' \
+  tidy_rebase a_position_is_taken_once_two_branch_commits_do_not_share_one_main_commit
+m RB15 'the content floor is not checked' src/tidy_rebase.rs \
+  'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);' 'floor_ok &= true;' \
+  tidy_rebase the_content_floor_is_fifty_percent_inclusive
+m RB16 'the walk has no slack before the oldest author time' src/tidy_rebase.rs \
+  'head.committer_secs < s - RB_SLACK_SECS' 'head.committer_secs < s' \
+  tidy_rebase the_walk_stops_a_day_before_the_oldest_author_time_and_not_earlier
+m RB17 'similarity fills any gap, not only one between two neighbours' src/tidy_rebase.rs \
+  'if a.pos[i].is_some() || up != down + 2 {' 'if a.pos[i].is_some() {' \
+  tidy_rebase similarity_is_not_used_without_the_neighbours_on_both_sides_of_one_free_position
+m RB18 'the parent count of the merge commit is ignored' src/tidy_rebase.rs \
+  'if merge_head.parents == 2 {' 'if false {' \
+  tidy_rebase a_merge_commit_with_two_parents_is_a_merge
+m RB19 'the identity of the k commits is not checked' src/tidy_rebase.rs \
+  '&& (0..k).all(|j| same_identity(&chain[k - 1 - j], &pr.commits[j]));' '&& true;' \
+  tidy_rebase the_commits_behind_the_merge_commit_must_equal_the_pull_request_commits
+m RB20 'a pull request that was not read is an error' src/tidy_rebase.rs \
+  'ApiInput::NotRead(r) => return Ok(ApiReport::not_read(*r)),' 'ApiInput::NotRead(r) => return Err(crate::error::Error::usage(r.as_str())),' \
+  tidy_rebase without_a_pull_request_mapping_the_reason_is_kept_and_nothing_fails
+m RB21 'a partial mapping is landed via rebase' src/tidy_rebase.rs \
+  'if rebase.is_some_and(|r| r.strength == Strength::Strong) {' 'if rebase.is_some_and(|r| r.strength == Strength::Strong || r.partial) {' \
+  tidy_rebase a_partial_or_weak_mapping_is_unknown
+m RB22 'subjects are not masked' src/tidy_rebase.rs \
+  '    mask_bytes(text, RB_SUBJECT_CHARS)' '    String::from_utf8_lossy(text).into_owned()' \
+  tidy_rebase the_mapping_has_one_row_per_commit_with_masked_subjects
+m RB23 'remaining has no files' src/tidy_rebase.rs \
+  '.take(RB_MAX_REMAINING_FILES)' '.take(0)' \
+  tidy_rebase what_is_not_mapped_is_listed_with_its_files
+m RB24 'the ancestor flag is ignored by landed_via (replaces the apply mutation of package 2)' src/tidy_rebase.rs \
+  '    if ancestor {' '    if false {' \
+  tidy_rebase landed_via_follows_the_precedence
+m RB25 'the neighbour behind (newer) does not decide among equal keys' src/tidy_rebase.rs \
+  'let after = a.pos.get(i + 1).copied().flatten().map(|p| p + 1);' 'let after: Option<u32> = None;' \
+  tidy_rebase the_same_key_twice_is_a_multiset_and_the_neighbour_decides
+m RB26 'the neighbour in front (older) does not decide among equal keys' src/tidy_rebase.rs \
+  'let before = i
+                        .checked_sub(1)' 'let before = i
+                        .checked_sub(1)
+                        .filter(|_| false)' \
+  tidy_rebase the_same_key_twice_is_a_multiset_and_the_neighbour_decides
+m RB27 'an ambiguous commit is not flagged' src/tidy_rebase.rs \
+  'a.ambiguous[i] = true;' 'let _ = i;' \
+  tidy_rebase the_same_key_twice_without_a_neighbour_is_ambiguous_and_not_mapped
+m RB28 'an equal patch on another commit does not win over the identity' src/tidy_rebase.rs \
+  'if let Some(p) = hit {' 'if let Some(p) = hit.filter(|_| false) {' \
+  tidy_rebase an_equal_patch_on_another_commit_wins_over_the_identity
+m RB29 'the oldest branch commit takes the newest equal patch' src/tidy_rebase.rs \
+  'if let Some(m) = main.pop() {' 'if let Some(m) = (!main.is_empty()).then(|| main.remove(0)) {' \
+  tidy_rebase equal_patches_pair_branch_commits_with_chain_commits_oldest_with_oldest
+m RB30 'the low threshold of the similarity fill is 60' src/tidy_rebase.rs \
+  'if sim.ge_pct(LOW_PCT) {' 'if sim.ge_pct(LOW_PCT - 10) {' \
+  tidy_rebase a_gap_of_one_between_two_mapped_commits_is_filled_by_similarity
+m RB31 'a different zone offset is not noted' src/tidy_rebase.rs \
+  '.is_some_and(|p| index.positions[p as usize].offset != heads[i].offset);' '.is_some_and(|_| false);' \
+  tidy_rebase a_zone_offset_that_differs_is_noted_and_the_epoch_second_decides
+m RB32 'a merge commit of the branch counts as a commit' src/tidy_rebase.rs \
+  'if head.parents > 1 {' 'if head.parents > 100 {' \
+  tidy_rebase the_branch_side_is_the_non_merge_commits_oldest_first
+m RB33 'the branch side takes the newest ready commit first' src/tidy_rebase.rs \
+  'ready.sort_by_key(|id| std::cmp::Reverse(order_key(id)));' 'ready.sort_by_key(|id| order_key(id));' \
+  tidy_rebase the_branch_side_puts_parents_before_children_even_with_equal_times
+m RB34 'the window holds one commit more than the limit' src/tidy_rebase.rs \
+  'if idx.positions.len() >= max_window {' 'if idx.positions.len() > max_window {' \
+  tidy_rebase the_walk_stops_at_the_window_limit_and_says_so
+m RB35 'a missing object is an error for the whole index' src/tidy_rebase.rs \
+  'Err(_) if !idx.positions.is_empty() => {' 'Err(_) if false => {' \
+  tidy_rebase a_missing_parent_object_ends_the_walk_without_an_error
+m RB36 'the time bound is exclusive of the day' src/tidy_rebase.rs \
+  'head.committer_secs < s - RB_SLACK_SECS' 'head.committer_secs <= s - RB_SLACK_SECS' \
+  tidy_rebase the_walk_stops_a_day_before_the_oldest_author_time_and_not_earlier
+m RB37 'the content floor is 51 percent' src/tidy_rebase.rs \
+  'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);' 'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR + 1);' \
+  tidy_rebase the_content_floor_is_fifty_percent_inclusive
+m RB38 'the position of an API target is counted from the merge commit' src/tidy_rebase.rs \
+  'position: Some((dist + k - 1 - j) as u32),' 'position: Some((k - 1 - j) as u32),' \
+  tidy_rebase a_pull_request_with_one_parent_and_identity_equal_commits_is_a_rebase
+m RB39 'the squash time tolerance is 4 seconds' src/tidy_rebase.rs \
+  '<= RB_API_TIME_TOLERANCE)' '<= RB_API_TIME_TOLERANCE + 2)' \
+  tidy_rebase a_commit_with_the_time_of_the_merge_is_a_squash
+m RB40 'an equal patch without identity is a proof' src/tidy_rebase.rs \
+  '&& floor_ok && identity_backed' '&& floor_ok' \
+  tidy_rebase one_commit_is_enough_for_a_proof_when_it_has_the_identity
+m RB41 'a single mapped commit is no hint' src/tidy_rebase.rs \
+  '} else if mapped >= 1 {' '} else if mapped >= 2 {' \
+  tidy_rebase one_commit_is_enough_for_a_proof_when_it_has_the_identity
+m RB42 'every mapped commit is its own run' src/tidy_rebase.rs \
+  '&& mapped_at[k - 1].1 == x.1 + 1;' '&& false;' \
+  tidy_rebase a_foreign_commit_between_the_targets_breaks_the_run
+m RB43 'the gap is not counted' src/tidy_rebase.rs \
+  '(Some(lo), Some(hi)) => ((hi - lo + 1) as usize).saturating_sub(mapped),' '(Some(_), Some(_)) => 0,' \
+  tidy_rebase a_foreign_commit_between_the_targets_breaks_the_run
+m RB44 'an equal patch has no content value' src/tidy_rebase.rs \
+  '                Some(1000)' '                None' \
+  tidy_rebase a_conflict_resolution_keeps_the_identity_with_a_content_value
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
