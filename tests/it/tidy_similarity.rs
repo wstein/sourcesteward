@@ -30,6 +30,7 @@ fn dice_numbers() {
         (100, 100, 87, "87.0"),
         (20, 20, 19, "95.0"),
         (19, 19, 18, "94.7"),
+        (3, 3, 2, "66.7"),
         (10, 10, 10, "100.0"),
         (10, 10, 0, "0.0"),
     ] {
@@ -553,4 +554,834 @@ fn a_commit_and_its_cherry_pick_on_another_base_are_100_percent_and_a_wrong_pair
         T0 + 61,
     );
     assert_eq!(shown(k(a).similarity(&k(wrong))), "0.0");
+}
+
+// ---- candidates, best candidate, classes, figures, evidence ----
+
+const DAY: i64 = 86_400;
+
+/// 30 lines `x<i>`; the lines `first..first+count` read `<tag><i>` instead, except those in `odd` (`odd<i>`).
+fn edited(first: usize, count: usize, tag: &str, odd: &[usize]) -> String {
+    (0..30)
+        .map(|i| {
+            if odd.contains(&i) {
+                format!("odd{i}\n")
+            } else if i >= first && i < first + count {
+                format!("{tag}{i}\n")
+            } else {
+                format!("x{i}\n")
+            }
+        })
+        .collect()
+}
+
+fn base_of(fx: &Fx) -> ObjectId {
+    mk(
+        fx,
+        None,
+        &[put("f.txt", &edited(0, 0, "", &[]))],
+        "base",
+        T0,
+    )
+}
+
+fn eval_with(fx: &Fx, main: &[ObjectId], plus: &[ObjectId], lim: &Limits) -> BranchReport {
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    let idx = MainIndex::build(&repo, &mut cache, main, None).unwrap();
+    evaluate_branch(&repo, &mut cache, &idx, plus, 95, 70, lim).unwrap()
+}
+
+fn eval(fx: &Fx, main: &[ObjectId], plus: &[ObjectId]) -> BranchReport {
+    eval_with(fx, main, plus, &Limits::default())
+}
+
+fn cmp0(r: &BranchReport) -> &Compared {
+    match &r.commits[0].outcome {
+        Outcome::Compared(c) => c,
+        o => panic!("not compared: {o:?}"),
+    }
+}
+
+#[test]
+fn a_rebase_with_a_small_conflict_resolution_has_the_same_subject_and_less_than_100() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let m = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[5]))],
+        "feat: x",
+        T0 + 200,
+    );
+    let r = eval(&fx, &[m], &[a]);
+    let c = cmp0(&r);
+    assert_eq!(c.candidate, m);
+    assert_eq!(c.reason, Reason::Subject);
+    assert_eq!((c.sim.inter, c.sim.a, c.sim.b), (39, 40, 40));
+    assert_eq!(fmt_permille(c.sim.permille()), "97.5");
+    assert_eq!(r.class, Class::Landed);
+    assert!(
+        c.evidence.is_empty(),
+        "at or above the high threshold: no evidence"
+    );
+}
+
+#[test]
+fn a_modified_commit_is_between_the_thresholds_and_a_different_one_is_partial() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    // 4 of the 20 added lines differ: 36 of 40 keys shared = 90.0
+    let m4 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[1, 3, 5, 7]))],
+        "feat: x",
+        T0 + 200,
+    );
+    let r = eval(&fx, &[m4], &[a]);
+    assert_eq!(fmt_permille(cmp0(&r).sim.permille()), "90.0");
+    assert_eq!(r.class, Class::Modified);
+    // 13 of 20 differ: 27 of 40 = 67.5, below 70
+    let odd13: Vec<usize> = (0..13).collect();
+    let m13 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &odd13))],
+        "feat: x",
+        T0 + 201,
+    );
+    let r = eval(&fx, &[m13], &[a]);
+    assert_eq!(fmt_permille(cmp0(&r).sim.permille()), "67.5");
+    assert_eq!(r.class, Class::Partial);
+    // same subject, other content
+    let other = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(10, 20, "zzz", &[]))],
+        "feat: x",
+        T0 + 202,
+    );
+    let r = eval(&fx, &[other], &[a]);
+    assert_eq!(r.class, Class::Partial);
+    assert!(cmp0(&r).sim.permille() < 700);
+}
+
+#[test]
+fn indentation_does_not_matter_but_other_reformatting_does() {
+    let fx = Fx::new();
+    let base = mk(&fx, None, &[put("f.txt", "a\n")], "base", T0);
+    let body = |ind: &str, inner: &str| -> String {
+        (0..10)
+            .map(|i| format!("{ind}call{inner}({i});\n"))
+            .collect()
+    };
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &body("    ", ""))],
+        "feat: calls",
+        T0 + 100,
+    );
+    let tabs = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &body("\t", ""))],
+        "feat: calls",
+        T0 + 200,
+    );
+    let spaced = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &body("", " "))],
+        "feat: calls",
+        T0 + 201,
+    );
+    assert_eq!(
+        fmt_permille(cmp0(&eval(&fx, &[tabs], &[a])).sim.permille()),
+        "100.0"
+    );
+    let r = eval(&fx, &[spaced], &[a]);
+    assert!(
+        cmp0(&r).sim.permille() < 700,
+        "inner white space changes the line"
+    );
+}
+
+#[test]
+fn a_rename_shows_only_in_the_value_without_the_path() {
+    let fx = Fx::new();
+    let base = mk(&fx, None, &[put("a.txt", "a\n")], "base", T0);
+    let text = lines(10, "t");
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("old/mod.rs", &text)],
+        "feat: module",
+        T0 + 100,
+    );
+    let m = mk(
+        &fx,
+        Some(base),
+        &[put("new/mod.rs", &text)],
+        "feat: module",
+        T0 + 200,
+    );
+    let r = eval(&fx, &[m], &[a]);
+    let c = cmp0(&r);
+    assert_eq!(fmt_permille(c.sim.permille()), "0.0");
+    assert_eq!(fmt_permille(c.no_path.permille()), "100.0");
+    assert_eq!(
+        r.class,
+        Class::Partial,
+        "the value without the path is no part of the class"
+    );
+}
+
+#[test]
+fn a_squash_is_not_recognised() {
+    let fx = Fx::new();
+    let base = mk(&fx, None, &[put("a.txt", "a\n")], "base", T0);
+    let c1 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(10, "p"))],
+        "feat: one",
+        T0 + 100,
+    );
+    let c2 = mk(
+        &fx,
+        Some(c1),
+        &[put("g.txt", &lines(10, "q"))],
+        "feat: two",
+        T0 + 101,
+    );
+    let squash = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(10, "p")), put("g.txt", &lines(10, "q"))],
+        "feat: everything",
+        T0 + 200,
+    );
+    let r = eval(&fx, &[squash], &[c1, c2]);
+    assert_eq!(r.class, Class::Partial);
+    assert_eq!(r.plus_commits, 2);
+    for c in &r.commits {
+        let Outcome::Compared(x) = &c.outcome else {
+            panic!("found via the file overlap")
+        };
+        assert_eq!(x.reason, Reason::Files);
+        assert_eq!(
+            fmt_permille(x.sim.permille()),
+            "66.7",
+            "2*10/(10+20): the squash holds both parts"
+        );
+    }
+}
+
+#[test]
+fn no_plus_commit_is_class_none_and_merges_and_empty_commits_are_counted() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let m = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 5, "n", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let r = eval(&fx, &[m], &[]);
+    assert_eq!((r.class, r.plus_commits), (Class::None, 0));
+    assert_eq!((r.min, r.median_permille), (None, None));
+    let l = mk(&fx, Some(base), &[put("l.txt", "l\n")], "l", T0 + 101);
+    let rr = mk(&fx, Some(base), &[put("r.txt", "r\n")], "r", T0 + 102);
+    let merge = mk_full(
+        &fx,
+        &[l, rr],
+        Some(l),
+        &[put("r.txt", "r\n")],
+        "merge",
+        T0 + 103,
+    );
+    let empty = mk(&fx, Some(base), &[], "empty", T0 + 104);
+    let r = eval(&fx, &[m], &[merge, empty]);
+    assert_eq!(r.class, Class::None, "nothing to judge");
+    assert_eq!(
+        (r.skipped.merges, r.skipped.empty, r.plus_commits),
+        (1, 1, 0)
+    );
+}
+
+#[test]
+fn the_window_is_seven_days_by_author_time() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let t = T0 + 100 * DAY;
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 5, "n", &[]))],
+        "feat: x",
+        t,
+    );
+    let same = |time: i64| {
+        mk(
+            &fx,
+            Some(base),
+            &[put("f.txt", &edited(0, 5, "n", &[]))],
+            "feat: x",
+            time,
+        )
+    };
+    let seven = same(t - 7 * DAY);
+    let eight = same(t - 7 * DAY - 1);
+    assert_eq!(
+        cmp0(&eval(&fx, &[seven], &[a])).candidate,
+        seven,
+        "7 days older is in"
+    );
+    assert_eq!(
+        eval(&fx, &[eight], &[a]).commits[0].outcome,
+        Outcome::NoCandidate,
+        "one second more is out"
+    );
+    let newer = same(t + 30 * DAY);
+    assert_eq!(
+        cmp0(&eval(&fx, &[newer], &[a])).candidate,
+        newer,
+        "newer is always in"
+    );
+    assert!(in_window(100, 100 - 7 * DAY, 7 * DAY) && !in_window(100, 99 - 7 * DAY, 7 * DAY));
+}
+
+#[test]
+fn candidates_by_subject_by_subject_without_prefix_and_by_file_overlap() {
+    let fx = Fx::new();
+    let base = mk(&fx, None, &[put("a.txt", "a\n")], "base", T0);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(5, "n"))],
+        "fix(core): thing",
+        T0 + 100,
+    );
+    // same subject, other files
+    let s1 = mk(
+        &fx,
+        Some(base),
+        &[put("z.txt", "z\n")],
+        "fix(core): thing",
+        T0 + 101,
+    );
+    let r = eval(&fx, &[s1], &[a]);
+    assert_eq!(cmp0(&r).reason, Reason::Subject);
+    // subject differs only in type(scope):
+    let s2 = mk(
+        &fx,
+        Some(base),
+        &[put("z.txt", "z\n")],
+        "feat(ui)!: thing",
+        T0 + 102,
+    );
+    let r = eval(&fx, &[s2], &[a]);
+    assert_eq!(cmp0(&r).reason, Reason::SubjectStripped);
+    // other subject, same single file: the overlap is 1/1
+    let s3 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(6, "n"))],
+        "something else",
+        T0 + 103,
+    );
+    let r = eval(&fx, &[s3], &[a]);
+    assert_eq!(cmp0(&r).reason, Reason::Files);
+    // 1 file of 3 is less than half: no candidate
+    let wide = mk(
+        &fx,
+        Some(base),
+        &[
+            put("f.txt", &lines(5, "n")),
+            put("g.txt", "g\n"),
+            put("h.txt", "h\n"),
+        ],
+        "wide change",
+        T0 + 104,
+    );
+    let narrow = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(6, "n"))],
+        "other",
+        T0 + 105,
+    );
+    assert_eq!(
+        eval(&fx, &[narrow], &[wide]).commits[0].outcome,
+        Outcome::NoCandidate
+    );
+    // 2 of 3 files: at least half
+    let two = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &lines(6, "n")), put("g.txt", "g2\n")],
+        "other",
+        T0 + 106,
+    );
+    assert_eq!(cmp0(&eval(&fx, &[two], &[wide])).reason, Reason::Files);
+}
+
+#[test]
+fn the_subject_prefix_is_stripped_like_conventional_commits() {
+    assert_eq!(strip_type_scope(b"fix(core): thing"), b"thing");
+    assert_eq!(strip_type_scope(b"feat!: thing"), b"thing");
+    assert_eq!(strip_type_scope(b"feat(a-b)!:   thing"), b"thing");
+    assert_eq!(strip_type_scope(b"thing"), b"thing");
+    assert_eq!(
+        strip_type_scope(b"Fix: thing"),
+        b"Fix: thing",
+        "type is lower case"
+    );
+    assert_eq!(strip_type_scope(b"fix(core: thing"), b"fix(core: thing");
+    assert_eq!(
+        strip_type_scope(b"fix:"),
+        b"fix:",
+        "nothing left: unchanged"
+    );
+}
+
+#[test]
+fn the_best_candidate_is_the_highest_and_a_tie_goes_to_the_smaller_id() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let worse = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[2, 4, 6]))],
+        "feat: x",
+        T0 + 101,
+    );
+    let best = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 102,
+    );
+    let r = eval(&fx, &[worse, best], &[a]);
+    assert_eq!(cmp0(&r).candidate, best);
+    assert_eq!(fmt_permille(cmp0(&r).sim.permille()), "100.0");
+    // two equal candidates: the smaller commit ID, whatever the input order
+    let twin = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 103,
+    );
+    let want = best.min(twin);
+    assert_eq!(cmp0(&eval(&fx, &[best, twin], &[a])).candidate, want);
+    assert_eq!(cmp0(&eval(&fx, &[twin, best], &[a])).candidate, want);
+}
+
+#[test]
+fn candidates_are_cut_at_the_limit_and_the_cut_is_reported() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 5, "n", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let ms: Vec<ObjectId> = (0..3)
+        .map(|i| {
+            mk(
+                &fx,
+                Some(base),
+                &[put("f.txt", &edited(0, 5, "n", &[]))],
+                "feat: x",
+                T0 + 101 + i,
+            )
+        })
+        .collect();
+    let lim = Limits {
+        max_candidates: 2,
+        ..Limits::default()
+    };
+    assert!(eval_with(&fx, &ms, &[a], &lim).candidates_cut);
+    assert!(!eval(&fx, &ms, &[a]).candidates_cut);
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    let idx = MainIndex::build(&repo, &mut cache, &ms, None).unwrap();
+    let info = commit_info(&repo, a).unwrap();
+    let files = cache.files(&repo, a).unwrap().unwrap();
+    assert_eq!(idx.candidates(&info, &files, &lim).0.len(), 2);
+    assert_eq!(idx.len(), 3);
+}
+
+#[test]
+fn a_commit_without_value_prevents_landed() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let m = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 200,
+    );
+    assert_eq!(eval(&fx, &[m], &[a]).class, Class::Landed);
+    let lim = Limits {
+        max_keys: 10,
+        ..Limits::default()
+    };
+    let r = eval_with(&fx, &[m], &[a], &lim);
+    assert_eq!(
+        (r.class, r.skipped.too_large, r.plus_commits),
+        (Class::Partial, 1, 1)
+    );
+    assert_eq!(r.commits[0].outcome, Outcome::Skipped(Skip::TooLarge));
+}
+
+fn rep(sims: &[Option<(u64, u64, u64)>]) -> BranchReport {
+    let commits = sims
+        .iter()
+        .enumerate()
+        .map(|(i, s)| CommitReport {
+            commit: ObjectId::from_hex(format!("{:040x}", i + 1).as_bytes()).unwrap(),
+            subject: String::new(),
+            outcome: match s {
+                None => Outcome::NoCandidate,
+                Some((inter, a, b)) => {
+                    let sim = Sim {
+                        inter: *inter,
+                        a: *a,
+                        b: *b,
+                    };
+                    Outcome::Compared(Compared {
+                        candidate: ObjectId::null(gix::hash::Kind::Sha1),
+                        candidate_subject: String::new(),
+                        reason: Reason::Subject,
+                        sim,
+                        no_path: sim,
+                        evidence: vec![],
+                    })
+                }
+            },
+        })
+        .collect();
+    summarize(commits, SkippedCounts::default(), false, 95, 70)
+}
+
+#[test]
+fn class_boundaries_are_inclusive() {
+    assert_eq!(rep(&[Some((19, 20, 20))]).class, Class::Landed, "95.0");
+    assert_eq!(
+        rep(&[Some((19, 20, 20)), Some((20, 20, 20))]).class,
+        Class::Landed
+    );
+    assert_eq!(rep(&[Some((18, 19, 19))]).class, Class::Modified, "94.7");
+    assert_eq!(
+        rep(&[Some((14, 20, 20))]).class,
+        Class::Modified,
+        "70.0 is not below low"
+    );
+    assert_eq!(rep(&[Some((27, 40, 40))]).class, Class::Partial, "67.5");
+    assert_eq!(
+        rep(&[Some((20, 20, 20)), None]).class,
+        Class::Partial,
+        "one without candidate"
+    );
+    assert_eq!(
+        rep(&[Some((20, 20, 20)), Some((14, 20, 20))]).class,
+        Class::Modified
+    );
+    assert_eq!(
+        rep(&[Some((20, 20, 20)), Some((27, 40, 40))]).class,
+        Class::Partial,
+        "one below low"
+    );
+    assert_eq!(rep(&[]).class, Class::None);
+}
+
+#[test]
+fn figures_count_minimum_and_median() {
+    // 100.0, 90.0, 80.0 -> median 90.0; two values 100.0 and 80.0 -> 90.0
+    let r = rep(&[Some((20, 20, 20)), Some((18, 20, 20)), Some((16, 20, 20))]);
+    assert_eq!(
+        (r.plus_commits, r.at_or_above, r.without_candidate),
+        (3, 1, 0)
+    );
+    assert_eq!(r.min.map(|m| m.permille()), Some(800));
+    assert_eq!(r.median_permille, Some(900));
+    let r = rep(&[Some((20, 20, 20)), Some((16, 20, 20)), None]);
+    assert_eq!((r.plus_commits, r.without_candidate), (3, 1));
+    assert_eq!(
+        r.median_permille,
+        Some(900),
+        "mean of the two middle values"
+    );
+    // the middle of an unsorted list, odd count
+    let r = rep(&[
+        Some((20, 20, 20)),
+        Some((16, 20, 20)),
+        Some((10, 20, 20)),
+        Some((18, 20, 20)),
+        Some((19, 20, 20)),
+    ]);
+    assert_eq!(r.median_permille, Some(900));
+    assert_eq!(r.min.map(|m| m.permille()), Some(500));
+}
+
+#[test]
+fn evidence_names_the_biggest_differences_masked_and_at_most_five() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    // 8 lines differ, two of them with control and direction characters
+    let mut text = edited(0, 20, "new", &[1, 2, 3, 4, 5, 6]);
+    text = text
+        .replace("odd1\n", "\u{1b}[31mred\u{202e}\n")
+        .replace("odd2\n", "tab\there\n");
+    let m = mk(&fx, Some(base), &[put("f.txt", &text)], "feat: x", T0 + 200);
+    let r = eval(&fx, &[m], &[a]);
+    let ev = &cmp0(&r).evidence;
+    assert_eq!(ev.len(), 5, "at most 5 of the 12 differing keys");
+    assert!(ev
+        .iter()
+        .all(|e| e.count_a != e.count_b && e.path == "f.txt"));
+    let all: String = ev.iter().map(|e| e.line.clone()).collect();
+    let shown = evidence_all(&fx, a, m);
+    assert!(
+        !shown.contains('\u{1b}') && !shown.contains('\u{202e}') && !shown.contains('\t'),
+        "{shown:?}"
+    );
+    assert!(
+        shown.contains("\\u{1b}[31mred\\u{202e}") && shown.contains("tab\\there"),
+        "{shown:?}"
+    );
+    let _ = all;
+}
+
+fn evidence_all(fx: &Fx, a: ObjectId, m: ObjectId) -> String {
+    let repo = fx.repo();
+    let lim = Limits {
+        max_evidence: 100,
+        ..Limits::default()
+    };
+    match (
+        commit_entries(&repo, a, &lim).unwrap(),
+        commit_entries(&repo, m, &lim).unwrap(),
+    ) {
+        (Entries::Lines(x), Entries::Lines(y)) => evidence(&x, &y, 100)
+            .iter()
+            .map(|e| format!("{}{}\n", e.sign, e.line))
+            .collect(),
+        _ => panic!(),
+    }
+}
+
+#[test]
+fn masking_handles_bytes_controls_and_length() {
+    assert_eq!(mask_bytes(b"a\xffb", 80), "a\\xffb");
+    assert_eq!(mask_bytes(b"x\x1b[0m\ty", 80), "x\\u{1b}[0m\\ty");
+    assert_eq!(mask_bytes("a\u{202e}b".as_bytes(), 80), "a\\u{202e}b");
+    assert_eq!(mask_bytes(b"abcdef", 3), "abc\u{2026}");
+    assert_eq!(mask_bytes(b"abc", 3), "abc");
+}
+
+#[test]
+fn the_same_input_gives_the_same_output_in_any_order() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let a1 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let a2 = mk(
+        &fx,
+        Some(a1),
+        &[put("g.txt", &lines(5, "g"))],
+        "feat: y",
+        T0 + 101,
+    );
+    let m1 = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 20, "new", &[3]))],
+        "feat: x",
+        T0 + 200,
+    );
+    let m2 = mk(
+        &fx,
+        Some(m1),
+        &[put("g.txt", &lines(5, "g"))],
+        "feat: y",
+        T0 + 201,
+    );
+    let r1 = eval(&fx, &[m1, m2], &[a1, a2]);
+    let r2 = eval(&fx, &[m2, m1], &[a2, a1, a2]);
+    assert_eq!(r1, r2);
+    assert_eq!(r1, eval(&fx, &[m1, m2], &[a1, a2]));
+    assert!(
+        r1.commits[0].commit < r1.commits[1].commit,
+        "sorted by commit ID"
+    );
+    assert_eq!(r1.class, Class::Landed);
+}
+
+#[test]
+fn a_main_commit_older_than_since_is_not_indexed() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let old = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 5, "n", &[]))],
+        "feat: x",
+        T0 + 100,
+    );
+    let new = mk(
+        &fx,
+        Some(base),
+        &[put("f.txt", &edited(0, 5, "n", &[]))],
+        "feat: x",
+        T0 + 200,
+    );
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    assert_eq!(
+        MainIndex::build(&repo, &mut cache, &[old, new], None)
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        MainIndex::build(&repo, &mut cache, &[old, new], Some(T0 + 150))
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[test]
+fn a_walk_over_main_leaves_out_merges() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let l = mk(&fx, Some(base), &[put("l.txt", "l\n")], "l", T0 + 100);
+    let r = mk(&fx, Some(base), &[put("r.txt", "r\n")], "r", T0 + 101);
+    let merge = mk_full(
+        &fx,
+        &[l, r],
+        Some(l),
+        &[put("r.txt", "r\n")],
+        "merge",
+        T0 + 102,
+    );
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    let idx = MainIndex::build_from_walk(&repo, &mut cache, merge, None).unwrap();
+    assert_eq!(idx.len(), 3, "base, l and r; the merge is not a candidate");
+}
+
+#[test]
+fn the_defaults_are_95_70_and_seven_days() {
+    assert_eq!((HIGH_PCT, LOW_PCT, WINDOW_DAYS), (95, 70, 7));
+    let l = Limits::default();
+    assert_eq!(l.window_secs, 7 * DAY);
+    assert_eq!(
+        (
+            l.max_keys,
+            l.max_blob_bytes,
+            l.max_candidates,
+            l.max_evidence
+        ),
+        (20_000, 1 << 20, 100, 5)
+    );
+}
+
+#[test]
+fn evidence_orders_by_difference_then_key() {
+    let en = |p: &str, sign: u8, l: &str| Entry {
+        path: p.into(),
+        sign,
+        line: l.into(),
+    };
+    let a = vec![
+        en("f", b'+', "x"),
+        en("f", b'+', "x"),
+        en("f", b'+', "x"),
+        en("f", b'+', "y"),
+        en("a", b'+', "z"),
+    ];
+    let b = vec![
+        en("f", b'+', "y"),
+        en("f", b'+', "y"),
+        en("f", b'+', "same"),
+        en("f", b'+', "same"),
+    ];
+    let ev = evidence(&a, &b, 10);
+    let got: Vec<(String, char, u64, u64)> = ev
+        .iter()
+        .map(|e| (e.path.clone(), e.sign, e.count_a, e.count_b))
+        .collect();
+    // x: 3 vs 0 (diff 3) first; then diff 1: ("a", z) before ("f", y); the equal "same" is no evidence
+    assert_eq!(
+        got,
+        vec![
+            ("f".into(), '+', 3, 0),
+            ("a".into(), '+', 1, 0),
+            ("f".into(), '+', 1, 2)
+        ]
+    );
+    assert_eq!(evidence(&a, &b, 1).len(), 1);
+}
+
+#[test]
+fn the_cumulative_diff_of_equal_trees_is_empty() {
+    let fx = Fx::new();
+    let base = mk(&fx, None, &[put("a.txt", "x\n")], "base", T0);
+    let repo = fx.repo();
+    let tree = repo.find_commit(base).unwrap().tree_id().unwrap().detach();
+    assert_eq!(
+        tree_entries(&repo, tree, tree, &Limits::default()).unwrap(),
+        Entries::Skipped(Skip::Empty)
+    );
 }
