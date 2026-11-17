@@ -38,6 +38,8 @@ stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [
 stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
 stw ready-check NUMBER [--repo OWNER/NAME] [--human | --json]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
+stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH] [--human | --json]
+stw lint pr-text FILE [--ready] [--human | --json]
 ```
 
 | Command | What it does | Writes |
@@ -52,6 +54,7 @@ stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]...
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
 | `ready-check` | the seven read-only conditions for a pull request | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
+| `lint review`, `lint pr-text` | new, no Go counterpart: the text of a review comment or of a PR text from a file against the same rules (and the patch-id of `BASE...HEAD` against a local repository), see "Text files: `lint review`, `lint pr-text`" | nothing |
 | `sync restore` | moves the branches a `sync` run changed back to their journaled old tips, only where a branch still stands on the tip the run left (see "`sync restore`") | local branches (and the work tree of a checked-out one), the state of an incomplete journal record |
 | `sync` | like Go it acts by default: fetch `origin` (any remote kind gix can serve, see "Remote kinds") and fast-forward the checked-out branch, index and working tree included. `--plan` (alias `--dry-run`, the same flag): like Go it fetches `origin` first (not with `--offline`) and says what would be fast-forwarded and why not | without `--plan`/`--dry-run`; with it only the remote-tracking refs of `origin` (and FETCH_HEAD, objects); `--apply` is a hidden alias without effect (see "Deviations from Go in these flags", 1) |
 
@@ -292,6 +295,8 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 | 1 | the command ran, but a repository could not be read; `sync` failed in one; `sync restore` found no run or left an entry `changed-since`, `journal-incomplete` or `failed`; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
 | 2 | usage error or unusable workspace; nothing was done |
 | 3 | `lint pr` only: an error finding, or a list cut at its bound (the result is printed and is not a pass) |
+
+`lint review` and `lint pr-text` use 0 (no error finding), 1 (an error finding, the output is printed) and 2 (usage error, also an unreadable or non-UTF-8 FILE and a revision that does not resolve).
 
 ## Output for agents
 
@@ -994,6 +999,36 @@ Exit 0: no error finding (warnings do not fail). Exit 3: an error finding, or a 
 command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.rs` and `tests/it/lint_pr_cmd.rs`; plan:
 `docs/migration-plan.md`, "Slice 3".
 
+## Text files: `stw lint review`, `stw lint pr-text` (new)
+
+New behavior without a Go counterpart; read-only, no network, no `git` process (revisions and the patch-id are read in process).
+Both read one UTF-8 text from FILE and report findings in the shape of `lint pr` (`--json`: `schema_version` 1, `command`
+`lint review` or `lint pr-text`, `time`, `file`, `options`, `rules`, `findings` with `rule`, `severity`, `location` (`kind`
+`file`, `line`), `message`, `summary`). Shared rule IDs and functions with `lint pr`: `session-link`, `pr-body-length`,
+`pr-blocker-line`, `review-line-format`, `review-comment-length` (`src/lint_files.rs` calls `lint_pr`); the first line is read by
+`review::parse_strict`, no second grammar. Own IDs: `text-line-endings`, `review-session-word`, `review-patch-id`, `review-head`,
+`pr-generated-line` (`FILE_RULES`). Exit 0 no error finding (a warning does not fail), 1 an error finding, 2 usage.
+
+`stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH]`: the first line is exactly
+`Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n|none>` or `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex>
+pr=<n|none>` (fixed keys and order, lower-case hex, no markdown, no blank line before it); at most 15 lines (blank lines at the end
+do not count); no carriage return in any line; the word `session` only as `no session links` (any case); no session trailer or
+code-session URL. `--pr` compares `pr=`. `--base` and `--head` (only together; `--checkout` or the repository around the current
+directory; names or ids) compute the patch-id of `BASE...HEAD` (the first field of `git diff BASE...HEAD | git patch-id --stable`)
+and compare it with `patch-id=`, and compare `head=` (`to=`) with the id HEAD resolves to. An empty diff has no patch-id and never
+matches.
+
+`stw lint pr-text FILE [--ready]`: about 25 lines (warning above 25, error above 30, the limits of `lint pr`); exactly one Blocker
+line, `Blocker: <text>` for a Draft (the default) or, with `--ready`, exactly `Blocker: None.`; the last non-blank line is
+`🤖 Generated with [Claude Code](https://claude.com/claude-code)`; no session link; no carriage return. A `#n` that names an issue
+of another repository is not checked (planned as its own step).
+
+Fixtures: real comments and PR texts of three pull requests, stored unchanged in `tests/fixtures/lint/` (its README names the
+sources); tests: `tests/it/lint_files.rs` (18 cases); mutations `LF1` to `LF28`. Source of the limits and the line forms:
+`claude/CLAUDE.md` (review comment, 15 lines, session links) and `claude/skills/agent-workflow/SKILL.md`, section 9 (PR text, 25
+lines, the Blocker line, the review line); the attribution line is the one of the tool (`dotagents-adapter.md`). The rules are
+not compared with the current dotagents text rule by rule: UNKNOWN, as for `lint pr`.
+
 ## The op log: `stw oplog timeline | evolog | undo-plan | undo` (new)
 
 New behavior without a Go counterpart: the three read-only commands over the logs that the accepted spikes
@@ -1114,7 +1149,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 911 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 939 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
