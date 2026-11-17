@@ -175,3 +175,75 @@ impl Keys {
         }
     }
 }
+
+use crate::error::Result;
+use gix::ObjectId;
+
+/// Why a commit has no value.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Skip {
+    /// More than one parent: no patch.
+    Merge,
+    /// The tree equals the parent's tree.
+    Empty,
+    /// More keys or a bigger blob than `Limits` allow.
+    TooLarge,
+}
+
+impl Skip {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Skip::Merge => "merge",
+            Skip::Empty => "empty",
+            Skip::TooLarge => "too-large",
+        }
+    }
+}
+
+/// Bounds and constants of one run.
+#[derive(Clone, Debug)]
+pub struct Limits {
+    /// A candidate may be at most this many seconds older than the commit (author time).
+    pub window_secs: i64,
+    /// A commit with more keys than this is `TooLarge`.
+    pub max_keys: usize,
+    /// A blob bigger than this (either side) makes the commit `TooLarge`.
+    pub max_blob_bytes: u64,
+    /// At most this many candidates are compared per commit.
+    pub max_candidates: usize,
+    /// At most this many evidence lines per commit below the high threshold.
+    pub max_evidence: usize,
+}
+
+pub const WINDOW_DAYS: i64 = 7;
+pub const HIGH_PCT: u32 = 95;
+pub const LOW_PCT: u32 = 70;
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits {
+            window_secs: WINDOW_DAYS * 86_400,
+            max_keys: 20_000,
+            max_blob_bytes: 1 << 20,
+            max_candidates: 100,
+            max_evidence: 5,
+        }
+    }
+}
+
+/// The changed lines of a commit or of a tree diff, or the reason there are none.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Entries {
+    Lines(Vec<Entry>),
+    Skipped(Skip),
+}
+
+/// The entries of `commit` against its first parent.
+pub fn commit_entries(_repo: &gix::Repository, _commit: ObjectId, _lim: &Limits) -> Result<Entries> {
+    unimplemented!()
+}
+
+/// The entries of the difference between two trees (the cumulative diff `base...tip` is `tree_entries(base tree, tip tree)`).
+pub fn tree_entries(_repo: &gix::Repository, _old: ObjectId, _new: ObjectId, _lim: &Limits) -> Result<Entries> {
+    unimplemented!()
+}
