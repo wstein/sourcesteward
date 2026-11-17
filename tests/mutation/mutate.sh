@@ -3806,9 +3806,9 @@ m TS49 'the value without the path is the value with the path' src/tidy_similari
 m TS50 'the value without the path decides the class' src/tidy_similarity.rs \
   'Outcome::Compared(x) => sims.push(x.sim),' 'Outcome::Compared(x) => sims.push(x.no_path),' \
   tidy_similarity a_rename_shows_only_in_the_value_without_the_path
-m TS51 'subject candidates come after the file candidates only by reason order (reason sort removed)' src/tidy_similarity.rs \
+m TS51 'candidates of one reason are not ordered by commit ID' src/tidy_similarity.rs \
   'by_subject.sort_by_key(|x| (x.reason, x.id));' '' \
-  tidy_similarity candidates_by_subject_by_subject_without_prefix_and_by_file_overlap
+  tidy_similarity candidates_are_cut_at_the_limit_and_the_cut_is_reported
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
