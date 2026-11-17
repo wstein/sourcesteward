@@ -413,6 +413,8 @@ fn usage_errors_exit_two() {
             "--checkout",
             co,
         ],
+        vec!["review", fs, "--checkout", co],
+        vec!["review", fs, "--json", "--human"],
         vec!["review", fs, "--pr", "0"],
         vec!["review", fs, "--pr", "x"],
         vec!["review", "/nonexistent/stw-lintfiles/comment.txt"],
@@ -489,9 +491,11 @@ fn the_blocker_line_is_exactly_one_line_of_the_fixed_form() {
         ("plural", good_pr("Blockers: None.")),
         ("two lines", good_pr("Blocker: None.\nBlocker: None.")),
     ] {
-        let o = pr_text_of(&text, &["--ready"]);
-        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
-        assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name}");
+        for extra in [&["--ready"][..], &[][..]] {
+            let o = pr_text_of(&text, extra);
+            assert_eq!(code(&o), 1, "{name} {extra:?}: {}", out_text(&o));
+            assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name} {extra:?}");
+        }
     }
     // `None.` needs the full stop
     let o = pr_text_of(&good_pr("Blocker: None"), &["--ready"]);
