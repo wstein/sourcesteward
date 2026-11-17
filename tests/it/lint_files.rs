@@ -505,6 +505,7 @@ fn none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line(
         "Blocker: none",
         "Blocker: keiner",
         "Blocker: Keiner.",
+        "Blocker: keine",
     ] {
         let o = pr_text_of(&good_pr(b), &[]);
         assert_eq!(code(&o), 3, "draft {b:?}: {}", out_text(&o));
@@ -801,7 +802,9 @@ fn the_patch_id_is_the_one_of_real_git() {
             git(d, &["rm", "-q", "a.txt"]);
         }),
         ("mode", |d| {
-            git(d, &["update-index", "--chmod=+x", "a.txt"]);
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(d.join("a.txt"), std::fs::Permissions::from_mode(0o755))
+                .unwrap();
         }),
         ("no final line feed", |d| {
             put(d, "a.txt", b"no final line feed")
@@ -905,8 +908,12 @@ fn an_annotated_tag_is_peeled_and_a_missing_merge_base_is_a_read_error() {
         let o = review_of(&line, &["--base", &base, "--head", rev, "--checkout", co]);
         assert_eq!(code(&o), 0, "head {rev}: {}", out_text(&o));
     }
-    let o = review_of(&line, &["--base", "v1", "--head", &head, "--checkout", co]);
-    assert_eq!(code(&o), 0, "base as tag: {}", out_text(&o));
+    git(
+        d,
+        &["tag", "-a", "-m", "annotated", "--no-sign", "v0", &base],
+    );
+    let o = review_of(&line, &["--base", "v0", "--head", "v1", "--checkout", co]);
+    assert_eq!(code(&o), 0, "base and head as tags: {}", out_text(&o));
     // two unrelated histories have no merge base
     git(d, &["checkout", "-q", "--orphan", "unrelated"]);
     git(d, &["rm", "-rfq", "."]);
@@ -917,5 +924,9 @@ fn an_annotated_tag_is_peeled_and_a_missing_merge_base_is_a_read_error() {
         &["--base", &base, "--head", &unrelated, "--checkout", co],
     );
     assert_eq!(code(&o), 2, "{}", out_text(&o));
-    assert!(out_text(&o).contains("no merge base"), "{}", out_text(&o));
+    assert!(
+        out_text(&o).contains("has no meaning"),
+        "the check names the problem itself: {}",
+        out_text(&o)
+    );
 }
