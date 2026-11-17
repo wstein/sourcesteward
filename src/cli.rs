@@ -12,8 +12,8 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_pr_cmd, oplog, prove, restack_plan, status, status_all,
-    status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
+    add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove, restack_plan,
+    status, status_all, status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
 };
 
 const EXIT_CODES: &str = "\
@@ -241,6 +241,9 @@ enum LintCommand {
     /// Check the commits, text and comments of a pull request against the machine-checkable working rules (read-only)
     #[command(after_help = LINT_PR_HELP)]
     Pr(LintPrArgs),
+    /// Check the text of a review comment from a file against the review line rules (read-only, no network)
+    #[command(after_help = LINT_REVIEW_HELP)]
+    Review(LintReviewArgs),
 }
 
 const LINT_PR_HELP: &str = "\
@@ -282,6 +285,104 @@ struct LintPrArgs {
     /// Print one JSON object instead of text
     #[arg(long)]
     json: bool,
+}
+
+const LINT_REVIEW_HELP: &str = "\
+New in stw (no Go counterpart). Reads the text of one review comment from FILE (UTF-8) and reports one finding per
+violated rule with the rule ID, the severity and the line. Rules: the first line is exactly
+`Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n|none>` or
+`Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex> pr=<n|none>` (fixed keys and order, lower-case hex, read by the
+strict parser of `review lines`); at most 15 lines; no carriage return anywhere; the word session only as `no session
+links`; no session link. With --pr the `pr=` field must equal it. With --base and --head (both) the patch-id of
+`BASE...HEAD` is computed in the repository (the same value as the first field of `git diff BASE...HEAD | git patch-id
+--stable`) and compared with `patch-id=`, and `head=` (`to=` of the Carried-over form) is compared with the id HEAD
+resolves to. The repository is --checkout or the one around the current directory. Reads FILE and the repository only;
+no network, nothing is written, `git` is not started. `--json` lists the rule table.
+
+Exit codes:
+  0  no finding of severity error
+  1  at least one error finding (the output is printed)
+  2  usage error (also: FILE not readable or not UTF-8, a revision that does not resolve)";
+
+#[derive(Args)]
+struct LintReviewArgs {
+    /// File with the text of the review comment
+    #[arg(value_name = "FILE")]
+    file: PathBuf,
+    /// Base revision of the patch-id (with --head)
+    #[arg(long, value_name = "REV")]
+    base: Option<String>,
+    /// Head revision: patch-id of BASE...HEAD and the head= field are compared (with --base)
+    #[arg(long, value_name = "REV")]
+    head: Option<String>,
+    /// The pr= field must be this pull request number, or none
+    #[arg(long, value_name = "NUMBER|none")]
+    pr: Option<String>,
+    /// Repository or worktree for --base and --head [default: the repository of the current directory]
+    #[arg(long, value_name = "PATH")]
+    checkout: Option<PathBuf>,
+    /// Print the human list (the default)
+    #[arg(long)]
+    human: bool,
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+}
+
+/// Prints a file report and returns the exit status: 0 without an error finding, 1 with one.
+fn print_file_report(r: &lint_files::Report, json: bool) -> u8 {
+    if json {
+        print_json(&r.to_json(tidy::now_secs()));
+    } else {
+        print!("{}", r.render_human());
+    }
+    if r.passed() {
+        exit::OK
+    } else {
+        exit::FAILED
+    }
+}
+
+fn run_lint_review(a: LintReviewArgs) -> Result<u8> {
+    if a.human && a.json {
+        return Err(Error::usage("--human and --json cannot be combined"));
+    }
+    let pr =
+        a.pr.as_deref()
+            .map(|p| carryover::parse_pr(p).map_err(|e| Error::usage(e.to_string())))
+            .transpose()?;
+    let expect = match (&a.base, &a.head) {
+        (Some(b), Some(h)) => Some(lint_files::expectation(a.checkout.as_deref(), b, h)?),
+        (None, None) if a.checkout.is_none() => None,
+        _ => {
+            return Err(Error::usage(
+                "--base and --head go together, and --checkout needs them",
+            ))
+        }
+    };
+    let text = lint_files::read_text(&a.file)?;
+    let findings = lint_files::lint_review(
+        &text,
+        &lint_files::ReviewOpts {
+            pr,
+            expect: expect.clone(),
+        },
+    );
+    let report = lint_files::Report {
+        command: "lint review",
+        file: a.file.display().to_string(),
+        lines: lint_pr::line_count(&text),
+        rule_ids: &lint_files::REVIEW_RULE_IDS,
+        options: json!({
+            "pr": a.pr,
+            "base": a.base,
+            "head": a.head,
+            "resolved_head": expect.as_ref().map(|e| e.head.clone()),
+            "computed_patch_id": expect.as_ref().map(|e| e.patch_id.clone()),
+        }),
+        findings,
+    };
+    Ok(print_file_report(&report, a.json))
 }
 
 fn run_lint_pr(a: LintPrArgs) -> Result<u8> {
@@ -1873,6 +1974,9 @@ fn run(command: Command) -> Result<u8> {
         Command::Lint {
             command: LintCommand::Pr(a),
         } => run_lint_pr(a),
+        Command::Lint {
+            command: LintCommand::Review(a),
+        } => run_lint_review(a),
         Command::Dev {
             command: DevCommand::PatchId { repo, revs },
         } => {

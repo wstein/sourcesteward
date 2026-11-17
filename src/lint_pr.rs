@@ -309,7 +309,7 @@ fn same_identity(owners: &[Identity], name: &str, email: &str) -> bool {
 
 /// The session trailer or the code-session URL of the Claude web host (see the `anchor` of the table), case-insensitive,
 /// on one line.
-fn session_pattern(line: &str) -> bool {
+pub(crate) fn session_pattern(line: &str) -> bool {
     let f = fold(line);
     f.contains(concat!("claude", "-session:")) || f.contains(concat!("claude", ".ai/code/session_"))
 }
@@ -400,7 +400,7 @@ fn conventional(subject: &str) -> bool {
 
 /// `(?im)^[\s*_#>-]*<key>` followed by `\b`, on some line of the text; `key` is lower case.
 /// For the blocker line the key is `blocker` with an optional `s`.
-fn line_starts_with(text: &str, key: &str, optional_s: bool) -> bool {
+pub(crate) fn line_starts_with(text: &str, key: &str, optional_s: bool) -> bool {
     normalize(text).split('\n').any(|line| {
         let t =
             line.trim_start_matches(|c| re_space(c) || matches!(c, '*' | '_' | '#' | '>' | '-'));
