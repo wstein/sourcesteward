@@ -28,7 +28,6 @@ pub const LOC_FILE: &str = "file";
 /// The attribution line that ends a PR text (the attribution of the tool, see the adapter of the agent rules).
 pub const GENERATED_LINE: &str = "🤖 Generated with [Claude Code](https://claude.com/claude-code)";
 
-const SOURCE_CORE: &str = "claude/CLAUDE.md";
 const SOURCE_SKILL: &str = "claude/skills/agent-workflow/SKILL.md";
 
 /// The rules only the file commands have. `source` and `anchor` as in `lint_pr::Rule`.
@@ -351,7 +350,7 @@ pub fn expectation(checkout: Option<&Path>, base: &str, head: &str) -> Result<Ex
             .map_err(|e| Error::usage(format!("--{name} {rev}: {e}")))?;
         let commit = id
             .object()
-            .and_then(|o| o.peel_to_commit().map_err(Into::into))
+            .and_then(|o| o.peel_to_commit())
             .map_err(|e| Error::usage(format!("--{name} {rev}: not a commit: {e}")))?;
         Ok(commit.id)
     };
