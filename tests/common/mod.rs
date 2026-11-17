@@ -699,3 +699,26 @@ pub fn stage_gitlinks_in(dir: &Path, rels: &[&str], sort: bool) {
     index.remove_tree();
     index.write(Default::default()).unwrap();
 }
+
+/// The head of the default branch in the fixtures of `stw status` that serve the CI documents.
+pub const CI_SHA: &str = "163ada5851030a900b58162e5b47fe15c4c4aac8";
+
+/// The documents the CI of the default branch of a repository `test/NAME` needs: the repository (default branch `main`),
+/// the branch, one successful check run and no commit status. `None` for any other path. A fixture of `stw status` that
+/// does not test the CI answers with these, so that the source `ci-main` reads green and adds no notice.
+pub fn ci_docs(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/repos/test/")?;
+    let (name, tail) = rest.split_once('/').unwrap_or((rest, ""));
+    if name.is_empty() {
+        return None;
+    }
+    let body = match tail {
+        "" => serde_json::json!({"default_branch": "main"}),
+        "branches/main" => serde_json::json!({"commit": {"sha": CI_SHA}}),
+        t if t == format!("commits/{CI_SHA}/check-runs") => serde_json::json!({"total_count": 1,
+            "check_runs": [{"id": 1, "name": "ci", "status": "completed", "conclusion": "success", "head_sha": CI_SHA}]}),
+        t if t == format!("commits/{CI_SHA}/statuses") => serde_json::json!([]),
+        _ => return None,
+    };
+    Some(body.to_string())
+}

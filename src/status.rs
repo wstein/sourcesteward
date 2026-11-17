@@ -11,6 +11,7 @@ use crate::github::{Client, GithubState, IssueCounts, OpenPr, PAGE};
 use crate::oplog::hooks::{hint_of, Blocked, HookHint};
 use crate::output::*;
 use crate::repo::{self, RepoRef, Upstream};
+use crate::status_ci::{self, CiMain};
 use crate::status_review;
 
 /// Counts like `git status --porcelain=v2`: a path counts once per kind.
@@ -374,6 +375,10 @@ pub struct RepoStatus {
     pub review_read: bool,
     pub issues: Option<IssueCounts>,
     pub issue_error: Option<String>,
+    /// The CI of the head of the default branch (`ci-main`); None when it was not read or could not be.
+    pub ci_main: Option<CiMain>,
+    /// Why `ci_main` could not be read (cut to 200 characters, not yet escaped).
+    pub ci_error: Option<String>,
     pub branches_local: Option<usize>,
     pub branches_remote: Option<usize>,
     pub worktrees: Option<usize>,
@@ -436,6 +441,8 @@ fn blank(name: String, path: String) -> RepoStatus {
         review_read: false,
         issues: None,
         issue_error: None,
+        ci_main: None,
+        ci_error: None,
         branches_local: None,
         branches_remote: None,
         worktrees: None,
@@ -502,8 +509,8 @@ pub fn collect_local(
     s
 }
 
-/// The remote half: open pull requests and issues of the GitHub origin. A repository that could not be read
-/// locally has none.
+/// The remote half: open pull requests, issues and the CI of the default branch of the GitHub origin. A repository
+/// that could not be read locally has none.
 pub fn read_remote(s: &mut RepoStatus, gh: Option<&Client>) {
     if s.error.is_some() {
         return;
@@ -519,6 +526,10 @@ pub fn read_remote(s: &mut RepoStatus, gh: Option<&Client>) {
         match c.open_issues(&slug) {
             Ok(i) => s.issues = Some(i),
             Err(e) => s.issue_error = Some(e.to_string().chars().take(200).collect()),
+        }
+        match status_ci::read_ci_main(c, &slug) {
+            Ok(m) => s.ci_main = Some(m),
+            Err(e) => s.ci_error = Some(e.chars().take(200).collect()),
         }
     }
 }
@@ -806,6 +817,9 @@ pub fn reasons(s: &RepoStatus) -> Vec<String> {
     if s.facts.branch.is_none() && s.error.is_none() {
         v.push("detached".into());
     }
+    if s.ci_main.as_ref().is_some_and(|m| m.class == "red") {
+        v.push("main-red".into());
+    }
     if s.error.is_some() {
         v.push("error".into());
     }
@@ -818,7 +832,7 @@ pub fn reasons(s: &RepoStatus) -> Vec<String> {
 pub struct Notice {
     /// Stable identifier (see the README, "Notices").
     pub code: &'static str,
-    /// The kind of read the notice is about: `github`, `fetch`, `pulls`, `issues`, `reviews`, `submodules`.
+    /// The kind of read the notice is about: `github`, `fetch`, `pulls`, `issues`, `ci`, `reviews`, `submodules`.
     pub source: &'static str,
     /// The repositories named, escaped like in the text.
     pub repos: Vec<String>,
@@ -836,7 +850,7 @@ impl Notice {
 }
 
 /// The notices of a status run, in this order: the GitHub note, then per repository (in list order) fetch, pull
-/// requests, issues and review notices, then the rate-limit notice of the run, then `extra` (rejected submodule
+/// requests, issues, default branch CI and review notices, then the rate-limit notice of the run, then `extra` (rejected submodule
 /// paths).
 pub fn collect_notices(gh: &GithubState, extra: &[Notice], list: &[RepoStatus]) -> Vec<Notice> {
     let mut notices: Vec<Notice> = gh
@@ -879,6 +893,13 @@ pub fn collect_notices(gh: &GithubState, extra: &[Notice], list: &[RepoStatus]) 
                 "issues-not-read",
                 "issues",
                 format!("{name}: issues not read ({})", esc(e)),
+            ));
+        }
+        if let Some(e) = &s.ci_error {
+            notices.push(one(
+                "ci-not-read",
+                "ci",
+                format!("{name}: default branch CI not read ({})", esc(e)),
             ));
         }
         notices.extend(status_review::notices(s));
@@ -940,6 +961,7 @@ pub fn to_json(
                 "oplog_hooks": s.oplog_hooks.as_ref().map_or(Value::Null, hooks_json),
                 "fetch_error": jopt(s.fetch.error.as_deref()),
                 "worktree_list": s.worktree_list.as_ref().map_or(Value::Null, |l| Value::Array(l.iter().map(WorktreeInfo::json).collect())),
+                "ci_main": ci_main_json(s),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs,
                                   "review": if s.review_read { status_review::tally(&s.prs).json() } else { Value::Null }},
                 "error": jopt(s.error.as_deref()),
@@ -960,6 +982,18 @@ pub fn to_json(
         m.insert("stats".into(), stats);
     }
     doc
+}
+
+/// The `ci_main` member of a repository: `read` says whether the CI of the head of the default branch was read;
+/// without a read `error` is the cause (null when nothing was asked: `--offline`, no token, no GitHub origin).
+/// `source` is `check-runs` or `actions-runs`.
+fn ci_main_json(s: &RepoStatus) -> Value {
+    match &s.ci_main {
+        Some(m) => json!({"read": true, "error": null, "branch": m.branch,
+                          "head": m.head, "class": m.class, "source": m.source}),
+        None => json!({"read": false, "error": s.ci_error.as_deref().map(esc),
+                       "branch": null, "head": null, "class": null, "source": null}),
+    }
 }
 
 /// The JSON of the op log hook hint: `state` (`installed`, `missing`, `blocked`), `reason` (null, or `hooks-path`,
@@ -1128,6 +1162,14 @@ pub fn explain(s: &RepoStatus, reason: &str) -> String {
                 .head
                 .map_or(String::new(), |h| format!(" at {}", short(&h.to_string())))
         ),
+        "main-red" => s.ci_main.as_ref().map_or(esc("main-red"), |m| {
+            format!(
+                "the CI of the default branch {} is red at {} ({}): look at the failing checks on GitHub",
+                esc(&m.branch),
+                short(&m.head),
+                m.via_text()
+            )
+        }),
         "error" => format!(
             "the repository could not be read: {}",
             esc(s.error.as_deref().unwrap_or("unknown error"))
@@ -1324,6 +1366,17 @@ pub fn render_human(notices: &[Notice], list: &[RepoStatus], rules: &str, view: 
                 out += "  missing";
             }
             out.push('\n');
+        }
+        if let Some(m) = &s.ci_main {
+            out += &format!(
+                "    main CI {} ({}@{}, {})\n",
+                m.class,
+                esc(&m.branch),
+                short(&m.head),
+                m.via_text()
+            );
+        } else if let Some(e) = &s.ci_error {
+            out += &format!("    main CI not read ({})\n", esc(e));
         }
         if let Some(e) = &s.pr_error {
             out += &format!("    pull requests: not read ({})\n", esc(e));

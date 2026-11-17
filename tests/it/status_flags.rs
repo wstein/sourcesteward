@@ -812,6 +812,9 @@ fn rate_api() -> FakeRoutes {
             serde_json::json!({"number": n, "title": "t", "draft": false, "user": {"login": "me", "type": "User"},
                            "head": {"ref": "b", "sha": "abc"}, "state": "open", "merged_at": null})
         };
+        if let Some(b) = ci_docs(path) {
+            return (200, headers, b);
+        }
         let body = match path {
             "/repos/test/fixture/pulls" => serde_json::json!([pr(1), pr(2)]),
             "/repos/test/fixture/issues" => {
@@ -853,12 +856,12 @@ fn stats_text_is_one_line_at_the_very_end_with_the_requests_and_the_rate_limit()
     let n = api.hits().len();
     assert_eq!(
         n,
-        4,
-        "list + 2 details of the PRs + issues: {:?}",
+        8,
+        "list + 2 details of the PRs + issues + the 4 reads of the CI of the default branch: {:?}",
         api.hits()
     );
     let last = t.trim_end().lines().last().unwrap();
-    let want = format!("stats: API: {n} reqs (4,896/5,000 left, reset 22:13 UTC) | ");
+    let want = format!("stats: API: {n} reqs (4,892/5,000 left, reset 22:13 UTC) | ");
     assert!(last.starts_with(&want), "{last}");
     let rest = &last[want.len()..];
     assert!(
@@ -894,9 +897,9 @@ fn stats_json_adds_the_stats_member_and_stays_one_document() {
     let v = json_of(&o);
     assert_eq!(v["schema_version"], 2);
     let s = &v["stats"];
-    assert_eq!(s["requests"], 4, "{s}");
+    assert_eq!(s["requests"], 8, "{s}");
     assert_eq!(s["rate_limit_limit"], 5000);
-    assert_eq!(s["rate_limit_remaining"], 4896);
+    assert_eq!(s["rate_limit_remaining"], 4892);
     assert_eq!(s["rate_limit_reset"], "2023-11-14T22:13:20Z");
     assert!(s["duration_ms"].is_u64(), "{s}");
     assert!(
@@ -944,18 +947,24 @@ fn verbose_text_lists_the_sources_per_repository_before_the_stats_line() {
     let lines: Vec<&str> = tail.lines().collect();
     assert_eq!(lines[1], "Diagnostic breakdown:");
     assert_eq!(lines[2], "  test/fixture:");
+    // repository, branch, check runs and statuses of the default branch CI
     assert!(
-        lines[3].starts_with("    issues:     1 req (0 cached 304s, 1 consumed) in "),
+        lines[3].starts_with("    ci-main:    4 reqs (0 cached 304s, 4 consumed) in "),
         "{}",
         lines[3]
     );
     assert!(
-        lines[4].starts_with("    pulls:      3 reqs (0 cached 304s, 3 consumed) in "),
+        lines[4].starts_with("    issues:     1 req (0 cached 304s, 1 consumed) in "),
         "{}",
         lines[4]
     );
-    assert!(lines[5].starts_with("stats: API: 4 reqs"), "{}", lines[5]);
-    assert_eq!(lines.len(), 6, "{tail}");
+    assert!(
+        lines[5].starts_with("    pulls:      3 reqs (0 cached 304s, 3 consumed) in "),
+        "{}",
+        lines[5]
+    );
+    assert!(lines[6].starts_with("stats: API: 8 reqs"), "{}", lines[6]);
+    assert_eq!(lines.len(), 7, "{tail}");
 }
 
 #[test]
@@ -970,14 +979,14 @@ fn verbose_with_json_keeps_stdout_a_document_and_writes_the_breakdown_to_stderr(
     assert_eq!(o.status.code(), Some(0), "{}{}", out(&o), err(&o));
     let v = json_of(&o);
     assert_eq!(
-        v["stats"]["requests"], 4,
+        v["stats"]["requests"], 8,
         "--verbose includes --stats: {}",
         v["stats"]
     );
     assert!(!out(&o).contains("Diagnostic"));
     let e = err(&o);
     assert!(
-        e.contains("Diagnostic breakdown:\n  test/fixture:\n    issues:"),
+        e.contains("Diagnostic breakdown:\n  test/fixture:\n    ci-main:"),
         "{e}"
     );
     assert!(
@@ -985,7 +994,7 @@ fn verbose_with_json_keeps_stdout_a_document_and_writes_the_breakdown_to_stderr(
             .lines()
             .last()
             .unwrap()
-            .starts_with("stats: API: 4 reqs"),
+            .starts_with("stats: API: 8 reqs"),
         "{e}"
     );
     assert!(!e.contains(TOKEN));

@@ -89,7 +89,10 @@ fn codes(a: &[Value]) -> Vec<&str> {
 fn a_run_without_notices_has_an_empty_array_and_none_in_the_text() {
     let fx = status_fixture();
     let r = path_str(&fx.path);
-    let api = FakeApi::start(200, "[]");
+    let api = FakeRoutes::start(|path, _| match ci_docs(path) {
+        Some(b) => (200, vec![], b),
+        None => (200, vec![], "[]".into()),
+    });
     let a = both(true, Some(&api.url), &["status", "--root", &r]);
     assert!(a.is_empty(), "{a:?}");
     let o = stw(true, Some(&api.url), &["status", "--root", &r, "--json"]);
@@ -136,7 +139,12 @@ fn a_failed_pull_request_or_issue_read_is_one_notice_per_source_and_the_old_fiel
             _ => FakeApi::start(500, "{}"),
         };
         let a = both(true, Some(&api.url), &["status", "--root", &r]);
-        assert_eq!(codes(&a), ["prs-not-read", "issues-not-read"], "{status}");
+        // the CI of the default branch is read after the issues and fails the same way
+        assert_eq!(
+            codes(&a),
+            ["prs-not-read", "issues-not-read", "ci-not-read"],
+            "{status}"
+        );
         assert_eq!(a[0]["source"], "pulls");
         assert_eq!(a[1]["source"], "issues");
         let v = json_of(&stw(
@@ -177,7 +185,10 @@ fn the_deadline_is_a_notice_of_the_read_it_cut() {
         Some(&api.url),
         &["status", "--root", &r, "--timeout", "1s"],
     );
-    assert_eq!(codes(&a), ["prs-not-read", "issues-not-read"]);
+    assert_eq!(
+        codes(&a),
+        ["prs-not-read", "issues-not-read", "ci-not-read"]
+    );
     assert!(
         a.iter()
             .all(|x| x["message"].as_str().unwrap().contains("deadline:")),
@@ -273,7 +284,10 @@ fn the_order_is_note_then_per_repository_then_rate_limit_then_paths() {
     let r = path_str(&fx.path);
     let api = FakeApi::start(500, "{}");
     let a = both(true, Some(&api.url), &["status", "--root", &r]);
-    assert_eq!(codes(&a), ["prs-not-read", "issues-not-read"]);
+    assert_eq!(
+        codes(&a),
+        ["prs-not-read", "issues-not-read", "ci-not-read"]
+    );
     // two runs give the same list
     let b = both(true, Some(&api.url), &["status", "--root", &r]);
     assert_eq!(a, b);

@@ -21,6 +21,7 @@ pub mod restack_plan;
 pub mod review;
 pub mod status;
 pub mod status_all;
+pub mod status_ci;
 pub mod status_review;
 pub mod status_stats;
 pub mod sync;

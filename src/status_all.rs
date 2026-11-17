@@ -405,6 +405,10 @@ fn number(s: Source) -> String {
 fn github_cell(s: &RepoStatus, note_code: Option<&str>) -> String {
     let c = status::counts_of(s);
     let mut cell = format!("PRs {} | Issues {}", number(c.prs), number(c.issues));
+    // only a red head needs action; the other classes are in the JSON (`ci_main`) and in `status` without a PATH
+    if s.ci_main.as_ref().is_some_and(|m| m.class == "red") {
+        cell += " | main red";
+    }
     let reason = match (c.prs, c.issues) {
         (Source::Failed, _) => s.pr_error.as_deref().map(classify),
         (_, Source::Failed) => s.issue_error.as_deref().map(classify),

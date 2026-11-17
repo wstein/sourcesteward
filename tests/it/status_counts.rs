@@ -98,6 +98,9 @@ fn pull_in_issues(n: u64) -> Value {
 /// shows; test/sub: 1 PR, issues answer 403.
 fn api() -> FakeRoutes {
     FakeRoutes::start(|path, _| {
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         let body = match path {
             "/repos/test/fixture/pulls" => json!([
                 pr(1, "dependabot[bot]", "Bot"),

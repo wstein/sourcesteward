@@ -616,6 +616,9 @@ fn github_counts_failed_reads_and_totals() {
         &["config", "remote.origin.url", "https://github.com/test/c"],
     );
     let api = FakeRoutes::start(|path, _| {
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         let body = match path {
             "/repos/test/ws/pulls" => json!([pr(1), pr(2)]),
             "/repos/test/ws/issues" => json!([issue(3), issue(4), issue(5)]),

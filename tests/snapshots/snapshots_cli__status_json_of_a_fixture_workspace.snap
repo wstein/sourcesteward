@@ -88,6 +88,14 @@ expression: pretty
       },
       "fetch_error": null,
       "worktree_list": null,
+      "ci_main": {
+        "read": false,
+        "error": null,
+        "branch": null,
+        "head": null,
+        "class": null,
+        "source": null
+      },
       "pull_requests": {
         "read": false,
         "error": null,

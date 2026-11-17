@@ -189,6 +189,7 @@ fn json_field_names_are_the_documented_ones() {
             "attention",
             "reasons",
             "counts",
+            "ci_main",
             "fetch",
             "fetch_error",
             "worktree_list",

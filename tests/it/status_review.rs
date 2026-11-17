@@ -91,6 +91,9 @@ fn forge_with(
     let answers: Arc<BTreeMap<u64, Answer>> = Arc::new(answers.into_iter().collect());
     FakeRoutes::start(move |path, query| {
         let ok = |v: Value| (200, vec![], v.to_string());
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         match path {
             "/repos/test/fixture/pulls" => ok(Value::Array(
                 prs.iter()
@@ -754,6 +757,9 @@ fn forge_hints(prs: Vec<HintPr>, answers: Vec<(u64, Answer)>) -> FakeRoutes {
     let answers: Arc<BTreeMap<u64, Answer>> = Arc::new(answers.into_iter().collect());
     FakeRoutes::start(move |path, _| {
         let ok = |v: Value| (200, vec![], v.to_string());
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         match path {
             "/repos/test/fixture/pulls" => ok(Value::Array(
                 prs.iter()
@@ -907,10 +913,14 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
         ),
         "{t}"
     );
-    // no read besides the list, the merge state and the comments: the hints cost nothing
+    // no read besides the list, the merge state and the comments (and the CI of the default branch, which is read
+    // with or without a hint): the hints cost nothing
     for h in api.hits() {
         assert!(
             h.contains("/pulls?")
+                || h.contains("GET /repos/test/fixture HTTP")
+                || h.contains("/branches/main")
+                || h.contains("/commits/")
                 || h.contains("/pulls/")
                 || h.contains("/comments?")
                 || h.contains("/issues?"),
@@ -1000,6 +1010,9 @@ fn forge_rate(
     let seen = std::sync::atomic::AtomicUsize::new(0);
     FakeRoutes::start(move |path, _| {
         let ok = |v: Value| (200, vec![], v.to_string());
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         match path {
             "/repos/test/fixture/pulls" => ok(Value::Array(
                 (1..=n)
@@ -1371,6 +1384,9 @@ fn the_review_notices_are_in_the_json_with_code_count_and_the_text_order() {
     assert!(text.contains("Notices (2)\n"), "{text}");
     // the timeout names the cause in the message of the same code
     let api = FakeRoutes::start(|path, _| {
+        if let Some(b) = ci_docs(path) {
+            return (200, vec![], b);
+        }
         if path.ends_with("/comments") {
             std::thread::sleep(std::time::Duration::from_secs(3));
             return (200, vec![], "[]".into());

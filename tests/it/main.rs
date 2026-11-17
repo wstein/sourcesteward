@@ -43,6 +43,8 @@ mod review_lines;
 mod review_read;
 mod slug;
 mod status_all;
+mod status_ci_main;
+mod status_ci_main_text;
 mod status_counts;
 mod status_flags;
 mod status_hook_hint;

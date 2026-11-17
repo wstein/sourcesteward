@@ -152,7 +152,7 @@ pub struct Stats {
     pub sources: Vec<SourceStats>,
 }
 
-/// `pulls` or `issues` and the repository of a REST path `/repos/OWNER/NAME/<source>...`.
+/// `pulls`, `issues` or `ci-main` and the repository of a REST path `/repos/OWNER/NAME/<source>...`.
 fn classify(path: &str) -> (String, &'static str) {
     let mut seg = path.trim_start_matches('/').split('/');
     if seg.next() != Some("repos") {
@@ -163,6 +163,9 @@ fn classify(path: &str) -> (String, &'static str) {
     };
     let source = match seg.next().map(|s| s.split('?').next().unwrap_or("")) {
         Some("pulls") => "pulls",
+        // the reads of the default branch CI (`stw status`, source `ci-main` as in Go): the repository document for
+        // the default branch name, the branch, the check runs and statuses of a commit and the Actions runs
+        None | Some("branches" | "commits" | "actions") => "ci-main",
         // the comments of a pull request (`stw status --review`) belong to the pulls source, as in Go
         Some("issues") => match (seg.next(), seg.next()) {
             (Some(n), Some(c))
