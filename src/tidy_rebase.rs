@@ -401,7 +401,7 @@ pub struct RebaseReport {
 
 /// Class and decision of a strong proof; `None` for a hint or no match. The decision is `review`.
 pub fn evidence_class(r: &RebaseReport) -> Option<(&'static str, &'static str)> {
-    None
+    (r.strength == Strength::Strong).then_some((RB_CLASS, RB_DECISION))
 }
 
 /// The assignment of branch commits to chain positions.
@@ -597,14 +597,44 @@ struct Shape {
 
 /// `mapped_at` holds (branch index, chain position) of the mapped commits in branch order.
 fn shape(mapped_at: &[(usize, u32)], n: usize, floor_ok: bool, identity_backed: bool) -> Shape {
+    let mapped = mapped_at.len();
+    let in_order = mapped_at.windows(2).all(|w| w[0].1 > w[1].1);
+    let (lo, hi) = (
+        mapped_at.iter().map(|x| x.1).min(),
+        mapped_at.iter().map(|x| x.1).max(),
+    );
+    let gap = match (lo, hi) {
+        (Some(lo), Some(hi)) => ((hi - lo + 1) as usize).saturating_sub(mapped),
+        _ => 0,
+    };
+    let contiguous = mapped > 0 && gap == 0;
+    let (mut runs, mut run_len, mut cur) = (0, 0, 0);
+    for (k, x) in mapped_at.iter().enumerate() {
+        let linked = k > 0 && mapped_at[k - 1].0 + 1 == x.0 && mapped_at[k - 1].1 == x.1 + 1;
+        if linked {
+            cur += 1;
+        } else {
+            runs += 1;
+            cur = 1;
+        }
+        run_len = run_len.max(cur);
+    }
+    let strength = if n >= 1 && mapped == n && contiguous && in_order && floor_ok && identity_backed
+    {
+        Strength::Strong
+    } else if mapped >= 1 {
+        Strength::Hint
+    } else {
+        Strength::None
+    };
     Shape {
-        contiguous: false,
-        in_order: false,
-        gap: 0,
-        runs: 0,
-        run_len: 0,
-        partial: false,
-        strength: Strength::None,
+        contiguous,
+        in_order,
+        gap,
+        runs,
+        run_len,
+        partial: mapped > 0 && mapped < n && contiguous && in_order,
+        strength,
     }
 }
 
