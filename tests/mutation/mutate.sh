@@ -1691,6 +1691,107 @@ m TH14 'entries that are no manifest do not count for the scan bound' src/tidy_h
   '                looked += 1;' '                let _ = looked;' \
   tidy_history every_bound_is_a_visible_marker
 
+m LF1 'lint review: a wrong patch-id passes' src/lint_files.rs \
+  'if &e.patch_id != patch_id {' 'if false && &e.patch_id != patch_id {' \
+  lint_files patch_id_and_head_are_compared_with_the_repository
+m LF2 'lint review: a wrong head passes' src/lint_files.rs \
+  'if &e.head != head {' 'if false && &e.head != head {' \
+  lint_files patch_id_and_head_are_compared_with_the_repository
+m LF3 'lint review: a wrong pr= passes' src/lint_files.rs \
+  'if want != pr {' 'if false && want != pr {' \
+  lint_files patch_id_and_head_are_compared_with_the_repository
+m LF4 'lint review: the head of the Carried-over form is its from=' src/lint_files.rs \
+  'pr, to, patch_id, ..
+                } => (*pr, to, patch_id),' 'pr, from, patch_id, ..
+                } => (*pr, from, patch_id),' \
+  lint_files patch_id_and_head_are_compared_with_the_repository
+m LF5 'lint files: a carriage return is not an error' src/lint_files.rs \
+  "if l.contains('\\r') {" "if l.contains('\\u{0}') {" \
+  lint_files carriage_returns_are_errors_anywhere
+m LF6 'lint review: 16 lines are allowed' src/lint_files.rs \
+  'let r = lint_pr::rule(lint_pr::REVIEW_LENGTH);
+    if n > r.limit {' 'let r = lint_pr::rule(lint_pr::REVIEW_LENGTH);
+    if n > r.limit + 1 {' \
+  lint_files a_review_comment_has_at_most_15_lines
+m LF7 'lint review: the word session is not looked for' src/lint_files.rs \
+  'if rest.contains("session") {' 'if rest.contains("sessionX") {' \
+  lint_files the_word_session_only_as_no_session_links
+m LF8 'lint review: no session links is not allowed' src/lint_files.rs \
+  '.replace("no session links", "")' '.replace("no session linksX", "")' \
+  lint_files the_word_session_only_as_no_session_links
+m LF9 'lint files: a session link is not looked for' src/lint_files.rs \
+  'if lint_pr::session_pattern(l) {' 'if false && lint_pr::session_pattern(l) {' \
+  lint_files a_session_link_is_an_error
+m LF10 'lint review: blank lines before the first line are skipped' src/lint_files.rs \
+  "text.split('\\n').next().unwrap_or(\"\")" "text.trim_start().split('\\n').next().unwrap_or(\"\")" \
+  lint_files the_first_line_follows_the_fixed_grammar
+m LF11 'lint review: the patch-id is taken for HEAD...BASE' src/lint_files.rs \
+  '.patch_id(&b, &h)' '.patch_id(&h, &b)' \
+  lint_files patch_id_and_head_are_compared_with_the_repository
+m LF12 'lint files: a file that is not UTF-8 is read lossily' src/lint_files.rs \
+  'String::from_utf8(bytes)
+        .map_err(|_| Error::usage(format!("{}: not UTF-8 text", path.display())))' 'Ok(String::from_utf8_lossy(&bytes).into_owned())' \
+  lint_files usage_errors_exit_two
+m LF13 'lint pr-text: the hard limit is one line higher' src/lint_files.rs \
+  'if n > r.hard {' 'if n > r.hard + 1 {' \
+  lint_files the_length_warns_above_25_and_fails_above_30
+m LF14 'lint pr-text: the warning limit is one line higher' src/lint_files.rs \
+  '} else if n > r.limit {' '} else if n > r.limit + 1 {' \
+  lint_files the_length_warns_above_25_and_fails_above_30
+m LF15 'lint pr-text: a missing Blocker line passes' src/lint_files.rs \
+  '[] => out.push(finding(lint_pr::BLOCKER_LINE, 0, "no Blocker line")),' '[] => {}' \
+  lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
+m LF16 'lint pr-text: only the first Blocker line counts' src/lint_files.rs \
+  '.filter(|(_, l)| lint_pr::line_starts_with(l, "blocker", true))
+        .collect();' '.filter(|(_, l)| lint_pr::line_starts_with(l, "blocker", true))
+        .take(1)
+        .collect();' \
+  lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
+m LF17 'lint pr-text: the colon needs no blank after it' src/lint_files.rs \
+  'l.strip_prefix("Blocker: ")' 'l.strip_prefix("Blocker:")' \
+  lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
+m LF18 'lint pr-text: a blank Blocker text passes in a Draft' src/lint_files.rs \
+  'Some(rest) if rest.trim().is_empty() => out.push(finding(' 'Some(rest) if rest.is_empty() => out.push(finding(' \
+  lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
+m LF19 'lint pr-text: a Draft may say Blocker: None.' src/lint_files.rs \
+  'Some("None.") if !ready => out.push(finding(' 'Some("None.") if false => out.push(finding(' \
+  lint_files a_draft_names_its_blocker_a_ready_pr_has_none
+m LF20 'lint pr-text: a Ready PR may name a blocker' src/lint_files.rs \
+  'Some(rest) if ready && rest != "None." => out.push(finding(' 'Some(rest) if false && ready && rest != "None." => out.push(finding(' \
+  lint_files a_draft_names_its_blocker_a_ready_pr_has_none
+m LF21 'lint pr-text: a CR at the end of the Blocker line is part of its text' src/lint_files.rs \
+  ".map(|l| l.strip_suffix('\\r').unwrap_or(l))" '.map(|l| l)' \
+  lint_files a_session_link_and_a_carriage_return_are_errors
+m LF22 'lint pr-text: any last line passes as the attribution line' src/lint_files.rs \
+  'Some((_, l)) if l == GENERATED_LINE => {}' 'Some((_, _)) => {}' \
+  lint_files the_last_non_blank_line_is_the_attribution_line
+m LF23 'lint pr-text: the attribution line may have trailing blanks' src/lint_files.rs \
+  'Some((_, l)) if l == GENERATED_LINE => {}' 'Some((_, l)) if l.trim() == GENERATED_LINE => {}' \
+  lint_files the_last_non_blank_line_is_the_attribution_line
+m LF24 'lint pr-text: the first non-blank line is taken for the last' src/lint_files.rs \
+  '.rfind(|(_, l)| !l.trim().is_empty())' '.find(|(_, l)| !l.trim().is_empty())' \
+  lint_files the_last_non_blank_line_is_the_attribution_line
+m LF25 'lint pr-text: an empty text has no missing attribution line' src/lint_files.rs \
+  'None => out.push(finding(PR_GENERATED_LINE, 0, "the text is empty")),' 'None => {}' \
+  lint_files the_last_non_blank_line_is_the_attribution_line
+m LF26 'lint files: an error finding exits 0' src/cli.rs \
+  '    if r.passed() {
+        exit::OK
+    } else {
+        exit::FAILED
+    }' '    if true {
+        exit::OK
+    } else {
+        exit::FAILED
+    }' \
+  lint_files human_output_lists_each_finding
+m LF27 'lint review: --json and --human are combined' src/cli.rs \
+  'if a.human && a.json {' 'if false && a.human && a.json {' \
+  lint_files usage_errors_exit_two
+m LF28 'lint review: --checkout without --base and --head is accepted' src/cli.rs \
+  '(None, None) if a.checkout.is_none() => None,' '(None, None) => None,' \
+  lint_files usage_errors_exit_two
+
 # stw prove (new): every check of the proof and the verdict
 m PV1 'prove: the committer identity is not checked' src/prove.rs \
   'for (role, who) in [("author", &m.author), ("committer", &m.committer)] {' 'for (role, who) in [("author", &m.author)] {' \
