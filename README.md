@@ -294,9 +294,9 @@ superproject of the current directory, else `$STW_ROOT`), `--repo NAME` (repeata
 | 0 | everything asked for worked (also when repositories need attention, and in `status` also when a GitHub read failed: that is a notice, Go exits 1 there) |
 | 1 | the command ran, but a repository could not be read; `sync` failed in one; `sync restore` found no run or left an entry `changed-since`, `journal-incomplete` or `failed`; `tidy apply` failed a step (a branch, worktree, registration or the `info/exclude` file; the manifest could not be written); `tidy restore` left an entry not restored (`not-overwritten`, `missing-object`) |
 | 2 | usage error or unusable workspace; nothing was done |
-| 3 | `lint pr` only: an error finding, or a list cut at its bound (the result is printed and is not a pass) |
+| 3 | `lint pr`, `lint review`, `lint pr-text`: an error finding (`lint pr` also: a list cut at its bound); the result is printed and is not a pass |
 
-`lint review` and `lint pr-text` use 0 (no error finding), 1 (an error finding, the output is printed) and 2 (usage error, also an unreadable or non-UTF-8 FILE and a revision that does not resolve).
+`lint review` and `lint pr-text` read nothing from the network: 0 no error finding, 3 an error finding, 2 usage error (also an unreadable or non-UTF-8 FILE, a revision that does not resolve, no merge base).
 
 ## Output for agents
 
@@ -1007,7 +1007,7 @@ Both read one UTF-8 text from FILE and report findings in the shape of `lint pr`
 `file`, `line`), `message`, `summary`). Shared rule IDs and functions with `lint pr`: `session-link`, `pr-body-length`,
 `pr-blocker-line`, `review-line-format`, `review-comment-length` (`src/lint_files.rs` calls `lint_pr`); the first line is read by
 `review::parse_strict`, no second grammar. Own IDs: `text-line-endings`, `review-session-word`, `review-patch-id`, `review-head`,
-`pr-generated-line` (`FILE_RULES`). Exit 0 no error finding (a warning does not fail), 1 an error finding, 2 usage.
+`pr-generated-line` (`FILE_RULES`). Exit 0 no error finding (a warning does not fail), 3 an error finding, 2 usage.
 
 `stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH]`: the first line is exactly
 `Review: <CLEAR|FINDINGS> head=<40 hex> patch-id=<40 hex> pr=<n|none>` or `Carried-over: from=<40 hex> to=<40 hex> patch-id=<40 hex>

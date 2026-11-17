@@ -304,8 +304,8 @@ no network, nothing is written, `git` is not started. `--json` lists the rule ta
 
 Exit codes:
   0  no finding of severity error
-  1  at least one error finding (the output is printed)
-  2  usage error (also: FILE not readable or not UTF-8, a revision that does not resolve)";
+  3  at least one error finding (the output is printed)
+  2  usage error (also: FILE not readable or not UTF-8, a revision that does not resolve, no merge base)";
 
 #[derive(Args)]
 struct LintReviewArgs {
@@ -342,7 +342,7 @@ nothing is written. `--json` lists the rule table.
 
 Exit codes:
   0  no finding of severity error (warnings do not fail)
-  1  at least one error finding (the output is printed)
+  3  at least one error finding (the output is printed)
   2  usage error (also: FILE not readable or not UTF-8)";
 
 #[derive(Args)]
@@ -374,7 +374,7 @@ fn run_lint_pr_text(a: LintPrTextArgs) -> Result<u8> {
     Ok(print_file_report(&report, a.json))
 }
 
-/// Prints a file report and returns the exit status: 0 without an error finding, 1 with one.
+/// Prints a file report and returns the exit status: 0 without an error finding, 3 with one (as `lint pr`).
 fn print_file_report(r: &lint_files::Report, json: bool) -> u8 {
     if json {
         print_json(&r.to_json(tidy::now_secs()));
@@ -384,7 +384,7 @@ fn print_file_report(r: &lint_files::Report, json: bool) -> u8 {
     if r.passed() {
         exit::OK
     } else {
-        exit::FAILED
+        lint_pr_cmd::EXIT_FINDINGS
     }
 }
 

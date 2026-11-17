@@ -1778,11 +1778,11 @@ m LF26 'lint files: an error finding exits 0' src/cli.rs \
   '    if r.passed() {
         exit::OK
     } else {
-        exit::FAILED
+        lint_pr_cmd::EXIT_FINDINGS
     }' '    if true {
         exit::OK
     } else {
-        exit::FAILED
+        lint_pr_cmd::EXIT_FINDINGS
     }' \
   lint_files human_output_lists_each_finding
 m LF27 'lint review: --json and --human are combined' src/cli.rs \
