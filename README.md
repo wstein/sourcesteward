@@ -1371,6 +1371,14 @@ on a single file), the ref is restored but files already written stay; `git stat
   content (`a b.txt` equals `ab.txt`; `\tcc x` equals `  cc   x`), so the `equal-patches` proof also requires an
   identical digest of the diff lines with their white space (file names included): a change that differs from main
   only in white space keeps the branch.
+- Commit similarity (`src/tidy_similarity.rs`, library only; not yet wired into `tidy plan`; specification and accepted method in `spikes/stw/tidy-similarity/README.md`):
+  a commit is the multiset of its changed lines (`<path> NUL <sign> <trimmed line>`, context 0, no rename detection), two commits are compared with
+  Dice `2 * |A ∩ B| / (|A| + |B|)`, decided in integers (`200 * I >= pct * (A + B)`; the display rounds half up to one decimal and never shows the
+  threshold for a value below it). Candidates on main: same subject, same subject without `type(scope):`, or at least half of the changed files in
+  common, at most 7 days older (author time), at most 100 per commit. Classes per branch `landed` (all >= 95), `modified` (all >= 70), `partial`, `none`.
+  Hunks come from gix-imara-diff (Myers), not from `git diff -U0`; whether the multisets differ from git's is UNKNOWN until the oracle. Limits: a commit with more
+  than 20 000 keys or a blob over 1 MiB is `too_large` (no value, prevents `landed`). Reusable parts: `Keys::sum`, containment as (numerator, denominator),
+  `tree_entries` (cumulative diff `base...tip`), `MainIndex::candidates` and `in_window` apart from the comparison. Mutations `TS1` to `TS51`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.

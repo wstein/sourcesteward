@@ -973,13 +973,6 @@ fn the_best_candidate_is_the_highest_and_a_tie_goes_to_the_smaller_id() {
         "feat: x",
         T0 + 100,
     );
-    let worse = mk(
-        &fx,
-        Some(base),
-        &[put("f.txt", &edited(0, 20, "new", &[2, 4, 6]))],
-        "feat: x",
-        T0 + 101,
-    );
     let best = mk(
         &fx,
         Some(base),
@@ -987,6 +980,19 @@ fn the_best_candidate_is_the_highest_and_a_tie_goes_to_the_smaller_id() {
         "feat: x",
         T0 + 102,
     );
+    // the worse one gets the smaller commit ID (candidates are tried in ID order), so "first" is not "best"
+    let worse = (0..)
+        .map(|k| {
+            mk(
+                &fx,
+                Some(base),
+                &[put("f.txt", &edited(0, 20, "new", &[2, 4, 6]))],
+                "feat: x",
+                T0 + 101 + k,
+            )
+        })
+        .find(|w| *w < best)
+        .unwrap();
     let r = eval(&fx, &[worse, best], &[a]);
     assert_eq!(cmp0(&r).candidate, best);
     assert_eq!(fmt_permille(cmp0(&r).sim.permille()), "100.0");
@@ -1033,10 +1039,22 @@ fn candidates_are_cut_at_the_limit_and_the_cut_is_reported() {
     assert!(!eval(&fx, &ms, &[a]).candidates_cut);
     let repo = fx.repo();
     let mut cache = SimCache::default();
-    let idx = MainIndex::build(&repo, &mut cache, &ms, None).unwrap();
+    let mut desc = ms.clone();
+    desc.sort_by(|x, y| y.cmp(x));
+    let idx = MainIndex::build(&repo, &mut cache, &desc, None).unwrap();
     let info = commit_info(&repo, a).unwrap();
     let files = cache.files(&repo, a).unwrap().unwrap();
-    assert_eq!(idx.candidates(&info, &files, &lim).0.len(), 2);
+    // indexed in descending ID order; the cut keeps the two smallest IDs
+    let got: Vec<ObjectId> = idx
+        .candidates(&info, &files, &lim)
+        .0
+        .iter()
+        .map(|c| c.id)
+        .collect();
+    let mut want = ms.clone();
+    want.sort();
+    want.truncate(2);
+    assert_eq!(got, want);
     assert_eq!(idx.len(), 3);
 }
 
