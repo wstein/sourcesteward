@@ -131,7 +131,7 @@ fn human_output_lists_each_finding() {
     let f = dir.path().join("c.txt");
     std::fs::write(&f, format!("{}\nsession here\n", good_line())).unwrap();
     let o = stw(&["review", f.to_str().unwrap()]);
-    assert_eq!(code(&o), 1, "{}", out_text(&o));
+    assert_eq!(code(&o), 3, "{}", out_text(&o));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(text.contains("FAIL, 1 errors, 0 warnings"), "{text}");
     assert!(text.contains("review-session-word"), "{text}");
@@ -192,7 +192,7 @@ fn the_first_line_follows_the_fixed_grammar() {
     ];
     for (name, line) in bad {
         let o = review_of(&format!("{line}\nbody\n"), &[]);
-        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
+        assert_eq!(code(&o), 3, "{name}: {}", out_text(&o));
         assert!(
             rules(&o).contains(&"review-line-format".to_string()),
             "{name}"
@@ -200,7 +200,7 @@ fn the_first_line_follows_the_fixed_grammar() {
     }
     // the first line is the first line: a blank line before it is no review line
     let o = review_of(&format!("\n{}\n", good_line()), &[]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert!(rules(&o).contains(&"review-line-format".to_string()));
     // pr=none is the local form
     let o = review_of(
@@ -214,13 +214,13 @@ fn the_first_line_follows_the_fixed_grammar() {
 fn carriage_returns_are_errors_anywhere() {
     // `pr=49\r`: CRLF line ends
     let o = review_of(&format!("{}\r\nbody\r\n", good_line()), &[]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     let r = rules(&o);
     assert!(r.contains(&"text-line-endings".to_string()), "{r:?}");
     assert!(r.contains(&"review-line-format".to_string()), "{r:?}");
     // a CR in a later line only
     let o = review_of(&format!("{}\nbody\r\nmore\n", good_line()), &[]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["text-line-endings"]);
     // a lone CR inside a line
     let o = review_of(&format!("{}\nbo\rdy\n", good_line()), &[]);
@@ -260,7 +260,7 @@ fn the_carried_over_form_is_fixed_too() {
         ),
     ] {
         let o = review_of(&format!("{line}\nline 2\n"), &[]);
-        assert_eq!(code(&o), 1, "{name}");
+        assert_eq!(code(&o), 3, "{name}");
         assert_eq!(rules(&o), vec!["review-line-format"], "{name}");
     }
 }
@@ -280,7 +280,7 @@ fn a_review_comment_has_at_most_15_lines() {
         assert_eq!(code(&o), 0, "{n} lines: {}", out_text(&o));
     }
     let o = review_of(&body(16), &[]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["review-comment-length"]);
     // trailing blank lines do not count
     let o = review_of(&format!("{}\n\n\n", body(15)), &[]);
@@ -298,7 +298,7 @@ fn the_word_session_only_as_no_session_links() {
         "no session links, session ids none",
     ] {
         let o = review_of(&format!("{}\n{text}\n", good_line()), &[]);
-        assert_eq!(code(&o), 1, "{text}");
+        assert_eq!(code(&o), 3, "{text}");
         assert_eq!(rules(&o), vec!["review-session-word"], "{text}");
     }
 }
@@ -310,7 +310,7 @@ fn a_session_link_is_an_error() {
     let url = concat!("https://claude", ".ai/code/session_", "01ABC");
     for text in [trailer, url] {
         let o = review_of(&format!("{}\n{text}\n", good_line()), &[]);
-        assert_eq!(code(&o), 1, "{text}");
+        assert_eq!(code(&o), 3, "{text}");
         assert!(rules(&o).contains(&"session-link".to_string()), "{text}");
     }
 }
@@ -365,7 +365,7 @@ fn patch_id_and_head_are_compared_with_the_repository() {
         &format!("Review: CLEAR head={head} patch-id={wrong} pr=7\n"),
         args(&[]),
     );
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["review-patch-id"]);
     // a wrong head
     let other = "1".repeat(40);
@@ -376,7 +376,7 @@ fn patch_id_and_head_are_compared_with_the_repository() {
     assert_eq!(rules(&o), vec!["review-head"]);
     // a wrong pr
     let o = run(&good, args(&["--pr", "8"]));
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["review-line-format"]);
     let o = run(&good, args(&["--pr", "7"]));
     assert_eq!(code(&o), 0, "{}", out_text(&o));
@@ -459,7 +459,7 @@ fn real_pr_texts_pass_as_ready() {
         assert_eq!(v["summary"]["passed"], true, "{name}");
         // the same text is no Draft text: it has `Blocker: None.`
         let o = stw(&["pr-text", f.to_str().unwrap(), "--json"]);
-        assert_eq!(code(&o), 1, "{name}");
+        assert_eq!(code(&o), 3, "{name}");
         assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name}");
     }
 }
@@ -470,12 +470,12 @@ fn a_draft_names_its_blocker_a_ready_pr_has_none() {
     let o = pr_text_of(&draft, &[]);
     assert_eq!(code(&o), 0, "{}", out_text(&o));
     let o = pr_text_of(&draft, &["--ready"]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["pr-blocker-line"]);
     let ready = good_pr("Blocker: None.");
     assert_eq!(code(&pr_text_of(&ready, &["--ready"])), 0);
     let o = pr_text_of(&ready, &[]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["pr-blocker-line"]);
 }
 
@@ -493,7 +493,7 @@ fn the_blocker_line_is_exactly_one_line_of_the_fixed_form() {
     ] {
         for extra in [&["--ready"][..], &[][..]] {
             let o = pr_text_of(&text, extra);
-            assert_eq!(code(&o), 1, "{name} {extra:?}: {}", out_text(&o));
+            assert_eq!(code(&o), 3, "{name} {extra:?}: {}", out_text(&o));
             assert_eq!(rules(&o), vec!["pr-blocker-line"], "{name} {extra:?}");
         }
     }
@@ -526,7 +526,7 @@ fn the_last_non_blank_line_is_the_attribution_line() {
         ("empty file", String::new()),
     ] {
         let o = pr_text_of(&text, &["--ready"]);
-        assert_eq!(code(&o), 1, "{name}: {}", out_text(&o));
+        assert_eq!(code(&o), 3, "{name}: {}", out_text(&o));
         assert!(
             rules(&o).contains(&"pr-generated-line".to_string()),
             "{name}"
@@ -541,14 +541,14 @@ fn a_session_link_and_a_carriage_return_are_errors() {
     for t in [trailer, url] {
         let text = format!("Purpose.\n{t}\nBlocker: None.\n\n{GEN}\n");
         let o = pr_text_of(&text, &["--ready"]);
-        assert_eq!(code(&o), 1, "{t}");
+        assert_eq!(code(&o), 3, "{t}");
         assert_eq!(rules(&o), vec!["session-link"], "{t}");
     }
     let o = pr_text_of(
         &good_pr("Blocker: None.").replace('\n', "\r\n"),
         &["--ready"],
     );
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     let r = rules(&o);
     assert!(r.contains(&"text-line-endings".to_string()), "{r:?}");
     // CR before the line feed does not make the Blocker or the attribution line wrong on their own
@@ -586,7 +586,7 @@ fn the_length_warns_above_25_and_fails_above_30() {
         assert_eq!(v["summary"]["warnings"], 1);
     }
     let o = pr_text_of(&text(31), &["--ready"]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     assert_eq!(rules(&o), vec!["pr-body-length"]);
     let v: Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["findings"][0]["severity"], "error");
@@ -619,7 +619,7 @@ fn pr_text_json_and_usage() {
     let f = dir.path().join("pr.txt");
     std::fs::write(&f, "Purpose.\n").unwrap();
     let o = stw(&["pr-text", f.to_str().unwrap()]);
-    assert_eq!(code(&o), 1);
+    assert_eq!(code(&o), 3);
     let t = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(t.contains("FAIL, 2 errors, 0 warnings"), "{t}");
     assert!(t.contains("pr-blocker-line"), "{t}");
