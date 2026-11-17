@@ -1025,7 +1025,7 @@ line, `Blocker: <text>` for a Draft (the default) or, with `--ready`, exactly `B
 of another repository is not checked (planned as its own step).
 
 Fixtures: real comments and PR texts of three pull requests, stored unchanged in `tests/fixtures/lint/` (its README names the
-sources); tests: `tests/it/lint_files.rs` (18 cases); mutations `LF1` to `LF39`. Source of the limits and the line forms:
+sources); tests: `tests/it/lint_files.rs` (23 cases); mutations `LF1` to `LF39`. Source of the limits and the line forms:
 `claude/CLAUDE.md` (review comment, 15 lines, session links) and `claude/skills/agent-workflow/SKILL.md`, section 9 (PR text, 25
 lines, the Blocker line, the review line); the attribution line is the one of the tool (`dotagents-adapter.md`). The rules are
 not compared with the current dotagents text rule by rule: UNKNOWN, as for `lint pr`.

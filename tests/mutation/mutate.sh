@@ -1713,62 +1713,62 @@ m LF6 'lint review: 16 lines are allowed' src/lint_files.rs \
     if n > r.limit {' 'let r = lint_pr::rule(lint_pr::REVIEW_LENGTH);
     if n > r.limit + 1 {' \
   lint_files a_review_comment_has_at_most_15_lines
-m LF9 'lint files: a session link is not looked for' src/lint_files.rs \
+m LF7 'lint files: a session link is not looked for' src/lint_files.rs \
   'if lint_pr::session_pattern(l) {' 'if false && lint_pr::session_pattern(l) {' \
   lint_files a_session_link_is_an_error
-m LF10 'lint review: blank lines before the first line are skipped' src/lint_files.rs \
+m LF8 'lint review: blank lines before the first line are skipped' src/lint_files.rs \
   "text.split('\\n').next().unwrap_or(\"\")" "text.trim_start().split('\\n').next().unwrap_or(\"\")" \
   lint_files the_first_line_follows_the_fixed_grammar
-m LF11 'lint review: the patch-id is taken for HEAD...BASE' src/lint_files.rs \
-  '.patch_id(&b, &h)' '.patch_id(&h, &b)' \
-  lint_files patch_id_and_head_are_compared_with_the_repository
-m LF12 'lint files: a file that is not UTF-8 is read lossily' src/lint_files.rs \
+m LF9 'lint review: the diff is taken from HEAD to HEAD' src/lint_files.rs \
+  'base: hex("base", &b)?,' 'base: hex("base", &h)?,' \
+  lint_files the_patch_id_is_the_one_of_real_git
+m LF10 'lint files: a file that is not UTF-8 is read lossily' src/lint_files.rs \
   'String::from_utf8(bytes)
         .map_err(|_| Error::usage(format!("{}: not UTF-8 text", path.display())))' 'Ok(String::from_utf8_lossy(&bytes).into_owned())' \
   lint_files usage_errors_exit_two
-m LF13 'lint pr-text: the hard limit is one line higher' src/lint_files.rs \
+m LF11 'lint pr-text: the hard limit is one line higher' src/lint_files.rs \
   'if n > r.hard {' 'if n > r.hard + 1 {' \
   lint_files the_length_warns_above_25_and_fails_above_30
-m LF14 'lint pr-text: the warning limit is one line higher' src/lint_files.rs \
+m LF12 'lint pr-text: the warning limit is one line higher' src/lint_files.rs \
   '} else if n > r.limit {' '} else if n > r.limit + 1 {' \
   lint_files the_length_warns_above_25_and_fails_above_30
-m LF15 'lint pr-text: a missing Blocker line passes' src/lint_files.rs \
+m LF13 'lint pr-text: a missing Blocker line passes' src/lint_files.rs \
   '[] => out.push(finding(lint_pr::BLOCKER_LINE, 0, "no Blocker line")),' '[] => {}' \
   lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
-m LF16 'lint pr-text: only the first Blocker line counts' src/lint_files.rs \
+m LF14 'lint pr-text: only the first Blocker line counts' src/lint_files.rs \
   '.filter(|(_, l)| lint_pr::line_starts_with(l, "blocker", true))
         .collect();' '.filter(|(_, l)| lint_pr::line_starts_with(l, "blocker", true))
         .take(1)
         .collect();' \
   lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
-m LF17 'lint pr-text: the colon needs no blank after it' src/lint_files.rs \
+m LF15 'lint pr-text: the colon needs no blank after it' src/lint_files.rs \
   'l.strip_prefix("Blocker: ")' 'l.strip_prefix("Blocker:")' \
   lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
-m LF18 'lint pr-text: a blank Blocker text passes in a Draft' src/lint_files.rs \
+m LF16 'lint pr-text: a blank Blocker text passes in a Draft' src/lint_files.rs \
   'Some(rest) if rest.trim().is_empty() => out.push(finding(' 'Some(rest) if rest.is_empty() => out.push(finding(' \
   lint_files the_blocker_line_is_exactly_one_line_of_the_fixed_form
-m LF19 'lint pr-text: a Draft may say Blocker: None.' src/lint_files.rs \
+m LF17 'lint pr-text: a Draft may say Blocker: None.' src/lint_files.rs \
   'Some(rest) if !ready && means_none(rest) => out.push(finding(' 'Some(rest) if false && means_none(rest) => out.push(finding(' \
   lint_files a_draft_names_its_blocker_a_ready_pr_has_none
-m LF20 'lint pr-text: a Ready PR may name a blocker' src/lint_files.rs \
+m LF18 'lint pr-text: a Ready PR may name a blocker' src/lint_files.rs \
   'Some(rest) if ready && rest != "None." => out.push(finding(' 'Some(rest) if false && ready && rest != "None." => out.push(finding(' \
   lint_files a_draft_names_its_blocker_a_ready_pr_has_none
-m LF21 'lint pr-text: a CR at the end of the Blocker line is part of its text' src/lint_files.rs \
+m LF19 'lint pr-text: a CR at the end of the Blocker line is part of its text' src/lint_files.rs \
   ".map(|l| l.strip_suffix('\\r').unwrap_or(l))" '.map(|l| l)' \
   lint_files a_session_link_and_a_carriage_return_are_errors
-m LF22 'lint pr-text: any last line passes as the attribution line' src/lint_files.rs \
+m LF20 'lint pr-text: any last line passes as the attribution line' src/lint_files.rs \
   'Some((_, l)) if l == GENERATED_LINE => {}' 'Some((_, _)) => {}' \
   lint_files the_last_non_blank_line_is_the_attribution_line
-m LF23 'lint pr-text: the attribution line may have trailing blanks' src/lint_files.rs \
+m LF21 'lint pr-text: the attribution line may have trailing blanks' src/lint_files.rs \
   'Some((_, l)) if l == GENERATED_LINE => {}' 'Some((_, l)) if l.trim() == GENERATED_LINE => {}' \
   lint_files the_last_non_blank_line_is_the_attribution_line
-m LF24 'lint pr-text: the first non-blank line is taken for the last' src/lint_files.rs \
+m LF22 'lint pr-text: the first non-blank line is taken for the last' src/lint_files.rs \
   '.rfind(|(_, l)| !l.trim().is_empty())' '.find(|(_, l)| !l.trim().is_empty())' \
   lint_files the_last_non_blank_line_is_the_attribution_line
-m LF25 'lint pr-text: an empty text has no missing attribution line' src/lint_files.rs \
+m LF23 'lint pr-text: an empty text has no missing attribution line' src/lint_files.rs \
   'None => out.push(finding(PR_GENERATED_LINE, 0, "the text is empty")),' 'None => {}' \
   lint_files the_last_non_blank_line_is_the_attribution_line
-m LF26 'lint files: an error finding exits 0' src/cli.rs \
+m LF24 'lint files: an error finding exits 0' src/cli.rs \
   '    if r.passed() {
         exit::OK
     } else {
@@ -1779,12 +1779,52 @@ m LF26 'lint files: an error finding exits 0' src/cli.rs \
         lint_pr_cmd::EXIT_FINDINGS
     }' \
   lint_files human_output_lists_each_finding
-m LF27 'lint review: --json and --human are combined' src/cli.rs \
+m LF25 'lint review: --json and --human are combined' src/cli.rs \
   'if a.human && a.json {' 'if false && a.human && a.json {' \
   lint_files usage_errors_exit_two
-m LF28 'lint review: --checkout without --base and --head is accepted' src/cli.rs \
+m LF26 'lint review: --checkout without --base and --head is accepted' src/cli.rs \
   '(None, None) if a.checkout.is_none() => None,' '(None, None) => None,' \
   lint_files usage_errors_exit_two
+
+m LF27 'lint pr-text: a full stop after none is a named blocker in a Draft' src/lint_files.rs \
+  'let t = t.strip_suffix('"'"'.'"'"').unwrap_or(t);' 'let t = t;' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF28 'lint pr-text: keiner is a named blocker in a Draft' src/lint_files.rs \
+  '["none", "keiner", "keine"]' '["none", "keine"]' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF29 'lint pr-text: keine is a named blocker in a Draft' src/lint_files.rs \
+  '["none", "keiner", "keine"]' '["none", "keiner"]' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF30 'lint pr-text: None in capitals is a named blocker in a Draft' src/lint_files.rs \
+  '.any(|w| lint_pr::fold(t) == *w)' '.any(|w| t == *w)' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF31 'lint pr-text: blanks after none are a named blocker in a Draft' src/lint_files.rs \
+  'let t = rest.trim();' 'let t = rest;' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF32 'lint pr-text: a Ready PR takes any text that begins with None' src/lint_files.rs \
+  'Some(rest) if ready && rest != "None." => out.push(finding(' 'Some(rest) if ready && !rest.starts_with("None") => out.push(finding(' \
+  lint_files none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line
+m LF33 'lint review: pr= has no digit limit' src/lint_files.rs \
+  '!matches!(pr, PrRef::Number(n) if *n > 999_999_999)' '!matches!(pr, PrRef::Number(n) if *n > 99_999_999_999)' \
+  lint_files pr_has_at_most_nine_digits_as_in_lint_pr
+m LF34 'lint review: a tag is not peeled to its commit' src/lint_files.rs \
+  'Ok(commit.id)' 'Ok(id.detach())' \
+  lint_files an_annotated_tag_is_peeled_and_a_missing_merge_base_is_a_read_error
+m LF35 'lint review: a missing merge base is left to git' src/lint_files.rs \
+  'if !matches!(r.merge_base(b, h), Ok(Some(_))) {' 'if false {' \
+  lint_files an_annotated_tag_is_peeled_and_a_missing_merge_base_is_a_read_error
+m LF36 'lint review: git patch-id runs without --stable' src/git_runner.rs \
+  'Op::PatchIdStable => v(&["patch-id", "--stable"]),' 'Op::PatchIdStable => v(&["patch-id"]),' \
+  lint_files the_patch_id_is_the_one_of_real_git
+m LF37 'lint review: git diff detects no renames' src/git_runner.rs \
+  '"diff.renames=true",' '"diff.renames=false",' \
+  lint_files the_patch_id_is_the_one_of_real_git
+m LF38 'lint review: the diff is taken between BASE and HEAD, not from the merge base' src/git_runner.rs \
+  'a.push(format!("{}...{}", base.as_str(), head.as_str()));' 'a.push(format!("{}..{}", base.as_str(), head.as_str()));' \
+  lint_files the_patch_id_of_a_merge_head_and_of_a_head_that_is_no_descendant_is_the_one_of_real_git
+m LF39 'lint review: the diff is not fed to git patch-id' src/lint_files.rs \
+  '.run_with_stdin(&dir, Op::PatchIdStable, Some(&diff.stdout))' '.run_with_stdin(&dir, Op::PatchIdStable, Some(b"x"))' \
+  lint_files the_patch_id_is_the_one_of_real_git
 
 # stw prove (new): every check of the proof and the verdict
 m PV1 'prove: the committer identity is not checked' src/prove.rs \
