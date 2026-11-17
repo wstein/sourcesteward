@@ -635,3 +635,54 @@ fn truncated_status_context_is_unknown() {
     assert_eq!(doc["conditions"][2]["status"], "unknown");
     assert_eq!(doc["ready"], false);
 }
+
+/// `stw status` falls back to the Actions runs when a token cannot read check runs; `ready-check` does not: it decides
+/// Ready, so a check class it cannot read is unknown evidence, and it never requests the Actions runs.
+#[test]
+fn cli_ready_check_stays_strict_a_403_on_check_runs_is_unknown_and_no_actions_run_is_read() {
+    use common::FakeRoutes;
+    let sha = "a".repeat(40);
+    let api = FakeRoutes::start(move |path, _| {
+        let body = if path == "/repos/o/r/pulls/7" {
+            serde_json::json!({"state":"open","draft":true,"body":"Blocker: none","head":{"sha":sha},"base":{"ref":"main"},"mergeable":true,"rebaseable":true,"mergeable_state":"clean"})
+        } else if path == "/repos/o/r" {
+            serde_json::json!({"default_branch":"main"})
+        } else if path.ends_with("/check-runs") {
+            return (403, vec![], "{}".into());
+        } else if path.ends_with("/actions/runs") {
+            serde_json::json!({"total_count":1,"workflow_runs":[{"id":1,"workflow_id":7,"name":"Test","event":"push","status":"completed","conclusion":"success","head_sha":sha,"created_at":"2026-11-17T17:32:44Z","run_attempt":1}]})
+        } else if path.ends_with("/statuses") {
+            serde_json::json!([])
+        } else if path.ends_with("/issues/7/comments") {
+            serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])
+        } else {
+            return (404, vec![], "{}".into());
+        };
+        (200, vec![], body.to_string())
+    });
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", "/nonexistent")
+        .env("GH_TOKEN", "TEST-TOKEN")
+        .env("STW_GITHUB_API_URL", &api.url)
+        .args(["ready-check", "7", "--repo", "o/r", "--json"])
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(1));
+    let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+    assert_eq!(doc["ready"], false);
+    assert_eq!(doc["conditions"][2]["status"], "unknown");
+    assert!(
+        doc["errors"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|e| e["source"] == "checks"),
+        "{doc}"
+    );
+    assert!(
+        api.hits().iter().all(|h| !h.contains("/actions/")),
+        "{:?}",
+        api.hits()
+    );
+}
