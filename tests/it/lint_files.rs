@@ -115,12 +115,12 @@ fn json_document_shape() {
         "review-patch-id",
         "review-head",
         "review-comment-length",
-        "review-session-word",
         "session-link",
         "text-line-endings",
     ] {
         assert!(ids.contains(&id), "rule {id} listed: {ids:?}");
     }
+    assert!(!ids.contains(&"review-session-word"), "no rule on the word session: {ids:?}");
     assert_eq!(v["summary"]["errors"], 0);
     assert_eq!(v["summary"]["warnings"], 0);
 }
@@ -129,12 +129,12 @@ fn json_document_shape() {
 fn human_output_lists_each_finding() {
     let dir = scratch();
     let f = dir.path().join("c.txt");
-    std::fs::write(&f, format!("{}\nsession here\n", good_line())).unwrap();
+    std::fs::write(&f, format!("{}\nbody\r\n", good_line())).unwrap();
     let o = stw(&["review", f.to_str().unwrap()]);
     assert_eq!(code(&o), 3, "{}", out_text(&o));
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert!(text.contains("FAIL, 1 errors, 0 warnings"), "{text}");
-    assert!(text.contains("review-session-word"), "{text}");
+    assert!(text.contains("text-line-endings"), "{text}");
     assert!(text.contains("file:2"), "{text}");
 }
 
@@ -288,18 +288,17 @@ fn a_review_comment_has_at_most_15_lines() {
 }
 
 #[test]
-fn the_word_session_only_as_no_session_links() {
-    let ok = format!("{}\nPR body: 7 lines, no session links.\n", good_line());
-    assert_eq!(code(&review_of(&ok, &[])), 0);
+fn the_word_session_is_no_finding_only_the_link_patterns_are() {
+    // owner decision: only the session-link patterns count, as in `lint pr`
     for text in [
         "the session ended",
-        "Session-Link check: 0",
-        "no session link",
-        "no session links, session ids none",
+        "Session-Link-Prüfung: 0",
+        "possession of the branch",
+        "PR body: 7 lines, no session links.",
+        "session links: none",
     ] {
         let o = review_of(&format!("{}\n{text}\n", good_line()), &[]);
-        assert_eq!(code(&o), 3, "{text}");
-        assert_eq!(rules(&o), vec!["review-session-word"], "{text}");
+        assert_eq!(code(&o), 0, "{text}: {}", out_text(&o));
     }
 }
 
