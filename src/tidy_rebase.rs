@@ -175,6 +175,10 @@ impl RebaseIndex {
     pub fn window_cut(&self) -> bool {
         self.stop == Stop::Window
     }
+    /// The last commit of a walk that ended at a missing object: its parent is not there, so it has no patch to read.
+    pub fn is_edge(&self, pos: u32) -> bool {
+        matches!(self.stop, Stop::Missing(_)) && pos as usize + 1 == self.positions.len()
+    }
     pub fn head(&self, pos: u32) -> Option<&Head> {
         self.positions.get(pos as usize)
     }
@@ -283,10 +287,11 @@ pub fn patch_hits(
     if wanted.is_empty() {
         return Ok(hits);
     }
-    // newest first on the chain; the oldest branch commit is the last of its list and meets the oldest chain commit
+    // the lists of chain commits are newest first (`pop` takes the oldest); branch commits are visited oldest first,
+    // so the oldest branch commit meets the oldest chain commit. The boundary commit of a shallow clone has no patch.
     let mut on_main: HashMap<(ObjectId, ObjectId), Vec<ObjectId>> = HashMap::new();
-    for h in &index.positions {
-        if h.parents > 1 {
+    for (pos, h) in index.positions.iter().enumerate() {
+        if h.parents > 1 || index.is_edge(pos as u32) {
             continue;
         }
         if let Some(k) = commit_patch_key(repo, h.id)? {
@@ -598,7 +603,7 @@ fn refine(
             continue;
         }
         let q = down + 1;
-        if index.positions[q as usize].parents > 1 || a.pos.contains(&Some(q)) {
+        if index.positions[q as usize].parents > 1 || index.is_edge(q) || a.pos.contains(&Some(q)) {
             continue;
         }
         if let Content::Value(sim) = content_of(
@@ -621,13 +626,18 @@ fn refine(
         let (Some(p), Method::Identity) = (a.pos[i], a.method[i]) else {
             continue;
         };
-        match content_of(
-            repo,
-            cache,
-            heads[i].id,
-            index.positions[p as usize].id,
-            lim,
-        )? {
+        let content = if index.is_edge(p) {
+            Content::Unknown
+        } else {
+            content_of(
+                repo,
+                cache,
+                heads[i].id,
+                index.positions[p as usize].id,
+                lim,
+            )?
+        };
+        match content {
             Content::Value(sim) => {
                 value[i] = Some(sim.permille());
                 high &= sim.ge_pct(RB_CONTENT_HIGH);
@@ -980,7 +990,12 @@ pub fn evaluate_api(
     let mut chain: Vec<Head> = Vec::new();
     let mut next = Some(pr.merge_commit);
     while let (Some(id), true) = (next, chain.len() < k) {
-        chain.push(read_head(repo, id)?);
+        match read_head(repo, id) {
+            Ok(h) => chain.push(h),
+            // behind a shallow boundary: the PR commits cannot be compared
+            Err(_) if !chain.is_empty() => break,
+            Err(e) => return Err(e),
+        }
         next = repo
             .find_commit(id)?
             .parent_ids()

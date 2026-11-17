@@ -330,7 +330,7 @@ fn the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error() {
     let list = cs(2);
     let l = land(&fx, edge, &list[1..], MERGE_SECS + 10);
     let base_tip = last(&l);
-    // the branch: its first commit is the one at the boundary, the second landed on top of it
+    // the branch (with its own root commit): its first commit is the one at the boundary, the second landed on top of it
     let b = base(&fx);
     let br = branch(&fx, b, &list);
     let repo = fx.repo();
@@ -348,9 +348,13 @@ fn the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error() {
     let mut cache = SimCache::default();
     let r = evaluate(&repo, &mut cache, &index, &side, &hits, &Limits::default()).unwrap();
     // the identity finds the boundary commit; its content cannot be read: not vouched for
-    assert_eq!(r.mapping[0].main, Some(edge));
-    assert_eq!(r.mapping[0].value, None);
-    assert_eq!(r.mapped, 2);
+    assert_eq!(r.mapping[1].main, Some(edge));
+    assert_eq!(r.mapping[1].value, None);
+    assert_eq!(
+        (r.n, r.mapped),
+        (3, 2),
+        "the base commit of the fixture branch is not on main"
+    );
     assert!(!r.content_ok);
     assert_eq!(r.strength, Strength::Hint);
     assert_eq!(r.stop, Stop::Missing(ghost), "the reason is in the report");
