@@ -323,6 +323,14 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
             },
             Version(2, 36, 0),
         ),
+        (
+            Op::DiffRange {
+                base: h('e'),
+                head: h('f'),
+            },
+            Version(2, 30, 0),
+        ),
+        (Op::PatchIdStable, Version(2, 30, 0)),
         // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
         (
             Op::SyncRebase {
@@ -340,6 +348,8 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
         | Op::FetchPullHead { .. }
         | Op::UpdateBranchCas { .. }
         | Op::RangeDiff { .. }
+        | Op::DiffRange { .. }
+        | Op::PatchIdStable
         | Op::SubmoduleSync { .. }
         | Op::SubmoduleUpdate { .. }
         | Op::CheckAttrGitmodules { .. }

@@ -7,9 +7,8 @@ use std::path::Path;
 
 use serde_json::{json, Value};
 
-use crate::carryover::{Git, RepoGit};
 use crate::error::{Error, Result};
-use crate::git_runner;
+use crate::git_runner::{self, Hex40, Op};
 use crate::lint_pr::{self, Finding, Location, Rule, Severity};
 use crate::lint_pr_cmd::rfc3339_utc;
 use crate::repo;
@@ -331,7 +330,11 @@ fn blocker(text: &str, ready: bool, out: &mut Vec<Finding>) {
 }
 
 /// The head and the patch-id of `BASE...HEAD` in the repository around `checkout` (default: the current
-/// directory). Revisions are resolved to full ids; nothing is fetched or written, and `git` is not started.
+/// directory). Revisions are resolved in process to full commit ids (a tag is peeled). The patch-id is the first
+/// field of `git diff BASE...HEAD | git patch-id --stable`, computed by git itself (`Op::DiffRange`,
+/// `Op::PatchIdStable`): the in-process patch-id of `patch_id.rs` is not git's value for a rename or a binary
+/// file, and a review line carries git's value. Nothing is fetched or written; a read that fails is a usage error
+/// (exit 2), never a finding.
 pub fn expectation(checkout: Option<&Path>, base: &str, head: &str) -> Result<Expect> {
     let start = match checkout {
         Some(p) => p.to_path_buf(),
@@ -342,15 +345,50 @@ pub fn expectation(checkout: Option<&Path>, base: &str, head: &str) -> Result<Ex
     let dir = repo::top_level(&start).unwrap_or(start);
     let r = repo::open_isolated(&dir)
         .map_err(|e| Error::usage(format!("{}: not a repository: {e}", dir.display())))?;
-    let resolve = |name: &str, rev: &str| -> Result<String> {
-        r.rev_parse_single(rev)
-            .map(|id| id.detach().to_string())
-            .map_err(|e| Error::usage(format!("--{name} {rev}: {e}")))
+    let resolve = |name: &str, rev: &str| -> Result<gix::ObjectId> {
+        let id = r
+            .rev_parse_single(rev)
+            .map_err(|e| Error::usage(format!("--{name} {rev}: {e}")))?;
+        let commit = id
+            .object()
+            .and_then(|o| o.peel_to_commit().map_err(Into::into))
+            .map_err(|e| Error::usage(format!("--{name} {rev}: not a commit: {e}")))?;
+        Ok(commit.id)
     };
     let (b, h) = (resolve("base", base)?, resolve("head", head)?);
-    let patch_id = RepoGit::new(&dir, git_runner::shared())
-        .patch_id(&b, &h)
-        .map_err(|e| Error::repository(format!("patch-id of {base}...{head}: {}", e.message)))?;
+    if !matches!(r.merge_base(b, h), Ok(Some(_))) {
+        return Err(Error::usage(format!(
+            "no merge base of {base} and {head}: BASE...HEAD has no meaning"
+        )));
+    }
+    let (b, h) = (b.to_string(), h.to_string());
+    let hex = |name: &str, id: &str| {
+        Hex40::parse(id).ok_or_else(|| Error::usage(format!("--{name}: not a full id")))
+    };
+    let runner = git_runner::shared();
+    let git = |e: git_runner::GitError| Error::usage(format!("patch-id of {base}...{head}: {e}"));
+    let diff = runner
+        .run(
+            &dir,
+            Op::DiffRange {
+                base: hex("base", &b)?,
+                head: hex("head", &h)?,
+            },
+        )
+        .map_err(git)?;
+    // no change, no patch-id (git prints nothing for an empty diff)
+    let patch_id = if diff.stdout.is_empty() {
+        String::new()
+    } else {
+        let out = runner
+            .run_with_stdin(&dir, Op::PatchIdStable, Some(&diff.stdout))
+            .map_err(git)?;
+        String::from_utf8_lossy(&out.stdout)
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string()
+    };
     Ok(Expect { head: h, patch_id })
 }
 

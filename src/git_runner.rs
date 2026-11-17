@@ -246,6 +246,13 @@ pub enum Op {
         new_base: Hex40,
         new_head: Hex40,
     },
+    /// `git diff BASE...HEAD`: the text `stw lint review` feeds to `PatchIdStable`. Local, read-only. Pins what
+    /// reshapes a diff (renames on, context 3, no prefix options, no external diff, no textconv); `.gitattributes`
+    /// and the replace refs are as `git diff` of the user sees them, except that replace refs are off.
+    DiffRange { base: Hex40, head: Hex40 },
+    /// `git patch-id --stable`, reading the diff on stdin (`Runner::run_with_stdin`): the first field of the first
+    /// output line is the patch-id of the diff.
+    PatchIdStable,
     /// Fetch `+refs/pull/<pr>/head` of `origin` into `refs/stw/carry-over/pr-<pr>`: objects and that private
     /// ref only (no tags, no FETCH_HEAD, no configured refmap). For an ssh or local-path remote, as `FetchOrigin`.
     FetchPullHead { pr: u64 },
@@ -301,6 +308,8 @@ impl Op {
     pub fn min_version(&self) -> Version {
         match self {
             Op::RangeDiff { .. } => Version(2, 41, 0),
+            // `git diff` and `git patch-id --stable` (2.0) with options that exist since 2.30 or are ignored
+            Op::DiffRange { .. } | Op::PatchIdStable => Version(2, 30, 0),
             // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
             Op::SyncRebase { .. } => Version(2, 38, 0),
             Op::SubmoduleSync { .. }
@@ -444,6 +453,13 @@ impl Op {
                 a.push(format!("{}..{}", new_base.as_str(), new_head.as_str()));
                 a
             }
+            Op::DiffRange { base, head } => {
+                let mut a = v(&["diff", "--no-color", "--no-ext-diff", "--no-textconv"]);
+                a.push(format!("{}...{}", base.as_str(), head.as_str()));
+                a.push("--".to_string());
+                a
+            }
+            Op::PatchIdStable => v(&["patch-id", "--stable"]),
             Op::CheckAttrGitmodules { cached } => {
                 let mut a = v(&["check-attr"]);
                 if *cached {
@@ -482,6 +498,34 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. } => &[],
+            Op::DiffRange { .. } => &[
+                "-c",
+                "diff.ignoreSubmodules=none",
+                "-c",
+                "diff.submodule=short",
+                "-c",
+                "core.attributesFile=/dev/null",
+                "-c",
+                "diff.renames=true",
+                "-c",
+                "diff.context=3",
+                "-c",
+                "diff.interHunkContext=0",
+                "-c",
+                "diff.algorithm=myers",
+                "-c",
+                "diff.indentHeuristic=true",
+                "-c",
+                "diff.relative=false",
+                "-c",
+                "diff.suppressBlankEmpty=false",
+                "-c",
+                "diff.noprefix=false",
+                "-c",
+                "diff.mnemonicPrefix=false",
+                "-c",
+                "core.quotePath=true",
+            ],
             // a patch comparison pins what hides or reshapes a change: `diff.ignoreSubmodules=all` hides a
             // gitlink, a size limit turns a file into "Binary files differ", context and algorithm reshape the
             // inner `git log -p` patches
@@ -857,6 +901,7 @@ impl Runner {
                     max_stderr: 4096,
                     timeout: Duration::from_secs(10),
                 },
+                None,
             ) {
                 Ok((st, out, _)) if st.success() => {
                     let text = String::from_utf8_lossy(&out).into_owned();
@@ -972,6 +1017,9 @@ impl Runner {
         ) {
             set("GIT_ATTR_NOSYSTEM", "1".into());
         }
+        if matches!(op, Op::DiffRange { .. }) {
+            set("GIT_NO_REPLACE_OBJECTS", "1".into());
+        }
         if matches!(op, Op::RangeDiff { .. }) {
             // no `.gitattributes` of the worktree, no replace refs: nothing may hide or swap a commit
             set("GIT_ATTR_SOURCE", EMPTY_TREE.into());
@@ -993,6 +1041,16 @@ impl Runner {
     /// Run `op` in `repo`. Checks the repository path, finds git, checks the version (once), starts the fixed
     /// vector with the scrubbed environment, and bounds time and output.
     pub fn run(&self, repo: &Path, op: Op) -> std::result::Result<Output, GitError> {
+        self.run_with_stdin(repo, op, None)
+    }
+
+    /// `run` with bytes on the standard input of the child (`Op::PatchIdStable`); without, stdin is closed.
+    pub fn run_with_stdin(
+        &self,
+        repo: &Path,
+        op: Op,
+        input: Option<&[u8]>,
+    ) -> std::result::Result<Output, GitError> {
         let argv = self.argv(repo, op.clone())?;
         let exe = self.find_git().ok_or(GitError::NotFound)?;
         let command = self.command.get().map_or("this step", String::as_str);
@@ -1034,7 +1092,15 @@ impl Runner {
         let mut cmd = Command::new(exe);
         cmd.args(argv).current_dir(repo);
         self.apply_env(&mut cmd, Some(repo), &op);
-        let (status, stdout, stderr) = self.exec(cmd, &self.limits)?;
+        // a diff of a large pull request is bigger than the default bound of a call
+        let limits = match op {
+            Op::DiffRange { .. } => Limits {
+                max_stdout: 64 << 20,
+                ..self.limits
+            },
+            _ => self.limits,
+        };
+        let (status, stdout, stderr) = self.exec(cmd, &limits, input)?;
         let stderr = shorten(
             &redact(&String::from_utf8_lossy(&stderr), &self.secrets),
             600,
@@ -1061,6 +1127,7 @@ impl Runner {
         &self,
         mut cmd: Command,
         limits: &Limits,
+        input: Option<&[u8]>,
     ) -> std::result::Result<(std::process::ExitStatus, Vec<u8>, Vec<u8>), GitError> {
         // Without a terminal git gets its own process group: a timeout or output limit then kills it together
         // with the helpers it started (ssh, upload-pack) that still hold the pipes. With a terminal it stays
@@ -1075,9 +1142,13 @@ impl Runner {
                 std::io::stderr().is_terminal(),
             ),
         };
-        cmd.stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
+        cmd.stdin(if input.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
         if own_group {
             cmd.process_group(0);
         }
@@ -1096,6 +1167,14 @@ impl Runner {
                 std::io::ErrorKind::NotFound => GitError::NotFound,
                 _ => GitError::Spawn(redact(&e.to_string(), &self.secrets)),
             })?;
+        if let (Some(bytes), Some(mut stdin)) = (input, child.stdin.take()) {
+            // a thread: the child may write before it has read everything
+            let bytes = bytes.to_vec();
+            std::thread::spawn(move || {
+                use std::io::Write;
+                let _ = stdin.write_all(&bytes);
+            });
+        }
         let (tx, rx) = mpsc::channel::<(bool, Option<Vec<u8>>)>();
         let streams: [(bool, Option<Box<dyn Read + Send>>); 2] = [
             (false, child.stdout.take().map(|s| Box::new(s) as _)),

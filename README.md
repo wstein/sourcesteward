@@ -736,7 +736,8 @@ version text that cannot be read, is refused (fail closed, `git_error: version`,
 
 | Command | Minimum Git | Deciding feature | Evidence (RelNotes) |
 | --- | --- | --- | --- |
-| `status`, `tidy`, `restack plan`, `lint pr`, `review lines` | none (no Git call) | gix only | `tests/it/no_binaries.rs` |
+| `status`, `tidy`, `restack plan`, `lint pr`, `lint pr-text`, `review lines` | none (no Git call) | gix only | `tests/it/no_binaries.rs` |
+| `lint review` with `--base` and `--head` | 2.30 | `git diff` and `git patch-id --stable`, the fail-closed value; without those two flags no Git call | `tests/it/lint_files.rs` |
 | `status --fetch`, `sync` (default), `sync --prune`, `--no-prune` | 2.30 | `fetch --prune --no-prune-tags` (2.17); 2.30 is the fail-closed value, formally 2.17 | 2.17.0 |
 | `sync --submodules`, `sync restore`, `add` | 2.36 | `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command); these ops read the index | 2.36.0 (config/core) |
 | `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
@@ -1001,7 +1002,7 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 
 ## Text files: `stw lint review`, `stw lint pr-text` (new)
 
-New behavior without a Go counterpart; read-only, no network, no `git` process (revisions and the patch-id are read in process).
+New behavior without a Go counterpart; read-only, no network. `lint pr-text` and `lint review` without `--base`/`--head` start no `git`. With `--base` and `--head` the revisions are resolved in process (a tag is peeled to its commit; no merge base is a usage error), and the patch-id is computed by git: `git diff BASE...HEAD` and `git patch-id --stable` through the runner (`Op::DiffRange`, `Op::PatchIdStable`, minimum Git 2.30). The in-process patch-id of `patch_id.rs` is not used here: it differs from git's value for a rename and for a binary file, and a review line carries git's value.
 Both read one UTF-8 text from FILE and report findings in the shape of `lint pr` (`--json`: `schema_version` 1, `command`
 `lint review` or `lint pr-text`, `time`, `file`, `options`, `rules`, `findings` with `rule`, `severity`, `location` (`kind`
 `file`, `line`), `message`, `summary`). Shared rule IDs and functions with `lint pr`: `session-link`, `pr-body-length`,
@@ -1014,7 +1015,7 @@ Both read one UTF-8 text from FILE and report findings in the shape of `lint pr`
 pr=<n|none>` (fixed keys and order, lower-case hex, no markdown, no blank line before it); at most 15 lines (blank lines at the end
 do not count); no carriage return in any line; no session trailer or
 code-session URL (the word session alone is no finding). `--pr` compares `pr=`. `--base` and `--head` (only together; `--checkout` or the repository around the current
-directory; names or ids) compute the patch-id of `BASE...HEAD` (the first field of `git diff BASE...HEAD | git patch-id --stable`)
+directory; names, ids or tags) compute the patch-id of `BASE...HEAD` (the first field of `git diff BASE...HEAD | git patch-id --stable`, by git)
 and compare it with `patch-id=`, and compare `head=` (`to=`) with the id HEAD resolves to. An empty diff has no patch-id and never
 matches.
 
@@ -1024,7 +1025,7 @@ line, `Blocker: <text>` for a Draft (the default) or, with `--ready`, exactly `B
 of another repository is not checked (planned as its own step).
 
 Fixtures: real comments and PR texts of three pull requests, stored unchanged in `tests/fixtures/lint/` (its README names the
-sources); tests: `tests/it/lint_files.rs` (18 cases); mutations `LF1` to `LF28`. Source of the limits and the line forms:
+sources); tests: `tests/it/lint_files.rs` (18 cases); mutations `LF1` to `LF39`. Source of the limits and the line forms:
 `claude/CLAUDE.md` (review comment, 15 lines, session links) and `claude/skills/agent-workflow/SKILL.md`, section 9 (PR text, 25
 lines, the Blocker line, the review line); the attribution line is the one of the tool (`dotagents-adapter.md`). The rules are
 not compared with the current dotagents text rule by rule: UNKNOWN, as for `lint pr`.
@@ -1149,7 +1150,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 939 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 950 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
