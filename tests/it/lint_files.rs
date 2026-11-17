@@ -495,6 +495,45 @@ fn a_draft_names_its_blocker_a_ready_pr_has_none() {
 }
 
 #[test]
+fn none_in_any_spelling_is_no_named_blocker_and_ready_takes_only_the_exact_line() {
+    // a Draft names a blocker (skill section 9: "Blocker oder keiner"; core: a Draft starts with a named blocker)
+    for b in [
+        "Blocker: none.",
+        "Blocker: None",
+        "Blocker: None. ",
+        "Blocker: NONE",
+        "Blocker: none",
+        "Blocker: keiner",
+        "Blocker: Keiner.",
+    ] {
+        let o = pr_text_of(&good_pr(b), &[]);
+        assert_eq!(code(&o), 3, "draft {b:?}: {}", out_text(&o));
+        assert_eq!(rules(&o), vec!["pr-blocker-line"], "draft {b:?}");
+    }
+    // a blocker that merely begins with None names one
+    assert_eq!(
+        code(&pr_text_of(
+            &good_pr("Blocker: None of the CI runs is green"),
+            &[]
+        )),
+        0
+    );
+    // a Ready PR has exactly `Blocker: None.`
+    for b in [
+        "Blocker: None.x",
+        "Blocker: None. ",
+        "Blocker: None. Review pending",
+        "Blocker: Nonesuch",
+        "Blocker: none.",
+        "Blocker: None",
+    ] {
+        let o = pr_text_of(&good_pr(b), &["--ready"]);
+        assert_eq!(code(&o), 3, "ready {b:?}: {}", out_text(&o));
+        assert_eq!(rules(&o), vec!["pr-blocker-line"], "ready {b:?}");
+    }
+}
+
+#[test]
 fn the_blocker_line_is_exactly_one_line_of_the_fixed_form() {
     for (name, text) in [
         ("missing", good_pr("Tests again: 3 passed")),
