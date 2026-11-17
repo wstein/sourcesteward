@@ -529,6 +529,81 @@ impl Fx {
     }
 }
 
+/// A signature with explicit identity, time (seconds since the epoch) and zone offset (seconds east of UTC).
+#[derive(Clone, Copy, Debug)]
+pub struct Stamp<'a> {
+    pub name: &'a str,
+    pub email: &'a str,
+    pub secs: i64,
+    pub offset: i32,
+}
+
+impl<'a> Stamp<'a> {
+    pub fn new(name: &'a str, email: &'a str, secs: i64) -> Stamp<'a> {
+        Stamp {
+            name,
+            email,
+            secs,
+            offset: 0,
+        }
+    }
+    pub fn tz(self, offset: i32) -> Stamp<'a> {
+        Stamp { offset, ..self }
+    }
+}
+
+impl Fx {
+    /// Like `commit`, with author and committer given in full (identity, seconds, zone) and the message as raw bytes.
+    /// The fixture clock is not used. Writes objects only; no ref is touched.
+    pub fn commit_at(
+        &self,
+        parent: Option<ObjectId>,
+        edits: &[(&str, Option<&str>)],
+        msg: impl AsRef<[u8]>,
+        author: Stamp,
+        committer: Stamp,
+    ) -> ObjectId {
+        self.commit_at_parents(
+            parent.into_iter().collect(),
+            parent,
+            edits,
+            msg,
+            author,
+            committer,
+        )
+    }
+
+    /// `commit_at` with any parents (a merge commit) and the tree taken from `tree_from`.
+    pub fn commit_at_parents(
+        &self,
+        parents: Vec<ObjectId>,
+        tree_from: Option<ObjectId>,
+        edits: &[(&str, Option<&str>)],
+        msg: impl AsRef<[u8]>,
+        author: Stamp,
+        committer: Stamp,
+    ) -> ObjectId {
+        let plain = self.commit_with_parents(parents, tree_from, edits, "x");
+        let repo = self.repo();
+        let mut c = repo
+            .find_commit(plain)
+            .unwrap()
+            .decode()
+            .unwrap()
+            .to_owned()
+            .unwrap();
+        let sig = |s: Stamp| gix::actor::Signature {
+            name: s.name.into(),
+            email: s.email.into(),
+            time: gix::date::Time::new(s.secs, s.offset),
+        };
+        c.author = sig(author);
+        c.committer = sig(committer);
+        c.message = msg.as_ref().into();
+        repo.write_object(&c).unwrap().detach()
+    }
+}
+
 /// Stdout of a successful `stw` run, independent of the developer's token and workspace.
 pub fn stw_stdout(args: &[&str]) -> String {
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
