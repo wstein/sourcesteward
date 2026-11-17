@@ -498,7 +498,12 @@ fn complete<T>(r: Result<Read<T>, String>) -> Result<Vec<T>, String> {
         Read::Failed(e) => Err(e),
     }
 }
-fn check_class(runs: &[CheckRun], statuses: &[CommitStatus]) -> Result<&'static str, String> {
+/// The class of a head from its check runs and statuses (`none`, `pending`, `green`, `red`). Shared with `stw status`
+/// (`status_ci`): one rule for both commands.
+pub(crate) fn check_class(
+    runs: &[CheckRun],
+    statuses: &[CommitStatus],
+) -> Result<&'static str, String> {
     use std::collections::HashSet;
     if runs.iter().any(|r| {
         r.status.is_empty()
