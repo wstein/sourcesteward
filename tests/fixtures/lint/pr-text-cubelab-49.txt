@@ -1,0 +1,11 @@
+## Scope (documentation only)
+The root `AGENTS.md` described the proposed CubeScene API in [Cubistry #111](https://github.com/wstein/cubistry/issues/111) as the viewer’s "contract". This overstates the accepted decision: [Cubistry #21](https://github.com/wstein/cubistry/issues/21) confirms only the **target ownership** of a separate TypeScript `@puzlwerk/viewer` alongside the ReScript core; CubeScene is not an accepted API, and animation timing/easing ownership remains undecided.
+
+One minimal wording correction, with an explicit canonical link. No migration authorization, implementation, dependency, renderer, solver, Rust change, or merge. Preserve existing CubeLab behavior and the M1 → M2 → M3 gate; the separately approved bounded wstein/cubistry#504 and wstein/cubistry#505 exception does not waive M1 or authorize an additional solver migration.
+
+Validation: exact-match one-span edit on root `AGENTS.md`; independent review CLEAR at the exact head (see comment). CI: test-and-build success; the Browser tests workflow is skipped by its job condition (label e2e not set, docs-only PR).
+
+
+Blocker: None.
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+

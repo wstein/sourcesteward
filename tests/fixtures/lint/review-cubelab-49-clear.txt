@@ -1,0 +1,13 @@
+Review: CLEAR head=82dc939a0115b4f116c8ac71fb73eb3b96a1d01b patch-id=8a7ecc88da6cff3f867a0e932184ca39f5bd151a pr=49
+Scope: AGENTS.md lines 43-46 only (+4/-2), one span, no CRLF, git diff --check clean.
+Sources: cubistry#111 is labeled "Proposal for discussion; NOT approved"; cubistry#21 owner comments (2026-11-05, 2026-11-08, 2026-11-16) keep CubeScene a proposal and timing/easing open.
+The owner comment of 2026-11-15 in cubistry#21 bounds the #504/#505 exception and does not accept M1; both PRs merged 2026-11-15.
+Consistency: git grep finds no other CubeScene mention and no other place calling the viewer an accepted contract.
+Links: cubistry#111 and cubistry#21 resolve; link syntax and US English correct.
+CI on exact head: CI run 43835670949 success; Browser tests run 43835670873 skipped (no e2e label, job condition).
+Local: npm ci 0, format:check 0; no repo check covers Markdown typos or links (two probe mutations passed format:check).
+Base drift: main is 2 commits ahead (package.json, package-lock.json only); AGENTS.md unchanged on main.
+Nit: commit lacks a Co-Authored-By trailer.
+Nit: PR body writes bare #504/#505; in this repo these do not exist; use wstein/cubistry#504/#505.
+Nit: PR body lacks a "Blocker:" line and the closing attribution line; "Draft; do not auto-merge." must go at Ready.
+PR body: 7 lines, no session links.

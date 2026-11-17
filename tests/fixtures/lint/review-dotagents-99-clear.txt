@@ -1,0 +1,13 @@
+Review: CLEAR head=13cacbe99b273d46c234efdd7662f3a4410472e0 patch-id=4dd58dd32fc07562d0a26f316bca59669657a52c pr=99
+Round 2 (strong tier), delta dd25b13..13cacbe (fast-forward, no merge commits).
+Tests (env -i): test.sh 938/0, layout 225/0, budget 35/0, adapters 198/0, neutral 72/0, agent-install 88/0, guard 275/0, hook-split 25/0, codex 59/0, macos-local 21/0, git-env 62/0; rule-budget 7433 chars, max line 130. CI Test success (attempt 1).
+Findings 1-3 (blocking): fixed. Condition 5 matches points 5 and 7; the Ready template defines fetch, <Basis>, <CLEAR-PR>, <Head>, the comment query and the abort rule.
+The template query ran against this PR and returned the latest Review line; issue comments come in ascending order, so the last line of --paginate is the latest.
+Findings 4-7: fixed, except the nits below. Finding 8: kept, stated in the PR text.
+9 nit SKILL.md:575-576 (Ready template): dropping the merge-commit condition from the Ready template keeps test.sh green (938/0); only point 7 is pinned.
+10 nit docs/rule-inventory.md:160: S52 still says "Delta-Review".
+11 nit SKILL.md:338-340: "braucht neues Label" and "setzt das Label nur neu, wenn sich der Baum geändert hat" in one item; wording only.
+12 nit SKILL.md:573: startswith("Review:") skips a malformed FINDINGS line (leading space, markdown); fail-open only for comments that break the format rule.
+Mutations: 9 applied, 7 killed at the intended check, 1 failed only on line length, 1 survived (finding 9).
+Identity and trailers ok; PR text 19 lines with Blocker line; no session links (0).
+Owner decisions A and B stay open; recommendation unchanged.

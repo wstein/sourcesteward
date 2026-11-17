@@ -1,0 +1,24 @@
+A rejected guided proposal or physical-guide conflict now offers **Find a matching cube**. The existing photos and reviewed colors enter an explicit bounded PuzlWerk ReScript search; no camera retake or free assignment editor is required.
+
+- Canonical questions skip resolved faces and update the productive net/3D preview, preserving exact photo IDs and absolute rotations.
+- Only final **Use this cube** installs the rechecked Core confirmation once. Cancel restores the preceding approval or conflict.
+- Single-face color review resumes Core constraints; Back removes the last manual constraint through Core. Original photos and recognition provenance stay unchanged.
+- Initial capped-empty results retain neutral capture slots and color review. Search further increases the actual budget; incomplete search and NxN checks remain explicit.
+- Preserves immutable capture lineage across retakes and keeps the dialog open when the external install rejects a stale result.
+
+Validation: 11/11 browser and 2/2 actual-checker adapter cases on 7a582b8; final 6/6 browser delta on 5da6a04090ad10bb55a9a012cd17c4fa2755a1a6. Ten compiled counter-mutants detected across both stages. Final typecheck, lint, format, build and typos exit 0. Original 19:08 and 21:28 captures are exercised without photo/color/protocol edits; selected source hashes and export/reimport are checked.
+
+Base: #60 is merged; this PR is rebased onto main (head bfbf79cc1d3372c874bd7c3db028a416e3208f94, same patch-id as the reviewed 5da6a04090ad10bb55a9a012cd17c4fa2755a1a6). Private Core 0.3.0 is pinned to PuzlWerk source f1fa30ac2c12b507be9c6f3041fe7ef316378c37 (an earlier wstein/puzlwerk#85 head; the archive differs from the current one only in provenance.json); no registry publication or sibling checkout is needed.
+
+R1 follow-up binds actions to their exact opaque review/Core revision and active capture; neutral source review now carries Photo-N names through title, dialog and image alt.
+
+Review CLEAR at the pre-rebase head 5da6a04090ad10bb55a9a012cd17c4fa2755a1a6 and carried over to this head with the same patch-id (Carried-over comment on this PR). CI at this head: CI run 44136132716 success; CI at the pre-rebase head: 1436 unit cases (6 expected failures, 2 skips) and 203/203 browser cases without retries.
+
+Owner gates at merge: license/distribution (EUPL-1.2 Core in the MIT app), physical-owner acceptance, M1 sequence per Cubistry #21. Parent #60 and wstein/puzlwerk#85 are merged. Complete NxN reachability remains unverified.
+Merge publishes: pages.yml deploys on every push to main, so merging ships the vendored EUPL-1.2 Core in the app bundle via GitHub Pages.
+Blocker: None.
+
+Manual steps are in docs/orientation-recovery.md. Local before/after desktop and touch captures accompany the author report.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+

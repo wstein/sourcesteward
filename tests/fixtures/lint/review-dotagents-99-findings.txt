@@ -1,0 +1,14 @@
+Review: FINDINGS head=dd25b136896a8af84d0cf1adf43e69db1c2e70fe patch-id=2251ee9714a111cb33da1b6f9451e5b47295512d pr=99
+Round 1 (strong tier). Tests (env -i): test.sh 930/0, layout 225/0, budget 35/0, adapters 198/0, neutral 72/0, agent-install 88/0, guard 275/0, hook-split 25/0, codex 59/0, macos-local 21/0, git-env 62/0; rule-budget 7433 chars, max line 130. CI Test success (attempt 1).
+1 blocking SKILL.md:338: ci-full condition 5 still says a new push needs a new review; contradicts condition 1 (:330) and point 7.
+2 blocking SKILL.md:569-570: Ready template, child below the top, requires the CLEAR to name the current top head; no patch-id path, contradicts section 6 (:292-293).
+3 blocking SKILL.md:566-568: Ready template not executable without interpretation: no fetch, <Basis> undefined (origin/<default>, cumulative at a top), no command to find the latest Review: comment, compares with the given CLEAR URL instead of the latest CLEAR (point 7).
+4 nit SKILL.md:250: "Delta-Review nach Punkt 4": point 4 defines no delta review (Delta-Check is point 3, :218); terms mixed.
+5 nit SKILL.md:91: "reine Rebase mit gleichem git range-diff folgt Punkt 7"; point 7 now uses patch-id.
+6 nit SKILL.md:366 and docs/rule-inventory.md K44: "auf dem CLEAR-Head" is ambiguous after point 7 (point 5 says "auf diesem Head").
+7 nit test.sh: mutation survivors: dropping "git rev-list --merges" from point 7 (:247) passes; "Übernahme" in docs/ is not scanned.
+8 nit commit 22f072c alone fails test.sh (stated in PR text); not bisectable.
+Mutations: 13 applied, 11 killed at the intended check, 2 survived (finding 7).
+Leftover words: only crew-* skills and unrelated "übernehmen" (adoption of work, trailers); deleted script and suite unreferenced.
+Identity and trailers ok; no session links (0).
+Owner decisions (stack patch-id, whitespace): see the coordinator report.

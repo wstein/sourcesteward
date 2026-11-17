@@ -1,0 +1,21 @@
+Removes the carry-over mechanism (owner decision 2026-11-17) without fallback and binds a CLEAR to the content instead.
+
+Changes:
+- Skill section 4 point 7 is rewritten: when setting Ready the helper compares `git diff <base>...<head> | git patch-id --stable` (first field) with the patch-id of the last `Review: CLEAR`. Equal patch-id, no merge commit and green light checks on the exact head: the CLEAR stays valid, without own comment or reviewer. Otherwise a delta review (point 4).
+- The `Carried-over:` line, the "Übernahme-Prüfer" template, `scripts/carry-over-check.sh` and `test-carry-over.sh` are deleted; core, Ready and label templates, workflows, README, AGENTS.md, docs and inventories lose every reference.
+- Review round 1 fixes: ci-full condition 5, Ready template (fetch, base, latest Review comment command, child below top, stop on deviation), term Delta-Check.
+- Core: 7492 to 7433 characters (`bash scripts/rule-budget.sh`).
+
+Tests (worktree, `env -i`), head 13cacbe99b273d46c234efdd7662f3a4410472e0: test.sh 938/0, test-layout 225/0, test-budget 35/0, test-adapters 198/0, test-neutral 72/0, test-agent-install 88/0, test-guard 275/0, test-hook-split 25/0, test-codex 59/0, test-macos-local 21/0, test-git-env 62/0.
+New tests fail on the old trees (origin/main: 32, dd25b13: 14). Mutations killed: planted reference (word scan), old ci-full sentence, removed `git fetch origin`, removed merge-commit condition from point 7.
+
+Not verified: test-agent-hooks-live.sh (needs a real Codex), macOS CI lane (manual).
+
+Owner decisions at merge: stack patch-id (cumulative top patch-id kept) and whitespace-only changes (accept the gap or use `git patch-id --verbatim`); see the first comment. Review recommendation: keep the simple stack form, do not reintroduce range-diff.
+
+Review CLEAR at this head (comment); CI Test success; no workflow reads `ci-full`, so no heavy lane exists for this repo. Commit 1 alone does not pass test.sh (script and workflows still present); the head does.
+
+Blocker: None.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
