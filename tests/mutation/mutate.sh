@@ -41,13 +41,7 @@ m W3 "worktree protection ignored by tidy" src/tidy.rs \
   "if let Some(dir) = wt.branch_dir(&br) {" "if let Some(dir) = wt.branch_dir(&br).filter(|_| false) {" \
   tidy classification_with_pull_request_proof
 m T1 "equal-patches proof accepts any branch" src/tidy.rs \
-  "    Ok(false)
-}
-
-/// Pull request proof" "    Ok(true)
-}
-
-/// Pull request proof" \
+  'self.with_patch > 0 && self.commits.is_empty()' 'true' \
   tidy a_changed_patch_is_not_equal
 m T2 "merged PR proof ignores the head SHA" src/tidy.rs \
   "if pr.head_sha == tipstr {" "if true {" \
@@ -3738,8 +3732,10 @@ m TS31 'bytes that are not UTF-8 are not marked' src/tidy_similarity.rs \
   's.push_str(&format!("\\x{byte:02x}"));' 's.push('\''?'\'');' \
   tidy_similarity masking_handles_bytes_controls_and_length
 m TS32 'the display is not clamped below the threshold' src/tidy_similarity.rs \
-  '            t - 1
-' '            t
+  '!self.ge_pct(threshold_pct) {
+            t - 1
+' '!self.ge_pct(threshold_pct) {
+            t
 ' \
   tidy_similarity threshold_is_at_or_above_in_integers
 m TS33 'rounding is truncation' src/tidy_similarity.rs \
@@ -4031,6 +4027,123 @@ m RB67 'the mail of the PR commits is compared in its own case' src/tidy_rebase.
 m RB68 'the zone offset of an API mapping is not noted' src/tidy_rebase.rs \
   'tz_differs: m.offset != h.offset,' 'tz_differs: false,' \
   tidy_rebase a_different_zone_offset_of_a_pull_request_commit_is_noted
+
+m TP1 'the similarity stage also runs for a branch that has an equal-patches proof' src/tidy.rs \
+  '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+        );' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "equal-patches"
+        );' \
+  tidy_similarity_plan the_existing_proof_has_precedence_over_similarity
+m TP2 'an open pull request does not stop the similarity stage' src/tidy.rs \
+  'if let Some(n) = pr_open {
+            bp.proof = "open-pull-request";' 'if let Some(n) = pr_open.filter(|_| uniq == 0) {
+            bp.proof = "open-pull-request";' \
+  tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
+m TP3 'a backup branch is judged by the similarity stage' src/tidy.rs \
+  '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+        );' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "backup-recent"
+        );' \
+  tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
+m TP4 'a worktree does not protect a similar-patches branch' src/tidy.rs \
+  'if let Some(dir) = wt.branch_dir(&br) {' 'if let Some(dir) = wt.branch_dir(&br).filter(|_| bp.proof != "similar-patches") {' \
+  tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
+m TP5 'a branch whose proof is pull-request-merged-branch-moved is not judged' src/tidy.rs \
+  '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+        );' '"upstream-gone" | "unmerged"
+        );' \
+  tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
+m TP6 'a branch whose proof is upstream-gone is not judged' src/tidy.rs \
+  '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+        );' '"pull-request-merged-branch-moved" | "unmerged"
+        );' \
+  tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
+m TP7 'a similar-patches branch is delete' src/tidy.rs \
+  'bp.decision = "review";
+            bp.proof = "similar-patches";' 'bp.decision = "delete";
+            bp.proof = "similar-patches";' \
+  tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
+m TP8 'apply deletes a similar-patches branch' src/tidy_apply.rs \
+  'if bp.decision == "delete" {
+                    asked.push((bp, Kind::Branch));' 'if bp.decision == "delete" || bp.proof == "similar-patches" {
+                    asked.push((bp, Kind::Branch));' \
+  tidy_similarity_plan apply_never_deletes_a_similar_patches_branch
+m TP9 'modified branches count as similar-patches' src/tidy.rs \
+  'if report.class == tidy_similarity::Class::Landed {' 'if report.class != tidy_similarity::Class::Partial {' \
+  tidy_similarity_plan modified_partial_squash_and_empty_branches_stay_unmerged_with_their_class
+m TP10 'the oldest plus commit sets no start for the index' src/tidy.rs \
+  'Some(oldest - lim.window_secs),' 'None,' \
+  tidy_similarity_plan the_index_starts_a_window_before_the_oldest_plus_commit
+m TP11 'the index starts a window after the oldest plus commit' src/tidy.rs \
+  'Some(oldest - lim.window_secs),' 'Some(oldest + lim.window_secs),' \
+  tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
+m TP12 'the boundary commit of a shallow clone is indexed' src/tidy_similarity.rs \
+  'if is_shallow && has_missing_parent(repo, *id)? {' 'if false && has_missing_parent(repo, *id)? {' \
+  tidy_similarity_plan a_shallow_clone_gives_a_plan_with_the_boundary_skipped
+m TP13 'the boundary commits are not counted' src/tidy_similarity.rs \
+  'idx.shallow += 1;' 'idx.shallow += 0;' \
+  tidy_similarity the_boundary_of_a_shallow_clone_is_left_out_of_the_index_and_counted
+m TP14 'the plan does not report the shallow boundary' src/tidy.rs \
+  'skipped_shallow: index.shallow_skipped(),' 'skipped_shallow: 0,' \
+  tidy_similarity_plan a_shallow_clone_gives_a_plan_with_the_boundary_skipped
+m TP15 '--similarity is ignored' src/cli.rs \
+  'high: u32::from(a.similarity),' 'high: 95,' \
+  tidy_similarity_plan the_flags_set_the_thresholds_and_the_value_decides_at_the_boundary
+m TP16 '--similarity-low is ignored' src/cli.rs \
+  'low: u32::from(a.similarity_low),' 'low: 70,' \
+  tidy_similarity_plan the_flags_set_the_thresholds_and_the_value_decides_at_the_boundary
+m TP17 'a low threshold above the high one is accepted' src/cli.rs \
+  'if a.similarity_low > a.similarity {' 'if a.similarity_low > a.similarity + 100 {' \
+  tidy_similarity_plan thresholds_out_of_range_or_in_the_wrong_order_are_usage_errors
+m TP18 '--no-similarity has no effect' src/cli.rs \
+  'similarity: (!a.no_similarity).then(|| tidy::Similarity {' 'similarity: Some(()).map(|_| tidy::Similarity {' \
+  tidy_similarity_plan no_similarity_gives_the_plan_of_before
+m TP19 'the range of the low threshold starts at 0' src/cli.rs \
+  'default_value_t = tidy_similarity::LOW_PCT as u8,
+          value_parser = clap::value_parser!(u8).range(1..=100)' 'default_value_t = tidy_similarity::LOW_PCT as u8,
+          value_parser = clap::value_parser!(u8).range(0..=100)' \
+  tidy_similarity_plan thresholds_out_of_range_or_in_the_wrong_order_are_usage_errors
+m TP20 'summary.similar counts equal-patches' src/tidy.rs \
+  '.filter(|b| b.proof == "similar-patches")
+        .count()' '.filter(|b| b.proof == "equal-patches")
+        .count()' \
+  tidy_similarity_plan the_summary_counts_similar_branches_as_review_and_names_them
+m TP21 'summary.similar is not in the JSON' src/tidy.rs \
+  '"similar": similar_count(plans)}})' '"similar": 0}})' \
+  tidy_similarity_plan the_summary_counts_similar_branches_as_review_and_names_them
+m TP22 'the key threshold_low is renamed' src/tidy.rs \
+  '"threshold_low": s.low,' '"threshold_lo": s.low,' \
+  tidy_similarity_plan the_json_of_a_similar_branch_has_the_stable_keys_and_the_figures
+m TP23 'the window in the JSON is 0' src/tidy.rs \
+  '"window_days": tidy_similarity::WINDOW_DAYS,' '"window_days": 0,' \
+  tidy_similarity_plan the_json_of_a_similar_branch_has_the_stable_keys_and_the_figures
+m TP24 'the JSON has no evidence lines' src/tidy.rs \
+  'x.evidence
+                        .iter()' 'x.evidence
+                        .iter()
+                        .take(0)' \
+  tidy_similarity_plan the_json_of_a_modified_branch_has_evidence_lines
+m TP25 'the text summary does not name similar-patches' src/tidy.rs \
+  'format!(" ({similar} of them similar-patches)")' 'String::new()' \
+  tidy_similarity_plan the_text_plan_has_one_line_for_a_similar_branch_and_no_command
+m TP26 'a branch without a patch is all matched' src/tidy.rs \
+  'self.with_patch > 0 && self.commits.is_empty()' 'self.commits.is_empty()' \
+  tidy_similarity_plan modified_partial_squash_and_empty_branches_stay_unmerged_with_their_class
+m TP27 'unmatched commits leave out the first of a key' src/tidy.rs \
+  'needed.entry(p).or_default().push(info.id);' 'needed.entry(p).or_default();' \
+  tidy_similarity_plan unmatched_commits_are_the_branch_commits_without_a_patch_partner_on_main
+m TP28 'a value below the low threshold is shown as the low threshold' src/tidy_similarity.rs \
+  'if p >= t && !self.ge_pct(low_pct) {
+            t - 1' 'if p >= t && !self.ge_pct(low_pct) {
+            p' \
+  tidy_similarity a_value_below_the_low_threshold_is_not_shown_as_the_low_threshold
+m TP29 'the median is taken from values protected for the high threshold only' src/tidy_similarity.rs \
+  'sims.iter().map(|s| s.shown_in(high, low)).collect();' 'sims.iter().map(|s| s.shown(high)).collect();' \
+  tidy_similarity a_value_below_the_low_threshold_is_not_shown_as_the_low_threshold
+m TP30 'the plan does not judge: the + commits are the whole branch' src/tidy.rs \
+  'unmatched = Some(u.commits);' 'unmatched = Some(Vec::new());' \
+  tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
+m TP31 'the minimum shown ignores the thresholds' src/tidy.rs \
+  'let min = report.min.map(|m| m.shown_in(th.high, th.low)).unwrap_or(0);' 'let min = 0;' \
+  tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

@@ -237,7 +237,7 @@ fn a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review() {
         "{}",
         b.detail
     );
-    assert!(b.detail.contains("97.5"), "{}", b.detail);
+    assert!(b.detail.contains("min 97.5 %"), "{}", b.detail);
     assert!(b.detail.contains("threshold 95"), "{}", b.detail);
     assert!(
         b.worktree.is_none(),
@@ -615,6 +615,7 @@ fn the_json_of_a_modified_branch_has_evidence_lines() {
 #[test]
 fn the_summary_counts_similar_branches_as_review_and_names_them() {
     let w = scenarios();
+    w.fx.branch("eq2", w.fx.tip("eq"));
     let v = plan_json(&w, &[]);
     assert_eq!(
         key_list(&v["summary"]),
@@ -628,7 +629,10 @@ fn the_summary_counts_similar_branches_as_review_and_names_them() {
     );
     assert_eq!(v["summary"]["review"], 1);
     assert_eq!(v["summary"]["similar"], 1);
-    assert_eq!(v["summary"]["delete"], 1);
+    assert_eq!(
+        v["summary"]["delete"], 2,
+        "two equal-patches branches are not similar"
+    );
 }
 
 #[test]

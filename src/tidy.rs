@@ -1,9 +1,10 @@
 //! `stw tidy plan`: which local branches and worktree registrations can be cleaned up. Read-only.
 //!
-//! Proof order per branch (first match wins), as in the prototype:
-//! in a worktree whose directory exists (keep) > open PR (keep) > ancestor of base (delete) >
-//! equal patch IDs in base (delete) > merged PR with exactly this head (delete) > merged PR but the
-//! branch moved (review) > upstream gone (review) > unmerged (keep). Nothing is deleted here.
+//! Proof order per branch (first match wins): open PR (keep) > ancestor of base (delete) >
+//! equal patch IDs in base (delete) > merged PR with exactly this head (delete) > backup name (delete from an age, else
+//! keep) > similar patches in base (review, `similarity_stage`) > merged PR but the branch moved (review) >
+//! upstream gone (review) > unmerged (keep). A branch checked out in a worktree whose directory exists is
+//! `keep`/`in-worktree` at the end, whatever the proof was. Nothing is deleted here.
 //!
 //! Backup branches (see `is_backup`) have no review class: where no proof above applies they are `keep`
 //! while the tip commit is younger than `backup_days` days and `delete` from that age on.
