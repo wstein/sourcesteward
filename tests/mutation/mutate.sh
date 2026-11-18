@@ -4561,17 +4561,36 @@ m OR23 'the plan writes the landing under another name' src/tidy.rs \
   '"landed_via": json!({"kind": b.landed_via.kind.as_str()' '"landed_via": json!({"type": b.landed_via.kind.as_str()' \
   tidy_oracle with_the_plan::the_real_plan_of_a_rebase_merge_is_judged_a_rebase
 m OR24 'the driver takes a relative directory' tests/oracle/tidy_oracle.sh \
-  '*) die "OUTDIR must be an absolute path: $1" ;; esac' '*) ;; esac' \
+  '*) die "$gname must be an absolute path: $gpath" ;; esac' '*) ;; esac' \
   tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
 m OR25 'the driver takes a directory with ..' tests/oracle/tidy_oracle.sh \
-  "*) die \"OUTDIR must not contain '..': \$1\" ;; esac" '*) ;; esac' \
+  "die \"\$gname must not contain '..': \$gpath\" ;; esac" ';; esac' \
   tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
 m OR26 'the driver takes the root directory' tests/oracle/tidy_oracle.sh \
-  '[ "$1" != / ] || die "OUTDIR must not be /"' 'true' \
+  '[ "$gpath" != / ] || die "$gname must not be /"' 'true' \
   tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
 m OR27 'the driver takes a directory inside a Git tree' tests/oracle/tidy_oracle.sh \
-  'check-ignore -q "$1" || die "OUTDIR is inside a Git tree that does not ignore it: $1"' 'check-ignore -q "$1" || true' \
+  'check-ignore -q "$gprobe$gtail/" || die "$gname is inside a Git tree that does not ignore it: $gpath"' 'check-ignore -q "$gprobe$gtail/" || true' \
   tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
+m OR28 'a rebase that maps more commits than GitHub wrote is accepted' src/tidy_oracle.rs \
+  'if v.targets == want {' 'if v.targets.is_superset(&want) {' \
+  tidy_oracle a_strong_rebase_that_maps_more_commits_than_github_wrote_is_a_finding
+m OR29 'the driver refuses every directory inside a Git tree' tests/oracle/tidy_oracle.sh \
+  'check-ignore -q "$gprobe$gtail/" || die' 'false || die' \
+  tidy_oracle the_driver_accepts_a_directory_that_the_git_tree_ignores
+m OR30 'the driver does not guard the raw data directory' tests/oracle/tidy_oracle.sh \
+  '[ "${ORACLE_RAWDIR+set}" != set ] || guard_dir ORACLE_RAWDIR "$ORACLE_RAWDIR"' 'true' \
+  tidy_oracle the_driver_guards_the_raw_data_directory_and_resolves_symlinks
+m OR31 'an empty raw data directory counts as not given' tests/oracle/tidy_oracle.sh \
+  '"${ORACLE_RAWDIR+set}"' '"${ORACLE_RAWDIR:+set}"' \
+  tidy_oracle the_driver_guards_the_raw_data_directory_and_resolves_symlinks
+m OR32 'git is not told to compare text' tests/it/oracle_tidy.rs \
+  '        "--no-textconv",
+        "--text",' '        "--no-textconv",' \
+  oracle_tidy the_comparison_reads_text_in_files_marked_binary_and_counts_unreadable_per_commit
+m OR33 'an unreadable commit counts once per setting' tests/it/oracle_tidy.rs \
+  'Err(_) => unreadable = true,' 'Err(_) => run.unreadable += 1,' \
+  oracle_tidy the_comparison_reads_text_in_files_marked_binary_and_counts_unreadable_per_commit
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
