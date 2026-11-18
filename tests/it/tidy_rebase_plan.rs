@@ -830,3 +830,353 @@ fn a_remaining_list_has_at_most_twenty_masked_paths() {
         "{files:?}"
     );
 }
+
+// ---- the pull request mapping through a fake API ----
+
+use stw::auth::TokenSource;
+use stw::github::Client;
+use stw::tidy::PrApi;
+use stw::tidy_rebase::ApiReason;
+
+/// `YYYY-MM-DDTHH:MM:SSZ` of seconds since the epoch.
+fn iso(secs: i64) -> String {
+    let days = secs.div_euclid(86_400);
+    let rem = secs.rem_euclid(86_400);
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
+}
+
+fn pr_commit_json(id: ObjectId, c: &C) -> String {
+    format!(
+        r#"{{"sha":"{id}","commit":{{"author":{{"name":"{NAME}","email":"{MAIL}","date":"{}"}},"message":"{}"}}}}"#,
+        iso(c.secs),
+        c.subject
+    )
+}
+
+/// The commits answer of a pull request: the first `k` commits of `list` with the ids they have on the branch.
+fn commits_body(ids: &[ObjectId], list: &[C]) -> String {
+    let v: Vec<String> = ids
+        .iter()
+        .zip(list)
+        .map(|(i, c)| pr_commit_json(*i, c))
+        .collect();
+    format!("[{}]", v.join(","))
+}
+
+fn merged_pr(head: &str, number: u64, head_sha: String, merge: String, at: i64) -> AnyPr {
+    AnyPr {
+        head_ref: head.into(),
+        head_sha,
+        number,
+        state: "MERGED",
+        merge_commit_sha: merge,
+        merged_at: Some(at),
+        title: "t".into(),
+    }
+}
+
+fn plan_api(w: &W, prs: Vec<AnyPr>, api: PrApi, o: &PlanOpts) -> RepoPlan {
+    plan_repo_with_opts(
+        &rr(w),
+        PrProof {
+            prs: Some(prs),
+            note: "ok".into(),
+            api,
+        },
+        o,
+    )
+}
+
+fn client(routes: &FakeRoutes) -> Client {
+    Client::with_base("tok".into(), TokenSource::Env, routes.url.clone())
+}
+
+fn api_of(p: &RepoPlan, branch: &str) -> (Option<ApiReason>, LandedKind, Strength) {
+    let b = get(p, branch);
+    let a = &b.rebase.as_ref().expect("rebase object").api;
+    (a.not_read, a.kind, a.strength)
+}
+
+/// A branch of three commits; the pull request holds the first two (`head` is the second), the branch moved on.
+struct Moved {
+    w: W,
+    list: Vec<C>,
+    ids: Vec<ObjectId>,
+}
+
+fn moved(landed: fn(&mut W, &[C]) -> ObjectId) -> Moved {
+    let mut w = world();
+    w.fx.set_origin_url("https://github.com/o/r.git");
+    let list = cs(0, 3);
+    let ids = w.branch("feat", &list);
+    let m = landed(&mut w, &list[..2]);
+    w.set_main(m);
+    Moved { w, list, ids }
+}
+
+fn no_sim() -> PlanOpts {
+    let mut o = opts();
+    o.similarity = None;
+    o
+}
+
+const MOVED: (&str, &str) = ("review", "pull-request-merged-branch-moved");
+
+#[test]
+fn a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api() {
+    let m = moved(|w, l| *w.land_resolved(l, MERGE_SECS).last().unwrap());
+    let main = m.w.main.to_string();
+    let body = commits_body(&m.ids[..2], &m.list[..2]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let c = client(&routes);
+    let prs = vec![merged_pr(
+        "feat",
+        5,
+        m.ids[1].to_string(),
+        main.clone(),
+        MERGE_SECS,
+    )];
+    let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
+    // the proof stays; the commits are mapped by identity, the branch has one more
+    assert_eq!(proof_of(&p, "feat"), MOVED);
+    assert_eq!(
+        api_of(&p, "feat"),
+        (None, LandedKind::Rebase, Strength::Hint)
+    );
+    assert_eq!(
+        via(&p, "feat"),
+        (LandedKind::Rebase, Basis::PrApi, Strength::Hint)
+    );
+    let hits = routes.hits();
+    assert_eq!(hits.len(), 1, "{hits:?}");
+    assert!(
+        hits[0].starts_with("GET /repos/o/r/pulls/5/commits?per_page=100 "),
+        "{}",
+        hits[0]
+    );
+    let v = json_of(&p);
+    let a = &branch_json(&v, "feat")["rebase"]["api"];
+    assert_eq!(a["state"], "read");
+    assert!(a["reason"].is_null());
+    assert_eq!(
+        (&a["pr"], &a["k"], &a["merge_parents"]),
+        (&5.into(), &2.into(), &1.into())
+    );
+    assert_eq!(a["merge_commit"], main.as_str());
+    assert_eq!(
+        (&a["tip_matches_run"], &a["head_in_branch"], &a["kind"]),
+        (&true.into(), &true.into(), &"rebase".into())
+    );
+}
+
+#[test]
+fn a_pull_request_with_a_squash_commit_gives_squash_by_the_merge_time() {
+    // the squash commit is written by the merger at the merge time: author time = merged_at
+    let m = moved(|w, _| {
+        let s = Stamp::new("Merger", "merger@example.com", MERGE_SECS);
+        w.fx.commit_at(
+            Some(w.main),
+            &[("squashed.txt", Some("all of it\n"))],
+            "Add steps (#5)",
+            s,
+            s,
+        )
+    });
+    let main = m.w.main.to_string();
+    let body = commits_body(&m.ids[..2], &m.list[..2]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let c = client(&routes);
+    let prs = vec![merged_pr(
+        "feat",
+        5,
+        m.ids[1].to_string(),
+        main,
+        MERGE_SECS + 1,
+    )];
+    let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
+    assert_eq!(proof_of(&p, "feat"), MOVED);
+    assert_eq!(
+        via(&p, "feat"),
+        (LandedKind::Squash, Basis::PrApi, Strength::Strong)
+    );
+}
+
+#[test]
+fn a_pull_request_with_a_merge_commit_gives_merge_by_two_parents() {
+    let m = moved(|w, _| {
+        // `main` takes the head of the pull request with a merge commit
+        let s = Stamp::new("Merger", "merger@example.com", MERGE_SECS);
+        let head =
+            w.fx.repo()
+                .find_reference("refs/heads/feat")
+                .unwrap()
+                .id()
+                .detach();
+        let parent_of_head =
+            w.fx.repo()
+                .find_commit(head)
+                .unwrap()
+                .parent_ids()
+                .next()
+                .unwrap()
+                .detach();
+        w.fx.commit_at_parents(
+            vec![w.main, parent_of_head],
+            Some(parent_of_head),
+            &[],
+            "Merge pull request #5",
+            s,
+            s,
+        )
+    });
+    let main = m.w.main.to_string();
+    let body = commits_body(&m.ids[..2], &m.list[..2]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let c = client(&routes);
+    let prs = vec![merged_pr("feat", 5, m.ids[1].to_string(), main, MERGE_SECS)];
+    let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
+    assert_eq!(
+        via(&p, "feat"),
+        (LandedKind::Merge, Basis::PrApi, Strength::Strong)
+    );
+    assert_eq!(
+        get(&p, "feat").rebase.as_ref().unwrap().api.merge_parents,
+        Some(2)
+    );
+}
+
+#[test]
+fn without_a_usable_pull_request_the_plan_falls_back_to_the_local_evidence_and_says_why() {
+    let m = moved(|w, l| *w.land_resolved(l, MERGE_SECS).last().unwrap());
+    let main = m.w.main.to_string();
+    let head = m.ids[1].to_string();
+    let unknown = "f".repeat(40);
+    let on_no_chain = m.ids[0].to_string();
+    let run = |pr: AnyPr, api: PrApi| plan_api(&m.w, vec![pr], api, &no_sim());
+    let pr = |merge: &str| merged_pr("feat", 5, head.clone(), merge.to_string(), MERGE_SECS);
+    let reason = |p: &RepoPlan| api_of(p, "feat").0;
+    // no network, no token
+    let p = run(pr(&main), PrApi::Off(ApiReason::Offline));
+    assert_eq!(reason(&p), Some(ApiReason::Offline));
+    assert_eq!(proof_of(&p, "feat"), MOVED);
+    assert_eq!(
+        via(&p, "feat"),
+        (LandedKind::Unknown, Basis::None, Strength::None)
+    );
+    let p = run(pr(&main), PrApi::Off(ApiReason::NoToken));
+    assert_eq!(reason(&p), Some(ApiReason::NoToken));
+    // the pull request has no merge commit
+    let routes = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    let c = client(&routes);
+    let p = run(pr(""), PrApi::Client(&c));
+    assert_eq!(reason(&p), Some(ApiReason::NotMerged));
+    // the merge commit is not in the clone, or not on the base
+    let p = run(pr(&unknown), PrApi::Client(&c));
+    assert_eq!(reason(&p), Some(ApiReason::MergeCommitNotInClone));
+    let p = run(pr(&on_no_chain), PrApi::Client(&c));
+    assert_eq!(reason(&p), Some(ApiReason::NotOnBase));
+    // another branch's pull request: this branch has none that is merged
+    let p = run(
+        merged_pr("other", 6, head.clone(), main.clone(), MERGE_SECS),
+        PrApi::Client(&c),
+    );
+    assert_eq!(reason(&p), Some(ApiReason::NoPullRequest));
+    assert_eq!(proof_of(&p, "feat").1, "unmerged");
+    // a full page, a server error, a rate limit
+    let page = commits_body(&vec![m.ids[0]; 100], &vec![m.list[0].clone(); 100]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], page.clone()));
+    let c = client(&routes);
+    assert_eq!(
+        reason(&run(pr(&main), PrApi::Client(&c))),
+        Some(ApiReason::TooManyCommits)
+    );
+    let routes = FakeRoutes::start(|_, _| (500, vec![], "{}".into()));
+    let c = client(&routes);
+    assert_eq!(
+        reason(&run(pr(&main), PrApi::Client(&c))),
+        Some(ApiReason::RequestFailed)
+    );
+    let routes = FakeRoutes::start(|_, _| (429, vec![], "{}".into()));
+    let c = client(&routes);
+    let p = run(pr(&main), PrApi::Client(&c));
+    assert_eq!(reason(&p), Some(ApiReason::RateLimited));
+    assert!(p.error.is_none());
+    // none of them changed what the local evidence says
+    assert_eq!(report(&p, "feat").mapped, 2);
+}
+
+#[test]
+fn a_strong_local_proof_and_a_head_proof_do_not_ask_the_api() {
+    let mut w = world();
+    w.fx.set_origin_url("https://github.com/o/r.git");
+    let l = cs(0, 2);
+    w.branch("strong", &l);
+    w.land_resolved(&l, MERGE_SECS);
+    let l2 = cs(2, 1);
+    let ids = w.branch("headed", &l2);
+    w.land(&l2, MERGE_SECS + 100);
+    let routes = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    let c = client(&routes);
+    let main = w.main.to_string();
+    let prs = vec![
+        merged_pr("strong", 1, "0".repeat(40), main.clone(), MERGE_SECS),
+        merged_pr("headed", 2, ids[0].to_string(), main, MERGE_SECS),
+    ];
+    let p = plan_api(&w, prs, PrApi::Client(&c), &opts());
+    assert_eq!(proof_of(&p, "strong"), ("review", "rebase-identity"));
+    assert_eq!(proof_of(&p, "headed"), ("delete", "equal-patches"));
+    assert!(routes.hits().is_empty(), "{:?}", routes.hits());
+    assert_eq!(api_of(&p, "strong").0, Some(ApiReason::NotNeeded));
+    assert_eq!(api_of(&p, "headed").0, Some(ApiReason::NotNeeded));
+}
+
+#[test]
+fn at_most_thirty_requests_are_made_per_repository() {
+    let w = world();
+    w.fx.set_origin_url("https://github.com/o/r.git");
+    let mut prs = Vec::new();
+    for i in 0..32 {
+        let name = format!("b{i:02}");
+        let mut one = c(i);
+        one.secs = T0 + 100 * i as i64;
+        let ids = w.branch(&name, &[one]);
+        // the head differs from the tip: the branch moved
+        prs.push(merged_pr(
+            &name,
+            100 + i as u64,
+            "1".repeat(40),
+            ids[0].to_string(),
+            MERGE_SECS,
+        ));
+    }
+    let routes = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
+    let c = client(&routes);
+    let p = plan_api(&w, prs, PrApi::Client(&c), &no_sim());
+    assert!(p.error.is_none(), "{:?}", p.error);
+    assert_eq!(routes.hits().len(), 30);
+    let limited = p
+        .branches
+        .iter()
+        .filter(|b| {
+            b.rebase
+                .as_ref()
+                .is_some_and(|r| r.api.not_read == Some(ApiReason::RateLimited))
+        })
+        .map(|b| b.branch.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(limited, ["b30", "b31"]);
+}
