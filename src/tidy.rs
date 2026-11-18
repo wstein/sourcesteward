@@ -142,6 +142,27 @@ pub fn all_patches_in_base(
     Ok(false)
 }
 
+/// The commits of `base..tip` that have no equal patch in `tip..base`.
+pub struct Unmatched {
+    /// Non-merge commits of `base..tip` that have a patch.
+    pub with_patch: usize,
+    /// Those without a partner, in walk order.
+    pub commits: Vec<ObjectId>,
+}
+
+/// The `+` commits of `git cherry <base> <tip>`, by the same equality as `all_patches_in_base`.
+pub fn unmatched_commits(
+    _repo: &gix::Repository,
+    _cache: &mut PatchCache,
+    _base: ObjectId,
+    _tip: ObjectId,
+) -> Result<Unmatched> {
+    Ok(Unmatched {
+        with_patch: 0,
+        commits: Vec::new(),
+    })
+}
+
 /// Pull request proof of one repository: the PR list, or the reason there is none.
 pub struct PrProof {
     pub prs: Option<Vec<AnyPr>>,

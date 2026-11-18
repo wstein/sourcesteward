@@ -66,4 +66,5 @@ mod tidy_backup;
 mod tidy_history;
 mod tidy_rebase;
 mod tidy_similarity;
+mod tidy_similarity_plan;
 mod worktrees;
