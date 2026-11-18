@@ -8,7 +8,11 @@
 //! (b) one contiguous run: the matched commits sit directly behind each other in the same order;
 //! (c) the mapping table `mapping` (branch commit -> main commit, method, value) and the rest `remaining`;
 //! (d) the pull request (`merge_commit_sha` and the PR commits, given as input) and `landed_via`.
-//! Identity is evidence for a human decision (`review`), never a deletion proof.
+//! Identity is evidence for a human decision (`review`), never a deletion proof. A proof is strong only with a content
+//! value of at least 95 % per commit and without a later version (an identity match whose branch commit was committed
+//! after the main commit: an amend or fixup after landing keeps the author time). The index stops by a run of old author
+//! times, never by the committer time. A rebase followed by `merge --ff-only` leaves the branch commits on main, so
+//! the tip is an ancestor and `landed_via` says `merge`/`ancestor` (the name is misleading for that flow).
 //!
 //! Not applied: mailmap (raw header values are compared), `Co-authored-by`, committer (a rebase merge writes a new one).
 //! Zones: only seconds since the epoch are compared; a different offset is noted (`tz_differs`).
