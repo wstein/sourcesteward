@@ -885,3 +885,79 @@ fn the_flag_lists_the_same_branches_as_the_plain_plan_with_and_without_all() {
         assert_eq!(e.contains("  plain  ["), all, "{e}");
     }
 }
+
+// ---- a pull request that was merged or squashed and the branch that moved on ----
+
+fn merge_commit_of(w: &mut crate::tidy_rebase_plan::W, _: &[C]) -> gix::ObjectId {
+    let s = Stamp::new("Merger", "merger@example.com", MERGE_SECS);
+    let head =
+        w.fx.repo()
+            .find_reference("refs/heads/feat")
+            .unwrap()
+            .id()
+            .detach();
+    let parent_of_head =
+        w.fx.repo()
+            .find_commit(head)
+            .unwrap()
+            .parent_ids()
+            .next()
+            .unwrap()
+            .detach();
+    w.fx.commit_at_parents(
+        vec![w.main, parent_of_head],
+        Some(parent_of_head),
+        &[],
+        "Merge pull request #5",
+        s,
+        s,
+    )
+}
+
+fn squash_commit_of(w: &mut crate::tidy_rebase_plan::W, _: &[C]) -> gix::ObjectId {
+    let s = Stamp::new("Merger", "merger@example.com", MERGE_SECS);
+    w.fx.commit_at(
+        Some(w.main),
+        &[("squashed.txt", Some("all of it\n"))],
+        "Add steps (#5)",
+        s,
+        s,
+    )
+}
+
+fn moved_text(
+    landed: fn(&mut crate::tidy_rebase_plan::W, &[C]) -> gix::ObjectId,
+    at: i64,
+) -> Vec<String> {
+    let m = moved(landed);
+    let main = m.w.main.to_string();
+    let body = commits_body(&m.ids[..2], &m.list[..2]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let c = client(&routes);
+    let prs = vec![merged_pr("feat", 5, m.ids[1].to_string(), main, at)];
+    let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
+    under(&explained(&p), "feat")
+}
+
+#[test]
+fn a_merge_or_squash_that_the_branch_moved_on_from_names_that_and_no_wrong_number() {
+    for (kind, u) in [
+        ("merge", moved_text(merge_commit_of, MERGE_SECS)),
+        ("squash", moved_text(squash_commit_of, MERGE_SECS + 1)),
+    ] {
+        let k = u
+            .iter()
+            .position(|l| l.starts_with("pull request: #5"))
+            .unwrap_or(1000);
+        assert_eq!(
+            at(&u, k),
+            format!("pull request: #5 {kind} (hint), 2 commit(s), the head is in the branch"),
+            "{u:#?}"
+        );
+        assert_eq!(
+            at(&u, k + 1),
+            "  hint only: the branch has commits after the pull request head; the pull request mapping gives no proof of its own",
+            "{kind}: {u:#?}"
+        );
+    }
+}
