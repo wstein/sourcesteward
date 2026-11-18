@@ -25,7 +25,7 @@ detection, no warning, no test).
 ```
 stw status    [PATH].. [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
               [--depth N] [--limit N] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
-stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N] [--similarity PCT] [--similarity-low PCT] [--no-similarity] [--no-rebase-evidence]
+stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N] [--similarity PCT] [--similarity-low PCT] [--no-similarity] [--no-rebase-evidence] [--explain]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw tidy history [--limit N] [--manifest-dir DIR] [--json]
@@ -253,6 +253,9 @@ Deviations from Go in these flags:
     this workspace) leaves the branch commits on the base, so the tip is an ancestor and `landed_via` says `merge`/`ancestor`; a content value below 95 % per commit (the owner's floor) is
     a hint, not a proof; the floor, `RB_STOP_RUN` (64) and the 30 requests per repository are constants not calibrated on real data; an amend after landing keeps author time and subject and
     is caught only by the content value and the later committer time.
+18. `tidy plan --explain` (new; Go has `--explain` with a `next_command` per kept candidate, issue 388): Rust prints the evidence only and never a command for someone else to run
+    (rule of this README, "Output for agents"), so there is no `next command`; the text is derived from the data of the plan (README "Explanation in `tidy plan --explain`"), the JSON is
+    unchanged (it already holds the data), and the flag is not on `tidy apply`.
 
 ## agent-rules
 
@@ -660,6 +663,8 @@ value or below `threshold_low`; `none`: no commit to judge), `threshold`, `thres
 (`skipped`: `merge`, `empty` or `too-large`); `reason` says how the candidate was found (`subject`, `subject-stripped`, `files`, else `none`); `evidence` has up to 5 lines
 `{path,sign,line,count_a,count_b}` for a commit below the threshold (untrusted text, escaped). A value that rounds to a threshold but is below it is shown one tenth lower.
 Text: one line per `similar-patches` branch with the figures, and `(N of them similar-patches)` in the summary line.
+`skipped.merges` and `skipped.empty` are always 0 in the plan: the `+` set holds only commits that have a patch (a merge commit and an empty commit have none), so these two keys
+count only where the function of the stage is called with such commits (it is a pure function with its own tests).
 
 ## Rebase evidence in `tidy plan`
 
@@ -696,6 +701,35 @@ tip_matches_run,head_in_branch,kind,strength}`, `mapping[{commit,subject,main,po
 `value` in percent or null) and `remaining[{commit,subject,files,files_total}]` (at most 20 paths, escaped, untrusted text). `summary.rebase` counts the branches with `rebase-identity`; they are
 counted in `review`, too. Text: one line per `rebase-identity` branch, `(N of them rebase-identity)` in the summary line, and `; landed via <kind> (<basis>, <strength>)` on a line whose
 branch landed by a mapping or the pull request (not for an ancestor).
+
+## Explanation in `tidy plan --explain`
+
+`stw tidy plan --explain` prints under each branch of the text plan (indented by four spaces) the evidence that led to the decision, or the evidence that is missing. It reads
+only the data the plan already holds (classes, numbers, reasons): no diff, no request, no other read; it interprets nothing, prints no command and gives no advice. The decision, the
+order of the branches and the JSON are the same with and without the flag (the data is already in the JSON: `similarity.commits[].evidence`, `rebase.mapping`, `rebase.remaining`,
+`rebase.api.reason`, `landed_via`), so with `--json` the flag changes nothing and is no error. `tidy apply` has no such flag (exit 2). `tidy plan` has no `--long`; the flag does not
+need one. Without the flag the text is byte for byte the text it was. The same plan gives the same text.
+
+Lines, in this order (a section is left out where its stage did not run: `--no-similarity` leaves out `similarity:`, `--no-rebase-evidence` leaves out `mapping:`, `remaining:` and `pull request:`):
+
+- `why: <decision>: <sentence>`: the proof that decided, or the proof that is missing (`keep: 2 of 4 commit(s) have no patch partner on origin/main`). Where `similar-patches` or
+  `rebase-identity` took the place of `pull-request-merged-branch-moved` or `upstream-gone`, the sentence ends with `; pull request #N was merged and the branch moved on` or
+  `; upstream <name> is gone` (the plan keeps the number of the merged pull request for this; the JSON does not carry it).
+- `landed via: <kind> (<basis>, <strength>)` where the branch landed by a mapping, the pull request or an ancestor.
+- `delete` branches get these two lines and nothing more (the proof is clear).
+- `similarity: class <class>, N commit(s) judged, A at or above 95 %, lowest x %, median y %, W without candidate`, then for each commit below the threshold (at most 20, then
+  `… N more commit(s)`): `<sha7> '<subject>' best candidate <sha7> <value> % (<reason>; without path <value> %)`, `no candidate` or `skipped (too-large)`, and below it up to 5 evidence
+  lines `<sign> <path>: <line>` (a line of at most 120 characters, cut with `…`).
+- `mapping: strength <s>, M of N commit(s) mapped (patch-id a, identity b, similarity c), contiguous|not contiguous (gap g), in order|not in order`, then for each mapped commit (at most 20,
+  then `… N more`): `<sha7> -> <sha7> <method> <value> %`, with `(later version, hint only)` where the branch commit was committed after its commit on the base, and `(time zone differs)`; a
+  `modified: a commit is 70 to 94 % like its commit on <base> (hint only)` line where a value is between the two thresholds.
+- `remaining: N commit(s) without a commit on <base>` and one line per commit with its files (at most 20 commits, at most 20 paths over all of them).
+- `pull request: PR mapping not read (<reason>)` with the reason of `rebase.api.reason`; where the pull request was read: `pull request: #N <kind> (<strength>), k commit(s), the head is in
+  the branch, r commit(s) of the branch come after it`, then `hint only: ...` or `strong, but ...` with the reason why the pull request mapping is a hint (commits after the head, the head
+  not in the branch) and that it gives no proof of its own (only the commit mapping makes `rebase-identity`), the `pull request mapping:` table (method `api`) and
+  `remaining after the pull request head`.
+
+All text from a commit (subjects, paths, lines) is escaped (control, invisible and direction characters; bytes that are not UTF-8 as `\xNN`), and so is the name of the upstream.
 
 ## tidy apply and tidy restore
 
