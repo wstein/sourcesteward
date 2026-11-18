@@ -4203,9 +4203,9 @@ m TR15 'the request limit is 31' src/tidy.rs \
 m TR16 'the patch keys of the plan are not passed to the mapping' src/tidy.rs \
   'patches.get(self.repo, id))?;' '{ let _ = (&patches, id); Ok(None) })?;' \
   tidy_rebase_plan landed_via_follows_the_evidence_of_each_branch
-m TR17 'a commit the rebase stage vouched for is judged again by the similarity stage' src/tidy.rs \
-  'm.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)' 'false && m.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)' \
-  tidy_rebase_plan a_commit_the_rebase_stage_vouched_for_is_not_judged_again_by_the_similarity_stage
+m TR17 'a branch with an identity hint is not judged by the similarity stage' src/tidy.rs \
+  'row.plus = row.unmatched.take();' 'row.plus = row.unmatched.take().filter(|_| row.bp.rebase.as_ref().is_none_or(|r| r.report.mapped == 0));' \
+  tidy_rebase_plan a_hint_of_the_rebase_stage_does_not_take_similar_patches_away
 m TR18 'a failed stage is not named in the detail' src/tidy.rs \
   'bp.detail += &format!("; rebase evidence not computed ({e})");' 'let _ = (bp, e);' \
   lib tidy::tests::a_failed_stage_is_named_in_the_detail_and_the_proof_stays

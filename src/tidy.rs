@@ -478,15 +478,10 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         stage.run(&mut cache, &mut sim_cache, &mut rows);
     }
     // where the proof would be `pull-request-merged-branch-moved`, `upstream-gone` or `unmerged` the similarity stage
-    // may find a better one; a commit the rebase stage has vouched for is not judged again
+    // may find a better one; it judges every `+` commit, whatever the rebase stage found (a hint takes nothing away)
     if opts.similarity.is_some() {
         for row in rows.iter_mut().filter(|r| judged(r.bp.proof)) {
-            let solved = solved_by_rebase(row.bp.rebase.as_ref());
-            row.plus = row.unmatched.take().map(|u| {
-                u.into_iter()
-                    .filter(|c| !solved.contains(c))
-                    .collect::<Vec<_>>()
-            });
+            row.plus = row.unmatched.take();
         }
     }
     if let Some(th) = opts.similarity {
@@ -609,19 +604,6 @@ fn judged(proof: &str) -> bool {
 
 /// At most this many extra requests (`pulls/N/commits`) per repository and plan.
 pub const MAX_PR_REQUESTS: usize = 30;
-
-/// Commits the rebase stage has vouched for: mapped to a commit of the base by identity with a content value of at
-/// least `RB_CONTENT_HIGH` and no later version. The similarity stage does not judge them again.
-fn solved_by_rebase(r: Option<&RebasePlan>) -> std::collections::HashSet<ObjectId> {
-    let high = tidy_rebase::RB_CONTENT_HIGH * 10;
-    r.into_iter()
-        .flat_map(|r| &r.report.mapping)
-        .filter(|m| {
-            m.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)
-        })
-        .map(|m| m.commit)
-        .collect()
-}
 
 /// A stage that failed for a branch leaves the plan standing and says so in the detail.
 fn stage_failed(bp: &mut BranchPlan, e: &Error) {

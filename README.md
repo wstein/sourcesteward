@@ -672,8 +672,8 @@ name, author mail (lower case), author second and subject, the targets are one b
 none is a later version. The detail reads `rebase-identity (3 of 3 commits, run of 3, min 100 %)`. `tidy apply` does not act on it (it acts on `delete` only and plans without the
 stage), a plan file edited to say `delete` for such a branch is refused (`the proof no longer holds`), and the plan prints no command. The order: after `equal-patches`,
 `merged-pull-request-head` and the backup proofs, before `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone` and `unmerged` (the existing proofs and the gates keep
-their place; a branch in a worktree is `in-worktree` and its `rebase` object stays). A commit the stage vouched for (identity, content value at least 95 %) is not judged again by the
-similarity stage. A stage that fails for a branch (or the index of the base) leaves the plan standing: `rebase` is null and the detail says `; rebase evidence not computed (<reason>)`.
+their place; a branch in a worktree is `in-worktree` and its `rebase` object stays). A hint of the stage (identity without one run, a partial landing) takes nothing away from the similarity stage: it judges every commit as before, so
+the default plan is never weaker than the plan with `--no-rebase-evidence`. A stage that fails for a branch (or the index of the base) leaves the plan standing: `rebase` is null and the detail says `; rebase evidence not computed (<reason>)`.
 
 Flag: `--no-rebase-evidence` (the stage does not run: no `rebase-identity`, `rebase` is null, no pull request commits are read; `landed_via` stays `merge`/`ancestor` for an ancestor and
 is `unknown` otherwise; independent of `--no-similarity`). The thresholds are constants, not flags (the floor, the stop after 64 old author times, a window of at most 50 000 chain commits).
