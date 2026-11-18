@@ -423,3 +423,409 @@ fn author_times_at_the_edge_of_the_range_do_not_crash_the_plan() {
         assert!(get(&p, "feat").rebase.is_some(), "{secs}");
     }
 }
+
+// ---- landed_via, JSON, text, summary, apply ----
+
+use serde_json::Value;
+use stw::github::GithubState;
+use stw::tidy_rebase::{Basis, LandedKind};
+
+fn json_of(p: &RepoPlan) -> Value {
+    let gh = GithubState {
+        client: None,
+        note: None,
+    };
+    stw::tidy::to_json("/root", &gh, std::slice::from_ref(p))
+}
+
+fn branch_json<'a>(v: &'a Value, name: &str) -> &'a Value {
+    v["repos"][0]["branches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["branch"] == name)
+        .unwrap_or_else(|| panic!("no branch {name}"))
+}
+
+fn key_list(v: &Value) -> Vec<String> {
+    let mut k: Vec<String> = v
+        .as_object()
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default();
+    k.sort();
+    k
+}
+
+fn sorted(names: &[&str]) -> Vec<String> {
+    let mut v: Vec<String> = names.iter().map(|s| s.to_string()).collect();
+    v.sort();
+    v
+}
+
+fn via(p: &RepoPlan, branch: &str) -> (LandedKind, Basis, Strength) {
+    let l = get(p, branch).landed_via;
+    (l.kind, l.basis, l.strength)
+}
+
+#[test]
+fn landed_via_follows_the_evidence_of_each_branch() {
+    let mut w = world();
+    // merged: the tip is an ancestor of main
+    let l0 = cs(0, 1);
+    let ids = w.branch("merged", &l0);
+    w.set_main(ids[0]);
+    // landed without a change: equal patches, with identity
+    let l1 = cs(1, 2);
+    w.branch("equal", &l1);
+    w.land(&l1, MERGE_SECS);
+    // landed with a resolution
+    let l2 = cs(3, 2);
+    w.branch("resolved", &l2);
+    w.land_resolved(&l2, MERGE_SECS + 100);
+    // one commit with an equal patch but another author time: a hint for a squash
+    let l3 = cs(5, 1);
+    w.branch("one", &l3);
+    let mut moved = l3.clone();
+    moved[0].secs += 777;
+    w.land(&moved, MERGE_SECS + 200);
+    // two such commits: nothing to say
+    let l4 = cs(6, 2);
+    w.branch("two", &l4);
+    let mut moved = l4.clone();
+    for m in &mut moved {
+        m.secs += 777;
+    }
+    w.land(&moved, MERGE_SECS + 300);
+    // a branch that did not land, and one with an open pull request
+    w.branch("open", &cs(8, 1));
+    w.branch("plain", &cs(9, 1));
+    let prs = vec![AnyPr {
+        head_ref: "open".into(),
+        head_sha: "0".repeat(40),
+        number: 1,
+        state: "OPEN",
+        ..Default::default()
+    }];
+    let p = plan_with(&w, Some(prs), &opts());
+    use LandedKind::*;
+    assert_eq!(
+        via(&p, "merged"),
+        (Merge, Basis::Ancestor, Strength::Strong)
+    );
+    assert_eq!(
+        via(&p, "equal"),
+        (Rebase, Basis::CommitMap, Strength::Strong)
+    );
+    assert_eq!(
+        via(&p, "resolved"),
+        (Rebase, Basis::CommitMap, Strength::Strong)
+    );
+    assert_eq!(
+        via(&p, "one"),
+        (Unknown, Basis::SingleCommitMap, Strength::Hint)
+    );
+    assert_eq!(via(&p, "two"), (Unknown, Basis::None, Strength::None));
+    assert_eq!(via(&p, "plain"), (Unknown, Basis::None, Strength::None));
+    assert_eq!(via(&p, "open"), (Unknown, Basis::None, Strength::None));
+    // the decision never depends on it
+    assert_eq!(proof_of(&p, "equal"), ("delete", "equal-patches"));
+    assert_eq!(proof_of(&p, "one"), ("delete", "equal-patches"));
+}
+
+#[test]
+fn the_stage_off_leaves_landed_via_to_the_ancestor_check() {
+    let mut w = world();
+    let l = cs(0, 2);
+    w.branch("equal", &l);
+    w.land(&l, MERGE_SECS);
+    let ids = w.branch("merged", &cs(2, 1));
+    w.set_main(ids[0]);
+    let mut o = opts();
+    o.rebase = false;
+    let p = plan_with(&w, None, &o);
+    use LandedKind::*;
+    assert_eq!(
+        via(&p, "merged"),
+        (Merge, Basis::Ancestor, Strength::Strong)
+    );
+    assert_eq!(via(&p, "equal"), (Unknown, Basis::None, Strength::None));
+    let v = json_of(&p);
+    assert!(branch_json(&v, "equal")["rebase"].is_null());
+    assert_eq!(branch_json(&v, "equal")["landed_via"]["kind"], "unknown");
+}
+
+#[test]
+fn the_json_has_the_rebase_object_landed_via_and_the_summary() {
+    let mut w = world();
+    let list = cs(0, 3);
+    w.branch("feat", &list);
+    w.land_resolved(&list[..3], MERGE_SECS);
+    w.branch("rest", &cs(3, 2));
+    let p = plan(&w);
+    let v = json_of(&p);
+    let b = branch_json(&v, "feat");
+    assert_eq!(
+        key_list(b),
+        sorted(&[
+            "branch",
+            "commit",
+            "decision",
+            "proof",
+            "detail",
+            "unique_commits",
+            "upstream",
+            "upstream_track",
+            "worktree",
+            "similarity",
+            "rebase",
+            "landed_via"
+        ])
+    );
+    assert_eq!(b["proof"], "rebase-identity");
+    assert_eq!(b["decision"], "review");
+    assert_eq!(
+        key_list(&b["landed_via"]),
+        sorted(&["kind", "basis", "strength"])
+    );
+    assert_eq!(b["landed_via"]["kind"], "rebase");
+    assert_eq!(b["landed_via"]["basis"], "commit-map");
+    assert_eq!(b["landed_via"]["strength"], "strong");
+    let r = &b["rebase"];
+    assert_eq!(
+        key_list(r),
+        sorted(&[
+            "state",
+            "strength",
+            "n",
+            "mapped",
+            "by_patch_id",
+            "by_identity",
+            "by_similarity",
+            "unmapped",
+            "ambiguous",
+            "contiguous",
+            "in_order",
+            "gap",
+            "runs",
+            "run_len",
+            "partial",
+            "content_ok",
+            "modified",
+            "skipped",
+            "window",
+            "api",
+            "mapping",
+            "remaining"
+        ])
+    );
+    assert_eq!(r["state"], "computed");
+    assert_eq!(r["strength"], "strong");
+    assert_eq!(
+        (&r["n"], &r["mapped"], &r["by_identity"]),
+        (&3.into(), &3.into(), &3.into())
+    );
+    assert_eq!(
+        (&r["contiguous"], &r["in_order"], &r["run_len"]),
+        (&true.into(), &true.into(), &3.into())
+    );
+    assert_eq!(key_list(&r["skipped"]), sorted(&["merges", "empty"]));
+    assert_eq!(
+        key_list(&r["window"]),
+        sorted(&["commits", "stop", "cut", "stopped_at"])
+    );
+    assert_eq!(r["window"]["stop"], "root");
+    assert_eq!(
+        key_list(&r["api"]),
+        sorted(&[
+            "state",
+            "reason",
+            "pr",
+            "merge_commit",
+            "merge_parents",
+            "k",
+            "tip_matches_run",
+            "head_in_branch",
+            "kind",
+            "strength"
+        ])
+    );
+    assert_eq!(r["api"]["state"], "not-read");
+    assert_eq!(r["api"]["reason"], "offline");
+    let m = &r["mapping"][0];
+    assert_eq!(
+        key_list(m),
+        sorted(&[
+            "commit",
+            "subject",
+            "main",
+            "position",
+            "method",
+            "value",
+            "identity",
+            "tz_differs",
+            "ambiguous",
+            "later"
+        ])
+    );
+    assert_eq!(m["method"], "identity");
+    assert_eq!(m["value"], 97.5);
+    assert_eq!(m["subject"], "step 0");
+    assert_eq!(r["mapping"].as_array().unwrap().len(), 3);
+    assert!(r["remaining"].as_array().unwrap().is_empty());
+    // the other branch: computed, nothing mapped
+    let o = &branch_json(&v, "rest")["rebase"];
+    assert_eq!(o["strength"], "none");
+    assert_eq!(o["mapped"], 0);
+    assert_eq!(o["mapping"][0]["method"], "none");
+    assert!(o["mapping"][0]["main"].is_null());
+    assert_eq!(o["remaining"][0]["files"][0], "f3.txt");
+    assert_eq!(o["remaining"][0]["files_total"], 1);
+    // summary: counted as review, and on its own
+    let s = &v["summary"];
+    assert_eq!(s["rebase"], 1);
+    assert_eq!(s["review"], 1);
+    assert_eq!(v["schema_version"], 2);
+}
+
+#[test]
+fn the_text_names_the_proof_in_one_line_and_gives_no_command() {
+    let mut w = world();
+    let list = cs(0, 3);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let eq = cs(3, 2);
+    w.branch("equal", &eq);
+    w.land(&eq, MERGE_SECS + 100);
+    let text = stw::tidy::render_human(&[plan(&w)], true);
+    let line = text
+        .lines()
+        .find(|l| l.contains("[rebase-identity]"))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(
+        line.trim_start().starts_with("review  feat  [rebase-identity] rebase-identity (3 of 3 commits, run of 3, min 97.5 %)"),
+        "{line}"
+    );
+    assert!(
+        !text.contains("next command") && !text.contains("git branch -D"),
+        "{text}"
+    );
+    assert!(
+        text.contains("1 to review (1 of them rebase-identity)"),
+        "{text}"
+    );
+    let eq_line = text
+        .lines()
+        .find(|l| l.contains("[equal-patches]"))
+        .unwrap();
+    assert!(
+        eq_line.ends_with("; landed via rebase (commit-map, strong)"),
+        "{eq_line}"
+    );
+}
+
+#[test]
+fn a_mix_of_equal_patches_rebase_identity_and_similar_patches() {
+    let mut w = world();
+    let a = cs(0, 2);
+    w.branch("a-equal", &a);
+    w.land(&a, MERGE_SECS);
+    let b = cs(2, 2);
+    w.branch("b-rebase", &b);
+    w.land_resolved(&b, MERGE_SECS + 100);
+    // similar by content but no identity: another author time
+    let c3 = cs(4, 1);
+    w.branch("c-similar", &c3);
+    let mut moved: Vec<C> = c3.iter().map(resolved).collect();
+    moved[0].secs += 500;
+    w.land(&moved, MERGE_SECS + 200);
+    let p = plan(&w);
+    assert_eq!(proof_of(&p, "a-equal"), ("delete", "equal-patches"));
+    assert_eq!(proof_of(&p, "b-rebase"), ("review", "rebase-identity"));
+    assert_eq!(proof_of(&p, "c-similar"), ("review", "similar-patches"));
+    let v = json_of(&p);
+    assert_eq!(v["summary"]["review"], 2);
+    assert_eq!(v["summary"]["rebase"], 1);
+    assert_eq!(v["summary"]["similar"], 1);
+    let text = stw::tidy::render_human(&[p], true);
+    assert!(
+        text.contains("2 to review (1 of them rebase-identity, 1 similar-patches)"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_rebase_identity_branch_is_never_deleted_by_apply() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let p = plan(&w);
+    assert_eq!(proof_of(&p, "feat"), ("review", "rebase-identity"));
+    let dir = scratch();
+    let o = stw::tidy_apply::ApplyOpts {
+        manifest_dir: dir.path().to_path_buf(),
+        run_id: "0000000000001-1-0".into(),
+        now: T0,
+    };
+    // a fresh run
+    let r = stw::tidy_apply::apply_repo(&rr(&w), &p, None, &o);
+    assert!(r.error.is_none(), "{:?}", r.error);
+    assert!(stw::repo::resolve(&w.fx.repo(), "refs/heads/feat").is_some());
+    assert!(
+        r.branches.iter().all(|b| b.branch != "feat"),
+        "{:?}",
+        r.branches
+    );
+    // a plan file edited by hand: `delete` for this branch
+    let hand = vec![stw::tidy_apply::Planned {
+        branch: "feat".into(),
+        commit: w.fx.tip("feat").to_string(),
+        kind: stw::tidy_apply::Kind::Branch,
+        worktree: None,
+    }];
+    let o2 = stw::tidy_apply::ApplyOpts {
+        run_id: "0000000000002-1-0".into(),
+        ..o
+    };
+    let r = stw::tidy_apply::apply_repo(&rr(&w), &p, Some(&hand), &o2);
+    assert!(stw::repo::resolve(&w.fx.repo(), "refs/heads/feat").is_some());
+    let res = r
+        .branches
+        .iter()
+        .find(|b| b.branch == "feat")
+        .expect("named");
+    assert_eq!(res.action, "skipped");
+    assert!(
+        res.reason
+            .contains("the proof no longer holds: now review [rebase-identity]"),
+        "{}",
+        res.reason
+    );
+}
+
+#[test]
+fn a_remaining_list_has_at_most_twenty_masked_paths() {
+    let w = world();
+    let mut c = c(0);
+    c.file = "d/\u{202e}evil.txt".into();
+    let big: Vec<(String, String)> = (0..25)
+        .map(|i| (format!("many/f{i:02}.txt"), "x\n".to_string()))
+        .collect();
+    let mut edits: Vec<(&str, Option<&str>)> = vec![(c.file.as_str(), Some(c.body.as_str()))];
+    edits.extend(big.iter().map(|(f, b)| (f.as_str(), Some(b.as_str()))));
+    let s = Stamp::new(NAME, MAIL, c.secs);
+    let id = w.fx.commit_at(Some(w.c0), &edits, "many files", s, s);
+    w.fx.branch("many", id);
+    let p = plan(&w);
+    let v = json_of(&p);
+    let rem = &branch_json(&v, "many")["rebase"]["remaining"][0];
+    assert_eq!(rem["files_total"], 26);
+    let files = rem["files"].as_array().unwrap();
+    assert_eq!(files.len(), 20);
+    assert!(
+        files
+            .iter()
+            .all(|f| !f.as_str().unwrap().contains('\u{202e}')),
+        "{files:?}"
+    );
+}
