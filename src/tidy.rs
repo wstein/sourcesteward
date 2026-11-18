@@ -7,7 +7,7 @@
 //!
 //! Backup branches (see `is_backup`) have no review class: where no proof above applies they are `keep`
 //! while the tip commit is younger than `backup_days` days and `delete` from that age on.
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use gix::ObjectId;
 use serde_json::{json, Value};
@@ -120,46 +120,57 @@ pub fn all_patches_in_base(
     base: ObjectId,
     tip: ObjectId,
 ) -> Result<bool> {
-    let mut needed: HashSet<PatchKey> = HashSet::new();
-    for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
-        let info = info?;
-        if let Some(p) = cache.get(repo, info.id)? {
-            needed.insert(p);
-        }
-    }
-    if needed.is_empty() {
-        return Ok(false);
-    }
-    for info in repo.rev_walk([base]).with_hidden([tip]).all()? {
-        let info = info?;
-        if let Some(p) = cache.get(repo, info.id)? {
-            needed.remove(&p);
-            if needed.is_empty() {
-                return Ok(true);
-            }
-        }
-    }
-    Ok(false)
+    Ok(unmatched_commits(repo, cache, base, tip)?.all_matched())
 }
 
 /// The commits of `base..tip` that have no equal patch in `tip..base`.
 pub struct Unmatched {
     /// Non-merge commits of `base..tip` that have a patch.
     pub with_patch: usize,
-    /// Those without a partner, in walk order.
+    /// Those without a partner, sorted by commit ID (the `+` lines of `git cherry`).
     pub commits: Vec<ObjectId>,
 }
 
-/// The `+` commits of `git cherry <base> <tip>`, by the same equality as `all_patches_in_base`.
+impl Unmatched {
+    /// At least one commit with a patch, and every one has a partner: the proof `equal-patches`.
+    pub fn all_matched(&self) -> bool {
+        self.with_patch > 0 && self.commits.is_empty()
+    }
+}
+
+/// The `+` commits of `git cherry <base> <tip>`, by the equality of `all_patches_in_base`. The walk over
+/// `tip..base` stops as soon as every commit has its partner.
 pub fn unmatched_commits(
-    _repo: &gix::Repository,
-    _cache: &mut PatchCache,
-    _base: ObjectId,
-    _tip: ObjectId,
+    repo: &gix::Repository,
+    cache: &mut PatchCache,
+    base: ObjectId,
+    tip: ObjectId,
 ) -> Result<Unmatched> {
+    let mut needed: HashMap<PatchKey, Vec<ObjectId>> = HashMap::new();
+    let mut with_patch = 0;
+    for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
+        let info = info?;
+        if let Some(p) = cache.get(repo, info.id)? {
+            needed.entry(p).or_default().push(info.id);
+            with_patch += 1;
+        }
+    }
+    if !needed.is_empty() {
+        for info in repo.rev_walk([base]).with_hidden([tip]).all()? {
+            let info = info?;
+            if let Some(p) = cache.get(repo, info.id)? {
+                needed.remove(&p);
+                if needed.is_empty() {
+                    break;
+                }
+            }
+        }
+    }
+    let mut commits: Vec<ObjectId> = needed.into_values().flatten().collect();
+    commits.sort();
     Ok(Unmatched {
-        with_patch: 0,
-        commits: Vec::new(),
+        with_patch,
+        commits,
     })
 }
 
