@@ -185,19 +185,29 @@ fn pull_request(r: &RebasePlan, _base: &str) -> Vec<String> {
         Some(true) => "in",
         _ => "not in",
     };
-    let mut out = vec![format!(
-        "pull request: #{} {} ({}), {} commit(s), the head is {head} the branch, {} commit(s) of the branch come after it",
+    let mut line = format!(
+        "pull request: #{} {} ({}), {} commit(s), the head is {head} the branch",
         a.pr.unwrap_or(0),
         a.kind.as_str(),
         a.strength.as_str(),
         a.k.unwrap_or(0),
-        a.remaining.len()
-    )];
+    );
+    // only the commit mapping of a rebase lists the commits after the head; for a merge or a squash the list is not read
+    if a.kind == LandedKind::Rebase {
+        line += &format!(
+            ", {} commit(s) of the branch come after it",
+            a.remaining.len()
+        );
+    }
+    let mut out = vec![line];
     if a.kind != LandedKind::Unknown {
         let mut why: Vec<&str> = Vec::new();
         if a.strength != Strength::Strong {
             if !a.remaining.is_empty() {
                 why.push("commits of the branch come after the pull request head");
+            } else if a.kind != LandedKind::Rebase && a.head_in_branch == Some(true) {
+                // the tip is not the head or behind it: the branch has commits after the head
+                why.push("the branch has commits after the pull request head");
             }
             if a.head_in_branch == Some(false) {
                 why.push("the pull request head is not in the branch");
