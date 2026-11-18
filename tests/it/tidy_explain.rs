@@ -670,3 +670,148 @@ fn the_paths_of_all_remaining_commits_together_are_cut_at_twenty() {
 fn at_(u: &[String], i: usize) -> &str {
     u.get(i).map(String::as_str).unwrap_or("")
 }
+
+// ---- the flag: `tidy plan --explain` ----
+
+use crate::common::{path_str, scratch};
+use crate::tidy_rebase_plan::stw_cli;
+
+fn cli(w: &crate::tidy_rebase_plan::W, args: &[&str]) -> (Option<i32>, String, String) {
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let mut a: Vec<&str> = args.to_vec();
+    a.extend_from_slice(&["--root", r.as_str()]);
+    let o = stw_cli(home.path(), &a);
+    (
+        o.status.code(),
+        String::from_utf8_lossy(&o.stdout).into_owned(),
+        String::from_utf8_lossy(&o.stderr).into_owned(),
+    )
+}
+
+#[test]
+fn the_flag_adds_the_explanation_to_the_text_plan_and_nothing_else() {
+    let w = landed_world();
+    let (code, plain, _) = cli(&w, &["tidy", "plan", "--offline", "--all"]);
+    assert_eq!(code, Some(0));
+    assert!(!plain.contains("why:"), "{plain}");
+    let (code, text, err) = cli(&w, &["tidy", "plan", "--offline", "--all", "--explain"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(
+        text.contains(
+            "    why: review: 3 of 3 commit(s) map to commits of origin/main as one run (strong)\n"
+        ),
+        "{text}"
+    );
+    let kept: Vec<&str> = text.lines().filter(|l| !l.starts_with("    ")).collect();
+    assert_eq!(kept, plain.lines().collect::<Vec<_>>());
+    assert!(
+        !text.contains("next command")
+            && !text.contains("git branch")
+            && !text.contains("stw tidy apply"),
+        "{text}"
+    );
+}
+
+#[test]
+fn without_the_flag_the_text_is_the_literal_it_always_was() {
+    let w = world();
+    let merged = w.commits_on(Some(w.main), &cs(5, 1));
+    w.fx.branch("merged", merged[0]);
+    let w = {
+        let mut w = w;
+        w.set_main(merged[0]);
+        w
+    };
+    let (code, plain, _) = cli(&w, &["tidy", "plan", "--offline"]);
+    assert_eq!(code, Some(0));
+    let name =
+        w.fx.path
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .into_owned();
+    let base = w.main.to_string();
+    assert_eq!(
+        plain,
+        format!(
+            "{name}  base refs/remotes/origin/main {}  (pull request proof off (--offline))\n  delete  merged  [merged-ancestor] tip is an ancestor of refs/remotes/origin/main\n1 to delete, 0 to delete with their worktree, 0 to review, 0 kept (read-only: nothing was changed)\n(GitHub not read: --offline)\n",
+            &base[..12]
+        )
+    );
+}
+
+#[test]
+fn the_flag_does_not_change_the_json() {
+    let w = landed_world();
+    let (_, plain, _) = cli(&w, &["tidy", "plan", "--offline", "--json"]);
+    let (code, with, err) = cli(&w, &["tidy", "plan", "--offline", "--json", "--explain"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert_eq!(plain, with);
+}
+
+#[test]
+fn apply_has_no_such_flag() {
+    let w = landed_world();
+    let (code, out, err) = cli(&w, &["tidy", "apply", "--offline", "--explain"]);
+    assert_eq!(code, Some(2), "{out}{err}");
+    assert!(err.contains("--explain"), "{err}");
+}
+
+#[test]
+fn the_sections_of_a_stage_that_is_off_are_left_out() {
+    let w = landed_world();
+    let (_, both, _) = cli(
+        &w,
+        &[
+            "tidy",
+            "plan",
+            "--offline",
+            "--explain",
+            "--no-rebase-evidence",
+        ],
+    );
+    assert!(both.contains("similarity: class landed"), "{both}");
+    assert!(
+        !both.contains("mapping:") && !both.contains("pull request:"),
+        "{both}"
+    );
+    let (_, only, _) = cli(
+        &w,
+        &["tidy", "plan", "--offline", "--explain", "--no-similarity"],
+    );
+    assert!(only.contains("mapping: strength strong"), "{only}");
+    assert!(!only.contains("similarity:"), "{only}");
+    let (_, none, _) = cli(
+        &w,
+        &[
+            "tidy",
+            "plan",
+            "--offline",
+            "--all",
+            "--explain",
+            "--no-similarity",
+            "--no-rebase-evidence",
+        ],
+    );
+    assert_eq!(
+        none.lines()
+            .filter(|l| l.starts_with("    "))
+            .collect::<Vec<_>>(),
+        ["    why: keep: 3 commit(s) not in origin/main, no proof of landing found"]
+    );
+}
+
+#[test]
+fn the_explained_text_is_the_same_each_time_and_for_a_shallow_clone() {
+    let w = landed_world();
+    let a = cli(&w, &["tidy", "plan", "--offline", "--explain", "--all"]).1;
+    let b = cli(&w, &["tidy", "plan", "--offline", "--explain", "--all"]).1;
+    assert_eq!(a, b);
+    let git = w.fx.path.join(".git");
+    let main_hex = w.main.to_string();
+    std::fs::write(git.join("shallow"), format!("{main_hex}\n")).unwrap();
+    let (code, text, err) = cli(&w, &["tidy", "plan", "--offline", "--explain"]);
+    assert_eq!(code, Some(0), "{err}");
+    assert!(text.contains("    why: "), "{text}");
+}
