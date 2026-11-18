@@ -1069,3 +1069,101 @@ fn a_cut_candidate_list_is_named_in_the_similarity_section() {
         "similarity: the list of candidates of a commit was cut at 100"
     );
 }
+
+// ---- ambiguous, time zone, a head that is not in the branch ----
+
+#[test]
+fn a_key_with_two_free_commits_on_the_base_is_named_ambiguous() {
+    let mut w = world();
+    let one = C {
+        subject: "dup".into(),
+        file: "a.txt".into(),
+        body: "a\n".into(),
+        secs: T0 + 5,
+    };
+    let two = C {
+        file: "b.txt".into(),
+        body: "b\n".into(),
+        ..one.clone()
+    };
+    let mine = C {
+        file: "c.txt".into(),
+        body: "c\n".into(),
+        ..one.clone()
+    };
+    w.branch("feat", std::slice::from_ref(&mine));
+    w.land(&[one, two], MERGE_SECS);
+    let p = plan_with(&w, None, &opts());
+    let r = report(&p, "feat");
+    assert_eq!(r.ambiguous, 1);
+    let u = under(&explained(&p), "feat");
+    assert!(
+        u.contains(&format!(
+            "  {} -> ambiguous (more than one commit on the base has the same author, time and subject)",
+            sha7(r.mapping[0].commit)
+        )),
+        "{u:#?}"
+    );
+}
+
+#[test]
+fn a_different_time_zone_is_noted_on_the_mapping_line() {
+    let mut w = world();
+    let d = c(0);
+    let a = Stamp::new(NAME, MAIL, d.secs).tz(3600);
+    let id = w.fx.commit_at(
+        Some(w.c0),
+        &[(d.file.as_str(), Some(d.body.as_str()))],
+        &d.subject,
+        a,
+        a,
+    );
+    w.fx.branch("feat", id);
+    w.land_resolved(&[d], MERGE_SECS);
+    let p = plan_with(&w, None, &opts());
+    let m = &report(&p, "feat").mapping[0];
+    assert!(m.tz_differs);
+    let u = under(&explained(&p), "feat");
+    assert!(u.contains(&map_line(m, " (time zone differs)")), "{u:#?}");
+}
+
+#[test]
+fn a_pull_request_head_that_is_not_in_the_branch_is_the_reason_of_the_hint() {
+    let mut w = world();
+    w.fx.set_origin_url("https://github.com/o/r.git");
+    let list: Vec<C> = cs(0, 2)
+        .iter()
+        .map(|c| {
+            let tag = c.body.split(' ').next().unwrap().to_string();
+            C {
+                body: odd_lines(&tag, 40, &[3, 5, 7, 9]),
+                ..c.clone()
+            }
+        })
+        .collect();
+    let plain = cs(0, 2);
+    let ids = w.branch("feat", &plain);
+    let landed = w.land(&list, MERGE_SECS);
+    let stranger = w.commits_on(None, &[c(7)])[0];
+    let body = commits_body(&ids, &plain);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let cl = client(&routes);
+    let prs = vec![merged_pr(
+        "feat",
+        5,
+        stranger.to_string(),
+        landed.last().unwrap().to_string(),
+        MERGE_SECS,
+    )];
+    let p = plan_api(&w, prs, PrApi::Client(&cl), &opts());
+    let a = &get(&p, "feat").rebase.as_ref().unwrap().api;
+    assert_eq!(a.head_in_branch, Some(false), "{a:?}");
+    let u = under(&explained(&p), "feat");
+    assert!(
+        u.contains(
+            &"  hint only: the pull request head is not in the branch; the pull request mapping gives no proof of its own"
+                .to_string()
+        ),
+        "{u:#?}"
+    );
+}
