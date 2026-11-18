@@ -980,6 +980,11 @@ pub fn similar_count(plans: &[RepoPlan]) -> usize {
         .count()
 }
 
+/// `render_human` with the explanation under each branch (`tidy plan --explain`).
+pub fn render_explained(plans: &[RepoPlan], all: bool) -> String {
+    render_human(plans, all)
+}
+
 pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
     let mut out = String::new();
     for p in plans {
