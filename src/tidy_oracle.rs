@@ -197,6 +197,7 @@ pub struct PrTruth {
     pub number: u64,
     pub head_sha: String,
     pub merge_commit_sha: String,
+    pub base: String,
     pub commits: Vec<String>,
     pub main_run: Vec<String>,
 }
@@ -234,6 +235,7 @@ pub fn parse_truth(raw: &Value) -> Result<Vec<PrTruth>, String> {
             number,
             head_sha: field(&pr["head_sha"], "head_sha")?,
             merge_commit_sha: field(&pr["merge_commit_sha"], "merge_commit_sha")?,
+            base: String::new(),
             commits,
             main_run,
         });
@@ -290,11 +292,13 @@ pub enum Verdict {
     Rebase,
     /// The existing proof `equal-patches`.
     EqualPatches,
+    /// The pull request went into another branch than the default branch; the plan reading is named, not judged.
+    Stacked(String),
     /// A finding, with the cause.
     Miss(String),
 }
 
-pub fn judge(truth: &PrTruth, view: Option<&PlanView>) -> Verdict {
+pub fn judge(truth: &PrTruth, view: Option<&PlanView>, _default_branch: &str) -> Verdict {
     let Some(v) = view else {
         return Verdict::Miss("the branch is not in the plan".into());
     };

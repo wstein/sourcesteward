@@ -180,7 +180,7 @@ fn counterexamples_name_setting_commit_value_and_sizes() {
 fn raw() -> Value {
     json!([
         {"number": 49,
-         "pr": {"merged": true, "merge_commit_sha": "m2", "head_sha": "h2"},
+         "pr": {"merged": true, "merge_commit_sha": "m2", "head_sha": "h2", "base": "main"},
          "pr_commits": [{"sha": "p1"}, {"sha": "p2"}],
          "main_commits": [{"sha": "m2"}, {"sha": "m1"}, {"sha": "old"}]},
         {"number": 61},
@@ -198,12 +198,13 @@ fn the_truth_keeps_merged_pull_requests_with_the_run_on_the_base() {
             number: 49,
             head_sha: "h2".into(),
             merge_commit_sha: "m2".into(),
+            base: "main".into(),
             commits: vec!["p1".into(), "p2".into()],
             main_run: vec!["m2".into(), "m1".into()],
         }]
     );
     assert!(parse_truth(&json!({})).is_err());
-    let bad = json!([{"number": 5, "pr": {"merged": true, "head_sha": "h"}, "pr_commits": [], "main_commits": []}]);
+    let bad = json!([{"number": 5, "pr": {"merged": true, "head_sha": "h", "base": "main"}, "pr_commits": [], "main_commits": []}]);
     let err = parse_truth(&bad).unwrap_err();
     assert_eq!(err, "#5: no merge_commit_sha");
 }
@@ -259,7 +260,7 @@ fn the_view_reads_the_decision_the_landing_and_the_mapped_commits() {
 fn a_strong_rebase_onto_the_commits_github_wrote_is_a_rebase() {
     let p = plan_json(rebase_branch("strong", &["m1", "m2"]));
     let v = branch_view(&p, "pr-49");
-    assert_eq!(judge(&truth(), v.as_ref()), Verdict::Rebase);
+    assert_eq!(judge(&truth(), v.as_ref(), "main"), Verdict::Rebase);
 }
 
 #[test]
@@ -267,7 +268,7 @@ fn a_strong_rebase_onto_other_commits_is_a_finding() {
     let p = plan_json(rebase_branch("strong", &["m1", "zz"]));
     let v = branch_view(&p, "pr-49");
     assert_eq!(
-        judge(&truth(), v.as_ref()),
+        judge(&truth(), v.as_ref(), "main"),
         Verdict::Miss(
             "landed via rebase (strong), but the mapped commits are not the 2 that GitHub wrote (2 mapped)".into()
         )
@@ -281,7 +282,7 @@ fn the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_c
         "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"}, "rebase": null}),
     );
     assert_eq!(
-        judge(&truth(), branch_view(&eq, "pr-49").as_ref()),
+        judge(&truth(), branch_view(&eq, "pr-49").as_ref(), "main"),
         Verdict::EqualPatches
     );
     let hint = plan_json(
@@ -290,13 +291,13 @@ fn the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_c
         "rebase": {"strength": "hint", "n": 3, "mapped": 1, "mapping": [{"main": "m1"}]}}),
     );
     assert_eq!(
-        judge(&truth(), branch_view(&hint, "pr-49").as_ref()),
+        judge(&truth(), branch_view(&hint, "pr-49").as_ref(), "main"),
         Verdict::Miss(
             "proof unmerged, landed via unknown/none/none, rebase hint, mapped 1 of 3".into()
         )
     );
     assert_eq!(
-        judge(&truth(), None),
+        judge(&truth(), None, "main"),
         Verdict::Miss("the branch is not in the plan".into())
     );
 }
@@ -310,9 +311,49 @@ fn a_rebase_that_is_not_strong_is_not_a_rebase_verdict() {
     b["repos"][0]["branches"][1]["proof"] = json!("unmerged");
     let v = branch_view(&b, "pr-49");
     assert_eq!(
-        judge(&truth(), v.as_ref()),
+        judge(&truth(), v.as_ref(), "main"),
         Verdict::Miss(
             "proof unmerged, landed via unknown/none/none, rebase hint, mapped 2 of 2".into()
+        )
+    );
+}
+
+#[test]
+fn a_pull_request_into_another_branch_is_stacked_and_the_plan_reading_is_named() {
+    // GitHub wrote the commits into the branch `low`, not into the default branch: they reach it with the pull request of
+    // `low`, so the run of the merge is not on the default branch and cannot be compared
+    let mut t = truth();
+    t.base = "low".into();
+    let strong = plan_json(rebase_branch("strong", &["m1", "m2", "m0"]));
+    assert_eq!(
+        judge(&t, branch_view(&strong, "pr-49").as_ref(), "main"),
+        Verdict::Stacked(
+            "the base is low, not main; the plan says rebase/commit-map/strong".into()
+        )
+    );
+    let eq = plan_json(
+        json!({"branch": "pr-49", "decision": "delete", "proof": "equal-patches",
+        "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"}, "rebase": null}),
+    );
+    assert_eq!(
+        judge(&t, branch_view(&eq, "pr-49").as_ref(), "main"),
+        Verdict::Stacked("the base is low, not main; the plan says equal-patches".into())
+    );
+}
+
+#[test]
+fn a_stacked_pull_request_the_plan_does_not_recognise_is_a_finding() {
+    let mut t = truth();
+    t.base = "low".into();
+    let hint = plan_json(
+        json!({"branch": "pr-49", "decision": "keep", "proof": "unmerged",
+        "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"},
+        "rebase": {"strength": "hint", "n": 3, "mapped": 1, "mapping": [{"main": "m1"}]}}),
+    );
+    assert_eq!(
+        judge(&t, branch_view(&hint, "pr-49").as_ref(), "main"),
+        Verdict::Miss(
+            "proof unmerged, landed via unknown/none/none, rebase hint, mapped 1 of 3".into()
         )
     );
 }
@@ -324,14 +365,15 @@ fn the_summary_counts_the_verdicts_and_lists_the_findings() {
         (50, Verdict::EqualPatches),
         (51, Verdict::Miss("why".into())),
         (52, Verdict::Rebase),
+        (53, Verdict::Stacked("s".into())),
     ];
     assert_eq!(
         render_verdicts("wstein/x", &rows),
-        "wstein/x: 4 merged pull requests, 2 rebase, 1 equal-patches, 1 findings\n  #51: why\n"
+        "wstein/x: 5 merged pull requests, 2 rebase, 1 equal-patches, 1 stacked, 1 findings\n  #51: why\n  #53 stacked: s\n"
     );
     assert_eq!(
         render_verdicts("wstein/y", &[]),
-        "wstein/y: 0 merged pull requests, 0 rebase, 0 equal-patches, 0 findings\n"
+        "wstein/y: 0 merged pull requests, 0 rebase, 0 equal-patches, 0 stacked, 0 findings\n"
     );
 }
 
@@ -355,16 +397,24 @@ mod with_the_plan {
             number: 7,
             head_sha: ids[1].to_string(),
             merge_commit_sha: landed[1].to_string(),
+            base: "main".into(),
             commits: ids.iter().map(|i| i.to_string()).collect(),
             main_run: landed.iter().rev().map(|i| i.to_string()).collect(),
         };
         let view = branch_view(&json, "pr-7");
-        assert_eq!(judge(&truth, view.as_ref()), Verdict::Rebase, "{view:?}");
+        assert_eq!(
+            judge(&truth, view.as_ref(), "main"),
+            Verdict::Rebase,
+            "{view:?}"
+        );
         // the same plan against a truth with another run of commits is a finding
         let other = PrTruth {
             main_run: vec![ids[0].to_string()],
             ..truth
         };
-        assert!(matches!(judge(&other, view.as_ref()), Verdict::Miss(_)));
+        assert!(matches!(
+            judge(&other, view.as_ref(), "main"),
+            Verdict::Miss(_)
+        ));
     }
 }
