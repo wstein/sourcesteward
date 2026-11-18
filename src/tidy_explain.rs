@@ -5,8 +5,11 @@
 //! The texts of commits that the reports carry (subjects, paths, lines) are masked where they are read
 //! (`tidy_similarity::mask_bytes`); only what the plan holds unmasked (the upstream name) is escaped here.
 use crate::github::reads::escape_untrusted;
-use crate::tidy::{BranchPlan, SimilarityPlan};
-use crate::tidy_similarity::{fmt_permille, Outcome};
+use crate::tidy::{BranchPlan, RebasePlan, SimilarityPlan};
+use crate::tidy_rebase::{
+    LandedKind, MapEntry, RebaseReport, Remaining, Strength, RB_CONTENT_HIGH,
+};
+use crate::tidy_similarity::{fmt_permille, Outcome, LOW_PCT};
 
 /// At most this many commit lines, mapping lines and remaining commits per branch; the rest is counted.
 const MAX_ROWS: usize = 20;
@@ -31,9 +34,197 @@ fn sha7(id: impl ToString) -> String {
 pub fn lines(b: &BranchPlan, base: &str) -> Vec<String> {
     let base = base.strip_prefix("refs/remotes/").unwrap_or(base);
     let mut out = vec![format!("why: {}", why(b, base))];
+    let l = &b.landed_via;
+    if l.kind != LandedKind::Unknown {
+        out.push(format!(
+            "landed via: {} ({}, {})",
+            l.kind.as_str(),
+            l.basis.as_str(),
+            l.strength.as_str()
+        ));
+    }
+    // a deletion with its proof gets the sentence and how it landed, nothing more
+    if b.decision == "delete" {
+        return out;
+    }
     if let Some(sim) = &b.similarity {
         out.extend(similarity(sim));
     }
+    if let Some(r) = &b.rebase {
+        out.extend(mapping(&r.report, base));
+        out.extend(pull_request(r, base));
+    }
+    out
+}
+
+/// `(b7 -> m7 method value %)` for a mapped commit, with the hints that go with it.
+fn map_line(m: &MapEntry) -> String {
+    let Some(main) = m.main else {
+        return format!(
+            "  {} -> ambiguous (more than one commit on the base has the same author, time and subject)",
+            sha7(m.commit)
+        );
+    };
+    let mut s = format!(
+        "  {} -> {} {}",
+        sha7(m.commit),
+        sha7(main),
+        m.method.as_str()
+    );
+    if let Some(v) = m.value {
+        s += &format!(" {} %", fmt_permille(v));
+    }
+    let mut notes: Vec<&str> = Vec::new();
+    if m.later {
+        notes.push("later version, hint only");
+    }
+    if m.tz_differs {
+        notes.push("time zone differs");
+    }
+    if !notes.is_empty() {
+        s += &format!(" ({})", notes.join(", "));
+    }
+    s
+}
+
+/// The mapped commits (at most `MAX_ROWS` lines), the `modified` hint, and the commits that remain.
+fn mapping(rep: &RebaseReport, base: &str) -> Vec<String> {
+    if rep.n == 0 {
+        return Vec::new();
+    }
+    let mut out = vec![format!(
+        "mapping: strength {}, {} of {} commit(s) mapped (patch-id {}, identity {}, similarity {}), {}, {}",
+        rep.strength.as_str(),
+        rep.mapped,
+        rep.n,
+        rep.by_patch_id,
+        rep.by_identity,
+        rep.by_similarity,
+        if rep.contiguous { format!("contiguous (gap {})", rep.gap) } else { format!("not contiguous (gap {})", rep.gap) },
+        if rep.in_order { "in order" } else { "not in order" }
+    )];
+    out.extend(entries(
+        rep.mapping
+            .iter()
+            .filter(|m| m.main.is_some() || m.ambiguous),
+        map_line,
+    ));
+    if rep.modified {
+        out.push(format!(
+            "modified: a commit is {LOW_PCT} to {} % like its commit on {base} (hint only)",
+            RB_CONTENT_HIGH - 1
+        ));
+    }
+    out.extend(remaining(
+        &rep.remaining,
+        &format!(
+            "remaining: {} commit(s) without a commit on {base}",
+            rep.remaining.len()
+        ),
+    ));
+    out
+}
+
+/// At most `MAX_ROWS` lines, then the count of the rest.
+fn entries<'a, T: 'a>(it: impl Iterator<Item = &'a T>, line: impl Fn(&T) -> String) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut more = 0;
+    for (i, x) in it.enumerate() {
+        if i < MAX_ROWS {
+            out.push(line(x));
+        } else {
+            more += 1;
+        }
+    }
+    if more > 0 {
+        out.push(format!("  \u{2026} {more} more"));
+    }
+    out
+}
+
+/// The commits without a target with their files: at most `MAX_ROWS` commits and, over all of them, `MAX_ROWS` paths.
+fn remaining(list: &[Remaining], head: &str) -> Vec<String> {
+    if list.is_empty() {
+        return Vec::new();
+    }
+    let mut budget = MAX_ROWS;
+    let mut out = vec![head.to_string()];
+    let mut more = 0;
+    for (i, r) in list.iter().enumerate() {
+        if i >= MAX_ROWS {
+            more += 1;
+            continue;
+        }
+        let shown: Vec<&str> = r.files.iter().take(budget).map(String::as_str).collect();
+        budget -= shown.len();
+        let mut files = format!("{} file(s)", r.files_total);
+        if !shown.is_empty() {
+            files += &format!(": {}", shown.join(", "));
+        }
+        if shown.len() < r.files_total {
+            files += ", \u{2026}";
+        }
+        out.push(cut(
+            &format!("  {} '{}' ({files})", sha7(r.commit), r.subject),
+            MAX_LINE + 2,
+        ));
+    }
+    if more > 0 {
+        out.push(format!("  \u{2026} {more} more commit(s)"));
+    }
+    out
+}
+
+/// What the pull request gave, or why it was not read.
+fn pull_request(r: &RebasePlan, _base: &str) -> Vec<String> {
+    let a = &r.api;
+    if let Some(reason) = a.not_read {
+        return vec![format!(
+            "pull request: PR mapping not read ({})",
+            reason.as_str()
+        )];
+    }
+    let head = match a.head_in_branch {
+        Some(true) => "in",
+        _ => "not in",
+    };
+    let mut out = vec![format!(
+        "pull request: #{} {} ({}), {} commit(s), the head is {head} the branch, {} commit(s) of the branch come after it",
+        a.pr.unwrap_or(0),
+        a.kind.as_str(),
+        a.strength.as_str(),
+        a.k.unwrap_or(0),
+        a.remaining.len()
+    )];
+    if a.kind != LandedKind::Unknown {
+        let mut why: Vec<&str> = Vec::new();
+        if a.strength != Strength::Strong {
+            if !a.remaining.is_empty() {
+                why.push("commits of the branch come after the pull request head");
+            }
+            if a.head_in_branch == Some(false) {
+                why.push("the pull request head is not in the branch");
+            }
+        }
+        why.push("the pull request mapping gives no proof of its own");
+        let lead = if a.strength == Strength::Strong {
+            "strong, but "
+        } else {
+            "hint only: "
+        };
+        out.push(format!("  {lead}{}", why.join("; ")));
+    }
+    if !a.mapping.is_empty() {
+        out.push("pull request mapping:".to_string());
+        out.extend(entries(a.mapping.iter(), map_line));
+    }
+    out.extend(remaining(
+        &a.remaining,
+        &format!(
+            "remaining after the pull request head: {} commit(s)",
+            a.remaining.len()
+        ),
+    ));
     out
 }
 
