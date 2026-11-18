@@ -25,7 +25,7 @@ detection, no warning, no test).
 ```
 stw status    [PATH].. [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
               [--depth N] [--limit N] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
-stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N] [--similarity PCT] [--similarity-low PCT] [--no-similarity]
+stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N] [--similarity PCT] [--similarity-low PCT] [--no-similarity] [--no-rebase-evidence]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw tidy history [--limit N] [--manifest-dir DIR] [--json]
@@ -246,6 +246,13 @@ Deviations from Go in these flags:
     can still mean different behavior when the context on the base differs; several commits of the branch can have the same partner; a commit of more than 20 000 changed lines or a blob over
     1 MiB has no value and prevents `landed`; hunks come from gix (Myers), not from git's xdiff, so a multiset can differ from git's in rare cases (UNKNOWN until the oracle). A shallow clone gives
     a plan with the boundary commits of the base left out (`skipped.shallow`); a branch that itself reaches the boundary still fails the `equal-patches` walk (as before).
+17. Rebase evidence in `tidy plan` (new, Go has no identity or rebase stage; README "Rebase evidence in `tidy plan`"): the evidence class `rebase-identity` (decision `review`, never `delete`),
+    `--no-rebase-evidence`, the JSON objects `rebase` and `landed_via`, `summary.rebase`, and the read of the commits of a merged pull request. Limits: the mailmap is not applied (raw author mail
+    and name are compared, a changed mail gives no match); times have a resolution of one second and only the epoch seconds are compared (a different zone offset is noted, `tz_differs`); a
+    squash merge is recognised only through the pull request (`landed_via` squash, basis `pr-api`), never from the commits alone; a rebase followed by `git merge --ff-only` (the push flow of
+    this workspace) leaves the branch commits on the base, so the tip is an ancestor and `landed_via` says `merge`/`ancestor`; a content value below 95 % per commit (the owner's floor) is
+    a hint, not a proof; the floor, `RB_STOP_RUN` (64) and the 30 requests per repository are constants not calibrated on real data; an amend after landing keeps author time and subject and
+    is caught only by the content value and the later committer time.
 
 ## agent-rules
 
@@ -316,7 +323,7 @@ removal or a changed meaning raises it. Common top-level fields: `schema_version
 `github_auth` (where the token came from, never the token) and `github_note` (why GitHub was not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
-`summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep, similar} (`similar`: the branches with the proof `similar-patches`; they are counted in `review`, too. `delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
+`summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep, similar, rebase} (`similar`: the branches with the proof `similar-patches`, `rebase`: those with `rebase-identity`; both are counted in `review`, too. `delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
 would_fast_forward, skipped, errors}.
 
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
@@ -350,9 +357,9 @@ would_fast_forward, skipped, errors}.
   A total is a number only when every repository with a GitHub origin gave one, else null with `state` `failed` (any), `not-read`, or `no-remote` (no repository has a GitHub origin). Schema rule:
   `counts` and `totals` are additive, `schema_version` stays `2`; `day briefing` reads this contract, so a removal or a changed
   meaning raises the version.
-- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree,similarity}]` (`similarity` is null or the object of "Similar patches in `tidy plan`") (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
+- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree,similarity,rebase,landed_via}]` (`similarity` is null or the object of "Similar patches in `tidy plan`"; `rebase` is null or the object of "Rebase evidence in `tidy plan`"; `landed_via` is always there) (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
   `stale_worktree_registrations[{path,locked,lock_reason}]`. Proofs: `in-worktree`, `open-pull-request`, `merged-ancestor`, `equal-patches`,
-  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
+  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `rebase-identity`, `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
 - `sync` repo: `branch`, `upstream`, `ahead`, `behind`, `dirty_files`, `fetch` (`not-run`, `skipped-offline`,
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
@@ -653,6 +660,42 @@ value or below `threshold_low`; `none`: no commit to judge), `threshold`, `thres
 (`skipped`: `merge`, `empty` or `too-large`); `reason` says how the candidate was found (`subject`, `subject-stripped`, `files`, else `none`); `evidence` has up to 5 lines
 `{path,sign,line,count_a,count_b}` for a commit below the threshold (untrusted text, escaped). A value that rounds to a threshold but is below it is shown one tenth lower.
 Text: one line per `similar-patches` branch with the figures, and `(N of them similar-patches)` in the summary line.
+
+## Rebase evidence in `tidy plan`
+
+GitHub's rebase merge writes every commit of a pull request again (new ID, new committer, new parent) and keeps author, author time and subject. The stage maps the
+commits of a branch to the first-parent chain of the base by that key and says how the branch landed. Method and limits: `spikes/stw/tidy-similarity/README.md`
+(packages 1b and 2b); code: `src/tidy_rebase.rs` and the stage in `src/tidy.rs`.
+
+Proof `rebase-identity`, decision `review`, never `delete`: every commit of the branch (merge commits of the branch do not count) has a commit on the chain with the same author
+name, author mail (lower case), author second and subject, the targets are one block in branch order, every commit has a content value of at least 95 % (the owner's floor) and
+none is a later version. The detail reads `rebase-identity (3 of 3 commits, run of 3, min 100 %)`. `tidy apply` does not act on it (it acts on `delete` only and plans without the
+stage), a plan file edited to say `delete` for such a branch is refused (`the proof no longer holds`), and the plan prints no command. The order: after `equal-patches`,
+`merged-pull-request-head` and the backup proofs, before `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone` and `unmerged` (the existing proofs and the gates keep
+their place; a branch in a worktree is `in-worktree` and its `rebase` object stays). A commit the stage vouched for (identity, content value at least 95 %) is not judged again by the
+similarity stage. A stage that fails for a branch (or the index of the base) leaves the plan standing: `rebase` is null and the detail says `; rebase evidence not computed (<reason>)`.
+
+Flag: `--no-rebase-evidence` (the stage does not run: no `rebase-identity`, `rebase` is null, no pull request commits are read; `landed_via` stays `merge`/`ancestor` for an ancestor and
+is `unknown` otherwise; independent of `--no-similarity`). The thresholds are constants, not flags (the floor, the stop after 64 old author times, a window of at most 50 000 chain commits).
+The patch IDs come from the `PatchCache` of the `equal-patches` walk; one `SimCache` serves the rebase and the similarity stage. The two stages walk the base twice (all ancestors for the
+similarity index, the first-parent chain for the rebase index): they ask for different commits.
+
+Pull request (read only, optional): where a branch would be `pull-request-merged-branch-moved`, `upstream-gone` or `unmerged`, has a merged pull request, and the commits do not already
+prove it, one request `GET pulls/N/commits?per_page=100` reads the commits of the pull request (at most 30 requests per repository; a full page of 100 is `too-many-commits`). The token
+needs `Pull requests: Read` and `Metadata: Read`, no more. Without network, token or with a rate limit the plan uses the commits alone: no error, no change of the exit code; the reason is in
+`rebase.api.reason`: `offline`, `no-token`, `no-pull-request`, `rate-limited`, `request-failed`, `too-many-commits`, `not-merged`, `merge-commit-not-in-clone`, `not-on-base`, `not-needed`
+(a proof that needs no pull request). The mapping: two parents of the merge commit are `merge`; one parent and the k commits behind it equal to the k pull request commits (author, time,
+subject) are `rebase` (strong only when nothing remains and the pull request head is in the branch, else a hint); one parent and an author time equal to `merged_at` plus or minus 2 s are `squash`.
+
+JSON, additive in schema 2: `landed_via {kind merge|rebase|squash|unknown, basis ancestor|commit-map|pr-api|single-commit-map|none, strength strong|hint|none}` always; precedence: the tip is an
+ancestor of the base (`merge`), a strong commit mapping (`rebase`), the pull request, one commit with an equal patch but no identity (`unknown`, a hint for a squash), else `unknown`. The
+decision never depends on it. Per branch `rebase` (null where not computed: `--no-rebase-evidence`, an open pull request, a merged ancestor, a backup, a failure):
+`state`, `strength`, `n`, `mapped`, `by_patch_id`, `by_identity`, `by_similarity`, `unmapped`, `ambiguous`, `contiguous`, `in_order`, `gap`, `runs`, `run_len`, `partial`, `content_ok`, `modified`,
+`skipped{merges,empty}`, `window{commits,stop,cut,stopped_at}` (`stop`: `root`, `time`, `window`, `missing`: a shallow clone, the walk ends there), `api{state,reason,pr,merge_commit,merge_parents,k,
+tip_matches_run,head_in_branch,kind,strength}`, `mapping[{commit,subject,main,position,method,value,identity,tz_differs,ambiguous,later}]` (`method`: `patch-id`, `identity`, `similarity`, `api`, `none`;
+`value` in percent or null) and `remaining[{commit,subject,files,files_total}]` (at most 20 paths, escaped, untrusted text). `summary.rebase` counts the branches with `rebase-identity`; they are
+counted in `review`, too. Text: one line per `rebase-identity` branch, `(N of them rebase-identity)` in the summary line, and `; landed via <kind> (<basis>, <strength>)` on a line whose
+branch landed by a mapping or the pull request (not for an ancestor).
 
 ## tidy apply and tidy restore
 
@@ -1413,7 +1456,7 @@ on a single file), the ref is restored but files already written stay; `git stat
   Hunks come from gix-imara-diff (Myers), not from `git diff -U0`; whether the multisets differ from git's is UNKNOWN until the oracle. Limits: a commit with more
   than 20 000 keys or a blob over 1 MiB is `too_large` (no value, prevents `landed`). Reusable parts: `Keys::sum`, containment as (numerator, denominator),
   `tree_entries` (cumulative diff `base...tip`), `MainIndex::candidates` and `in_window` apart from the comparison. Mutations `TS1` to `TS51` and `TP1` to `TP31` (the plan).
-- Rebase-merge proof (`src/tidy_rebase.rs`, library only; not yet wired into `tidy plan`; specification in `spikes/stw/tidy-similarity/README.md`, section
+- Rebase-merge proof (`src/tidy_rebase.rs`, wired into `tidy plan` as the proof `rebase-identity` (README "Rebase evidence in `tidy plan`"); specification in `spikes/stw/tidy-similarity/README.md`, section
   package 1b): a rebase merge writes a branch commit again with the same author, author time and subject. `RebaseIndex` walks the first-parent chain
   of main once; a branch commit maps to the chain commit with the same key (author mail in lower case, author seconds, subject) and the exact author
   name, after an equal patch. Several commits with one key are assigned as a multiset by their neighbours (`ambiguous` without one). `contiguous`,

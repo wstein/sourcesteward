@@ -2,8 +2,8 @@
 //!
 //! Proof order per branch (first match wins): open PR (keep) > ancestor of base (delete) >
 //! equal patch IDs in base (delete) > merged PR with exactly this head (delete) > backup name (delete from an age, else
-//! keep) > similar patches in base (review, `similarity_stage`) > merged PR but the branch moved (review) >
-//! upstream gone (review) > unmerged (keep). A branch checked out in a worktree whose directory exists is
+//! keep) > rebase identity (review, `RebaseStage`) > similar patches in base (review, `similarity_stage`) > merged PR
+//! but the branch moved (review) > upstream gone (review) > unmerged (keep). A branch checked out in a worktree whose directory exists is
 //! `keep`/`in-worktree` at the end, whatever the proof was. Nothing is deleted here.
 //!
 //! Backup branches (see `is_backup`) have no review class: where no proof above applies they are `keep`

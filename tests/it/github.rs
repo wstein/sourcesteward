@@ -438,6 +438,9 @@ fn readme_mentions_every_documented_field() {
         "became_empty",
         "not_computed",
         "restack-plan",
+        "landed_via",
+        "rebase-identity",
+        "no-rebase-evidence",
     ] {
         assert!(readme.contains(f), "README does not mention `{f}`");
     }
