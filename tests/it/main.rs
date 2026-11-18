@@ -32,6 +32,7 @@ mod oplog_read;
 mod oplog_undo;
 mod oplog_undo_keep;
 mod oplog_write;
+mod oracle_tidy;
 mod patchid;
 mod patchid_props;
 mod prove;
