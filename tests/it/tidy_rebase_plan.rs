@@ -1206,7 +1206,7 @@ fn at_most_thirty_requests_are_made_per_repository() {
 // ---- the similarity stage, a shallow clone, the flag ----
 
 #[test]
-fn a_commit_the_rebase_stage_vouched_for_is_not_judged_again_by_the_similarity_stage() {
+fn a_commit_with_identity_is_still_judged_by_the_similarity_stage_when_the_branch_is_no_proof() {
     let mut w = world();
     let list = cs(0, 2);
     w.branch("feat", &list);
@@ -1220,11 +1220,88 @@ fn a_commit_the_rebase_stage_vouched_for_is_not_judged_again_by_the_similarity_s
     let r = report(&p, "feat");
     assert_eq!((r.mapped, r.by_identity), (1, 1));
     let s = get(&p, "feat").similarity.as_ref().unwrap();
-    assert_eq!(
-        s.report.plus_commits, 1,
-        "the vouched-for commit is not compared again"
-    );
-    assert_eq!(s.report.commits.len(), 1);
+    assert_eq!(s.report.plus_commits, 2, "both commits are compared");
+}
+
+/// 2 = delete, 1 = review, 0 = keep.
+fn rank(p: &RepoPlan, branch: &str) -> u8 {
+    match get(p, branch).decision {
+        "delete" => 2,
+        "review" => 1,
+        _ => 0,
+    }
+}
+
+#[test]
+fn a_hint_of_the_rebase_stage_does_not_take_similar_patches_away() {
+    let mut w = world();
+    // landed in swapped order
+    let a = cs(0, 2);
+    w.branch("swapped", &a);
+    w.land_resolved(&[a[1].clone()], MERGE_SECS);
+    w.land_resolved(&[a[0].clone()], MERGE_SECS + 10);
+    // a foreign commit between the landed commits
+    let b = cs(2, 2);
+    w.branch("foreign", &b);
+    w.land_resolved(&b[..1], MERGE_SECS + 100);
+    w.foreign(7);
+    w.land_resolved(&b[1..], MERGE_SECS + 110);
+    let p = plan(&w);
+    for br in ["swapped", "foreign"] {
+        assert_eq!(report(&p, br).strength, Strength::Hint, "{br}");
+        assert_eq!(proof_of(&p, br), ("review", "similar-patches"), "{br}");
+    }
+}
+
+#[test]
+fn the_default_plan_is_never_weaker_than_the_plan_without_the_stage() {
+    // one world with every kind of landing; every branch is compared
+    let mut w = world();
+    let mut n = 0;
+    let mut take = |k: usize| {
+        let l = cs(n, k);
+        n += k;
+        l
+    };
+    let l = take(2);
+    w.branch("swapped", &l);
+    w.land_resolved(&[l[1].clone()], MERGE_SECS);
+    w.land_resolved(&[l[0].clone()], MERGE_SECS + 10);
+    let l = take(2);
+    w.branch("foreign", &l);
+    w.land_resolved(&l[..1], MERGE_SECS + 20);
+    w.foreign(7);
+    w.land_resolved(&l[1..], MERGE_SECS + 30);
+    let l = take(3);
+    w.branch("partial", &l);
+    w.land_resolved(&l[..2], MERGE_SECS + 40);
+    let l = take(2);
+    w.branch("clean", &l);
+    w.land_resolved(&l, MERGE_SECS + 50);
+    let l = take(2);
+    w.branch("equal", &l);
+    w.land(&l, MERGE_SECS + 60);
+    let l = take(2);
+    w.branch("mixed", &l);
+    w.land_resolved(&l[..1], MERGE_SECS + 70);
+    let mut second = resolved(&l[1]);
+    second.secs += 500;
+    w.land(&[second], MERGE_SECS + 80);
+    let l = take(2);
+    w.branch("untouched", &l);
+    let on = plan(&w);
+    let mut o = opts();
+    o.rebase = false;
+    let off = plan_with(&w, None, &o);
+    for b in &on.branches {
+        assert!(
+            rank(&on, &b.branch) >= rank(&off, &b.branch),
+            "{}: {:?} against {:?}",
+            b.branch,
+            proof_of(&on, &b.branch),
+            proof_of(&off, &b.branch)
+        );
+    }
 }
 
 #[test]
