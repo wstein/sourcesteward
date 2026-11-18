@@ -47,8 +47,14 @@ impl Sim {
         }
     }
     /// `shown` for both thresholds of a run: a value below the low threshold is not shown as the low one either.
-    pub fn shown_in(&self, high_pct: u32, _low_pct: u32) -> u32 {
-        self.shown(high_pct)
+    pub fn shown_in(&self, high_pct: u32, low_pct: u32) -> u32 {
+        let p = self.shown(high_pct);
+        let t = low_pct * 10;
+        if p >= t && !self.ge_pct(low_pct) {
+            t - 1
+        } else {
+            p
+        }
     }
     /// Order by the exact value (cross multiplication), not by the rounded one.
     pub fn cmp_value(&self, other: &Sim) -> Ordering {
@@ -906,7 +912,7 @@ pub fn summarize(
     }
     let at_or_above = sims.iter().filter(|s| s.ge_pct(high)).count();
     let min = sims.iter().copied().min_by(|a, b| a.cmp_value(b));
-    let mut shown: Vec<u32> = sims.iter().map(|s| s.shown(high)).collect();
+    let mut shown: Vec<u32> = sims.iter().map(|s| s.shown_in(high, low)).collect();
     shown.sort_unstable();
     let median_permille = match shown.len() {
         0 => None,
