@@ -2,7 +2,8 @@
 //! tally of differing multisets per `diff.algorithm`, and the GitHub truth of a merged pull request against the plan.
 //! Nothing here starts a process or reads a repository; `tests/it/oracle_tidy.rs` and `tests/oracle/tidy_oracle.sh` do.
 //! Integers only: shares are counted, the display is rounded.
-use crate::tidy_similarity::{Entry, Keys, Sim};
+use crate::tidy_similarity::{fmt_permille, Entry, Keys, Sim};
+use std::collections::BTreeMap;
 
 // ---- the diff of git ----
 
@@ -89,8 +90,12 @@ pub fn differs(sim: &Sim) -> bool {
     sim.inter != sim.a || sim.inter != sim.b
 }
 
+// ---- tally ----
+
+/// How many worst commits a tally keeps.
 pub const KEEP_WORST: usize = 5;
 
+/// Commits compared, how many differ, and the worst ones (lowest value first, then the smaller commit ID).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Tally {
     pub total: u64,
@@ -99,27 +104,85 @@ pub struct Tally {
 }
 
 impl Tally {
-    pub fn add(&mut self, _id: &str, _sim: Sim) {}
-    pub fn share_permille(&self) -> Option<u32> {
-        None
+    pub fn add(&mut self, id: &str, sim: Sim) {
+        self.total += 1;
+        if !differs(&sim) {
+            return;
+        }
+        self.differing += 1;
+        self.worst.push((id.to_string(), sim));
+        self.worst
+            .sort_by(|x, y| x.1.cmp_value(&y.1).then_with(|| x.0.cmp(&y.0)));
+        self.worst.truncate(KEEP_WORST);
     }
+    /// The share of differing commits in tenths of a percent, rounded half up; None without a commit.
+    pub fn share_permille(&self) -> Option<u32> {
+        if self.total == 0 {
+            return None;
+        }
+        Some(((2000 * self.differing + self.total) / (2 * self.total)) as u32)
+    }
+    /// The worst value in tenths of a percent; None when nothing differs.
     pub fn worst_permille(&self) -> Option<u32> {
-        None
+        self.worst.first().map(|w| w.1.permille())
     }
 }
 
+/// One tally per setting (for example `git-myers+indent`), in the order of the names.
 #[derive(Clone, Debug, Default)]
-pub struct Matrix {}
+pub struct Matrix {
+    rows: BTreeMap<String, Tally>,
+}
 
 impl Matrix {
-    pub fn add(&mut self, _setting: &str, _id: &str, _sim: Sim) {}
-    pub fn get(&self, _setting: &str) -> Option<&Tally> {
-        None
+    pub fn add(&mut self, setting: &str, id: &str, sim: Sim) {
+        self.rows
+            .entry(setting.to_string())
+            .or_default()
+            .add(id, sim);
     }
+    pub fn get(&self, setting: &str) -> Option<&Tally> {
+        self.rows.get(setting)
+    }
+    /// A Markdown table: setting, commits, differing, share in percent, worst value in percent (with the commit).
     pub fn render_table(&self) -> String {
-        String::new()
+        let mut s = String::from(
+            "| setting | commits | differing | share % | worst % |\n|---|---|---|---|---|\n",
+        );
+        for (name, t) in &self.rows {
+            let share = t.share_permille().map_or("-".into(), fmt_permille);
+            let worst = match t.worst.first() {
+                Some((id, sim)) => {
+                    format!("{} ({})", fmt_permille(sim.permille()), short(id))
+                }
+                None => "-".into(),
+            };
+            s.push_str(&format!(
+                "| {name} | {} | {} | {share} | {worst} |\n",
+                t.total, t.differing
+            ));
+        }
+        s
     }
+    /// The worst commits of every setting that has any, one line each: setting, commit, value, intersection and sizes.
     pub fn render_counterexamples(&self) -> String {
-        String::new()
+        let mut s = String::new();
+        for (name, t) in &self.rows {
+            for (id, sim) in &t.worst {
+                s.push_str(&format!(
+                    "{name} {} {} % ({} of {} and {})\n",
+                    short(id),
+                    fmt_permille(sim.permille()),
+                    sim.inter,
+                    sim.a,
+                    sim.b
+                ));
+            }
+        }
+        s
     }
+}
+
+fn short(id: &str) -> &str {
+    &id[..id.len().min(12)]
 }
