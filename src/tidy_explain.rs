@@ -111,8 +111,7 @@ fn mapping(rep: &RebaseReport, base: &str) -> Vec<String> {
     ));
     if rep.modified {
         out.push(format!(
-            "modified: a commit is {LOW_PCT} to {} % like its commit on {base} (hint only)",
-            RB_CONTENT_HIGH - 1
+            "modified: a commit is at least {LOW_PCT} % and below {RB_CONTENT_HIGH} % like its commit on {base} (hint only)"
         ));
     }
     out.extend(remaining(

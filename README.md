@@ -722,7 +722,7 @@ Lines, in this order (a section is left out where its stage did not run: `--no-s
   lines `<sign> <path>: <line>` (a line of at most 120 characters, cut with `…`).
 - `mapping: strength <s>, M of N commit(s) mapped (patch-id a, identity b, similarity c), contiguous|not contiguous (gap g), in order|not in order`, then for each mapped commit (at most 20,
   then `… N more`): `<sha7> -> <sha7> <method> <value> %`, with `(later version, hint only)` where the branch commit was committed after its commit on the base, and `(time zone differs)`; a
-  `modified: a commit is 70 to 94 % like its commit on <base> (hint only)` line where a value is between the two thresholds.
+  `modified: a commit is at least 70 % and below 95 % like its commit on <base> (hint only)` line where a value is between the two thresholds.
 - `remaining: N commit(s) without a commit on <base>` and one line per commit with its files (at most 20 commits, at most 20 paths over all of them).
 - `pull request: PR mapping not read (<reason>)` with the reason of `rebase.api.reason`; where the pull request was read: `pull request: #N <kind> (<strength>), k commit(s), the head is in
   the branch, r commit(s) of the branch come after it`, then `hint only: ...` or `strong, but ...` with the reason why the pull request mapping is a hint (commits after the head, the head
@@ -1495,7 +1495,7 @@ on a single file), the ref is restored but files already written stay; `git stat
   of main once; a branch commit maps to the chain commit with the same key (author mail in lower case, author seconds, subject) and the exact author
   name, after an equal patch. Several commits with one key are assigned as a multiset by their neighbours (`ambiguous` without one). `contiguous`,
   `in_order`, `gap`, `runs`: the targets form one block in branch order. Strong (class `rebase-identity`, decision `review`, never `delete`): all
-  commits mapped, one ordered block, content at least 95 % per commit (70 to 94 % is `modified`), no later version (amend after landing), at least one identity.
+  commits mapped, one ordered block, content at least 95 % per commit (at least 70 % and below 95 % is `modified`), no later version (amend after landing), at least one identity.
   The index stops by a run of 64 old author times, never by the committer time; the boundary commit of a shallow clone is skipped. The pull request (`evaluate_api`, on given inputs, no request) and
   `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB68`; the plan wiring (rebase stage, pull request reads, `landed_via`, flag): `TR1` to `TR52`.
 - `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX28`.
