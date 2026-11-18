@@ -4457,6 +4457,38 @@ m TX27 'the explained text leaves out the kept branches the plain text lists' sr
 m TX28 'the explanation names the proof of a worktree wrongly' src/tidy_explain.rs \
   '; without it the proof would be {}", w.proof' '; without it the proof would be {}", b.proof' \
   tidy_explain each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided
+m TX29 'an ambiguous commit is called unmapped' src/tidy_explain.rs \
+  '-> ambiguous (more than' '-> unmapped (more than' \
+  tidy_explain a_key_with_two_free_commits_on_the_base_is_named_ambiguous
+m TX30 'a different time zone is not noted' src/tidy_explain.rs \
+  '    if m.tz_differs {' '    if false {' \
+  tidy_explain a_different_time_zone_is_noted_on_the_mapping_line
+m TX31 'a head outside the branch is not a reason' src/tidy_explain.rs \
+  'if a.head_in_branch == Some(false) {' 'if false {' \
+  tidy_explain a_pull_request_head_that_is_not_in_the_branch_is_the_reason_of_the_hint
+m TX32 'the number after the head is named for any kind' src/tidy_explain.rs \
+  '    if a.kind == LandedKind::Rebase {
+        line +=' '    if true {
+        line +=' \
+  tidy_explain a_merge_or_squash_that_the_branch_moved_on_from_names_that_and_no_wrong_number
+m TX33 'a merge or squash moved on from has no reason' src/tidy_explain.rs \
+  '} else if a.kind != LandedKind::Rebase && a.head_in_branch == Some(true) {' '} else if false {' \
+  tidy_explain a_merge_or_squash_that_the_branch_moved_on_from_names_that_and_no_wrong_number
+m TX34 'equal-patches says all commits have a patch' src/tidy_explain.rs \
+  'all commits of the branch that have a patch have an equal patch' 'all commits of the branch have an equal patch' \
+  tidy_explain a_merge_commit_in_a_branch_with_equal_patches_is_not_called_a_patch
+m TX35 'the shallow boundary is not named' src/tidy_explain.rs \
+  '    if sim.skipped_shallow > 0 {' '    if false {' \
+  tidy_explain a_shallow_boundary_is_named_in_the_similarity_section
+m TX36 'a cut candidate list is not named' src/tidy_explain.rs \
+  '    if r.candidates_cut {' '    if false {' \
+  tidy_explain a_cut_candidate_list_is_named_in_the_similarity_section
+m TX37 'the modified range is open at the top' src/tidy_explain.rs \
+  'and below {RB_CONTENT_HIGH} %' 'and up to {RB_CONTENT_HIGH} %' \
+  tidy_explain a_modified_mapping_and_a_later_version_are_hints_and_say_so
+m TX38 'an empty commit counts as a commit without a partner' src/tidy_explain.rs \
+  'b.decision, sim.report.plus_commits, b.unique' 'b.decision, b.unique, b.unique' \
+  tidy_explain an_empty_commit_is_not_counted_as_a_commit_without_a_partner
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
