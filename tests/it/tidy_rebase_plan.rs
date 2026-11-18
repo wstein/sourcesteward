@@ -697,7 +697,15 @@ fn the_text_names_the_proof_in_one_line_and_gives_no_command() {
     let eq = cs(3, 2);
     w.branch("equal", &eq);
     w.land(&eq, MERGE_SECS + 100);
+    let merged = w.commits_on(Some(w.main), &cs(5, 1));
+    w.fx.branch("merged", merged[0]);
+    w.set_main(merged[0]);
     let text = stw::tidy::render_human(&[plan(&w)], true);
+    let merged_line = text
+        .lines()
+        .find(|l| l.contains("[merged-ancestor]"))
+        .unwrap();
+    assert!(!merged_line.contains("landed via"), "{merged_line}");
     let line = text
         .lines()
         .find(|l| l.contains("[rebase-identity]"))

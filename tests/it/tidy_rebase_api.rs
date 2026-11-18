@@ -18,6 +18,10 @@ fn utc_times_are_read_as_seconds_since_the_epoch() {
     assert_eq!(parse_utc("2023-11-14T22:13:20Z"), Some(1_700_000_000));
     assert_eq!(parse_utc("2024-02-29T00:00:00Z"), Some(1_709_164_800));
     assert_eq!(parse_utc("1969-12-31T23:59:59Z"), Some(-1));
+    // 2000 is a leap year (divisible by 400), 1900 is not (divisible by 100)
+    assert_eq!(parse_utc("2000-02-29T00:00:00Z"), Some(951_782_400));
+    assert_eq!(parse_utc("1900-02-29T00:00:00Z"), None);
+    assert_eq!(parse_utc("2023-02-29T00:00:00Z"), None);
     for bad in [
         "",
         "2023-11-14",
