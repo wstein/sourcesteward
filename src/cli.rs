@@ -1054,6 +1054,10 @@ struct TidyArgs {
     /// from the commits; no pull request commit reads)
     #[arg(long)]
     no_rebase_evidence: bool,
+    /// Under each branch of the text plan: the evidence that led to the decision, or the evidence that is missing
+    /// (read-only; the decision and the JSON are the same, which already holds the data)
+    #[arg(long)]
+    explain: bool,
 }
 
 #[derive(Args)]
@@ -1870,7 +1874,11 @@ fn run(command: Command) -> Result<u8> {
                 }
                 print_json(&v);
             } else {
-                print!("{}", tidy::render_human(&plans, a.all));
+                if a.explain {
+                    print!("{}", tidy::render_explained(&plans, a.all));
+                } else {
+                    print!("{}", tidy::render_human(&plans, a.all));
+                }
                 print_notices(&ws.rejected);
                 if let Some(n) = &ws.github.note {
                     println!("({n})");
