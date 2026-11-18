@@ -627,7 +627,8 @@ fn the_summary_counts_similar_branches_as_review_and_names_them() {
             "delete_with_worktree",
             "review",
             "keep",
-            "similar"
+            "similar",
+            "rebase"
         ])
     );
     assert_eq!(v["summary"]["review"], 1);

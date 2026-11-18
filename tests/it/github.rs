@@ -255,7 +255,8 @@ fn json_field_names_are_the_documented_ones() {
             "delete_with_worktree",
             "review",
             "keep",
-            "similar"
+            "similar",
+            "rebase"
         ])
     );
     let repo = &td["repos"][0];
@@ -285,7 +286,9 @@ fn json_field_names_are_the_documented_ones() {
             "upstream",
             "upstream_track",
             "worktree",
-            "similarity"
+            "similarity",
+            "rebase",
+            "landed_via"
         ])
     );
     assert_eq!(

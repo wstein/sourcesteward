@@ -650,7 +650,7 @@ fn the_json_has_the_rebase_object_landed_via_and_the_summary() {
         ])
     );
     assert_eq!(r["api"]["state"], "not-read");
-    assert_eq!(r["api"]["reason"], "offline");
+    assert_eq!(r["api"]["reason"], "not-needed");
     let m = &r["mapping"][0];
     assert_eq!(
         key_list(m),
@@ -675,6 +675,7 @@ fn the_json_has_the_rebase_object_landed_via_and_the_summary() {
     // the other branch: computed, nothing mapped
     let o = &branch_json(&v, "rest")["rebase"];
     assert_eq!(o["strength"], "none");
+    assert_eq!(o["api"]["reason"], "offline");
     assert_eq!(o["mapped"], 0);
     assert_eq!(o["mapping"][0]["method"], "none");
     assert!(o["mapping"][0]["main"].is_null());

@@ -847,7 +847,9 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
                            "detail": b.detail, "unique_commits": b.unique, "upstream": jopt(b.upstream.as_deref()),
                            "upstream_track": jopt(b.track.as_deref()),
                            "worktree": b.worktree.as_ref().map(|w| json!({"path": worktrees::show(&w.dir), "removable_proof": w.proof, "outside_worktrees_dir": w.outside, "blocker": jopt(w.blocker.as_deref())})).unwrap_or(Value::Null),
-                           "similarity": b.similarity.as_ref().map(similarity_json).unwrap_or(Value::Null)})
+                           "similarity": b.similarity.as_ref().map(similarity_json).unwrap_or(Value::Null),
+                           "rebase": b.rebase.as_ref().map(rebase_json).unwrap_or(Value::Null),
+                           "landed_via": json!({"kind": b.landed_via.kind.as_str(), "basis": b.landed_via.basis.as_str(), "strength": b.landed_via.strength.as_str()})})
                 })
                 .collect();
             let stale: Vec<Value> = p
@@ -866,7 +868,7 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
     json!({"schema_version": 2, "command": "tidy-plan", "read_only": true, "root": root,
            "engine": engine(),
            "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()), "repos": repos,
-           "summary": {"delete": d, "delete_with_worktree": w, "review": r, "keep": k, "similar": similar_count(plans)}})
+           "summary": {"delete": d, "delete_with_worktree": w, "review": r, "keep": k, "similar": similar_count(plans), "rebase": rebase_count(plans)}})
 }
 
 /// A value in percent with one decimal, as a JSON number.
@@ -932,6 +934,58 @@ fn similarity_json(s: &SimilarityPlan) -> Value {
            "commits": commits})
 }
 
+fn rebase_json(r: &RebasePlan) -> Value {
+    use tidy_rebase::Stop;
+    let rep = &r.report;
+    let value = |v: Option<u32>| v.map(pct).unwrap_or(Value::Null);
+    let mapping: Vec<Value> = rep
+        .mapping
+        .iter()
+        .map(|m| {
+            json!({"commit": m.commit.to_string(), "subject": m.subject,
+                   "main": m.main.map(|x| Value::String(x.to_string())).unwrap_or(Value::Null),
+                   "position": m.position, "method": m.method.as_str(), "value": value(m.value),
+                   "identity": m.identity, "tz_differs": m.tz_differs, "ambiguous": m.ambiguous, "later": m.later})
+        })
+        .collect();
+    let remaining: Vec<Value> = rep
+        .remaining
+        .iter()
+        .map(|m| {
+            json!({"commit": m.commit.to_string(), "subject": m.subject, "files": m.files, "files_total": m.files_total})
+        })
+        .collect();
+    let (stop, stopped_at) = match rep.stop {
+        Stop::Root => ("root", Value::Null),
+        Stop::Time => ("time", Value::Null),
+        Stop::Window => ("window", Value::Null),
+        Stop::Missing(id) => ("missing", Value::String(id.to_string())),
+    };
+    let a = &r.api;
+    let api = json!({"state": if a.not_read.is_none() { "read" } else { "not-read" },
+                     "reason": a.not_read.map(|x| Value::String(x.as_str().into())).unwrap_or(Value::Null),
+                     "pr": a.pr, "merge_commit": a.merge_commit.map(|x| Value::String(x.to_string())).unwrap_or(Value::Null),
+                     "merge_parents": a.merge_parents, "k": a.k, "tip_matches_run": a.tip_matches_run,
+                     "head_in_branch": a.head_in_branch, "kind": a.kind.as_str(), "strength": a.strength.as_str()});
+    json!({"state": "computed", "strength": rep.strength.as_str(), "n": rep.n, "mapped": rep.mapped,
+           "by_patch_id": rep.by_patch_id, "by_identity": rep.by_identity, "by_similarity": rep.by_similarity,
+           "unmapped": rep.unmapped, "ambiguous": rep.ambiguous, "contiguous": rep.contiguous,
+           "in_order": rep.in_order, "gap": rep.gap, "runs": rep.runs, "run_len": rep.run_len,
+           "partial": rep.partial, "content_ok": rep.content_ok, "modified": rep.modified,
+           "skipped": {"merges": rep.skipped.merges, "empty": rep.skipped.empty},
+           "window": {"commits": rep.window_commits, "stop": stop, "cut": rep.stop == Stop::Window, "stopped_at": stopped_at},
+           "api": api, "mapping": mapping, "remaining": remaining})
+}
+
+/// Branches with the proof `rebase-identity` (they are counted in `review`, too).
+pub fn rebase_count(plans: &[RepoPlan]) -> usize {
+    plans
+        .iter()
+        .flat_map(|p| &p.branches)
+        .filter(|b| b.proof == tidy_rebase::RB_CLASS)
+        .count()
+}
+
 /// Branches with the proof `similar-patches` (they are counted in `review`, too).
 pub fn similar_count(plans: &[RepoPlan]) -> usize {
     plans
@@ -966,6 +1020,18 @@ pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
             }
             any = true;
             let mut note = String::new();
+            let l = &b.landed_via;
+            if l.kind != LandedKind::Unknown
+                && l.basis != Basis::Ancestor
+                && b.proof != tidy_rebase::RB_CLASS
+            {
+                note += &format!(
+                    "; landed via {} ({}, {})",
+                    l.kind.as_str(),
+                    l.basis.as_str(),
+                    l.strength.as_str()
+                );
+            }
             if let Some(w) = &b.worktree {
                 match &w.blocker {
                     None => note += &format!("; removable with its branch (proof: {})", w.proof),
@@ -1004,11 +1070,12 @@ pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
         }
     }
     let (d, w, r, k) = summary(plans);
-    let similar = similar_count(plans);
-    let of_them = if similar > 0 {
-        format!(" ({similar} of them similar-patches)")
-    } else {
-        String::new()
+    let (similar, rebase) = (similar_count(plans), rebase_count(plans));
+    let of_them = match (rebase, similar) {
+        (0, 0) => String::new(),
+        (0, s) => format!(" ({s} of them similar-patches)"),
+        (r, 0) => format!(" ({r} of them rebase-identity)"),
+        (r, s) => format!(" ({r} of them rebase-identity, {s} similar-patches)"),
     };
     out += &format!(
         "{d} to delete, {w} to delete with their worktree, {r} to review{of_them}, {k} kept (read-only: nothing was changed)\n"
