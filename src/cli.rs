@@ -1839,11 +1839,20 @@ fn run(command: Command) -> Result<u8> {
         Command::Tidy {
             command: TidyCommand::Plan(a),
         } => {
+            if a.similarity_low > a.similarity {
+                return Err(Error::usage(format!(
+                    "--similarity-low ({}) must not be above --similarity ({})",
+                    a.similarity_low, a.similarity
+                )));
+            }
             let ws = workspace(&a.common, None)?;
             let opts = tidy::PlanOpts {
                 backup_days: a.backup_days,
                 now: tidy::now_secs(),
-                similarity: Some(tidy::Similarity::default()),
+                similarity: (!a.no_similarity).then(|| tidy::Similarity {
+                    high: u32::from(a.similarity),
+                    low: u32::from(a.similarity_low),
+                }),
             };
             let plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)
