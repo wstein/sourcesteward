@@ -81,8 +81,55 @@ pub enum PrCommitsRead {
 }
 
 /// `YYYY-MM-DDTHH:MM:SSZ` (what GitHub sends) as seconds since the epoch; `None` for anything else.
-pub fn parse_utc(_s: &str) -> Option<i64> {
-    None
+pub fn parse_utc(s: &str) -> Option<i64> {
+    let b = s.as_bytes();
+    if b.len() != 20
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+        || b[19] != b'Z'
+    {
+        return None;
+    }
+    let num = |from: usize, to: usize| -> Option<i64> {
+        let t = &s[from..to];
+        t.bytes()
+            .all(|c| c.is_ascii_digit())
+            .then(|| t.parse().ok())?
+    };
+    let (y, m, d) = (num(0, 4)?, num(5, 7)?, num(8, 10)?);
+    let (hh, mm, ss) = (num(11, 13)?, num(14, 16)?, num(17, 19)?);
+    if !(1..=12).contains(&m) || hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
+    let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;
+    let dim = [
+        31,
+        if leap { 29 } else { 28 },
+        31,
+        30,
+        31,
+        30,
+        31,
+        31,
+        30,
+        31,
+        30,
+        31,
+    ][m as usize - 1];
+    if !(1..=dim).contains(&d) {
+        return None;
+    }
+    // days from the civil date (Howard Hinnant's algorithm)
+    let y2 = if m <= 2 { y - 1 } else { y };
+    let era = y2.div_euclid(400);
+    let yoe = y2 - era * 400;
+    let doy = (153 * (if m > 2 { m - 3 } else { m + 9 }) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(days * 86_400 + hh * 3600 + mm * 60 + ss)
 }
 
 /// Whether GitHub is available for this run, and the reason when it is not.
@@ -549,7 +596,9 @@ impl Client {
                     head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
                     number: p["number"].as_u64().unwrap_or(0),
                     state,
-                    ..Default::default()
+                    merge_commit_sha: p["merge_commit_sha"].as_str().unwrap_or("").to_string(),
+                    merged_at: p["merged_at"].as_str().and_then(parse_utc),
+                    title: p["title"].as_str().unwrap_or("").to_string(),
                 });
             }
             if items.len() < 100 {
@@ -563,8 +612,35 @@ impl Client {
 
     /// The commits of pull request `number` (`GET pulls/N/commits?per_page=100`, one request), oldest first.
     pub fn pr_commits(&self, slug: &str, number: u64) -> Result<PrCommitsRead> {
-        let _ = (slug, number);
-        Ok(PrCommitsRead::Commits(Vec::new()))
+        let api = &self.base;
+        let v = self.get(&format!(
+            "{api}/repos/{slug}/pulls/{number}/commits?per_page={PAGE}"
+        ))?;
+        let items = v.as_array().ok_or_else(|| {
+            Error::github("GitHub API sent an unexpected pull request commits response")
+        })?;
+        if items.len() >= PAGE {
+            return Ok(PrCommitsRead::TooMany);
+        }
+        let bad = || Error::github("GitHub API sent an unreadable pull request commit");
+        let mut out = Vec::with_capacity(items.len());
+        for c in items {
+            let id = c["sha"]
+                .as_str()
+                .and_then(|h| gix::ObjectId::from_hex(h.as_bytes()).ok())
+                .ok_or_else(bad)?;
+            let a = &c["commit"]["author"];
+            out.push(crate::tidy_rebase::PrCommit {
+                id,
+                name: a["name"].as_str().ok_or_else(bad)?.as_bytes().to_vec(),
+                mail: a["email"].as_str().ok_or_else(bad)?.as_bytes().to_vec(),
+                secs: a["date"].as_str().and_then(parse_utc).ok_or_else(bad)?,
+                subject: crate::tidy_rebase::subject_of(
+                    c["commit"]["message"].as_str().ok_or_else(bad)?.as_bytes(),
+                ),
+            });
+        }
+        Ok(PrCommitsRead::Commits(out))
     }
 
     /// SHA of `refs/heads/<branch>` on the remote (read-only replacement of `git ls-remote`).
