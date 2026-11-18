@@ -3854,12 +3854,13 @@ m RB14 'a set instead of a multiset: a position is taken twice' src/tidy_rebase.
                 .collect();' '                .filter(|_| true)
                 .collect();' \
   tidy_rebase a_position_is_taken_once_two_branch_commits_do_not_share_one_main_commit
-m RB15 'the content floor is not checked' src/tidy_rebase.rs \
-  'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);' 'floor_ok &= true;' \
-  tidy_rebase the_content_floor_is_fifty_percent_inclusive
-m RB16 'the walk has no slack before the oldest author time' src/tidy_rebase.rs \
-  'head.committer_secs < s - RB_SLACK_SECS' 'head.committer_secs < s' \
-  tidy_rebase the_walk_stops_a_day_before_the_oldest_author_time_and_not_earlier
+m RB15 'the content value of an identity match is not held to 95 percent' src/tidy_rebase.rs \
+  '                high &= sim.ge_pct(RB_CONTENT_HIGH);
+                low &= sim.ge_pct(LOW_PCT);' '                low &= sim.ge_pct(LOW_PCT);' \
+  tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
+m RB16 'the age bound has no slack before the oldest author time' src/tidy_rebase.rs \
+  'head.key.secs < s - RB_SLACK_SECS' 'head.key.secs < s' \
+  tidy_rebase the_age_bound_is_a_day_before_the_oldest_author_time_inclusive
 m RB17 'similarity fills any gap, not only one between two neighbours' src/tidy_rebase.rs \
   'if a.pos[i].is_some() || up != down + 2 {' 'if a.pos[i].is_some() {' \
   tidy_rebase similarity_is_not_used_without_the_neighbours_on_both_sides_of_one_free_position
@@ -3918,14 +3919,16 @@ m RB34 'the window holds one commit more than the limit' src/tidy_rebase.rs \
   'if idx.positions.len() >= max_window {' 'if idx.positions.len() > max_window {' \
   tidy_rebase the_walk_stops_at_the_window_limit_and_says_so
 m RB35 'a missing object is an error for the whole index' src/tidy_rebase.rs \
-  'Err(_) if !idx.positions.is_empty() => {' 'Err(_) if false => {' \
+  'if !idx.positions.is_empty() && !repo.has_object(id) {' 'if false {' \
   tidy_rebase a_missing_parent_object_ends_the_walk_without_an_error
-m RB36 'the time bound is exclusive of the day' src/tidy_rebase.rs \
-  'head.committer_secs < s - RB_SLACK_SECS' 'head.committer_secs <= s - RB_SLACK_SECS' \
-  tidy_rebase the_walk_stops_a_day_before_the_oldest_author_time_and_not_earlier
-m RB37 'the content floor is 51 percent' src/tidy_rebase.rs \
-  'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR);' 'floor_ok &= sim.ge_pct(RB_CONTENT_FLOOR + 1);' \
-  tidy_rebase the_content_floor_is_fifty_percent_inclusive
+m RB36 'the age bound is exclusive of the day' src/tidy_rebase.rs \
+  'head.key.secs < s - RB_SLACK_SECS' 'head.key.secs <= s - RB_SLACK_SECS' \
+  tidy_rebase the_age_bound_is_a_day_before_the_oldest_author_time_inclusive
+m RB37 'the content threshold is 96 percent' src/tidy_rebase.rs \
+  '                high &= sim.ge_pct(RB_CONTENT_HIGH);
+                low &= sim.ge_pct(LOW_PCT);' '                high &= sim.ge_pct(RB_CONTENT_HIGH + 1);
+                low &= sim.ge_pct(LOW_PCT);' \
+  tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
 m RB38 'the position of an API target is counted from the merge commit' src/tidy_rebase.rs \
   'position: Some((dist + k - 1 - j) as u32),' 'position: Some((k - 1 - j) as u32),' \
   tidy_rebase a_pull_request_with_one_parent_and_identity_equal_commits_is_a_rebase
@@ -3933,7 +3936,7 @@ m RB39 'the squash time tolerance is 4 seconds' src/tidy_rebase.rs \
   '<= RB_API_TIME_TOLERANCE)' '<= RB_API_TIME_TOLERANCE + 2)' \
   tidy_rebase a_commit_with_the_time_of_the_merge_is_a_squash
 m RB40 'an equal patch without identity is a proof' src/tidy_rebase.rs \
-  '&& floor_ok && identity_backed' '&& floor_ok' \
+  '&& content_ok && identity_backed' '&& content_ok' \
   tidy_rebase one_commit_is_enough_for_a_proof_when_it_has_the_identity
 m RB41 'a single mapped commit is no hint' src/tidy_rebase.rs \
   '} else if mapped >= 1 {' '} else if mapped >= 2 {' \
@@ -3947,6 +3950,87 @@ m RB43 'the gap is not counted' src/tidy_rebase.rs \
 m RB44 'an equal patch has no content value' src/tidy_rebase.rs \
   '                Some(1000)' '                None' \
   tidy_rebase a_conflict_resolution_keeps_the_identity_with_a_content_value
+m RB45 'the content threshold is 90 percent (RB_CONTENT_HIGH)' src/tidy_rebase.rs \
+  'pub const RB_CONTENT_HIGH: u32 = 95;' 'pub const RB_CONTENT_HIGH: u32 = 90;' \
+  tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
+m RB46 'a commit filled by similarity is not held to 95 percent' src/tidy_rebase.rs \
+  '                value[i] = Some(sim.shown(LOW_PCT));
+                high &= sim.ge_pct(RB_CONTENT_HIGH);' '                value[i] = Some(sim.shown(LOW_PCT));' \
+  tidy_rebase a_gap_of_one_between_two_mapped_commits_is_filled_by_similarity
+m RB47 'modified needs no 70 percent' src/tidy_rebase.rs \
+  'modified: !high && low,' 'modified: !high,' \
+  tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
+m RB48 'an identity value below 70 percent does not count against modified' src/tidy_rebase.rs \
+  '                low &= sim.ge_pct(LOW_PCT);
+            }
+            Content::BothEmpty' '            }
+            Content::BothEmpty' \
+  tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
+m RB49 'a later version is not recognised' src/tidy_rebase.rs \
+  'heads[i].committer_secs > index.positions[p as usize].committer_secs' 'false' \
+  tidy_rebase an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint
+m RB50 'the same committer time is a later version' src/tidy_rebase.rs \
+  'heads[i].committer_secs > index.positions[p as usize].committer_secs' 'heads[i].committer_secs >= index.positions[p as usize].committer_secs' \
+  tidy_rebase an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint
+m RB51 'an equal patch can be a later version' src/tidy_rebase.rs \
+  '(Some(p), Method::Identity) => {
+                heads[i].committer_secs' '(Some(p), _) => {
+                heads[i].committer_secs' \
+  tidy_rebase an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint
+m RB52 'a later version does not keep the proof at hint' src/tidy_rebase.rs \
+  'let content_ok = high && !later.iter().any(|x| *x);' 'let content_ok = high;' \
+  tidy_rebase an_amend_after_landing_keeps_the_author_time_and_is_at_most_a_hint
+m RB53 'the walk stops after one old commit' src/tidy_rebase.rs \
+  'if old_run >= RB_STOP_RUN {' 'if old_run >= 1 {' \
+  tidy_rebase a_run_of_old_author_times_ends_the_walk_a_single_one_does_not
+m RB54 'the run of old commits is not broken by a recent commit' src/tidy_rebase.rs \
+  '            } else {
+                old_run = 0;' '            } else {
+                old_run += 0;' \
+  tidy_rebase a_run_of_old_author_times_ends_the_walk_a_single_one_does_not
+m RB55 'the walk stops by the committer time again' src/tidy_rebase.rs \
+  'head.key.secs < s - RB_SLACK_SECS' 'head.committer_secs < s - RB_SLACK_SECS' \
+  tidy_rebase an_old_committer_time_does_not_end_the_walk
+m RB56 'the stop reason names the tip instead of the missing commit' src/tidy_rebase.rs \
+  'idx.stop = Stop::Missing(id);' 'idx.stop = Stop::Missing(base_tip);' \
+  tidy_rebase a_missing_parent_object_ends_the_walk_without_an_error
+m RB57 'the boundary commit is read for its patch ID' src/tidy_rebase.rs \
+  'if h.parents > 1 || index.is_edge(pos as u32) {' 'if h.parents > 1 {' \
+  tidy_rebase the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error
+m RB58 'the content of the boundary commit is read' src/tidy_rebase.rs \
+  'let content = if index.is_edge(p) {' 'let content = if false {' \
+  tidy_rebase the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error
+m RB59 'the boundary commit is not the last one of the walk' src/tidy_rebase.rs \
+  'matches!(self.stop, Stop::Missing(_)) && pos as usize + 1 == self.positions.len()' 'matches!(self.stop, Stop::Missing(_)) && pos == 0' \
+  tidy_rebase the_boundary_commit_of_a_shallow_clone_is_skipped_not_an_error
+m RB60 'an unreadable PR commit behind the merge commit is an error' src/tidy_rebase.rs \
+  'Err(_) if !chain.is_empty() => break,' 'Err(_) if false => break,' \
+  tidy_rebase a_shallow_boundary_below_the_merge_commit_is_not_an_error
+m RB61 'an API rebase with remaining commits is strong' src/tidy_rebase.rs \
+  'rep.strength = if rep.remaining.is_empty() && rep.head_in_branch == Some(true) {' 'rep.strength = if rep.head_in_branch == Some(true) {' \
+  tidy_rebase commits_after_the_pull_request_head_remain
+m RB62 'an API rebase with a head outside the branch is strong' src/tidy_rebase.rs \
+  'rep.strength = if rep.remaining.is_empty() && rep.head_in_branch == Some(true) {' 'rep.strength = if rep.remaining.is_empty() {' \
+  tidy_rebase commits_after_the_pull_request_head_remain
+m RB63 'landed_via does not take the strength of the pull request' src/tidy_rebase.rs \
+  'return via(a.kind, Basis::PrApi, a.strength);' 'return via(a.kind, Basis::PrApi, Strength::Strong);' \
+  tidy_rebase commits_after_the_pull_request_head_remain
+m RB64 'the squash tolerance is exclusive' src/tidy_rebase.rs \
+  '<= RB_API_TIME_TOLERANCE)' '< RB_API_TIME_TOLERANCE)' \
+  tidy_rebase the_squash_time_tolerance_is_two_seconds_inclusive_in_both_directions
+m RB65 'the squash time difference is not an absolute value' src/tidy_rebase.rs \
+  '(merge_head.key.secs - t).abs() <=' '(merge_head.key.secs - t) <=' \
+  tidy_rebase the_squash_time_tolerance_is_two_seconds_inclusive_in_both_directions
+m RB66 'the author name of the PR commits is not compared' src/tidy_rebase.rs \
+  '    h.name == c.name
+        && h.key.mail' '    h.key.mail' \
+  tidy_rebase the_pull_request_commits_are_compared_by_name_and_by_mail_in_lower_case
+m RB67 'the mail of the PR commits is compared in its own case' src/tidy_rebase.rs \
+  'h.key.mail == c.mail.to_ascii_lowercase()' 'h.key.mail == c.mail' \
+  tidy_rebase the_pull_request_commits_are_compared_by_name_and_by_mail_in_lower_case
+m RB68 'the zone offset of an API mapping is not noted' src/tidy_rebase.rs \
+  'tz_differs: m.offset != h.offset,' 'tz_differs: false,' \
+  tidy_rebase a_different_zone_offset_of_a_pull_request_commit_is_noted
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
