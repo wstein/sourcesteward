@@ -871,3 +871,17 @@ fn the_name_of_a_gone_upstream_is_escaped() {
     );
     assert!(!line.contains('\u{202e}'), "{line:?}");
 }
+
+#[test]
+fn the_flag_lists_the_same_branches_as_the_plain_plan_with_and_without_all() {
+    let w = landed_world();
+    w.branch("plain", &cs(8, 1));
+    let p = plan_with(&w, None, &opts());
+    for all in [false, true] {
+        let plain = stw::tidy::render_human(std::slice::from_ref(&p), all);
+        let e = stw::tidy::render_explained(std::slice::from_ref(&p), all);
+        let kept: Vec<&str> = e.lines().filter(|l| !l.starts_with("    ")).collect();
+        assert_eq!(kept, plain.lines().collect::<Vec<_>>(), "all={all}");
+        assert_eq!(e.contains("  plain  ["), all, "{e}");
+    }
+}

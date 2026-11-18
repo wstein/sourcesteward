@@ -4329,6 +4329,134 @@ m TR51 'the two counts of the summary line are swapped' src/tidy.rs \
 m TR52 'fetch_proof does not hand the client to the stage' src/tidy.rs \
   'api: PrApi::Client(c),' 'api: PrApi::Off(ApiReason::NoToken),' \
   tidy_rebase_plan the_client_of_fetch_proof_reaches_the_stage
+m TX1 'the mapping, commit and remaining lists are cut at 21 instead of 20' src/tidy_explain.rs \
+  'const MAX_ROWS: usize = 20;' 'const MAX_ROWS: usize = 21;' \
+  tidy_explain the_mapping_is_cut_at_twenty_lines
+m TX2 'an evidence line may have 121 characters' src/tidy_explain.rs \
+  'const MAX_LINE: usize = 120;' 'const MAX_LINE: usize = 121;' \
+  tidy_explain text_from_commits_is_masked_and_an_evidence_line_has_at_most_120_characters
+m TX3 'six evidence lines per commit instead of five' src/tidy_similarity.rs \
+  'max_evidence: 5,' 'max_evidence: 6,' \
+  tidy_explain a_modified_commit_shows_its_candidate_value_and_at_most_five_evidence_lines
+m TX4 'the paths of the remaining commits are not limited over all of them' src/tidy_explain.rs \
+  '.take(budget).map(String::as_str)' '.take(MAX_ROWS).map(String::as_str)' \
+  tidy_explain the_paths_of_all_remaining_commits_together_are_cut_at_twenty
+m TX5 'the upstream name in the sentence is not escaped' src/tidy_explain.rs \
+  '        "upstream-gone" => format!(
+            "{}: upstream {} is gone, {} commit(s) not in {base}",
+            b.decision,
+            escape_untrusted(b.upstream.as_deref().unwrap_or(""), 200).0,' '        "upstream-gone" => format!(
+            "{}: upstream {} is gone, {} commit(s) not in {base}",
+            b.decision,
+            b.upstream.as_deref().unwrap_or(""),' \
+  tidy_explain the_name_of_a_gone_upstream_is_escaped
+m TX6 'a delete gets all the sections' src/tidy_explain.rs \
+  'if b.decision == "delete" {' 'if false {' \
+  tidy_explain a_delete_gets_the_sentence_and_how_it_landed_and_nothing_else
+m TX7 'the explanation is printed without the flag' src/cli.rs \
+  '                if a.explain {
+                    print!("{}", tidy::render_explained(&plans, a.all));' '                if true {
+                    print!("{}", tidy::render_explained(&plans, a.all));' \
+  tidy_explain the_flag_adds_the_explanation_to_the_text_plan_and_nothing_else
+m TX8 'the flag adds a key to the JSON' src/cli.rs \
+  '                    m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+                }
+                print_json(&v);
+            } else {
+                if a.explain' '                    m.insert("rejected_paths".into(), rejected_json(&ws.rejected));
+                    if a.explain {
+                        m.insert("explain".into(), Value::Bool(true));
+                    }
+                }
+                print_json(&v);
+            } else {
+                if a.explain' \
+  tidy_explain the_flag_does_not_change_the_json
+m TX9 'tidy apply takes --explain' src/cli.rs \
+  'struct ApplyArgs {
+    #[command(flatten)]
+    common: Common,' 'struct ApplyArgs {
+    #[command(flatten)]
+    common: Common,
+    #[arg(long)]
+    explain: bool,' \
+  tidy_explain apply_has_no_such_flag
+m TX10 'the commit lines are not cut' src/tidy_explain.rs \
+  'if rows == MAX_ROWS {' 'if false {' \
+  tidy_explain at_most_twenty_commit_lines_are_shown_and_the_rest_is_counted
+m TX11 'the text has a next command' src/tidy_explain.rs \
+  'let mut out = vec![format!("why: {}", why(b, base))];' 'let mut out = vec![format!("why: {}", why(b, base)), "next command: stw tidy apply".to_string()];' \
+  tidy_explain the_flag_adds_the_explanation_to_the_text_plan_and_nothing_else
+m TX12 'the method in a mapping line is a fixed word' src/tidy_explain.rs \
+  '        m.method.as_str()
+    );' '        "method"
+    );' \
+  tidy_explain a_strong_mapping_lists_each_commit_with_its_commit_on_the_base
+m TX13 'the reason line is worded differently' src/tidy_explain.rs \
+  '"pull request: PR mapping not read ({})"' '"pull request mapping not read ({})"' \
+  tidy_explain every_reason_of_the_pull_request_mapping_is_named_in_one_line
+m TX14 'the later hint loses its words hint only' src/tidy_explain.rs \
+  'notes.push("later version, hint only");' 'notes.push("later version");' \
+  tidy_explain a_modified_mapping_and_a_later_version_are_hints_and_say_so
+m TX15 'the modified hint says another thing' src/tidy_explain.rs \
+  'like its commit on {base} (hint only)' 'like its commit on {base}' \
+  tidy_explain a_modified_mapping_and_a_later_version_are_hints_and_say_so
+m TX16 'a later version is not noted' src/tidy_explain.rs \
+  '    if m.later {
+        notes.push' '    if false {
+        notes.push' \
+  tidy_explain a_modified_mapping_and_a_later_version_are_hints_and_say_so
+m TX17 'commits at or above the threshold get a line' src/tidy_explain.rs \
+  'Outcome::Compared(x) if x.sim.ge_pct(sim.high) => continue,' 'Outcome::Compared(x) if false && x.sim.ge_pct(sim.high) => continue,' \
+  tidy_explain a_landed_branch_has_the_summary_line_and_no_commit_lines
+m TX18 'the plan forgets the pull request number of the branch' src/tidy.rs \
+  '            pr_moved: pr_other,
+        };' '            pr_moved: None,
+        };' \
+  tidy_explain each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided
+m TX19 'a gone upstream is not named where a stage replaced the proof' src/tidy_explain.rs \
+  '} else if b.track.as_deref() == Some("[gone]") {' '} else if false {' \
+  tidy_explain a_stage_that_replaced_the_pull_request_or_the_upstream_proof_names_them
+m TX20 'the hint of the pull request mapping ignores the commits after the head' src/tidy_explain.rs \
+  '            if !a.remaining.is_empty() {
+                why.push' '            if a.remaining.is_empty() {
+                why.push' \
+  tidy_explain a_pull_request_that_was_read_says_what_it_found_and_why_it_is_a_hint
+m TX21 'the mapping lines run backwards' src/tidy_explain.rs \
+  '        rep.mapping
+            .iter()
+            .filter(|m| m.main.is_some() || m.ambiguous),' '        rep.mapping
+            .iter()
+            .rev()
+            .filter(|m| m.main.is_some() || m.ambiguous),' \
+  tidy_explain a_strong_mapping_lists_each_commit_with_its_commit_on_the_base
+m TX22 'the commit lines run backwards' src/tidy_explain.rs \
+  '    for c in &r.commits {' '    for c in r.commits.iter().rev() {' \
+  tidy_explain the_commit_lines_follow_the_order_of_the_report
+m TX23 'a skipped commit has no reason' src/tidy_explain.rs \
+  'format!("skipped ({})", k.as_str())' 'format!("skipped ({})", "")' \
+  tidy_explain a_commit_without_a_candidate_and_a_commit_too_large_are_named
+m TX24 'the two counts of the sentence are swapped' src/tidy_explain.rs \
+  'b.decision, sim.report.plus_commits, b.unique
+            ),' 'b.decision, b.unique, sim.report.plus_commits
+            ),' \
+  tidy_explain the_sentence_counts_the_commits_without_a_patch_partner_of_all_that_are_not_on_the_base
+m TX25 'the explanation is not indented under its branch' src/tidy.rs \
+  'out += &format!("    {l}\n");' 'out += &format!("  {l}\n");' \
+  tidy_explain each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided
+m TX26 'the explanation is printed for a plain render' src/tidy.rs \
+  'pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
+    render_with(plans, all, false)' 'pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
+    render_with(plans, all, true)' \
+  tidy_explain without_the_flag_the_text_is_the_plain_plan
+m TX27 'the explained text leaves out the kept branches the plain text lists' src/tidy.rs \
+  'pub fn render_explained(plans: &[RepoPlan], all: bool) -> String {
+    render_with(plans, all, true)' 'pub fn render_explained(plans: &[RepoPlan], all: bool) -> String {
+    render_with(plans, true, true)' \
+  tidy_explain the_flag_lists_the_same_branches_as_the_plain_plan_with_and_without_all
+m TX28 'the explanation names the proof of a worktree wrongly' src/tidy_explain.rs \
+  '; without it the proof would be {}", w.proof' '; without it the proof would be {}", b.proof' \
+  tidy_explain each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do

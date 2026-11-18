@@ -1337,7 +1337,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1182 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1210 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1498,6 +1498,7 @@ on a single file), the ref is restored but files already written stay; `git stat
   commits mapped, one ordered block, content at least 95 % per commit (70 to 94 % is `modified`), no later version (amend after landing), at least one identity.
   The index stops by a run of 64 old author times, never by the committer time; the boundary commit of a shallow clone is skipped. The pull request (`evaluate_api`, on given inputs, no request) and
   `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB68`; the plan wiring (rebase stage, pull request reads, `landed_via`, flag): `TR1` to `TR52`.
+- `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX28`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.
