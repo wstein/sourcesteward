@@ -161,7 +161,7 @@ m Z3 "status text prints a command" src/status.rs \
   '"{attention} of {} repositories need attention\n"' '"next: git -C x status\n{attention} of {} repositories need attention\n"' \
   cli no_output_contains_a_command_or_next_steps
 m Z4 "tidy plan text prints a command" src/tidy.rs \
-  '"{d} to delete, {w} to delete with their worktree, {r} to review, {k} kept (read-only: nothing was changed)\n"' '"next: git -C x branch -d y\n{d} to delete, {w} to delete with their worktree, {r} to review, {k} kept (read-only: nothing was changed)\n"' \
+  '"{d} to delete, {w} to delete with their worktree, {r} to review{of_them}, {k} kept (read-only: nothing was changed)\n"' '"next: git -C x branch -d y\n{d} to delete, {w} to delete with their worktree, {r} to review{of_them}, {k} kept (read-only: nothing was changed)\n"' \
   cli no_output_contains_a_command_or_next_steps
 m Z5 "sync text prints a command" src/sync/mod.rs \
   '"{} fast-forwarded, {} skipped, {} failed",' '"next: git -C x pull\n{} fast-forwarded, {} skipped, {} failed",' \
@@ -3650,10 +3650,10 @@ m TS5 'the path is not part of the key with path' src/tidy_similarity.rs \
   '.map(|e| hash_key(Some(&e.path), e.sign, &e.line))' '.map(|e| hash_key(None, e.sign, &e.line))' \
   tidy_similarity the_path_is_part_of_the_key_but_not_of_the_no_path_value
 m TS6 'the time window is removed' src/tidy_similarity.rs \
-  'candidate_time >= commit_time - window_secs' 'candidate_time >= i64::MIN' \
+  'candidate_time >= commit_time.saturating_sub(window_secs)' 'candidate_time >= i64::MIN' \
   tidy_similarity the_window_is_seven_days_by_author_time
 m TS7 'the window excludes exactly 7 days (>= becomes >)' src/tidy_similarity.rs \
-  'candidate_time >= commit_time - window_secs' 'candidate_time > commit_time - window_secs' \
+  'candidate_time >= commit_time.saturating_sub(window_secs)' 'candidate_time > commit_time.saturating_sub(window_secs)' \
   tidy_similarity the_window_is_seven_days_by_author_time
 m TS8 'candidates by file overlap are never accepted' src/tidy_similarity.rs \
   '&& !seen.contains(n)
@@ -3855,7 +3855,7 @@ m RB15 'the content value of an identity match is not held to 95 percent' src/ti
                 low &= sim.ge_pct(LOW_PCT);' '                low &= sim.ge_pct(LOW_PCT);' \
   tidy_rebase a_proof_needs_95_percent_per_commit_70_to_94_is_modified_below_is_no_proof
 m RB16 'the age bound has no slack before the oldest author time' src/tidy_rebase.rs \
-  'head.key.secs < s - RB_SLACK_SECS' 'head.key.secs < s' \
+  'head.key.secs < s.saturating_sub(RB_SLACK_SECS)' 'head.key.secs < s' \
   tidy_rebase the_age_bound_is_a_day_before_the_oldest_author_time_inclusive
 m RB17 'similarity fills any gap, not only one between two neighbours' src/tidy_rebase.rs \
   'if a.pos[i].is_some() || up != down + 2 {' 'if a.pos[i].is_some() {' \
@@ -3909,7 +3909,7 @@ m RB32 'a merge commit of the branch counts as a commit' src/tidy_rebase.rs \
   'if head.parents > 1 {' 'if head.parents > 100 {' \
   tidy_rebase the_branch_side_is_the_non_merge_commits_oldest_first
 m RB33 'the branch side takes the newest ready commit first' src/tidy_rebase.rs \
-  'ready.sort_by_key(|id| std::cmp::Reverse(order_key(id)));' 'ready.sort_by_key(|id| order_key(id));' \
+  '.map(|(id, _)| std::cmp::Reverse((set[id].key.secs, *id)))' '.map(|(id, _)| std::cmp::Reverse((-set[id].key.secs, *id)))' \
   tidy_rebase the_branch_side_puts_parents_before_children_even_with_equal_times
 m RB34 'the window holds one commit more than the limit' src/tidy_rebase.rs \
   'if idx.positions.len() >= max_window {' 'if idx.positions.len() > max_window {' \
@@ -3918,7 +3918,7 @@ m RB35 'a missing object is an error for the whole index' src/tidy_rebase.rs \
   'if !idx.positions.is_empty() && !repo.has_object(id) {' 'if false {' \
   tidy_rebase a_missing_parent_object_ends_the_walk_without_an_error
 m RB36 'the age bound is exclusive of the day' src/tidy_rebase.rs \
-  'head.key.secs < s - RB_SLACK_SECS' 'head.key.secs <= s - RB_SLACK_SECS' \
+  'head.key.secs < s.saturating_sub(RB_SLACK_SECS)' 'head.key.secs <= s.saturating_sub(RB_SLACK_SECS)' \
   tidy_rebase the_age_bound_is_a_day_before_the_oldest_author_time_inclusive
 m RB37 'the content threshold is 96 percent' src/tidy_rebase.rs \
   '                high &= sim.ge_pct(RB_CONTENT_HIGH);
@@ -3929,7 +3929,7 @@ m RB38 'the position of an API target is counted from the merge commit' src/tidy
   'position: Some((dist + k - 1 - j) as u32),' 'position: Some((k - 1 - j) as u32),' \
   tidy_rebase a_pull_request_with_one_parent_and_identity_equal_commits_is_a_rebase
 m RB39 'the squash time tolerance is 4 seconds' src/tidy_rebase.rs \
-  '<= RB_API_TIME_TOLERANCE)' '<= RB_API_TIME_TOLERANCE + 2)' \
+  '<= RB_API_TIME_TOLERANCE as u64' '<= RB_API_TIME_TOLERANCE as u64 + 2' \
   tidy_rebase a_commit_with_the_time_of_the_merge_is_a_squash
 m RB40 'an equal patch without identity is a proof' src/tidy_rebase.rs \
   '&& content_ok && identity_backed' '&& content_ok' \
@@ -3985,7 +3985,7 @@ m RB54 'the run of old commits is not broken by a recent commit' src/tidy_rebase
                 old_run += 0;' \
   tidy_rebase a_run_of_old_author_times_ends_the_walk_a_single_one_does_not
 m RB55 'the walk stops by the committer time again' src/tidy_rebase.rs \
-  'head.key.secs < s - RB_SLACK_SECS' 'head.committer_secs < s - RB_SLACK_SECS' \
+  'head.key.secs < s.saturating_sub(RB_SLACK_SECS)' 'head.committer_secs < s.saturating_sub(RB_SLACK_SECS)' \
   tidy_rebase an_old_committer_time_does_not_end_the_walk
 m RB56 'the stop reason names the tip instead of the missing commit' src/tidy_rebase.rs \
   'idx.stop = Stop::Missing(id);' 'idx.stop = Stop::Missing(base_tip);' \
@@ -4012,10 +4012,10 @@ m RB63 'landed_via does not take the strength of the pull request' src/tidy_reba
   'return via(a.kind, Basis::PrApi, a.strength);' 'return via(a.kind, Basis::PrApi, Strength::Strong);' \
   tidy_rebase commits_after_the_pull_request_head_remain
 m RB64 'the squash tolerance is exclusive' src/tidy_rebase.rs \
-  '<= RB_API_TIME_TOLERANCE)' '< RB_API_TIME_TOLERANCE)' \
+  '<= RB_API_TIME_TOLERANCE as u64' '< RB_API_TIME_TOLERANCE as u64' \
   tidy_rebase the_squash_time_tolerance_is_two_seconds_inclusive_in_both_directions
 m RB65 'the squash time difference is not an absolute value' src/tidy_rebase.rs \
-  '(merge_head.key.secs - t).abs() <=' '(merge_head.key.secs - t) <=' \
+  'merge_head.key.secs.abs_diff(t) <= RB_API_TIME_TOLERANCE as u64' '(merge_head.key.secs - t) <= RB_API_TIME_TOLERANCE' \
   tidy_rebase the_squash_time_tolerance_is_two_seconds_inclusive_in_both_directions
 m RB66 'the author name of the PR commits is not compared' src/tidy_rebase.rs \
   '    h.name == c.name
@@ -4030,8 +4030,8 @@ m RB68 'the zone offset of an API mapping is not noted' src/tidy_rebase.rs \
 
 m TP1 'the similarity stage also runs for a branch that has an equal-patches proof' src/tidy.rs \
   '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
-        );' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "equal-patches"
-        );' \
+    )' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "equal-patches"
+    )' \
   tidy_similarity_plan the_existing_proof_has_precedence_over_similarity
 m TP2 'an open pull request does not stop the similarity stage' src/tidy.rs \
   'if let Some(n) = pr_open {
@@ -4040,21 +4040,21 @@ m TP2 'an open pull request does not stop the similarity stage' src/tidy.rs \
   tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
 m TP3 'a backup branch is judged by the similarity stage' src/tidy.rs \
   '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
-        );' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "backup-recent"
-        );' \
+    )' '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged" | "backup-recent"
+    )' \
   tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
 m TP4 'a worktree does not protect a similar-patches branch' src/tidy.rs \
   'if let Some(dir) = wt.branch_dir(&br) {' 'if let Some(dir) = wt.branch_dir(&br).filter(|_| bp.proof != "similar-patches") {' \
   tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
 m TP5 'a branch whose proof is pull-request-merged-branch-moved is not judged' src/tidy.rs \
   '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
-        );' '"upstream-gone" | "unmerged"
-        );' \
+    )' '"upstream-gone" | "unmerged"
+    )' \
   tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
 m TP6 'a branch whose proof is upstream-gone is not judged' src/tidy.rs \
   '"pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
-        );' '"pull-request-merged-branch-moved" | "unmerged"
-        );' \
+    )' '"pull-request-merged-branch-moved" | "unmerged"
+    )' \
   tidy_similarity_plan similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_the_gates
 m TP7 'a similar-patches branch is delete' src/tidy.rs \
   'bp.decision = "review";
@@ -4070,10 +4070,10 @@ m TP9 'modified branches count as similar-patches' src/tidy.rs \
   'if report.class == tidy_similarity::Class::Landed {' 'if report.class != tidy_similarity::Class::Partial {' \
   tidy_similarity_plan modified_partial_squash_and_empty_branches_stay_unmerged_with_their_class
 m TP10 'the oldest plus commit sets no start for the index' src/tidy.rs \
-  'Some(oldest - lim.window_secs),' 'None,' \
+  'Some(oldest.saturating_sub(lim.window_secs)),' 'None,' \
   tidy_similarity_plan the_index_starts_a_window_before_the_oldest_plus_commit
 m TP11 'the index starts a window after the oldest plus commit' src/tidy.rs \
-  'Some(oldest - lim.window_secs),' 'Some(oldest + lim.window_secs),' \
+  'Some(oldest.saturating_sub(lim.window_secs)),' 'Some(oldest.saturating_add(lim.window_secs)),' \
   tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
 m TP12 'the boundary commit of a shallow clone is indexed' src/tidy_similarity.rs \
   'if is_shallow && has_missing_parent(repo, *id)? {' 'if false && has_missing_parent(repo, *id)? {' \
@@ -4107,7 +4107,7 @@ m TP20 'summary.similar counts equal-patches' src/tidy.rs \
         .count()' \
   tidy_similarity_plan the_summary_counts_similar_branches_as_review_and_names_them
 m TP21 'summary.similar is not in the JSON' src/tidy.rs \
-  '"similar": similar_count(plans)}})' '"similar": 0}})' \
+  '"similar": similar_count(plans), "rebase"' '"similar": 0, "rebase"' \
   tidy_similarity_plan the_summary_counts_similar_branches_as_review_and_names_them
 m TP22 'the key threshold_low is renamed' src/tidy.rs \
   '"threshold_low": s.low,' '"threshold_lo": s.low,' \
@@ -4122,7 +4122,7 @@ m TP24 'the JSON has no evidence lines' src/tidy.rs \
                         .take(0)' \
   tidy_similarity_plan the_json_of_a_modified_branch_has_evidence_lines
 m TP25 'the text summary does not name similar-patches' src/tidy.rs \
-  'format!(" ({similar} of them similar-patches)")' 'String::new()' \
+  '(0, s) => format!(" ({s} of them similar-patches)"),' '(0, _) => String::new(),' \
   tidy_similarity_plan the_text_plan_has_one_line_for_a_similar_branch_and_no_command
 m TP26 'a branch without a patch is all matched' src/tidy.rs \
   'self.with_patch > 0 && self.commits.is_empty()' 'self.commits.is_empty()' \
