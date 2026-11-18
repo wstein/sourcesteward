@@ -3,15 +3,15 @@ use stw::github::AnyPr;
 use stw::repo::RepoRef;
 use stw::tidy::{plan_repo_with, PrProof, RepoPlan};
 
-struct Built {
-    fx: Fx,
-    m1: gix::ObjectId,
-    pr_head: gix::ObjectId,
-    moved_head: gix::ObjectId,
+pub(crate) struct Built {
+    pub(crate) fx: Fx,
+    pub(crate) m1: gix::ObjectId,
+    pub(crate) pr_head: gix::ObjectId,
+    pub(crate) moved_head: gix::ObjectId,
 }
 
 /// main history c0 -> m1 (edit line 10) -> m2 (edit line 20), origin/main = m2.
-fn build() -> Built {
+pub(crate) fn build() -> Built {
     let fx = Fx::new();
     let c0 = fx.commit(None, &[("a.txt", Some(&lines(30, "x")))], "c0");
     let edit10 = lines(30, "x").replace("x10\n", "TEN\n");
@@ -70,7 +70,7 @@ fn build() -> Built {
     }
 }
 
-fn plan(b: &Built, with_prs: bool) -> RepoPlan {
+pub(crate) fn plan(b: &Built, with_prs: bool) -> RepoPlan {
     let prs = vec![
         AnyPr {
             head_ref: "pr-open".into(),

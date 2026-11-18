@@ -436,7 +436,7 @@ use serde_json::Value;
 use stw::github::GithubState;
 use stw::tidy_rebase::{Basis, LandedKind};
 
-fn json_of(p: &RepoPlan) -> Value {
+pub(crate) fn json_of(p: &RepoPlan) -> Value {
     let gh = GithubState {
         client: None,
         note: None,
@@ -468,7 +468,7 @@ fn sorted(names: &[&str]) -> Vec<String> {
     v
 }
 
-fn via(p: &RepoPlan, branch: &str) -> (LandedKind, Basis, Strength) {
+pub(crate) fn via(p: &RepoPlan, branch: &str) -> (LandedKind, Basis, Strength) {
     let l = get(p, branch).landed_via;
     (l.kind, l.basis, l.strength)
 }
@@ -893,7 +893,7 @@ fn pr_commit_json(id: ObjectId, c: &C) -> String {
 }
 
 /// The commits answer of a pull request: the first `k` commits of `list` with the ids they have on the branch.
-fn commits_body(ids: &[ObjectId], list: &[C]) -> String {
+pub(crate) fn commits_body(ids: &[ObjectId], list: &[C]) -> String {
     let v: Vec<String> = ids
         .iter()
         .zip(list)
@@ -902,7 +902,13 @@ fn commits_body(ids: &[ObjectId], list: &[C]) -> String {
     format!("[{}]", v.join(","))
 }
 
-fn merged_pr(head: &str, number: u64, head_sha: String, merge: String, at: i64) -> AnyPr {
+pub(crate) fn merged_pr(
+    head: &str,
+    number: u64,
+    head_sha: String,
+    merge: String,
+    at: i64,
+) -> AnyPr {
     AnyPr {
         head_ref: head.into(),
         head_sha,
@@ -914,7 +920,7 @@ fn merged_pr(head: &str, number: u64, head_sha: String, merge: String, at: i64) 
     }
 }
 
-fn plan_api(w: &W, prs: Vec<AnyPr>, api: PrApi, o: &PlanOpts) -> RepoPlan {
+pub(crate) fn plan_api(w: &W, prs: Vec<AnyPr>, api: PrApi, o: &PlanOpts) -> RepoPlan {
     plan_repo_with_opts(
         &rr(w),
         PrProof {
@@ -926,24 +932,24 @@ fn plan_api(w: &W, prs: Vec<AnyPr>, api: PrApi, o: &PlanOpts) -> RepoPlan {
     )
 }
 
-fn client(routes: &FakeRoutes) -> Client {
+pub(crate) fn client(routes: &FakeRoutes) -> Client {
     Client::with_base("tok".into(), TokenSource::Env, routes.url.clone())
 }
 
-fn api_of(p: &RepoPlan, branch: &str) -> (Option<ApiReason>, LandedKind, Strength) {
+pub(crate) fn api_of(p: &RepoPlan, branch: &str) -> (Option<ApiReason>, LandedKind, Strength) {
     let b = get(p, branch);
     let a = &b.rebase.as_ref().expect("rebase object").api;
     (a.not_read, a.kind, a.strength)
 }
 
 /// A branch of three commits; the pull request holds the first two (`head` is the second), the branch moved on.
-struct Moved {
-    w: W,
-    list: Vec<C>,
-    ids: Vec<ObjectId>,
+pub(crate) struct Moved {
+    pub(crate) w: W,
+    pub(crate) list: Vec<C>,
+    pub(crate) ids: Vec<ObjectId>,
 }
 
-fn moved(landed: fn(&mut W, &[C]) -> ObjectId) -> Moved {
+pub(crate) fn moved(landed: fn(&mut W, &[C]) -> ObjectId) -> Moved {
     let mut w = world();
     w.fx.set_origin_url("https://github.com/o/r.git");
     let list = cs(0, 3);
@@ -953,13 +959,13 @@ fn moved(landed: fn(&mut W, &[C]) -> ObjectId) -> Moved {
     Moved { w, list, ids }
 }
 
-fn no_sim() -> PlanOpts {
+pub(crate) fn no_sim() -> PlanOpts {
     let mut o = opts();
     o.similarity = None;
     o
 }
 
-const MOVED: (&str, &str) = ("review", "pull-request-merged-branch-moved");
+pub(crate) const MOVED: (&str, &str) = ("review", "pull-request-merged-branch-moved");
 
 #[test]
 fn a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api() {
@@ -1345,7 +1351,7 @@ fn a_shallow_clone_gives_a_plan_and_the_stage_says_where_the_walk_ended() {
     assert_eq!(win["stopped_at"], old.to_string().as_str());
 }
 
-fn stw_cli(home: &std::path::Path, args: &[&str]) -> std::process::Output {
+pub(crate) fn stw_cli(home: &std::path::Path, args: &[&str]) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
         .env("HOME", home)
@@ -1357,7 +1363,7 @@ fn stw_cli(home: &std::path::Path, args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
-fn cli_json(w: &W, extra: &[&str]) -> Value {
+pub(crate) fn cli_json(w: &W, extra: &[&str]) -> Value {
     let home = scratch();
     let r = path_str(&w.fx.path);
     let mut args = vec!["tidy", "plan", "--offline", "--json", "--root", r.as_str()];
