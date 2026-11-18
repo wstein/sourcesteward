@@ -1,4 +1,6 @@
 //! The pure comparison functions of the tidy oracle (`src/tidy_oracle.rs`): no network, no clone, throw-away fixtures.
+use serde_json::{json, Value};
+use std::collections::BTreeSet;
 use stw::tidy_oracle::*;
 use stw::tidy_similarity::{Entry, Keys, Sim};
 
@@ -170,5 +172,165 @@ fn counterexamples_name_setting_commit_value_and_sizes() {
     assert_eq!(
         m.render_counterexamples(),
         "git-histogram abcdef012345 48.7 % (19 of 40 and 38)\n"
+    );
+}
+
+// ---- the truth of GitHub against the plan ----
+
+fn raw() -> Value {
+    json!([
+        {"number": 49,
+         "pr": {"merged": true, "merge_commit_sha": "m2", "head_sha": "h2"},
+         "pr_commits": [{"sha": "p1"}, {"sha": "p2"}],
+         "main_commits": [{"sha": "m2"}, {"sha": "m1"}, {"sha": "old"}]},
+        {"number": 61},
+        {"number": 62, "pr": {"merged": false, "merge_commit_sha": null, "head_sha": "h"},
+         "pr_commits": [], "main_commits": []}
+    ])
+}
+
+#[test]
+fn the_truth_keeps_merged_pull_requests_with_the_run_on_the_base() {
+    let t = parse_truth(&raw()).unwrap();
+    assert_eq!(
+        t,
+        vec![PrTruth {
+            number: 49,
+            head_sha: "h2".into(),
+            merge_commit_sha: "m2".into(),
+            commits: vec!["p1".into(), "p2".into()],
+            main_run: vec!["m2".into(), "m1".into()],
+        }]
+    );
+    assert!(parse_truth(&json!({})).is_err());
+    let bad = json!([{"number": 5, "pr": {"merged": true, "head_sha": "h"}, "pr_commits": [], "main_commits": []}]);
+    let err = parse_truth(&bad).unwrap_err();
+    assert_eq!(err, "#5: no merge_commit_sha");
+}
+
+fn plan_json(branch: Value) -> Value {
+    json!({"repos": [{"name": "r", "branches": [{"branch": "other"}, branch]}]})
+}
+
+fn rebase_branch(strength: &str, targets: &[&str]) -> Value {
+    let mapping: Vec<Value> = targets.iter().map(|t| json!({"main": t})).collect();
+    json!({"branch": "pr-49", "decision": "review", "proof": "rebase-identity",
+           "landed_via": {"kind": "rebase", "basis": "commit-map", "strength": strength},
+           "rebase": {"strength": strength, "n": 2, "mapped": targets.len(), "mapping": mapping}})
+}
+
+fn truth() -> PrTruth {
+    let t = parse_truth(&raw()).unwrap();
+    assert_eq!(t.len(), 1, "one merged pull request in the raw data");
+    t.into_iter().next().unwrap()
+}
+
+#[test]
+fn the_view_reads_the_decision_the_landing_and_the_mapped_commits() {
+    let p = plan_json(rebase_branch("strong", &["m1", "m2"]));
+    assert_eq!(
+        branch_view(&p, "pr-49"),
+        Some(PlanView {
+            decision: "review".into(),
+            proof: "rebase-identity".into(),
+            kind: "rebase".into(),
+            basis: "commit-map".into(),
+            strength: "strong".into(),
+            rebase_strength: Some("strong".into()),
+            n: 2,
+            mapped: 2,
+            targets: BTreeSet::from(["m1".to_string(), "m2".to_string()]),
+        })
+    );
+    assert!(branch_view(&p, "pr-50").is_none());
+    // a branch without the rebase object (null) and a mapping entry without a target
+    let q = plan_json(
+        json!({"branch": "b", "decision": "keep", "proof": "unmerged", "rebase": null,
+               "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"}}),
+    );
+    let w = branch_view(&q, "b");
+    assert_eq!(
+        w.map(|w| (w.rebase_strength, w.n, w.mapped)),
+        Some((None, 0, 0))
+    );
+}
+
+#[test]
+fn a_strong_rebase_onto_the_commits_github_wrote_is_a_rebase() {
+    let p = plan_json(rebase_branch("strong", &["m1", "m2"]));
+    let v = branch_view(&p, "pr-49");
+    assert_eq!(judge(&truth(), v.as_ref()), Verdict::Rebase);
+}
+
+#[test]
+fn a_strong_rebase_onto_other_commits_is_a_finding() {
+    let p = plan_json(rebase_branch("strong", &["m1", "zz"]));
+    let v = branch_view(&p, "pr-49");
+    assert_eq!(
+        judge(&truth(), v.as_ref()),
+        Verdict::Miss(
+            "landed via rebase (strong), but the mapped commits are not the 2 that GitHub wrote (2 mapped)".into()
+        )
+    );
+}
+
+#[test]
+fn the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_cause() {
+    let eq = plan_json(
+        json!({"branch": "pr-49", "decision": "delete", "proof": "equal-patches",
+        "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"}, "rebase": null}),
+    );
+    assert_eq!(
+        judge(&truth(), branch_view(&eq, "pr-49").as_ref()),
+        Verdict::EqualPatches
+    );
+    let hint = plan_json(
+        json!({"branch": "pr-49", "decision": "keep", "proof": "unmerged",
+        "landed_via": {"kind": "unknown", "basis": "none", "strength": "none"},
+        "rebase": {"strength": "hint", "n": 3, "mapped": 1, "mapping": [{"main": "m1"}]}}),
+    );
+    assert_eq!(
+        judge(&truth(), branch_view(&hint, "pr-49").as_ref()),
+        Verdict::Miss(
+            "proof unmerged, landed via unknown/none/none, rebase hint, mapped 1 of 3".into()
+        )
+    );
+    assert_eq!(
+        judge(&truth(), None),
+        Verdict::Miss("the branch is not in the plan".into())
+    );
+}
+
+#[test]
+fn a_rebase_that_is_not_strong_is_not_a_rebase_verdict() {
+    let p = plan_json(rebase_branch("hint", &["m1", "m2"]));
+    let mut b = p.clone();
+    b["repos"][0]["branches"][1]["landed_via"] =
+        json!({"kind": "unknown", "basis": "none", "strength": "none"});
+    b["repos"][0]["branches"][1]["proof"] = json!("unmerged");
+    let v = branch_view(&b, "pr-49");
+    assert_eq!(
+        judge(&truth(), v.as_ref()),
+        Verdict::Miss(
+            "proof unmerged, landed via unknown/none/none, rebase hint, mapped 2 of 2".into()
+        )
+    );
+}
+
+#[test]
+fn the_summary_counts_the_verdicts_and_lists_the_findings() {
+    let rows = vec![
+        (49, Verdict::Rebase),
+        (50, Verdict::EqualPatches),
+        (51, Verdict::Miss("why".into())),
+        (52, Verdict::Rebase),
+    ];
+    assert_eq!(
+        render_verdicts("wstein/x", &rows),
+        "wstein/x: 4 merged pull requests, 2 rebase, 1 equal-patches, 1 findings\n  #51: why\n"
+    );
+    assert_eq!(
+        render_verdicts("wstein/y", &[]),
+        "wstein/y: 0 merged pull requests, 0 rebase, 0 equal-patches, 0 findings\n"
     );
 }

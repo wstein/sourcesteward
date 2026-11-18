@@ -3,7 +3,8 @@
 //! Nothing here starts a process or reads a repository; `tests/it/oracle_tidy.rs` and `tests/oracle/tidy_oracle.sh` do.
 //! Integers only: shares are counted, the display is rounded.
 use crate::tidy_similarity::{fmt_permille, Entry, Keys, Sim};
-use std::collections::BTreeMap;
+use serde_json::Value;
+use std::collections::{BTreeMap, BTreeSet};
 
 // ---- the diff of git ----
 
@@ -185,4 +186,49 @@ impl Matrix {
 
 fn short(id: &str) -> &str {
     &id[..id.len().min(12)]
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PrTruth {
+    pub number: u64,
+    pub head_sha: String,
+    pub merge_commit_sha: String,
+    pub commits: Vec<String>,
+    pub main_run: Vec<String>,
+}
+
+pub fn parse_truth(_raw: &Value) -> Result<Vec<PrTruth>, String> {
+    Ok(Vec::new())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PlanView {
+    pub decision: String,
+    pub proof: String,
+    pub kind: String,
+    pub basis: String,
+    pub strength: String,
+    pub rebase_strength: Option<String>,
+    pub n: u64,
+    pub mapped: u64,
+    pub targets: BTreeSet<String>,
+}
+
+pub fn branch_view(_plan: &Value, _name: &str) -> Option<PlanView> {
+    None
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Verdict {
+    Rebase,
+    EqualPatches,
+    Miss(String),
+}
+
+pub fn judge(_truth: &PrTruth, _view: Option<&PlanView>) -> Verdict {
+    Verdict::Miss(String::new())
+}
+
+pub fn render_verdicts(_repo: &str, _rows: &[(u64, Verdict)]) -> String {
+    String::new()
 }
