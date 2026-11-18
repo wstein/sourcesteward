@@ -764,3 +764,50 @@ fn no_similarity_gives_the_plan_of_before() {
     }
     assert_eq!(v["summary"]["similar"], 0);
 }
+
+#[test]
+fn tidy_apply_leaves_a_similar_patches_branch_alone_fresh_and_with_a_plan_file() {
+    let w = scenarios();
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let md = path_str(&home.path().join("m"));
+    let plan = stw(
+        home.path(),
+        &["tidy", "plan", "--offline", "--json", "--root", &r],
+    );
+    let file = home.path().join("plan.json");
+    std::fs::write(&file, &plan.stdout).unwrap();
+    let f = path_str(&file);
+    let has = |b: &str| stw::repo::resolve(&w.fx.repo(), &format!("refs/heads/{b}")).is_some();
+    for extra in [vec!["--plan", f.as_str()], vec![]] {
+        let mut args = vec![
+            "tidy",
+            "apply",
+            "--json",
+            "--offline",
+            "--root",
+            r.as_str(),
+            "--manifest-dir",
+            md.as_str(),
+        ];
+        args.extend(extra.iter().copied());
+        let o = stw(home.path(), &args);
+        assert_eq!(
+            o.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        let v: Value = serde_json::from_slice(&o.stdout).unwrap();
+        let listed = v["repos"][0]["branches"].as_array().unwrap();
+        assert!(listed.iter().all(|b| b["branch"] != "sim"), "{listed:?}");
+        assert!(has("sim"), "the branch stays: {extra:?}");
+        for b in ["mod", "part", "squash", "empty"] {
+            assert!(has(b), "{b}");
+        }
+    }
+    assert!(
+        !has("eq"),
+        "the equal patch branch is deleted by the first run"
+    );
+}
