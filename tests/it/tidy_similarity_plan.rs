@@ -197,7 +197,7 @@ fn scenarios() -> W {
     let md = w.on(None, &[("g3.txt", Some(&p))], "feat: modified", t_branch);
     w.fx.branch("mod", md);
     w.land(&[("g3.txt", Some(&p4))], "feat: modified", t_main + 180);
-    // part: g4, same subject, other content (0 %)
+    // part: g4, same subject, other content (40 %)
     let q = text("q", &[]);
     let pt = w.on(None, &[("g4.txt", Some(&q))], "feat: part", t_branch);
     w.fx.branch("part", pt);
@@ -608,7 +608,8 @@ fn the_json_of_a_modified_branch_has_evidence_lines() {
     assert_eq!(branch_json(&v, "empty")["similarity"]["class"], "none");
     assert_eq!(branch_json(&v, "empty")["similarity"]["min"], Value::Null);
     let pt = &branch_json(&v, "part")["similarity"]["commits"][0];
-    assert_eq!(pt["similarity"], 0.0);
+    // the 20 removed lines are shared: 2 * 20 / (40 + 60)
+    assert_eq!(pt["similarity"], 40.0);
 }
 
 #[test]

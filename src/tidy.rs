@@ -555,7 +555,8 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
                     json!({"branch": b.branch, "commit": b.tip, "decision": b.decision, "proof": b.proof,
                            "detail": b.detail, "unique_commits": b.unique, "upstream": jopt(b.upstream.as_deref()),
                            "upstream_track": jopt(b.track.as_deref()),
-                           "worktree": b.worktree.as_ref().map(|w| json!({"path": worktrees::show(&w.dir), "removable_proof": w.proof, "outside_worktrees_dir": w.outside, "blocker": jopt(w.blocker.as_deref())})).unwrap_or(Value::Null)})
+                           "worktree": b.worktree.as_ref().map(|w| json!({"path": worktrees::show(&w.dir), "removable_proof": w.proof, "outside_worktrees_dir": w.outside, "blocker": jopt(w.blocker.as_deref())})).unwrap_or(Value::Null),
+                           "similarity": b.similarity.as_ref().map(similarity_json).unwrap_or(Value::Null)})
                 })
                 .collect();
             let stale: Vec<Value> = p
@@ -574,7 +575,79 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
     json!({"schema_version": 2, "command": "tidy-plan", "read_only": true, "root": root,
            "engine": engine(),
            "github": gh.client.is_some(), "github_auth": jopt(gh.client.as_ref().map(|c| c.source.label())), "github_note": jopt(gh.note.as_deref()), "repos": repos,
-           "summary": {"delete": d, "delete_with_worktree": w, "review": r, "keep": k}})
+           "summary": {"delete": d, "delete_with_worktree": w, "review": r, "keep": k, "similar": similar_count(plans)}})
+}
+
+/// A value in percent with one decimal, as a JSON number.
+fn pct(permille: u32) -> Value {
+    json!(f64::from(permille) / 10.0)
+}
+
+fn similarity_json(s: &SimilarityPlan) -> Value {
+    use tidy_similarity::Outcome;
+    let shown = |x: &tidy_similarity::Sim| pct(x.shown_in(s.high, s.low));
+    let commits: Vec<Value> = s
+        .report
+        .commits
+        .iter()
+        .map(|c| {
+            let (outcome, skipped, cand, value, no_path, reason, evidence) = match &c.outcome {
+                Outcome::Skipped(k) => (
+                    "skipped",
+                    json!(k.as_str()),
+                    None,
+                    Value::Null,
+                    Value::Null,
+                    "none",
+                    Vec::new(),
+                ),
+                Outcome::NoCandidate => (
+                    "no-candidate",
+                    Value::Null,
+                    None,
+                    Value::Null,
+                    Value::Null,
+                    "none",
+                    Vec::new(),
+                ),
+                Outcome::Compared(x) => (
+                    "compared",
+                    Value::Null,
+                    Some(x),
+                    shown(&x.sim),
+                    pct(x.no_path.permille()),
+                    x.reason.as_str(),
+                    x.evidence
+                        .iter()
+                        .map(|e| json!({"path": e.path, "sign": e.sign.to_string(), "line": e.line, "count_a": e.count_a, "count_b": e.count_b}))
+                        .collect(),
+                ),
+            };
+            json!({"commit": c.commit.to_string(), "subject": c.subject, "outcome": outcome, "skipped": skipped,
+                   "candidate": cand.map(|x| Value::String(x.candidate.to_string())).unwrap_or(Value::Null),
+                   "candidate_subject": cand.map(|x| Value::String(x.candidate_subject.clone())).unwrap_or(Value::Null),
+                   "reason": reason, "similarity": value, "similarity_no_path": no_path, "evidence": evidence})
+        })
+        .collect();
+    let r = &s.report;
+    json!({"class": r.class.as_str(), "threshold": s.high, "threshold_low": s.low,
+           "window_days": tidy_similarity::WINDOW_DAYS,
+           "plus_commits": r.plus_commits, "at_or_above": r.at_or_above,
+           "min": r.min.as_ref().map(shown).unwrap_or(Value::Null),
+           "median": r.median_permille.map(pct).unwrap_or(Value::Null),
+           "without_candidate": r.without_candidate,
+           "skipped": {"merges": r.skipped.merges, "empty": r.skipped.empty, "too_large": r.skipped.too_large, "shallow": s.skipped_shallow},
+           "bounds": {"candidates_cut": r.candidates_cut, "main_commits_indexed": s.indexed},
+           "commits": commits})
+}
+
+/// Branches with the proof `similar-patches` (they are counted in `review`, too).
+pub fn similar_count(plans: &[RepoPlan]) -> usize {
+    plans
+        .iter()
+        .flat_map(|p| &p.branches)
+        .filter(|b| b.proof == "similar-patches")
+        .count()
 }
 
 pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
@@ -640,8 +713,14 @@ pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
         }
     }
     let (d, w, r, k) = summary(plans);
+    let similar = similar_count(plans);
+    let of_them = if similar > 0 {
+        format!(" ({similar} of them similar-patches)")
+    } else {
+        String::new()
+    };
     out += &format!(
-        "{d} to delete, {w} to delete with their worktree, {r} to review, {k} kept (read-only: nothing was changed)\n"
+        "{d} to delete, {w} to delete with their worktree, {r} to review{of_them}, {k} kept (read-only: nothing was changed)\n"
     );
     if !all && k > 0 {
         out += "(--all lists the kept branches)\n";
