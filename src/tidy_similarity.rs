@@ -46,6 +46,10 @@ impl Sim {
             p
         }
     }
+    /// `shown` for both thresholds of a run: a value below the low threshold is not shown as the low one either.
+    pub fn shown_in(&self, high_pct: u32, _low_pct: u32) -> u32 {
+        self.shown(high_pct)
+    }
     /// Order by the exact value (cross multiplication), not by the rounded one.
     pub fn cmp_value(&self, other: &Sim) -> Ordering {
         // inter/total compared as inter*other.total against other.inter*total; empty sets count as 0

@@ -1405,3 +1405,33 @@ fn the_cumulative_diff_of_equal_trees_is_empty() {
         Entries::Skipped(Skip::Empty)
     );
 }
+
+#[test]
+fn a_value_below_the_low_threshold_is_not_shown_as_the_low_threshold() {
+    // 2 * 1749 / 5000 = 69.96: rounds to 70.0 but is below 70
+    let s = Sim {
+        inter: 1749,
+        a: 2500,
+        b: 2500,
+    };
+    assert_eq!(s.permille(), 700);
+    assert!(!s.ge_pct(70));
+    assert_eq!(s.shown_in(95, 70), 699, "shown as 69.9");
+    // a value at or above a threshold keeps its rounded form; the high threshold is still protected
+    let ok = Sim {
+        inter: 7,
+        a: 10,
+        b: 10,
+    };
+    assert_eq!(ok.shown_in(95, 70), 700, "70.0 is at the low threshold");
+    let high = Sim {
+        inter: 4749,
+        a: 5000,
+        b: 5001,
+    };
+    assert_eq!(high.shown_in(95, 70), 949);
+    // the median uses the protected value
+    let r = rep(&[Some((1749, 2500, 2500))]);
+    assert_eq!(r.class, Class::Partial);
+    assert_eq!(r.median_permille, Some(699));
+}
