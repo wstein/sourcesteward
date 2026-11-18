@@ -235,7 +235,7 @@ pub fn parse_truth(raw: &Value) -> Result<Vec<PrTruth>, String> {
             number,
             head_sha: field(&pr["head_sha"], "head_sha")?,
             merge_commit_sha: field(&pr["merge_commit_sha"], "merge_commit_sha")?,
-            base: String::new(),
+            base: field(&pr["base"], "base")?,
             commits,
             main_run,
         });
@@ -298,10 +298,25 @@ pub enum Verdict {
     Miss(String),
 }
 
-pub fn judge(truth: &PrTruth, view: Option<&PlanView>, _default_branch: &str) -> Verdict {
+pub fn judge(truth: &PrTruth, view: Option<&PlanView>, default_branch: &str) -> Verdict {
     let Some(v) = view else {
         return Verdict::Miss("the branch is not in the plan".into());
     };
+    if truth.base != default_branch {
+        let reading = if v.kind == "rebase" && v.strength == "strong" {
+            Some(format!("rebase/{}/strong", v.basis))
+        } else if v.proof == "equal-patches" {
+            Some("equal-patches".to_string())
+        } else {
+            None
+        };
+        if let Some(r) = reading {
+            return Verdict::Stacked(format!(
+                "the base is {}, not {default_branch}; the plan says {r}",
+                truth.base
+            ));
+        }
+    }
     if v.kind == "rebase" && v.strength == "strong" {
         let want: BTreeSet<String> = truth.main_run.iter().cloned().collect();
         if v.targets == want {
@@ -328,19 +343,22 @@ pub fn judge(truth: &PrTruth, view: Option<&PlanView>, _default_branch: &str) ->
     ))
 }
 
-/// The summary of a repository: counts and one line per finding.
+/// The summary of a repository: counts and one line per stacked pull request and per finding.
 pub fn render_verdicts(repo: &str, rows: &[(u64, Verdict)]) -> String {
     let count = |f: fn(&Verdict) -> bool| rows.iter().filter(|r| f(&r.1)).count();
     let rebase = count(|v| *v == Verdict::Rebase);
     let equal = count(|v| *v == Verdict::EqualPatches);
+    let stacked = count(|v| matches!(v, Verdict::Stacked(_)));
     let mut s = format!(
-        "{repo}: {} merged pull requests, {rebase} rebase, {equal} equal-patches, {} findings\n",
+        "{repo}: {} merged pull requests, {rebase} rebase, {equal} equal-patches, {stacked} stacked, {} findings\n",
         rows.len(),
-        rows.len() - rebase - equal
+        rows.len() - rebase - equal - stacked
     );
     for (n, v) in rows {
-        if let Verdict::Miss(why) = v {
-            s.push_str(&format!("  #{n}: {why}\n"));
+        match v {
+            Verdict::Miss(why) => s.push_str(&format!("  #{n}: {why}\n")),
+            Verdict::Stacked(why) => s.push_str(&format!("  #{n} stacked: {why}\n")),
+            _ => {}
         }
     }
     s
