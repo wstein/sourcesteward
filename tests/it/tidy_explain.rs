@@ -1006,3 +1006,66 @@ fn proof_of_br(p: &RepoPlan, br: &str) -> (&'static str, &'static str) {
     let b = get(p, br);
     (b.decision, b.proof)
 }
+
+// ---- the limits of the similarity stage are named ----
+
+#[test]
+fn a_shallow_boundary_is_named_in_the_similarity_section() {
+    let fx = crate::common::Fx::new();
+    let s0 = Stamp::new("Other", "o@example.com", T0 - 20_000);
+    let old = fx.commit_at(None, &[("old.txt", Some("old\n"))], "old", s0, s0);
+    let s1 = Stamp::new("Other", "o@example.com", T0 - 10_000);
+    let c0 = fx.commit_at(Some(old), &[("base.txt", Some("base\n"))], "base", s1, s1);
+    fx.remote("main", c0);
+    fx.origin_head("main");
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.checkout_head();
+    let mut w = crate::tidy_rebase_plan::W { fx, c0, main: c0 };
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let git = w.fx.path.join(".git");
+    std::fs::write(git.join("shallow"), format!("{c0}\n")).unwrap();
+    let hex = old.to_string();
+    std::fs::remove_file(git.join("objects").join(&hex[..2]).join(&hex[2..])).unwrap();
+    let p = plan_with(&w, None, &no_rebase());
+    let n = sim(&p, "feat").similarity.as_ref().unwrap().skipped_shallow;
+    assert!(n > 0);
+    let u = under(&explained(&p), "feat");
+    assert_eq!(
+        at(&u, 2),
+        format!(
+            "similarity: {n} commit(s) of the base were left out of the index (shallow boundary)"
+        )
+    );
+}
+
+#[test]
+fn a_cut_candidate_list_is_named_in_the_similarity_section() {
+    let mut w = world();
+    w.branch("feat", &[c(0)]);
+    let many: Vec<C> = (0..101)
+        .map(|i| C {
+            subject: "step 0".into(),
+            file: format!("m{i}.txt"),
+            body: format!("main {i}\n"),
+            secs: T0 + 1 + i as i64,
+        })
+        .collect();
+    w.land(&many, MERGE_SECS);
+    let p = plan_with(&w, None, &no_rebase());
+    assert!(
+        sim(&p, "feat")
+            .similarity
+            .as_ref()
+            .unwrap()
+            .report
+            .candidates_cut
+    );
+    let u = under(&explained(&p), "feat");
+    assert_eq!(
+        at(&u, 2),
+        "similarity: the list of candidates of a commit was cut at 100"
+    );
+}
