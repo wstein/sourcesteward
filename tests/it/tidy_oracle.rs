@@ -497,6 +497,21 @@ fn the_driver_accepts_a_directory_that_the_git_tree_ignores() {
     assert!(!dir.exists());
 }
 
+#[test]
+fn the_driver_accepts_a_link_to_a_directory_the_git_tree_ignores() {
+    // the directory behind the link is judged, not the path of the link: git itself refuses the path through the
+    // link (it does not exist yet), so only the resolution lets this case pass
+    let fx = crate::common::Fx::new();
+    std::fs::write(fx.path.join(".gitignore"), "ign/\n").unwrap();
+    std::fs::create_dir(fx.path.join("ign")).unwrap();
+    let tmp = tempfile::tempdir().unwrap();
+    let link = tmp.path().join("link");
+    std::os::unix::fs::symlink(fx.path.join("ign"), &link).unwrap();
+    let (code, err) = driver(link.join("out").to_str().unwrap());
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("needs cargo"), "{err}");
+}
+
 // ---- against the real plan of a fixture ----
 
 mod with_the_plan {
