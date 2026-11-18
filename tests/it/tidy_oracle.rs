@@ -306,14 +306,12 @@ fn the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_c
 fn a_rebase_that_is_not_strong_is_not_a_rebase_verdict() {
     let p = plan_json(rebase_branch("hint", &["m1", "m2"]));
     let mut b = p.clone();
-    b["repos"][0]["branches"][1]["landed_via"] =
-        json!({"kind": "unknown", "basis": "none", "strength": "none"});
     b["repos"][0]["branches"][1]["proof"] = json!("unmerged");
     let v = branch_view(&b, "pr-49");
     assert_eq!(
         judge(&truth(), v.as_ref(), "main"),
         Verdict::Miss(
-            "proof unmerged, landed via unknown/none/none, rebase hint, mapped 2 of 2".into()
+            "proof unmerged, landed via rebase/commit-map/hint, rebase hint, mapped 2 of 2".into()
         )
     );
 }
@@ -374,6 +372,66 @@ fn the_summary_counts_the_verdicts_and_lists_the_findings() {
     assert_eq!(
         render_verdicts("wstein/y", &[]),
         "wstein/y: 0 merged pull requests, 0 rebase, 0 equal-patches, 0 stacked, 0 findings\n"
+    );
+}
+
+// ---- the driver script ----
+
+fn driver_script() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/oracle/tidy_oracle.sh")
+}
+
+fn in_path(program: &str) -> std::path::PathBuf {
+    std::env::split_paths(&std::env::var_os("PATH").unwrap())
+        .map(|d| d.join(program))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| panic!("{program} is not on the PATH"))
+}
+
+/// The script with a PATH that has only `git` and `dirname`: where a guard does not refuse, the script stops at the
+/// check for `cargo` and `gh` before it creates, clones or fetches anything.
+fn driver(arg: &str) -> (Option<i32>, String) {
+    let bin = tempfile::tempdir().unwrap();
+    for p in ["git", "dirname"] {
+        std::os::unix::fs::symlink(in_path(p), bin.path().join(p)).unwrap();
+    }
+    let o = std::process::Command::new(in_path("bash"))
+        .arg(driver_script())
+        .arg(arg)
+        .env("PATH", bin.path())
+        .output()
+        .unwrap();
+    (
+        o.status.code(),
+        String::from_utf8_lossy(&o.stderr).to_string(),
+    )
+}
+
+#[test]
+fn the_driver_script_parses_and_refuses_bad_output_directories() {
+    let syntax = std::process::Command::new("bash")
+        .arg("-n")
+        .arg(driver_script())
+        .status()
+        .unwrap();
+    assert!(syntax.success(), "bash -n");
+    let fx = crate::common::Fx::new();
+    let inside = fx.path.join("out");
+    let inside = inside.to_str().unwrap();
+    for (arg, why) in [
+        ("", "usage"),
+        ("rel/dir", "must be an absolute path"),
+        ("/tmp/stw-oracle-x/../y", "must not contain '..'"),
+        ("/", "must not be /"),
+        (inside, "inside a Git tree that does not ignore it"),
+    ] {
+        let (code, err) = driver(arg);
+        assert_eq!(code, Some(2), "{arg:?}: {err}");
+        assert!(err.contains(why), "{arg:?}: {err}");
+    }
+    assert!(
+        !fx.path.join("out").exists(),
+        "a refused path is not created"
     );
 }
 
