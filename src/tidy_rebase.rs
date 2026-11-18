@@ -234,21 +234,19 @@ pub fn branch_side(repo: &gix::Repository, base: ObjectId, tip: ObjectId) -> Res
             children.entry(*p).or_default().push(*id);
         }
     }
-    let order_key = |id: &ObjectId| (set[id].key.secs, *id);
-    let mut ready: Vec<ObjectId> = waiting
+    // ready commits, the oldest author time first (ties by commit ID)
+    let mut ready: std::collections::BinaryHeap<std::cmp::Reverse<(i64, ObjectId)>> = waiting
         .iter()
         .filter(|(_, n)| **n == 0)
-        .map(|(id, _)| *id)
+        .map(|(id, _)| std::cmp::Reverse((set[id].key.secs, *id)))
         .collect();
     let mut out = BranchSide::default();
-    while !ready.is_empty() {
-        ready.sort_by_key(|id| std::cmp::Reverse(order_key(id)));
-        let id = ready.pop().expect("not empty");
+    while let Some(std::cmp::Reverse((_, id))) = ready.pop() {
         for ch in children.get(&id).into_iter().flatten() {
             let w = waiting.get_mut(ch).expect("child is in the set");
             *w -= 1;
             if *w == 0 {
-                ready.push(*ch);
+                ready.push(std::cmp::Reverse((set[ch].key.secs, *ch)));
             }
         }
         let head = &set[&id];
@@ -275,15 +273,25 @@ pub fn branch_side(repo: &gix::Repository, base: ObjectId, tip: ObjectId) -> Res
 
 /// Patch ID matches: branch commit -> commit on the chain with an equal patch (ID and white-space digest). The
 /// oldest branch commit takes the oldest chain commit among equals. Costs one diff per non-merge commit of the
-/// window; a caller that already walked main for equal patches can pass its own map to `evaluate`.
+/// window; `patch_hits_with` takes the keys from a lookup (the plan passes its `PatchCache`).
 pub fn patch_hits(
     repo: &gix::Repository,
     index: &RebaseIndex,
     commits: &[ObjectId],
 ) -> Result<HashMap<ObjectId, ObjectId>> {
+    patch_hits_with(index, commits, &mut |id| commit_patch_key(repo, id))
+}
+
+/// `patch_hits` with the patch keys taken from `key` (the plan passes its `PatchCache`, which already holds the keys of
+/// the commits the equal-patches walk read).
+pub fn patch_hits_with(
+    index: &RebaseIndex,
+    commits: &[ObjectId],
+    key: &mut dyn FnMut(ObjectId) -> Result<Option<PatchKey>>,
+) -> Result<HashMap<ObjectId, ObjectId>> {
     let mut wanted: HashMap<(ObjectId, ObjectId), Vec<ObjectId>> = HashMap::new();
     for c in commits {
-        if let Some(k) = commit_patch_key(repo, *c)? {
+        if let Some(k) = key(*c)? {
             wanted.entry(k).or_default().push(*c);
         }
     }
@@ -298,7 +306,7 @@ pub fn patch_hits(
         if h.parents > 1 || index.is_edge(pos as u32) {
             continue;
         }
-        if let Some(k) = commit_patch_key(repo, h.id)? {
+        if let Some(k) = key(h.id)? {
             if wanted.contains_key(&k) {
                 on_main.entry(k).or_default().push(h.id);
             }
@@ -313,18 +321,6 @@ pub fn patch_hits(
         }
     }
     Ok(hits)
-}
-
-/// `patch_hits` with the patch keys taken from `key` (the plan passes its `PatchCache`, which already holds the keys of
-/// the commits the equal-patches walk read).
-pub fn patch_hits_with(
-    repo: &gix::Repository,
-    index: &RebaseIndex,
-    commits: &[ObjectId],
-    key: &mut dyn FnMut(ObjectId) -> Result<Option<PatchKey>>,
-) -> Result<HashMap<ObjectId, ObjectId>> {
-    let _ = (repo, index, commits, key);
-    Ok(HashMap::new())
 }
 
 /// How a branch commit was found on main.
@@ -876,9 +872,9 @@ impl ApiReason {
             ApiReason::NotMerged => "not-merged",
             ApiReason::MergeCommitNotInClone => "merge-commit-not-in-clone",
             ApiReason::NotOnBase => "not-on-base",
-            ApiReason::RequestFailed => "",
-            ApiReason::TooManyCommits => "",
-            ApiReason::NotNeeded => "",
+            ApiReason::RequestFailed => "request-failed",
+            ApiReason::TooManyCommits => "too-many-commits",
+            ApiReason::NotNeeded => "not-needed",
         }
     }
 }

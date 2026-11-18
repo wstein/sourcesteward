@@ -541,7 +541,7 @@ fn patch_hits_with_takes_the_keys_from_the_lookup_it_is_given() {
     // the real keys: only the second commit has an equal patch
     let real = patch_hits(&repo, &idx, &br).unwrap();
     let mut calls = 0;
-    let hits = patch_hits_with(&repo, &idx, &br, &mut |id| {
+    let hits = patch_hits_with(&idx, &br, &mut |id| {
         calls += 1;
         commit_patch_key(&repo, id)
     })
@@ -553,7 +553,7 @@ fn patch_hits_with_takes_the_keys_from_the_lookup_it_is_given() {
         "the lookup is asked for the branch and the chain: {calls}"
     );
     // a lookup that says nothing finds nothing
-    assert!(patch_hits_with(&repo, &idx, &br, &mut |_| Ok(None))
+    assert!(patch_hits_with(&idx, &br, &mut |_| Ok(None))
         .unwrap()
         .is_empty());
     // a lookup that makes two different commits equal finds them
@@ -562,9 +562,11 @@ fn patch_hits_with_takes_the_keys_from_the_lookup_it_is_given() {
         ObjectId::null(gix::hash::Kind::Sha1),
     );
     let (x, y) = (br[0], main[0]);
-    let hits = patch_hits_with(&repo, &idx, &br, &mut |id| {
-        Ok((id == x || id == y).then_some(fake))
-    })
+    let hits = patch_hits_with(
+        &idx,
+        &br,
+        &mut |id| Ok((id == x || id == y).then_some(fake)),
+    )
     .unwrap();
     assert_eq!(hits.get(&br[0]), Some(&main[0]));
     assert_eq!(hits.len(), 1);
