@@ -29,5 +29,6 @@ pub mod tidy;
 pub mod tidy_apply;
 pub mod tidy_explain;
 pub mod tidy_history;
+pub mod tidy_oracle;
 pub mod tidy_rebase;
 pub mod tidy_similarity;

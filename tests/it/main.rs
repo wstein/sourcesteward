@@ -65,6 +65,7 @@ mod tidy_apply_cli;
 mod tidy_backup;
 mod tidy_explain;
 mod tidy_history;
+mod tidy_oracle;
 mod tidy_rebase;
 mod tidy_rebase_api;
 mod tidy_rebase_plan;
