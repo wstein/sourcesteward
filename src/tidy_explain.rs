@@ -294,7 +294,7 @@ fn why(b: &BranchPlan, base: &str) -> String {
     let mut s = match b.proof {
         "merged-ancestor" => format!("{}: the tip is an ancestor of {base}", b.decision),
         "equal-patches" => format!(
-            "{}: all {} commit(s) of the branch have an equal patch on {base}",
+            "{}: all commits of the branch that have a patch have an equal patch on {base} ({} commit(s) not in it)",
             b.decision, b.unique
         ),
         "merged-pull-request-head" => format!(
@@ -356,7 +356,7 @@ fn why(b: &BranchPlan, base: &str) -> String {
         ),
         _ => match &b.similarity {
             Some(sim) => format!(
-                "{}: {} of {} commit(s) have no patch partner on {base}",
+                "{}: {} of the {} commit(s) not in {base} have a patch without a partner there",
                 b.decision, sim.report.plus_commits, b.unique
             ),
             None => format!(
