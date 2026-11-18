@@ -14,13 +14,14 @@ use gix::ObjectId;
 use serde_json::{json, Value};
 
 use crate::error::{Error, Result};
-use crate::github::{AnyPr, Client, GithubState};
+use crate::github::{AnyPr, Client, GithubState, PrCommitsRead};
 use crate::output::*;
 use crate::patch_id::{commit_patch_key, PatchKey};
 use crate::repo::worktrees::{self, StaleRegistration};
 use crate::repo::{self, RepoRef};
 use crate::tidy_rebase::{
-    ApiReason, ApiReport, Basis, LandedKind, LandedVia, RebaseReport, Strength,
+    self, landed_via, ApiInput, ApiReason, ApiReport, Basis, LandedKind, LandedVia, PrInput,
+    RebaseReport, Strength,
 };
 use crate::tidy_similarity::{self, BranchReport};
 
@@ -339,7 +340,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
     plan.stale = wt.stale.clone();
     let mut cache = PatchCache::default();
     // branches decided so far, before the worktree protection; `plus` are the commits the similarity stage judges
-    let mut rows: Vec<(BranchPlan, Option<Vec<ObjectId>>)> = Vec::new();
+    let mut rows: Vec<Row> = Vec::new();
     for (br, tip) in repo::local_branches(&repo)? {
         if br == basebranch {
             continue;
@@ -456,23 +457,48 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         } else {
             bp.detail = format!("{uniq} commit(s) not in {base}, no merged pull request found");
         }
-        // where the proof would be `upstream-gone` or `unmerged` the similarity stage may find a better one
-        let judged = matches!(
-            bp.proof,
-            "pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
-        );
-        let plus = if opts.similarity.is_some() && judged {
-            unmatched
-        } else {
-            None
+        rows.push(Row {
+            bp,
+            tip,
+            unmatched,
+            pr_moved: pr_other,
+            plus: None,
+        });
+    }
+    let mut sim_cache = tidy_similarity::SimCache::default();
+    if opts.rebase {
+        let mut stage = RebaseStage {
+            repo: &repo,
+            base_tip,
+            prs: prs.as_deref(),
+            api: proof.api,
+            slug: slug.as_deref(),
+            requests_left: MAX_PR_REQUESTS,
         };
-        rows.push((bp, plus));
+        stage.run(&mut cache, &mut sim_cache, &mut rows);
+    }
+    // where the proof would be `pull-request-merged-branch-moved`, `upstream-gone` or `unmerged` the similarity stage
+    // may find a better one; a commit the rebase stage has vouched for is not judged again
+    if opts.similarity.is_some() {
+        for row in rows.iter_mut().filter(|r| judged(r.bp.proof)) {
+            let solved = solved_by_rebase(row.bp.rebase.as_ref());
+            row.plus = row.unmatched.take().map(|u| {
+                u.into_iter()
+                    .filter(|c| !solved.contains(c))
+                    .collect::<Vec<_>>()
+            });
+        }
     }
     if let Some(th) = opts.similarity {
-        similarity_stage(&repo, base_tip, &base, th, &mut rows)?;
+        similarity_stage(&repo, base_tip, &base, th, &mut sim_cache, &mut rows)?;
     }
-    for (mut bp, _) in rows {
+    for Row { mut bp, .. } in rows {
         let br = bp.branch.clone();
+        bp.landed_via = landed_via(
+            bp.proof == "merged-ancestor",
+            bp.rebase.as_ref().map(|r| &r.report),
+            bp.rebase.as_ref().map(|r| &r.api),
+        );
         // a checkout in a directory that exists protects the branch; the proof it would have is kept
         if let Some(dir) = wt.branch_dir(&br) {
             if bp.decision == "delete" {
@@ -510,12 +536,13 @@ fn similarity_stage(
     base_tip: ObjectId,
     base: &str,
     th: Similarity,
-    rows: &mut [(BranchPlan, Option<Vec<ObjectId>>)],
+    cache: &mut tidy_similarity::SimCache,
+    rows: &mut [Row],
 ) -> Result<()> {
     let lim = tidy_similarity::Limits::default();
     let mut oldest: Option<i64> = None;
-    for (_, plus) in rows.iter() {
-        for id in plus.iter().flatten() {
+    for row in rows.iter() {
+        for id in row.plus.iter().flatten() {
             let t = tidy_similarity::commit_info(repo, *id)?.author_time;
             oldest = Some(oldest.map_or(t, |o| o.min(t)));
         }
@@ -523,20 +550,19 @@ fn similarity_stage(
     let Some(oldest) = oldest else {
         return Ok(());
     };
-    let mut cache = tidy_similarity::SimCache::default();
     let index = tidy_similarity::MainIndex::build_from_walk(
         repo,
-        &mut cache,
+        cache,
         base_tip,
-        Some(oldest - lim.window_secs),
+        Some(oldest.saturating_sub(lim.window_secs)),
     )?;
-    for (bp, plus) in rows.iter_mut() {
-        let Some(plus) = plus else {
+    for row in rows.iter_mut() {
+        let bp = &mut row.bp;
+        let Some(plus) = row.plus.as_ref() else {
             continue;
         };
-        let report = tidy_similarity::evaluate_branch(
-            repo, &mut cache, &index, plus, th.high, th.low, &lim,
-        )?;
+        let report =
+            tidy_similarity::evaluate_branch(repo, cache, &index, plus, th.high, th.low, &lim)?;
         if report.class == tidy_similarity::Class::Landed {
             let shown = |p: u32| tidy_similarity::fmt_permille(p);
             let min = report.min.map(|m| m.shown_in(th.high, th.low)).unwrap_or(0);
@@ -561,10 +587,212 @@ fn similarity_stage(
     Ok(())
 }
 
+/// One branch while the stages run: its plan so far and what the stages need besides.
+struct Row {
+    bp: BranchPlan,
+    tip: ObjectId,
+    /// The commits of `base..tip` without an equal patch in the base; None where the equal-patches walk did not run.
+    unmatched: Option<Vec<ObjectId>>,
+    /// The number of a merged pull request of this branch (the proof `pull-request-merged-branch-moved`).
+    pr_moved: Option<u64>,
+    /// The commits the similarity stage judges; None where it does not.
+    plus: Option<Vec<ObjectId>>,
+}
+
+/// The proofs the later stages may replace: where the branch would be `review` or `keep` for want of anything better.
+fn judged(proof: &str) -> bool {
+    matches!(
+        proof,
+        "pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+    )
+}
+
+/// At most this many extra requests (`pulls/N/commits`) per repository and plan.
+pub const MAX_PR_REQUESTS: usize = 30;
+
+/// Commits the rebase stage has vouched for: mapped to a commit of the base by identity with a content value of at
+/// least `RB_CONTENT_HIGH` and no later version. The similarity stage does not judge them again.
+fn solved_by_rebase(r: Option<&RebasePlan>) -> std::collections::HashSet<ObjectId> {
+    let high = tidy_rebase::RB_CONTENT_HIGH * 10;
+    r.into_iter()
+        .flat_map(|r| &r.report.mapping)
+        .filter(|m| {
+            m.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)
+        })
+        .map(|m| m.commit)
+        .collect()
+}
+
 /// A stage that failed for a branch leaves the plan standing and says so in the detail.
-#[allow(dead_code)]
 fn stage_failed(bp: &mut BranchPlan, e: &Error) {
-    let _ = (bp, e);
+    bp.detail += &format!("; rebase evidence not computed ({e})");
+}
+
+/// The rebase stage: maps the commits of each branch to commits of the first-parent chain of the base (identity, equal
+/// patch, run), reads the pull request commits where a merged pull request is of use, and lets a branch whose commits all
+/// landed as one run become `review` with the proof `rebase-identity`. A hint or a failure leaves the proof alone.
+struct RebaseStage<'a> {
+    repo: &'a gix::Repository,
+    base_tip: ObjectId,
+    prs: Option<&'a [AnyPr]>,
+    api: PrApi<'a>,
+    slug: Option<&'a str>,
+    requests_left: usize,
+}
+
+impl RebaseStage<'_> {
+    fn run(
+        &mut self,
+        patches: &mut PatchCache,
+        sim: &mut tidy_similarity::SimCache,
+        rows: &mut [Row],
+    ) {
+        let eligible = |r: &Row| {
+            r.unmatched.is_some()
+                && (judged(r.bp.proof)
+                    || matches!(r.bp.proof, "equal-patches" | "merged-pull-request-head"))
+        };
+        let mut sides: Vec<Option<tidy_rebase::BranchSide>> = Vec::new();
+        let mut since: Option<i64> = None;
+        for row in rows.iter_mut() {
+            if !eligible(row) {
+                sides.push(None);
+                continue;
+            }
+            match tidy_rebase::branch_side(self.repo, self.base_tip, row.tip) {
+                Ok(side) => {
+                    if let Some(t) = side.oldest_author_secs {
+                        since = Some(since.map_or(t, |o: i64| o.min(t)));
+                    }
+                    sides.push(Some(side));
+                }
+                Err(e) => {
+                    stage_failed(&mut row.bp, &e);
+                    sides.push(None);
+                }
+            }
+        }
+        let Some(since) = since else {
+            return;
+        };
+        let index = match tidy_rebase::RebaseIndex::build(
+            self.repo,
+            self.base_tip,
+            Some(since),
+            tidy_rebase::RB_MAX_WINDOW,
+        ) {
+            Ok(i) => i,
+            Err(e) => {
+                for (row, side) in rows.iter_mut().zip(&sides) {
+                    if side.is_some() {
+                        stage_failed(&mut row.bp, &e);
+                    }
+                }
+                return;
+            }
+        };
+        let lim = tidy_similarity::Limits::default();
+        for (row, side) in rows.iter_mut().zip(sides) {
+            let Some(side) = side else {
+                continue;
+            };
+            if let Err(e) = self.branch(patches, sim, &index, &lim, row, &side) {
+                stage_failed(&mut row.bp, &e);
+            }
+        }
+    }
+
+    fn branch(
+        &mut self,
+        patches: &mut PatchCache,
+        sim: &mut tidy_similarity::SimCache,
+        index: &tidy_rebase::RebaseIndex,
+        lim: &tidy_similarity::Limits,
+        row: &mut Row,
+        side: &tidy_rebase::BranchSide,
+    ) -> Result<()> {
+        let unmatched: std::collections::HashSet<ObjectId> =
+            row.unmatched.iter().flatten().copied().collect();
+        let matched: Vec<ObjectId> = side
+            .commits
+            .iter()
+            .filter(|c| !unmatched.contains(*c))
+            .copied()
+            .collect();
+        let hits =
+            tidy_rebase::patch_hits_with(index, &matched, &mut |id| patches.get(self.repo, id))?;
+        let report = tidy_rebase::evaluate(self.repo, sim, index, side, &hits, lim)?;
+        let strong = report.strength == Strength::Strong;
+        let input = self.api_input(row, strong);
+        let api = tidy_rebase::evaluate_api(self.repo, self.base_tip, side, row.tip, &input)
+            .unwrap_or_else(|_| tidy_rebase::ApiReport::not_read(ApiReason::RequestFailed));
+        if judged(row.bp.proof) && tidy_rebase::evidence_class(&report).is_some() {
+            let min = report
+                .mapping
+                .iter()
+                .filter_map(|m| m.value)
+                .min()
+                .map(tidy_similarity::fmt_permille)
+                .unwrap_or_else(|| "n/a".into());
+            row.bp.decision = tidy_rebase::RB_DECISION;
+            row.bp.proof = tidy_rebase::RB_CLASS;
+            row.bp.detail = format!(
+                "rebase-identity ({} of {} commits, run of {}, min {min} %): review, not a deletion proof",
+                report.mapped, report.n, report.run_len
+            );
+        }
+        row.bp.rebase = Some(RebasePlan { report, api });
+        Ok(())
+    }
+
+    /// What the pull request says about this branch, or why it says nothing. At most `MAX_PR_REQUESTS` requests.
+    fn api_input(&mut self, row: &Row, local_strong: bool) -> ApiInput {
+        use tidy_rebase::ApiInput::NotRead;
+        if local_strong || !judged(row.bp.proof) {
+            return NotRead(ApiReason::NotNeeded);
+        }
+        let Some(prs) = self.prs else {
+            return NotRead(match self.api {
+                PrApi::Off(r) => r,
+                PrApi::Client(_) => ApiReason::NoPullRequest,
+            });
+        };
+        let Some(pr) = row
+            .pr_moved
+            .and_then(|n| prs.iter().find(|p| p.number == n))
+        else {
+            return NotRead(ApiReason::NoPullRequest);
+        };
+        let c = match self.api {
+            PrApi::Off(r) => return NotRead(r),
+            PrApi::Client(c) => c,
+        };
+        let Some(slug) = self.slug else {
+            return NotRead(ApiReason::NoPullRequest);
+        };
+        let parse = |h: &str| ObjectId::from_hex(h.as_bytes()).ok();
+        let (Some(merge_commit), Some(head)) = (parse(&pr.merge_commit_sha), parse(&pr.head_sha))
+        else {
+            return NotRead(ApiReason::NotMerged);
+        };
+        if self.requests_left == 0 || c.rate_limited() {
+            return NotRead(ApiReason::RateLimited);
+        }
+        self.requests_left -= 1;
+        match c.pr_commits(slug, pr.number) {
+            Ok(PrCommitsRead::Commits(commits)) => ApiInput::Pr(PrInput {
+                number: pr.number,
+                merged: true,
+                merge_commit,
+                merged_at: pr.merged_at,
+                head,
+                commits,
+            }),
+            Ok(PrCommitsRead::TooMany) => NotRead(ApiReason::TooManyCommits),
+            Err(_) if c.rate_limited() => NotRead(ApiReason::RateLimited),
+            Err(_) => NotRead(ApiReason::RequestFailed),
+        }
+    }
 }
 
 /// True when `dir` is not below `<work tree>/.worktrees/` (compared as written and with symbolic links resolved).

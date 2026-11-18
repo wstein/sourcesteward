@@ -269,9 +269,10 @@ fn the_rebase_proof_comes_before_pull_request_moved_and_upstream_gone() {
     let p = plan_with(&w, Some(vec![pr]), &opts());
     assert_eq!(proof_of(&p, "moved"), ("review", "rebase-identity"));
     assert_eq!(proof_of(&p, "gone"), ("review", "rebase-identity"));
-    // without the stage they are what they were
+    // without the stages they are what they were
     let mut o = opts();
     o.rebase = false;
+    o.similarity = None;
     let pr = AnyPr {
         head_ref: "moved".into(),
         head_sha: "0".repeat(40),

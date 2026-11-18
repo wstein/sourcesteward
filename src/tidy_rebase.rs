@@ -142,7 +142,7 @@ impl RebaseIndex {
             }
             let head = read_head(repo, id)?;
             // the committer time is not looked at: it can be set to anything
-            if since.is_some_and(|s| head.key.secs < s - RB_SLACK_SECS) {
+            if since.is_some_and(|s| head.key.secs < s.saturating_sub(RB_SLACK_SECS)) {
                 old_run += 1;
             } else {
                 old_run = 0;
@@ -925,7 +925,7 @@ pub struct ApiReport {
 }
 
 impl ApiReport {
-    fn not_read(reason: ApiReason) -> ApiReport {
+    pub fn not_read(reason: ApiReason) -> ApiReport {
         ApiReport {
             not_read: Some(reason),
             pr: None,
