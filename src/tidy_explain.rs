@@ -9,7 +9,7 @@ use crate::tidy::{BranchPlan, RebasePlan, SimilarityPlan};
 use crate::tidy_rebase::{
     LandedKind, MapEntry, RebaseReport, Remaining, Strength, RB_CONTENT_HIGH,
 };
-use crate::tidy_similarity::{fmt_permille, Outcome, LOW_PCT};
+use crate::tidy_similarity::{fmt_permille, Limits, Outcome, LOW_PCT};
 
 /// At most this many commit lines, mapping lines and remaining commits per branch; the rest is counted.
 const MAX_ROWS: usize = 20;
@@ -252,6 +252,18 @@ fn similarity(sim: &SimilarityPlan) -> Vec<String> {
     }
     head += &format!(", {} without candidate", r.without_candidate);
     let mut out = vec![head];
+    if sim.skipped_shallow > 0 {
+        out.push(format!(
+            "similarity: {} commit(s) of the base were left out of the index (shallow boundary)",
+            sim.skipped_shallow
+        ));
+    }
+    if r.candidates_cut {
+        out.push(format!(
+            "similarity: the list of candidates of a commit was cut at {}",
+            Limits::default().max_candidates
+        ));
+    }
     let mut rows = 0;
     let mut more = 0;
     for c in &r.commits {
