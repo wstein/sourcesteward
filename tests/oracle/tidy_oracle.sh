@@ -20,14 +20,28 @@
 set -u
 die() { echo "tidy_oracle.sh: $*" >&2; exit 2; }
 [ $# -eq 1 ] && [ -n "$1" ] || die "usage: tidy_oracle.sh OUTDIR (absolute path)"
-case $1 in /*) ;; *) die "OUTDIR must be an absolute path: $1" ;; esac
-case $1 in *..*) die "OUTDIR must not contain '..': $1" ;; esac
-[ "$1" != / ] || die "OUTDIR must not be /"
-probe=$1
-while [ ! -d "$probe" ]; do probe=$(dirname "$probe"); done
-if [ "$(git -C "$probe" rev-parse --is-inside-work-tree 2> /dev/null)" = true ]; then
-  git -C "$probe" check-ignore -q "$1" || die "OUTDIR is inside a Git tree that does not ignore it: $1"
-fi
+
+# A directory the script may write to: absolute, without '..', not /, and where it lies in a Git work tree (after
+# resolving symlinks) ignored by that tree. The directory need not exist yet. Nothing is created here.
+guard_dir() {
+  gname=$1 gpath=$2
+  [ -n "$gpath" ] || die "$gname is empty"
+  case $gpath in /*) ;; *) die "$gname must be an absolute path: $gpath" ;; esac
+  case $gpath in *..*) die "$gname must not contain '..': $gpath" ;; esac
+  [ "$gpath" != / ] || die "$gname must not be /"
+  gprobe=$gpath gtail=""
+  while [ ! -d "$gprobe" ]; do
+    gtail="/${gprobe##*/}$gtail"
+    gprobe=$(dirname "$gprobe")
+  done
+  gprobe=$(cd "$gprobe" && pwd -P)
+  if [ "$(git -C "$gprobe" rev-parse --is-inside-work-tree 2> /dev/null)" = true ]; then
+    # the trailing slash: a pattern such as out/ matches a directory that is not there yet
+    git -C "$gprobe" check-ignore -q "$gprobe$gtail/" || die "$gname is inside a Git tree that does not ignore it: $gpath"
+  fi
+}
+guard_dir OUTDIR "$1"
+[ "${ORACLE_RAWDIR+set}" != set ] || guard_dir ORACLE_RAWDIR "$ORACLE_RAWDIR"
 for t in cargo git gh jq python3; do command -v "$t" > /dev/null || die "needs $t"; done
 mkdir -p "$1" || die "cannot create $1"
 OUT=$(cd "$1" && pwd -P)
@@ -41,11 +55,14 @@ RAWDIR=${ORACLE_RAWDIR:-$OUT/raw}
 PRS=${ORACLE_PRS:-15}
 MIN_RATE=${ORACLE_MIN_RATE:-500}
 STW=${ORACLE_STW:-}
-LOCK=$(cd "$CRATE/../.." && pwd)/scratch/cargo-queue.lock
+LOCK=${ORACLE_LOCK:-$(cd "$CRATE/../.." && pwd)/scratch/cargo-queue.lock}
+if command -v flock > /dev/null && [ ! -d "$(dirname "$LOCK")" ]; then
+  echo "tidy_oracle.sh: WARNING: no directory for the cargo lock $LOCK (set ORACLE_LOCK): cargo runs without the queue" >&2
+fi
 
-rate() { gh api rate_limit --jq .resources.core.remaining 2> /dev/null || echo 0; }
 check_rate() {
-  r=$(rate)
+  r=$(gh api rate_limit --jq .resources.core.remaining 2> /dev/null)
+  [ -n "$r" ] || die "no network or no GitHub login: gh api rate_limit failed"
   [ "$r" -ge "$MIN_RATE" ] || die "GitHub rate limit: $r requests left, below $MIN_RATE; stopped"
 }
 name_of() { echo "$1" | tr / _; }
@@ -121,10 +138,10 @@ export STW_ORACLE_OUT=$OUT/out STW_ORACLE_HUNK_REPO=$HUNK_DIR STW_ORACLE_REBASE_
 export STW_ORACLE_HUNK_COMMITS=${ORACLE_HUNK_COMMITS:-1000} STW_ORACLE_MATRIX_COMMITS=${ORACLE_MATRIX_COMMITS:-500}
 rm -f "$OUT/out/hunk.md" "$OUT/out/matrix.md" "$OUT/out/rebase.md"
 run_tests() {
-  cd "$CRATE" && cargo test --test it oracle_tidy -- --ignored --nocapture --test-threads=1
+  cargo test --manifest-path "$CRATE/Cargo.toml" --test it oracle_tidy -- --ignored --nocapture --test-threads=1
 }
 if command -v flock > /dev/null && [ -d "$(dirname "$LOCK")" ]; then
-  flock "$LOCK" bash -c "$(declare -f run_tests); CRATE='$CRATE'; run_tests" > "$OUT/out/tests.log" 2>&1
+  flock "$LOCK" cargo test --manifest-path "$CRATE/Cargo.toml" --test it oracle_tidy -- --ignored --nocapture --test-threads=1 > "$OUT/out/tests.log" 2>&1
 else
   run_tests > "$OUT/out/tests.log" 2>&1
 fi
@@ -145,10 +162,12 @@ print("%.2f %d %d" % (secs, rss // 1024, p.returncode))
 cost() { # label clone args...
   label=$1 dir=$2; shift 2
   best=""
+  # shellcheck disable=SC2034 # the counter only repeats the run
   for i in 1 2; do
     res=$(cd "$dir" && python3 -I -c "$PYWRAP" "$STW" tidy plan --json --root "$dir" "$@")
     if [ -z "$best" ] || [ "$(echo "${res%% *} ${best%% *}" | awk '{print ($1 < $2)}')" = 1 ]; then best=$res; fi
   done
+  # shellcheck disable=SC2086 # best is "seconds megabytes exit code": the split into three words is the point
   set -- $best
   echo "| $(basename "$dir") | $label | $1 | $2 | $3 |"
 }
