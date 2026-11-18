@@ -163,3 +163,126 @@ fn without_the_flag_the_text_is_the_plain_plan() {
     let kept: Vec<&str> = e.lines().filter(|l| !l.starts_with("    ")).collect();
     assert_eq!(kept, plain.lines().collect::<Vec<_>>());
 }
+
+// ---- the similarity section ----
+
+use crate::common::Stamp;
+use crate::tidy_rebase_plan::{c, C, MAIL, NAME};
+use stw::tidy::BranchPlan;
+
+fn no_rebase() -> stw::tidy::PlanOpts {
+    let mut o = opts();
+    o.rebase = false;
+    o
+}
+
+/// `n` lines `<tag> line <k>`; the lines in `odd` read `<tag> odd <k>`.
+fn odd_lines(tag: &str, n: usize, odd: &[usize]) -> String {
+    (0..n)
+        .map(|k| {
+            if odd.contains(&k) {
+                format!("{tag} odd {k}\n")
+            } else {
+                format!("{tag} line {k}\n")
+            }
+        })
+        .collect()
+}
+
+fn with_odd(c: &C, odd: &[usize]) -> C {
+    C {
+        body: odd_lines("c0", 40, odd),
+        ..c.clone()
+    }
+}
+
+fn sim<'a>(p: &'a RepoPlan, br: &str) -> &'a BranchPlan {
+    p.branches.iter().find(|b| b.branch == br).unwrap()
+}
+
+fn sha7(id: impl ToString) -> String {
+    id.to_string()[..7].to_string()
+}
+
+#[test]
+fn a_landed_branch_has_the_summary_line_and_no_commit_lines() {
+    let w = landed_world();
+    let p = plan_with(&w, None, &no_rebase());
+    let u = under(&explained(&p), "feat");
+    assert_eq!(
+        u[1..],
+        [
+            "similarity: class landed, 3 commit(s) judged, 3 at or above 95 %, lowest 97.5 %, median 97.5 %, 0 without candidate"
+        ]
+    );
+}
+
+#[test]
+fn a_modified_commit_shows_its_candidate_value_and_at_most_five_evidence_lines() {
+    let mut w = world();
+    w.branch("feat", &[c(0)]);
+    w.land(&[with_odd(&c(0), &[3, 5, 7, 9])], MERGE_SECS);
+    let p = plan_with(&w, None, &no_rebase());
+    let b = sim(&p, "feat");
+    let r = &b.similarity.as_ref().unwrap().report.commits[0];
+    let cand = match &r.outcome {
+        stw::tidy_similarity::Outcome::Compared(x) => x.candidate,
+        o => panic!("{o:?}"),
+    };
+    let u = under(&explained(&p), "feat");
+    let me = sha7(r.commit);
+    assert_eq!(
+        u[1..],
+        [
+            "similarity: class modified, 1 commit(s) judged, 0 at or above 95 %, lowest 90.0 %, median 90.0 %, 0 without candidate".to_string(),
+            format!("  {me} 'step 0' best candidate {} 90.0 % (subject; without path 90.0 %)", sha7(cand)),
+            "    + f0.txt: c0 line 3".into(),
+            "    + f0.txt: c0 line 5".into(),
+            "    + f0.txt: c0 line 7".into(),
+            "    + f0.txt: c0 line 9".into(),
+            "    + f0.txt: c0 odd 3".into(),
+        ]
+    );
+}
+
+#[test]
+fn a_commit_without_a_candidate_and_a_commit_too_large_are_named() {
+    let w = world();
+    w.branch("plain", &[c(0)]);
+    let big = "x\n".repeat(600_000);
+    let s = Stamp::new(NAME, MAIL, T0 + 500);
+    let id =
+        w.fx.commit_at(Some(w.c0), &[("big.txt", Some(big.as_str()))], "big", s, s);
+    w.fx.branch("huge", id);
+    let p = plan_with(&w, None, &no_rebase());
+    let t = explained(&p);
+    let plain = &sim(&p, "plain").similarity.as_ref().unwrap().report.commits[0];
+    let u = under(&t, "plain");
+    assert_eq!(
+        u[1..],
+        [
+            "similarity: class partial, 1 commit(s) judged, 0 at or above 95 %, 1 without candidate".to_string(),
+            format!("  {} 'step 0' no candidate", sha7(plain.commit)),
+        ]
+    );
+    let huge = &sim(&p, "huge").similarity.as_ref().unwrap().report.commits[0];
+    let u = under(&t, "huge");
+    assert_eq!(
+        u.get(2..).unwrap_or_default(),
+        [format!("  {} 'big' skipped (too-large)", sha7(huge.commit))]
+    );
+}
+
+#[test]
+fn at_most_twenty_commit_lines_are_shown_and_the_rest_is_counted() {
+    let w = world();
+    w.branch("many", &cs(0, 25));
+    let p = plan_with(&w, None, &no_rebase());
+    let u = under(&explained(&p), "many");
+    assert_eq!(u.len(), 2 + 20 + 1, "{u:#?}");
+    assert!(
+        u[2].starts_with("  ") && u[2].contains("no candidate"),
+        "{u:#?}"
+    );
+    assert_eq!(u[22], "  … 5 more commit(s)");
+}
