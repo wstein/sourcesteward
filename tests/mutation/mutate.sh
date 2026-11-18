@@ -4489,6 +4489,89 @@ m TX37 'the modified range is open at the top' src/tidy_explain.rs \
 m TX38 'an empty commit counts as a commit without a partner' src/tidy_explain.rs \
   'b.decision, sim.report.plus_commits, b.unique' 'b.decision, b.unique, b.unique' \
   tidy_explain an_empty_commit_is_not_counted_as_a_commit_without_a_partner
+m OR1 'the tab git adds after a path with a space stays' src/tidy_oracle.rs \
+  'let rest = rest.strip_suffix(b"\t").unwrap_or(rest);' 'let rest = rest;' \
+  tidy_oracle a_path_with_a_space_loses_the_tab_git_adds_and_a_quoted_path_is_an_error
+m OR2 'a deleted file has no path' src/tidy_oracle.rs \
+  '(Some(Some(p)), _) | (_, Some(Some(p))) => p.clone(),' '(Some(Some(p)), _) => p.clone(),' \
+  tidy_oracle an_added_file_takes_the_new_path_and_a_deleted_file_the_old_one
+m OR3 'a line that looks like a header is read as a header inside a hunk' src/tidy_oracle.rs \
+  'if !in_hunk {' 'if true {' \
+  tidy_oracle a_changed_line_that_looks_like_a_header_is_a_line
+m OR4 'the white space of a changed line is not trimmed' src/tidy_oracle.rs \
+  'crate::tidy_similarity::trim_line(&line[1..]).to_vec(),' '(&line[1..]).to_vec(),' \
+  tidy_oracle a_modified_file_gives_its_changed_lines_trimmed_with_the_path
+m OR5 'a quoted path is read as a path' src/tidy_oracle.rs \
+  "if rest.first() == Some(&b'\"') {" 'if false {' \
+  tidy_oracle a_path_with_a_space_loses_the_tab_git_adds_and_a_quoted_path_is_an_error
+m OR6 'the marker entries of gix are compared with the diff of git' src/tidy_oracle.rs \
+  ".filter(|e| e.sign == b'+' || e.sign == b'-')" '.filter(|_| true)' \
+  tidy_oracle text_keys_leave_out_the_marker_entries_of_gix
+m OR7 'two multisets of different size do not differ' src/tidy_oracle.rs \
+  'sim.inter != sim.a || sim.inter != sim.b' 'sim.inter != sim.a' \
+  tidy_oracle equal_multisets_do_not_differ_and_a_size_or_content_difference_does
+m OR8 'equal values are ordered by the larger commit ID' src/tidy_oracle.rs \
+  '.then_with(|| x.0.cmp(&y.0))' '.then_with(|| y.0.cmp(&x.0))' \
+  tidy_oracle a_tally_counts_commits_and_differing_ones_and_keeps_the_worst_first
+m OR9 'the list of worst commits is not cut' src/tidy_oracle.rs \
+  'self.worst.truncate(KEEP_WORST);' '' \
+  tidy_oracle the_share_is_rounded_half_up_and_the_worst_list_is_cut
+m OR10 'the share is cut instead of rounded half up' src/tidy_oracle.rs \
+  '(2000 * self.differing + self.total) / (2 * self.total)' '(1000 * self.differing) / self.total' \
+  tidy_oracle the_share_is_rounded_half_up_and_the_worst_list_is_cut
+m OR11 'the best commit is listed first' src/tidy_oracle.rs \
+  'x.1.cmp_value(&y.1).then_with' 'y.1.cmp_value(&x.1).then_with' \
+  tidy_oracle a_tally_counts_commits_and_differing_ones_and_keeps_the_worst_first
+m OR12 'the table swaps the commits and the differing ones' src/tidy_oracle.rs \
+  't.total, t.differing' 't.differing, t.total' \
+  tidy_oracle the_matrix_has_one_row_per_setting_in_name_order_and_renders_a_table
+m OR13 'a commit ID is cut at eight characters' src/tidy_oracle.rs \
+  '&id[..id.len().min(12)]' '&id[..id.len().min(8)]' \
+  tidy_oracle counterexamples_name_setting_commit_value_and_sizes
+m OR14 'a pull request that is not merged is kept' src/tidy_oracle.rs \
+  'if pr["merged"] != Value::Bool(true) {' 'if false {' \
+  tidy_oracle the_truth_keeps_merged_pull_requests_with_the_run_on_the_base
+m OR15 'the run on the base is not cut to the pull request commits' src/tidy_oracle.rs \
+  'main_run.truncate(commits.len());' '' \
+  tidy_oracle the_truth_keeps_merged_pull_requests_with_the_run_on_the_base
+m OR16 'a rebase onto other commits is accepted' src/tidy_oracle.rs \
+  'if v.targets == want {' 'if true {' \
+  tidy_oracle a_strong_rebase_onto_other_commits_is_a_finding
+m OR17 'a pull request into another branch is judged like one into the default branch' src/tidy_oracle.rs \
+  'if truth.base != default_branch {' 'if false {' \
+  tidy_oracle a_pull_request_into_another_branch_is_stacked_and_the_plan_reading_is_named
+m OR18 'the proof equal-patches is a finding' src/tidy_oracle.rs \
+  'return Verdict::EqualPatches;' 'return Verdict::Miss(String::new());' \
+  tidy_oracle the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_cause
+m OR19 'a stacked pull request counts as a finding' src/tidy_oracle.rs \
+  'rows.len() - rebase - equal - stacked' 'rows.len() - rebase - equal' \
+  tidy_oracle the_summary_counts_the_verdicts_and_lists_the_findings
+m OR20 'the view reads the kind of the landing from the basis' src/tidy_oracle.rs \
+  'kind: text(&b["landed_via"]["kind"]),' 'kind: text(&b["landed_via"]["basis"]),' \
+  tidy_oracle the_view_reads_the_decision_the_landing_and_the_mapped_commits
+m OR21 'the view reads the mapped commits from the branch commits' src/tidy_oracle.rs \
+  'm["main"].as_str().map(str::to_string)' 'm["commit"].as_str().map(str::to_string)' \
+  tidy_oracle the_view_reads_the_decision_the_landing_and_the_mapped_commits
+m OR22 'a rebase that is not strong is a rebase' src/tidy_oracle.rs \
+  'if v.kind == "rebase" && v.strength == "strong" {
+        let want' 'if v.kind == "rebase" {
+        let want' \
+  tidy_oracle a_rebase_that_is_not_strong_is_not_a_rebase_verdict
+m OR23 'the plan writes the landing under another name' src/tidy.rs \
+  '"landed_via": json!({"kind": b.landed_via.kind.as_str()' '"landed_via": json!({"type": b.landed_via.kind.as_str()' \
+  tidy_oracle with_the_plan::the_real_plan_of_a_rebase_merge_is_judged_a_rebase
+m OR24 'the driver takes a relative directory' tests/oracle/tidy_oracle.sh \
+  '*) die "OUTDIR must be an absolute path: $1" ;; esac' '*) ;; esac' \
+  tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
+m OR25 'the driver takes a directory with ..' tests/oracle/tidy_oracle.sh \
+  "*) die \"OUTDIR must not contain '..': \$1\" ;; esac" '*) ;; esac' \
+  tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
+m OR26 'the driver takes the root directory' tests/oracle/tidy_oracle.sh \
+  '[ "$1" != / ] || die "OUTDIR must not be /"' 'true' \
+  tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
+m OR27 'the driver takes a directory inside a Git tree' tests/oracle/tidy_oracle.sh \
+  'check-ignore -q "$1" || die "OUTDIR is inside a Git tree that does not ignore it: $1"' 'check-ignore -q "$1" || true' \
+  tidy_oracle the_driver_script_parses_and_refuses_bad_output_directories
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
