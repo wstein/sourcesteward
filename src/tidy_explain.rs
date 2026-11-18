@@ -164,10 +164,7 @@ fn remaining(list: &[Remaining], head: &str) -> Vec<String> {
         if shown.len() < r.files_total {
             files += ", \u{2026}";
         }
-        out.push(cut(
-            &format!("  {} '{}' ({files})", sha7(r.commit), r.subject),
-            MAX_LINE + 2,
-        ));
+        out.push(format!("  {} '{}' ({files})", sha7(r.commit), r.subject));
     }
     if more > 0 {
         out.push(format!("  \u{2026} {more} more commit(s)"));
