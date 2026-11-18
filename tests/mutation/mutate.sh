@@ -4591,6 +4591,13 @@ m OR32 'git is not told to compare text' tests/it/oracle_tidy.rs \
 m OR33 'an unreadable commit counts once per setting' tests/it/oracle_tidy.rs \
   'Err(_) => unreadable = true,' 'Err(_) => run.unreadable += 1,' \
   oracle_tidy the_comparison_reads_text_in_files_marked_binary_and_counts_unreadable_per_commit
+m OR34 'the paths gix takes for binary are not left out on the side of git' tests/it/oracle_tidy.rs \
+  '    entries.retain(|e| !binary.contains(&e.path));
+' '' \
+  oracle_tidy a_file_with_a_nul_byte_is_left_out_on_both_sides
+m OR35 'the driver judges the path of a link, not the directory behind it' tests/oracle/tidy_oracle.sh \
+  'gprobe=$(cd "$gprobe" && pwd -P)' 'gprobe=$(cd "$gprobe" && pwd -L)' \
+  tidy_oracle the_driver_accepts_a_link_to_a_directory_the_git_tree_ignores
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
