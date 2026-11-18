@@ -122,7 +122,16 @@ fn sample(repo: &Path, window: usize, want: usize) -> Vec<(String, String)> {
 }
 
 /// The keys of git for one commit and one setting.
-fn git_keys(repo: &Path, parent: &str, id: &str, flags: &[&str]) -> Result<Keys, String> {
+///
+/// Entries of the paths in `binary` (the files gix takes for binary) are left out: with `--text` git prints their lines,
+/// gix has one marker entry that the comparison does not use.
+fn git_keys(
+    repo: &Path,
+    parent: &str,
+    id: &str,
+    flags: &[&str],
+    binary: &std::collections::HashSet<Vec<u8>>,
+) -> Result<Keys, String> {
     let mut args = vec![
         "-c",
         "core.quotepath=off",
@@ -137,7 +146,8 @@ fn git_keys(repo: &Path, parent: &str, id: &str, flags: &[&str]) -> Result<Keys,
     args.extend_from_slice(flags);
     args.extend_from_slice(&[parent, id]);
     let out = git(repo, &args);
-    let entries = parse_unified_u0(&out)?;
+    let mut entries = parse_unified_u0(&out)?;
+    entries.retain(|e| !binary.contains(&e.path));
     Ok(text_keys(&entries))
 }
 
@@ -196,8 +206,12 @@ fn compare(repo: &Path, commits: &[(String, String)], settings: &[(&str, &[&str]
     };
     for (id, parent) in commits {
         let oid = ObjectId::from_hex(id.as_bytes()).unwrap();
+        let mut binary = std::collections::HashSet::new();
         let mine = match commit_entries(&g, oid, &lim).expect("gix reads the commit") {
-            Entries::Lines(l) => text_keys(&l),
+            Entries::Lines(l) => {
+                binary.extend(l.iter().filter(|e| e.sign == b'B').map(|e| e.path.clone()));
+                text_keys(&l)
+            }
             Entries::Skipped(_) => {
                 run.skipped_gix += 1;
                 continue;
@@ -205,7 +219,7 @@ fn compare(repo: &Path, commits: &[(String, String)], settings: &[(&str, &[&str]
         };
         let mut unreadable = false;
         for (name, flags) in settings {
-            match git_keys(repo, parent, id, flags) {
+            match git_keys(repo, parent, id, flags, &binary) {
                 Ok(theirs) => run.matrix.add(name, id, mine.similarity(&theirs)),
                 Err(_) => unreadable = true,
             }
