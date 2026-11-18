@@ -91,3 +91,84 @@ fn equal_multisets_do_not_differ_and_a_size_or_content_difference_does() {
     assert!(differs(&sim(5, 5, 6)));
     assert!(differs(&sim(5, 6, 5)));
 }
+
+// ---- tally and matrix ----
+
+#[test]
+fn a_tally_counts_commits_and_differing_ones_and_keeps_the_worst_first() {
+    let mut t = Tally::default();
+    assert_eq!(t.share_permille(), None);
+    assert_eq!(t.worst_permille(), None);
+    t.add("aa", sim(5, 5, 5));
+    t.add("c2", sim(8, 10, 10));
+    t.add("c1", sim(8, 10, 10));
+    t.add("bb", sim(3, 10, 10));
+    t.add("dd", sim(9, 10, 10));
+    assert_eq!((t.total, t.differing), (5, 4));
+    let ids: Vec<&str> = t.worst.iter().map(|w| w.0.as_str()).collect();
+    // lowest value first; equal values: the smaller commit ID
+    assert_eq!(ids, ["bb", "c1", "c2", "dd"]);
+    assert_eq!(t.worst_permille(), Some(300));
+    // 4 of 5 = 80.0 %
+    assert_eq!(t.share_permille(), Some(800));
+}
+
+#[test]
+fn the_share_is_rounded_half_up_and_the_worst_list_is_cut() {
+    let mut t = Tally::default();
+    for i in 0..8 {
+        t.add(&format!("x{i}"), sim(1, 2, 2));
+    }
+    for i in 0..1992 {
+        t.add(&format!("y{i}"), sim(2, 2, 2));
+    }
+    // 8 of 2000 = 0.4 %
+    assert_eq!(t.share_permille(), Some(4));
+    assert_eq!(t.worst.len(), KEEP_WORST);
+    let mut u = Tally::default();
+    u.add("a", sim(0, 1, 1));
+    for _ in 0..199 {
+        u.add("z", sim(1, 1, 1));
+    }
+    // 1 of 200 = 0.5 %
+    assert_eq!(u.share_permille(), Some(5));
+    let mut h = Tally::default();
+    h.add("a", sim(0, 1, 1));
+    for _ in 0..2 {
+        h.add("z", sim(1, 1, 1));
+    }
+    // 1 of 3 = 33.33 -> 333
+    assert_eq!(h.share_permille(), Some(333));
+    let mut r = Tally::default();
+    r.add("a", sim(0, 1, 1));
+    for _ in 0..1999 {
+        r.add("z", sim(1, 1, 1));
+    }
+    // 1 of 2000 = 0.05 % = 0.5 permille: half up gives 1 permille
+    assert_eq!(r.share_permille(), Some(1));
+}
+
+#[test]
+fn the_matrix_has_one_row_per_setting_in_name_order_and_renders_a_table() {
+    let mut m = Matrix::default();
+    m.add("git-patience", "1111111111111111", sim(10, 10, 10));
+    m.add("git-myers", "aaaaaaaaaaaaaaaaaaaa", sim(9, 10, 10));
+    m.add("git-myers", "bbbbbbbbbbbbbbbbbbbb", sim(5, 5, 5));
+    assert_eq!(m.get("git-myers").map(|t| t.total), Some(2));
+    assert!(m.get("git-minimal").is_none());
+    assert_eq!(
+        m.render_table(),
+        "| setting | commits | differing | share % | worst % |\n|---|---|---|---|---|\n| git-myers | 2 | 1 | 50.0 | 90.0 (aaaaaaaaaaaa) |\n| git-patience | 1 | 0 | 0.0 | - |\n"
+    );
+}
+
+#[test]
+fn counterexamples_name_setting_commit_value_and_sizes() {
+    let mut m = Matrix::default();
+    m.add("git-histogram", "abcdef0123456789", sim(19, 40, 38));
+    m.add("git-myers", "0123456789abcdef", sim(1, 1, 1));
+    assert_eq!(
+        m.render_counterexamples(),
+        "git-histogram abcdef012345 48.7 % (19 of 40 and 38)\n"
+    );
+}

@@ -88,3 +88,38 @@ pub fn text_keys(entries: &[Entry]) -> Keys {
 pub fn differs(sim: &Sim) -> bool {
     sim.inter != sim.a || sim.inter != sim.b
 }
+
+pub const KEEP_WORST: usize = 5;
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Tally {
+    pub total: u64,
+    pub differing: u64,
+    pub worst: Vec<(String, Sim)>,
+}
+
+impl Tally {
+    pub fn add(&mut self, _id: &str, _sim: Sim) {}
+    pub fn share_permille(&self) -> Option<u32> {
+        None
+    }
+    pub fn worst_permille(&self) -> Option<u32> {
+        None
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Matrix {}
+
+impl Matrix {
+    pub fn add(&mut self, _setting: &str, _id: &str, _sim: Sim) {}
+    pub fn get(&self, _setting: &str) -> Option<&Tally> {
+        None
+    }
+    pub fn render_table(&self) -> String {
+        String::new()
+    }
+    pub fn render_counterexamples(&self) -> String {
+        String::new()
+    }
+}
