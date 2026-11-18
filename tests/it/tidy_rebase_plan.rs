@@ -421,6 +421,12 @@ fn author_times_at_the_edge_of_the_range_do_not_crash_the_plan() {
         let p = plan(&w);
         assert!(p.error.is_none(), "{secs}: {:?}", p.error);
         assert!(get(&p, "feat").rebase.is_some(), "{secs}");
+        // the similarity stage alone
+        let mut o = opts();
+        o.rebase = false;
+        let p = plan_with(&w, None, &o);
+        assert!(p.error.is_none(), "{secs}: {:?}", p.error);
+        assert!(get(&p, "feat").similarity.is_some(), "{secs}");
     }
 }
 
@@ -714,6 +720,7 @@ fn the_text_names_the_proof_in_one_line_and_gives_no_command() {
         line.trim_start().starts_with("review  feat  [rebase-identity] rebase-identity (3 of 3 commits, run of 3, min 97.5 %)"),
         "{line}"
     );
+    assert!(!line.contains("landed via"), "{line}");
     assert!(
         !text.contains("next command") && !text.contains("git branch -D"),
         "{text}"
@@ -951,13 +958,11 @@ fn a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api() {
     let body = commits_body(&m.ids[..2], &m.list[..2]);
     let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
     let c = client(&routes);
-    let prs = vec![merged_pr(
-        "feat",
-        5,
-        m.ids[1].to_string(),
-        main.clone(),
-        MERGE_SECS,
-    )];
+    // the pull request of another branch comes first in the list
+    let prs = vec![
+        merged_pr("other", 9, "1".repeat(40), "f".repeat(40), MERGE_SECS),
+        merged_pr("feat", 5, m.ids[1].to_string(), main.clone(), MERGE_SECS),
+    ];
     let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
     // the proof stays; the commits are mapped by identity, the branch has one more
     assert_eq!(proof_of(&p, "feat"), MOVED);
@@ -1137,12 +1142,19 @@ fn a_strong_local_proof_and_a_head_proof_do_not_ask_the_api() {
     let l2 = cs(2, 1);
     let ids = w.branch("headed", &l2);
     w.land(&l2, MERGE_SECS + 100);
+    // an equal patch with another author time: no identity, so the mapping is no strong proof either
+    let l3 = cs(3, 1);
+    let ids3 = w.branch("cherry", &l3);
+    let mut moved = l3.clone();
+    moved[0].secs += 777;
+    w.land(&moved, MERGE_SECS + 200);
     let routes = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
     let c = client(&routes);
     let main = w.main.to_string();
     let prs = vec![
         merged_pr("strong", 1, "0".repeat(40), main.clone(), MERGE_SECS),
-        merged_pr("headed", 2, ids[0].to_string(), main, MERGE_SECS),
+        merged_pr("headed", 2, ids[0].to_string(), main.clone(), MERGE_SECS),
+        merged_pr("cherry", 3, ids3[0].to_string(), main, MERGE_SECS),
     ];
     let p = plan_api(&w, prs, PrApi::Client(&c), &opts());
     assert_eq!(proof_of(&p, "strong"), ("review", "rebase-identity"));
@@ -1150,6 +1162,8 @@ fn a_strong_local_proof_and_a_head_proof_do_not_ask_the_api() {
     assert!(routes.hits().is_empty(), "{:?}", routes.hits());
     assert_eq!(api_of(&p, "strong").0, Some(ApiReason::NotNeeded));
     assert_eq!(api_of(&p, "headed").0, Some(ApiReason::NotNeeded));
+    assert_eq!(proof_of(&p, "cherry"), ("delete", "equal-patches"));
+    assert_eq!(api_of(&p, "cherry").0, Some(ApiReason::NotNeeded));
 }
 
 #[test]

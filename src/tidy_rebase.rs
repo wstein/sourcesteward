@@ -1078,7 +1078,7 @@ pub fn evaluate_api(
         };
     } else if pr
         .merged_at
-        .is_some_and(|t| (merge_head.key.secs - t).abs() <= RB_API_TIME_TOLERANCE)
+        .is_some_and(|t| merge_head.key.secs.abs_diff(t) <= RB_API_TIME_TOLERANCE as u64)
     {
         rep.kind = LandedKind::Squash;
         rep.strength = Strength::Strong;

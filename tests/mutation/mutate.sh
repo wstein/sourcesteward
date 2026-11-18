@@ -4145,6 +4145,144 @@ m TP31 'the minimum shown ignores the thresholds' src/tidy.rs \
   'let min = report.min.map(|m| m.shown_in(th.high, th.low)).unwrap_or(0);' 'let min = 0;' \
   tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
 
+m TR1 'the similarity stage also judges a branch with the proof rebase-identity' src/tidy.rs \
+  'for row in rows.iter_mut().filter(|r| judged(r.bp.proof)) {
+            let solved = solved_by_rebase(row.bp.rebase.as_ref());' 'for row in rows.iter_mut().filter(|r| judged(r.bp.proof) || r.bp.proof == tidy_rebase::RB_CLASS) {
+            let solved = std::collections::HashSet::<ObjectId>::new();' \
+  tidy_rebase_plan rebase_identity_comes_before_similar_patches
+m TR2 'rebase-identity replaces an equal-patches proof' src/tidy.rs \
+  'if judged(row.bp.proof) && tidy_rebase::evidence_class(&report).is_some() {' 'if (judged(row.bp.proof) || row.bp.proof == "equal-patches") && tidy_rebase::evidence_class(&report).is_some() {' \
+  tidy_rebase_plan the_existing_proofs_keep_their_place
+m TR3 'rebase-identity replaces a merged-pull-request-head proof' src/tidy.rs \
+  'if judged(row.bp.proof) && tidy_rebase::evidence_class(&report).is_some() {' 'if (judged(row.bp.proof) || row.bp.proof == "merged-pull-request-head") && tidy_rebase::evidence_class(&report).is_some() {' \
+  tidy_rebase_plan the_existing_proofs_keep_their_place
+m TR4 'the rebase stage also runs for open pull requests and backups' src/tidy.rs \
+  '            r.unmatched.is_some()
+                && (judged(r.bp.proof)
+                    || matches!(r.bp.proof, "equal-patches" | "merged-pull-request-head"))' '            true' \
+  tidy_rebase_plan the_existing_proofs_keep_their_place
+m TR5 'a strong rebase proof is delete' src/tidy.rs \
+  'row.bp.decision = tidy_rebase::RB_DECISION;' 'row.bp.decision = "delete";' \
+  tidy_rebase_plan a_rebase_merge_with_a_conflict_resolution_is_rebase_identity_and_review
+m TR6 'the flag --no-rebase-evidence does not switch the stage off' src/cli.rs \
+  'rebase: !a.no_rebase_evidence,' 'rebase: true,' \
+  tidy_rebase_plan the_flag_no_rebase_evidence_switches_the_stage_off_and_is_independent_of_the_other
+m TR7 'summary.rebase is always 0' src/tidy.rs \
+  '"rebase": rebase_count(plans)}})' '"rebase": 0}})' \
+  tidy_rebase_plan the_json_has_the_rebase_object_landed_via_and_the_summary
+m TR8 'rebase_count counts another proof' src/tidy.rs \
+  '.filter(|b| b.proof == tidy_rebase::RB_CLASS)
+        .count()' '.filter(|b| b.proof == "similar-patches")
+        .count()' \
+  tidy_rebase_plan the_json_has_the_rebase_object_landed_via_and_the_summary
+m TR9 'the JSON key landed_via has another name' src/tidy.rs \
+  '"landed_via": json!({"kind"' '"landed": json!({"kind"' \
+  tidy_rebase_plan the_json_has_the_rebase_object_landed_via_and_the_summary
+m TR10 'landed_via does not know an ancestor' src/tidy.rs \
+  'bp.proof == "merged-ancestor",
+            bp.rebase.as_ref().map(|r| &r.report),' 'false,
+            bp.rebase.as_ref().map(|r| &r.report),' \
+  tidy_rebase_plan landed_via_follows_the_evidence_of_each_branch
+m TR11 'landed_via ignores the pull request mapping' src/tidy.rs \
+  'bp.rebase.as_ref().map(|r| &r.api),
+        );' 'None,
+        );' \
+  tidy_rebase_plan a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api
+m TR12 'the API rule ignores the parent count of the merge commit' src/tidy_rebase.rs \
+  'if merge_head.parents == 2 {' 'if false {' \
+  tidy_rebase_plan a_pull_request_with_a_merge_commit_gives_merge_by_two_parents
+m TR13 'the API rule does not compare the k commits with the pull request commits' src/tidy_rebase.rs \
+  '&& (0..k).all(|j| same_identity(&chain[k - 1 - j], &pr.commits[j]));' '&& true;' \
+  tidy_rebase_plan a_pull_request_with_a_squash_commit_gives_squash_by_the_merge_time
+m TR14 'the API squash rule takes no time tolerance' src/tidy_rebase.rs \
+  'merge_head.key.secs.abs_diff(t) <= RB_API_TIME_TOLERANCE as u64' 'merge_head.key.secs.abs_diff(t) <= 0' \
+  tidy_rebase_plan a_pull_request_with_a_squash_commit_gives_squash_by_the_merge_time
+m TR15 'the request limit is 31' src/tidy.rs \
+  'pub const MAX_PR_REQUESTS: usize = 30;' 'pub const MAX_PR_REQUESTS: usize = 31;' \
+  tidy_rebase_plan at_most_thirty_requests_are_made_per_repository
+m TR16 'the patch keys of the plan are not passed to the mapping' src/tidy.rs \
+  'patches.get(self.repo, id))?;' '{ let _ = (&patches, id); Ok(None) })?;' \
+  tidy_rebase_plan landed_via_follows_the_evidence_of_each_branch
+m TR17 'a commit the rebase stage vouched for is judged again by the similarity stage' src/tidy.rs \
+  'm.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)' 'false && m.main.is_some() && !m.ambiguous && !m.later && m.value.is_some_and(|v| v >= high)' \
+  tidy_rebase_plan a_commit_the_rebase_stage_vouched_for_is_not_judged_again_by_the_similarity_stage
+m TR18 'a failed stage is not named in the detail' src/tidy.rs \
+  'bp.detail += &format!("; rebase evidence not computed ({e})");' 'let _ = (bp, e);' \
+  lib tidy::tests::a_failed_stage_is_named_in_the_detail_and_the_proof_stays
+m TR19 'the text names landed via for an ancestor too' src/tidy.rs \
+  '&& l.basis != Basis::Ancestor
+' '
+' \
+  tidy_rebase_plan the_text_names_the_proof_in_one_line_and_gives_no_command
+m TR20 'the text names landed via on a rebase-identity line' src/tidy.rs \
+  '&& b.proof != tidy_rebase::RB_CLASS
+' '
+' \
+  tidy_rebase_plan the_text_names_the_proof_in_one_line_and_gives_no_command
+m TR21 'the summary line names similar-patches for the rebase count' src/tidy.rs \
+  '(r, 0) => format!(" ({r} of them rebase-identity)"),' '(r, 0) => format!(" ({r} of them similar-patches)"),' \
+  tidy_rebase_plan the_text_names_the_proof_in_one_line_and_gives_no_command
+m TR22 'a strong local proof still asks the pull request' src/tidy.rs \
+  'if local_strong || !judged(row.bp.proof) {' 'if !judged(row.bp.proof) {' \
+  tidy_rebase_plan a_strong_local_proof_and_a_head_proof_do_not_ask_the_api
+m TR23 'a proof that needs no pull request still asks it' src/tidy.rs \
+  'if local_strong || !judged(row.bp.proof) {' 'if local_strong {' \
+  tidy_rebase_plan a_strong_local_proof_and_a_head_proof_do_not_ask_the_api
+m TR24 'the similarity stage subtracts from the oldest author time without a guard' src/tidy.rs \
+  'Some(oldest.saturating_sub(lim.window_secs)),' 'Some(oldest - lim.window_secs),' \
+  tidy_rebase_plan author_times_at_the_edge_of_the_range_do_not_crash_the_plan
+m TR25 'a rate limit answer is a request failure' src/tidy.rs \
+  'Err(_) if c.rate_limited() => NotRead(ApiReason::RateLimited),' 'Err(_) if false => NotRead(ApiReason::RateLimited),' \
+  tidy_rebase_plan without_a_usable_pull_request_the_plan_falls_back_to_the_local_evidence_and_says_why
+m TR26 'a full page of commits is a request failure' src/tidy.rs \
+  'Ok(PrCommitsRead::TooMany) => NotRead(ApiReason::TooManyCommits),' 'Ok(PrCommitsRead::TooMany) => NotRead(ApiReason::RequestFailed),' \
+  tidy_rebase_plan without_a_usable_pull_request_the_plan_falls_back_to_the_local_evidence_and_says_why
+m TR27 'a full page of commits is read as commits (limit one too high)' src/github.rs \
+  'if items.len() >= PAGE {' 'if items.len() > PAGE {' \
+  tidy_rebase_api a_full_page_of_commits_is_too_many
+m TR28 'merged_at of the pull list is not read' src/github.rs \
+  'merged_at: p["merged_at"].as_str().and_then(parse_utc),' 'merged_at: None,' \
+  tidy_rebase_api the_pull_list_carries_the_merge_commit_the_merge_time_and_the_title
+m TR29 'the merge commit of the pull list is not read' src/github.rs \
+  'merge_commit_sha: p["merge_commit_sha"].as_str().unwrap_or("").to_string(),' 'merge_commit_sha: String::new(),' \
+  tidy_rebase_api the_pull_list_carries_the_merge_commit_the_merge_time_and_the_title
+m TR30 'parse_utc has no 400-year rule' src/github.rs \
+  'let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;' 'let leap = y % 4 == 0 && y % 100 != 0;' \
+  tidy_rebase_api utc_times_are_read_as_seconds_since_the_epoch
+m TR31 'parse_utc has no 100-year rule' src/github.rs \
+  'let leap = (y % 4 == 0 && y % 100 != 0) || y % 400 == 0;' 'let leap = y % 4 == 0;' \
+  tidy_rebase_api utc_times_are_read_as_seconds_since_the_epoch
+m TR32 'the stop of the walk is not reported as missing' src/tidy.rs \
+  'Stop::Missing(id) => ("missing", Value::String(id.to_string())),' 'Stop::Missing(_) => ("root", Value::Null),' \
+  tidy_rebase_plan a_shallow_clone_gives_a_plan_and_the_stage_says_where_the_walk_ended
+m TR33 'the remaining list has no files' src/tidy.rs \
+  '"files": m.files, "files_total"' '"files": Vec::<String>::new(), "files_total"' \
+  tidy_rebase_plan the_json_has_the_rebase_object_landed_via_and_the_summary
+m TR34 'the API state is always not-read' src/tidy.rs \
+  'if a.not_read.is_none() { "read" } else { "not-read" }' '"not-read"' \
+  tidy_rebase_plan a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api
+m TR35 'a rebase-identity branch is counted as keep' src/tidy.rs \
+  'row.bp.proof = tidy_rebase::RB_CLASS;' 'row.bp.proof = "unmerged";' \
+  tidy_rebase_plan a_rebase_merge_with_a_conflict_resolution_is_rebase_identity_and_review
+m TR36 'the pull request of another branch is used' src/tidy.rs \
+  '.and_then(|n| prs.iter().find(|p| p.number == n))' '.and_then(|_| prs.first())' \
+  tidy_rebase_plan a_pull_request_that_was_rebased_gives_rebase_by_the_pr_api
+m TR37 'the stage runs although it is off' src/tidy.rs \
+  'if opts.rebase {
+        let mut stage' 'if true {
+        let mut stage' \
+  tidy_rebase_plan the_stage_off_gives_the_plan_without_it
+m TR38 'branch_side takes the newest ready commit first' src/tidy_rebase.rs \
+  '.map(|(id, _)| std::cmp::Reverse((set[id].key.secs, *id)))' '.map(|(id, _)| std::cmp::Reverse((-set[id].key.secs, *id)))' \
+  tidy_rebase the_branch_side_puts_parents_before_children_even_with_equal_times
+m TR39 'patch_hits_with does not ask the lookup for the chain' src/tidy_rebase.rs \
+  'if let Some(k) = key(h.id)? {' 'if let Some(k) = key(h.id).ok().flatten().filter(|_| false) {' \
+  tidy_rebase patch_hits_with_takes_the_keys_from_the_lookup_it_is_given
+
+m TR40 'the window rule subtracts without a guard' src/tidy_similarity.rs \
+  'candidate_time >= commit_time.saturating_sub(window_secs)' 'candidate_time >= commit_time - window_secs' \
+  tidy_rebase_plan author_times_at_the_edge_of_the_range_do_not_crash_the_plan
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}

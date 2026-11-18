@@ -444,7 +444,7 @@ fn has_missing_parent(repo: &gix::Repository, id: ObjectId) -> Result<bool> {
 
 /// The window rule: a candidate is at most `window_secs` older than the commit (author time); newer is fine.
 pub fn in_window(commit_time: i64, candidate_time: i64, window_secs: i64) -> bool {
-    candidate_time >= commit_time - window_secs
+    candidate_time >= commit_time.saturating_sub(window_secs)
 }
 
 /// Results per commit, shared by all branches of a repository: keys and path sets are computed once.
