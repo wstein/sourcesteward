@@ -5,12 +5,90 @@
 //! The texts of commits that the reports carry (subjects, paths, lines) are masked where they are read
 //! (`tidy_similarity::mask_bytes`); only what the plan holds unmasked (the upstream name) is escaped here.
 use crate::github::reads::escape_untrusted;
-use crate::tidy::BranchPlan;
+use crate::tidy::{BranchPlan, SimilarityPlan};
+use crate::tidy_similarity::{fmt_permille, Outcome};
+
+/// At most this many commit lines, mapping lines and remaining commits per branch; the rest is counted.
+const MAX_ROWS: usize = 20;
+/// At most this many characters in a line that carries text of a commit.
+const MAX_LINE: usize = 120;
+
+/// `s` cut to `max` characters, the last of them `…` where something was cut.
+fn cut(s: &str, max: usize) -> String {
+    if s.chars().count() <= max {
+        return s.to_string();
+    }
+    let mut c: String = s.chars().take(max - 1).collect();
+    c.push('\u{2026}');
+    c
+}
+
+fn sha7(id: impl ToString) -> String {
+    id.to_string().chars().take(7).collect()
+}
 
 /// The lines under one branch (no indent). `base` is the base ref as the plan names it.
 pub fn lines(b: &BranchPlan, base: &str) -> Vec<String> {
     let base = base.strip_prefix("refs/remotes/").unwrap_or(base);
-    vec![format!("why: {}", why(b, base))]
+    let mut out = vec![format!("why: {}", why(b, base))];
+    if let Some(sim) = &b.similarity {
+        out.extend(similarity(sim));
+    }
+    out
+}
+
+/// The summary of the similarity stage and one line per commit below the high threshold, with its evidence lines.
+fn similarity(sim: &SimilarityPlan) -> Vec<String> {
+    let r = &sim.report;
+    let mut head = format!(
+        "similarity: class {}, {} commit(s) judged, {} at or above {} %",
+        r.class.as_str(),
+        r.plus_commits,
+        r.at_or_above,
+        sim.high
+    );
+    if let Some(m) = r.min {
+        head += &format!(", lowest {} %", fmt_permille(m.shown_in(sim.high, sim.low)));
+    }
+    if let Some(d) = r.median_permille {
+        head += &format!(", median {} %", fmt_permille(d));
+    }
+    head += &format!(", {} without candidate", r.without_candidate);
+    let mut out = vec![head];
+    let mut rows = 0;
+    let mut more = 0;
+    for c in &r.commits {
+        let what = match &c.outcome {
+            Outcome::Compared(x) if x.sim.ge_pct(sim.high) => continue,
+            Outcome::Compared(x) => format!(
+                "best candidate {} {} % ({}; without path {} %)",
+                sha7(x.candidate),
+                fmt_permille(x.sim.shown_in(sim.high, sim.low)),
+                x.reason.as_str(),
+                fmt_permille(x.no_path.permille())
+            ),
+            Outcome::NoCandidate => "no candidate".to_string(),
+            Outcome::Skipped(k) => format!("skipped ({})", k.as_str()),
+        };
+        if rows == MAX_ROWS {
+            more += 1;
+            continue;
+        }
+        rows += 1;
+        out.push(format!("  {} '{}' {what}", sha7(c.commit), c.subject));
+        if let Outcome::Compared(x) = &c.outcome {
+            for e in &x.evidence {
+                out.push(cut(
+                    &format!("    {} {}: {}", e.sign, e.path, e.line),
+                    MAX_LINE + 4,
+                ));
+            }
+        }
+    }
+    if more > 0 {
+        out.push(format!("  \u{2026} {more} more commit(s)"));
+    }
+    out
 }
 
 /// The sentence: the decision and the proof that led to it, or the proof that is missing.
