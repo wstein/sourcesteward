@@ -45,6 +45,9 @@ pub struct BranchPlan {
     pub rebase: Option<RebasePlan>,
     /// How the branch landed, with the basis; `unknown` where nothing says.
     pub landed_via: LandedVia,
+    /// The number of a merged pull request of this branch whose head is not the tip (the branch moved on). Not in
+    /// the JSON; the text of `--explain` names it where a later stage replaced the proof that used it.
+    pub pr_moved: Option<u64>,
 }
 
 /// The result of the rebase stage for one branch.
@@ -397,6 +400,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
                 basis: Basis::None,
                 strength: Strength::None,
             },
+            pr_moved: pr_other,
         };
         let mut unmatched: Option<Vec<ObjectId>> = None;
         if let Some(n) = pr_open {
@@ -982,10 +986,14 @@ pub fn similar_count(plans: &[RepoPlan]) -> usize {
 
 /// `render_human` with the explanation under each branch (`tidy plan --explain`).
 pub fn render_explained(plans: &[RepoPlan], all: bool) -> String {
-    render_human(plans, all)
+    render_with(plans, all, true)
 }
 
 pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
+    render_with(plans, all, false)
+}
+
+fn render_with(plans: &[RepoPlan], all: bool, explain: bool) -> String {
     let mut out = String::new();
     for p in plans {
         out += &format!(
@@ -1035,6 +1043,12 @@ pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
                 "  {:<7} {}  [{}] {}{}\n",
                 b.decision, b.branch, b.proof, b.detail, note
             );
+            if explain {
+                let base = p.base.as_deref().unwrap_or("");
+                for l in crate::tidy_explain::lines(b, base) {
+                    out += &format!("    {l}\n");
+                }
+            }
         }
         for s in &p.stale {
             any = true;
@@ -1098,6 +1112,7 @@ mod tests {
                 basis: Basis::None,
                 strength: Strength::None,
             },
+            pr_moved: None,
         }
     }
 
