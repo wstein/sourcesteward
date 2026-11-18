@@ -334,3 +334,37 @@ fn the_summary_counts_the_verdicts_and_lists_the_findings() {
         "wstein/y: 0 merged pull requests, 0 rebase, 0 equal-patches, 0 findings\n"
     );
 }
+
+// ---- against the real plan of a fixture ----
+
+mod with_the_plan {
+    use super::*;
+    use crate::tidy_rebase_plan::{cs, json_of, plan, resolved, world, MERGE_SECS};
+
+    /// A rebase merge with a conflict resolution in a fixture: the real plan JSON is judged against a truth built from
+    /// the same commits, so that the names of the JSON fields the view reads are the ones the plan writes.
+    #[test]
+    fn the_real_plan_of_a_rebase_merge_is_judged_a_rebase() {
+        let mut w = world();
+        let list = cs(0, 2);
+        let ids = w.branch("pr-7", &list);
+        let landed = w.land(&list.iter().map(resolved).collect::<Vec<_>>(), MERGE_SECS);
+        let p = plan(&w);
+        let json = json_of(&p);
+        let truth = PrTruth {
+            number: 7,
+            head_sha: ids[1].to_string(),
+            merge_commit_sha: landed[1].to_string(),
+            commits: ids.iter().map(|i| i.to_string()).collect(),
+            main_run: landed.iter().rev().map(|i| i.to_string()).collect(),
+        };
+        let view = branch_view(&json, "pr-7");
+        assert_eq!(judge(&truth, view.as_ref()), Verdict::Rebase, "{view:?}");
+        // the same plan against a truth with another run of commits is a finding
+        let other = PrTruth {
+            main_run: vec![ids[0].to_string()],
+            ..truth
+        };
+        assert!(matches!(judge(&other, view.as_ref()), Verdict::Miss(_)));
+    }
+}
