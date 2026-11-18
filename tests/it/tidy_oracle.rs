@@ -276,6 +276,19 @@ fn a_strong_rebase_onto_other_commits_is_a_finding() {
 }
 
 #[test]
+fn a_strong_rebase_that_maps_more_commits_than_github_wrote_is_a_finding() {
+    let p = plan_json(rebase_branch("strong", &["m1", "m2", "zz"]));
+    let v = branch_view(&p, "pr-49");
+    assert_eq!(
+        judge(&truth(), v.as_ref(), "main"),
+        Verdict::Miss(
+            "landed via rebase (strong), but the mapped commits are not the 2 that GitHub wrote (3 mapped)"
+                .into()
+        )
+    );
+}
+
+#[test]
 fn the_proof_equal_patches_is_accepted_and_anything_else_is_a_finding_with_the_cause() {
     let eq = plan_json(
         json!({"branch": "pr-49", "decision": "delete", "proof": "equal-patches",
@@ -433,6 +446,18 @@ fn the_driver_script_parses_and_refuses_bad_output_directories() {
         !fx.path.join("out").exists(),
         "a refused path is not created"
     );
+}
+
+#[test]
+fn the_driver_accepts_a_directory_that_the_git_tree_ignores() {
+    let fx = crate::common::Fx::new();
+    std::fs::write(fx.path.join(".gitignore"), "out/\n").unwrap();
+    let dir = fx.path.join("out");
+    let (code, err) = driver(dir.to_str().unwrap());
+    // past the guards: the script stops at the check for cargo and gh, nothing is created
+    assert_eq!(code, Some(2), "{err}");
+    assert!(err.contains("needs cargo"), "{err}");
+    assert!(!dir.exists());
 }
 
 // ---- against the real plan of a fixture ----
