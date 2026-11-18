@@ -703,6 +703,7 @@ fn the_text_names_the_proof_in_one_line_and_gives_no_command() {
     let eq = cs(3, 2);
     w.branch("equal", &eq);
     w.land(&eq, MERGE_SECS + 100);
+    w.branch("plain", &cs(8, 1));
     let merged = w.commits_on(Some(w.main), &cs(5, 1));
     w.fx.branch("merged", merged[0]);
     w.set_main(merged[0]);
@@ -712,6 +713,8 @@ fn the_text_names_the_proof_in_one_line_and_gives_no_command() {
         .find(|l| l.contains("[merged-ancestor]"))
         .unwrap();
     assert!(!merged_line.contains("landed via"), "{merged_line}");
+    let plain_line = text.lines().find(|l| l.contains(" plain ")).unwrap();
+    assert!(!plain_line.contains("landed via"), "{plain_line}");
     let line = text
         .lines()
         .find(|l| l.contains("[rebase-identity]"))
@@ -754,17 +757,24 @@ fn a_mix_of_equal_patches_rebase_identity_and_similar_patches() {
     let mut moved: Vec<C> = c3.iter().map(resolved).collect();
     moved[0].secs += 500;
     w.land(&moved, MERGE_SECS + 200);
+    // a second similar branch: the two counts of the summary line differ
+    let d3 = cs(5, 1);
+    w.branch("d-similar", &d3);
+    let mut moved: Vec<C> = d3.iter().map(resolved).collect();
+    moved[0].secs += 500;
+    w.land(&moved, MERGE_SECS + 300);
     let p = plan(&w);
     assert_eq!(proof_of(&p, "a-equal"), ("delete", "equal-patches"));
+    assert_eq!(proof_of(&p, "d-similar"), ("review", "similar-patches"));
     assert_eq!(proof_of(&p, "b-rebase"), ("review", "rebase-identity"));
     assert_eq!(proof_of(&p, "c-similar"), ("review", "similar-patches"));
     let v = json_of(&p);
-    assert_eq!(v["summary"]["review"], 2);
+    assert_eq!(v["summary"]["review"], 3);
     assert_eq!(v["summary"]["rebase"], 1);
-    assert_eq!(v["summary"]["similar"], 1);
+    assert_eq!(v["summary"]["similar"], 2);
     let text = stw::tidy::render_human(&[p], true);
     assert!(
-        text.contains("2 to review (1 of them rebase-identity, 1 similar-patches)"),
+        text.contains("3 to review (1 of them rebase-identity, 2 similar-patches)"),
         "{text}"
     );
 }
@@ -1383,4 +1393,106 @@ fn the_flag_no_rebase_evidence_switches_the_stage_off_and_is_independent_of_the_
     assert_eq!(branch_json(&neither, "feat")["proof"], "unmerged");
     let only = cli_json(&w, &["--no-similarity"]);
     assert_eq!(branch_json(&only, "feat")["proof"], "rebase-identity");
+}
+
+// ---- defaults, reasons from fetch_proof, apply, the client reaching the stage ----
+
+#[test]
+fn the_default_options_run_both_stages() {
+    let o = PlanOpts::default();
+    assert!(o.rebase);
+    assert!(o.similarity.is_some());
+}
+
+#[test]
+fn without_a_client_the_reason_says_offline_or_no_token() {
+    let w = world();
+    w.fx.set_origin_url("https://github.com/o/r.git");
+    w.branch("plain", &cs(0, 1));
+    let reason = |offline: bool| {
+        let p = stw::tidy::plan_repo(&rr(&w), None, offline, &opts());
+        assert!(p.error.is_none(), "{:?}", p.error);
+        api_of(&p, "plain").0
+    };
+    assert_eq!(reason(true), Some(ApiReason::Offline));
+    assert_eq!(reason(false), Some(ApiReason::NoToken));
+}
+
+#[test]
+fn apply_plans_without_the_rebase_stage() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let plan = stw_cli(
+        home.path(),
+        &[
+            "tidy",
+            "plan",
+            "--offline",
+            "--json",
+            "--no-similarity",
+            "--root",
+            &r,
+        ],
+    );
+    assert_eq!(plan.status.code(), Some(0));
+    let mut v: Value = serde_json::from_slice(&plan.stdout).unwrap();
+    assert_eq!(v["repos"][0]["branches"][0]["proof"], "rebase-identity");
+    // the plan file says `delete` for it
+    v["repos"][0]["branches"][0]["decision"] = "delete".into();
+    let file = home.path().join("plan.json");
+    std::fs::write(&file, v.to_string()).unwrap();
+    let md = path_str(&home.path().join("m"));
+    let o = stw_cli(
+        home.path(),
+        &[
+            "tidy",
+            "apply",
+            "--json",
+            "--offline",
+            "--root",
+            &r,
+            "--plan",
+            &path_str(&file),
+            "--manifest-dir",
+            &md,
+        ],
+    );
+    let out: Value = serde_json::from_slice(&o.stdout).unwrap();
+    let text = out.to_string();
+    assert!(
+        text.contains("the proof no longer holds: now keep [unmerged]"),
+        "{text}"
+    );
+    assert!(stw::repo::resolve(&w.fx.repo(), "refs/heads/feat").is_some());
+}
+
+#[test]
+fn the_client_of_fetch_proof_reaches_the_stage() {
+    let m = moved(|w, l| *w.land_resolved(l, MERGE_SECS).last().unwrap());
+    let main = m.w.main.to_string();
+    let commits = commits_body(&m.ids[..2], &m.list[..2]);
+    let list = format!(
+        r#"[{{"number":5,"state":"closed","title":"t","merged_at":"{}","merge_commit_sha":"{main}","head":{{"ref":"feat","sha":"{}"}}}}]"#,
+        iso(MERGE_SECS),
+        m.ids[1]
+    );
+    let routes = FakeRoutes::start(move |path, _| {
+        if path.ends_with("/commits") {
+            (200, vec![], commits.clone())
+        } else {
+            (200, vec![], list.clone())
+        }
+    });
+    let c = client(&routes);
+    let p = stw::tidy::plan_repo(&rr(&m.w), Some(&c), false, &no_sim());
+    assert!(p.error.is_none(), "{:?}", p.error);
+    assert_eq!(api_of(&p, "feat").0, None, "{:?}", routes.hits());
+    assert_eq!(
+        via(&p, "feat"),
+        (LandedKind::Rebase, Basis::PrApi, Strength::Hint)
+    );
 }

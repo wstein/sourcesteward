@@ -4283,6 +4283,55 @@ m TR40 'the window rule subtracts without a guard' src/tidy_similarity.rs \
   'candidate_time >= commit_time.saturating_sub(window_secs)' 'candidate_time >= commit_time - window_secs' \
   tidy_rebase_plan author_times_at_the_edge_of_the_range_do_not_crash_the_plan
 
+m TR41 'a merge by the pull request is strong although the branch moved on' src/tidy_rebase.rs \
+  'rep.strength = whole_or_hint;
+        return Ok(rep);' 'rep.strength = Strength::Strong;
+        return Ok(rep);' \
+  tidy_rebase_plan a_pull_request_with_a_merge_commit_gives_merge_by_two_parents
+m TR42 'a squash by the pull request is strong although the branch moved on' src/tidy_rebase.rs \
+  'rep.kind = LandedKind::Squash;
+        rep.strength = whole_or_hint;' 'rep.kind = LandedKind::Squash;
+        rep.strength = Strength::Strong;' \
+  tidy_rebase_plan a_pull_request_with_a_squash_commit_gives_squash_by_the_merge_time
+m TR43 'the branch always counts as the whole pull request' src/tidy_rebase.rs \
+  'let whole = crate::repo::is_ancestor(repo, tip, pr.head)?;' 'let whole = true;' \
+  tidy_rebase a_merge_or_squash_is_strong_only_when_the_branch_has_nothing_after_the_pull_request_head
+m TR44 'the request limit is reported as a rate limit' src/tidy.rs \
+  'return NotRead(ApiReason::RequestLimit);' 'return NotRead(ApiReason::RateLimited);' \
+  tidy_rebase_plan at_most_thirty_requests_are_made_per_repository
+m TR45 'the reason evaluate-failed has another name' src/tidy_rebase.rs \
+  'ApiReason::EvaluateFailed => "evaluate-failed",' 'ApiReason::EvaluateFailed => "request-failed",' \
+  tidy_rebase the_reasons_of_a_failed_or_skipped_mapping_have_names
+m TR46 'the reason request-limit has another name' src/tidy_rebase.rs \
+  'ApiReason::RequestLimit => "request-limit",' 'ApiReason::RequestLimit => "rate-limited",' \
+  tidy_rebase the_reasons_of_a_failed_or_skipped_mapping_have_names
+m TR47 'offline is reported as no-token' src/tidy.rs \
+  '    } else if offline {
+        ApiReason::Offline' '    } else if offline {
+        ApiReason::NoToken' \
+  tidy_rebase_plan without_a_client_the_reason_says_offline_or_no_token
+m TR48 'apply plans with the rebase stage' src/cli.rs \
+  '        similarity: None,
+        rebase: false,' '        similarity: None,
+        rebase: true,' \
+  tidy_rebase_plan apply_plans_without_the_rebase_stage
+m TR49 'the default options switch the rebase stage off' src/tidy.rs \
+  '            similarity: Some(Similarity::default()),
+            rebase: true,' '            similarity: Some(Similarity::default()),
+            rebase: false,' \
+  tidy_rebase_plan the_default_options_run_both_stages
+m TR50 'the text names landed via unknown too' src/tidy.rs \
+  'if l.kind != LandedKind::Unknown
+' 'if true
+' \
+  tidy_rebase_plan the_text_names_the_proof_in_one_line_and_gives_no_command
+m TR51 'the two counts of the summary line are swapped' src/tidy.rs \
+  '(r, s) => format!(" ({r} of them rebase-identity, {s} similar-patches)"),' '(r, s) => format!(" ({s} of them rebase-identity, {r} similar-patches)"),' \
+  tidy_rebase_plan a_mix_of_equal_patches_rebase_identity_and_similar_patches
+m TR52 'fetch_proof does not hand the client to the stage' src/tidy.rs \
+  'api: PrApi::Client(c),' 'api: PrApi::Off(ApiReason::NoToken),' \
+  tidy_rebase_plan the_client_of_fetch_proof_reaches_the_stage
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
