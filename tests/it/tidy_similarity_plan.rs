@@ -1,6 +1,8 @@
 //! The similarity stage of `stw tidy plan` (evidence class `similar-patches`, decision `review`, never `delete`).
 use crate::common::*;
 use gix::ObjectId;
+use serde_json::Value;
+use std::process::{Command, Output};
 use stw::github::AnyPr;
 use stw::repo::RepoRef;
 use stw::tidy::{
@@ -447,4 +449,207 @@ fn apply_never_deletes_a_similar_patches_branch() {
     );
     // `eq` has an equal patch and is deleted
     assert!(stw::repo::resolve(&w.fx.repo(), "refs/heads/eq").is_none());
+}
+
+fn stw(home: &std::path::Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", home)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+fn plan_json(w: &W, extra: &[&str]) -> Value {
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let mut args = vec!["tidy", "plan", "--offline", "--json", "--root", r.as_str()];
+    args.extend_from_slice(extra);
+    let o = stw(home.path(), &args);
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    serde_json::from_slice(&o.stdout).unwrap()
+}
+
+fn branch_json<'a>(v: &'a Value, name: &str) -> &'a Value {
+    v["repos"][0]["branches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["branch"] == name)
+        .unwrap_or_else(|| panic!("no branch {name}"))
+}
+
+fn key_list(v: &Value) -> Vec<String> {
+    let mut k: Vec<String> = v
+        .as_object()
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default();
+    k.sort();
+    k
+}
+
+fn sorted(names: &[&str]) -> Vec<String> {
+    let mut v: Vec<String> = names.iter().map(|s| s.to_string()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn the_json_of_a_similar_branch_has_the_stable_keys_and_the_figures() {
+    let w = scenarios();
+    let v = plan_json(&w, &[]);
+    assert_eq!(v["schema_version"], 2);
+    let b = branch_json(&v, "sim");
+    assert_eq!(
+        (&b["decision"], &b["proof"]),
+        (&"review".into(), &"similar-patches".into())
+    );
+    let s = &b["similarity"];
+    assert_eq!(
+        key_list(s),
+        sorted(&[
+            "class",
+            "threshold",
+            "threshold_low",
+            "window_days",
+            "plus_commits",
+            "at_or_above",
+            "min",
+            "median",
+            "without_candidate",
+            "skipped",
+            "bounds",
+            "commits"
+        ])
+    );
+    assert_eq!(s["class"], "landed");
+    assert_eq!(
+        (&s["threshold"], &s["threshold_low"], &s["window_days"]),
+        (&95.into(), &70.into(), &7.into())
+    );
+    assert_eq!(
+        (
+            &s["plus_commits"],
+            &s["at_or_above"],
+            &s["without_candidate"]
+        ),
+        (&2.into(), &2.into(), &0.into())
+    );
+    assert_eq!((&s["min"], &s["median"]), (&97.5.into(), &97.5.into()));
+    assert_eq!(
+        key_list(&s["skipped"]),
+        sorted(&["merges", "empty", "too_large", "shallow"])
+    );
+    assert_eq!(
+        key_list(&s["bounds"]),
+        sorted(&["candidates_cut", "main_commits_indexed"])
+    );
+    let c = &s["commits"][0];
+    assert_eq!(
+        key_list(c),
+        sorted(&[
+            "commit",
+            "subject",
+            "outcome",
+            "skipped",
+            "candidate",
+            "candidate_subject",
+            "reason",
+            "similarity",
+            "similarity_no_path",
+            "evidence"
+        ])
+    );
+    assert_eq!(c["outcome"], "compared");
+    assert_eq!(
+        (&c["similarity"], &c["similarity_no_path"]),
+        (&97.5.into(), &97.5.into())
+    );
+    assert_eq!(c["reason"], "subject");
+    assert_eq!(c["candidate_subject"], c["subject"]);
+    assert_eq!(c["candidate"].as_str().map(str::len), Some(40));
+    assert_eq!(
+        c["evidence"],
+        serde_json::json!([]),
+        "at or above the high threshold"
+    );
+    // where no proof applies the object is null
+    assert!(branch_json(&v, "eq")["similarity"].is_null());
+}
+
+#[test]
+fn the_json_of_a_modified_branch_has_evidence_lines() {
+    let w = scenarios();
+    let v = plan_json(&w, &[]);
+    let b = branch_json(&v, "mod");
+    assert_eq!(b["proof"], "unmerged");
+    let s = &b["similarity"];
+    assert_eq!(s["class"], "modified");
+    let ev = s["commits"][0]["evidence"].as_array().unwrap();
+    assert_eq!(
+        ev.len(),
+        5,
+        "at most five lines, four lines differ on each side"
+    );
+    assert_eq!(
+        key_list(&ev[0]),
+        sorted(&["path", "sign", "line", "count_a", "count_b"])
+    );
+    // the squash has a commit below the low threshold, the empty branch has no commit
+    assert_eq!(branch_json(&v, "squash")["similarity"]["class"], "partial");
+    assert_eq!(branch_json(&v, "empty")["similarity"]["class"], "none");
+    assert_eq!(branch_json(&v, "empty")["similarity"]["min"], Value::Null);
+    let pt = &branch_json(&v, "part")["similarity"]["commits"][0];
+    assert_eq!(pt["similarity"], 0.0);
+}
+
+#[test]
+fn the_summary_counts_similar_branches_as_review_and_names_them() {
+    let w = scenarios();
+    let v = plan_json(&w, &[]);
+    assert_eq!(
+        key_list(&v["summary"]),
+        sorted(&[
+            "delete",
+            "delete_with_worktree",
+            "review",
+            "keep",
+            "similar"
+        ])
+    );
+    assert_eq!(v["summary"]["review"], 1);
+    assert_eq!(v["summary"]["similar"], 1);
+    assert_eq!(v["summary"]["delete"], 1);
+}
+
+#[test]
+fn the_text_plan_has_one_line_for_a_similar_branch_and_no_command() {
+    let w = scenarios();
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let o = stw(home.path(), &["tidy", "plan", "--offline", "--root", &r]);
+    assert_eq!(o.status.code(), Some(0));
+    let out = String::from_utf8_lossy(&o.stdout).to_string();
+    let line = out
+        .lines()
+        .find(|l| l.contains("[similar-patches]"))
+        .unwrap_or_else(|| panic!("no line: {out}"));
+    assert!(line.trim_start().starts_with("review "), "{line}");
+    assert!(line.contains(" sim "), "{line}");
+    assert!(line.contains("min 97.5 %"), "{line}");
+    assert!(line.contains("not a deletion proof"), "{line}");
+    assert!(
+        !out.contains("stw tidy apply") && !out.contains("git branch"),
+        "{out}"
+    );
+    assert!(out.contains("1 to review"), "{out}");
+    assert!(out.contains("(1 of them similar-patches)"), "{out}");
 }
