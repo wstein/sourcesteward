@@ -751,7 +751,7 @@ of the owner), `ORACLE_RAWDIR` (same guards as the output directory), `ORACLE_LO
 (the same commits against every `diff.algorithm`, with and without the indent heuristic), the rebase oracle (every merged pull request as a branch: strong `landed_via` rebase onto the commits GitHub wrote, or `equal-patches`;
 a pull request into another branch is named `stacked`) and the cost of `stw tidy plan` (seconds, peak memory). The same tests run alone with `STW_ORACLE_HUNK_REPO`, `STW_ORACLE_REBASE_REPOS` and `STW_ORACLE_OUT` set:
 `cargo test --test it oracle_tidy -- --ignored --nocapture` (they skip with a message without the variable; a finding is a result, `STW_ORACLE_STRICT=1` makes it a failure). The comparisons are pure functions in
-`src/tidy_oracle.rs` with ordinary tests in `tests/it/tidy_oracle.rs`; mutations `OR1` to `OR33`. No new deviation from the Go behavior.
+`src/tidy_oracle.rs` with ordinary tests in `tests/it/tidy_oracle.rs`; mutations `OR1` to `OR35`. No new deviation from the Go behavior.
 
 ## tidy apply and tidy restore
 
@@ -1359,7 +1359,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1253 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1255 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 ```
@@ -1522,7 +1522,7 @@ on a single file), the ref is restored but files already written stay; `git stat
   The index stops by a run of 64 old author times, never by the committer time; the boundary commit of a shallow clone is skipped. The pull request (`evaluate_api`, on given inputs, no request) and
   `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB68`; the plan wiring (rebase stage, pull request reads, `landed_via`, flag): `TR1` to `TR52`.
 - `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX38`.
-- The oracle of `tidy plan`: `src/tidy_oracle.rs` (pure comparisons), `tests/it/tidy_oracle.rs`, the ignored tests `tests/it/oracle_tidy.rs`, the driver `tests/oracle/tidy_oracle.sh`; mutations `OR1` to `OR33`.
+- The oracle of `tidy plan`: `src/tidy_oracle.rs` (pure comparisons), `tests/it/tidy_oracle.rs`, the ignored tests `tests/it/oracle_tidy.rs`, the driver `tests/oracle/tidy_oracle.sh`; mutations `OR1` to `OR35`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.
