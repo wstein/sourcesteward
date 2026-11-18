@@ -1024,7 +1024,8 @@ fn a_pull_request_with_a_squash_commit_gives_squash_by_the_merge_time() {
     assert_eq!(proof_of(&p, "feat"), MOVED);
     assert_eq!(
         via(&p, "feat"),
-        (LandedKind::Squash, Basis::PrApi, Strength::Strong)
+        (LandedKind::Squash, Basis::PrApi, Strength::Hint),
+        "the branch has a commit after the pull request head"
     );
 }
 
@@ -1064,7 +1065,8 @@ fn a_pull_request_with_a_merge_commit_gives_merge_by_two_parents() {
     let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
     assert_eq!(
         via(&p, "feat"),
-        (LandedKind::Merge, Basis::PrApi, Strength::Strong)
+        (LandedKind::Merge, Basis::PrApi, Strength::Hint),
+        "the branch has a commit after the pull request head"
     );
     assert_eq!(
         get(&p, "feat").rebase.as_ref().unwrap().api.merge_parents,
@@ -1196,7 +1198,7 @@ fn at_most_thirty_requests_are_made_per_repository() {
         .filter(|b| {
             b.rebase
                 .as_ref()
-                .is_some_and(|r| r.api.not_read == Some(ApiReason::RateLimited))
+                .is_some_and(|r| r.api.not_read == Some(ApiReason::RequestLimit))
         })
         .map(|b| b.branch.as_str())
         .collect::<Vec<_>>();

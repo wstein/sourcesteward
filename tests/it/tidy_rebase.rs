@@ -577,6 +577,57 @@ fn the_reasons_of_a_failed_or_skipped_mapping_have_names() {
     assert_eq!(ApiReason::RequestFailed.as_str(), "request-failed");
     assert_eq!(ApiReason::TooManyCommits.as_str(), "too-many-commits");
     assert_eq!(ApiReason::NotNeeded.as_str(), "not-needed");
+    assert_eq!(ApiReason::RequestLimit.as_str(), "request-limit");
+    assert_eq!(ApiReason::EvaluateFailed.as_str(), "evaluate-failed");
+}
+
+#[test]
+fn a_merge_or_squash_is_strong_only_when_the_branch_has_nothing_after_the_pull_request_head() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let list = cs(3);
+    let br = branch(&fx, b, &list);
+    // the pull request holds the first two commits; the branch has a third
+    let pr_list = &list[..2];
+    let pr_ids = &br[..2];
+    let f = foreign(&fx, b, 1);
+    let s = Stamp::new("M", "m@example.com", MERGE_SECS);
+    let m = fx.commit_at_parents(
+        vec![f, br[1]],
+        Some(br[1]),
+        &[],
+        "Merge pull request #7",
+        s,
+        s,
+    );
+    let rep = api(&fx, m, br[2], pr(pr_list, pr_ids, m));
+    assert_eq!(rep.kind, LandedKind::Merge);
+    assert_eq!(
+        rep.strength,
+        Strength::Hint,
+        "a commit after the pull request head"
+    );
+    let rep = api(&fx, m, br[1], pr(pr_list, pr_ids, m));
+    assert_eq!(
+        rep.strength,
+        Strength::Strong,
+        "the branch tip is the pull request head"
+    );
+    // a squash
+    let author = Stamp::new("GitHub", "noreply@github.com", MERGE_SECS + 6);
+    let committer = Stamp::new("Merger", "merger@example.com", MERGE_SECS + 5);
+    let sq = fx.commit_at(
+        Some(b),
+        &[("all.txt", Some("all\n"))],
+        "step 1 (#7)",
+        author,
+        committer,
+    );
+    let rep = api(&fx, sq, br[2], pr(pr_list, pr_ids, sq));
+    assert_eq!(rep.kind, LandedKind::Squash);
+    assert_eq!(rep.strength, Strength::Hint);
+    let rep = api(&fx, sq, br[1], pr(pr_list, pr_ids, sq));
+    assert_eq!(rep.strength, Strength::Strong);
 }
 
 // ---- (a) identity ----

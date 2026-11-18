@@ -860,6 +860,10 @@ pub enum ApiReason {
     TooManyCommits,
     /// The branch has a proof that does not need the pull request (equal patches, merged head).
     NotNeeded,
+    /// The plan has made its requests for this repository (not a rate limit of GitHub).
+    RequestLimit,
+    /// The local check of the pull request mapping failed.
+    EvaluateFailed,
 }
 
 impl ApiReason {
@@ -875,6 +879,8 @@ impl ApiReason {
             ApiReason::RequestFailed => "request-failed",
             ApiReason::TooManyCommits => "too-many-commits",
             ApiReason::NotNeeded => "not-needed",
+            ApiReason::RequestLimit => "",
+            ApiReason::EvaluateFailed => "",
         }
     }
 }
