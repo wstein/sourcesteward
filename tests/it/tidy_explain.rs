@@ -815,3 +815,59 @@ fn the_explained_text_is_the_same_each_time_and_for_a_shallow_clone() {
     assert_eq!(code, Some(0), "{err}");
     assert!(text.contains("    why: "), "{text}");
 }
+
+// ---- the numbers of the sentence, the order of the commit lines, the masked upstream ----
+
+#[test]
+fn the_sentence_counts_the_commits_without_a_patch_partner_of_all_that_are_not_on_the_base() {
+    let mut w = world();
+    let list = cs(0, 4);
+    w.branch("feat", &list);
+    w.land(&list[..2], MERGE_SECS);
+    let p = plan_with(&w, None, &no_rebase());
+    assert_eq!(
+        first(&explained(&p), "feat"),
+        "why: keep: 2 of 4 commit(s) have no patch partner on origin/main"
+    );
+}
+
+#[test]
+fn the_commit_lines_follow_the_order_of_the_report() {
+    let w = world();
+    w.branch("many", &cs(0, 6));
+    let p = plan_with(&w, None, &no_rebase());
+    let want: Vec<String> = sim(&p, "many")
+        .similarity
+        .as_ref()
+        .unwrap()
+        .report
+        .commits
+        .iter()
+        .map(|c| sha7(c.commit))
+        .collect();
+    let got: Vec<String> = under(&explained(&p), "many")
+        .iter()
+        .filter(|l| l.starts_with("  ") && l.contains("no candidate"))
+        .map(|l| l.trim_start().chars().take(7).collect())
+        .collect();
+    assert_eq!(got, want);
+    assert_eq!(got.len(), 6);
+}
+
+#[test]
+fn the_name_of_a_gone_upstream_is_escaped() {
+    let w = world();
+    let name = "feat\u{202e}x";
+    w.branch(name, &cs(0, 1));
+    w.fx.track(name);
+    let t = explained(&plan_with(&w, None, &no_rebase()));
+    let line = t
+        .lines()
+        .find(|l| l.starts_with("    why: review: upstream"))
+        .unwrap_or("");
+    assert!(
+        line.contains("origin/feat\\u{202e}x is gone"),
+        "{line:?} in {t}"
+    );
+    assert!(!line.contains('\u{202e}'), "{line:?}");
+}
