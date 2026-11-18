@@ -410,3 +410,34 @@ fn rebase_oracle_against_github() {
         assert_eq!(findings, 0, "findings:\n{report}");
     }
 }
+
+// ---- the comparison itself, on a throw-away repository (no network, no clone) ----
+
+/// A file that `.gitattributes` marks `-diff` is a text diff for gix and "Binary files differ" for git unless git is
+/// told `--text`; a commit with a path that git quotes is unreadable for the parser once, not once per setting.
+#[test]
+fn the_comparison_reads_text_in_files_marked_binary_and_counts_unreadable_per_commit() {
+    use crate::common::{Fx, Stamp};
+    let fx = Fx::new();
+    std::fs::write(fx.path.join(".gitattributes"), "bin.txt -diff\n").unwrap();
+    let s = Stamp::new("A", "a@example.com", 1_700_000_000);
+    let c0 = fx.commit_at(
+        None,
+        &[("bin.txt", Some("one\n")), ("a\tb.txt", Some("x\n"))],
+        "c0",
+        s,
+        s,
+    );
+    let c1 = fx.commit_at(Some(c0), &[("bin.txt", Some("two\n"))], "c1", s, s);
+    let c2 = fx.commit_at(Some(c1), &[("a\tb.txt", Some("y\n"))], "c2", s, s);
+    let commits = vec![
+        (c1.to_string(), c0.to_string()),
+        (c2.to_string(), c1.to_string()),
+    ];
+    let run = compare(&fx.path, &commits, &SETTINGS[1..3]);
+    assert_eq!(run.unreadable, 1, "one commit, two settings");
+    for name in ["git-myers+indent", "git-myers-noindent"] {
+        let t = run.matrix.get(name).expect("a row");
+        assert_eq!((t.total, t.differing), (1, 0), "{name}");
+    }
+}
