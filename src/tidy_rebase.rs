@@ -22,7 +22,7 @@ use gix::bstr::ByteSlice;
 use gix::ObjectId;
 
 use crate::error::Result;
-use crate::patch_id::{changed_files, commit_patch_key};
+use crate::patch_id::{changed_files, commit_patch_key, PatchKey};
 use crate::tidy_similarity::{mask_bytes, Limits, Sim, SimCache, Skip, LOW_PCT};
 
 /// A chain commit counts as old when its author time is older than the oldest author time of the branches by more
@@ -313,6 +313,18 @@ pub fn patch_hits(
         }
     }
     Ok(hits)
+}
+
+/// `patch_hits` with the patch keys taken from `key` (the plan passes its `PatchCache`, which already holds the keys of
+/// the commits the equal-patches walk read).
+pub fn patch_hits_with(
+    repo: &gix::Repository,
+    index: &RebaseIndex,
+    commits: &[ObjectId],
+    key: &mut dyn FnMut(ObjectId) -> Result<Option<PatchKey>>,
+) -> Result<HashMap<ObjectId, ObjectId>> {
+    let _ = (repo, index, commits, key);
+    Ok(HashMap::new())
 }
 
 /// How a branch commit was found on main.
@@ -846,6 +858,12 @@ pub enum ApiReason {
     MergeCommitNotInClone,
     /// The merge commit is not on the first-parent chain of the base within the window.
     NotOnBase,
+    /// The request for the pull request commits failed (not a rate limit).
+    RequestFailed,
+    /// The pull request has a full page of commits or more: the list is not read.
+    TooManyCommits,
+    /// The branch has a proof that does not need the pull request (equal patches, merged head).
+    NotNeeded,
 }
 
 impl ApiReason {
@@ -858,6 +876,9 @@ impl ApiReason {
             ApiReason::NotMerged => "not-merged",
             ApiReason::MergeCommitNotInClone => "merge-commit-not-in-clone",
             ApiReason::NotOnBase => "not-on-base",
+            ApiReason::RequestFailed => "",
+            ApiReason::TooManyCommits => "",
+            ApiReason::NotNeeded => "",
         }
     }
 }

@@ -1,6 +1,7 @@
 //! Rebase-merge proof (package 1b): identity, run, mapping, pull request. Rebase merges are rebuilt with gix:
 //! the same author, author time and subject on a new parent with a new committer and committer time.
 use gix::ObjectId;
+use stw::patch_id::commit_patch_key;
 use stw::tidy_rebase::*;
 
 use crate::common::{Fx, Stamp};
@@ -525,6 +526,55 @@ fn a_commit_without_an_equal_patch_has_no_hit() {
     let idx = RebaseIndex::build(&repo, last(&main), None, RB_MAX_WINDOW).unwrap();
     assert!(patch_hits(&repo, &idx, &br).unwrap().is_empty());
     assert!(patch_hits(&repo, &idx, &[]).unwrap().is_empty());
+}
+
+#[test]
+fn patch_hits_with_takes_the_keys_from_the_lookup_it_is_given() {
+    let fx = Fx::new();
+    let b = base(&fx);
+    let br = branch(&fx, b, &[c(0), c(1)]);
+    let mut changed = c(0);
+    changed.body = lines("other", 20);
+    let main = land(&fx, b, &[changed, c(1)], MERGE_SECS);
+    let repo = fx.repo();
+    let idx = RebaseIndex::build(&repo, last(&main), None, RB_MAX_WINDOW).unwrap();
+    // the real keys: only the second commit has an equal patch
+    let real = patch_hits(&repo, &idx, &br).unwrap();
+    let mut calls = 0;
+    let hits = patch_hits_with(&repo, &idx, &br, &mut |id| {
+        calls += 1;
+        commit_patch_key(&repo, id)
+    })
+    .unwrap();
+    assert_eq!(hits, real);
+    assert_eq!(hits.len(), 1);
+    assert!(
+        calls >= 4,
+        "the lookup is asked for the branch and the chain: {calls}"
+    );
+    // a lookup that says nothing finds nothing
+    assert!(patch_hits_with(&repo, &idx, &br, &mut |_| Ok(None))
+        .unwrap()
+        .is_empty());
+    // a lookup that makes two different commits equal finds them
+    let fake = (
+        ObjectId::empty_tree(gix::hash::Kind::Sha1),
+        ObjectId::null(gix::hash::Kind::Sha1),
+    );
+    let (x, y) = (br[0], main[0]);
+    let hits = patch_hits_with(&repo, &idx, &br, &mut |id| {
+        Ok((id == x || id == y).then_some(fake))
+    })
+    .unwrap();
+    assert_eq!(hits.get(&br[0]), Some(&main[0]));
+    assert_eq!(hits.len(), 1);
+}
+
+#[test]
+fn the_reasons_of_a_failed_or_skipped_mapping_have_names() {
+    assert_eq!(ApiReason::RequestFailed.as_str(), "request-failed");
+    assert_eq!(ApiReason::TooManyCommits.as_str(), "too-many-commits");
+    assert_eq!(ApiReason::NotNeeded.as_str(), "not-needed");
 }
 
 // ---- (a) identity ----
