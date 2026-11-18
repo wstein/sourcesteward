@@ -4146,9 +4146,7 @@ m TP31 'the minimum shown ignores the thresholds' src/tidy.rs \
   tidy_similarity_plan a_cherry_pick_with_a_conflict_resolution_is_similar_patches_and_review
 
 m TR1 'the similarity stage also judges a branch with the proof rebase-identity' src/tidy.rs \
-  'for row in rows.iter_mut().filter(|r| judged(r.bp.proof)) {
-            let solved = solved_by_rebase(row.bp.rebase.as_ref());' 'for row in rows.iter_mut().filter(|r| judged(r.bp.proof) || r.bp.proof == tidy_rebase::RB_CLASS) {
-            let solved = std::collections::HashSet::<ObjectId>::new();' \
+  'for row in rows.iter_mut().filter(|r| judged(r.bp.proof)) {' 'for row in rows.iter_mut().filter(|r| judged(r.bp.proof) || r.bp.proof == tidy_rebase::RB_CLASS) {' \
   tidy_rebase_plan rebase_identity_comes_before_similar_patches
 m TR2 'rebase-identity replaces an equal-patches proof' src/tidy.rs \
   'if judged(row.bp.proof) && tidy_rebase::evidence_class(&report).is_some() {' 'if (judged(row.bp.proof) || row.bp.proof == "equal-patches") && tidy_rebase::evidence_class(&report).is_some() {' \
