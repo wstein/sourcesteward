@@ -39,7 +39,7 @@ fn each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided() {
     );
     assert_eq!(
         w("rebased"),
-        "why: delete: all 1 commit(s) of the branch have an equal patch on origin/main"
+        "why: delete: all commits of the branch that have a patch have an equal patch on origin/main (1 commit(s) not in it)"
     );
     assert_eq!(
         w("pr-merged"),
@@ -60,7 +60,7 @@ fn each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided() {
     );
     assert_eq!(
         w("unmerged"),
-        "why: keep: 1 of 1 commit(s) have no patch partner on origin/main"
+        "why: keep: 1 of the 1 commit(s) not in origin/main have a patch without a partner there"
     );
     assert_eq!(
         w("wt-live"),
@@ -484,7 +484,7 @@ fn a_delete_gets_the_sentence_and_how_it_landed_and_nothing_else() {
     assert_eq!(
         under(&explained(&p), "equal"),
         [
-            "why: delete: all 2 commit(s) of the branch have an equal patch on origin/main",
+            "why: delete: all commits of the branch that have a patch have an equal patch on origin/main (2 commit(s) not in it)",
             "landed via: rebase (commit-map, strong)"
         ]
     );
@@ -827,7 +827,7 @@ fn the_sentence_counts_the_commits_without_a_patch_partner_of_all_that_are_not_o
     let p = plan_with(&w, None, &no_rebase());
     assert_eq!(
         first(&explained(&p), "feat"),
-        "why: keep: 2 of 4 commit(s) have no patch partner on origin/main"
+        "why: keep: 2 of the 4 commit(s) not in origin/main have a patch without a partner there"
     );
 }
 
@@ -960,4 +960,49 @@ fn a_merge_or_squash_that_the_branch_moved_on_from_names_that_and_no_wrong_numbe
             "{kind}: {u:#?}"
         );
     }
+}
+
+// ---- numbers the data proves: empty commits and merge commits ----
+
+#[test]
+fn an_empty_commit_is_not_counted_as_a_commit_without_a_partner() {
+    let w = world();
+    w.branch("other", &cs(0, 1));
+    let s = Stamp::new(NAME, MAIL, T0 + 700);
+    let e = w.fx.commit_at(Some(w.c0), &[], "empty", s, s);
+    w.fx.branch("emp", e);
+    let p = plan_with(&w, None, &no_rebase());
+    assert_eq!(
+        first(&explained(&p), "emp"),
+        "why: keep: 0 of the 1 commit(s) not in origin/main have a patch without a partner there"
+    );
+}
+
+#[test]
+fn a_merge_commit_in_a_branch_with_equal_patches_is_not_called_a_patch() {
+    let mut w = world();
+    let x = w.commits_on(None, &[c(0)])[0];
+    let y = w.commits_on(None, &[c(1)])[0];
+    let s = Stamp::new(NAME, MAIL, T0 + 800);
+    let m = w.fx.commit_at_parents(
+        vec![x, y],
+        Some(y),
+        &[("f0.txt", Some(c(0).body.as_str()))],
+        "merge",
+        s,
+        s,
+    );
+    w.fx.branch("merged", m);
+    w.land(&[c(0), c(1)], MERGE_SECS);
+    let p = plan_with(&w, None, &no_rebase());
+    assert_eq!(proof_of_br(&p, "merged"), ("delete", "equal-patches"));
+    assert_eq!(
+        first(&explained(&p), "merged"),
+        "why: delete: all commits of the branch that have a patch have an equal patch on origin/main (3 commit(s) not in it)"
+    );
+}
+
+fn proof_of_br(p: &RepoPlan, br: &str) -> (&'static str, &'static str) {
+    let b = get(p, br);
+    (b.decision, b.proof)
 }
