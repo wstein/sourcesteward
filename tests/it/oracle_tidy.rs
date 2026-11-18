@@ -445,3 +445,32 @@ fn the_comparison_reads_text_in_files_marked_binary_and_counts_unreadable_per_co
         assert_eq!((t.total, t.differing), (1, 0), "{name}");
     }
 }
+
+/// With `--text` git prints the lines of a file with a NUL byte; gix has one marker entry for it. The path of such a file
+/// is left out on the side of git, so that a commit that changes a binary file still compares equal.
+#[test]
+fn a_file_with_a_nul_byte_is_left_out_on_both_sides() {
+    use crate::common::{Fx, Stamp};
+    let fx = Fx::new();
+    let s = Stamp::new("A", "a@example.com", 1_700_000_000);
+    let c0 = fx.commit_at(
+        None,
+        &[("nul.dat", Some("a\0b\n")), ("t.txt", Some("x\n"))],
+        "c0",
+        s,
+        s,
+    );
+    let c1 = fx.commit_at(
+        Some(c0),
+        &[("nul.dat", Some("c\0d\n")), ("t.txt", Some("y\n"))],
+        "c1",
+        s,
+        s,
+    );
+    let commits = vec![(c1.to_string(), c0.to_string())];
+    let run = compare(&fx.path, &commits, &SETTINGS[1..3]);
+    for name in ["git-myers+indent", "git-myers-noindent"] {
+        let t = run.matrix.get(name).expect("a row");
+        assert_eq!((t.total, t.differing), (1, 0), "{name}");
+    }
+}
