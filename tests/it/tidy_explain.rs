@@ -333,3 +333,340 @@ fn text_from_commits_is_masked_and_an_evidence_line_has_at_most_120_characters()
         );
     }
 }
+
+// ---- the rebase section: landed via, the mapping, what remains, the pull request ----
+
+use crate::common::FakeRoutes;
+use crate::tidy_rebase_plan::{client, commits_body, get, moved, no_sim, plan_api, report};
+use stw::tidy::PrApi;
+use stw::tidy_rebase::{ApiReason, MapEntry};
+
+/// Line `i` of an explanation, empty where there is none (a failed assertion, not an index panic).
+fn at(u: &[String], i: usize) -> &str {
+    u.get(i).map(String::as_str).unwrap_or("")
+}
+
+fn map_line(m: &MapEntry, note: &str) -> String {
+    let value = m
+        .value
+        .map(|v| format!(" {} %", stw::tidy_similarity::fmt_permille(v)))
+        .unwrap_or_default();
+    format!(
+        "  {} -> {} {}{value}{note}",
+        sha7(m.commit),
+        sha7(m.main.unwrap()),
+        m.method.as_str()
+    )
+}
+
+#[test]
+fn a_strong_mapping_lists_each_commit_with_its_commit_on_the_base() {
+    let w = landed_world();
+    let p = plan_with(&w, None, &opts());
+    let r = report(&p, "feat");
+    let u = under(&explained(&p), "feat");
+    assert_eq!(at(&u, 1), "landed via: rebase (commit-map, strong)");
+    assert_eq!(
+        at(&u, 2),
+        "mapping: strength strong, 3 of 3 commit(s) mapped (patch-id 0, identity 3, similarity 0), contiguous (gap 0), in order"
+    );
+    let want: Vec<String> = r.mapping.iter().map(|m| map_line(m, "")).collect();
+    assert_eq!(want.len(), 3);
+    assert_eq!(u.get(3..6).unwrap_or_default(), &want[..]);
+    assert_eq!(
+        at(&u, 6),
+        format!(
+            "pull request: PR mapping not read ({})",
+            get(&p, "feat")
+                .rebase
+                .as_ref()
+                .unwrap()
+                .api
+                .not_read
+                .unwrap()
+                .as_str()
+        )
+    );
+    assert_eq!(u.len(), 7, "{u:#?}");
+}
+
+#[test]
+fn a_part_that_landed_names_the_commits_that_remain_with_their_files() {
+    let mut w = world();
+    let list = cs(0, 3);
+    w.branch("feat", &list);
+    w.land_resolved(&list[..2], MERGE_SECS);
+    let mut o = opts();
+    o.similarity = None;
+    let p = plan_with(&w, None, &o);
+    let r = report(&p, "feat");
+    let u = under(&explained(&p), "feat");
+    assert_eq!(
+        at(&u, 0),
+        "why: keep: 3 commit(s) not in origin/main, no proof of landing found"
+    );
+    assert_eq!(
+        at(&u, 1),
+        "mapping: strength hint, 2 of 3 commit(s) mapped (patch-id 0, identity 2, similarity 0), contiguous (gap 0), in order"
+    );
+    assert_eq!(at(&u, 2), map_line(&r.mapping[0], ""));
+    assert_eq!(at(&u, 3), map_line(&r.mapping[1], ""));
+    assert_eq!(
+        at(&u, 4),
+        "remaining: 1 commit(s) without a commit on origin/main"
+    );
+    assert_eq!(
+        at(&u, 5),
+        format!(
+            "  {} 'step 2' (1 file(s): f2.txt)",
+            sha7(r.remaining[0].commit)
+        )
+    );
+    assert!(
+        at(&u, 6).starts_with("pull request: PR mapping not read ("),
+        "{u:#?}"
+    );
+    assert_eq!(u.len(), 7);
+}
+
+#[test]
+fn a_modified_mapping_and_a_later_version_are_hints_and_say_so() {
+    let mut w = world();
+    w.branch("mod", &[c(0)]);
+    w.land(&[with_odd(&c(0), &[3, 5, 7, 9])], MERGE_SECS);
+    // a branch commit committed after its commit on the base
+    let mut d = c(1);
+    d.secs = T0 + 200;
+    let a = Stamp::new(NAME, MAIL, d.secs);
+    let later = Stamp::new(NAME, MAIL, MERGE_SECS + 5_000);
+    let id = w.fx.commit_at(
+        Some(w.c0),
+        &[(d.file.as_str(), Some(d.body.as_str()))],
+        &d.subject,
+        a,
+        later,
+    );
+    w.fx.branch("late", id);
+    w.land_resolved(&[d], MERGE_SECS + 100);
+    let p = plan_with(&w, None, &opts());
+    let t = explained(&p);
+    let u = under(&t, "mod");
+    let m = &report(&p, "mod").mapping[0];
+    assert!(u.contains(&map_line(m, "")), "{u:#?}");
+    assert!(
+        u.contains(
+            &"modified: a commit is 70 to 94 % like its commit on origin/main (hint only)"
+                .to_string()
+        ),
+        "{u:#?}"
+    );
+    let u = under(&t, "late");
+    let m = &report(&p, "late").mapping[0];
+    assert!(m.later);
+    assert!(
+        u.contains(&map_line(m, " (later version, hint only)")),
+        "{u:#?}"
+    );
+    assert!(
+        !under(&t, "mod").iter().any(|l| l.contains("later version")),
+        "{t}"
+    );
+}
+
+#[test]
+fn a_delete_gets_the_sentence_and_how_it_landed_and_nothing_else() {
+    let mut w = world();
+    let eq = cs(3, 2);
+    w.branch("equal", &eq);
+    w.land(&eq, MERGE_SECS);
+    let p = plan_with(&w, None, &opts());
+    assert_eq!(proof_of_eq(&p), ("delete", "equal-patches"));
+    assert_eq!(
+        under(&explained(&p), "equal"),
+        [
+            "why: delete: all 2 commit(s) of the branch have an equal patch on origin/main",
+            "landed via: rebase (commit-map, strong)"
+        ]
+    );
+}
+
+fn proof_of_eq(p: &RepoPlan) -> (&'static str, &'static str) {
+    let b = get(p, "equal");
+    (b.decision, b.proof)
+}
+
+#[test]
+fn every_reason_of_the_pull_request_mapping_is_named_in_one_line() {
+    let w = landed_world();
+    let p = plan_with(&w, None, &opts());
+    let all = [
+        ApiReason::Offline,
+        ApiReason::NoToken,
+        ApiReason::NoPullRequest,
+        ApiReason::RateLimited,
+        ApiReason::NotMerged,
+        ApiReason::MergeCommitNotInClone,
+        ApiReason::NotOnBase,
+        ApiReason::RequestFailed,
+        ApiReason::TooManyCommits,
+        ApiReason::NotNeeded,
+        ApiReason::RequestLimit,
+        ApiReason::EvaluateFailed,
+    ];
+    let names = [
+        "offline",
+        "no-token",
+        "no-pull-request",
+        "rate-limited",
+        "not-merged",
+        "merge-commit-not-in-clone",
+        "not-on-base",
+        "request-failed",
+        "too-many-commits",
+        "not-needed",
+        "request-limit",
+        "evaluate-failed",
+    ];
+    for (reason, name) in all.into_iter().zip(names) {
+        let mut q = p.clone();
+        for b in &mut q.branches {
+            b.rebase.as_mut().unwrap().api.not_read = Some(reason);
+        }
+        let u = under(&explained(&q), "feat");
+        assert_eq!(
+            u.last().unwrap(),
+            &format!("pull request: PR mapping not read ({name})")
+        );
+    }
+}
+
+#[test]
+fn a_pull_request_that_was_read_says_what_it_found_and_why_it_is_a_hint() {
+    let m = moved(|w, l| *w.land_resolved(l, MERGE_SECS).last().unwrap());
+    let main = m.w.main.to_string();
+    let body = commits_body(&m.ids[..2], &m.list[..2]);
+    let routes = FakeRoutes::start(move |_, _| (200, vec![], body.clone()));
+    let c = client(&routes);
+    let prs = vec![merged_pr("feat", 5, m.ids[1].to_string(), main, MERGE_SECS)];
+    let p = plan_api(&m.w, prs, PrApi::Client(&c), &no_sim());
+    let a = &get(&p, "feat").rebase.as_ref().unwrap().api;
+    let u = under(&explained(&p), "feat");
+    assert_eq!(
+        at(&u, 0),
+        "why: review: pull request #5 merged, the branch has 3 commit(s) not in origin/main"
+    );
+    assert!(
+        u.contains(&"landed via: rebase (pr-api, hint)".to_string()),
+        "{u:#?}"
+    );
+    let k = u
+        .iter()
+        .position(|l| l.starts_with("pull request: #5"))
+        .unwrap_or(1000);
+    assert_eq!(
+        at(&u, k),
+        "pull request: #5 rebase (hint), 2 commit(s), the head is in the branch, 1 commit(s) of the branch come after it"
+    );
+    assert_eq!(
+        at(&u, k + 1),
+        "  hint only: commits of the branch come after the pull request head; the pull request mapping gives no proof of its own"
+    );
+    assert_eq!(at(&u, k + 2), "pull request mapping:");
+    let want: Vec<String> = a.mapping.iter().map(|m| map_line(m, "")).collect();
+    assert_eq!(want.len(), 2);
+    assert_eq!(u.get(k + 3..k + 5).unwrap_or_default(), &want[..]);
+    assert_eq!(
+        at(&u, k + 5),
+        "remaining after the pull request head: 1 commit(s)"
+    );
+    assert_eq!(
+        at(&u, k + 6),
+        format!(
+            "  {} 'step 2' (1 file(s): f2.txt)",
+            sha7(a.remaining[0].commit)
+        )
+    );
+}
+
+#[test]
+fn the_mapping_is_cut_at_twenty_lines() {
+    let mut w = world();
+    let list = cs(0, 25);
+    w.branch("big", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let mut o = opts();
+    o.similarity = None;
+    let u = under(&explained(&plan_with(&w, None, &o)), "big");
+    let rows: Vec<&String> = u.iter().filter(|l| l.contains(" -> ")).collect();
+    assert_eq!(rows.len(), 20, "{u:#?}");
+    assert!(u.contains(&"  \u{2026} 5 more".to_string()), "{u:#?}");
+}
+
+#[test]
+fn the_remaining_commits_are_cut_at_twenty_lines() {
+    let mut o = opts();
+    o.similarity = None;
+    let w = world();
+    w.branch("open", &cs(0, 25));
+    let u = under(&explained(&plan_with(&w, None, &o)), "open");
+    let at = u
+        .iter()
+        .position(|l| l.starts_with("remaining: 25"))
+        .unwrap_or(1000);
+    assert_eq!(
+        u.get(at + 20).map(|s| s.contains("'step 19'")),
+        Some(true),
+        "{u:#?}"
+    );
+    assert_eq!(at_(&u, at + 21), "  \u{2026} 5 more commit(s)");
+    assert!(at_(&u, at + 22).starts_with("pull request: "), "{u:#?}");
+    assert_eq!(u.len(), at + 23);
+}
+
+#[test]
+fn the_paths_of_all_remaining_commits_together_are_cut_at_twenty() {
+    let mut o = opts();
+    o.similarity = None;
+    let w = world();
+    let files = |tag: &str| -> Vec<(String, String)> {
+        (0..15)
+            .map(|i| (format!("{tag}/f{i:02}.txt"), "x\n".to_string()))
+            .collect()
+    };
+    let mk = |parent, tag: &str, secs| {
+        let f = files(tag);
+        let e: Vec<(&str, Option<&str>)> = f
+            .iter()
+            .map(|(n, b)| (n.as_str(), Some(b.as_str())))
+            .collect();
+        let s = Stamp::new(NAME, MAIL, secs);
+        w.fx.commit_at(Some(parent), &e, format!("files {tag}"), s, s)
+    };
+    let one = mk(w.c0, "a", T0 + 10);
+    let two = mk(one, "b", T0 + 20);
+    w.fx.branch("files", two);
+    let u = under(&explained(&plan_with(&w, None, &o)), "files");
+    let at = u
+        .iter()
+        .position(|l| l.starts_with("remaining: 2"))
+        .unwrap_or(1000);
+    let first = at_(&u, at + 1);
+    let second = at_(&u, at + 2);
+    let paths = |l: &str| {
+        l.split(": ").nth(1).map(|x| {
+            x.split(", ")
+                .filter(|p| p.trim_end_matches(')').ends_with(".txt"))
+                .count()
+        })
+    };
+    assert_eq!(paths(first), Some(15), "{first}");
+    assert_eq!(paths(second), Some(5), "{second}");
+    assert!(
+        second.contains("(15 file(s): ") && second.ends_with(", \u{2026})"),
+        "{second}"
+    );
+}
+
+fn at_(u: &[String], i: usize) -> &str {
+    u.get(i).map(String::as_str).unwrap_or("")
+}
