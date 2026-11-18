@@ -1529,6 +1529,12 @@ fn commits_after_the_pull_request_head_remain() {
     let rep = api(&fx, last(&all), last(&br), pr(&list, &br, last(&all)));
     assert_eq!((rep.remaining.len(), rep.head_in_branch), (0, Some(true)));
     assert_eq!(rep.strength, Strength::Strong);
+    // everything is mapped but the PR head is not in the branch (rewritten later): a hint
+    let mut off = pr(&list, &br, last(&all));
+    off.head = foreign(&fx, b, 9);
+    let rep = api(&fx, last(&all), last(&br), off);
+    assert_eq!((rep.remaining.len(), rep.head_in_branch), (0, Some(false)));
+    assert_eq!(rep.strength, Strength::Hint);
 }
 
 #[test]
