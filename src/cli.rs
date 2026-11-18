@@ -14,6 +14,7 @@ use crate::repo::{self, RepoRef};
 use crate::{
     add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove, restack_plan,
     status, status_all, status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
+    tidy_similarity,
 };
 
 const EXIT_CODES: &str = "\
@@ -1037,6 +1038,18 @@ struct TidyArgs {
     /// Backup branches (r9-*, r10-*, pre-restack*, archive/*, backup/*) whose tip commit is at least N days old are `delete`
     #[arg(long, value_name = "N", default_value_t = tidy::DEFAULT_BACKUP_DAYS)]
     backup_days: u64,
+    /// A branch whose commits without an equal patch on the base all have a patch at least this similar (percent, 1 to 100)
+    /// is `review` with the proof `similar-patches` (never `delete`)
+    #[arg(long, value_name = "PCT", default_value_t = tidy_similarity::HIGH_PCT as u8,
+          value_parser = clap::value_parser!(u8).range(1..=100), conflicts_with = "no_similarity")]
+    similarity: u8,
+    /// Lower threshold in percent (1 to 100, not above --similarity): between the two the class is `modified`, below `partial`
+    #[arg(long, value_name = "PCT", default_value_t = tidy_similarity::LOW_PCT as u8,
+          value_parser = clap::value_parser!(u8).range(1..=100), conflicts_with = "no_similarity")]
+    similarity_low: u8,
+    /// Do not compare commits by similarity (the plan is as without that stage; saves the time of the comparison)
+    #[arg(long)]
+    no_similarity: bool,
 }
 
 #[derive(Args)]

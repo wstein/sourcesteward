@@ -250,7 +250,13 @@ fn json_field_names_are_the_documented_ones() {
     );
     assert_eq!(
         keys(&td["summary"]),
-        doc(&["delete", "delete_with_worktree", "review", "keep", "similar"])
+        doc(&[
+            "delete",
+            "delete_with_worktree",
+            "review",
+            "keep",
+            "similar"
+        ])
     );
     let repo = &td["repos"][0];
     assert_eq!(

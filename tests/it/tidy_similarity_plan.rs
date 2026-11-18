@@ -654,3 +654,113 @@ fn the_text_plan_has_one_line_for_a_similar_branch_and_no_command() {
     assert!(out.contains("1 to review"), "{out}");
     assert!(out.contains("(1 of them similar-patches)"), "{out}");
 }
+
+fn run(w: &W, extra: &[&str]) -> Output {
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let mut args = vec!["tidy", "plan", "--offline", "--root", r.as_str()];
+    args.extend_from_slice(extra);
+    stw(home.path(), &args)
+}
+
+fn proof_and_class(w: &W, extra: &[&str]) -> (String, Value, Value) {
+    let v = plan_json(w, extra);
+    let b = branch_json(&v, "sim");
+    (
+        b["proof"].as_str().unwrap().to_string(),
+        b["similarity"]["class"].clone(),
+        b["similarity"]["threshold"].clone(),
+    )
+}
+
+#[test]
+fn the_flags_set_the_thresholds_and_the_value_decides_at_the_boundary() {
+    let w = scenarios();
+    // the value of `sim` is 97.5
+    let sim = |e: &[&str]| proof_and_class(&w, e);
+    assert_eq!(
+        sim(&[]),
+        ("similar-patches".into(), "landed".into(), 95.into())
+    );
+    assert_eq!(
+        sim(&["--similarity", "97"]),
+        ("similar-patches".into(), "landed".into(), 97.into())
+    );
+    assert_eq!(
+        sim(&["--similarity", "98"]),
+        ("unmerged".into(), "modified".into(), 98.into())
+    );
+    assert_eq!(
+        sim(&["--similarity", "99", "--similarity-low", "98"]),
+        ("unmerged".into(), "partial".into(), 99.into())
+    );
+    assert_eq!(
+        sim(&["--similarity", "100", "--similarity-low", "100"]),
+        ("unmerged".into(), "partial".into(), 100.into())
+    );
+    let v = plan_json(&w, &["--similarity", "90", "--similarity-low", "60"]);
+    let s = &branch_json(&v, "sim")["similarity"];
+    assert_eq!(
+        (&s["threshold"], &s["threshold_low"]),
+        (&90.into(), &60.into())
+    );
+}
+
+#[test]
+fn thresholds_out_of_range_or_in_the_wrong_order_are_usage_errors() {
+    let w = scenarios();
+    for args in [
+        vec!["--similarity", "0"],
+        vec!["--similarity", "101"],
+        vec!["--similarity", "-1"],
+        vec!["--similarity", "abc"],
+        vec!["--similarity-low", "0"],
+        vec!["--similarity-low", "101"],
+        vec!["--similarity", "60"],
+        vec!["--similarity", "80", "--similarity-low", "90"],
+        vec!["--no-similarity", "--similarity", "90"],
+        vec!["--no-similarity", "--similarity-low", "50"],
+    ] {
+        let o = run(&w, &args);
+        assert_eq!(o.status.code(), Some(2), "{args:?}");
+        assert!(o.stdout.is_empty(), "{args:?} printed a plan");
+    }
+    let o = run(&w, &["--similarity", "60"]);
+    let err = String::from_utf8_lossy(&o.stderr);
+    assert!(
+        err.contains("--similarity-low") && err.contains("--similarity"),
+        "{err}"
+    );
+    // the ends are valid
+    for args in [
+        vec!["--similarity", "100"],
+        vec!["--similarity", "70", "--similarity-low", "70"],
+        vec!["--similarity", "1", "--similarity-low", "1"],
+        vec!["--similarity-low", "1"],
+    ] {
+        let o = run(&w, &args);
+        assert_eq!(o.status.code(), Some(0), "{args:?}");
+    }
+}
+
+#[test]
+fn no_similarity_gives_the_plan_of_before() {
+    let w = scenarios();
+    let o = run(&w, &["--no-similarity"]);
+    assert_eq!(o.status.code(), Some(0));
+    let short: String = w.main.to_string().chars().take(12).collect();
+    let expect = format!(
+        "repo  base refs/remotes/origin/main {short}  (pull request proof off (--offline))\n\
+         \x20 delete  eq  [equal-patches] all 1 commit(s) have an equal patch in refs/remotes/origin/main (squash or rebase merge)\n\
+         1 to delete, 0 to delete with their worktree, 0 to review, 5 kept (read-only: nothing was changed)\n\
+         (--all lists the kept branches)\n\
+         (GitHub not read: --offline)\n"
+    );
+    assert_eq!(String::from_utf8_lossy(&o.stdout), expect);
+    let v = plan_json(&w, &["--no-similarity"]);
+    for b in v["repos"][0]["branches"].as_array().unwrap() {
+        assert!(b["similarity"].is_null(), "{b}");
+        assert_ne!(b["proof"], "similar-patches");
+    }
+    assert_eq!(v["summary"]["similar"], 0);
+}
