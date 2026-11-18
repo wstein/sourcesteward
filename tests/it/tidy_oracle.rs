@@ -404,6 +404,10 @@ fn in_path(program: &str) -> std::path::PathBuf {
 /// The script with a PATH that has only `git` and `dirname`: where a guard does not refuse, the script stops at the
 /// check for `cargo` and `gh` before it creates, clones or fetches anything.
 fn driver(arg: &str) -> (Option<i32>, String) {
+    driver_env(arg, &[])
+}
+
+fn driver_env(arg: &str, env: &[(&str, &str)]) -> (Option<i32>, String) {
     let bin = tempfile::tempdir().unwrap();
     for p in ["git", "dirname"] {
         std::os::unix::fs::symlink(in_path(p), bin.path().join(p)).unwrap();
@@ -412,6 +416,7 @@ fn driver(arg: &str) -> (Option<i32>, String) {
         .arg(driver_script())
         .arg(arg)
         .env("PATH", bin.path())
+        .envs(env.iter().copied())
         .output()
         .unwrap();
     (
@@ -446,6 +451,38 @@ fn the_driver_script_parses_and_refuses_bad_output_directories() {
         !fx.path.join("out").exists(),
         "a refused path is not created"
     );
+}
+
+#[test]
+fn the_driver_guards_the_raw_data_directory_and_resolves_symlinks() {
+    let fx = crate::common::Fx::new();
+    let tmp = tempfile::tempdir().unwrap();
+    let out = tmp.path().join("out");
+    let out = out.to_str().unwrap();
+    let raw_in_tree = fx.path.join("raw");
+    for (raw, why) in [
+        ("", "ORACLE_RAWDIR is empty"),
+        ("rel/raw", "ORACLE_RAWDIR must be an absolute path"),
+        ("/tmp/x/../raw", "ORACLE_RAWDIR must not contain '..'"),
+        (
+            raw_in_tree.to_str().unwrap(),
+            "ORACLE_RAWDIR is inside a Git tree that does not ignore it",
+        ),
+    ] {
+        let (code, err) = driver_env(out, &[("ORACLE_RAWDIR", raw)]);
+        assert_eq!(code, Some(2), "{raw:?}: {err}");
+        assert!(err.contains(why), "{raw:?}: {err}");
+    }
+    // a link to a directory in the work tree: the directory behind it counts
+    let link = tmp.path().join("link");
+    std::os::unix::fs::symlink(&fx.path, &link).unwrap();
+    let (code, err) = driver(link.join("new").to_str().unwrap());
+    assert_eq!(code, Some(2), "{err}");
+    assert!(
+        err.contains("inside a Git tree that does not ignore it"),
+        "{err}"
+    );
+    assert!(!fx.path.join("new").exists());
 }
 
 #[test]
