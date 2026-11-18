@@ -286,3 +286,50 @@ fn at_most_twenty_commit_lines_are_shown_and_the_rest_is_counted() {
     );
     assert_eq!(u[22], "  … 5 more commit(s)");
 }
+
+#[test]
+fn text_from_commits_is_masked_and_an_evidence_line_has_at_most_120_characters() {
+    let mut w = world();
+    let mut hostile = c(0);
+    hostile.file = format!("d\u{202e}{}.txt", "p".repeat(150));
+    hostile.body = odd_lines("c0", 40, &[]).replacen(
+        "c0 line 3\n",
+        &format!("\u{1b}[31m\u{202e}{}\n", "y".repeat(300)),
+        1,
+    );
+    w.branch("feat", std::slice::from_ref(&hostile));
+    w.land(&[with_odd(&hostile, &[3, 5, 7, 9])], MERGE_SECS);
+    // a commit whose subject is not UTF-8
+    let s = Stamp::new(NAME, MAIL, T0 + 900);
+    let id = w.fx.commit_at(
+        Some(w.c0),
+        &[("l.txt", Some("l\n"))],
+        b"caf\xe9\x07 bell",
+        s,
+        s,
+    );
+    w.fx.branch("latin1", id);
+    let p = plan_with(&w, None, &no_rebase());
+    let t = explained(&p);
+    let u = under(&t, "feat");
+    let ev = u.iter().find(|l| l.starts_with("    + d")).unwrap_or(&u[0]);
+    assert!(
+        ev.starts_with(&format!("    + d\\u{{202e}}{}", "p".repeat(20))),
+        "{ev}"
+    );
+    assert!(
+        ev.chars().count() <= 124 && ev.ends_with('\u{2026}'),
+        "{ev}"
+    );
+    let l = under(&t, "latin1");
+    assert!(
+        l.iter().any(|x| x.contains("'caf\\xe9\\u{7} bell'")),
+        "{l:#?}"
+    );
+    for ch in t.chars() {
+        assert!(
+            ch == '\n' || !(ch.is_control() || ('\u{202a}'..='\u{202e}').contains(&ch)),
+            "raw {ch:?} in {t}"
+        );
+    }
+}
