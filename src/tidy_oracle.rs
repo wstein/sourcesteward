@@ -188,6 +188,10 @@ fn short(id: &str) -> &str {
     &id[..id.len().min(12)]
 }
 
+// ---- the truth of GitHub against the plan ----
+
+/// A merged pull request as GitHub says it: the head, the merge commit, the pull request commits and the commits on
+/// the base that the merge wrote (the first k of `main_commits`, k = number of pull request commits).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PrTruth {
     pub number: u64,
@@ -197,10 +201,47 @@ pub struct PrTruth {
     pub main_run: Vec<String>,
 }
 
-pub fn parse_truth(_raw: &Value) -> Result<Vec<PrTruth>, String> {
-    Ok(Vec::new())
+/// The merged pull requests of a raw file (`scratch/stw-tidy-rebase/raw/*.json`); entries without a pull request or not
+/// merged are left out.
+pub fn parse_truth(raw: &Value) -> Result<Vec<PrTruth>, String> {
+    let list = raw.as_array().ok_or("the raw data is not a list")?;
+    let mut out = Vec::new();
+    for e in list {
+        let Some(pr) = e.get("pr").filter(|p| p.is_object()) else {
+            continue;
+        };
+        if pr["merged"] != Value::Bool(true) {
+            continue;
+        }
+        let number = e["number"].as_u64().ok_or("an entry without a number")?;
+        let field = |v: &Value, what: &str| -> Result<String, String> {
+            v.as_str()
+                .map(str::to_string)
+                .ok_or(format!("#{number}: no {what}"))
+        };
+        let shas = |key: &str| -> Result<Vec<String>, String> {
+            e[key]
+                .as_array()
+                .ok_or(format!("#{number}: no {key}"))?
+                .iter()
+                .map(|c| field(&c["sha"], key))
+                .collect()
+        };
+        let commits = shas("pr_commits")?;
+        let mut main_run = shas("main_commits")?;
+        main_run.truncate(commits.len());
+        out.push(PrTruth {
+            number,
+            head_sha: field(&pr["head_sha"], "head_sha")?,
+            merge_commit_sha: field(&pr["merge_commit_sha"], "merge_commit_sha")?,
+            commits,
+            main_run,
+        });
+    }
+    Ok(out)
 }
 
+/// What the plan says about one branch (a pull request head fetched as a branch).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct PlanView {
     pub decision: String,
@@ -211,24 +252,92 @@ pub struct PlanView {
     pub rebase_strength: Option<String>,
     pub n: u64,
     pub mapped: u64,
+    /// The commits of the base the branch commits are mapped to.
     pub targets: BTreeSet<String>,
 }
 
-pub fn branch_view(_plan: &Value, _name: &str) -> Option<PlanView> {
-    None
+/// The branch `name` in the JSON of `stw tidy plan --json` (all repositories).
+pub fn branch_view(plan: &Value, name: &str) -> Option<PlanView> {
+    let b = plan["repos"]
+        .as_array()?
+        .iter()
+        .flat_map(|r| r["branches"].as_array().into_iter().flatten())
+        .find(|b| b["branch"] == name)?;
+    let text = |v: &Value| v.as_str().unwrap_or("").to_string();
+    let rebase = &b["rebase"];
+    Some(PlanView {
+        decision: text(&b["decision"]),
+        proof: text(&b["proof"]),
+        kind: text(&b["landed_via"]["kind"]),
+        basis: text(&b["landed_via"]["basis"]),
+        strength: text(&b["landed_via"]["strength"]),
+        rebase_strength: rebase["strength"].as_str().map(str::to_string),
+        n: rebase["n"].as_u64().unwrap_or(0),
+        mapped: rebase["mapped"].as_u64().unwrap_or(0),
+        targets: rebase["mapping"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .filter_map(|m| m["main"].as_str().map(str::to_string))
+            .collect(),
+    })
 }
 
+/// The result for one pull request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Verdict {
+    /// Strong `landed_via` rebase, and the mapped commits are the ones GitHub wrote.
     Rebase,
+    /// The existing proof `equal-patches`.
     EqualPatches,
+    /// A finding, with the cause.
     Miss(String),
 }
 
-pub fn judge(_truth: &PrTruth, _view: Option<&PlanView>) -> Verdict {
-    Verdict::Miss(String::new())
+pub fn judge(truth: &PrTruth, view: Option<&PlanView>) -> Verdict {
+    let Some(v) = view else {
+        return Verdict::Miss("the branch is not in the plan".into());
+    };
+    if v.kind == "rebase" && v.strength == "strong" {
+        let want: BTreeSet<String> = truth.main_run.iter().cloned().collect();
+        if v.targets == want {
+            return Verdict::Rebase;
+        }
+        return Verdict::Miss(format!(
+            "landed via rebase (strong), but the mapped commits are not the {} that GitHub wrote ({} mapped)",
+            want.len(),
+            v.targets.len()
+        ));
+    }
+    if v.proof == "equal-patches" {
+        return Verdict::EqualPatches;
+    }
+    Verdict::Miss(format!(
+        "proof {}, landed via {}/{}/{}, rebase {}, mapped {} of {}",
+        v.proof,
+        v.kind,
+        v.basis,
+        v.strength,
+        v.rebase_strength.as_deref().unwrap_or("none"),
+        v.mapped,
+        v.n
+    ))
 }
 
-pub fn render_verdicts(_repo: &str, _rows: &[(u64, Verdict)]) -> String {
-    String::new()
+/// The summary of a repository: counts and one line per finding.
+pub fn render_verdicts(repo: &str, rows: &[(u64, Verdict)]) -> String {
+    let count = |f: fn(&Verdict) -> bool| rows.iter().filter(|r| f(&r.1)).count();
+    let rebase = count(|v| *v == Verdict::Rebase);
+    let equal = count(|v| *v == Verdict::EqualPatches);
+    let mut s = format!(
+        "{repo}: {} merged pull requests, {rebase} rebase, {equal} equal-patches, {} findings\n",
+        rows.len(),
+        rows.len() - rebase - equal
+    );
+    for (n, v) in rows {
+        if let Verdict::Miss(why) = v {
+            s.push_str(&format!("  #{n}: {why}\n"));
+        }
+    }
+    s
 }
