@@ -595,6 +595,11 @@ impl MainIndex {
         self.commits.len()
     }
 
+    /// Commits of main left out because their parent is not in the object database (a shallow clone).
+    pub fn shallow_skipped(&self) -> usize {
+        0
+    }
+
     pub fn is_empty(&self) -> bool {
         self.commits.is_empty()
     }

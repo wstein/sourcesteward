@@ -1435,3 +1435,75 @@ fn a_value_below_the_low_threshold_is_not_shown_as_the_low_threshold() {
     assert_eq!(r.class, Class::Partial);
     assert_eq!(r.median_permille, Some(699));
 }
+
+/// A history `root <- b1 <- b2 <- b3` as a shallow clone of depth 3 has it: `b1` is the boundary, `root` is not in the object database.
+fn shallow_history(fx: &Fx) -> [ObjectId; 3] {
+    let root = mk(
+        fx,
+        None,
+        &[put("f.txt", &edited(0, 0, "", &[]))],
+        "root",
+        T0,
+    );
+    let b1 = mk(
+        fx,
+        Some(root),
+        &[put("f.txt", &edited(0, 3, "a", &[]))],
+        "b1",
+        T0 + 100,
+    );
+    let b2 = mk(
+        fx,
+        Some(b1),
+        &[put("f.txt", &edited(0, 6, "b", &[]))],
+        "b2",
+        T0 + 200,
+    );
+    let b3 = mk(
+        fx,
+        Some(b2),
+        &[put("f.txt", &edited(0, 9, "c", &[]))],
+        "b3",
+        T0 + 300,
+    );
+    let git = fx.path.join(".git");
+    std::fs::write(git.join("shallow"), format!("{b1}\n")).unwrap();
+    let hex = root.to_string();
+    std::fs::remove_file(git.join("objects").join(&hex[..2]).join(&hex[2..])).unwrap();
+    [b1, b2, b3]
+}
+
+#[test]
+fn the_boundary_of_a_shallow_clone_is_left_out_of_the_index_and_counted() {
+    let fx = Fx::new();
+    let [_b1, b2, b3] = shallow_history(&fx);
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    let idx = MainIndex::build_from_walk(&repo, &mut cache, b3, None);
+    assert!(idx.is_ok(), "a shallow clone is no error: {:?}", idx.err());
+    let idx = idx.unwrap();
+    assert_eq!(idx.len(), 2, "b2 and b3; the boundary commit has no patch");
+    assert_eq!(idx.shallow_skipped(), 1);
+    // the commits above the boundary are candidates as usual
+    let plus = mk(
+        &fx,
+        Some(b2),
+        &[put("f.txt", &edited(0, 6, "b", &[1]))],
+        "b2",
+        T0 + 400,
+    );
+    let r = evaluate_branch(&repo, &mut cache, &idx, &[plus], 95, 70, &Limits::default()).unwrap();
+    assert_eq!(r.commits.len(), 1);
+    assert!(matches!(r.commits[0].outcome, Outcome::Compared(_)));
+}
+
+#[test]
+fn a_complete_clone_has_no_boundary() {
+    let fx = Fx::new();
+    let base = base_of(&fx);
+    let c = mk(&fx, Some(base), &[put("g.txt", "g\n")], "c", T0 + 100);
+    let repo = fx.repo();
+    let mut cache = SimCache::default();
+    let idx = MainIndex::build_from_walk(&repo, &mut cache, c, None).unwrap();
+    assert_eq!((idx.len(), idx.shallow_skipped()), (2, 0));
+}
