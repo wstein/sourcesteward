@@ -706,8 +706,10 @@ branch landed by a mapping or the pull request (not for an ancestor).
 
 `stw tidy plan --explain` prints under each branch of the text plan (indented by four spaces) the evidence that led to the decision, or the evidence that is missing. It reads
 only the data the plan already holds (classes, numbers, reasons): no diff, no request, no other read; it interprets nothing, prints no command and gives no advice. The decision, the
-order of the branches and the JSON are the same with and without the flag (the data is already in the JSON: `similarity.commits[].evidence`, `rebase.mapping`, `rebase.remaining`,
-`rebase.api.reason`, `landed_via`), so with `--json` the flag changes nothing and is no error. `tidy apply` has no such flag (exit 2). `tidy plan` has no `--long`; the flag does not
+order of the branches and the JSON are the same with and without the flag, so with `--json` the flag changes nothing and is no error. Most of the data is in the JSON already (`similarity.commits[].evidence`,
+`rebase.mapping` with `ambiguous`, `later` and `tz_differs`, `rebase.remaining`, `rebase.api.reason`, `rebase.api.head_in_branch`, `landed_via`); only in the text are the table of the pull
+request mapping, the list `remaining after the pull request head` and the number of the merged pull request of a branch whose proof a later stage replaced (the counts of the
+sentences are derived from `unique_commits` and the `similarity` and `rebase` objects). `tidy apply` has no such flag (exit 2). `tidy plan` has no `--long`; the flag does not
 need one. Without the flag the text is byte for byte the text it was. The same plan gives the same text.
 
 Lines, in this order (a section is left out where its stage did not run: `--no-similarity` leaves out `similarity:`, `--no-rebase-evidence` leaves out `mapping:`, `remaining:` and `pull request:`):
@@ -716,17 +718,21 @@ Lines, in this order (a section is left out where its stage did not run: `--no-s
   `rebase-identity` took the place of `pull-request-merged-branch-moved` or `upstream-gone`, the sentence ends with `; pull request #N was merged and the branch moved on` or
   `; upstream <name> is gone` (the plan keeps the number of the merged pull request for this; the JSON does not carry it).
 - `landed via: <kind> (<basis>, <strength>)` where the branch landed by a mapping, the pull request or an ancestor.
-- `delete` branches get these two lines and nothing more (the proof is clear).
-- `similarity: class <class>, N commit(s) judged, A at or above 95 %, lowest x %, median y %, W without candidate`, then for each commit below the threshold (at most 20, then
+- `delete` branches get these two lines and nothing more (the proof is clear). The sentence counts only what the plan proves: `N commit(s) not in <base>` includes merge and empty commits,
+  `P of the N commit(s) not in <base> have a patch without a partner there` counts only commits that have a patch.
+- `similarity: class <class>, N commit(s) judged, A at or above 95 %, lowest x %, median y %, W without candidate`, then a line where the base was read from a shallow clone (`N commit(s) of the base were left out of the index (shallow boundary)`) or the candidate list of a commit was cut
+  (`the list of candidates of a commit was cut at 100`), then for each commit below the threshold (at most 20, then
   `… N more commit(s)`): `<sha7> '<subject>' best candidate <sha7> <value> % (<reason>; without path <value> %)`, `no candidate` or `skipped (too-large)`, and below it up to 5 evidence
   lines `<sign> <path>: <line>` (a line of at most 120 characters, cut with `…`).
 - `mapping: strength <s>, M of N commit(s) mapped (patch-id a, identity b, similarity c), contiguous|not contiguous (gap g), in order|not in order`, then for each mapped commit (at most 20,
-  then `… N more`): `<sha7> -> <sha7> <method> <value> %`, with `(later version, hint only)` where the branch commit was committed after its commit on the base, and `(time zone differs)`; a
+  then `… N more`): `<sha7> -> <sha7> <method> <value> %`, with `(later version, hint only)` where the branch commit was committed after its commit on the base, and `(time zone differs)`; a commit whose key matches more than one free commit on the base and no neighbour decides is `<sha7> -> ambiguous (more than one commit on the base has the
+  same author, time and subject)` and does not count as mapped; a
   `modified: a commit is at least 70 % and below 95 % like its commit on <base> (hint only)` line where a value is between the two thresholds.
 - `remaining: N commit(s) without a commit on <base>` and one line per commit with its files (at most 20 commits, at most 20 paths over all of them).
 - `pull request: PR mapping not read (<reason>)` with the reason of `rebase.api.reason`; where the pull request was read: `pull request: #N <kind> (<strength>), k commit(s), the head is in
-  the branch, r commit(s) of the branch come after it`, then `hint only: ...` or `strong, but ...` with the reason why the pull request mapping is a hint (commits after the head, the head
-  not in the branch) and that it gives no proof of its own (only the commit mapping makes `rebase-identity`), the `pull request mapping:` table (method `api`) and
+  (or not in) the branch` and, for a rebase only, `, r commit(s) of the branch come after it` (only the commit mapping of a rebase lists them), then `hint only: ...` or `strong, but ...`
+  with the reason why the pull request mapping is a hint (commits after the head; for a merge or a squash `the branch has commits after the pull request head`, derived from
+  `head_in_branch` because the commits are not listed; the head not in the branch) and that it gives no proof of its own (only the commit mapping makes `rebase-identity`), the `pull request mapping:` table (method `api`) and
   `remaining after the pull request head`.
 
 All text from a commit (subjects, paths, lines) is escaped (control, invisible and direction characters; bytes that are not UTF-8 as `\xNN`), and so is the name of the upstream.
@@ -1337,7 +1343,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1210 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1220 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1498,7 +1504,7 @@ on a single file), the ref is restored but files already written stay; `git stat
   commits mapped, one ordered block, content at least 95 % per commit (at least 70 % and below 95 % is `modified`), no later version (amend after landing), at least one identity.
   The index stops by a run of 64 old author times, never by the committer time; the boundary commit of a shallow clone is skipped. The pull request (`evaluate_api`, on given inputs, no request) and
   `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB68`; the plan wiring (rebase stage, pull request reads, `landed_via`, flag): `TR1` to `TR52`.
-- `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX28`.
+- `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX38`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
 - Untracked collapsing for nested repositories: `src/status.rs`.
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.
