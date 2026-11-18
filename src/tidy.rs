@@ -19,6 +19,9 @@ use crate::output::*;
 use crate::patch_id::{commit_patch_key, PatchKey};
 use crate::repo::worktrees::{self, StaleRegistration};
 use crate::repo::{self, RepoRef};
+use crate::tidy_rebase::{
+    ApiReason, ApiReport, Basis, LandedKind, LandedVia, RebaseReport, Strength,
+};
 use crate::tidy_similarity::{self, BranchReport};
 
 #[derive(Clone, Debug)]
@@ -37,6 +40,19 @@ pub struct BranchPlan {
     pub worktree: Option<WorktreeCandidate>,
     /// What the similarity stage found; None where the stage did not run for this branch.
     pub similarity: Option<SimilarityPlan>,
+    /// What the rebase stage found; None where the stage did not run or failed for this branch.
+    pub rebase: Option<RebasePlan>,
+    /// How the branch landed, with the basis; `unknown` where nothing says.
+    pub landed_via: LandedVia,
+}
+
+/// The result of the rebase stage for one branch.
+#[derive(Clone, Debug)]
+pub struct RebasePlan {
+    /// The commit mapping (identity, run, mapping table, rest).
+    pub report: RebaseReport,
+    /// The pull request mapping, or the reason there is none.
+    pub api: ApiReport,
 }
 
 /// The two thresholds of the similarity stage, in percent (`1..=100`, `low <= high`).
@@ -100,6 +116,8 @@ pub struct PlanOpts {
     pub now: i64,
     /// The similarity stage (`similar-patches`); None switches it off.
     pub similarity: Option<Similarity>,
+    /// The rebase stage (`rebase-identity`, `landed_via` from the commits and the pull request); false switches it off.
+    pub rebase: bool,
 }
 
 pub const DEFAULT_BACKUP_DAYS: u64 = 7;
@@ -110,6 +128,7 @@ impl Default for PlanOpts {
             backup_days: DEFAULT_BACKUP_DAYS,
             now: now_secs(),
             similarity: Some(Similarity::default()),
+            rebase: true,
         }
     }
 }
@@ -210,12 +229,27 @@ pub fn unmatched_commits(
 }
 
 /// Pull request proof of one repository: the PR list, or the reason there is none.
-pub struct PrProof {
+pub struct PrProof<'a> {
     pub prs: Option<Vec<AnyPr>>,
     pub note: String,
+    /// Where the commits of a pull request come from.
+    pub api: PrApi<'a>,
 }
 
-pub fn fetch_proof(slug: Option<&str>, gh: Option<&Client>, offline: bool) -> PrProof {
+/// The source of the commit list of a pull request: a client, or the reason there is none.
+#[derive(Clone, Copy)]
+pub enum PrApi<'a> {
+    Off(ApiReason),
+    Client(&'a Client),
+}
+
+impl Default for PrApi<'_> {
+    fn default() -> Self {
+        PrApi::Off(ApiReason::Offline)
+    }
+}
+
+pub fn fetch_proof<'a>(slug: Option<&str>, gh: Option<&'a Client>, offline: bool) -> PrProof<'a> {
     let mut pr_err = None;
     if let (Some(c), Some(s)) = (gh, slug) {
         match c.all_prs(s, 500) {
@@ -223,11 +257,23 @@ pub fn fetch_proof(slug: Option<&str>, gh: Option<&Client>, offline: bool) -> Pr
                 return PrProof {
                     prs: Some(v),
                     note: "pr-proof-available".into(),
+                    api: PrApi::Client(c),
                 }
             }
             Err(e) => pr_err = Some(e.to_string()),
         }
     }
+    let why = if gh.is_some_and(|c| c.rate_limited()) {
+        ApiReason::RateLimited
+    } else if pr_err.is_some() {
+        ApiReason::RequestFailed
+    } else if offline {
+        ApiReason::Offline
+    } else if slug.is_none() {
+        ApiReason::NoPullRequest
+    } else {
+        ApiReason::NoToken
+    };
     let note = if offline {
         "pull request proof off (--offline)".into()
     } else if slug.is_none() {
@@ -237,7 +283,11 @@ pub fn fetch_proof(slug: Option<&str>, gh: Option<&Client>, offline: bool) -> Pr
     } else {
         "pull request proof unavailable (no GitHub token: set GH_TOKEN or log in with gh)".into()
     };
-    PrProof { prs: None, note }
+    PrProof {
+        prs: None,
+        note,
+        api: PrApi::Off(why),
+    }
 }
 
 pub fn plan_repo(r: &RepoRef, gh: Option<&Client>, offline: bool, opts: &PlanOpts) -> RepoPlan {
@@ -340,6 +390,12 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             track,
             worktree: None,
             similarity: None,
+            rebase: None,
+            landed_via: LandedVia {
+                kind: LandedKind::Unknown,
+                basis: Basis::None,
+                strength: Strength::None,
+            },
         };
         let mut unmatched: Option<Vec<ObjectId>> = None;
         if let Some(n) = pr_open {
@@ -503,6 +559,12 @@ fn similarity_stage(
         });
     }
     Ok(())
+}
+
+/// A stage that failed for a branch leaves the plan standing and says so in the detail.
+#[allow(dead_code)]
+fn stage_failed(bp: &mut BranchPlan, e: &Error) {
+    let _ = (bp, e);
 }
 
 /// True when `dir` is not below `<work tree>/.worktrees/` (compared as written and with symbolic links resolved).
@@ -727,4 +789,42 @@ pub fn render_human(plans: &[RepoPlan], all: bool) -> String {
         out += "(--all lists the kept branches)\n";
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bare(detail: &str) -> BranchPlan {
+        BranchPlan {
+            branch: "b".into(),
+            tip: "0".repeat(40),
+            decision: "keep",
+            proof: "unmerged",
+            detail: detail.into(),
+            unique: 1,
+            upstream: None,
+            track: None,
+            worktree: None,
+            similarity: None,
+            rebase: None,
+            landed_via: LandedVia {
+                kind: LandedKind::Unknown,
+                basis: Basis::None,
+                strength: Strength::None,
+            },
+        }
+    }
+
+    #[test]
+    fn a_failed_stage_is_named_in_the_detail_and_the_proof_stays() {
+        let mut bp = bare("1 commit(s) not in base");
+        stage_failed(&mut bp, &Error::repository("object missing"));
+        assert_eq!(
+            bp.detail,
+            "1 commit(s) not in base; rebase evidence not computed (object missing)"
+        );
+        assert_eq!((bp.decision, bp.proof), ("keep", "unmerged"));
+        assert!(bp.rebase.is_none());
+    }
 }

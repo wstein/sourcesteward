@@ -58,6 +58,7 @@ fn plan(b: &B, days: u64, now: i64) -> RepoPlan {
         backup_days: days,
         now,
         similarity: None,
+        rebase: true,
     };
     plan_repo_with_opts(
         &RepoRef {
@@ -67,6 +68,7 @@ fn plan(b: &B, days: u64, now: i64) -> RepoPlan {
         PrProof {
             prs: None,
             note: "off".into(),
+            api: Default::default(),
         },
         &opts,
     )

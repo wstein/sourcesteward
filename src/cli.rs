@@ -1540,6 +1540,7 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
         backup_days: a.backup_days,
         now,
         similarity: None,
+        rebase: false,
     };
     let aopts = tidy_apply::ApplyOpts {
         manifest_dir: dir,
@@ -1853,6 +1854,7 @@ fn run(command: Command) -> Result<u8> {
                     high: u32::from(a.similarity),
                     low: u32::from(a.similarity_low),
                 }),
+                rebase: true,
             };
             let plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)

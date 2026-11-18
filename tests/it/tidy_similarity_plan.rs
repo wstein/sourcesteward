@@ -106,6 +106,7 @@ fn opts(sim: Option<Similarity>) -> PlanOpts {
         backup_days: 7,
         now: T0,
         similarity: sim,
+        rebase: true,
     }
 }
 
@@ -115,6 +116,7 @@ fn plan_with(w: &W, prs: Option<Vec<AnyPr>>, o: &PlanOpts) -> RepoPlan {
         PrProof {
             prs,
             note: "off".into(),
+            api: Default::default(),
         },
         o,
     )

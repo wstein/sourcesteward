@@ -98,11 +98,13 @@ fn plan(b: &Built, with_prs: bool) -> RepoPlan {
         PrProof {
             prs: Some(prs),
             note: "pr-proof-available".into(),
+            api: Default::default(),
         }
     } else {
         PrProof {
             prs: None,
             note: "pull request proof off (--offline)".into(),
+            api: Default::default(),
         }
     };
     plan_repo_with(
@@ -430,11 +432,13 @@ fn from_a_linked_root_the_worktrees_directory_is_the_main_checkouts() {
         stw::tidy::PrProof {
             prs: None,
             note: "off".into(),
+            api: Default::default(),
         },
         &stw::tidy::PlanOpts {
             backup_days: 7,
             now: 1_800_000_000,
             similarity: None,
+            rebase: true,
         },
     );
     assert!(p.error.is_none(), "{:?}", p.error);

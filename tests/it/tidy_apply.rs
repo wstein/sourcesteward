@@ -67,11 +67,13 @@ fn plan_with(w: &W, days: u64) -> RepoPlan {
         PrProof {
             prs: None,
             note: "off".into(),
+            api: Default::default(),
         },
         &PlanOpts {
             backup_days: days,
             now: w.now,
             similarity: None,
+            rebase: false,
         },
     )
 }
@@ -848,11 +850,13 @@ fn a_linked_worktree_as_root_writes_the_common_exclude_file() {
         PrProof {
             prs: None,
             note: "off".into(),
+            api: Default::default(),
         },
         &PlanOpts {
             backup_days: 7,
             now: w.now,
             similarity: None,
+            rebase: false,
         },
     );
     let tmp = scratch();
@@ -1155,11 +1159,13 @@ fn from_a_linked_root_the_main_checkouts_branch_is_kept() {
         PrProof {
             prs: None,
             note: "off".into(),
+            api: Default::default(),
         },
         &PlanOpts {
             backup_days: 7,
             now,
             similarity: None,
+            rebase: false,
         },
     );
     assert!(p.error.is_none(), "{:?}", p.error);
