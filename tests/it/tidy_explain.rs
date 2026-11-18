@@ -455,7 +455,7 @@ fn a_modified_mapping_and_a_later_version_are_hints_and_say_so() {
     assert!(u.contains(&map_line(m, "")), "{u:#?}");
     assert!(
         u.contains(
-            &"modified: a commit is 70 to 94 % like its commit on origin/main (hint only)"
+            &"modified: a commit is at least 70 % and below 95 % like its commit on origin/main (hint only)"
                 .to_string()
         ),
         "{u:#?}"
