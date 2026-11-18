@@ -681,11 +681,11 @@ The patch IDs come from the `PatchCache` of the `equal-patches` walk; one `SimCa
 similarity index, the first-parent chain for the rebase index): they ask for different commits.
 
 Pull request (read only, optional): where a branch would be `pull-request-merged-branch-moved`, `upstream-gone` or `unmerged`, has a merged pull request, and the commits do not already
-prove it, one request `GET pulls/N/commits?per_page=100` reads the commits of the pull request (at most 30 requests per repository; a full page of 100 is `too-many-commits`). The token
+prove it, one request `GET pulls/N/commits?per_page=100` reads the commits of the pull request (at most 30 requests per repository, the rest is `request-limit`; a full page of 100 is `too-many-commits`). The token
 needs `Pull requests: Read` and `Metadata: Read`, no more. Without network, token or with a rate limit the plan uses the commits alone: no error, no change of the exit code; the reason is in
-`rebase.api.reason`: `offline`, `no-token`, `no-pull-request`, `rate-limited`, `request-failed`, `too-many-commits`, `not-merged`, `merge-commit-not-in-clone`, `not-on-base`, `not-needed`
+`rebase.api.reason`: `offline`, `no-token`, `no-pull-request`, `rate-limited` (GitHub said so), `request-limit` (the 30 requests are used), `request-failed`, `evaluate-failed` (the local check failed), `too-many-commits`, `not-merged`, `merge-commit-not-in-clone`, `not-on-base`, `not-needed`
 (a proof that needs no pull request). The mapping: two parents of the merge commit are `merge`; one parent and the k commits behind it equal to the k pull request commits (author, time,
-subject) are `rebase` (strong only when nothing remains and the pull request head is in the branch, else a hint); one parent and an author time equal to `merged_at` plus or minus 2 s are `squash`.
+subject) are `rebase` (strong only when nothing remains and the pull request head is in the branch, else a hint); one parent and an author time equal to `merged_at` plus or minus 2 s are `squash`. `merge` and `squash` are strong only when the branch tip is the pull request head or behind it; a branch with commits after the head gets a hint.
 
 JSON, additive in schema 2: `landed_via {kind merge|rebase|squash|unknown, basis ancestor|commit-map|pr-api|single-commit-map|none, strength strong|hint|none}` always; precedence: the tip is an
 ancestor of the base (`merge`), a strong commit mapping (`rebase`), the pull request, one commit with an equal patch but no identity (`unknown`, a hint for a squash), else `unknown`. The

@@ -879,8 +879,8 @@ impl ApiReason {
             ApiReason::RequestFailed => "request-failed",
             ApiReason::TooManyCommits => "too-many-commits",
             ApiReason::NotNeeded => "not-needed",
-            ApiReason::RequestLimit => "",
-            ApiReason::EvaluateFailed => "",
+            ApiReason::RequestLimit => "request-limit",
+            ApiReason::EvaluateFailed => "evaluate-failed",
         }
     }
 }
@@ -1011,9 +1011,16 @@ pub fn evaluate_api(
         mapping: Vec::new(),
         remaining: Vec::new(),
     };
+    // strong only where the branch has nothing the pull request did not hold: the tip is the head or behind it
+    let whole = crate::repo::is_ancestor(repo, tip, pr.head)?;
+    let whole_or_hint = if whole {
+        Strength::Strong
+    } else {
+        Strength::Hint
+    };
     if merge_head.parents == 2 {
         rep.kind = LandedKind::Merge;
-        rep.strength = Strength::Strong;
+        rep.strength = whole_or_hint;
         return Ok(rep);
     }
     if merge_head.parents != 1 {
@@ -1087,7 +1094,7 @@ pub fn evaluate_api(
         .is_some_and(|t| merge_head.key.secs.abs_diff(t) <= RB_API_TIME_TOLERANCE as u64)
     {
         rep.kind = LandedKind::Squash;
-        rep.strength = Strength::Strong;
+        rep.strength = whole_or_hint;
     }
     Ok(rep)
 }

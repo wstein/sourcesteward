@@ -707,7 +707,7 @@ impl RebaseStage<'_> {
         let strong = report.strength == Strength::Strong;
         let input = self.api_input(row, strong);
         let api = tidy_rebase::evaluate_api(self.repo, self.base_tip, side, row.tip, &input)
-            .unwrap_or_else(|_| tidy_rebase::ApiReport::not_read(ApiReason::RequestFailed));
+            .unwrap_or_else(|_| tidy_rebase::ApiReport::not_read(ApiReason::EvaluateFailed));
         if judged(row.bp.proof) && tidy_rebase::evidence_class(&report).is_some() {
             let min = report
                 .mapping
@@ -757,8 +757,11 @@ impl RebaseStage<'_> {
         else {
             return NotRead(ApiReason::NotMerged);
         };
-        if self.requests_left == 0 || c.rate_limited() {
+        if c.rate_limited() {
             return NotRead(ApiReason::RateLimited);
+        }
+        if self.requests_left == 0 {
+            return NotRead(ApiReason::RequestLimit);
         }
         self.requests_left -= 1;
         match c.pr_commits(slug, pr.number) {
