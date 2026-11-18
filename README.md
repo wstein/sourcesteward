@@ -25,7 +25,7 @@ detection, no warning, no test).
 ```
 stw status    [PATH].. [--long|-l] [--fetch] [--worktrees] [--review] [--icons unicode|nerd|ascii] [--timeout DURATION] [--stats] [--verbose]
               [--depth N] [--limit N] [--json] [--offline] [--root PATH] [--repo NAME]... [--rules-path PATH]
-stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N]
+stw tidy plan  [--json] [--offline] [--root PATH] [--repo NAME]... [--all] [--backup-days N] [--similarity PCT] [--similarity-low PCT] [--no-similarity]
 stw tidy apply   [--plan FILE] [--manifest-dir DIR] [--backup-days N] [--json] [--offline] [--root PATH] [--repo NAME]...
 stw tidy restore [--run ID] [--branch NAME] [--manifest-dir DIR] [--json]
 stw tidy history [--limit N] [--manifest-dir DIR] [--json]
@@ -239,6 +239,13 @@ Deviations from Go in these flags:
     (a) Go does not fetch then and goes on with the state "as of last fetch" (`as_of_last_fetch`) and can still fast-forward to the last fetched
     `origin/<default>`; Rust refuses the whole run, as it does for a plan (and as for a failed fetch); (b) with `--offline` nothing is
     fetched and no refspec is checked (as in Go with `noFetch`); (c) the refspec is shown escaped and cut at 200 characters.
+16. Similar patches in `tidy plan` (new, Go has no percentage measure; README "Similar patches in `tidy plan`"): the evidence class `similar-patches` (decision `review`, never
+    `delete`) with `--similarity`, `--similarity-low` and `--no-similarity`, the JSON object `similarity` and `summary.similar`. Limits of the measure: reformatting counts as a
+    difference (only the white space at the ends of a line is ignored); a rename shows only in `similarity_no_path`, not in the class; a squash or a split commit is not recognised (class
+    `partial`); the window of 7 days (author time) and "without candidate" means no commit on the base with the same subject or at least half of the changed files in the window; 100 %
+    can still mean different behavior when the context on the base differs; several commits of the branch can have the same partner; a commit of more than 20 000 changed lines or a blob over
+    1 MiB has no value and prevents `landed`; hunks come from gix (Myers), not from git's xdiff, so a multiset can differ from git's in rare cases (UNKNOWN until the oracle). A shallow clone gives
+    a plan with the boundary commits of the base left out (`skipped.shallow`); a branch that itself reaches the boundary still fails the `equal-patches` walk (as before).
 
 ## agent-rules
 
@@ -309,7 +316,7 @@ removal or a changed meaning raises it. Common top-level fields: `schema_version
 `github_auth` (where the token came from, never the token) and `github_note` (why GitHub was not read). `status` also carries `notices` (below).
 Every repository entry has `name`, `path` and `error` (string or null). `tidy-plan` carries `read_only` (always true); `sync` carries `mode` (`dry-run` for `--plan`/`--dry-run`, else `apply`).
 
-`summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep} (`delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
+`summary`: `status` {total, attention}; `tidy-plan` {delete, delete_with_worktree, review, keep, similar} (`similar`: the branches with the proof `similar-patches`; they are counted in `review`, too. `delete_with_worktree`: kept branches whose worktree `apply` will remove, so `apply` deletes them; they are not in `keep`. A worktree that `apply` leaves alone because it is dirty, locked or has unpushed commits keeps its branch in `keep`); `sync` {total, fast_forwarded,
 would_fast_forward, skipped, errors}.
 
 - `status` repo: `counts` (below), `state`, `branch`, `detached`, `head`, `upstream`, `upstream_gone`, `ahead`, `behind`,
@@ -343,9 +350,9 @@ would_fast_forward, skipped, errors}.
   A total is a number only when every repository with a GitHub origin gave one, else null with `state` `failed` (any), `not-read`, or `no-remote` (no repository has a GitHub origin). Schema rule:
   `counts` and `totals` are additive, `schema_version` stays `2`; `day briefing` reads this contract, so a removal or a changed
   meaning raises the version.
-- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree}]` (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
+- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree,similarity}]` (`similarity` is null or the object of "Similar patches in `tidy plan`") (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
   `stale_worktree_registrations[{path,locked,lock_reason}]`. Proofs: `in-worktree`, `open-pull-request`, `merged-ancestor`, `equal-patches`,
-  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
+  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
 - `sync` repo: `branch`, `upstream`, `ahead`, `behind`, `dirty_files`, `fetch` (`not-run`, `skipped-offline`,
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
@@ -619,6 +626,33 @@ here, and entries expire (`gc.reflogExpire`, 90 days by default). The plan is re
 unmerged backup commit survives only until `git gc` prunes unreachable objects (about two weeks by default,
 `gc.pruneExpire`); after that `restore` reports `missing-object`. Commits that are merged or on a remote stay
 recoverable.
+
+## Similar patches in `tidy plan`
+
+A branch can have commits without an equal patch on the base (`equal-patches` fails) although the change is on the base: a cherry-pick with a
+conflict resolution, a rebase that touched a line. The similarity stage compares each such commit (the `+` commits of `git cherry`) with the commits of
+the base. Method and its limits: `spikes/stw/tidy-similarity/README.md`; code: `src/tidy_similarity.rs` and the stage in `src/tidy.rs`.
+
+Proof `similar-patches`, decision `review`, never `delete`: every commit of the branch without an equal patch has a commit on the base that is at least
+`--similarity PCT` (default 95) similar; the detail says `min`, `median` and the threshold. `tidy apply` does not act on it (it acts on `delete`
+only), so such a branch is not deleted by `apply`; the plan prints no command for it. The order: after `equal-patches`, `merged-pull-request-head` and
+the backup proofs, before `pull-request-merged-branch-moved`, `upstream-gone` and `unmerged`. The gates stay: an open pull request keeps the branch
+(`open-pull-request`), a branch checked out in a worktree is `in-worktree` (the `similarity` object stays in the entry), a backup branch is never `review`.
+The stage runs only where the proof would be `pull-request-merged-branch-moved`, `upstream-gone` or `unmerged`.
+
+Flags on `tidy plan`: `--similarity PCT` (1 to 100, default 95), `--similarity-low PCT` (1 to 100, default 70, not above `--similarity`; else exit 2),
+`--no-similarity` (the stage does not run: the text plan is the plan without it, JSON has `similarity: null`; conflicts with the other two). `tidy apply` has
+no flag and plans without the stage. The window of 7 days (a candidate is at most 7 days older than the commit, author time) is a constant. The index of the base
+holds the commits from one window before the oldest `+` commit on; a commit whose parent is missing (the boundary of a shallow clone) is left out and counted.
+
+JSON, additive in schema 2, per branch `similarity` (null where the stage did not run: a proof applies, a gate holds, `--no-similarity`):
+`class` (`landed`: all `+` commits at or above the threshold; `modified`: all at or above `threshold_low`, one below the threshold; `partial`: one without candidate, without
+value or below `threshold_low`; `none`: no commit to judge), `threshold`, `threshold_low`, `window_days`, `plus_commits`, `at_or_above`, `min` and `median` (percent with one decimal or null),
+`without_candidate`, `skipped{merges,empty,too_large,shallow}` (`shallow`: commits of the base left out of the index), `bounds{candidates_cut,main_commits_indexed}` and
+`commits[{commit,subject,outcome,skipped,candidate,candidate_subject,reason,similarity,similarity_no_path,evidence}]`. `outcome` is `compared`, `no-candidate` or `skipped`
+(`skipped`: `merge`, `empty` or `too-large`); `reason` says how the candidate was found (`subject`, `subject-stripped`, `files`, else `none`); `evidence` has up to 5 lines
+`{path,sign,line,count_a,count_b}` for a commit below the threshold (untrusted text, escaped). A value that rounds to a threshold but is below it is shown one tenth lower.
+Text: one line per `similar-patches` branch with the figures, and `(N of them similar-patches)` in the summary line.
 
 ## tidy apply and tidy restore
 
@@ -1226,7 +1260,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1099 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1130 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 ```
 
@@ -1371,14 +1405,14 @@ on a single file), the ref is restored but files already written stay; `git stat
   content (`a b.txt` equals `ab.txt`; `\tcc x` equals `  cc   x`), so the `equal-patches` proof also requires an
   identical digest of the diff lines with their white space (file names included): a change that differs from main
   only in white space keeps the branch.
-- Commit similarity (`src/tidy_similarity.rs`, library only; not yet wired into `tidy plan`; specification and accepted method in `spikes/stw/tidy-similarity/README.md`):
+- Commit similarity (`src/tidy_similarity.rs`, wired into `tidy plan` as the proof `similar-patches` (README "Similar patches in `tidy plan`"); specification and accepted method in `spikes/stw/tidy-similarity/README.md`):
   a commit is the multiset of its changed lines (`<path> NUL <sign> <trimmed line>`, context 0, no rename detection), two commits are compared with
   Dice `2 * |A ∩ B| / (|A| + |B|)`, decided in integers (`200 * I >= pct * (A + B)`; the display rounds half up to one decimal and never shows the
   threshold for a value below it). Candidates on main: same subject, same subject without `type(scope):`, or at least half of the changed files in
   common, at most 7 days older (author time), at most 100 per commit. Classes per branch `landed` (all >= 95), `modified` (all >= 70), `partial`, `none`.
   Hunks come from gix-imara-diff (Myers), not from `git diff -U0`; whether the multisets differ from git's is UNKNOWN until the oracle. Limits: a commit with more
   than 20 000 keys or a blob over 1 MiB is `too_large` (no value, prevents `landed`). Reusable parts: `Keys::sum`, containment as (numerator, denominator),
-  `tree_entries` (cumulative diff `base...tip`), `MainIndex::candidates` and `in_window` apart from the comparison. Mutations `TS1` to `TS51`.
+  `tree_entries` (cumulative diff `base...tip`), `MainIndex::candidates` and `in_window` apart from the comparison. Mutations `TS1` to `TS51` and `TP1` to `TP31` (the plan).
 - Rebase-merge proof (`src/tidy_rebase.rs`, library only; not yet wired into `tidy plan`; specification in `spikes/stw/tidy-similarity/README.md`, section
   package 1b): a rebase merge writes a branch commit again with the same author, author time and subject. `RebaseIndex` walks the first-parent chain
   of main once; a branch commit maps to the chain commit with the same key (author mail in lower case, author seconds, subject) and the exact author
