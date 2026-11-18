@@ -435,6 +435,13 @@ pub fn strip_type_scope(subject: &[u8]) -> &[u8] {
     }
 }
 
+/// A parent of `id` is not in the object database (the boundary of a shallow or partial clone).
+fn has_missing_parent(repo: &gix::Repository, id: ObjectId) -> Result<bool> {
+    let c = repo.find_commit(id)?;
+    let missing = c.parent_ids().any(|p| !repo.has_object(p.detach()));
+    Ok(missing)
+}
+
 /// The window rule: a candidate is at most `window_secs` older than the commit (author time); newer is fine.
 pub fn in_window(commit_time: i64, candidate_time: i64, window_secs: i64) -> bool {
     candidate_time >= commit_time - window_secs
@@ -535,6 +542,7 @@ pub struct MainIndex {
     by_subject: HashMap<Vec<u8>, Vec<usize>>,
     by_stripped: HashMap<Vec<u8>, Vec<usize>>,
     by_file: HashMap<u64, Vec<usize>>,
+    shallow: usize,
 }
 
 impl MainIndex {
@@ -551,10 +559,17 @@ impl MainIndex {
             by_subject: HashMap::new(),
             by_stripped: HashMap::new(),
             by_file: HashMap::new(),
+            shallow: 0,
         };
+        let is_shallow = repo.is_shallow().unwrap_or(false);
         for id in ids {
             let info = commit_info(repo, *id)?;
             if since.is_some_and(|t| info.author_time < t) {
+                continue;
+            }
+            // the boundary of a shallow clone: its parent is not there, so it has no patch to read
+            if is_shallow && has_missing_parent(repo, *id)? {
+                idx.shallow += 1;
                 continue;
             }
             let Some(files) = cache.files(repo, *id)? else {
@@ -597,7 +612,7 @@ impl MainIndex {
 
     /// Commits of main left out because their parent is not in the object database (a shallow clone).
     pub fn shallow_skipped(&self) -> usize {
-        0
+        self.shallow
     }
 
     pub fn is_empty(&self) -> bool {
