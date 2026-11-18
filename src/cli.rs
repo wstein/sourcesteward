@@ -1050,6 +1050,10 @@ struct TidyArgs {
     /// Do not compare commits by similarity (the plan is as without that stage; saves the time of the comparison)
     #[arg(long)]
     no_similarity: bool,
+    /// Do not map the commits of a branch to the base by author, time and subject (no `rebase-identity`, no `landed via`
+    /// from the commits; no pull request commit reads)
+    #[arg(long)]
+    no_rebase_evidence: bool,
 }
 
 #[derive(Args)]
@@ -1854,7 +1858,7 @@ fn run(command: Command) -> Result<u8> {
                     high: u32::from(a.similarity),
                     low: u32::from(a.similarity_low),
                 }),
-                rebase: true,
+                rebase: !a.no_rebase_evidence,
             };
             let plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)
