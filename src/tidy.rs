@@ -287,6 +287,8 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
     let wt = worktrees::scan(&repo)?;
     plan.stale = wt.stale.clone();
     let mut cache = PatchCache::default();
+    // branches decided so far, before the worktree protection; `plus` are the commits the similarity stage judges
+    let mut rows: Vec<(BranchPlan, Option<Vec<ObjectId>>)> = Vec::new();
     for (br, tip) in repo::local_branches(&repo)? {
         if br == basebranch {
             continue;
@@ -338,6 +340,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             worktree: None,
             similarity: None,
         };
+        let mut unmatched: Option<Vec<ObjectId>> = None;
         if let Some(n) = pr_open {
             bp.proof = "open-pull-request";
             bp.detail = format!("open pull request #{n}");
@@ -345,7 +348,12 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             bp.decision = "delete";
             bp.proof = "merged-ancestor";
             bp.detail = format!("tip is an ancestor of {base}");
-        } else if uniq > 0 && all_patches_in_base(&repo, &mut cache, base_tip, tip)? {
+        } else if uniq > 0 && {
+            let u = unmatched_commits(&repo, &mut cache, base_tip, tip)?;
+            let all = u.all_matched();
+            unmatched = Some(u.commits);
+            all
+        } {
             bp.decision = "delete";
             bp.proof = "equal-patches";
             bp.detail = format!(
@@ -391,6 +399,23 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         } else {
             bp.detail = format!("{uniq} commit(s) not in {base}, no merged pull request found");
         }
+        // where the proof would be `upstream-gone` or `unmerged` the similarity stage may find a better one
+        let judged = matches!(
+            bp.proof,
+            "pull-request-merged-branch-moved" | "upstream-gone" | "unmerged"
+        );
+        let plus = if opts.similarity.is_some() && judged {
+            unmatched
+        } else {
+            None
+        };
+        rows.push((bp, plus));
+    }
+    if let Some(th) = opts.similarity {
+        similarity_stage(&repo, base_tip, &base, th, &mut rows)?;
+    }
+    for (mut bp, _) in rows {
+        let br = bp.branch.clone();
         // a checkout in a directory that exists protects the branch; the proof it would have is kept
         if let Some(dir) = wt.branch_dir(&br) {
             if bp.decision == "delete" {
@@ -416,6 +441,65 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             bp.detail = format!("checked out in {}", worktrees::show(dir));
         }
         plan.branches.push(bp);
+    }
+    Ok(())
+}
+
+/// The similarity stage: judges the `+` commits of every branch in `rows` that has some against the base and lets
+/// a branch whose commits all have a similar patch there become `review` with the proof `similar-patches`.
+/// The index of the base starts one window before the oldest of those commits.
+fn similarity_stage(
+    repo: &gix::Repository,
+    base_tip: ObjectId,
+    base: &str,
+    th: Similarity,
+    rows: &mut [(BranchPlan, Option<Vec<ObjectId>>)],
+) -> Result<()> {
+    let lim = tidy_similarity::Limits::default();
+    let mut oldest: Option<i64> = None;
+    for (_, plus) in rows.iter() {
+        for id in plus.iter().flatten() {
+            let t = tidy_similarity::commit_info(repo, *id)?.author_time;
+            oldest = Some(oldest.map_or(t, |o| o.min(t)));
+        }
+    }
+    let Some(oldest) = oldest else {
+        return Ok(());
+    };
+    let mut cache = tidy_similarity::SimCache::default();
+    let index = tidy_similarity::MainIndex::build_from_walk(
+        repo,
+        &mut cache,
+        base_tip,
+        Some(oldest - lim.window_secs),
+    )?;
+    for (bp, plus) in rows.iter_mut() {
+        let Some(plus) = plus else {
+            continue;
+        };
+        let report = tidy_similarity::evaluate_branch(
+            repo, &mut cache, &index, plus, th.high, th.low, &lim,
+        )?;
+        if report.class == tidy_similarity::Class::Landed {
+            let shown = |p: u32| tidy_similarity::fmt_permille(p);
+            let min = report.min.map(|m| m.shown_in(th.high, th.low)).unwrap_or(0);
+            bp.decision = "review";
+            bp.proof = "similar-patches";
+            bp.detail = format!(
+                "all {} commit(s) without an equal patch have a similar patch in {base} (min {} %, median {} %, threshold {} %): review, not a deletion proof",
+                report.plus_commits,
+                shown(min),
+                shown(report.median_permille.unwrap_or(0)),
+                th.high
+            );
+        }
+        bp.similarity = Some(SimilarityPlan {
+            high: th.high,
+            low: th.low,
+            report,
+            indexed: index.len(),
+            skipped_shallow: index.shallow_skipped(),
+        });
     }
     Ok(())
 }

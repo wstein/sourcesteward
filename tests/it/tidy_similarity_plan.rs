@@ -359,7 +359,7 @@ fn the_index_starts_a_window_before_the_oldest_plus_commit() {
     w.land(&[("g0.txt", Some(&a))], "feat: old", T0 - 20 * DAY);
     w.land(&[("g1.txt", Some(&b))], "feat: older", T0 - 8 * DAY);
     w.land(&[("g2.txt", Some(&c))], "feat: newer", T0 - 3 * DAY);
-    let x = text("x", &[]);
+    let x = text("z", &[]);
     let br = w.on(None, &[("g5.txt", Some(&x))], "feat: unrelated", T0);
     w.fx.branch("work", br);
     let p = plan(&w);
@@ -384,7 +384,7 @@ fn a_shallow_clone_gives_a_plan_with_the_boundary_skipped() {
         T0 - 40 * DAY,
     );
     let b = base_file();
-    let c0 = mkc(&fx, Some(old), &[("g0.txt", Some(&b))], "c0", T0 - 30 * DAY);
+    let c0 = mkc(&fx, Some(old), &[("g0.txt", Some(&b))], "c0", T0 - 5 * DAY);
     let a = text("a", &[]);
     let a5 = text("a", &[5]);
     let main = mkc(
