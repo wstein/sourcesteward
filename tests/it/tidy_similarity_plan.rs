@@ -323,6 +323,7 @@ fn similar_patches_comes_before_upstream_gone_and_pull_request_moved_and_after_t
         head_sha: "0".repeat(40),
         number: n,
         state,
+        ..Default::default()
     };
     let prs = vec![pr("sim-moved", 2, "MERGED"), pr("sim-open", 3, "OPEN")];
     let p = plan_with(&w, Some(prs), &opts(Some(Similarity::default())));

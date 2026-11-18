@@ -77,18 +77,21 @@ fn plan(b: &Built, with_prs: bool) -> RepoPlan {
             head_sha: "0".repeat(40),
             number: 1,
             state: "OPEN",
+            ..Default::default()
         },
         AnyPr {
             head_ref: "pr-merged".into(),
             head_sha: b.pr_head.to_string(),
             number: 2,
             state: "MERGED",
+            ..Default::default()
         },
         AnyPr {
             head_ref: "pr-moved".into(),
             head_sha: b.moved_head.to_string(),
             number: 3,
             state: "MERGED",
+            ..Default::default()
         },
     ];
     let proof = if with_prs {

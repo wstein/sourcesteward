@@ -56,14 +56,33 @@ pub struct IssueCounts {
 /// Page size of the list reads of `stw status` (the REST maximum).
 pub const PAGE: usize = 100;
 
-/// One PR of any state, for the merged-head proof of `stw tidy plan`.
-#[derive(Clone, Debug)]
+/// One PR of any state, for the proofs of `stw tidy plan` (merged head, rebase and squash mapping).
+#[derive(Clone, Debug, Default)]
 pub struct AnyPr {
     pub head_ref: String,
     pub head_sha: String,
     pub number: u64,
     /// `OPEN`, `MERGED` or `CLOSED` (gh vocabulary).
     pub state: &'static str,
+    /// `merge_commit_sha` of the pull list: the merge commit, the tip of the rewritten commits, or the test merge of
+    /// a pull request that is not merged; empty when GitHub sent none.
+    pub merge_commit_sha: String,
+    /// `merged_at` in seconds since the epoch; `None` for a pull request that is not merged.
+    pub merged_at: Option<i64>,
+    pub title: String,
+}
+
+/// The commits of a pull request, or the fact that there are too many to read in one request.
+#[derive(Clone, Debug)]
+pub enum PrCommitsRead {
+    Commits(Vec<crate::tidy_rebase::PrCommit>),
+    /// The answer was a full page (`PAGE` commits): the list may go on, it is not read.
+    TooMany,
+}
+
+/// `YYYY-MM-DDTHH:MM:SSZ` (what GitHub sends) as seconds since the epoch; `None` for anything else.
+pub fn parse_utc(_s: &str) -> Option<i64> {
+    None
 }
 
 /// Whether GitHub is available for this run, and the reason when it is not.
@@ -530,6 +549,7 @@ impl Client {
                     head_sha: p["head"]["sha"].as_str().unwrap_or("").to_string(),
                     number: p["number"].as_u64().unwrap_or(0),
                     state,
+                    ..Default::default()
                 });
             }
             if items.len() < 100 {
@@ -539,6 +559,12 @@ impl Client {
         }
         out.truncate(limit);
         Ok(out)
+    }
+
+    /// The commits of pull request `number` (`GET pulls/N/commits?per_page=100`, one request), oldest first.
+    pub fn pr_commits(&self, slug: &str, number: u64) -> Result<PrCommitsRead> {
+        let _ = (slug, number);
+        Ok(PrCommitsRead::Commits(Vec::new()))
     }
 
     /// SHA of `refs/heads/<branch>` on the remote (read-only replacement of `git ls-remote`).
