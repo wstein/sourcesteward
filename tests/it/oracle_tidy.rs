@@ -131,6 +131,8 @@ fn git_keys(repo: &Path, parent: &str, id: &str, flags: &[&str]) -> Result<Keys,
         "--no-renames",
         "--no-color",
         "--no-ext-diff",
+        "--no-textconv",
+        "--text",
     ];
     args.extend_from_slice(flags);
     args.extend_from_slice(&[parent, id]);
@@ -201,12 +203,14 @@ fn compare(repo: &Path, commits: &[(String, String)], settings: &[(&str, &[&str]
                 continue;
             }
         };
+        let mut unreadable = false;
         for (name, flags) in settings {
             match git_keys(repo, parent, id, flags) {
                 Ok(theirs) => run.matrix.add(name, id, mine.similarity(&theirs)),
-                Err(_) => run.unreadable += 1,
+                Err(_) => unreadable = true,
             }
         }
+        run.unreadable += unreadable as usize;
     }
     run
 }
