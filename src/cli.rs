@@ -1526,6 +1526,7 @@ fn run_apply(a: ApplyArgs) -> Result<u8> {
     let popts = tidy::PlanOpts {
         backup_days: a.backup_days,
         now,
+        similarity: None,
     };
     let aopts = tidy_apply::ApplyOpts {
         manifest_dir: dir,
@@ -1829,6 +1830,7 @@ fn run(command: Command) -> Result<u8> {
             let opts = tidy::PlanOpts {
                 backup_days: a.backup_days,
                 now: tidy::now_secs(),
+                similarity: Some(tidy::Similarity::default()),
             };
             let plans = repo::for_each(&ws.repos, |r| {
                 tidy::plan_repo(r, ws.github.client(), a.common.offline, &opts)

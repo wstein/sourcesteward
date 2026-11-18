@@ -431,6 +431,7 @@ fn from_a_linked_root_the_worktrees_directory_is_the_main_checkouts() {
         &stw::tidy::PlanOpts {
             backup_days: 7,
             now: 1_800_000_000,
+            similarity: None,
         },
     );
     assert!(p.error.is_none(), "{:?}", p.error);

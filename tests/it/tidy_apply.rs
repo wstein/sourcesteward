@@ -71,6 +71,7 @@ fn plan_with(w: &W, days: u64) -> RepoPlan {
         &PlanOpts {
             backup_days: days,
             now: w.now,
+            similarity: None,
         },
     )
 }
@@ -851,6 +852,7 @@ fn a_linked_worktree_as_root_writes_the_common_exclude_file() {
         &PlanOpts {
             backup_days: 7,
             now: w.now,
+            similarity: None,
         },
     );
     let tmp = scratch();
@@ -1157,6 +1159,7 @@ fn from_a_linked_root_the_main_checkouts_branch_is_kept() {
         &PlanOpts {
             backup_days: 7,
             now,
+            similarity: None,
         },
     );
     assert!(p.error.is_none(), "{:?}", p.error);

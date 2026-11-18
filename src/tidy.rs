@@ -18,6 +18,7 @@ use crate::output::*;
 use crate::patch_id::{commit_patch_key, PatchKey};
 use crate::repo::worktrees::{self, StaleRegistration};
 use crate::repo::{self, RepoRef};
+use crate::tidy_similarity::{self, BranchReport};
 
 #[derive(Clone, Debug)]
 pub struct BranchPlan {
@@ -33,6 +34,36 @@ pub struct BranchPlan {
     /// Set when the branch is checked out in a linked worktree and would be `delete` otherwise: `tidy apply`
     /// may remove that worktree (when it is clean) and then the branch. The decision stays `keep`/`in-worktree`.
     pub worktree: Option<WorktreeCandidate>,
+    /// What the similarity stage found; None where the stage did not run for this branch.
+    pub similarity: Option<SimilarityPlan>,
+}
+
+/// The two thresholds of the similarity stage, in percent (`1..=100`, `low <= high`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Similarity {
+    pub high: u32,
+    pub low: u32,
+}
+
+impl Default for Similarity {
+    fn default() -> Self {
+        Similarity {
+            high: tidy_similarity::HIGH_PCT,
+            low: tidy_similarity::LOW_PCT,
+        }
+    }
+}
+
+/// The result of the similarity stage for one branch.
+#[derive(Clone, Debug)]
+pub struct SimilarityPlan {
+    pub high: u32,
+    pub low: u32,
+    pub report: BranchReport,
+    /// Commits of the base that were searched for partners.
+    pub indexed: usize,
+    /// Commits of the base left out because their parent is missing (shallow clone).
+    pub skipped_shallow: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -66,6 +97,8 @@ pub struct PlanOpts {
     pub backup_days: u64,
     /// "Now" in seconds since the epoch (tests inject it).
     pub now: i64,
+    /// The similarity stage (`similar-patches`); None switches it off.
+    pub similarity: Option<Similarity>,
 }
 
 pub const DEFAULT_BACKUP_DAYS: u64 = 7;
@@ -75,6 +108,7 @@ impl Default for PlanOpts {
         PlanOpts {
             backup_days: DEFAULT_BACKUP_DAYS,
             now: now_secs(),
+            similarity: Some(Similarity::default()),
         }
     }
 }
@@ -302,6 +336,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             upstream: up.name.clone(),
             track,
             worktree: None,
+            similarity: None,
         };
         if let Some(n) = pr_open {
             bp.proof = "open-pull-request";

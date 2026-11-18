@@ -57,6 +57,7 @@ fn plan(b: &B, days: u64, now: i64) -> RepoPlan {
     let opts = PlanOpts {
         backup_days: days,
         now,
+        similarity: None,
     };
     plan_repo_with_opts(
         &RepoRef {
