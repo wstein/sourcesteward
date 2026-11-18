@@ -1180,3 +1180,106 @@ fn at_most_thirty_requests_are_made_per_repository() {
         .collect::<Vec<_>>();
     assert_eq!(limited, ["b30", "b31"]);
 }
+
+// ---- the similarity stage, a shallow clone, the flag ----
+
+#[test]
+fn a_commit_the_rebase_stage_vouched_for_is_not_judged_again_by_the_similarity_stage() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    // the first commit landed with identity; the second as a similar commit with another author time
+    w.land_resolved(&list[..1], MERGE_SECS);
+    let mut second = resolved(&list[1]);
+    second.secs += 500;
+    w.land(&[second], MERGE_SECS + 100);
+    let p = plan(&w);
+    assert_eq!(proof_of(&p, "feat"), ("review", "similar-patches"));
+    let r = report(&p, "feat");
+    assert_eq!((r.mapped, r.by_identity), (1, 1));
+    let s = get(&p, "feat").similarity.as_ref().unwrap();
+    assert_eq!(
+        s.report.plus_commits, 1,
+        "the vouched-for commit is not compared again"
+    );
+    assert_eq!(s.report.commits.len(), 1);
+}
+
+#[test]
+fn a_shallow_clone_gives_a_plan_and_the_stage_says_where_the_walk_ended() {
+    let fx = Fx::new();
+    let s0 = Stamp::new("Other", "o@example.com", T0 - 20_000);
+    let old = fx.commit_at(None, &[("old.txt", Some("old\n"))], "old", s0, s0);
+    let s1 = Stamp::new("Other", "o@example.com", T0 - 10_000);
+    let c0 = fx.commit_at(Some(old), &[("base.txt", Some("base\n"))], "base", s1, s1);
+    fx.remote("main", c0);
+    fx.origin_head("main");
+    fx.branch("main", c0);
+    fx.set_head("main");
+    fx.checkout_head();
+    let mut w = W { fx, c0, main: c0 };
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let git = w.fx.path.join(".git");
+    std::fs::write(git.join("shallow"), format!("{c0}\n")).unwrap();
+    let hex = old.to_string();
+    std::fs::remove_file(git.join("objects").join(&hex[..2]).join(&hex[2..])).unwrap();
+    let p = plan(&w);
+    assert!(p.error.is_none(), "{:?}", p.error);
+    assert_eq!(proof_of(&p, "feat"), ("review", "rebase-identity"));
+    let v = json_of(&p);
+    let win = &branch_json(&v, "feat")["rebase"]["window"];
+    assert_eq!(win["stop"], "missing");
+    assert_eq!(win["stopped_at"], old.to_string().as_str());
+}
+
+fn stw_cli(home: &std::path::Path, args: &[&str]) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .env_clear()
+        .env("HOME", home)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .args(args)
+        .output()
+        .unwrap()
+}
+
+fn cli_json(w: &W, extra: &[&str]) -> Value {
+    let home = scratch();
+    let r = path_str(&w.fx.path);
+    let mut args = vec!["tidy", "plan", "--offline", "--json", "--root", r.as_str()];
+    args.extend_from_slice(extra);
+    let o = stw_cli(home.path(), &args);
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    serde_json::from_slice(&o.stdout).unwrap()
+}
+
+#[test]
+fn the_flag_no_rebase_evidence_switches_the_stage_off_and_is_independent_of_the_other() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let on = cli_json(&w, &[]);
+    let b = branch_json(&on, "feat");
+    assert_eq!(b["proof"], "rebase-identity");
+    assert_eq!(b["landed_via"]["kind"], "rebase");
+    assert_eq!(on["summary"]["rebase"], 1);
+    let off = cli_json(&w, &["--no-rebase-evidence"]);
+    let b = branch_json(&off, "feat");
+    assert_eq!(b["proof"], "similar-patches");
+    assert!(b["rebase"].is_null());
+    assert_eq!(b["landed_via"]["kind"], "unknown");
+    assert_eq!(off["summary"]["rebase"], 0);
+    let neither = cli_json(&w, &["--no-rebase-evidence", "--no-similarity"]);
+    assert_eq!(branch_json(&neither, "feat")["proof"], "unmerged");
+    let only = cli_json(&w, &["--no-similarity"]);
+    assert_eq!(branch_json(&only, "feat")["proof"], "rebase-identity");
+}
