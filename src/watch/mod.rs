@@ -14,6 +14,7 @@ use std::fmt;
 pub mod apply;
 pub mod event;
 pub mod journal;
+pub mod lock;
 pub mod state;
 pub mod statedir;
 

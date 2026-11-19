@@ -1744,3 +1744,140 @@ fn opening_tightens_the_mode_of_an_existing_journal() {
     Journal::open(t.path()).unwrap();
     assert_eq!(mode(&path), 0o600);
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The lock of the state directory.
+use std::io::{BufRead, BufReader};
+use std::process::{Command, Stdio};
+use std::time::Duration;
+
+use stw::watch::lock::{acquire_with, holder, LOCK_NAME};
+
+const NO_WAIT: Duration = Duration::from_millis(0);
+
+#[test]
+fn a_second_handle_in_the_same_process_is_locked_out_and_sees_the_pid() {
+    let t = tmp();
+    let first = acquire_with(t.path(), 1, NO_WAIT).unwrap();
+    assert_eq!(mode(&t.path().join(LOCK_NAME)), 0o600);
+    let pid = std::process::id();
+    assert_eq!(
+        std::fs::read_to_string(t.path().join(LOCK_NAME)).unwrap(),
+        format!("{pid}\n")
+    );
+    assert_eq!(
+        acquire_with(t.path(), 2, NO_WAIT).unwrap_err(),
+        WatchError::Locked(Some(pid))
+    );
+    assert_eq!(holder(t.path()), Some(Some(pid)));
+    first.release();
+    assert_eq!(holder(t.path()), None);
+    let again = acquire_with(t.path(), 1, NO_WAIT).unwrap();
+    drop(again);
+    acquire_with(t.path(), 1, NO_WAIT).unwrap(); // dropping releases too
+}
+
+#[test]
+fn the_holder_probe_never_creates_the_lock_file_and_leaves_a_free_lock_free() {
+    let t = tmp();
+    assert_eq!(holder(t.path()), None);
+    assert!(!t.path().join(LOCK_NAME).exists());
+    drop(acquire_with(t.path(), 1, NO_WAIT).unwrap());
+    assert_eq!(holder(t.path()), None);
+    acquire_with(t.path(), 1, NO_WAIT).unwrap();
+}
+
+#[test]
+fn an_unreadable_pid_is_reported_as_unknown() {
+    let t = tmp();
+    let l = acquire_with(t.path(), 1, NO_WAIT).unwrap();
+    std::fs::write(t.path().join(LOCK_NAME), "not a pid").unwrap();
+    assert_eq!(
+        acquire_with(t.path(), 1, NO_WAIT).unwrap_err(),
+        WatchError::Locked(None)
+    );
+    assert_eq!(holder(t.path()), Some(None));
+    drop(l);
+}
+
+#[test]
+fn a_busy_lock_is_retried_for_the_pause_before_it_is_reported() {
+    let t = tmp();
+    let l = acquire_with(t.path(), 1, NO_WAIT).unwrap();
+    let start = std::time::Instant::now();
+    assert!(acquire_with(t.path(), 3, Duration::from_millis(60)).is_err());
+    assert!(
+        start.elapsed() >= Duration::from_millis(120),
+        "two pauses between three attempts"
+    );
+    let dir = t.path().to_path_buf();
+    let h = std::thread::spawn(move || acquire_with(&dir, 20, Duration::from_millis(50)).map(drop));
+    std::thread::sleep(Duration::from_millis(100));
+    drop(l);
+    h.join()
+        .unwrap()
+        .expect("the retry got the lock once it was free");
+}
+
+/// Not a test of its own: the child of `a_second_process_is_locked_out`. It takes the lock, says so, and holds it until its
+/// standard input closes.
+#[test]
+#[ignore]
+fn lock_holder_child() {
+    let Ok(dir) = std::env::var("STW_WATCH_LOCK_CHILD_DIR") else {
+        return;
+    };
+    let _l = acquire_with(Path::new(&dir), 1, NO_WAIT).unwrap();
+    println!("LOCKED {}", std::process::id());
+    let mut line = String::new();
+    let _ = std::io::stdin().read_line(&mut line);
+}
+
+#[test]
+fn a_second_process_is_locked_out_and_the_lock_is_free_when_it_dies() {
+    let t = tmp();
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "watch_core::lock_holder_child",
+            "--ignored",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .env("STW_WATCH_LOCK_CHILD_DIR", t.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    // The reader runs in a thread so that a child that never says anything fails the test after a time limit instead of
+    // hanging it (and the cargo queue). libtest prints `test NAME ... ` in front of the first output line of the child.
+    let out = BufReader::new(child.stdout.take().unwrap());
+    let (tx, rx) = std::sync::mpsc::channel::<u32>();
+    std::thread::spawn(move || {
+        for line in out.lines().map_while(Result::ok) {
+            if let Some(p) = line
+                .split_once("LOCKED ")
+                .and_then(|(_, p)| p.trim().parse().ok())
+            {
+                let _ = tx.send(p);
+            }
+        }
+    });
+    let pid = rx.recv_timeout(Duration::from_secs(30));
+    if pid.is_err() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
+    let pid = pid.expect("the child took the lock within 30 s");
+    assert_ne!(pid, std::process::id());
+    assert_eq!(
+        acquire_with(t.path(), 1, NO_WAIT).unwrap_err(),
+        WatchError::Locked(Some(pid))
+    );
+    assert_eq!(holder(t.path()), Some(Some(pid)));
+    drop(child.stdin.take()); // the child reads EOF and exits
+    child.wait().unwrap();
+    assert_eq!(holder(t.path()), None);
+    acquire_with(t.path(), 1, NO_WAIT).unwrap();
+}
