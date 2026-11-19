@@ -1329,3 +1329,217 @@ fn applying_the_same_event_again_changes_nothing() {
         assert_eq!(s, once, "{}", e.id);
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The state directory: creation and refusal, atomic files, heartbeat, state.json.
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+
+use stw::watch::statedir::{
+    clean_path, ensure_state_dir, load_state, read_heartbeat, save_state, write_atomic,
+    write_heartbeat, STATE_NAME,
+};
+use stw::watch::WatchError;
+
+fn tmp() -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix("stw-watch-core-")
+        .tempdir()
+        .unwrap()
+}
+
+fn mode(p: &Path) -> u32 {
+    std::fs::metadata(p).unwrap().permissions().mode() & 0o777
+}
+
+#[test]
+fn a_new_state_directory_is_created_private_with_its_missing_parents() {
+    let t = tmp();
+    let dir = t.path().join("a").join("b").join("watch");
+    ensure_state_dir(&dir).unwrap();
+    assert!(dir.is_dir());
+    assert_eq!(
+        (
+            mode(&dir),
+            mode(&t.path().join("a")),
+            mode(&t.path().join("a/b"))
+        ),
+        (0o700, 0o700, 0o700)
+    );
+    ensure_state_dir(&dir).unwrap(); // an existing 0700 directory is accepted
+}
+
+#[test]
+fn a_relative_state_directory_is_a_usage_error_and_nothing_is_created() {
+    assert_eq!(
+        ensure_state_dir(Path::new("relative/dir")),
+        Err(WatchError::StateDirUsage)
+    );
+    assert!(!Path::new("relative").exists());
+    assert_eq!(
+        ensure_state_dir(Path::new("")),
+        Err(WatchError::StateDirUsage)
+    );
+}
+
+#[test]
+fn a_directory_with_another_mode_is_refused() {
+    let t = tmp();
+    for m in [0o755, 0o770, 0o750, 0o500] {
+        let dir = t.path().join(format!("m{m:o}"));
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(m)).unwrap();
+        assert!(
+            matches!(ensure_state_dir(&dir), Err(WatchError::StateDirMode(_))),
+            "{m:o}"
+        );
+    }
+}
+
+#[test]
+fn a_directory_inside_a_git_work_tree_or_below_dot_stw_is_refused_before_anything_is_created() {
+    let t = tmp();
+    let tree = t.path().join("tree");
+    std::fs::create_dir_all(tree.join(".git")).unwrap();
+    let inside = tree.join("deep").join("state");
+    assert!(matches!(
+        ensure_state_dir(&inside),
+        Err(WatchError::InsideWorkTree(_))
+    ));
+    assert!(!tree.join("deep").exists(), "nothing created");
+    // a `.git` file (a linked work tree or a submodule) counts too
+    let linked = t.path().join("linked");
+    std::fs::create_dir(&linked).unwrap();
+    std::fs::write(linked.join(".git"), "gitdir: /elsewhere\n").unwrap();
+    assert!(matches!(
+        ensure_state_dir(&linked.join("s")),
+        Err(WatchError::InsideWorkTree(_))
+    ));
+    // the work tree itself
+    assert!(matches!(
+        ensure_state_dir(&tree),
+        Err(WatchError::InsideWorkTree(_))
+    ));
+    // below a `.stw` directory
+    let stw = t.path().join("ws").join(".stw").join("state");
+    assert!(matches!(
+        ensure_state_dir(&stw),
+        Err(WatchError::InsideWorkTree(_))
+    ));
+    assert!(!t.path().join("ws").exists());
+}
+
+#[test]
+fn a_symbolic_link_into_a_work_tree_is_seen_and_dot_dot_is_resolved_first() {
+    let t = tmp();
+    let tree = t.path().join("tree");
+    std::fs::create_dir_all(tree.join(".git")).unwrap();
+    let link = t.path().join("link");
+    std::os::unix::fs::symlink(&tree, &link).unwrap();
+    assert!(matches!(
+        ensure_state_dir(&link.join("state")),
+        Err(WatchError::InsideWorkTree(_))
+    ));
+    // `tree/../ok` is `ok`: fine although the path names the work tree
+    let ok = tree.join("..").join("ok");
+    ensure_state_dir(&ok).unwrap();
+    assert!(t.path().join("ok").is_dir());
+    assert_eq!(clean_path(Path::new("/a/b/../c/./d")), Path::new("/a/c/d"));
+    assert_eq!(clean_path(Path::new("/../x")), Path::new("/x"));
+    assert_eq!(clean_path(Path::new("/")), Path::new("/"));
+}
+
+#[test]
+fn a_path_that_is_a_file_is_not_a_state_directory() {
+    let t = tmp();
+    let f = t.path().join("file");
+    std::fs::write(&f, "x").unwrap();
+    assert!(
+        matches!(ensure_state_dir(&f), Err(WatchError::Io(_))),
+        "a file"
+    );
+}
+
+#[test]
+fn an_atomic_write_leaves_the_content_with_mode_0600_and_no_temporary_file() {
+    let t = tmp();
+    write_atomic(t.path(), "x.json", b"one").unwrap();
+    write_atomic(t.path(), "x.json", b"two").unwrap();
+    assert_eq!(std::fs::read(t.path().join("x.json")).unwrap(), b"two");
+    assert_eq!(mode(&t.path().join("x.json")), 0o600);
+    let names: Vec<String> = std::fs::read_dir(t.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().into_string().unwrap())
+        .collect();
+    assert_eq!(names, ["x.json"]);
+    // a failing write (no such directory) leaves nothing and says where
+    let err = write_atomic(&t.path().join("nope"), "x", b"1").unwrap_err();
+    assert!(matches!(err, WatchError::Io(_)), "{err}");
+}
+
+#[test]
+fn the_heartbeat_is_one_line_with_time_pid_and_mode() {
+    let t = tmp();
+    write_heartbeat(t.path(), 1_792_003_723, 4242, "stream").unwrap();
+    assert_eq!(
+        std::fs::read_to_string(t.path().join("heartbeat")).unwrap(),
+        "2026-10-14T18:48:43Z 4242 stream\n"
+    );
+    assert_eq!(mode(&t.path().join("heartbeat")), 0o600);
+    let hb = read_heartbeat(t.path(), 1_792_003_723 + 90)
+        .unwrap()
+        .unwrap();
+    assert_eq!(
+        (hb.time.as_str(), hb.age_seconds, hb.pid, hb.mode.as_str()),
+        ("2026-10-14T18:48:43Z", 90, 4242, "stream")
+    );
+    // a clock that went back counts as age 0
+    assert_eq!(
+        read_heartbeat(t.path(), 1_792_003_000)
+            .unwrap()
+            .unwrap()
+            .age_seconds,
+        0
+    );
+}
+
+#[test]
+fn a_missing_or_unreadable_heartbeat_is_none() {
+    let t = tmp();
+    assert_eq!(read_heartbeat(t.path(), 0).unwrap(), None);
+    for bad in [
+        "",
+        "garbage\n",
+        "2026-10-14T18:48:43Z 1\n",
+        "2026-10-14T18:48:43Z x stream\n",
+        "yesterday 1 stream\n",
+        "2026-10-14T18:48:43Z 1 stream extra\n",
+    ] {
+        std::fs::write(t.path().join("heartbeat"), bad).unwrap();
+        assert_eq!(read_heartbeat(t.path(), 0).unwrap(), None, "{bad:?}");
+    }
+    std::fs::write(t.path().join("heartbeat"), [0xff, 0xfe]).unwrap();
+    assert_eq!(read_heartbeat(t.path(), 0).unwrap(), None, "not UTF-8");
+}
+
+#[test]
+fn state_json_is_written_atomically_and_read_back() {
+    let t = tmp();
+    assert_eq!(load_state(t.path()).unwrap(), None, "missing");
+    let mut s = State::new();
+    s.cycle = 7;
+    s.applied_seq = 3;
+    save_state(t.path(), &s).unwrap();
+    assert_eq!(mode(&t.path().join(STATE_NAME)), 0o600);
+    assert_eq!(load_state(t.path()).unwrap(), Some(s));
+    std::fs::write(t.path().join(STATE_NAME), "{not json").unwrap();
+    assert!(matches!(
+        load_state(t.path()),
+        Err(WatchError::CorruptState(_))
+    ));
+    std::fs::write(t.path().join(STATE_NAME), r#"{"schema_version":1}"#).unwrap();
+    assert!(
+        matches!(load_state(t.path()), Err(WatchError::CorruptState(_))),
+        "a Go state file is not ours"
+    );
+}

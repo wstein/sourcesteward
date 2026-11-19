@@ -1,6 +1,26 @@
 //! The state directory of a watcher: its id and default place, SHA-256 for the id, the freshness window of `--status`.
+#[allow(unused_imports)]
 use std::collections::BTreeSet;
-use std::path::PathBuf;
+#[allow(unused_imports)]
+use std::fs::{File, OpenOptions};
+#[allow(unused_imports)]
+use std::io::Write;
+#[allow(unused_imports)]
+use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+#[allow(unused_imports)]
+use std::path::{Component, Path, PathBuf};
+#[allow(unused_imports)]
+use std::sync::atomic::{AtomicU64, Ordering};
+
+#[allow(unused_imports)]
+use serde::Serialize;
+
+#[allow(unused_imports)]
+use super::event::format_utc;
+#[allow(unused_imports)]
+use super::state::State;
+#[allow(unused_imports)]
+use super::WatchError;
 
 /// Prefix of the text the workspace id hashes. It differs from the Go watcher's `stw-watch-v1`, so a Go state directory
 /// and a Rust one never share a path (D-20261119-05: new format, new baseline).
@@ -119,4 +139,122 @@ pub fn default_state_dir(id: &str, xdg_state_home: Option<&str>, home: Option<&s
 /// The age below which a heartbeat counts as alive: `max(3 x interval, 180)` seconds.
 pub fn status_freshness_seconds(interval_seconds: u64) -> u64 {
     interval_seconds.saturating_mul(3).max(180)
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The directory itself: creation and refusal, atomic files, heartbeat, state.json, the status report.
+
+/// A path without `.` and `..` components, resolved lexically (like Go's `filepath.Clean`).
+pub fn clean_path(p: &Path) -> PathBuf {
+    p.to_path_buf()
+}
+
+/// Creates `dir` (mode 0700, also the missing parents) or accepts an existing 0700 one. Refused (and nothing created) are:
+/// a relative path, a directory inside a Git work tree (a `.git` entry in it or above it) or below a `.stw` directory, found
+/// after the symbolic links of the deepest existing ancestor are resolved, and an existing directory with another mode.
+pub fn ensure_state_dir(dir: &Path) -> Result<(), WatchError> {
+    let _ = dir;
+    Ok(())
+}
+
+/// Flushes a directory entry (a created or renamed file) to disk.
+pub fn sync_dir(dir: &Path) -> Result<(), WatchError> {
+    let _ = dir;
+    Ok(())
+}
+
+/// Writes `dir/name` with mode 0600 atomically: a temporary file, fsync, rename, fsync of the directory. A reader sees the old
+/// or the new content, never a mix; a failure leaves no temporary file behind.
+pub fn write_atomic(dir: &Path, name: &str, data: &[u8]) -> Result<(), WatchError> {
+    let _ = (dir, name, data);
+    Ok(())
+}
+
+/// File names inside the state directory.
+pub const STATE_NAME: &str = "state.json";
+pub const HEARTBEAT_NAME: &str = "heartbeat";
+
+/// The line `RFC3339 pid mode` of the last completed cycle.
+pub fn write_heartbeat(dir: &Path, now_secs: i64, pid: u32, mode: &str) -> Result<(), WatchError> {
+    let _ = (dir, now_secs, pid, mode);
+    Ok(())
+}
+
+/// The last heartbeat as read from the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Heartbeat {
+    pub time: String,
+    pub age_seconds: u64,
+    pub pid: u32,
+    pub mode: String,
+}
+
+/// Reads the heartbeat. `Ok(None)`: no file, or a file that is not three fields with a valid time and pid.
+pub fn read_heartbeat(dir: &Path, now_secs: i64) -> Result<Option<Heartbeat>, WatchError> {
+    let _ = (dir, now_secs);
+    Ok(None)
+}
+
+/// Reads `state.json`: `Ok(None)` when the file is missing, `CorruptState` when it cannot be used.
+pub fn load_state(dir: &Path) -> Result<Option<State>, WatchError> {
+    let _ = dir;
+    Ok(None)
+}
+
+/// Writes `state.json` atomically.
+pub fn save_state(dir: &Path, state: &State) -> Result<(), WatchError> {
+    let _ = (dir, state);
+    Ok(())
+}
+
+/// One watched repository in the status report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StatusRepo {
+    pub repo: String,
+    pub last_ok: Option<String>,
+    pub age_seconds: Option<u64>,
+    pub failures: u64,
+    pub open_error: Option<String>,
+}
+
+/// The heartbeat part of the status report.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct StatusHeartbeat {
+    pub time: String,
+    pub age_seconds: u64,
+    pub pid: u32,
+}
+
+/// The `--status --json` object: liveness of the watcher that owns the directory, read from the directory only (no
+/// network, no lock taken, nothing written).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Status {
+    pub schema_version: u32,
+    pub state_dir: String,
+    pub heartbeat: Option<StatusHeartbeat>,
+    pub fresh: bool,
+    pub interval_seconds: u64,
+    pub seq: u64,
+    pub lock_held: bool,
+    pub repos: Vec<StatusRepo>,
+    /// The pid the lock holder recorded (not part of the JSON).
+    #[serde(skip)]
+    pub lock_pid: Option<u32>,
+}
+
+/// Reads the status of `dir` at `now_secs`. A missing directory, state or heartbeat is not an error: the result is simply not
+/// fresh. A corrupt `state.json` or journal is `CorruptState`.
+pub fn read_status(dir: &Path, now_secs: i64) -> Result<Status, WatchError> {
+    let _ = now_secs;
+    Ok(Status {
+        schema_version: 1,
+        state_dir: dir.display().to_string(),
+        heartbeat: None,
+        fresh: false,
+        interval_seconds: 60,
+        seq: 0,
+        lock_held: false,
+        repos: Vec::new(),
+        lock_pid: None,
+    })
 }
