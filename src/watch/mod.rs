@@ -11,6 +11,7 @@
 //! `printed_seq` again (at-least-once output).
 use std::fmt;
 
+pub mod event;
 pub mod statedir;
 
 /// What can go wrong in the core. The command (W4) maps the variants to exit codes (`Locked` is exit 3, the usage
