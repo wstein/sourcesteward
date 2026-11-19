@@ -572,3 +572,13 @@ fn the_range_is_the_one_git_sees_where_the_shallow_file_lists_a_commit_with_its_
     std::fs::remove_file(fx.path.join(".git/shallow")).unwrap();
     assert_eq!(stw::repo::range_commits(&repo, b0, t1).unwrap(), vec![b0]);
 }
+
+#[test]
+fn the_first_parent_index_of_the_base_ends_at_a_listed_commit() {
+    use stw::tidy_rebase::{RebaseIndex, Stop};
+    let (fx, _, _, _, a1, a2) = listed_parent_world();
+    let repo = fx.repo();
+    let idx = RebaseIndex::build(&repo, a2, None, 100).unwrap();
+    assert_eq!(idx.len(), 1);
+    assert_eq!(idx.stop(), Stop::Missing(a1));
+}
