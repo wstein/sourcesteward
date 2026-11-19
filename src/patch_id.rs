@@ -1,14 +1,19 @@
 //! Patch IDs with `git patch-id --stable` semantics, computed in-process.
 //!
-//! The ID is a SHA-1 over the diff of a commit against its first parent, normalized the way git does:
-//! hunk headers (line numbers) are dropped, `index` lines are dropped, and every ASCII whitespace byte is
-//! removed from every remaining line. `--stable`: every file diff is hashed on its own and the 20-byte hashes
-//! are summed (little-endian with carry), so the file order does not matter. `\ No newline` markers are not hashed.
-//! Merge commits have no patch ID (`git cherry` skips them as well).
+//! The ID is a SHA-1 over the diff of a commit against its first parent as `git diff-tree -p` prints it,
+//! read the way `git patch-id` reads it (a port of `get_one_patchid` in git's `builtin/patch-id.c`): hunk
+//! headers (line numbers) and `index` lines are not hashed, every ASCII white space byte is removed from
+//! every other line. `--stable`: the diff is cut into units, each unit is hashed on its own and the 20-byte
+//! hashes are summed (little-endian with carry), so the order of the units does not matter. A unit ends where
+//! the next `diff` line follows a complete hunk, so a file diff without hunks (mode change, empty file, exact
+//! rename) belongs to the unit of the next file diff; a binary file adds the abbreviated blob ids of its
+//! `index` line to the hash and ends its unit, and the `diff --git` line after it is not hashed; the last unit
+//! is added even when it is empty. `\ No newline` markers are not hashed. Merge commits have no patch ID
+//! (`git cherry` skips them as well). Renames are detected as `git diff` does by default (`patch_rename.rs`).
 //!
 //! Diff hunks come from `gix-imara-diff` (Myers, no slider heuristic) with 3 lines of context. Git uses
 //! xdiff; both are Myers-based but differ in heuristics, so IDs agree only where the hunks agree. The
-//! oracle script in `tests/oracle/` measures the agreement on real commits.
+//! oracle scripts in `tests/oracle/` measure the agreement on real commits.
 
 use gix::bstr::{BStr, BString};
 use gix::diff::blob::{Algorithm, Diff, InternedInput};
@@ -19,17 +24,42 @@ use crate::error::Result;
 
 const CONTEXT: u32 = 3;
 
-/// Hashes the lines of one file diff; `finish_file` folds the digest into the running stable sum.
-struct Hasher {
+/// One line of the diff text as far as `git patch-id` reads it.
+enum Line {
+    Text(Vec<u8>),
+    /// The `index` line of a binary diff: the abbreviated blob ids git prints, and the full ones.
+    Index {
+        pre: String,
+        post: String,
+        pre_full: String,
+        post_full: String,
+    },
+    /// The counts of a hunk header (`@@ -a,<before> +c,<after> @@`).
+    Hunk {
+        before: i64,
+        after: i64,
+    },
+}
+
+/// A port of `get_one_patchid` (builtin/patch-id.c, `--stable`). A second digest hashes the same lines with
+/// their white space and with full blob ids, and also the lines git skips (`Binary files ... differ`, the
+/// `diff` line after a binary file); it is cut into the same units.
+struct Machine {
     cur: gix::hash::Hasher,
     sum: [u8; 20],
-    /// The same lines with their white space kept, hashed per file and summed like `sum`.
     exact_cur: gix::hash::Hasher,
     exact_sum: [u8; 20],
+    before: i64,
+    after: i64,
+    binary: bool,
+    ids: (String, String),
+    full_ids: (String, String),
+    patchlen: usize,
+    stopped: bool,
     log: Option<Vec<u8>>,
 }
 
-/// Add `digest` to `sum` as a little-endian number, byte by byte (git's `hash_obj` sum in stable mode).
+/// Add `digest` to `sum` as a little-endian number, byte by byte (git's `flush_one_hunk` in stable mode).
 fn add_digest(sum: &mut [u8; 20], digest: &[u8]) {
     let mut carry: u16 = 0;
     for (i, b) in digest.iter().enumerate() {
@@ -39,38 +69,55 @@ fn add_digest(sum: &mut [u8; 20], digest: &[u8]) {
     }
 }
 
-impl Hasher {
+fn starts_with(line: &[u8], prefix: &str) -> bool {
+    line.starts_with(prefix.as_bytes())
+}
+
+impl Machine {
     fn new() -> Self {
-        Hasher {
+        Machine {
             cur: gix::hash::hasher(gix::hash::Kind::Sha1),
             sum: [0; 20],
             exact_cur: gix::hash::hasher(gix::hash::Kind::Sha1),
             exact_sum: [0; 20],
+            before: -1,
+            after: -1,
+            binary: false,
+            ids: Default::default(),
+            full_ids: Default::default(),
+            patchlen: 0,
+            stopped: false,
             log: None,
         }
     }
-    /// Feed one logical line with all ASCII whitespace removed (git's `remove_space`).
-    fn line(&mut self, line: &[u8]) {
-        // the exact variant keeps every byte; the length prefix keeps line borders unambiguous
+
+    fn exact_line(&mut self, line: &[u8]) {
+        // the length prefix keeps line borders unambiguous
         self.exact_cur.update(&(line.len() as u64).to_be_bytes());
         self.exact_cur.update(line);
-        let mut buf = Vec::with_capacity(line.len());
-        buf.extend(
-            line.iter()
-                .copied()
-                .filter(|b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r')),
-        );
+    }
+
+    /// git's `remove_space` on a line: a C string, so it ends at a NUL byte, and ASCII white space is dropped.
+    fn hash_line(&mut self, line: &[u8]) {
+        self.exact_line(line);
+        let c_string = line.split(|b| *b == 0).next().unwrap_or(&[]);
+        let buf: Vec<u8> = c_string
+            .iter()
+            .copied()
+            .filter(|b| !matches!(b, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+            .collect();
+        self.patchlen += buf.len();
         self.cur.update(&buf);
         if let Some(log) = &mut self.log {
             log.extend_from_slice(&buf);
             log.push(b'\n');
         }
     }
-    /// End of one file diff (git's `flush_one_hunk` in stable mode): add its digest to the sum.
-    fn finish_file(&mut self) -> Result<()> {
+
+    /// git's `flush_one_hunk` in stable mode: add the digest of the current unit to the sum.
+    fn flush(&mut self) -> Result<()> {
         let done = std::mem::replace(&mut self.cur, gix::hash::hasher(gix::hash::Kind::Sha1));
-        let digest = done.try_finalize()?;
-        add_digest(&mut self.sum, digest.as_bytes());
+        add_digest(&mut self.sum, done.try_finalize()?.as_bytes());
         let exact = std::mem::replace(
             &mut self.exact_cur,
             gix::hash::hasher(gix::hash::Kind::Sha1),
@@ -78,16 +125,100 @@ impl Hasher {
         .try_finalize()?;
         add_digest(&mut self.exact_sum, exact.as_bytes());
         if let Some(log) = &mut self.log {
-            log.extend_from_slice(b"--file-end--\n");
+            log.extend_from_slice(b"--unit-end--\n");
         }
         Ok(())
     }
-    /// (patch ID, white-space-preserving digest of the same lines)
-    fn finish(self) -> (ObjectId, ObjectId) {
-        (
+
+    fn feed(&mut self, line: Line) -> Result<()> {
+        if self.stopped {
+            return Ok(());
+        }
+        match line {
+            Line::Index {
+                pre,
+                post,
+                pre_full,
+                post_full,
+            } => {
+                self.ids = (pre, post);
+                self.full_ids = (pre_full, post_full);
+                Ok(())
+            }
+            Line::Hunk { before, after } => {
+                if self.before == 0 && self.after == 0 {
+                    self.before = before;
+                    self.after = after;
+                }
+                Ok(())
+            }
+            Line::Text(l) => self.text(&l),
+        }
+    }
+
+    fn text(&mut self, l: &[u8]) -> Result<()> {
+        // parsing a diff header?
+        if self.before == -1 {
+            if starts_with(l, "Binary files") || starts_with(l, "GIT binary patch") {
+                let ids = std::mem::take(&mut self.ids);
+                self.cur.update(ids.0.as_bytes());
+                self.cur.update(ids.1.as_bytes());
+                let full = std::mem::take(&mut self.full_ids);
+                self.exact_line(l);
+                self.exact_line(full.0.as_bytes());
+                self.exact_line(full.1.as_bytes());
+                self.flush()?;
+                self.binary = true;
+                self.before = 0;
+                return Ok(());
+            } else if starts_with(l, "--- ") {
+                self.before = 1;
+                self.after = 1;
+            } else if !l.first().is_some_and(|b| b.is_ascii_alphabetic()) {
+                self.stopped = true;
+                return Ok(());
+            }
+        }
+        if self.binary {
+            if starts_with(l, "diff ") {
+                // git does not hash this line
+                self.exact_line(l);
+                self.binary = false;
+                self.before = -1;
+            }
+            return Ok(());
+        }
+        // looking for a valid hunk header: a unit ends where the next `diff` line follows a complete hunk
+        if self.before == 0 && self.after == 0 {
+            if !starts_with(l, "diff ") {
+                self.stopped = true;
+                return Ok(());
+            }
+            self.flush()?;
+            self.before = -1;
+            self.after = -1;
+        }
+        // inside a hunk, or a header line
+        if l.first() == Some(&b'-') || l.first() == Some(&b' ') {
+            self.before -= 1;
+        }
+        if l.first() == Some(&b'+') || l.first() == Some(&b' ') {
+            self.after -= 1;
+        }
+        self.hash_line(l);
+        Ok(())
+    }
+
+    /// (patch ID, white-space-preserving digest of the same units). git adds the last unit even when it is
+    /// empty; an empty diff has no units at all.
+    fn finish(mut self) -> Result<(ObjectId, ObjectId)> {
+        if self.patchlen > 0 {
+            self.flush()?;
+        }
+        Ok((
             ObjectId::from_bytes_or_panic(&self.sum),
             ObjectId::from_bytes_or_panic(&self.exact_sum),
-        )
+        ))
     }
 }
 
@@ -114,8 +245,14 @@ pub(crate) fn content(repo: &gix::Repository, kind: EntryKind, id: ObjectId) -> 
     Ok(repo.find_object(id)?.data.clone())
 }
 
-/// Hash the unified-diff lines (without hunk headers) of `before` -> `after` into `h`.
-fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_name: &[u8]) {
+/// The unified-diff lines of `before` -> `after` (`---`, `+++`, hunk headers, 3 lines of context) as `out`.
+fn render_hunks(
+    out: &mut Vec<Line>,
+    before: &[u8],
+    after: &[u8],
+    old_name: &[u8],
+    new_name: &[u8],
+) {
     let input = InternedInput::new(before, after);
     let mut diff = Diff::compute(Algorithm::Myers, &input);
     diff.postprocess_no_heuristic(&input);
@@ -123,15 +260,16 @@ fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_
     if hunks.is_empty() {
         return;
     }
-    h.line(&[b"--- ".as_slice(), old_name].concat());
-    h.line(&[b"+++ ".as_slice(), new_name].concat());
+    out.push(Line::Text([b"--- ".as_slice(), old_name].concat()));
+    out.push(Line::Text([b"+++ ".as_slice(), new_name].concat()));
     let b: Vec<&[u8]> = input.before.iter().map(|t| input.interner[*t]).collect();
     let a: Vec<&[u8]> = input.after.iter().map(|t| input.interner[*t]).collect();
-    let emit = |h: &mut Hasher, prefix: u8, line: &[u8]| {
+    // a missing final newline adds a `\ No newline` marker line, which git does not hash
+    let emit = |lines: &mut Vec<Line>, prefix: u8, line: &[u8]| {
         let mut l = Vec::with_capacity(line.len() + 1);
         l.push(prefix);
         l.extend_from_slice(line);
-        h.line(&l); // a missing final newline adds a `\ No newline` marker line, which git does not hash
+        lines.push(Line::Text(l));
     };
     let nb = b.len() as u32;
     let mut i = 0;
@@ -142,16 +280,17 @@ fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_
         {
             j += 1;
         }
+        let mut lines: Vec<Line> = Vec::new();
         let start = hunks[i].before.start.saturating_sub(CONTEXT);
         for k in start..hunks[i].before.start {
-            emit(h, b' ', b[k as usize]);
+            emit(&mut lines, b' ', b[k as usize]);
         }
         for n in i..=j {
             for k in hunks[n].before.clone() {
-                emit(h, b'-', b[k as usize]);
+                emit(&mut lines, b'-', b[k as usize]);
             }
             for k in hunks[n].after.clone() {
-                emit(h, b'+', a[k as usize]);
+                emit(&mut lines, b'+', a[k as usize]);
             }
             let gap_end = if n < j {
                 hunks[n + 1].before.start
@@ -159,9 +298,20 @@ fn hash_hunks(h: &mut Hasher, before: &[u8], after: &[u8], old_name: &[u8], new_
                 (hunks[n].before.end + CONTEXT).min(nb)
             };
             for k in hunks[n].before.end..gap_end {
-                emit(h, b' ', b[k as usize]);
+                emit(&mut lines, b' ', b[k as usize]);
             }
         }
+        let count = |signs: [u8; 2]| {
+            lines
+                .iter()
+                .filter(|l| matches!(l, Line::Text(t) if signs.contains(&t[0])))
+                .count() as i64
+        };
+        out.push(Line::Hunk {
+            before: count(*b" -"),
+            after: count(*b" +"),
+        });
+        out.append(&mut lines);
         i = j + 1;
     }
 }
@@ -291,6 +441,46 @@ pub(crate) fn changed_files(
     Ok(files)
 }
 
+/// One entry of the diff as git prints it: an addition, a deletion or a modification of one path. For an
+/// addition or a deletion `old_path` and `new_path` are the same path.
+pub(crate) struct Pair {
+    pub(crate) old_path: BString,
+    pub(crate) new_path: BString,
+    pub(crate) old: Option<(EntryKind, ObjectId)>,
+    pub(crate) new: Option<(EntryKind, ObjectId)>,
+    /// `Some(percent)` for a rename (100 for an exact one): `similarity index <n>%`.
+    pub(crate) similarity: Option<u64>,
+}
+
+/// The file type of an entry as `S_IFMT` tells them apart: regular file, symbolic link, gitlink.
+fn type_class(kind: EntryKind) -> u8 {
+    match kind {
+        EntryKind::Blob | EntryKind::BlobExecutable => 0,
+        EntryKind::Link => 1,
+        _ => 2,
+    }
+}
+
+impl Pair {
+    /// The entries git prints for one changed path: a change of the file type (file, link, gitlink) is a
+    /// deletion followed by an addition.
+    pub(crate) fn of(f: &FileChange) -> Vec<Pair> {
+        let pair = |old, new| Pair {
+            old_path: f.path.clone(),
+            new_path: f.path.clone(),
+            old,
+            new,
+            similarity: None,
+        };
+        match (f.old, f.new) {
+            (Some(o), Some(n)) if type_class(o.0) != type_class(n.0) => {
+                vec![pair(Some(o), None), pair(None, Some(n))]
+            }
+            (old, new) => vec![pair(old, new)],
+        }
+    }
+}
+
 fn tree_diff_inner(
     repo: &gix::Repository,
     old: &gix::Tree<'_>,
@@ -298,16 +488,38 @@ fn tree_diff_inner(
     log: bool,
 ) -> Result<((ObjectId, ObjectId), Vec<u8>)> {
     let files = changed_files(repo, old, new)?;
-    let mut h = Hasher::new();
+    let mut m = Machine::new();
     if log {
-        h.log = Some(Vec::new());
+        m.log = Some(Vec::new());
     }
-    for f in files {
-        hash_file(repo, &mut h, f.path.as_ref(), f.old, f.new)?;
-        h.finish_file()?;
+    for pair in files.iter().flat_map(Pair::of) {
+        for line in render_pair(repo, &pair)? {
+            m.feed(line)?;
+        }
     }
-    let log = h.log.take().unwrap_or_default();
-    Ok((h.finish(), log))
+    let log = m.log.take().unwrap_or_default();
+    Ok((m.finish()?, log))
+}
+
+/// The abbreviated blob ids of an `index` line, as git prints them (the abbreviation length is the one gix
+/// computes for the repository: `core.abbrev`, else from the object count; an absent side is zeros).
+fn abbreviated(
+    repo: &gix::Repository,
+    old: Option<ObjectId>,
+    new: Option<ObjectId>,
+) -> Result<(String, String)> {
+    let short = |id: Option<ObjectId>| -> Result<Option<String>> {
+        match id {
+            Some(id) => Ok(Some(repo.find_object(id)?.id().shorten()?.to_string())),
+            None => Ok(None),
+        }
+    };
+    let (o, n) = (short(old)?, short(new)?);
+    let len = o.as_ref().or(n.as_ref()).map_or(7, |s| s.len());
+    Ok((
+        o.unwrap_or_else(|| "0".repeat(len)),
+        n.unwrap_or_else(|| "0".repeat(len)),
+    ))
 }
 
 /// `prefix` + `path` as git writes it in a diff header with `core.quotePath=true`: when the name contains
@@ -346,20 +558,21 @@ fn quote_path(prefix: &[u8], path: &BStr) -> Vec<u8> {
     out
 }
 
-fn hash_file(
-    repo: &gix::Repository,
-    h: &mut Hasher,
-    path: &BStr,
-    old: Option<(EntryKind, ObjectId)>,
-    new: Option<(EntryKind, ObjectId)>,
-) -> Result<()> {
+/// The diff text git prints for one entry (`git diff-tree -p`), as lines.
+fn render_pair(repo: &gix::Repository, pair: &Pair) -> Result<Vec<Line>> {
+    let (old, new) = (pair.old, pair.new);
+    let mut out: Vec<Line> = Vec::new();
+    let text = |out: &mut Vec<Line>, l: &[u8]| out.push(Line::Text(l.to_vec()));
     // git quotes names in diff headers (core.quotePath=true) and hashes the raw bytes
-    let header = [quote_path(b"a/", path), quote_path(b"b/", path)];
+    let header = [
+        quote_path(b"a/", pair.old_path.as_ref()),
+        quote_path(b"b/", pair.new_path.as_ref()),
+    ];
     let mut line = b"diff --git ".to_vec();
     line.extend_from_slice(&header[0]);
     line.push(b' ');
     line.extend_from_slice(&header[1]);
-    h.line(&line);
+    text(&mut out, &line);
     let dev_null = b"/dev/null".to_vec();
     let (old_name, new_name) = (
         if old.is_some() {
@@ -374,13 +587,31 @@ fn hash_file(
         },
     );
     match (old, new) {
-        (None, Some((k, _))) => h.line(format!("new file mode {}", mode_str(k)).as_bytes()),
-        (Some((k, _)), None) => h.line(format!("deleted file mode {}", mode_str(k)).as_bytes()),
+        (None, Some((k, _))) => text(
+            &mut out,
+            format!("new file mode {}", mode_str(k)).as_bytes(),
+        ),
+        (Some((k, _)), None) => text(
+            &mut out,
+            format!("deleted file mode {}", mode_str(k)).as_bytes(),
+        ),
         (Some((ko, _)), Some((kn, _))) if ko != kn => {
-            h.line(format!("old mode {}", mode_str(ko)).as_bytes());
-            h.line(format!("new mode {}", mode_str(kn)).as_bytes());
+            text(&mut out, format!("old mode {}", mode_str(ko)).as_bytes());
+            text(&mut out, format!("new mode {}", mode_str(kn)).as_bytes());
         }
         _ => {}
+    }
+    if let Some(percent) = pair.similarity {
+        text(&mut out, format!("similarity index {percent}%").as_bytes());
+        // the words stand outside the quotes of a quoted name
+        for (words, path) in [
+            (&b"rename from "[..], &pair.old_path),
+            (&b"rename to "[..], &pair.new_path),
+        ] {
+            let mut l = words.to_vec();
+            l.extend_from_slice(&quote_path(b"", path.as_ref()));
+            text(&mut out, &l);
+        }
     }
     let before = match old {
         Some((k, id)) => content(repo, k, id)?,
@@ -391,20 +622,28 @@ fn hash_file(
         None => Vec::new(),
     };
     if before == after {
-        return Ok(());
+        return Ok(out);
     }
     if is_binary(&before) || is_binary(&after) {
-        let _ = (&old_name, &new_name);
-        // git hashes the two (abbreviated) object ids of the `index` line instead of any content; the
-        // abbreviation length depends on the repository, so full ids are used here (not oracle-comparable)
-        let hex = |x: Option<(EntryKind, ObjectId)>| {
+        let (pre, post) = abbreviated(repo, old.map(|o| o.1), new.map(|n| n.1))?;
+        let full = |x: Option<(EntryKind, ObjectId)>| {
             x.map(|(_, id)| id.to_string())
                 .unwrap_or_else(|| "0".repeat(40))
         };
-        h.line(hex(old).as_bytes());
-        h.line(hex(new).as_bytes());
-        return Ok(());
+        out.push(Line::Index {
+            pre,
+            post,
+            pre_full: full(old),
+            post_full: full(new),
+        });
+        let mut l = b"Binary files ".to_vec();
+        l.extend_from_slice(&old_name);
+        l.extend_from_slice(b" and ");
+        l.extend_from_slice(&new_name);
+        l.extend_from_slice(b" differ");
+        text(&mut out, &l);
+        return Ok(out);
     }
-    hash_hunks(h, &before, &after, &old_name, &new_name);
-    Ok(())
+    render_hunks(&mut out, &before, &after, &old_name, &new_name);
+    Ok(out)
 }

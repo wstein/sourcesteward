@@ -16,18 +16,21 @@ IDS=() FILES=() OLDS=() NEWS=() TARGETS=() TESTS=() DESCS=()
 m() { IDS+=("$1"); DESCS+=("$2"); FILES+=("$3"); OLDS+=("$4"); NEWS+=("$5"); TARGETS+=("$6"); TESTS+=("$7"); }
 
 m P1 "whitespace is not removed before hashing" src/patch_id.rs \
-  ".filter(|b| !matches!(b, b' ' | b'\\t' | b'\\n' | 0x0b | 0x0c | b'\\r'))," ".filter(|_| true)," \
+  ".filter(|b| !matches!(b, b' ' | b'\\t' | b'\\n' | 0x0b | 0x0c | b'\\r'))" ".filter(|_| true)" \
   patchid whitespace_differences_do_not_matter_but_content_does
 m P2 "hunk header (line numbers) is hashed" src/patch_id.rs \
-  "let start = hunks[i].before.start.saturating_sub(CONTEXT);" \
-  "let start = hunks[i].before.start.saturating_sub(CONTEXT); h.line(format!(\"@@ -{} +{}\", hunks[i].before.start, hunks[i].after.start).as_bytes());" \
+  "out.append(&mut lines);" \
+  "out.push(Line::Text(format!(\"@@ -{} +{}\", hunks[i].before.start, hunks[i].after.start).into_bytes())); out.append(&mut lines);" \
   patchid same_change_on_different_base_has_equal_patch_id
 m P3 "file path is not hashed" src/patch_id.rs \
-  'let header = [quote_path(b"a/", path), quote_path(b"b/", path)];' 'let header = [quote_path(b"a/", "x".into()), quote_path(b"b/", "x".into())];' \
+  '    let header = [
+        quote_path(b"a/", pair.old_path.as_ref()),
+        quote_path(b"b/", pair.new_path.as_ref()),
+    ];' '    let header = [quote_path(b"a/", "x".into()), quote_path(b"b/", "x".into())];' \
   patchid path_matters
 m P4 "context lines are not hashed" src/patch_id.rs \
   "        for k in start..hunks[i].before.start {
-            emit(h, b' ', b[k as usize]);" \
+            emit(&mut lines, b' ', b[k as usize]);" \
   "        for k in start..hunks[i].before.start {
             let _ = k;" \
   patchid matches_git_patch_id_stable_on_known_vectors
