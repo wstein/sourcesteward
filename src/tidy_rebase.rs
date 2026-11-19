@@ -128,6 +128,7 @@ impl RebaseIndex {
             by_id: HashMap::new(),
             stop: Stop::Root,
         };
+        let listed = crate::repo::shallow_boundary(repo)?;
         let mut next = Some(base_tip);
         let mut old_run = 0;
         while let Some(id) = next {
@@ -158,6 +159,11 @@ impl RebaseIndex {
                 .next()
                 .map(|p| p.detach());
             idx.positions.push(head);
+            // git does not follow the parents of a commit that `.git/shallow` lists, whether they are there or not
+            if let (true, Some(parent)) = (listed.contains(&id), next) {
+                idx.stop = Stop::Missing(parent);
+                break;
+            }
             if old_run >= RB_STOP_RUN {
                 idx.stop = Stop::Time;
                 break;
