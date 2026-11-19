@@ -198,9 +198,8 @@ impl SquashIndex {
                 continue;
             };
             let title = normalize(&h.key.subject);
-            if !title.is_empty() {
-                by_title.entry(title).or_default().push(pos);
-            }
+            // a title that is empty is never looked up (`evaluate_subject` leaves it out of the titles of the branch)
+            by_title.entry(title).or_default().push(pos);
             if let Some(n) = pr_number_suffix(&h.key.subject) {
                 by_number.entry(n).or_default().push(pos);
             }
