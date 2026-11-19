@@ -2310,7 +2310,7 @@ fn a_truncated_journal_tail_is_reported_by_the_start_and_cut_by_the_next_commit(
     f.write_all(b"{\"schema_version\":1,\"se").unwrap();
     drop(f);
     let (mut core, report, _) = open(&dir, false);
-    assert_eq!(report.truncated_tail_bytes, 22);
+    assert_eq!(report.truncated_tail_bytes, 23);
     core.commit(&[new_pr_event(2)], &mut Rec::default())
         .unwrap();
     assert_eq!(core.tail(), 2);
@@ -2325,4 +2325,198 @@ fn the_heartbeat_names_the_process_and_the_mode() {
     core.heartbeat(1_792_003_723, "once").unwrap();
     let hb = read_heartbeat(&dir, 1_792_003_723).unwrap().unwrap();
     assert_eq!((hb.pid, hb.mode.as_str()), (std::process::id(), "once"));
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The scenario corpus (`tests/fixtures/watch/`, format in FORMAT.md): what the core can play of it.
+//
+// vectors:       event_id, id_counter, event_json (above), workspace_id, default_state_dir, status_freshness_seconds,
+//                merged_due_head_fork.
+// watch-cycles:  (1) the events of every scenario as an `apply` sequence, compared with `expected_state_view` on the properties
+//                that follow from events alone (see `compare_view`); (2) the same events through the session (journal, apply,
+//                print, state) with the crash points, restarts and file operations of the scenario, compared with the
+//                printed ordinals and the journal ordinals; (3) the liveness report of the scenarios that probe it.
+// Not played here (they need the cycle, W3): the debounce, the backoff times, the check classification, the shape, the
+// restacker choice and the observer questions; `state_after` and `hints` of the steps are cycle outputs.
+use std::collections::BTreeMap;
+
+fn watch_cycle_scenarios() -> Vec<(String, Value)> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(fixtures()).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().is_none_or(|x| x != "json") || p.file_stem().unwrap() == "index" {
+            continue;
+        }
+        let v: Value = serde_json::from_str(&std::fs::read_to_string(&p).unwrap()).unwrap();
+        if v["kind"] == "watch-cycles" {
+            out.push((v["name"].as_str().unwrap().to_string(), v));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    out
+}
+
+fn str_of(v: &Value) -> String {
+    v.as_str().unwrap_or_default().to_string()
+}
+
+/// The events of a scenario in order, each with its step (0-based index of `cycles`). The id is the Go id: the Rust ids have the
+/// same form, which `every_event_id_of_the_corpus_is_rebuilt_by_the_key_functions` proves.
+fn log_of(sc: &Value) -> Vec<(usize, Event)> {
+    let mut out = Vec::new();
+    for (i, step) in sc["expected_events"].as_array().unwrap().iter().enumerate() {
+        for e in step["events"].as_array().unwrap() {
+            let kind = Kind::parse(e["kind"].as_str().unwrap()).unwrap();
+            let details = Details::decode(kind, &e["details"].to_string()).unwrap();
+            let mut ev = Event::new(
+                e["go"]["id"].as_str().unwrap().to_string(),
+                str_of(&e["time"]),
+                e["repo"].as_str().map(str::to_string),
+                e["pr"].as_u64(),
+                details,
+            );
+            ev.seq = e["ordinal"].as_u64().unwrap();
+            out.push((i, ev));
+        }
+    }
+    out
+}
+
+/// The key an event of the corpus should have, built from its details and the counter in its id.
+fn key_of(ev: &Event) -> String {
+    let id = &ev.id;
+    let c = |l: char| id_counter(id, l).unwrap_or_else(|| panic!("no counter {l} in {id}"));
+    let parts: Vec<&str> = id.split(':').collect();
+    match &ev.details {
+        Details::NewPr(_) | Details::Closed(_) => key_generation(c('g')),
+        Details::HeadChanged(d) => key_head(&d.new, c('h')),
+        Details::ChecksGreen(d) => key_checks(&d.head, c('c')),
+        Details::ChecksRed(d) => key_checks(&d.head, c('c')),
+        Details::ChecksPendingTimeout(d) => key_timeout(&d.head, c('c')),
+        Details::MergeableChanged(_) => key_mergeable(parts[parts.len() - 2], c('m')),
+        Details::ReadyStateChanged(_) => key_ready(c('r')),
+        Details::BaseChanged(_) => key_base(c('b')),
+        Details::ReposChanged(_) => key_repos(c('p')),
+        Details::Merged(d) => key_merged(d.merge_commit.as_deref()),
+        Details::RestackNeeded(d) => key_restack(d.merged_pr, d.new_parent.as_deref()),
+        Details::WatchError(d) => key_error(&d.code, c('e'), d.failures),
+        Details::WatchRecovered(_) => {
+            if parts.last().is_some_and(|p| p.starts_with('e')) {
+                key_recovered_error(c('e'))
+            } else {
+                key_stall(c('s'))
+            }
+        }
+        Details::WatchStalled(_) => key_stall(c('s')),
+    }
+}
+
+#[test]
+fn every_event_id_of_the_corpus_is_rebuilt_by_the_key_functions_and_unique_per_scenario() {
+    let (mut events, mut per_kind) = (0, BTreeMap::new());
+    for (name, sc) in watch_cycle_scenarios() {
+        let mut seen = std::collections::BTreeSet::new();
+        for (_, ev) in log_of(&sc) {
+            assert_eq!(
+                event_id(ev.repo.as_deref(), ev.pr, ev.kind(), &key_of(&ev)),
+                ev.id,
+                "{name}"
+            );
+            if sc["expect_unique_event_ids"] == true {
+                assert!(seen.insert(ev.id.clone()), "{name}: {} twice", ev.id);
+            }
+            events += 1;
+            *per_kind.entry(ev.kind()).or_insert(0) += 1;
+        }
+    }
+    assert_eq!(per_kind.len(), 15, "every kind occurs in the corpus");
+    assert!(events > 700, "{events}");
+}
+
+#[test]
+fn the_workspace_id_groups_of_the_vector_stay_together_and_apart() {
+    // The Go ids are format-dependent; which inputs share an id is not.
+    let cs = cases("workspace-id");
+    let mut by_go: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for c in &cs {
+        let i = &c["input"];
+        let repos: Vec<String> = i["repos"].as_array().unwrap().iter().map(str_of).collect();
+        let root = str_of(&i["workspace_root"]);
+        let src = if root.is_empty() {
+            IdSource::Repos(&repos)
+        } else {
+            IdSource::Workspace(&root)
+        };
+        by_go
+            .entry(str_of(&c["expected"]["id"]))
+            .or_default()
+            .push(workspace_id(i["host"].as_str().unwrap(), src));
+    }
+    assert_eq!(by_go.len(), 4);
+    let mut rust_ids = std::collections::BTreeSet::new();
+    for ids in by_go.values() {
+        assert!(ids.iter().all(|i| i == &ids[0]), "{ids:?}");
+        rust_ids.insert(ids[0].clone());
+    }
+    assert_eq!(rust_ids.len(), 4, "different inputs, different ids");
+    assert_eq!(by_go.values().map(Vec::len).max(), Some(3));
+}
+
+#[test]
+fn the_default_state_dir_and_the_freshness_window_follow_their_vectors() {
+    for c in cases("default-state-dir") {
+        let i = &c["input"];
+        let xdg = i["xdg_state_home"].as_str();
+        let home = i["home"].as_str();
+        let got = default_state_dir(i["id"].as_str().unwrap(), xdg, home);
+        assert_eq!(
+            got.to_str().unwrap(),
+            c["expected"]["path"].as_str().unwrap(),
+            "{}",
+            c["name"]
+        );
+    }
+    for c in cases("status-freshness-window") {
+        let got = status_freshness_seconds(c["input"]["interval_seconds"].as_u64().unwrap());
+        assert_eq!(
+            got,
+            c["expected"]["seconds"].as_u64().unwrap(),
+            "{}",
+            c["name"]
+        );
+    }
+}
+
+#[test]
+fn a_merge_records_a_fork_head_unless_the_pr_was_seen_open_in_the_base_repository() {
+    let cs = cases("merged-records-head-fork");
+    assert!(cs.len() >= 3);
+    for c in cs {
+        let (fork, open) = (
+            c["input"]["observed_fork"] == true,
+            c["input"]["observed_open_pr"] == true,
+        );
+        let mut s = State::new();
+        if open {
+            let mut e = new_pr(5, H1);
+            if let Details::NewPr(d) = &mut e.details {
+                d.fork = fork;
+            }
+            s.apply(&e);
+        }
+        s.apply(&ev(
+            Some(5),
+            &key_merged(None),
+            Details::Merged(Merged {
+                merge_commit: None,
+                ..Merged::default()
+            }),
+        ));
+        assert_eq!(
+            s.repo[REPO].restack_due[0].head_fork,
+            c["expected"]["head_fork"] == true,
+            "{}",
+            c["name"]
+        );
+    }
 }
