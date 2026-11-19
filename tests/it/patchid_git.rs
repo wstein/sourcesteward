@@ -522,6 +522,29 @@ mod pinned {
             .collect();
         change(fx, before, after)
     }
+    fn five_identical_sources_five_destinations(fx: &Fx) -> ObjectId {
+        // four slots per destination: the fifth destination finds only taken sources
+        let src = body(20, "S");
+        let dst = format!(
+            "{}{}",
+            src.lines()
+                .take(15)
+                .map(|l| format!("{l}\n"))
+                .collect::<String>(),
+            body(5, "N")
+        );
+        let names = ["a1", "a2", "a3", "a4", "a5"];
+        let dnames = ["d1", "d2", "d3", "d4", "d5"];
+        let before: Tree = names
+            .iter()
+            .map(|n| t(Box::leak(format!("src/{n}").into_boxed_str()), &src))
+            .collect();
+        let after: Tree = dnames
+            .iter()
+            .map(|n| t(Box::leak(format!("dst/{n}").into_boxed_str()), &dst))
+            .collect();
+        change(fx, before, after)
+    }
     fn symlink_rename(fx: &Fx) -> ObjectId {
         change(fx, vec![l("old", "target")], vec![l("new", "target")])
     }
@@ -597,6 +620,7 @@ mod pinned {
             identical_sources_two_identical_destinations => "e258d0c1e6a8e096b996b9e248aeee0755f0e002",
             identical_sources_one_destination => "afd7bad30add69e58e522e830c4909213f37b573",
             at_the_rename_limit => "c0a9756bc84969c411135d8bc5881ebafd586454",
+            five_identical_sources_five_destinations => "036cbbdef7e4ea0ec2d1b8f962bf220d9059b566",
             symlink_rename => "8e78bdefc8f0bc26c65eb193a6d5d3cac408bab2",
             contents_swapped => "302ba4b49782057e95797e0093b1c6a3ef85897a",
             rename_and_similar_new_file => "e248fd04bca57a4b299358385809c420d8d8238e",
