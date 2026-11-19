@@ -4975,17 +4975,19 @@ m SHW10 'the JSON has no without_partner' src/tidy.rs \
 m SHW11 'the JSON has no unreadable_commits' src/tidy.rs \
   '"unreadable_commits": g.unreadable_commits' '"unreadable_commits": 0' \
   tidy_shallow the_plan_json_names_what_is_missing_per_branch
-m SHW12 'a merge commit with a missing parent is a boundary commit' src/tidy_similarity.rs \
-  '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), _) => !repo.has_object(p.detach()),' \
+m SHW12 'a commit that the shallow file lists is no boundary' src/repo/mod.rs \
+  '    if listed.contains(&id) {
+        return Ok(true);' '    if false {
+        return Ok(true);' \
+  tidy_shallow a_commit_listed_in_the_shallow_file_is_a_boundary_although_its_parent_is_there
+m SHW13 'a commit with a missing parent is no boundary' src/repo/mod.rs \
+  'let missing = c.parent_ids().any(|p| !repo.has_object(p.detach()));' 'let missing = false;' \
   tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_only_where_it_is_listed
-m SHW13 'a commit with its parent is a boundary commit' src/tidy_similarity.rs \
-  '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), None) => repo.has_object(p.detach()),' \
-  tidy_shallow a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs
 m SHW14 'the explained sentence names the wrong cause' src/tidy_explain.rs \
   'Some(g) if g.unreadable_commits > 0 => format!(' 'Some(g) if g.unreadable_commits == 0 => format!(' \
   tidy_shallow the_explained_text_says_which_part_of_the_history_is_missing
 m SHW15 'a shallow clone is not noticed by the equal-patches walks' src/tidy.rs \
-  'let shallow = repo.is_shallow().unwrap_or(false);' 'let shallow = false;' \
+  'let shallow = !listed.is_empty();' 'let shallow = false;' \
   tidy_shallow a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs
 m SHW16 'the plan JSON has no shallow object' src/tidy.rs \
   'b.shallow.map(|g| json!(' 'None::<ShallowGap>.map(|g| json!(' \
