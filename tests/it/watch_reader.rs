@@ -686,3 +686,256 @@ fn reader_error_codes_have_stable_names() {
         ]
     );
 }
+// ---- the store of validators (no Go counterpart: the layout is Rust's own, `schema_version` 1) -------------
+
+use stw::watch_reader::cond_store::{checks_key, detail_key, CondStore, TipEntry};
+use stw::watch_reader::http::PullItem;
+
+const SHA_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+const SHA_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+fn item(number: u64, head: &str, base: &str) -> PullItem {
+    PullItem {
+        number,
+        title: format!("PR {number}"),
+        user: "alice".into(),
+        labels: vec!["x".into()],
+        draft: false,
+        head_sha: head.into(),
+        head_ref: format!("feat/{number}"),
+        base_ref: base.into(),
+        base_sha: String::new(),
+    }
+}
+
+#[allow(clippy::field_reassign_with_default)]
+fn sample_store() -> CondStore {
+    let mut c = CondStore::default();
+    c.list = PullListState {
+        per_page: 25,
+        pages: vec![PullPage {
+            etag: "\"p1\"".into(),
+            link: "<https://api.github.com/repositories/1/pulls?page=2>; rel=\"next\"".into(),
+            items: vec![item(1, SHA_A, "main"), item(2, SHA_B, "feat/1")],
+        }],
+    };
+    c.tips.insert(
+        "feat/1".into(),
+        TipEntry {
+            etag: "W/\"t\"".into(),
+            sha: SHA_B.into(),
+        },
+    );
+    c.validators.insert(detail_key(7), "\"d7\"".into());
+    c.validators
+        .insert(checks_key(SHA_A, "runs"), "\"r\"".into());
+    c.validators
+        .insert(checks_key(SHA_A, "statuses"), "\"s\"".into());
+    c
+}
+
+#[test]
+fn cond_store_round_trips() {
+    let c = sample_store();
+    let back = CondStore::from_json(&c.to_json()).unwrap();
+    assert_eq!(back, c);
+    let empty = CondStore::default();
+    assert_eq!(CondStore::from_json(&empty.to_json()).unwrap(), empty);
+    // through bytes as well: what is written is read back
+    let bytes = serde_json::to_vec(&c.to_json()).unwrap();
+    assert_eq!(
+        CondStore::from_json(&serde_json::from_slice(&bytes).unwrap()).unwrap(),
+        c
+    );
+}
+
+#[test]
+#[allow(clippy::field_reassign_with_default)]
+fn cond_store_layout_is_documented_and_deterministic() {
+    let mut c = CondStore::default();
+    c.list = PullListState {
+        per_page: 12,
+        pages: vec![PullPage {
+            etag: "\"e\"".into(),
+            link: String::new(),
+            items: vec![item(3, SHA_A, "main")],
+        }],
+    };
+    c.tips.insert(
+        "main".into(),
+        TipEntry {
+            etag: "\"t\"".into(),
+            sha: SHA_B.into(),
+        },
+    );
+    c.validators.insert(detail_key(3), "\"d\"".into());
+    let want = format!(
+        "{{\"schema_version\":1,\"list\":{{\"per_page\":12,\"pages\":[{{\"etag\":\"\\\"e\\\"\",\"link\":\"\",\"items\":[{{\"number\":3,\"title\":\"PR 3\",\"user\":\"alice\",\"labels\":[\"x\"],\"draft\":false,\"head_sha\":\"{SHA_A}\",\"head_ref\":\"feat/3\",\"base_ref\":\"main\",\"base_sha\":\"\"}}]}}]}},\"tips\":{{\"main\":{{\"etag\":\"\\\"t\\\"\",\"sha\":\"{SHA_B}\"}}}},\"validators\":{{\"pulls/3\":\"\\\"d\\\"\"}}}}"
+    );
+    assert_eq!(serde_json::to_string(&c.to_json()).unwrap(), want);
+    assert_eq!(serde_json::to_string(&c.clone().to_json()).unwrap(), want);
+}
+
+#[test]
+#[allow(clippy::type_complexity)]
+fn cond_store_refuses_what_does_not_fit_the_layout() {
+    let good = sample_store().to_json();
+    assert!(CondStore::from_json(&good).is_ok());
+    let mut cases: Vec<(&str, Box<dyn Fn(&mut Value)>)> = vec![
+        (
+            "other version",
+            Box::new(|v| v["schema_version"] = 2.into()),
+        ),
+        (
+            "no version",
+            Box::new(|v| {
+                v.as_object_mut().unwrap().remove("schema_version");
+            }),
+        ),
+        ("unknown top field", Box::new(|v| v["extra"] = 1.into())),
+        ("per_page 7", Box::new(|v| v["list"]["per_page"] = 7.into())),
+        (
+            "per_page 0 with pages",
+            Box::new(|v| v["list"]["per_page"] = 0.into()),
+        ),
+        (
+            "per_page 12 with 13 items",
+            Box::new(|v| {
+                v["list"]["per_page"] = 12.into();
+                let it = v["list"]["pages"][0]["items"][0].clone();
+                v["list"]["pages"][0]["items"] = Value::Array(vec![it; 13]);
+            }),
+        ),
+        (
+            "too many pages",
+            Box::new(|v| {
+                let p = v["list"]["pages"][0].clone();
+                v["list"]["pages"] = Value::Array(vec![p; 81]);
+            }),
+        ),
+        (
+            "page etag with a line break",
+            Box::new(|v| v["list"]["pages"][0]["etag"] = "a\nb".into()),
+        ),
+        (
+            "page etag over 256 bytes",
+            Box::new(|v| v["list"]["pages"][0]["etag"] = "e".repeat(257).into()),
+        ),
+        (
+            "link with a control character",
+            Box::new(|v| v["list"]["pages"][0]["link"] = "<x>\u{1}".into()),
+        ),
+        (
+            "link over 8192 bytes",
+            Box::new(|v| v["list"]["pages"][0]["link"] = "l".repeat(8193).into()),
+        ),
+        (
+            "item number 0",
+            Box::new(|v| v["list"]["pages"][0]["items"][0]["number"] = 0.into()),
+        ),
+        (
+            "item head sha short",
+            Box::new(|v| v["list"]["pages"][0]["items"][0]["head_sha"] = "abc".into()),
+        ),
+        (
+            "item base sha uppercase",
+            Box::new(|v| {
+                v["list"]["pages"][0]["items"][0]["base_sha"] = SHA_A.to_uppercase().into()
+            }),
+        ),
+        (
+            "item label no text",
+            Box::new(|v| v["list"]["pages"][0]["items"][0]["labels"] = serde_json::json!([1])),
+        ),
+        (
+            "item with an extra field",
+            Box::new(|v| v["list"]["pages"][0]["items"][0]["x"] = 1.into()),
+        ),
+        (
+            "item no object",
+            Box::new(|v| v["list"]["pages"][0]["items"][0] = 5.into()),
+        ),
+        (
+            "tip sha short",
+            Box::new(|v| v["tips"]["feat/1"]["sha"] = "abc".into()),
+        ),
+        (
+            "tip branch with a percent",
+            Box::new(|v| {
+                let t = v["tips"]["feat/1"].clone();
+                v["tips"] = serde_json::json!({"a%2Fb": t});
+            }),
+        ),
+        (
+            "tip etag with a control character",
+            Box::new(|v| v["tips"]["feat/1"]["etag"] = "\u{7f}".into()),
+        ),
+        (
+            "validator key outside the reader paths",
+            Box::new(|v| v["validators"]["repos/a/b"] = "\"x\"".into()),
+        ),
+        (
+            "validator key pulls/0",
+            Box::new(|v| v["validators"]["pulls/0"] = "\"x\"".into()),
+        ),
+        (
+            "validator check key with a short sha",
+            Box::new(|v| v["validators"]["checks/abc/runs"] = "\"x\"".into()),
+        ),
+        (
+            "validator etag no text",
+            Box::new(|v| v["validators"]["pulls/7"] = 5.into()),
+        ),
+        (
+            "validator etag with a line break",
+            Box::new(|v| v["validators"]["pulls/7"] = "a\r\nb".into()),
+        ),
+    ];
+    cases.push(("not an object", Box::new(|v| *v = Value::Null)));
+    for (name, mutate) in &cases {
+        let mut v = good.clone();
+        mutate(&mut v);
+        assert!(CondStore::from_json(&v).is_err(), "{name}: accepted");
+    }
+}
+
+#[test]
+fn cond_store_bounds_the_number_of_validators() {
+    let mut v = sample_store().to_json();
+    let mut m = serde_json::Map::new();
+    for n in 1..=20_001u64 {
+        m.insert(detail_key(n), "\"e\"".into());
+    }
+    v["validators"] = Value::Object(m);
+    assert!(CondStore::from_json(&v).is_err());
+    let mut ok = serde_json::Map::new();
+    for n in 1..=20_000u64 {
+        ok.insert(detail_key(n), "\"e\"".into());
+    }
+    v["validators"] = Value::Object(ok);
+    assert!(CondStore::from_json(&v).is_ok());
+}
+
+#[test]
+fn cond_store_prune_keeps_only_open_prs_heads_and_bases() {
+    let mut c = sample_store();
+    c.validators.insert(detail_key(99), "\"old\"".into());
+    c.validators
+        .insert(checks_key(SHA_B, "runs"), "\"gone\"".into());
+    c.tips.insert(
+        "old-base".into(),
+        TipEntry {
+            etag: "\"t\"".into(),
+            sha: SHA_A.into(),
+        },
+    );
+    c.prune(&[item(7, SHA_A, "main"), item(2, SHA_A, "feat/1")]);
+    let keys: Vec<&str> = c.validators.keys().map(String::as_str).collect();
+    let a_runs = checks_key(SHA_A, "runs");
+    let a_stat = checks_key(SHA_A, "statuses");
+    assert_eq!(keys, vec![a_runs.as_str(), a_stat.as_str(), "pulls/7"]);
+    assert_eq!(
+        c.tips.keys().map(String::as_str).collect::<Vec<_>>(),
+        vec!["feat/1"]
+    );
+}

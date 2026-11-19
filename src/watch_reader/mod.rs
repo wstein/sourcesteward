@@ -3,4 +3,5 @@
 //! (`obs`) and the observer that reads only what the accepted state makes necessary (`host`).
 //! Read-only: every request is a GET; there is no write path. The token never reaches an output, an error text or an
 //! observation.
+pub mod cond_store;
 pub mod http;
