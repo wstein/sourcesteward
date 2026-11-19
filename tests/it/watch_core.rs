@@ -758,7 +758,15 @@ fn a_checks_event_of_the_current_head_sets_the_class_and_one_of_another_head_onl
         (pr(&s, 4).class, pr(&s, 4).epochs.checks),
         (Class::Green, 3)
     );
-    s.apply(&green(H2, 7));
+    let red_of_another_head = ev(
+        Some(4),
+        &key_checks(H2, 7),
+        Details::ChecksRed(ChecksRed {
+            head: H2.into(),
+            ..ChecksRed::default()
+        }),
+    );
+    s.apply(&red_of_another_head);
     assert_eq!(
         (pr(&s, 4).class, pr(&s, 4).epochs.checks),
         (Class::Green, 7),
