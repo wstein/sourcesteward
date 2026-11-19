@@ -383,6 +383,145 @@ mod pinned {
         let after: Tree = (0..1001).map(|k| t(name("e", k), &text(k, true))).collect();
         change(fx, before, after)
     }
+    fn basename_60_loses_to_other_95(fx: &Fx) -> ObjectId {
+        let x = format!("{}{}", body(12, "A"), body(8, "C"));
+        let y = format!("{}{}", body(12, "A"), body(8, "B"));
+        let dst = format!("{}{}", body(12, "A"), body(8, "B").replace("B line 8", "Q"));
+        change(
+            fx,
+            vec![t("d1/x.txt", &x), t("y.txt", &y)],
+            vec![t("d2/x.txt", &dst)],
+        )
+    }
+    fn basename_80_wins_over_other_95(fx: &Fx) -> ObjectId {
+        let x = format!("{}{}", body(16, "A"), body(4, "C"));
+        let y = format!("{}{}", body(16, "A"), body(4, "B"));
+        let dst = format!("{}{}", body(16, "A"), body(4, "B").replace("B line 4", "Q"));
+        change(
+            fx,
+            vec![t("d1/x.txt", &x), t("y.txt", &y)],
+            vec![t("d2/x.txt", &dst)],
+        )
+    }
+    fn basename_60_mixed(fx: &Fx) -> ObjectId {
+        let x = format!("{}{}", body(12, "A"), body(8, "C"));
+        let y = format!("{}{}", body(12, "A"), body(8, "B"));
+        let dst = format!("{}{}", body(12, "A"), body(8, "B").replace("B line 8", "Q"));
+        change(
+            fx,
+            vec![
+                t("d1/x.txt", &x),
+                t("y.txt", &y),
+                t("z.txt", &body(20, "Z")),
+            ],
+            vec![t("d2/x.txt", &dst), t("d2/z2.txt", &body(20, "Z"))],
+        )
+    }
+    fn basename_not_unique_among_sources(fx: &Fx) -> ObjectId {
+        let p = format!("{}{}", body(16, "A"), body(4, "C"));
+        let q = format!("{}{}", body(16, "A"), body(4, "B"));
+        let dst = format!("{}{}", body(16, "A"), body(4, "B").replace("B line 4", "Q"));
+        change(
+            fx,
+            vec![t("p/x.txt", &p), t("q/x.txt", &q)],
+            vec![t("r/x.txt", &dst)],
+        )
+    }
+    fn symlink_deleted_regular_added_same_blob(fx: &Fx) -> ObjectId {
+        change(fx, vec![l("old", "target")], vec![t("new", "target")])
+    }
+    fn regular_deleted_symlink_added_same_blob(fx: &Fx) -> ObjectId {
+        change(fx, vec![t("old", "target")], vec![l("new", "target")])
+    }
+    fn gitlink_moved(fx: &Fx) -> ObjectId {
+        change(
+            fx,
+            vec![
+                t("k", "k\n"),
+                g("sub", "1111111111111111111111111111111111111111"),
+            ],
+            vec![
+                t("k", "k\n"),
+                g("sub2", "1111111111111111111111111111111111111111"),
+            ],
+        )
+    }
+    fn executable_bit_and_rename(fx: &Fx) -> ObjectId {
+        change(fx, vec![x("old", "run\n")], vec![t("new", "run\n")])
+    }
+    fn slot_order_tie(fx: &Fx) -> ObjectId {
+        let head = |k: usize| -> String {
+            body(20, "S")
+                .lines()
+                .take(k)
+                .map(|l| format!("{l}\n"))
+                .collect()
+        };
+        let weak = |i: usize, k: usize| format!("{}{}", head(k), body(20 - k, &format!("J{i}")));
+        let dst = format!("{}{}", head(15), body(5, "N"));
+        change(
+            fx,
+            vec![
+                t("src/a1", &weak(1, 8)),
+                t("src/a2", &weak(2, 6)),
+                t("src/a3", &weak(3, 4)),
+                t("src/a4", &weak(4, 2)),
+                t("src/s1", &body(20, "S")),
+                t("src/s2", &body(20, "S")),
+            ],
+            vec![t("dst/d1", &dst), t("dst/d2", &dst)],
+        )
+    }
+    fn identical_sources_two_identical_destinations(fx: &Fx) -> ObjectId {
+        let src = body(20, "s");
+        let dst: String = format!(
+            "{}n1\nn2\nn3\nn4\n",
+            src.lines()
+                .take(16)
+                .map(|l| format!("{l}\n"))
+                .collect::<String>()
+        );
+        change(
+            fx,
+            vec![t("a/x.bash", &src), t("b/x.bash", &src)],
+            vec![t("a/y", &dst), t("b/y", &dst)],
+        )
+    }
+    fn identical_sources_one_destination(fx: &Fx) -> ObjectId {
+        let src = body(20, "s");
+        let dst: String = format!(
+            "{}n1\nn2\nn3\nn4\n",
+            src.lines()
+                .take(16)
+                .map(|l| format!("{l}\n"))
+                .collect::<String>()
+        );
+        change(
+            fx,
+            vec![t("a/x.bash", &src), t("b/x.bash", &src)],
+            vec![t("a/y", &dst)],
+        )
+    }
+    fn at_the_rename_limit(fx: &Fx) -> ObjectId {
+        let name = |dir: &str, k: usize| -> &'static str {
+            Box::leak(format!("{dir}/{}{k}", if dir == "d" { "a" } else { "b" }).into_boxed_str())
+        };
+        let text = |k: usize, changed: bool| -> String {
+            let s = format!("file {k}\nline two {k}\nthree\nfour\nfive\nsix\n");
+            if changed {
+                format!("{s}extra\n")
+            } else {
+                s
+            }
+        };
+        let before: Tree = (1..=1000)
+            .map(|k| t(name("d", k), &text(k, false)))
+            .collect();
+        let after: Tree = (1..=1000)
+            .map(|k| t(name("e", k), &text(k, true)))
+            .collect();
+        change(fx, before, after)
+    }
     fn symlink_rename(fx: &Fx) -> ObjectId {
         change(fx, vec![l("old", "target")], vec![l("new", "target")])
     }
@@ -446,6 +585,18 @@ mod pinned {
             over_the_rename_limit => "2cb38b08225341f12cc97e09f3e7ddefe85ac168",
             basename_pair_wins_over_better_match => "1d23266830b3621936a2e49822fc548d3882b398",
             over_the_rename_limit_with_same_base_names => "356080e043890aff1c73e55eae758945580f1cf9",
+            basename_60_loses_to_other_95 => "f8766b844b4008a6137486f370f17932f5e2e454",
+            basename_80_wins_over_other_95 => "6b8cba1ca015bc32680b2fcfc9e73e77c52e248a",
+            basename_60_mixed => "f12ca8d29dbe48b2cd26ac33c37fcf1e32b24708",
+            basename_not_unique_among_sources => "e334630473e93b1e34194019a85a21452929d32f",
+            symlink_deleted_regular_added_same_blob => "8d224db1dc3d8a3f0af1494e7a9d355b5481d70c",
+            regular_deleted_symlink_added_same_blob => "12cc1947583dca379bff45a3449a96d33844eca9",
+            gitlink_moved => "dd2b61f61d288d4fad21b309729242d23ce99abd",
+            executable_bit_and_rename => "1c8bb549e5e25c4a002316fe689f85531c3b02e9",
+            slot_order_tie => "869d4c054d80d1f153868060f838e655ed69b446",
+            identical_sources_two_identical_destinations => "e258d0c1e6a8e096b996b9e248aeee0755f0e002",
+            identical_sources_one_destination => "afd7bad30add69e58e522e830c4909213f37b573",
+            at_the_rename_limit => "c0a9756bc84969c411135d8bc5881ebafd586454",
             symlink_rename => "8e78bdefc8f0bc26c65eb193a6d5d3cac408bab2",
             contents_swapped => "302ba4b49782057e95797e0093b1c6a3ef85897a",
             rename_and_similar_new_file => "e248fd04bca57a4b299358385809c420d8d8238e",
