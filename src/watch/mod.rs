@@ -16,7 +16,6 @@ use event::Event;
 use journal::Journal;
 use lock::DirLock;
 use state::State;
-#[allow(unused_imports)]
 use statedir::{ensure_state_dir, load_state, save_state, write_heartbeat};
 
 pub mod apply;
@@ -247,14 +246,36 @@ impl Core {
         events: &[Event],
         out: &mut dyn Output,
     ) -> Result<Vec<Event>, WatchError> {
-        let _ = (out, self.broken, &self.dir);
-        Ok(events.to_vec())
+        if self.broken {
+            return Err(WatchError::Io(
+                "the watch session failed earlier; open the state directory again".to_string(),
+            ));
+        }
+        self.broken = true;
+        let mut written = Vec::with_capacity(events.len());
+        for (i, ev) in events.iter().enumerate() {
+            written.push(self.journal.append(ev)?);
+            out.after(Step::Append(i + 1))?;
+        }
+        for ev in &written {
+            self.state.apply(ev);
+        }
+        for (i, ev) in written.iter().enumerate() {
+            out.print(ev)?;
+            out.after(Step::Print(i + 1))?;
+        }
+        let tail = self.journal.tail();
+        self.state.applied_seq = tail;
+        self.state.printed_seq = tail;
+        save_state(&self.dir, &self.state)?;
+        out.after(Step::State)?;
+        self.broken = false;
+        Ok(written)
     }
 
     /// Writes the heartbeat (`RFC3339 pid mode`); the caller does it after every completed cycle, also after partial failures.
     pub fn heartbeat(&self, now_secs: i64, mode: &str) -> Result<(), WatchError> {
-        let _ = (now_secs, mode);
-        Ok(())
+        write_heartbeat(&self.dir, now_secs, std::process::id(), mode)
     }
 
     /// Releases the lock and the journal.
