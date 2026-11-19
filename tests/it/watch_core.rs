@@ -392,3 +392,34 @@ fn a_line_is_decoded_strictly() {
         "trailing white space is not data"
     );
 }
+
+use stw::watch::event::sanitize;
+
+#[test]
+fn text_from_outside_is_masked_and_cut() {
+    // control characters, backslash and direction changes as escapes
+    assert_eq!(sanitize(b"a\tb\nc\x00d", 100), r"a\tb\nc\u{0}d");
+    assert_eq!(sanitize("x\u{202e}y".as_bytes(), 100), r"x\u{202e}y");
+    assert_eq!(sanitize(br"a\b", 100), r"a\\b");
+    // bytes that are not UTF-8
+    assert_eq!(sanitize(b"ok\xff\xfe!", 100), r"ok\xff\xfe!");
+    // plain text is unchanged
+    assert_eq!(sanitize("Grüße".as_bytes(), 100), "Grüße");
+    // the cut is in bytes, at a character boundary, never longer than the limit
+    assert_eq!(sanitize(b"abcdef", 3), "abc");
+    assert_eq!(sanitize("aé".as_bytes(), 2), "a");
+    assert_eq!(sanitize("aé".as_bytes(), 3), "aé");
+    assert_eq!(sanitize(b"abc", 0), "");
+    assert_eq!(sanitize(&[b'x'; 600], 512).len(), 512);
+}
+
+proptest! {
+    #[test]
+    fn sanitized_text_has_no_control_characters_and_fits(bytes in proptest::collection::vec(any::<u8>(), 0..300), max in 0usize..400) {
+        let s = sanitize(&bytes, max);
+        prop_assert!(s.len() <= max);
+        prop_assert!(!s.chars().any(|c| c.is_control()));
+        let bidi = '\u{202e}';
+        prop_assert!(!s.contains(bidi));
+    }
+}
