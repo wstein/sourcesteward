@@ -1641,3 +1641,608 @@ fn rfc3339_accepts_what_go_parses() {
         assert!(!valid_rfc3339(bad), "{bad}");
     }
 }
+
+// ---- tests without a Go counterpart: end to end over HTTP, the token, the Actions fallback, limits --------
+
+fn sha(c: char) -> String {
+    c.to_string().repeat(40)
+}
+
+fn list_route(base_ref: &str, head: &str) -> Value {
+    let body = serde_json::json!([{"number": 1, "title": "PR 1", "user": {"login": "alice"}, "labels": [{"name": "x"}],
+        "draft": false, "head": {"sha": head, "ref": "feat/1"}, "base": {"ref": base_ref, "sha": sha('a')}}]);
+    serde_json::json!({"uri": "repos/o/r/pulls?state=open&per_page=25&page=1", "status": 0, "body": body.to_string(),
+        "etag": "\"l1\"", "not_modified_on_matching_validator": true})
+}
+
+fn route(uri: &str, status: u64, body: &str, etag: &str) -> Value {
+    serde_json::json!({"uri": uri, "status": status, "body": body, "etag": etag,
+        "not_modified_on_matching_validator": !etag.is_empty()})
+}
+
+fn observer_over(forge: &Forge) -> HostObserver<WatchHttp> {
+    let reader = WatchHttp::new(
+        TOKEN.to_string(),
+        forge.base.clone(),
+        "api.github.com".into(),
+    );
+    HostObserver::new(reader, Box::new(|| 1_700_000_000), 2000, vec![], vec![])
+}
+
+fn hints(cycle: u64, known: Vec<KnownPr>) -> Hints {
+    Hints {
+        cycle,
+        detail_every: 10,
+        known,
+    }
+}
+
+fn standard_routes(head: &str) -> Vec<Value> {
+    let detail = r#"{"mergeable":true,"mergeable_state":"clean","head":{"repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}"#;
+    vec![
+        list_route("main", head),
+        route(
+            "repos/o/r/branches/main",
+            200,
+            &format!("{{\"commit\":{{\"sha\":\"{}\"}}}}", sha('a')),
+            "\"b1\"",
+        ),
+        route("repos/o/r/pulls/1", 200, detail, "\"d1\""),
+        route(
+            &format!("repos/o/r/commits/{head}/check-runs?per_page=100&page=1"),
+            200,
+            r#"{"total_count":1,"check_runs":[{"name":"ci","status":"completed","conclusion":"success","output":{"title":"t","summary":"s","text":"x"}}]}"#,
+            "\"r1\"",
+        ),
+        route(
+            &format!("repos/o/r/commits/{head}/statuses?per_page=100&page=1"),
+            200,
+            r#"[{"context":"lint","state":"success","description":"ok"}]"#,
+            "\"s1\"",
+        ),
+    ]
+}
+
+#[test]
+fn observer_over_http_reads_then_uses_validators() {
+    let head = sha('1');
+    let forge = Forge::start(&standard_routes(&head));
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    assert_eq!(obs.default_branch, "main");
+    let p = &obs.prs[0];
+    assert_eq!(
+        (p.number, p.author.as_str(), p.fork_known, p.fork),
+        (1, "alice", true, false)
+    );
+    assert_eq!(p.detail.as_ref().unwrap().state, "clean");
+    let c = p.checks.as_ref().unwrap();
+    assert_eq!(
+        (
+            c.runs[0].name.as_str(),
+            c.runs[0].text.as_str(),
+            c.statuses[0].context.as_str()
+        ),
+        ("ci", "x", "lint")
+    );
+    let seen: Vec<String> = forge.take_log().into_iter().map(|r| r.uri).collect();
+    assert_eq!(seen.len(), 5, "{seen:?}");
+    // the second cycle: green is accepted, the PR is settled; the list and the tip are conditional and answered 304
+    let cond = obs.cond.clone().unwrap();
+    let known = vec![KnownPr {
+        number: 1,
+        head: head.clone(),
+        class: "green".into(),
+        ..KnownPr::default()
+    }];
+    let obs2 = o
+        .observe("o/r", &hints(2, known), Some(&cond), &cancel)
+        .unwrap();
+    assert!(obs2.prs[0].detail.is_none() && obs2.prs[0].checks.is_none());
+    let log = forge.take_log();
+    let got: Vec<(String, String)> = log
+        .iter()
+        .map(|r| (r.uri.clone(), r.if_none_match.clone()))
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (
+                "repos/o/r/pulls?state=open&per_page=25&page=1".to_string(),
+                "\"l1\"".to_string()
+            ),
+            ("repos/o/r/branches/main".to_string(), "\"b1\"".to_string()),
+        ]
+    );
+    // a cond that went through bytes gives the same requests
+    let again = CondStore::from_json(
+        &serde_json::from_slice(&serde_json::to_vec(&cond.to_json()).unwrap()).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(again, cond);
+}
+
+#[test]
+fn token_never_in_output() {
+    let head = sha('1');
+    let mut routes = standard_routes(&head);
+    routes.insert(0, serde_json::json!({"uri": "repos/o/r/pulls/9", "status": 500, "echo_authorization_header": true}));
+    let forge = Forge::start(&routes);
+    let reader = WatchHttp::new(
+        TOKEN.to_string(),
+        forge.base.clone(),
+        "api.github.com".into(),
+    );
+    let mut texts: Vec<String> = vec![format!("{reader:?}")];
+    texts.push(reader.pull_detail("o/r", 9, "").unwrap_err().to_string());
+    texts.push(format!(
+        "{:?}",
+        reader.pull_detail("o/r", 9, "").unwrap_err()
+    ));
+    let mut o = HostObserver::new(reader, Box::new(|| 1_700_000_000), 2000, vec![], vec![]);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    texts.push(format!("{obs:?}"));
+    texts.push(obs.cond.as_ref().unwrap().to_json().to_string());
+    // a failing observation: the error text of the core
+    let broken = Forge::start(&[]);
+    let mut o2 = observer_over(&broken);
+    let err = o2
+        .observe("o/r", &hints(1, vec![]), None, &cancel)
+        .unwrap_err();
+    texts.push(format!("{err:?}"));
+    texts.extend(o.take_diagnostics());
+    for t in &texts {
+        assert!(!t.contains(TOKEN), "the token is in: {t}");
+        assert!(!t.contains("Bearer"), "the header is in: {t}");
+    }
+    // the server did see the token (the test is not vacuous)
+    assert!(forge
+        .take_log()
+        .iter()
+        .all(|r| r.authorization == format!("Bearer {TOKEN}")));
+}
+
+#[test]
+fn the_reader_has_no_write_path() {
+    let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/watch_reader");
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        let text = std::fs::read_to_string(&p).unwrap();
+        for forbidden in [
+            ".post(",
+            ".put(",
+            ".patch(",
+            ".delete(",
+            ".head(",
+            ".send(",
+            ".send_json(",
+            ".send_form(",
+        ] {
+            assert!(!text.contains(forbidden), "{p:?} has {forbidden}");
+        }
+    }
+}
+
+fn runs_403(head: &str) -> Value {
+    route(
+        &format!("repos/o/r/commits/{head}/check-runs?per_page=100&page=1"),
+        403,
+        r#"{"message":"Resource not accessible by personal access token"}"#,
+        "",
+    )
+}
+
+#[test]
+fn a_token_without_checks_falls_back_to_actions_runs() {
+    let head = sha('1');
+    let mut routes = standard_routes(&head);
+    routes.insert(0, runs_403(&head));
+    routes.insert(0, route(
+        &format!("repos/o/r/actions/runs?head_sha={head}&per_page=100&page=1"),
+        200,
+        &serde_json::json!({"total_count": 3, "workflow_runs": [
+            {"id": 11, "workflow_id": 5, "name": "CI", "event": "push", "status": "completed", "conclusion": "success",
+             "head_sha": head, "created_at": "2026-10-22T08:00:00Z", "run_attempt": 1},
+            {"id": 12, "workflow_id": 5, "name": "CI", "event": "push", "status": "completed", "conclusion": "failure",
+             "head_sha": head, "created_at": "2026-10-22T09:00:00Z", "run_attempt": 1},
+            {"id": 13, "workflow_id": 6, "name": "Lint", "event": "pull_request", "status": "in_progress", "conclusion": null,
+             "head_sha": head, "created_at": "2026-10-22T09:00:00Z", "run_attempt": 1}]})
+        .to_string(),
+        "",
+    ));
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    let c = obs.prs[0].checks.as_ref().unwrap();
+    assert_eq!(c.via, stw::watch_reader::obs::ChecksVia::ActionsRuns);
+    let names: Vec<(&str, &str, &str)> = c
+        .runs
+        .iter()
+        .map(|r| (r.name.as_str(), r.status.as_str(), r.conclusion.as_str()))
+        .collect();
+    assert_eq!(
+        names,
+        vec![
+            ("CI (push)", "completed", "failure"),
+            ("Lint (pull_request)", "in_progress", "")
+        ]
+    );
+    assert!(
+        c.runs
+            .iter()
+            .all(|r| r.text.is_empty() && r.title.is_empty()),
+        "no output text from Actions runs"
+    );
+    assert_eq!(
+        c.statuses.len(),
+        1,
+        "the commit statuses are read as before"
+    );
+    assert_eq!(
+        o.take_diagnostics(),
+        vec!["watch: o/r: checks via actions-runs (the token cannot read check runs)".to_string()]
+    );
+    // announced once per repository, not per cycle
+    let _ = o
+        .observe(
+            "o/r",
+            &hints(2, vec![]),
+            Some(obs.cond.as_ref().unwrap()),
+            &cancel,
+        )
+        .unwrap();
+    assert!(o.take_diagnostics().is_empty());
+}
+
+#[test]
+fn when_check_runs_and_actions_are_both_refused_the_read_is_forbidden() {
+    let head = sha('1');
+    let mut routes = standard_routes(&head);
+    routes.insert(0, runs_403(&head));
+    routes.insert(
+        0,
+        route(
+            &format!("repos/o/r/actions/runs?head_sha={head}&per_page=100&page=1"),
+            403,
+            "{}",
+            "",
+        ),
+    );
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    match o.observe("o/r", &hints(1, vec![]), None, &cancel) {
+        Err(ObserveFailure::Error(e)) => assert_eq!(e.code, Code::Forbidden),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn a_404_on_check_runs_is_not_the_fallback() {
+    let head = sha('1');
+    let mut routes = standard_routes(&head);
+    routes.insert(
+        0,
+        route(
+            &format!("repos/o/r/commits/{head}/check-runs?per_page=100&page=1"),
+            404,
+            "{}",
+            "",
+        ),
+    );
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    match o.observe("o/r", &hints(1, vec![]), None, &cancel) {
+        Err(ObserveFailure::Error(e)) => assert_eq!(e.code, Code::Forbidden),
+        other => panic!("{other:?}"),
+    }
+    assert!(forge.take_log().iter().all(|r| !r.uri.contains("actions/")));
+}
+
+#[test]
+fn a_hung_server_ends_at_the_request_timeout() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        let mut held = Vec::new();
+        for s in listener.incoming().flatten() {
+            held.push(s); // never answers
+        }
+    });
+    let mut reader = WatchHttp::new(TOKEN.into(), base, "api.github.com".into());
+    reader
+        .set_request_timeout(std::time::Duration::from_millis(300))
+        .unwrap();
+    let started = std::time::Instant::now();
+    let e = reader.pull_detail("o/r", 1, "").unwrap_err();
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+    assert_eq!(e.code, Code::Network);
+    assert_eq!(e.message, "request canceled or exceeded its deadline");
+    assert!(reader
+        .set_request_timeout(std::time::Duration::ZERO)
+        .is_err());
+    assert!(reader
+        .set_request_timeout(std::time::Duration::from_secs(31))
+        .is_err());
+    assert!(reader
+        .set_request_timeout(std::time::Duration::from_secs(30))
+        .is_ok());
+}
+
+#[test]
+fn a_refused_connection_is_a_network_error_without_details() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    drop(listener);
+    let reader = WatchHttp::new(TOKEN.into(), base.clone(), "api.github.com".into());
+    let e = reader.rate_limit().unwrap_err();
+    assert_eq!(
+        (e.code, e.message.as_str()),
+        (Code::Network, "HTTP read failed")
+    );
+    assert!(
+        !e.to_string().contains(&base),
+        "the address is not in the error"
+    );
+}
+
+#[test]
+fn hostile_link_headers_are_bounded() {
+    let started = std::time::Instant::now();
+    let big = format!("<{}>; rel=\"next\"", "a".repeat(1 << 20));
+    assert_eq!(http::next_page_from_link(&big), None);
+    let commas = ",".repeat(1 << 20);
+    assert_eq!(http::next_page_from_link(&commas), None);
+    let many = "<x?page=2>; rel=\"prev\", ".repeat(50_000) + "<https://h/x?page=3>; rel=next";
+    assert_eq!(http::next_page_from_link(&many), Some(3));
+    assert!(!http::has_next_rel(&commas));
+    assert_eq!(
+        http::next_page_from_link("<https://h/x?page=2&page=9>; rel=next"),
+        Some(2)
+    );
+    assert_eq!(
+        http::next_page_from_link("<https://h/x?page=%32>; rel=next"),
+        Some(2)
+    );
+    assert_eq!(
+        http::next_page_from_link("<https://h/x%zz?page=2>; rel=next"),
+        None
+    );
+    assert_eq!(
+        http::next_page_from_link("<https://h/x?page=2\n>; rel=next"),
+        None
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+}
+
+#[test]
+fn a_list_that_never_ends_stops_at_the_page_bound() {
+    // every page names a following page: the reader stops with too-many-open-prs at the bound of the size
+    let mut routes = Vec::new();
+    for page in 1..=81u64 {
+        let item = serde_json::json!([{"number": page, "title": "t", "user": {"login": "u"}, "labels": [],
+            "draft": false, "head": {"sha": sha('1'), "ref": "r"}, "base": {"ref": "main", "sha": sha('a')}}]);
+        routes.insert(0, serde_json::json!({"uri": format!("repos/o/r/pulls?state=open&per_page=25&page={page}"), "status": 0,
+            "headers": {"Link": format!("<https://api.github.com/repositories/1/pulls?per_page=25&page={}>; rel=\"next\"", page + 1)},
+            "body": item.to_string()}));
+    }
+    let forge = Forge::start(&routes);
+    let reader = WatchHttp::new(TOKEN.into(), forge.base.clone(), "api.github.com".into());
+    let e = reader
+        .list_open_pulls("o/r", &PullListState::default(), 2000)
+        .unwrap_err();
+    assert_eq!(e.code, Code::TooManyPrs);
+    assert_eq!(forge.take_log().len(), 80, "no request beyond page 80");
+}
+
+#[test]
+fn observer_masks_the_untrusted_base_name_in_its_diagnostic() {
+    let mut fake = FakeReader::default();
+    fake.w.items.push(PullItem {
+        number: 1,
+        head_sha: sha('1'),
+        base_ref: "we%\u{202e}ird\u{7}\"x".into(),
+        head_ref: "r".into(),
+        ..PullItem::default()
+    });
+    fake.w.details.insert(1, "{}".into());
+    let swap = Swap(Rc::new(RefCell::new(Rc::new(fake))));
+    let mut o = HostObserver::new(swap, Box::new(|| 0), 2000, vec![], vec![]);
+    let cancel = AtomicBool::new(false);
+    o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    let d = o.take_diagnostics();
+    assert_eq!(d.len(), 1);
+    assert!(
+        d[0].chars().all(|c| !c.is_control() && c != '\u{202e}'),
+        "{:?}",
+        d[0]
+    );
+    assert!(
+        d[0].contains("\\u{202e}") && d[0].contains("\\u{7}") && d[0].contains("\\\"x"),
+        "{:?}",
+        d[0]
+    );
+}
+
+#[test]
+fn rate_limit_evidence_each_source_alone() {
+    let neutral = r#"{"message":"nope"}"#;
+    let r = |n: u64, status: u64, headers: Value, body: &str| serde_json::json!({"uri": format!("repos/a/b/pulls/{n}"), "status": status, "headers": headers, "body": body});
+    let routes = vec![
+        r(
+            1,
+            403,
+            serde_json::json!({"X-RateLimit-Remaining": "0"}),
+            neutral,
+        ),
+        r(2, 403, serde_json::json!({"Retry-After": "30"}), neutral),
+        r(
+            3,
+            403,
+            Value::Null,
+            r#"{"message":"You have exceeded a secondary rate limit"}"#,
+        ),
+        r(
+            4,
+            403,
+            Value::Null,
+            r#"{"message":"Abuse Detection mechanism"}"#,
+        ),
+        r(5, 403, Value::Null, neutral),
+        r(6, 429, Value::Null, neutral),
+        r(7, 403, serde_json::json!({"Retry-After": "abc"}), neutral),
+        r(
+            8,
+            403,
+            serde_json::json!({"X-RateLimit-Remaining": "7"}),
+            neutral,
+        ),
+    ];
+    let forge = Forge::start(&routes);
+    let reader = WatchHttp::new(TOKEN.into(), forge.base.clone(), "api.github.com".into());
+    let got: Vec<(Code, u64)> = (1..=8)
+        .map(|n| {
+            let e = reader.pull_detail("a/b", n, "").unwrap_err();
+            (e.code, e.retry_after)
+        })
+        .collect();
+    assert_eq!(
+        got,
+        vec![
+            (Code::RateLimited, 0),
+            (Code::RateLimited, 30),
+            (Code::RateLimited, 0),
+            (Code::RateLimited, 0),
+            (Code::Forbidden, 0),
+            (Code::RateLimited, 0),
+            (Code::RateLimited, 0),
+            (Code::Forbidden, 0),
+        ]
+    );
+}
+
+#[test]
+fn check_runs_and_statuses_follow_pages_and_keep_the_newest_status_of_a_context() {
+    let head = sha('1');
+    let run = |i: usize| serde_json::json!({"name": format!("r{i}"), "status": "completed", "conclusion": "success", "output": {}});
+    let page1: Vec<Value> = (0..100).map(run).collect();
+    let page2: Vec<Value> = (100..150).map(run).collect();
+    let st =
+        |c: &str, state: &str| serde_json::json!({"context": c, "state": state, "description": ""});
+    let mut s1: Vec<Value> = (0..100).map(|i| st(&format!("s{i}"), "success")).collect();
+    s1[0] = st("s0", "failure");
+    let s2 = vec![st("s0", "success"), st("extra", "pending")];
+    let mut routes = standard_routes(&head);
+    let base = format!("repos/o/r/commits/{head}");
+    routes.insert(
+        0,
+        route(
+            &format!("{base}/check-runs?per_page=100&page=1"),
+            200,
+            &serde_json::json!({"total_count": 150, "check_runs": page1}).to_string(),
+            "\"r1\"",
+        ),
+    );
+    routes.insert(
+        0,
+        route(
+            &format!("{base}/check-runs?per_page=100&page=2"),
+            200,
+            &serde_json::json!({"total_count": 150, "check_runs": page2}).to_string(),
+            "",
+        ),
+    );
+    routes.insert(
+        0,
+        route(
+            &format!("{base}/statuses?per_page=100&page=1"),
+            200,
+            &Value::Array(s1).to_string(),
+            "\"s1\"",
+        ),
+    );
+    routes.insert(
+        0,
+        route(
+            &format!("{base}/statuses?per_page=100&page=2"),
+            200,
+            &Value::Array(s2).to_string(),
+            "",
+        ),
+    );
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    let c = obs.prs[0].checks.as_ref().unwrap();
+    assert_eq!(c.runs.len(), 150);
+    assert_eq!(c.runs[149].name, "r149");
+    assert_eq!(
+        c.statuses.len(),
+        101,
+        "the older s0 of page 2 does not count twice"
+    );
+    assert_eq!(
+        (c.statuses[0].context.as_str(), c.statuses[0].state.as_str()),
+        ("s0", "failure")
+    );
+    assert_eq!(c.statuses[100].context, "extra");
+    let uris: Vec<String> = forge.take_log().into_iter().map(|r| r.uri).collect();
+    assert_eq!(uris.iter().filter(|u| u.ends_with("&page=2")).count(), 2);
+    assert_eq!(uris.iter().filter(|u| u.ends_with("&page=3")).count(), 0);
+}
+
+#[test]
+fn a_missing_base_branch_is_no_failure() {
+    let head = sha('1');
+    let mut routes = standard_routes(&head);
+    routes.insert(
+        0,
+        route(
+            "repos/o/r/branches/main",
+            404,
+            r#"{"message":"Branch not found"}"#,
+            "",
+        ),
+    );
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    assert_eq!(obs.prs.len(), 1);
+    assert!(obs.cond.unwrap().tips.is_empty());
+}
+
+#[test]
+fn the_class_of_a_changed_head_is_read_again_and_unchanged_heads_stay_quiet() {
+    // a head that did not change and whose class is green is not read at all
+    let head = sha('1');
+    let forge = Forge::start(&standard_routes(&head));
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let known = vec![KnownPr {
+        number: 1,
+        head: head.clone(),
+        class: "green".into(),
+        ..KnownPr::default()
+    }];
+    let obs = o
+        .observe("o/r", &hints(1, known.clone()), None, &cancel)
+        .unwrap();
+    assert!(obs.prs[0].checks.is_none());
+    // a new head is read
+    let known2 = vec![KnownPr {
+        number: 1,
+        head: sha('2'),
+        class: "green".into(),
+        ..KnownPr::default()
+    }];
+    let obs2 = o
+        .observe("o/r", &hints(2, known2), obs.cond.as_ref(), &cancel)
+        .unwrap();
+    assert!(obs2.prs[0].checks.is_some() && obs2.prs[0].detail.is_some());
+}
