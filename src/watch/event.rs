@@ -282,8 +282,26 @@ impl Details {
 
     /// Decodes the `details` object of `kind`: unknown keys are refused, missing keys are the zero value.
     pub fn decode(kind: Kind, value: Value) -> Result<Details, String> {
-        let _ = (kind, value);
-        Err("not implemented".to_string())
+        fn d<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
+            serde_json::from_value(v).map_err(|e| e.to_string())
+        }
+        Ok(match kind {
+            Kind::NewPr => Details::NewPr(d(value)?),
+            Kind::HeadChanged => Details::HeadChanged(d(value)?),
+            Kind::ChecksGreen => Details::ChecksGreen(d(value)?),
+            Kind::ChecksRed => Details::ChecksRed(d(value)?),
+            Kind::ChecksPendingTimeout => Details::ChecksPendingTimeout(d(value)?),
+            Kind::MergeableChanged => Details::MergeableChanged(d(value)?),
+            Kind::ReadyStateChanged => Details::ReadyStateChanged(d(value)?),
+            Kind::BaseChanged => Details::BaseChanged(d(value)?),
+            Kind::Merged => Details::Merged(d(value)?),
+            Kind::Closed => Details::Closed(d(value)?),
+            Kind::RestackNeeded => Details::RestackNeeded(d(value)?),
+            Kind::ReposChanged => Details::ReposChanged(d(value)?),
+            Kind::WatchError => Details::WatchError(d(value)?),
+            Kind::WatchRecovered => Details::WatchRecovered(d(value)?),
+            Kind::WatchStalled => Details::WatchStalled(d(value)?),
+        })
     }
 }
 
@@ -323,13 +341,38 @@ impl Event {
 
     /// The JSON line without the newline: keys `schema_version, seq, id, time, repo, pr, kind, details`, never omitted.
     pub fn to_line(&self) -> String {
-        String::new()
+        serde_json::to_string(self).expect("an event serializes: strings, numbers and lists only")
     }
 
     /// Decodes a line strictly: one JSON object, schema version 1, a known kind, exact detail keys, no trailing data.
     pub fn from_line(line: &str) -> Result<Event, String> {
-        let _ = line;
-        Err("not implemented".to_string())
+        #[derive(Deserialize)]
+        #[serde(deny_unknown_fields)]
+        struct Raw {
+            schema_version: u32,
+            seq: u64,
+            id: String,
+            time: String,
+            repo: Option<String>,
+            pr: Option<u64>,
+            kind: String,
+            details: Value,
+        }
+        let raw: Raw = serde_json::from_str(line).map_err(|e| e.to_string())?;
+        if raw.schema_version != SCHEMA_VERSION {
+            return Err(format!("unsupported schema_version {}", raw.schema_version));
+        }
+        let kind = Kind::parse(&raw.kind).ok_or_else(|| format!("unknown kind {:?}", raw.kind))?;
+        let details =
+            Details::decode(kind, raw.details).map_err(|e| format!("{} details: {e}", raw.kind))?;
+        Ok(Event {
+            seq: raw.seq,
+            id: raw.id,
+            time: raw.time,
+            repo: raw.repo,
+            pr: raw.pr,
+            details,
+        })
     }
 }
 
