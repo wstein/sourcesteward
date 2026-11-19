@@ -3,7 +3,7 @@
 //! with a rename is the one `git patch-id --stable` computes on `git diff` output. Sources: git's
 //! `diffcore-rename.c` (exact renames, then the similarity matrix) and `diffcore-delta.c` (the similarity
 //! estimate); both are re-implemented here from their documented behavior and checked against git with
-//! `tests/oracle/patch_id_rename_oracle.sh` and `tests/it/patchid_rename.rs`.
+//! `tests/oracle/patch_id_rename_oracle.sh` and `tests/it/patchid_git.rs`.
 //!
 //! The user's configuration is not read: the result must not depend on it, a patch ID that is printed in a
 //! review line has to be the same on every machine. Git itself changes its output with `diff.renames=false`
@@ -29,6 +29,10 @@ use crate::patch_id::{content, is_binary, FileChange, Pair};
 const MAX_SCORE: u64 = 60_000;
 /// git's `DEFAULT_RENAME_SCORE`: 50 %.
 const MINIMUM_SCORE: u64 = 30_000;
+/// The base-name pass needs more than the matrix does: git's `min_basename_score` is
+/// `minimum_score + GIT_BASENAME_FACTOR * (MAX_SCORE - minimum_score)` with a factor of 0.5, that is
+/// 30000 + 0.5 * 30000 = 45000 (75 %). A base-name pair below it is left to the matrix.
+const MINIMUM_BASENAME_SCORE: u64 = MINIMUM_SCORE + (MAX_SCORE - MINIMUM_SCORE) / 2;
 /// git's default `diff.renameLimit`: inexact detection is skipped when `sources * destinations` is larger
 /// than the square of it (and one of them is larger than the limit).
 const RENAME_LIMIT: u64 = 1000;
@@ -176,7 +180,7 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
     }
 
     // basename-guided pass (git's `find_basename_matches`): a source and a destination whose base name occurs
-    // once among the sources and once among the destinations left are scored first; 50 % makes a rename
+    // once among the sources and once among the destinations left are scored first; 75 % makes a rename
     let mut blobs = Blobs {
         repo,
         by_id: HashMap::new(),
@@ -205,7 +209,7 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
             continue;
         };
         let score = estimate(&mut blobs, files[s].old.unwrap(), files[*d].new.unwrap())?;
-        if score >= MINIMUM_SCORE {
+        if score >= MINIMUM_BASENAME_SCORE {
             src_used[s] = true;
             renamed[*d] = Some((s, score * 100 / MAX_SCORE));
         }
