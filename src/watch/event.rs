@@ -59,14 +59,28 @@ impl Kind {
 
     /// The wire name (`new-pr`, `checks-pending-timeout`, ...).
     pub fn as_str(self) -> &'static str {
-        let _ = self;
-        ""
+        match self {
+            Kind::NewPr => "new-pr",
+            Kind::HeadChanged => "head-changed",
+            Kind::ChecksGreen => "checks-green",
+            Kind::ChecksRed => "checks-red",
+            Kind::ChecksPendingTimeout => "checks-pending-timeout",
+            Kind::MergeableChanged => "mergeable-changed",
+            Kind::ReadyStateChanged => "ready-state-changed",
+            Kind::BaseChanged => "base-changed",
+            Kind::Merged => "merged",
+            Kind::Closed => "closed",
+            Kind::RestackNeeded => "restack-needed",
+            Kind::ReposChanged => "repos-changed",
+            Kind::WatchError => "watch-error",
+            Kind::WatchRecovered => "watch-recovered",
+            Kind::WatchStalled => "watch-stalled",
+        }
     }
 
     /// The kind of a wire name; `None` for an unknown name (also for the reserved `review-state-changed`).
     pub fn parse(name: &str) -> Option<Kind> {
-        let _ = name;
-        None
+        Kind::ALL.into_iter().find(|k| k.as_str() == name)
     }
 }
 
@@ -342,80 +356,88 @@ impl fmt::Display for Event {
 
 /// `REPO#PR:KIND:KEY`; `-` for an absent PR; without a repository (or with an empty one) `-:KIND:KEY`.
 pub fn event_id(repo: Option<&str>, pr: Option<u64>, kind: Kind, key: &str) -> String {
-    let _ = (repo, pr, kind, key);
-    String::new()
+    let prefix = match repo.filter(|r| !r.is_empty()) {
+        Some(r) => match pr {
+            Some(n) => format!("{r}#{n}"),
+            None => format!("{r}#-"),
+        },
+        None => "-".to_string(),
+    };
+    format!("{prefix}:{}:{key}", kind.as_str())
 }
 /// `new-pr` and `closed`: `g<generation>`.
 pub fn key_generation(generation: u64) -> String {
-    let _ = generation;
-    String::new()
+    format!("g{generation}")
 }
 /// `head-changed`: `<new head>:h<head epoch>`.
 pub fn key_head(sha: &str, epoch: u64) -> String {
-    let _ = (sha, epoch);
-    String::new()
+    format!("{sha}:h{epoch}")
 }
 /// `checks-green` and `checks-red`: `<head>:c<checks epoch>`.
 pub fn key_checks(head: &str, epoch: u64) -> String {
-    let _ = (head, epoch);
-    String::new()
+    format!("{head}:c{epoch}")
 }
 /// `checks-pending-timeout`: `<head>:c<checks epoch>:t`.
 pub fn key_timeout(head: &str, epoch: u64) -> String {
-    let _ = (head, epoch);
-    String::new()
+    format!("{}:t", key_checks(head, epoch))
 }
 /// `mergeable-changed`: `<head>:m<mergeable epoch>`.
 pub fn key_mergeable(head: &str, epoch: u64) -> String {
-    let _ = (head, epoch);
-    String::new()
+    format!("{head}:m{epoch}")
 }
 /// `ready-state-changed`: `r<ready epoch>`.
 pub fn key_ready(epoch: u64) -> String {
-    let _ = epoch;
-    String::new()
+    format!("r{epoch}")
 }
 /// `base-changed`: `b<base epoch>`.
 pub fn key_base(epoch: u64) -> String {
-    let _ = epoch;
-    String::new()
+    format!("b{epoch}")
 }
 /// `repos-changed`: `p<repos epoch>`.
 pub fn key_repos(epoch: u64) -> String {
-    let _ = epoch;
-    String::new()
+    format!("p{epoch}")
 }
 /// `watch-recovered` after a `watch-error` episode: `e<episode>`.
 pub fn key_recovered_error(episode: u64) -> String {
-    let _ = episode;
-    String::new()
+    format!("e{episode}")
 }
 /// `watch-stalled` and `watch-recovered` after it: `s<stall episode>`.
 pub fn key_stall(episode: u64) -> String {
-    let _ = episode;
-    String::new()
+    format!("s{episode}")
 }
 /// `watch-error`: `<code>:e<episode>:f<failures>`.
 pub fn key_error(code: &str, episode: u64, failures: u64) -> String {
-    let _ = (code, episode, failures);
-    String::new()
+    format!("{code}:e{episode}:f{failures}")
 }
 /// `merged`: the merge commit, `unknown` when it could not be read.
 pub fn key_merged(commit: Option<&str>) -> String {
-    let _ = commit;
-    String::new()
+    match commit {
+        Some(c) if !c.is_empty() => c.to_string(),
+        _ => "unknown".to_string(),
+    }
 }
 /// `restack-needed`: `<merged pr>:<merge commit or unknown>`.
 pub fn key_restack(merged_pr: u64, commit: Option<&str>) -> String {
-    let _ = (merged_pr, commit);
-    String::new()
+    format!("{merged_pr}:{}", key_merged(commit))
 }
 
 /// The counter an id carries for `letter` (`h`, `c`, `m`, `r`, `b`, `p`, `g`, `e`, `s`): the colon-separated part made of
 /// the letter and one to eight digits, searched from the end and never in the first part (the repository). The parts are
 /// short, so a hex SHA never matches.
 pub fn id_counter(id: &str, letter: char) -> Option<u64> {
-    let _ = (id, letter);
+    let parts: Vec<&str> = id.split(':').collect();
+    for p in parts.iter().skip(1).rev() {
+        let digits = match p.strip_prefix(letter) {
+            Some(d) => d,
+            None => continue,
+        };
+        if digits.is_empty() || digits.len() > 8 || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            continue;
+        }
+        if let Ok(n) = digits.parse::<u64>() {
+            return Some(n);
+        }
+    }
     None
 }
 
