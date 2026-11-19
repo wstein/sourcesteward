@@ -146,14 +146,81 @@ pub fn status_freshness_seconds(interval_seconds: u64) -> u64 {
 
 /// A path without `.` and `..` components, resolved lexically (like Go's `filepath.Clean`).
 pub fn clean_path(p: &Path) -> PathBuf {
-    p.to_path_buf()
+    let mut out = PathBuf::new();
+    for c in p.components() {
+        match c {
+            Component::ParentDir => {
+                if !out.pop() {
+                    // `..` above the root stays at the root
+                }
+            }
+            Component::CurDir => {}
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 /// Creates `dir` (mode 0700, also the missing parents) or accepts an existing 0700 one. Refused (and nothing created) are:
 /// a relative path, a directory inside a Git work tree (a `.git` entry in it or above it) or below a `.stw` directory, found
 /// after the symbolic links of the deepest existing ancestor are resolved, and an existing directory with another mode.
 pub fn ensure_state_dir(dir: &Path) -> Result<(), WatchError> {
-    let _ = dir;
+    if !dir.is_absolute() {
+        return Err(WatchError::StateDirUsage);
+    }
+    let dir = clean_path(dir);
+    // Resolve the deepest existing ancestor so a symbolic link into a work tree is seen.
+    let mut existing = dir.clone();
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    while std::fs::symlink_metadata(&existing).is_err() {
+        match (
+            existing.file_name().map(|n| n.to_os_string()),
+            existing.parent(),
+        ) {
+            (Some(name), Some(parent)) => {
+                rest.push(name);
+                existing = parent.to_path_buf();
+            }
+            _ => break,
+        }
+    }
+    let mut resolved = std::fs::canonicalize(&existing)
+        .map_err(|e| WatchError::Io(format!("cannot resolve {}: {e}", existing.display())))?;
+    for name in rest.iter().rev() {
+        resolved.push(name);
+    }
+    let mut p = resolved.as_path();
+    loop {
+        if p.file_name().is_some_and(|n| n == ".stw")
+            || std::fs::symlink_metadata(p.join(".git")).is_ok()
+        {
+            return Err(WatchError::InsideWorkTree(resolved.display().to_string()));
+        }
+        match p.parent() {
+            Some(parent) => p = parent,
+            None => break,
+        }
+    }
+    std::fs::DirBuilder::new()
+        .recursive(true)
+        .mode(0o700)
+        .create(&resolved)
+        .map_err(|e| WatchError::Io(format!("cannot create {}: {e}", resolved.display())))?;
+    let meta = std::fs::metadata(&resolved)
+        .map_err(|e| WatchError::Io(format!("cannot read {}: {e}", resolved.display())))?;
+    if !meta.is_dir() {
+        return Err(WatchError::Io(format!(
+            "{} is not a directory",
+            resolved.display()
+        )));
+    }
+    let mode = meta.permissions().mode() & 0o777;
+    if mode != 0o700 {
+        return Err(WatchError::StateDirMode(format!(
+            "{} has mode {mode:o}",
+            resolved.display()
+        )));
+    }
     Ok(())
 }
 
