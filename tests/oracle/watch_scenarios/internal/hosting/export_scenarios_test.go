@@ -554,7 +554,7 @@ func exportReaderScenarios(t *testing.T, dir string) {
 		x.write(dir)
 	}
 	{
-		x := newHX(t, "http-token-never-in-errors", "A server that echoes the Authorization header in an error body does not make the token reachable from the error.", "watch_reader_test.go:TestWatchTokenNeverInErrorsOrBodies")
+		x := newHX(t, "http-credentials-never-in-errors", "A server that echoes the Authorization header in an error body does not make the token reachable from the error.", "watch_reader_test.go:TestWatchTokenNeverInErrorsOrBodies")
 		x.route(hRoute{URI: "repos/a/b/pulls/7", Status: 500, EchoAuth: true})
 		o := x.do(hCall{Op: "pull_detail", Repo: "a/b", Number: 7})
 		x.must(o.Error.Code == CodeHTTP5xx && !o.Error.MessageLeaksSecret, "token")
