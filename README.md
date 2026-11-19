@@ -1186,7 +1186,7 @@ nothing: no add, commit, rebase, ref, file, object or index refresh, no network,
 fold, with this plan's checksum, an op log snapshot first and `stw oplog undo` as the way back) is a later step and does not
 exist: the flag is an unknown flag (exit 2). New behavior without a Go counterpart; the specification, the 64 counter-proofs
 of the Python spike and the comparison with git-absorb are in `spikes/stw/absorb/README.md` (continuation of Spec 018,
-"Fix up"); decisions D-20261119-07 to D-20261119-11.
+"Fix up"); decisions D-20261119-07 to D-20261119-11 and D-20261119-12 to D-20261119-20 (`dayboard/DECISIONS.md`): git-absorb is parked (-12); the later apply is native in Rust, fixups written with gix, rewrite by `git rebase --autosquash` with `GIT_SEQUENCE_EDITOR=true`, an op log snapshot first, git-absorb is never called, the BSD-3 notice stays (-13); no flag is the read-only plan, writing only with `--apply` and the plan checksum (Q1, -14); nothing staged is exit 1 `nothing-staged` (Q2, -15); an ambiguous hunk is skipped, `--ambiguous-newest` takes the newest (Q4, -16); one fixup per target commit (Q8, -17); a partial clone with missing objects is `partial-clone-unsupported`, no lazy fetch (Q11, -18); Q3, Q5, Q6, Q7, Q9, Q10, Q12 and Q13 follow the recommendations of the spike README (-19); order: live acceptance of the spike first, this read-only port in parallel, the apply only after the owner accepted the spike and the answers (-20).
 
 ```
 stw absorb [--plan] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
