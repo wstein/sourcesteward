@@ -338,3 +338,21 @@ fn a_file_renamed_in_the_stack_is_found_under_its_new_name_only_as_added() {
     assert_eq!(hunk(&p, 0)["target"]["sha"], c2);
     assert_eq!(hunk(&p, 0)["basis"], "file-added");
 }
+
+#[test]
+fn the_subject_is_the_first_paragraph_on_one_line() {
+    let fx = Fx::new();
+    let t = l(6);
+    fx.commit1(
+        "a.txt",
+        &t,
+        "\n\nfeat: first line  \n  continued on the second\n\nbody of the message\n",
+    );
+    fx.commit1("b.txt", "x\n", "feat: other");
+    fx.stage1("a.txt", &replace_line(&t, 2, "f"));
+    let p = fx.plan(&[]);
+    assert_eq!(
+        hunk(&p, 0)["target"]["subject"],
+        "feat: first line   continued on the second"
+    );
+}
