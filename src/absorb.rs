@@ -13,14 +13,15 @@
 //! Myers diff). The only `git` call is `blame` (`Op::BlameLines`, `via: git`) for the lines a hunk removes: gix has no
 //! blame. A failing blame is an error, never an empty evidence list. A partial clone is not served: a read that fails in
 //! one is `partial-clone-unsupported`, and nothing is ever fetched.
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use gix::ObjectId;
 use serde_json::{json, Value};
 
-use crate::git_runner::Runner;
+use crate::absorb_commute::{commute_diff_before, lines_match, Hunk};
+use crate::git_runner::{BlamePath, Hex40, Op, Runner};
 use crate::{repo, sha256};
 
 /// Commits in the stack without `--base`.
@@ -107,9 +108,7 @@ fn class(mode: u32) -> u32 {
     }
 }
 
-/// One staged change of a path (no rename detection): the status letters of `git diff-index --raw`. The fields are read by
-/// the plan of the next commit; the guards only ask whether there is one.
-#[allow(dead_code)]
+/// One staged change of a path (no rename detection): the status letters of `git diff-index --raw`.
 struct Change {
     path: Vec<u8>,
     status: char,
@@ -117,8 +116,42 @@ struct Change {
     new: Option<Item>,
 }
 
+/// A commit of the stack, or one a hunk's lines come from.
+#[derive(Clone)]
+struct Rec {
+    id: ObjectId,
+    parents: Vec<ObjectId>,
+    name: Vec<u8>,
+    email: Vec<u8>,
+    subject: Vec<u8>,
+}
+
+/// What one stack commit did to one path.
+#[derive(Clone)]
+struct FileDiff {
+    /// The commit created the path (or changed its type): every hunk of the path belongs to it.
+    added: bool,
+    binary: bool,
+    hunks: Vec<Hunk>,
+}
+
+/// One staged hunk and what became of it.
+struct Entry {
+    path: Vec<u8>,
+    old: (i64, usize),
+    new: (i64, usize),
+    /// The stack index of the target commit (newest is 0), also for a skipped hunk whose target is named.
+    target: Option<usize>,
+    basis: Option<&'static str>,
+    absorbed: bool,
+    reason: Option<&'static str>,
+    origins: Vec<(ObjectId, usize)>,
+}
+
 struct Planner<'a> {
     repo: gix::Repository,
+    dir: &'a Path,
+    runner: &'a Runner,
     opts: &'a Options,
     /// The repository is a partial clone: a failing read means a missing object.
     partial: bool,
@@ -126,11 +159,20 @@ struct Planner<'a> {
     ref_name: Vec<u8>,
     ident: (Vec<u8>, Vec<u8>),
     base: Option<ObjectId>,
+    index_digest: String,
+    /// Every commit a remote-tracking branch contains.
+    remote: HashSet<ObjectId>,
+    stack: Vec<Rec>,
+    stack_end: &'static str,
+    records: HashMap<ObjectId, Rec>,
+    diffs: HashMap<(usize, Vec<u8>), Option<FileDiff>>,
+    entries: Vec<Entry>,
+    files_skipped: Vec<(Vec<u8>, &'static str)>,
 }
 
 /// The plan of the staged changes of the repository at `dir` (its work tree root). `start` is the directory the command
 /// runs in (the search for a `.jj` directory starts there and ends at `dir`).
-pub fn plan(dir: &Path, start: &Path, _runner: &Runner, opts: &Options) -> Result<Plan, Fail> {
+pub fn plan(dir: &Path, start: &Path, runner: &Runner, opts: &Options) -> Result<Plan, Fail> {
     let repo = repo::open(dir).map_err(|e| Fail {
         code: "git-failed",
         message: format!("cannot open the repository: {e}"),
@@ -139,12 +181,22 @@ pub fn plan(dir: &Path, start: &Path, _runner: &Runner, opts: &Options) -> Resul
     let partial = is_partial(&repo);
     let mut p = Planner {
         repo,
+        dir,
+        runner,
         opts,
         partial,
         head: ObjectId::null(gix::hash::Kind::Sha1),
         ref_name: Vec::new(),
         ident: (Vec::new(), Vec::new()),
         base: None,
+        index_digest: String::new(),
+        remote: HashSet::new(),
+        stack: Vec::new(),
+        stack_end: "root",
+        records: HashMap::new(),
+        diffs: HashMap::new(),
+        entries: Vec::new(),
+        files_skipped: Vec::new(),
     };
     p.run()
 }
@@ -225,6 +277,62 @@ fn is_partial(repo: &gix::Repository) -> bool {
     promisor || cfg.string("extensions.partialclone").is_some()
 }
 
+fn mode_of(kind: gix::objs::tree::EntryKind) -> u32 {
+    u32::from_str_radix(crate::patch_id::mode_str(kind), 8).unwrap_or(0)
+}
+
+/// The zero-context hunks of `before` -> `after`: a Myers diff without the indent heuristic, as `git diff -U0
+/// --diff-algorithm=myers --no-indent-heuristic` prints them (the numbers are those of the hunk header).
+fn diff_hunks(before: &[u8], after: &[u8]) -> Vec<Hunk> {
+    use gix::diff::blob::{Algorithm, Diff, InternedInput};
+    let input = InternedInput::new(before, after);
+    let mut diff = Diff::compute(Algorithm::Myers, &input);
+    diff.postprocess_no_heuristic(&input);
+    diff.hunks()
+        .map(|h| {
+            let rem: Vec<Vec<u8>> = h
+                .before
+                .clone()
+                .map(|k| input.interner[input.before[k as usize]].to_vec())
+                .collect();
+            let add: Vec<Vec<u8>> = h
+                .after
+                .clone()
+                .map(|k| input.interner[input.after[k as usize]].to_vec())
+                .collect();
+            // a side without lines is numbered by the line before it
+            Hunk {
+                rem_start: i64::from(h.before.start) + i64::from(!rem.is_empty()),
+                add_start: i64::from(h.after.start) + i64::from(!add.is_empty()),
+                rem,
+                add,
+            }
+        })
+        .collect()
+}
+
+/// The first paragraph of a commit message as one line (`%s` of `git log`): blank lines before it are skipped, its lines
+/// lose their trailing white space and are joined by a space.
+fn subject_of(message: &[u8]) -> Vec<u8> {
+    let mut out: Vec<u8> = Vec::new();
+    let mut started = false;
+    for line in message.split(|b| *b == b'\n') {
+        let line = line.trim_ascii_end();
+        if line.is_empty() {
+            if started {
+                break;
+            }
+            continue;
+        }
+        if started {
+            out.push(b' ');
+        }
+        started = true;
+        out.extend_from_slice(line);
+    }
+    out
+}
+
 impl Planner<'_> {
     /// A failed read: in a partial clone an object is missing, else the repository is unreadable.
     fn read_err(&self, what: &str, e: impl std::fmt::Display) -> Fail {
@@ -263,7 +371,11 @@ impl Planner<'_> {
         if changes.is_empty() {
             return fail("nothing-staged", "nothing is staged: the index equals HEAD");
         }
-        fail("not-implemented", "stw absorb is not implemented yet")
+        self.walk()?;
+        for c in &changes {
+            self.change(c)?;
+        }
+        Ok(self.document())
     }
 
     fn identity(&self) -> Result<(Vec<u8>, Vec<u8>), Fail> {
@@ -303,10 +415,12 @@ impl Planner<'_> {
         Ok(id)
     }
 
-    /// The staged changes, sorted by path: the index against the tree of HEAD. An unmerged path is a refusal.
-    fn staged(&self) -> Result<Vec<Change>, Fail> {
+    /// The staged changes, sorted by path: the index against the tree of HEAD. An unmerged path is a refusal. The digest of
+    /// the whole index (`git ls-files -s -z`: mode, id, stage, path of every entry) is kept for the document.
+    fn staged(&mut self) -> Result<Vec<Change>, Fail> {
         let index = self.rd("reading the index", self.repo.index_or_empty())?;
         let mut new: BTreeMap<Vec<u8>, Item> = BTreeMap::new();
+        let mut listing: Vec<u8> = Vec::new();
         for e in index.entries() {
             if e.stage_raw() != 0 {
                 return fail(
@@ -314,14 +428,19 @@ impl Planner<'_> {
                     "the index has unmerged paths (a merge is in progress)",
                 );
             }
+            let path = e.path(&index);
+            listing.extend(format!("{:06o} {} 0\t", e.mode.bits(), e.id).bytes());
+            listing.extend_from_slice(path);
+            listing.push(0);
             new.insert(
-                e.path(&index).to_vec(),
+                path.to_vec(),
                 Item {
                     mode: e.mode.bits(),
                     id: e.id,
                 },
             );
         }
+        self.index_digest = sha256::hex(&listing);
         let commit = self.rd("reading HEAD", self.repo.find_commit(self.head))?;
         let tree = self.rd("reading the tree of HEAD", commit.tree())?;
         let mut rec = gix::traverse::tree::Recorder::default();
@@ -365,6 +484,519 @@ impl Planner<'_> {
         }
         Ok(out)
     }
+
+    // --- the stack --------------------------------------------------------------------------------------------------
+
+    fn rec(&mut self, id: ObjectId) -> Result<Rec, Fail> {
+        if let Some(r) = self.records.get(&id) {
+            return Ok(r.clone());
+        }
+        let c = self.rd("reading a commit", self.repo.find_commit(id))?;
+        let author = self.rd("reading a commit", c.author())?;
+        let r = Rec {
+            id,
+            parents: c.parent_ids().map(|p| p.detach()).collect(),
+            name: author.name.to_vec(),
+            email: author.email.to_vec(),
+            subject: subject_of(self.rd("reading a commit", c.message_raw())?),
+        };
+        self.records.insert(id, r.clone());
+        Ok(r)
+    }
+
+    fn foreign(&self, r: &Rec) -> bool {
+        (&r.name, &r.email) != (&self.ident.0, &self.ident.1)
+    }
+
+    /// The tips of the refs below `prefix` that are commits (tags are peeled), except the ref named `skip`.
+    fn tips(&self, prefix: &str, skip: Option<&[u8]>) -> Result<Vec<ObjectId>, Fail> {
+        let platform = self.rd("reading the refs", self.repo.references())?;
+        let iter = self.rd("reading the refs", platform.prefixed(prefix))?;
+        let mut out = Vec::new();
+        for r in iter {
+            let mut r = self.rd("reading the refs", r)?;
+            if skip == Some(r.name().as_bstr().as_ref()) {
+                continue;
+            }
+            if let Ok(id) = r.peel_to_id() {
+                if self.repo.find_commit(id.detach()).is_ok() {
+                    out.push(id.detach());
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    /// Every commit reachable from `tips`.
+    fn closure(&self, tips: Vec<ObjectId>) -> Result<HashSet<ObjectId>, Fail> {
+        let mut out = HashSet::new();
+        if tips.is_empty() {
+            return Ok(out);
+        }
+        let walk = self.rd("walking the history", self.repo.rev_walk(tips).all())?;
+        for info in walk {
+            out.insert(self.rd("walking the history", info)?.id);
+        }
+        Ok(out)
+    }
+
+    /// The stack: the first-parent commits of HEAD that no remote-tracking ref (and, without `--base`, no other local
+    /// branch) contains, newest first, up to the first merge commit, foreign commit or the limit (the stack rules of
+    /// git-absorb).
+    fn walk(&mut self) -> Result<(), Fail> {
+        self.remote = self.closure(self.tips("refs/remotes/", None)?)?;
+        let hidden = match self.base {
+            Some(b) => self.closure(vec![b])?,
+            None => {
+                let heads = self.tips("refs/heads/", Some(&self.ref_name))?;
+                self.closure(heads)?
+            }
+        };
+        let limit = if self.base.is_some() {
+            usize::MAX
+        } else {
+            self.opts.max_stack + 1
+        };
+        let mut recs: Vec<Rec> = Vec::new();
+        let mut cur = Some(self.head);
+        while let Some(id) = cur {
+            if recs.len() >= limit || self.remote.contains(&id) || hidden.contains(&id) {
+                break;
+            }
+            let r = self.rec(id)?;
+            cur = r.parents.first().copied();
+            recs.push(r);
+        }
+        let end = |base: bool| if base { "base" } else { "branch" };
+        let Some(first) = recs.first() else {
+            if self.remote.contains(&self.head) {
+                return fail(
+                    "published",
+                    "HEAD is contained in a remote-tracking branch: nothing to rewrite",
+                );
+            }
+            self.stack_end = end(self.base.is_some());
+            return Ok(());
+        };
+        if first.parents.len() <= 1 && self.foreign(first) {
+            return fail(
+                "not-owned",
+                format!(
+                    "HEAD is by another author ({} <{}>)",
+                    sanitize_bytes(&first.name),
+                    sanitize_bytes(&first.email)
+                ),
+            );
+        }
+        let mut stack: Vec<Rec> = Vec::new();
+        for r in recs {
+            if r.parents.len() > 1 {
+                self.stack_end = "merge";
+                self.stack = stack;
+                return Ok(());
+            }
+            if self.foreign(&r) {
+                self.stack_end = "foreign";
+                self.stack = stack;
+                return Ok(());
+            }
+            if self.base.is_none() && stack.len() == self.opts.max_stack {
+                self.stack_end = "limit";
+                self.stack = stack;
+                return Ok(());
+            }
+            stack.push(r);
+        }
+        self.stack_end = match stack.last().and_then(|r| r.parents.first().copied()) {
+            None => "root",
+            Some(next) if self.remote.contains(&next) => "published",
+            Some(next) => {
+                let r = self.rec(next)?;
+                if r.parents.len() > 1 {
+                    "merge"
+                } else if self.foreign(&r) {
+                    "foreign"
+                } else {
+                    end(self.base.is_some())
+                }
+            }
+        };
+        self.stack = stack;
+        Ok(())
+    }
+
+    // --- reading trees and blobs ------------------------------------------------------------------------------------
+
+    fn tree_of(&self, id: ObjectId) -> Result<ObjectId, Fail> {
+        let c = self.rd("reading a commit", self.repo.find_commit(id))?;
+        Ok(self.rd("reading a commit", c.tree_id())?.detach())
+    }
+
+    fn lookup(&self, tree: ObjectId, path: &[u8]) -> Result<Option<Item>, Fail> {
+        let t = self.rd("reading a tree", self.repo.find_tree(tree))?;
+        let rel = Path::new(std::ffi::OsStr::from_bytes(path));
+        let e = self.rd("reading a tree", t.lookup_entry_by_path(rel))?;
+        Ok(e.map(|e| Item {
+            mode: mode_of(e.mode().kind()),
+            id: e.object_id(),
+        }))
+    }
+
+    fn blob(&self, id: ObjectId) -> Result<Vec<u8>, Fail> {
+        Ok(self
+            .rd("reading a blob", self.repo.find_object(id))?
+            .data
+            .clone())
+    }
+
+    /// What stack commit `i` did to `path`; `None` when it left the path alone (or touched a gitlink, which the diff of
+    /// the plan ignores).
+    fn diff_of(&mut self, i: usize, path: &[u8]) -> Result<Option<FileDiff>, Fail> {
+        let key = (i, path.to_vec());
+        if let Some(d) = self.diffs.get(&key) {
+            return Ok(d.clone());
+        }
+        let rec = self.stack[i].clone();
+        let new = self.lookup(self.tree_of(rec.id)?, path)?;
+        let old = match rec.parents.first() {
+            Some(p) => self.lookup(self.tree_of(*p)?, path)?,
+            None => None,
+        };
+        let d = self.file_diff(old, new)?;
+        self.diffs.insert(key, d.clone());
+        Ok(d)
+    }
+
+    fn file_diff(&self, old: Option<Item>, new: Option<Item>) -> Result<Option<FileDiff>, Fail> {
+        if old == new || [old, new].iter().flatten().any(|x| x.mode == GITLINK) {
+            return Ok(None);
+        }
+        let added = match (old, new) {
+            (None, Some(_)) => true,
+            (Some(a), Some(b)) => class(a.mode) != class(b.mode),
+            _ => false,
+        };
+        if added {
+            return Ok(Some(FileDiff {
+                added,
+                binary: false,
+                hunks: Vec::new(),
+            }));
+        }
+        let read = |x: Option<Item>| x.map_or(Ok(Vec::new()), |x| self.blob(x.id));
+        let (before, after) = (read(old)?, read(new)?);
+        let binary = crate::patch_id::is_binary(&before) || crate::patch_id::is_binary(&after);
+        Ok(Some(FileDiff {
+            added,
+            binary,
+            hunks: if binary {
+                Vec::new()
+            } else {
+                diff_hunks(&before, &after)
+            },
+        }))
+    }
+
+    // --- the staged changes -----------------------------------------------------------------------------------------
+
+    fn change(&mut self, c: &Change) -> Result<(), Fail> {
+        let skip = |p: &mut Self, why: &'static str| {
+            p.files_skipped.push((c.path.clone(), why));
+            Ok(())
+        };
+        let linkish = |x: Option<Item>| x.is_some_and(|x| x.mode == SYMLINK);
+        if [c.old, c.new].iter().flatten().any(|x| x.mode == GITLINK) {
+            return skip(self, "submodule");
+        }
+        match c.status {
+            'A' => return skip(self, "added"),
+            'D' => return skip(self, "deleted"),
+            'T' => return skip(self, "typechange"),
+            'M' => {}
+            _ => return skip(self, "other"),
+        }
+        if linkish(c.old) || linkish(c.new) {
+            return skip(self, "symlink");
+        }
+        let Some(d) = self.file_diff(c.old, c.new)? else {
+            return skip(self, "mode-only");
+        };
+        if d.binary {
+            return skip(self, "binary");
+        }
+        if d.hunks.is_empty() {
+            return skip(self, "mode-only");
+        }
+        let mut preceding = 0;
+        for h in d.hunks {
+            let isolated = h.shifted(-preceding, 0);
+            preceding += h.offset();
+            self.hunk(&c.path, &h, &isolated)?;
+        }
+        Ok(())
+    }
+
+    /// Place one hunk. `h` has the numbers of the staged diff, `isolated` those it would have without the hunks before it
+    /// in the same file (the commutation test works on one hunk at a time).
+    fn hunk(&mut self, path: &[u8], h: &Hunk, isolated: &Hunk) -> Result<(), Fail> {
+        let mut e = Entry {
+            path: path.to_vec(),
+            old: (h.rem_start, h.rem.len()),
+            new: (h.add_start, h.add.len()),
+            target: None,
+            basis: None,
+            absorbed: false,
+            reason: None,
+            origins: Vec::new(),
+        };
+        let found = self.locate(path, isolated)?;
+        if !h.rem.is_empty() {
+            e.origins = self.blame(path, h)?;
+            for (id, _) in &e.origins {
+                self.rec(*id)?;
+            }
+        }
+        match found {
+            None => {
+                let shas: Vec<ObjectId> = e.origins.iter().map(|(s, _)| *s).collect();
+                e.reason = Some(self.outside_reason(&shas)?);
+            }
+            Some((i, commuted, basis)) => {
+                e.target = Some(i);
+                e.basis = Some(basis);
+                let ok = self.consistent(i, path, &commuted)?;
+                match decide(ok, e.origins.len(), self.opts.ambiguous_newest) {
+                    Ok(()) => e.absorbed = true,
+                    Err(why) => e.reason = Some(why),
+                }
+            }
+        }
+        self.entries.push(e);
+        Ok(())
+    }
+
+    /// The newest stack commit whose changes do not commute with the hunk, with the hunk as it is in that commit.
+    fn locate(
+        &mut self,
+        path: &[u8],
+        hunk: &Hunk,
+    ) -> Result<Option<(usize, Hunk, &'static str)>, Fail> {
+        let mut cur = hunk.clone();
+        for i in 0..self.stack.len() {
+            let Some(d) = self.diff_of(i, path)? else {
+                continue;
+            };
+            if d.added {
+                return Ok(Some((i, cur, "file-added")));
+            }
+            match commute_diff_before(&cur, &d.hunks) {
+                None => return Ok(Some((i, cur, "overlaps-lines"))),
+                Some(next) => cur = next,
+            }
+        }
+        Ok(None)
+    }
+
+    /// The removed lines of the commuted hunk are where it says in the blob of the target commit.
+    fn consistent(&self, i: usize, path: &[u8], hunk: &Hunk) -> Result<bool, Fail> {
+        let tree = self.tree_of(self.stack[i].id)?;
+        let item = match self.lookup(tree, path) {
+            Ok(Some(item)) if item.mode != GITLINK => item,
+            Ok(_) => return Ok(false),
+            Err(f) if f.code == "git-failed" => return Ok(false),
+            Err(f) => return Err(f),
+        };
+        match self.blob(item.id) {
+            Ok(blob) => Ok(lines_match(&blob, hunk)),
+            Err(f) if f.code == "git-failed" => Ok(false),
+            Err(f) => Err(f),
+        }
+    }
+
+    /// The commits that last changed the removed lines of `hunk` in HEAD, with the number of lines of each, in order of
+    /// first appearance (evidence, not the decision: the decision is the commutation test).
+    fn blame(&self, path: &[u8], hunk: &Hunk) -> Result<Vec<(ObjectId, usize)>, Fail> {
+        let shown = sanitize_bytes(path);
+        let no_evidence = |why: String| Fail {
+            code: "blame-failed",
+            message: format!("no evidence for the lines removed in {shown}: {why}"),
+        };
+        let first =
+            u32::try_from(hunk.rem_start).map_err(|_| no_evidence("bad line number".into()))?;
+        let last = first + hunk.rem.len() as u32 - 1;
+        let bp = BlamePath::parse(path)
+            .ok_or_else(|| no_evidence("the path is not UTF-8 text".into()))?;
+        let rev =
+            Hex40::parse(&self.head.to_string()).ok_or_else(|| no_evidence("bad head".into()))?;
+        let out = self
+            .runner
+            .run(
+                self.dir,
+                Op::BlameLines {
+                    rev,
+                    path: bp,
+                    first,
+                    last,
+                },
+            )
+            .map_err(|e| {
+                if self.partial {
+                    self.read_err("blame", e)
+                } else {
+                    no_evidence(e.to_string())
+                }
+            })?;
+        let mut counts: Vec<(ObjectId, usize)> = Vec::new();
+        for line in out.stdout.split(|b| *b == b'\n') {
+            let Some(id) = porcelain_header(line) else {
+                continue;
+            };
+            match counts.iter_mut().find(|(s, _)| *s == id) {
+                Some((_, n)) => *n += 1,
+                None => counts.push((id, 1)),
+            }
+        }
+        Ok(counts)
+    }
+
+    /// A hunk that commutes with the whole stack: no-candidate, or why the lines it removes cannot be reached.
+    fn outside_reason(&mut self, shas: &[ObjectId]) -> Result<&'static str, Fail> {
+        let outside: Vec<ObjectId> = shas
+            .iter()
+            .filter(|s| !self.stack.iter().any(|r| r.id == **s))
+            .copied()
+            .collect();
+        if outside.is_empty() {
+            return Ok("no-candidate");
+        }
+        if outside.iter().any(|s| self.remote.contains(s)) {
+            return Ok("published");
+        }
+        for s in &outside {
+            let r = self.rec(*s)?;
+            if self.foreign(&r) {
+                return Ok("foreign");
+            }
+        }
+        Ok("outside-range")
+    }
+
+    // --- the document -----------------------------------------------------------------------------------------------
+
+    fn document(&mut self) -> Plan {
+        let mut counts: HashMap<&[u8], usize> = HashMap::new();
+        for r in &self.stack {
+            *counts.entry(&r.subject).or_default() += 1;
+        }
+        let mut fixups: Vec<(usize, Vec<String>)> = Vec::new();
+        for (n, e) in self.entries.iter().enumerate() {
+            let Some(t) = e.target.filter(|_| e.absorbed) else {
+                continue;
+            };
+            let id = format!("h{}", n + 1);
+            match fixups.iter_mut().find(|(i, _)| *i == t) {
+                Some((_, hunks)) => hunks.push(id),
+                None => fixups.push((t, vec![id])),
+            }
+        }
+        let rewritten: Vec<String> = match fixups.iter().map(|(i, _)| *i).max() {
+            Some(oldest) => self.stack[..=oldest]
+                .iter()
+                .rev()
+                .map(|r| r.id.to_string())
+                .collect(),
+            None => Vec::new(),
+        };
+        let target = |i: usize| {
+            let r = &self.stack[i];
+            json!({"sha": r.id.to_string(), "subject": sanitize_bytes(&r.subject)})
+        };
+        let hunks: Vec<Value> = self
+            .entries
+            .iter()
+            .enumerate()
+            .map(|(n, e)| {
+                let origins: Vec<Value> = e
+                    .origins
+                    .iter()
+                    .map(|(s, lines)| {
+                        let subject = self
+                            .records
+                            .get(s)
+                            .map(|r| sanitize_bytes(&r.subject))
+                            .unwrap_or_default();
+                        json!({"sha": s.to_string(), "subject": subject, "lines": lines})
+                    })
+                    .collect();
+                json!({"id": format!("h{}", n + 1), "path": sanitize_bytes(&e.path),
+                    "old": {"start": e.old.0, "count": e.old.1},
+                    "new": {"start": e.new.0, "count": e.new.1},
+                    "assignment": if e.absorbed { "absorbed" } else { "skipped" },
+                    "target": e.target.map(target),
+                    "basis": e.basis, "reason": e.reason, "origins": origins})
+            })
+            .collect();
+        let fixups_json: Vec<Value> = fixups
+            .iter()
+            .map(|(i, ids)| {
+                let r = &self.stack[*i];
+                let subject = if counts[r.subject.as_slice()] == 1 {
+                    sanitize_bytes(&r.subject)
+                } else {
+                    r.id.to_string()
+                };
+                json!({"target": r.id.to_string(), "subject": format!("fixup! {subject}"), "hunks": ids})
+            })
+            .collect();
+        let absorbed = self.entries.iter().filter(|e| e.absorbed).count();
+        let ref_name = sanitize_bytes(&self.ref_name);
+        let branch = ref_name
+            .strip_prefix("refs/heads/")
+            .unwrap_or(&ref_name)
+            .to_string();
+        let base = self.opts.base.as_deref().map(sanitize);
+        let mut doc = json!({
+            "schema_version": SCHEMA_VERSION, "command": "absorb", "mode": "plan",
+            "head": self.head.to_string(), "branch": branch,
+            "index_digest": self.index_digest,
+            "base": base, "max_stack": self.opts.max_stack,
+            "stack": self.stack.iter().enumerate().map(|(i, _)| target(i)).collect::<Vec<_>>(),
+            "stack_end": self.stack_end,
+            "hunks": hunks,
+            "files_skipped": self.files_skipped.iter()
+                .map(|(p, why)| json!({"path": sanitize_bytes(p), "reason": why})).collect::<Vec<_>>(),
+            "fixups": fixups_json,
+            "rewrite": {"count": rewritten.len(), "commits": rewritten, "ref": ref_name, "new_shas": null},
+            "summary": {"hunks": self.entries.len(), "absorbed": absorbed,
+                "skipped": self.entries.len() - absorbed, "fixups": fixups.len(), "rewritten": rewritten.len()},
+            "effects": {"writes": [], "index_refresh": false, "network": false, "hooks": false, "prompts": false},
+        });
+        let options = json!({"base": self.opts.base, "max_stack": self.opts.max_stack,
+            "ambiguous_newest": self.opts.ambiguous_newest});
+        let raw: Vec<Vec<u8>> = self.entries.iter().map(|e| e.path.clone()).collect();
+        let sum = plan_sum(&options, &raw, &doc);
+        if let Value::Object(m) = &mut doc {
+            m.insert("plan_sum".into(), Value::String(sum));
+        }
+        Plan { doc }
+    }
+}
+
+/// The commit of a `git blame --porcelain` header line (`<40 hex> <orig line> <final line>[ <group size>]`).
+fn porcelain_header(line: &[u8]) -> Option<ObjectId> {
+    let text = std::str::from_utf8(line).ok()?;
+    let mut parts = text.split(' ');
+    let (sha, a, b) = (parts.next()?, parts.next()?, parts.next()?);
+    let number = |x: &str| !x.is_empty() && x.bytes().all(|c| c.is_ascii_digit());
+    let group = parts.next();
+    let ok = sha.len() == 40
+        && sha.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+        && number(a)
+        && number(b)
+        && group.is_none_or(number)
+        && parts.next().is_none();
+    ok.then(|| ObjectId::from_hex(sha.as_bytes()).ok())
+        .flatten()
 }
 
 /// Bidi controls, zero-width characters and line and paragraph separators (the C0 and C1 controls are tested by range).
