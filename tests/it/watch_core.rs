@@ -443,3 +443,126 @@ proptest! {
         prop_assert_eq!(stw::github::parse_utc(&format_utc(secs)), Some(secs));
     }
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// State and `apply`: the state file and the transition of every kind (the "Replay effects" table of Spec 035).
+
+use stw::watch::event::{Details, NewPr, ReadyStateChanged, ReposChanged, Skipped};
+use stw::watch::state::State;
+
+const REPO: &str = "o/r";
+const H1: &str = "1111111111111111111111111111111111111111";
+const H2: &str = "2222222222222222222222222222222222222222";
+const T0: &str = "2026-10-22T09:00:00Z";
+
+/// An event of `REPO` (`repos-changed` has no repository).
+fn ev(pr: Option<u64>, key: &str, details: Details) -> Event {
+    let repo = (details.kind() != Kind::ReposChanged).then(|| REPO.to_string());
+    let id = event_id(repo.as_deref(), pr, details.kind(), key);
+    Event::new(id, T0.to_string(), repo, pr, details)
+}
+
+fn new_pr(n: u64, head: &str) -> Event {
+    ev(
+        Some(n),
+        &key_generation(0),
+        Details::NewPr(NewPr {
+            title: format!("PR {n}"),
+            author: "alice".into(),
+            draft: false,
+            base: "main".into(),
+            head_ref: format!("feat/{n}"),
+            head: head.into(),
+            fork: false,
+        }),
+    )
+}
+
+fn repos_event(epoch: u64, added: &[&str], removed: &[&str], skipped: &[(&str, &str)]) -> Event {
+    ev(
+        None,
+        &key_repos(epoch),
+        Details::ReposChanged(ReposChanged {
+            added: added.iter().map(|s| s.to_string()).collect(),
+            removed: removed.iter().map(|s| s.to_string()).collect(),
+            skipped: skipped
+                .iter()
+                .map(|(p, r)| Skipped {
+                    path: p.to_string(),
+                    reason: r.to_string(),
+                })
+                .collect(),
+        }),
+    )
+}
+
+#[test]
+fn the_state_file_is_one_ordered_json_line_and_reads_back_equal() {
+    let mut s = State::new();
+    s.apply(&new_pr(10, H1));
+    s.apply(&new_pr(9, H2));
+    s.apply(&repos_event(1, &["z/z", "a/a"], &[], &[]));
+    s.cycle = 4;
+    s.interval_seconds = 60;
+    let bytes = s.encode();
+    assert_eq!(bytes.last(), Some(&b'\n'));
+    assert_eq!(bytes.iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(State::decode(&bytes).unwrap(), s);
+    assert_eq!(s.encode(), bytes, "deterministic");
+    let text = String::from_utf8(bytes).unwrap();
+    assert!(
+        text.starts_with(r#"{"format":"stw-watch-state","schema_version":1,"#),
+        "{text}"
+    );
+    // PR numbers are object keys in numeric order of the map, `class` of an unobserved PR is the empty string
+    assert!(
+        text.contains(r#""prs":{"9":{"#) && text.contains(r#""class":"none""#),
+        "{text}"
+    );
+    let mut unobserved = State::new();
+    unobserved.apply(&ev(
+        Some(1),
+        &key_ready(1),
+        Details::ReadyStateChanged(ReadyStateChanged::default()),
+    ));
+    assert!(String::from_utf8(unobserved.encode())
+        .unwrap()
+        .contains(r#""class":"""#));
+}
+
+#[test]
+fn a_state_file_of_another_format_version_or_shape_is_refused() {
+    let good = State::new().encode();
+    let text = String::from_utf8(good).unwrap();
+    for (what, bad) in [
+        ("empty", String::new()),
+        ("not json", "{".to_string()),
+        ("an array", "[]".to_string()),
+        (
+            "a Go state file",
+            r#"{"schema_version":1,"applied_seq":0,"repo":{},"health":{}}"#.to_string(),
+        ),
+        ("another format", text.replace("stw-watch-state", "other")),
+        (
+            "schema 2",
+            text.replace(r#""schema_version":1"#, r#""schema_version":2"#),
+        ),
+        (
+            "an unknown key",
+            text.replace(r#""cycle":0"#, r#""cycle":0,"extra":1"#),
+        ),
+        ("a missing key", text.replace(r#""cycle":0,"#, "")),
+        (
+            "a wrong type",
+            text.replace(r#""cycle":0"#, r#""cycle":"0""#),
+        ),
+        ("trailing data", format!("{} 1", text.trim_end())),
+        (
+            "a negative counter",
+            text.replace(r#""cycle":0"#, r#""cycle":-1"#),
+        ),
+    ] {
+        assert!(State::decode(bad.as_bytes()).is_err(), "{what}");
+    }
+    assert!(State::decode(text.as_bytes()).is_ok());
+}
