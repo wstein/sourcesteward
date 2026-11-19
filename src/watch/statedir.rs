@@ -226,15 +226,40 @@ pub fn ensure_state_dir(dir: &Path) -> Result<(), WatchError> {
 
 /// Flushes a directory entry (a created or renamed file) to disk.
 pub fn sync_dir(dir: &Path) -> Result<(), WatchError> {
-    let _ = dir;
-    Ok(())
+    File::open(dir)
+        .and_then(|d| d.sync_all())
+        .map_err(|e| WatchError::Io(format!("cannot sync {}: {e}", dir.display())))
 }
 
 /// Writes `dir/name` with mode 0600 atomically: a temporary file, fsync, rename, fsync of the directory. A reader sees the old
 /// or the new content, never a mix; a failure leaves no temporary file behind.
 pub fn write_atomic(dir: &Path, name: &str, data: &[u8]) -> Result<(), WatchError> {
-    let _ = (dir, name, data);
-    Ok(())
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let tmp = dir.join(format!(
+        "{name}.tmp-{}-{}",
+        std::process::id(),
+        COUNTER.fetch_add(1, Ordering::Relaxed)
+    ));
+    let target = dir.join(name);
+    let result = (|| -> std::io::Result<()> {
+        let mut f = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)?;
+        f.write_all(data)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, &target)
+    })();
+    if let Err(e) = result {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(WatchError::Io(format!(
+            "cannot write {}: {e}",
+            target.display()
+        )));
+    }
+    sync_dir(dir)
 }
 
 /// File names inside the state directory.
@@ -243,8 +268,11 @@ pub const HEARTBEAT_NAME: &str = "heartbeat";
 
 /// The line `RFC3339 pid mode` of the last completed cycle.
 pub fn write_heartbeat(dir: &Path, now_secs: i64, pid: u32, mode: &str) -> Result<(), WatchError> {
-    let _ = (dir, now_secs, pid, mode);
-    Ok(())
+    write_atomic(
+        dir,
+        HEARTBEAT_NAME,
+        format!("{} {pid} {mode}\n", format_utc(now_secs)).as_bytes(),
+    )
 }
 
 /// The last heartbeat as read from the file.
@@ -258,8 +286,31 @@ pub struct Heartbeat {
 
 /// Reads the heartbeat. `Ok(None)`: no file, or a file that is not three fields with a valid time and pid.
 pub fn read_heartbeat(dir: &Path, now_secs: i64) -> Result<Option<Heartbeat>, WatchError> {
-    let _ = (dir, now_secs);
-    Ok(None)
+    let path = dir.join(HEARTBEAT_NAME);
+    let raw = match std::fs::read_to_string(&path) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) if e.kind() == std::io::ErrorKind::InvalidData => return Ok(None),
+        Err(e) => {
+            return Err(WatchError::Io(format!(
+                "cannot read {}: {e}",
+                path.display()
+            )))
+        }
+    };
+    let f: Vec<&str> = raw.split_whitespace().collect();
+    let [time, pid, mode] = f[..] else {
+        return Ok(None);
+    };
+    let (Some(t), Ok(pid)) = (crate::github::parse_utc(time), pid.parse::<u32>()) else {
+        return Ok(None);
+    };
+    Ok(Some(Heartbeat {
+        time: time.to_string(),
+        age_seconds: u64::try_from(now_secs.saturating_sub(t)).unwrap_or(0),
+        pid,
+        mode: mode.to_string(),
+    }))
 }
 
 /// Reads `state.json`: `Ok(None)` when the file is missing, `CorruptState` when it cannot be used.
