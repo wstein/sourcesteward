@@ -1818,6 +1818,16 @@ fn a_second_handle_in_the_same_process_is_locked_out_and_sees_the_pid() {
 }
 
 #[test]
+fn an_existing_lock_file_is_tightened_to_mode_0600() {
+    let t = tmp();
+    let path = t.path().join(LOCK_NAME);
+    std::fs::write(&path, "").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    let _lock = acquire_with(t.path(), 1, NO_WAIT).unwrap();
+    assert_eq!(mode(&path), 0o600);
+}
+
+#[test]
 fn the_holder_probe_never_creates_the_lock_file_and_leaves_a_free_lock_free() {
     let t = tmp();
     assert_eq!(holder(t.path()), None);
