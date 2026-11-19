@@ -5,7 +5,7 @@
 //! Two rules make it safe to apply an event more than once (the cycle applies it when it emits it, the commit applies it
 //! again after the journal append, a replay applies it a third time): counters are raised to the value the id carries and
 //! never lowered, and every other effect sets a value or removes an entry; none adds up.
-use super::event::{id_counter, key_merged, Details, Event};
+use super::event::{format_utc, id_counter, key_merged, Details, Event};
 use super::state::{Class, ClosedPr, PrState, RepoState, RestackDue, State};
 
 impl State {
@@ -106,11 +106,76 @@ impl State {
     }
 
     fn apply_repos(&mut self, ev: &Event) {
-        let _ = ev;
+        let Details::ReposChanged(d) = &ev.details else {
+            return;
+        };
+        raise(&mut self.repos_epoch, id_counter(&ev.id, 'p'));
+        for r in &d.removed {
+            // The record stays: its counters keep ids unique if the repository comes back (its next read is a silent
+            // baseline that carries them over).
+            if let Some(rs) = self.repo.get_mut(r) {
+                rs.baselined = false;
+                rs.restack_due.clear();
+                rs.restack_done.clear();
+                rs.conditional = None;
+            }
+            if let Some(h) = self.health.get_mut(r) {
+                h.next_try.clear();
+            }
+        }
+        let mut repos: Vec<String> = Vec::new();
+        for r in self.repos.iter().flatten() {
+            if !d.removed.contains(r) && !repos.contains(r) {
+                repos.push(r.clone());
+            }
+        }
+        for r in &d.added {
+            if !repos.contains(r) {
+                repos.push(r.clone());
+            }
+            let rs = self
+                .repo
+                .entry(r.clone())
+                .or_insert_with(|| RepoState::new(&ev.time));
+            rs.baselined = false; // needs a silent baseline of its own
+        }
+        self.repos = Some(repos);
+        self.skipped = d.skipped.clone();
     }
 
     fn apply_health(&mut self, ev: &Event) {
-        let _ = ev;
+        let key = ev.repo.as_deref().unwrap_or("");
+        let h = self.health_mut(key);
+        match &ev.details {
+            Details::WatchError(d) => {
+                raise(&mut h.episode, id_counter(&ev.id, 'e'));
+                h.failures = h.failures.max(d.failures);
+                h.last_code = d.code.clone();
+                h.error_open = true;
+                if let Some(t) = crate::github::parse_utc(&ev.time) {
+                    let retry = i64::try_from(d.retry_in_seconds).unwrap_or(i64::MAX);
+                    h.next_try = format_utc(t.saturating_add(retry));
+                }
+            }
+            Details::WatchRecovered(_) => {
+                if let Some(e) = id_counter(&ev.id, 'e') {
+                    // after a watch-error episode
+                    h.episode = h.episode.max(e);
+                    h.error_open = false;
+                    h.failures = 0;
+                    h.last_code.clear();
+                } else if let Some(e) = id_counter(&ev.id, 's') {
+                    // after a watch-stalled episode
+                    h.stall_episode = h.stall_episode.max(e);
+                    h.stalled = false;
+                }
+            }
+            Details::WatchStalled(_) => {
+                raise(&mut h.stall_episode, id_counter(&ev.id, 's'));
+                h.stalled = true;
+            }
+            _ => {}
+        }
     }
 }
 
