@@ -76,5 +76,6 @@ mod tidy_similarity;
 mod tidy_similarity_plan;
 mod tidy_squash;
 mod tidy_squash_plan;
+mod watch_core;
 mod watch_scenarios;
 mod worktrees;

@@ -34,3 +34,4 @@ pub mod tidy_oracle;
 pub mod tidy_rebase;
 pub mod tidy_similarity;
 pub mod tidy_squash;
+pub mod watch;
