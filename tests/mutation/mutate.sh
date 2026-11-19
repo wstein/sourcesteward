@@ -4599,6 +4599,103 @@ m OR35 'the driver judges the path of a link, not the directory behind it' tests
   'gprobe=$(cd "$gprobe" && pwd -P)' 'gprobe=$(cd "$gprobe" && pwd -L)' \
   tidy_oracle the_driver_accepts_a_link_to_a_directory_the_git_tree_ignores
 
+m SQ11 'the number of parents of the merge commit is not checked' src/tidy_squash.rs \
+  'Some(anc && parents == 1)' 'Some(anc)' \
+  tidy_squash a_merge_commit_with_two_parents_is_no_squash_even_on_the_base
+m SQ12 'a merge commit that is not an ancestor of the base counts as on the base' src/tidy_squash.rs \
+  'Some(anc && parents == 1)' 'Some(parents == 1)' \
+  tidy_squash a_merge_commit_that_is_not_an_ancestor_of_the_base_is_not_on_the_base
+m SQ13 'the window before the oldest branch commit is not applied' src/tidy_squash.rs \
+  '.is_some_and(|h| floor.is_none_or(|f| h.key.secs >= f))' '.is_some_and(|h| floor.is_none_or(|_| true))' \
+  tidy_squash a_candidate_must_not_be_older_than_the_branch_by_more_than_the_window
+m SQ22 'the suffix (#N) is not removed from a subject before comparing' src/tidy_squash.rs \
+  'if let Some((rest, _)) = split_suffix(s) {' 'if let Some((rest, _)) = split_suffix(s).filter(|_| false) {' \
+  tidy_squash a_subject_is_reduced_to_its_title_before_two_are_compared
+m SQ24 'the reason of an offline plan is lost' src/tidy.rs \
+  '            None => sq::PrEvidence::not_read(match api {
+                PrApi::Off(r) => r,' '            None => sq::PrEvidence::not_read(match api {
+                PrApi::Off(_) => ApiReason::NoPullRequest,' \
+  tidy_squash_plan without_a_pull_request_list_the_stage_still_runs_on_the_subjects_and_names_the_reason
+m SQ31 'the detail names a merge commit that is not on the base' src/tidy.rs \
+  'if let (Some(m), Some(true)) = (pr.merge_commit, pr.merge_commit_on_base) {' 'if let (Some(m), _) = (pr.merge_commit, pr.merge_commit_on_base) {' \
+  tidy_squash_plan the_detail_names_nothing_where_the_merge_commit_is_not_on_the_base_or_the_head_is_not_in_the_branch
+m SQ32 'a pull request of a fork counts' src/tidy_squash.rs \
+  '&& slug.is_none_or(|s| p.head_repo.eq_ignore_ascii_case(s))' '&& slug.is_none_or(|_| true)' \
+  tidy_squash only_a_merged_pull_request_of_the_repository_itself_counts
+m SQ33 'the repository name is compared with case' src/tidy_squash.rs \
+  'p.head_repo.eq_ignore_ascii_case(s)' 'p.head_repo == s' \
+  tidy_squash only_a_merged_pull_request_of_the_repository_itself_counts
+m SQ34 'the pull request the plan names is not preferred' src/tidy_squash.rs \
+  'let first = usable.clone().find(|p| Some(p.number) == prefer);' 'let first = usable.clone().find(|_| false);' \
+  tidy_squash of_several_merged_pull_requests_the_preferred_one_or_the_latest_counts
+m SQ35 'the head of the pull request is always the tip' src/tidy_squash.rs \
+  'e.head_is_tip = Some(head == tip);' 'e.head_is_tip = Some(true);' \
+  tidy_squash commits_after_the_head_are_counted_and_a_head_outside_the_branch_is_named
+m SQ36 'the commits after the head are counted the wrong way round' src/tidy_squash.rs \
+  'repo::count_range(repo, tip, head).ok()' 'repo::count_range(repo, head, tip).ok()' \
+  tidy_squash commits_after_the_head_are_counted_and_a_head_outside_the_branch_is_named
+m SQ37 'a plus sign is accepted in the number of a subject' src/tidy_squash.rs \
+  'if digits.is_empty() || !digits.iter().all(u8::is_ascii_digit) {' 'if digits.is_empty() {' \
+  tidy_squash the_number_of_a_pull_request_is_read_from_the_end_of_a_subject
+m SQ38 'leading [group] words are not removed from a subject' src/tidy_squash.rs \
+  'if s.starts_with(b"[") {' 'if false && s.starts_with(b"[") {' \
+  tidy_squash a_subject_is_reduced_to_its_title_before_two_are_compared
+m SQ39 'a subject without a title is compared' src/tidy_squash.rs \
+  '.filter(|t| !t.is_empty())' '.filter(|_| true)' \
+  tidy_squash a_subject_that_is_only_decoration_never_matches
+m SQ40 'merge commits of the base are candidates' src/tidy_squash.rs \
+  'chain.head(pos).filter(|h| h.parents <= 1)' 'chain.head(pos)' \
+  tidy_squash a_merge_commit_on_the_base_is_never_a_candidate
+m SQ41 'the newest of several candidates is taken' src/tidy_squash.rs \
+  '.min_by_key(|h| (h.key.secs, h.id))' '.max_by_key(|h| (h.key.secs, h.id))' \
+  tidy_squash of_several_commits_with_a_matching_subject_the_oldest_counts
+m SQ42 'the merge commit of the pull request is not the first basis' src/tidy_squash.rs \
+  'if let Some(m) = pr.and_then(|p| p.merge_commit) {' 'if let Some(m) = pr.and_then(|p| p.merge_commit).filter(|_| false) {' \
+  tidy_squash the_merge_commit_of_the_pull_request_on_the_base_is_the_sure_candidate
+m SQ43 'a trailer of another pull request counts' src/tidy_squash.rs \
+  'e.pull_request_trailer |= n == p.number;' 'e.pull_request_trailer |= true;' \
+  tidy_squash the_trailer_must_name_the_pull_request
+m SQ44 'the list in the body is read with `- ` instead of `* `' src/tidy_squash.rs \
+  'line.strip_prefix(b"* ")' 'line.strip_prefix(b"- ")' \
+  tidy_squash the_merge_commit_of_the_pull_request_on_the_base_is_the_sure_candidate
+m SQ45 'a strong rebase gets squash evidence' src/tidy.rs \
+  'judged(proof) || proof == "similar-patches"' 'judged(proof) || matches!(proof, "similar-patches" | "rebase-identity")' \
+  tidy_squash_plan a_branch_in_a_worktree_keeps_the_object_and_a_stage_proof_keeps_its_place
+m SQ46 'the detail does not say that the head is not in the branch' src/tidy.rs \
+  '                    (Some(false), _) => {' '                    (Some(false), _) if false => {' \
+  tidy_squash_plan the_detail_names_nothing_where_the_merge_commit_is_not_on_the_base_or_the_head_is_not_in_the_branch
+m SQ47 'the explanation calls a head that is not the tip the tip' src/tidy_explain.rs \
+  '(Some(true), ..) => line += "; the head is the tip of the branch",' '(Some(false), ..) => line += "; the head is the tip of the branch",' \
+  tidy_squash_plan explain_tells_what_the_pull_request_and_the_subject_found
+m SQ48 'the explanation says a one-parent merge commit off the base has two parents' src/tidy_explain.rs \
+  'Some(1) => line += &format!(", merge commit {} is not on {base}", sha7(m)),' 'Some(2) => line += &format!(", merge commit {} is not on {base}", sha7(m)),' \
+  tidy_squash_plan explain_describes_a_merge_commit_that_is_no_squash_or_not_there
+m SQ49 'the JSON says merged: false' src/tidy.rs \
+  '"merged": p.number.map(|_| true)' '"merged": false' \
+  tidy_squash_plan the_json_has_the_squash_object_with_the_pull_request_and_the_subject
+m SQ50 'the JSON shows a subject without a candidate' src/tidy.rs \
+  'e.candidate.map(|_| Value::String(e.candidate_subject.clone())).unwrap_or(Value::Null)' 'Value::String(e.candidate_subject.clone())' \
+  tidy_squash_plan the_json_names_the_reason_where_the_pull_request_was_not_read_and_leaves_the_rest_null
+m SQ51 'the head repository is read from the wrong field' src/github.rs \
+  'head_repo: p["head"]["repo"]["full_name"]' 'head_repo: p["head"]["repo"]["name"]' \
+  tidy_rebase_api the_pull_list_carries_the_repository_of_the_head
+m SQ52 'the subject of the candidate is not masked' src/tidy_squash.rs \
+  'e.candidate_subject = mask_bytes(&subject, RB_SUBJECT_CHARS);' 'e.candidate_subject = String::from_utf8_lossy(&subject).into_owned();' \
+  tidy_squash text_of_a_candidate_is_masked_and_the_window_of_the_walk_is_reported
+m SQ53 'a merge commit that is not in the clone is taken as there' src/tidy_squash.rs \
+  'let here = repo.has_object(m);' 'let here = true;' \
+  tidy_squash a_merge_commit_that_is_not_in_the_clone_leaves_the_answers_open
+m SQ54 'a merge commit that is not on the base is the sure candidate' src/tidy.rs \
+  '.filter(|_| pr.merge_commit_on_base == Some(true))' '' \
+  tidy_squash_plan the_detail_names_nothing_where_the_merge_commit_is_not_on_the_base_or_the_head_is_not_in_the_branch
+m SQ55 'the pull request the plan names is not passed to the choice' src/tidy.rs \
+  'sq::pick_pr(list, &row.bp.branch, slug, row.pr_moved)' 'sq::pick_pr(list, &row.bp.branch, slug, None)' \
+  tidy_squash_plan of_two_merged_pull_requests_the_one_the_proof_names_is_read
+
+m SQ56 'a branch with a deletion proof or a gate gets squash evidence' src/tidy.rs \
+  'judged(proof) || proof == "similar-patches"' 'true' \
+  tidy_squash_plan the_stage_leaves_out_what_a_proof_or_a_gate_already_settled
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
