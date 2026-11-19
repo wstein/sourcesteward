@@ -1,25 +1,15 @@
 //! The state directory of a watcher: its id and default place, SHA-256 for the id, the freshness window of `--status`.
-#[allow(unused_imports)]
 use std::collections::BTreeSet;
-#[allow(unused_imports)]
 use std::fs::{File, OpenOptions};
-#[allow(unused_imports)]
 use std::io::Write;
-#[allow(unused_imports)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
-#[allow(unused_imports)]
 use std::path::{Component, Path, PathBuf};
-#[allow(unused_imports)]
 use std::sync::atomic::{AtomicU64, Ordering};
 
-#[allow(unused_imports)]
 use serde::Serialize;
 
-#[allow(unused_imports)]
 use super::event::format_utc;
-#[allow(unused_imports)]
 use super::state::State;
-#[allow(unused_imports)]
 use super::WatchError;
 
 /// Prefix of the text the workspace id hashes. It differs from the Go watcher's `stw-watch-v1`, so a Go state directory
@@ -315,14 +305,25 @@ pub fn read_heartbeat(dir: &Path, now_secs: i64) -> Result<Option<Heartbeat>, Wa
 
 /// Reads `state.json`: `Ok(None)` when the file is missing, `CorruptState` when it cannot be used.
 pub fn load_state(dir: &Path) -> Result<Option<State>, WatchError> {
-    let _ = dir;
-    Ok(None)
+    let path = dir.join(STATE_NAME);
+    let raw = match std::fs::read(&path) {
+        Ok(r) => r,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => {
+            return Err(WatchError::Io(format!(
+                "cannot read {}: {e}",
+                path.display()
+            )))
+        }
+    };
+    State::decode(&raw)
+        .map(Some)
+        .map_err(|e| WatchError::CorruptState(format!("{STATE_NAME}: {e}")))
 }
 
 /// Writes `state.json` atomically.
 pub fn save_state(dir: &Path, state: &State) -> Result<(), WatchError> {
-    let _ = (dir, state);
-    Ok(())
+    write_atomic(dir, STATE_NAME, &state.encode())
 }
 
 /// One watched repository in the status report.
