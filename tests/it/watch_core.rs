@@ -1,6 +1,6 @@
 //! The watch core (port package W1): `src/watch/`. Pure functions and files of the state directory; the replay of the
 //! scenario corpus (`tests/fixtures/watch/`) is at the end of this file.
-use stw::watch::statedir::{sha256, sha256_hex, workspace_id, IdSource};
+use stw::watch::statedir::{default_state_dir, sha256, sha256_hex, workspace_id, IdSource};
 
 #[test]
 fn sha256_matches_the_nist_vectors() {
@@ -109,5 +109,21 @@ fn the_repository_list_is_lower_cased_deduplicated_and_sorted_before_hashing() {
     assert_ne!(
         workspace_id("github.com", IdSource::Workspace("/a")),
         workspace_id("github.com", IdSource::Workspace("/b"))
+    );
+}
+
+#[test]
+fn the_default_state_dir_follows_xdg_then_home() {
+    assert_eq!(
+        default_state_dir("abc", Some("/x/state"), Some("/h")).to_str(),
+        Some("/x/state/stw/watch/abc")
+    );
+    assert_eq!(
+        default_state_dir("abc", Some(""), Some("/h")).to_str(),
+        Some("/h/.local/state/stw/watch/abc")
+    );
+    assert_eq!(
+        default_state_dir("abc", None, Some("/h")).to_str(),
+        Some("/h/.local/state/stw/watch/abc")
     );
 }
