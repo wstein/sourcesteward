@@ -331,8 +331,8 @@ fn blocker(text: &str, ready: bool, out: &mut Vec<Finding>) {
 /// The head and the patch-id of `BASE...HEAD` in the repository around `checkout` (default: the current
 /// directory). Revisions are resolved in process to full commit ids (a tag is peeled). The patch-id is the first
 /// field of `git diff BASE...HEAD | git patch-id --stable`, computed by git itself (`Op::DiffRange`,
-/// `Op::PatchIdStable`): the in-process patch-id of `patch_id.rs` is not git's value for a rename or a binary
-/// file, and a review line carries git's value. Nothing is fetched or written; a read that fails is a usage error
+/// `Op::PatchIdStable`): the in-process patch-id of `patch_id.rs` is git's value only under git's built-in
+/// defaults (README, "Patch ID", deviations), and a review line carries git's value. Nothing is fetched or written; a read that fails is a usage error
 /// (exit 2), never a finding.
 pub fn expectation(checkout: Option<&Path>, base: &str, head: &str) -> Result<Expect> {
     let start = match checkout {

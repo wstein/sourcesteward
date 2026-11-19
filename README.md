@@ -1255,7 +1255,7 @@ command and the mapping of its 15 + 17 + 3 tests: headers of `tests/it/lint_pr.r
 
 ## Text files: `stw lint review`, `stw lint pr-text` (new)
 
-New behavior without a Go counterpart; read-only, no network. `lint pr-text` and `lint review` without `--base`/`--head` start no `git`. With `--base` and `--head` the revisions are resolved in process (a tag is peeled to its commit; no merge base is a usage error), and the patch-id is computed by git: `git diff BASE...HEAD` and `git patch-id --stable` through the runner (`Op::DiffRange`, `Op::PatchIdStable`, minimum Git 2.30). The in-process patch-id of `patch_id.rs` is not used here: it differs from git's value for a rename and for a binary file, and a review line carries git's value.
+New behavior without a Go counterpart; read-only, no network. `lint pr-text` and `lint review` without `--base`/`--head` start no `git`. With `--base` and `--head` the revisions are resolved in process (a tag is peeled to its commit; no merge base is a usage error), and the patch-id is computed by git: `git diff BASE...HEAD` and `git patch-id --stable` through the runner (`Op::DiffRange`, `Op::PatchIdStable`, minimum Git 2.30). The in-process patch-id of `patch_id.rs` is not used here: it follows git's defaults only (see "Patch ID: the value of `git diff | git patch-id --stable`", deviations 1 to 5), and a review line carries git's value for the repository and the user's configuration.
 Both read one UTF-8 text from FILE and report findings in the shape of `lint pr` (`--json`: `schema_version` 1, `command`
 `lint review` or `lint pr-text`, `time`, `file`, `options`, `rules`, `findings` with `rule`, `severity`, `location` (`kind`
 `file`, `line`), `message`, `summary`). Shared rule IDs and functions with `lint pr`: `session-link`, `pr-body-length`,
@@ -1432,7 +1432,7 @@ cancellation of the HTTP client, the layout of the conditional-request store, an
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1325 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1346 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
@@ -1573,8 +1573,8 @@ on a single file), the ref is restored but files already written stay; `git stat
 
 ## Own code where gix has no API
 
-- Patch ID (`git patch-id --stable`, for squash/rebase-merge detection): `src/patch_id.rs`. On 2424 real commits 2399 equal git (98.97 %);
-  the others are 6 binary diffs and 19 text diffs with different hunk placement. A hunk-placement difference makes equal patches look different (a missed `equal-patches` proof).
+- Patch ID (`git patch-id --stable`, for squash/rebase-merge detection): `src/patch_id.rs` and `src/patch_rename.rs`; the section
+  "Patch ID: the value of `git diff | git patch-id --stable`" below says what it equals and where it deviates.
   Paths are hashed as git writes them (quoted, raw bytes). Git's ID ignores white space in file names and in file
   content (`a b.txt` equals `ab.txt`; `\tcc x` equals `  cc   x`), so the `equal-patches` proof also requires an
   identical digest of the diff lines with their white space (file names included): a change that differs from main
@@ -1605,6 +1605,50 @@ on a single file), the ref is restored but files already written stay; `git stat
 - Worktree registration HEAD (gix `Proxy` has none): `src/repo/worktrees.rs`.
 
 gix has no API stability promise before 1.0: the pin is exact and updates are deliberate.
+
+
+## Patch ID: the value of `git diff | git patch-id --stable`
+
+The patch ID that `stw prove`, `stw review carry-over`, `tidy`, `restack` and `stw dev patch-id` print and compare is the first field
+of `git patch-id --stable` on the diff of a commit against its first parent as `git diff` and `git show` print it with their built-in
+defaults: renames on (50 %, `diff.renameLimit` 1000), copies off, no break detection, `core.quotePath` on. Before 2026-11-19 a rename was
+a deletion plus an addition (`git diff-tree --no-renames`), a file diff without hunks was a unit of its own and a binary file
+hashed full blob ids; that was not git's value, and `stw lint review` rejected a `Carried-over:` line that `stw prove` had printed for a commit
+with a rename (debt ledger 2026-11-17, "prove/carry-over gix patch-id rename mismatch"). Measured then: 14 of 14 commits with a rename in
+three real histories and 16 of 21 cases of the fixture oracle differed from git; now 13 of 14 and 21 of 21 are equal, and the 47 pinned fixtures of
+`tests/it/patchid_git.rs` (units, binary files, type changes, gitlinks included) are equal. Sources: git `builtin/patch-id.c` (`get_one_patchid`), `diffcore-rename.c`, `diffcore-delta.c`, `diff.c`;
+the behavior is checked against the installed git, not copied from the source text.
+
+- Renames (`src/patch_rename.rs`): exact renames first (same blob id, the same base name preferred), then the base-name pass (a base name
+  that occurs once among the remaining sources and once among the remaining destinations is scored first), then the similarity matrix
+  (byte-span estimate of `diffcore-delta.c`: lines of at most 64 bytes hashed, a CR before an LF ignored, score `copied * 60000 / larger size`,
+  threshold 30000 inclusive, at most 4 candidates per destination, a source is used once). A rename prints `similarity index N%`, `rename from`,
+  `rename to` (the percentage is hashed, so it has to be git's integer), then the `---`/`+++` and hunks of the old against the new file; an exact
+  rename has no hunks. Skipped above `1000 * 1000` source/destination pairs (git warns on stderr and prints no renames). Symlinks and gitlinks
+  are renames only when exact. A change of the file type (file, symlink, gitlink) is a deletion plus an addition, as git prints it.
+- Units (`--stable`): a file diff without hunks (mode change, empty file, exact rename) is hashed together with the next file diff, a binary
+  file adds the abbreviated blob ids of its `index` line and ends the unit, the `diff` line after it is not hashed, the last unit is added even
+  when it is empty. The abbreviation length is the one gix gives the repository (`core.abbrev`, else from the object count, at least 7).
+- The second digest of `PatchKey` (used with the patch ID by the `equal-patches` proof) follows the same units, keeps white space, hashes full
+  blob ids for binary files and also the lines git skips.
+
+Deviations from git, one by one:
+
+1. Equal scores: when two sources compete for two destinations with the same score and the same base-name relation, git's choice depends
+   on the `qsort` of the C library (on the machine of the measurement it paired the other way round in 1 of 14 real commits, a commit that
+   moved identical files between two directories); this code takes the earlier destination and source.
+2. The user's configuration is not read: `diff.renames=false` or `copies`, `diff.renameLimit`, `-M<n>`, `-C`, `-B` give another output in git.
+   The result must not depend on a configuration (a review line carries it); `stw lint review --base/--head` still asks git itself.
+3. `.gitattributes` (`binary`, `-diff`, a diff driver, a text conversion) is not read.
+4. Hunk placement: gix-imara-diff and xdiff can place a hunk differently (as before; 6 of 334 sampled commits by `patch_id_oracle.sh`).
+5. The abbreviation length of a binary file's `index` line: gix computes the automatic length from its own object count, git from a sample of loose
+   objects; near a power of 2 the lengths can differ.
+6. Not covered by a mutation: more than 4 candidates competing for a destination, the same-base-name preference inside the similarity matrix, the exact threshold of the base-name pass, and a NUL byte after the first 8000 bytes of a text file
+   (git stops hashing the line there; this code does as well, without a test).
+
+Oracles (read-only on real repositories, throwaway repositories under `/tmp/stw-prove-patchid`): `tests/oracle/patch_id_rename_oracle.sh fixtures|repo`
+(commits with renames), `tests/oracle/patch_id_oracle.sh` (sample of commits), the ignored tests `patchid_git::pinned::oracle_against_git` and
+`patchid_git::units::oracle_against_git` (run git on the fixture repositories and compare); the ordinary tests pin the git values. Mutations `PI1` to `PI21`.
 
 ## Not verified
 
