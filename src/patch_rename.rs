@@ -165,7 +165,10 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
         let mut best: Option<(usize, bool)> = None;
         for &s in by_id.get(&did).into_iter().flatten() {
             let skind = files[s].old.unwrap().0;
-            if src_used[s] || (skind == EntryKind::Commit) != (dkind == EntryKind::Commit) {
+            // git (find_identical_files): the modes of two files that are not both regular must be equal, so a
+            // symlink is never paired with a regular file and a gitlink only with a gitlink
+            let modes_fit = (is_regular(skind) && is_regular(dkind)) || skind == dkind;
+            if src_used[s] || !modes_fit {
                 continue;
             }
             let same = basename(&files[s].path) == basename(&files[d].path);
