@@ -217,8 +217,7 @@ pub struct BranchSide {
 pub fn branch_side(repo: &gix::Repository, base: ObjectId, tip: ObjectId) -> Result<BranchSide> {
     let mut set: HashMap<ObjectId, Head> = HashMap::new();
     let mut parents_of: HashMap<ObjectId, Vec<ObjectId>> = HashMap::new();
-    for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
-        let id = info?.id;
+    for id in crate::repo::range_commits(repo, tip, base)? {
         let c = repo.find_commit(id)?;
         parents_of.insert(id, c.parent_ids().map(|p| p.detach()).collect());
         set.insert(id, read_head(repo, id)?);

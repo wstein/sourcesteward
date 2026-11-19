@@ -241,8 +241,8 @@ pub fn branch_commits(
     tip: ObjectId,
 ) -> Result<BranchCommits> {
     let mut out = BranchCommits::default();
-    for info in repo.rev_walk([tip]).with_hidden([base_tip]).all()? {
-        let h = read_head(repo, info?.id)?;
+    for id in repo::range_commits(repo, tip, base_tip)? {
+        let h = read_head(repo, id)?;
         out.oldest_author_secs = Some(
             out.oldest_author_secs
                 .map_or(h.key.secs, |o| o.min(h.key.secs)),
