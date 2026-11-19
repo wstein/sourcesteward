@@ -51,6 +51,19 @@ pub struct BranchPlan {
     /// The number of a merged pull request of this branch whose head is not the tip (the branch moved on). Not in
     /// the JSON; the text of `--explain` names it where a later stage replaced the proof that used it.
     pub pr_moved: Option<u64>,
+    /// What a shallow clone hides from the comparison with the base; None in a full clone and where nothing is hidden.
+    pub shallow: Option<ShallowGap>,
+}
+
+/// What the boundary of a shallow clone hides from the comparison of one branch with the base.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ShallowGap {
+    /// Commits of the branch (not in the base) at the boundary: their patches are unknown.
+    pub unreadable_commits: usize,
+    /// Commits of the branch with a readable patch that have no partner in the base (the `+` lines of `git cherry`).
+    pub without_partner: usize,
+    /// The base was read to the boundary while a commit of the branch still had no partner: a partner may lie behind it.
+    pub base_cut: bool,
 }
 
 /// The result of the rebase stage for one branch.
@@ -435,6 +448,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
                 strength: Strength::None,
             },
             pr_moved: pr_other,
+            shallow: None,
         };
         let mut unmatched: Option<Vec<ObjectId>> = None;
         if let Some(n) = pr_open {
@@ -447,7 +461,17 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         } else if uniq > 0 && {
             let u = unmatched_commits(&repo, &mut cache, base_tip, tip)?;
             let all = u.all_matched();
-            unmatched = Some(u.commits);
+            if !u.unreadable.is_empty() || (u.base_cut && !u.commits.is_empty()) {
+                bp.shallow = Some(ShallowGap {
+                    unreadable_commits: u.unreadable.len(),
+                    without_partner: u.commits.len(),
+                    base_cut: u.base_cut,
+                });
+            }
+            // the commits that could be read are no proof where others could not: no stage judges them
+            if u.unreadable.is_empty() {
+                unmatched = Some(u.commits);
+            }
             all
         } {
             bp.decision = "delete";
@@ -536,6 +560,11 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
     );
     for Row { mut bp, .. } in rows {
         let br = bp.branch.clone();
+        if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {
+            bp.decision = "review";
+            bp.proof = "shallow-history";
+            bp.detail = shallow_detail(&gap, bp.unique, &base);
+        }
         bp.landed_via = landed_via(
             bp.proof == "merged-ancestor",
             bp.rebase.as_ref().map(|r| &r.report),
@@ -568,6 +597,22 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         plan.branches.push(bp);
     }
     Ok(())
+}
+
+/// The detail of the proof `shallow-history`; every number is in the plan (`unique_commits`, `shallow`).
+fn shallow_detail(gap: &ShallowGap, unique: usize, base: &str) -> String {
+    const DEEPEN: &str = "(git fetch --unshallow gives the full history)";
+    if gap.unreadable_commits > 0 {
+        format!(
+            "{} of {unique} commit(s) not in {base} reach the shallow boundary of this clone: their patches are unknown, so the branch cannot be compared with {base} {DEEPEN}",
+            gap.unreadable_commits
+        )
+    } else {
+        format!(
+            "{} of {unique} commit(s) not in {base} have no equal patch in the part of {base} that this shallow clone holds: a partner may lie behind the boundary {DEEPEN}",
+            gap.without_partner
+        )
+    }
 }
 
 /// The similarity stage: judges the `+` commits of every branch in `rows` that has some against the base and lets
@@ -992,6 +1037,7 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
                            "similarity": b.similarity.as_ref().map(similarity_json).unwrap_or(Value::Null),
                            "rebase": b.rebase.as_ref().map(rebase_json).unwrap_or(Value::Null),
                            "squash": b.squash.as_ref().map(squash_json).unwrap_or(Value::Null),
+                           "shallow": b.shallow.map(|g| json!({"unreadable_commits": g.unreadable_commits, "without_partner": g.without_partner, "base_cut": g.base_cut})).unwrap_or(Value::Null),
                            "landed_via": json!({"kind": b.landed_via.kind.as_str(), "basis": b.landed_via.basis.as_str(), "strength": b.landed_via.strength.as_str()})})
                 })
                 .collect();
@@ -1291,6 +1337,7 @@ mod tests {
                 strength: Strength::None,
             },
             pr_moved: None,
+            shallow: None,
         }
     }
 

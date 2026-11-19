@@ -458,6 +458,17 @@ fn why(b: &BranchPlan, base: &str) -> String {
             b.pr_moved.unwrap_or(0),
             b.unique
         ),
+        "shallow-history" => match b.shallow {
+            Some(g) if g.unreadable_commits > 0 => format!(
+                "{}: {} of the {} commit(s) not in {base} reach the shallow boundary: their patches are unknown, so the branch cannot be proven landed or unmerged",
+                b.decision, g.unreadable_commits, b.unique
+            ),
+            Some(g) => format!(
+                "{}: {} of the {} commit(s) not in {base} have a patch without a partner in the part of it this clone holds; the boundary hides the rest",
+                b.decision, g.without_partner, b.unique
+            ),
+            None => format!("{}: the history of this clone is shallow", b.decision),
+        },
         "upstream-gone" => format!(
             "{}: upstream {} is gone, {} commit(s) not in {base}",
             b.decision,

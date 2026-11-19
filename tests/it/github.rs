@@ -289,6 +289,7 @@ fn json_field_names_are_the_documented_ones() {
             "similarity",
             "rebase",
             "squash",
+            "shallow",
             "landed_via"
         ])
     );

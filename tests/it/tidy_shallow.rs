@@ -205,7 +205,7 @@ fn a_branch_without_a_partner_in_the_part_of_the_base_that_is_there_is_not_kept_
     assert_eq!((b.decision, b.proof), ("review", "shallow-history"));
     assert_eq!(
         b.detail,
-        "1 commit(s) not in refs/remotes/origin/main have no equal patch in the part of refs/remotes/origin/main that this shallow clone holds: a partner may lie behind the boundary (git fetch --unshallow gives the full history)"
+        "1 of 1 commit(s) not in refs/remotes/origin/main have no equal patch in the part of refs/remotes/origin/main that this shallow clone holds: a partner may lie behind the boundary (git fetch --unshallow gives the full history)"
     );
 }
 
@@ -215,11 +215,11 @@ fn the_plan_json_names_what_is_missing_per_branch() {
     let v = json_of(&fx, plan_of(&fx));
     assert_eq!(
         branch_json(&v, "deep")["shallow"],
-        serde_json::json!({"unreadable_commits": 1, "base_cut": false})
+        serde_json::json!({"unreadable_commits": 1, "without_partner": 0, "base_cut": false})
     );
     assert_eq!(
         branch_json(&v, "orphan")["shallow"],
-        serde_json::json!({"unreadable_commits": 0, "base_cut": true})
+        serde_json::json!({"unreadable_commits": 0, "without_partner": 1, "base_cut": true})
     );
     assert_eq!(branch_json(&v, "fork")["shallow"], Value::Null);
     assert_eq!(branch_json(&v, "merged")["shallow"], Value::Null);
@@ -234,7 +234,7 @@ fn the_explained_text_says_which_part_of_the_history_is_missing() {
         "{t}"
     );
     assert!(
-        t.contains("why: review: 1 commit(s) not in origin/main have a patch without a partner in the part of it this clone holds"),
+        t.contains("why: review: 1 of the 1 commit(s) not in origin/main have a patch without a partner in the part of it this clone holds"),
         "{t}"
     );
 }
