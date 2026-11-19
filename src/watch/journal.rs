@@ -7,18 +7,12 @@
 //!   journal; the next append cuts them off (`Journal::junk_bytes` reports their length after `open`);
 //! - a complete line that is not a valid event, a `seq` that is not the previous one plus one, or a line longer than
 //!   `MAX_LINE_BYTES` is corruption: `WatchError::CorruptState`, nothing is repaired.
-#[allow(unused_imports)]
 use std::fs::{File, OpenOptions};
-#[allow(unused_imports)]
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
-#[allow(unused_imports)]
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-#[allow(unused_imports)]
 use std::path::{Path, PathBuf};
 
-#[allow(unused_imports)]
 use super::event::Event;
-#[allow(unused_imports)]
 use super::WatchError;
 
 /// File name inside the state directory.
@@ -38,7 +32,6 @@ pub struct ScanEnd {
     pub size: u64,
 }
 
-#[allow(dead_code)]
 fn corrupt(msg: String) -> WatchError {
     WatchError::CorruptState(format!("{JOURNAL_NAME}: {msg}"))
 }
@@ -106,13 +99,30 @@ pub struct Journal {
 impl Journal {
     /// Opens (creating it with mode 0600) and validates the journal; an existing file gets mode 0600.
     pub fn open(dir: &Path) -> Result<Journal, WatchError> {
-        let file = File::open("/dev/null").map_err(|e| WatchError::Io(e.to_string()))?;
+        let path = dir.join(JOURNAL_NAME);
+        let existed = path.exists();
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .mode(0o600)
+            .open(&path)
+            .map_err(|e| WatchError::Io(format!("cannot open {}: {e}", path.display())))?;
+        file.set_permissions(std::fs::Permissions::from_mode(0o600))
+            .map_err(|e| {
+                WatchError::Io(format!("cannot set the mode of {}: {e}", path.display()))
+            })?;
+        if !existed {
+            super::statedir::sync_dir(dir)?;
+        }
+        let end = scan(&path, &mut |_| {})?;
         Ok(Journal {
-            path: dir.join(JOURNAL_NAME),
+            path,
             file,
-            tail: 0,
-            good: 0,
-            junk: 0,
+            tail: end.tail,
+            good: end.good,
+            junk: end.size - end.good,
         })
     }
 
@@ -129,13 +139,47 @@ impl Journal {
     /// Writes `ev` with the next `seq` (the `seq` it has is ignored), fsyncs and returns the event as written. An
     /// unterminated truncated tail is cut off first, so every line of the file validates.
     pub fn append(&mut self, ev: &Event) -> Result<Event, WatchError> {
-        let _ = (&self.path, &self.file, self.tail, self.good);
-        Ok(ev.clone())
+        let io = |what: &str, e: std::io::Error| {
+            WatchError::Io(format!("{what} {}: {e}", self.path.display()))
+        };
+        let size = self
+            .file
+            .metadata()
+            .map_err(|e| io("cannot read", e))?
+            .len();
+        if size != self.good {
+            self.file
+                .set_len(self.good)
+                .map_err(|e| io("cannot cut the truncated tail of", e))?;
+        }
+        let mut out = ev.clone();
+        out.seq = self
+            .tail
+            .checked_add(1)
+            .ok_or_else(|| corrupt("seq overflow".to_string()))?;
+        let mut line = out.to_line();
+        line.push('\n');
+        self.file
+            .seek(SeekFrom::Start(self.good))
+            .map_err(|e| io("cannot write", e))?;
+        self.file
+            .write_all(line.as_bytes())
+            .map_err(|e| io("cannot write", e))?;
+        self.file.sync_all().map_err(|e| io("cannot sync", e))?;
+        self.good += line.len() as u64;
+        self.tail = out.seq;
+        self.junk = 0;
+        Ok(out)
     }
 
     /// The complete events with `seq` greater than `seq`, in order.
     pub fn after(&self, seq: u64) -> Result<Vec<Event>, WatchError> {
-        let _ = (&self.path, seq);
-        Ok(Vec::new())
+        let mut out = Vec::new();
+        scan(&self.path, &mut |e| {
+            if e.seq > seq {
+                out.push(e.clone());
+            }
+        })?;
+        Ok(out)
     }
 }
