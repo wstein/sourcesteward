@@ -2380,8 +2380,11 @@ fn a_state_ahead_of_the_journal_is_an_error_unless_the_baseline_is_forced() {
         format!("{}\n", j.lines().next().unwrap()),
     )
     .unwrap();
-    let err = Core::open(&dir, false, &mut Rec::default()).err().unwrap();
-    assert!(matches!(err, WatchError::CorruptState(_)), "{err}");
+    let res = Core::open(&dir, false, &mut Rec::default());
+    assert!(
+        matches!(res, Err(WatchError::CorruptState(_))),
+        "a state ahead of the journal is refused"
+    );
     let (core, report, _) = open(&dir, true);
     assert!(report.lost);
     assert_eq!(
