@@ -35,6 +35,7 @@ mod oplog_write;
 mod oracle_tidy;
 mod patchid;
 mod patchid_props;
+mod patchid_rename;
 mod prove;
 mod remote_kinds;
 mod replay;
