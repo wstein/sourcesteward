@@ -2520,3 +2520,366 @@ fn a_merge_records_a_fork_head_unless_the_pr_was_seen_open_in_the_base_repositor
         );
     }
 }
+
+// --- the cycle scenarios as apply sequences
+
+fn ignored(o: &Value, sc: &Value) -> bool {
+    let cfg = &sc["config"];
+    let has = |key: &str, v: &Value| cfg[key].as_array().unwrap().contains(v);
+    has("ignore_authors", &o["author"])
+        || o["labels"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|l| has("ignore_labels", l))
+}
+
+/// What the baseline of the cycle does with a successful first read of a repository, minus the check class (W3): the PRs of
+/// the observation replace the accepted ones, counters and generations carry over, vanished PRs are remembered.
+fn seed_baseline(rs: &mut RepoState, prs: &[Value], sc: &Value) {
+    let mut fresh = BTreeMap::new();
+    let mut sorted: Vec<&Value> = prs.iter().collect();
+    sorted.sort_by_key(|o| o["number"].as_u64().unwrap());
+    for o in sorted {
+        if ignored(o, sc) {
+            continue;
+        }
+        let n = o["number"].as_u64().unwrap();
+        let mut p = PrState {
+            number: n,
+            title: str_of(&o["title"]),
+            author: str_of(&o["author"]),
+            labels: o["labels"].as_array().unwrap().iter().map(str_of).collect(),
+            draft: o["draft"] == true,
+            head: str_of(&o["head"]),
+            head_ref: str_of(&o["head_ref"]),
+            base: str_of(&o["base"]),
+            fork: o["fork"] == true,
+            detail_due: o["detail"].is_null(),
+            ..PrState::default()
+        };
+        if let Some(old) = rs.prs.get(&n) {
+            p.epochs = old.epochs;
+            p.generation = old.generation;
+            if o["fork_known"] != true {
+                p.fork = old.fork;
+            }
+        } else if let Some((_, rec)) = rs.closed_record(n) {
+            p.epochs = rec.epochs;
+            p.generation = rec.generation + 1;
+        }
+        fresh.insert(n, p);
+    }
+    let vanished: Vec<ClosedPr> = rs
+        .prs
+        .iter()
+        .filter(|(n, _)| !fresh.contains_key(n))
+        .map(|(n, old)| ClosedPr {
+            number: *n,
+            generation: old.generation,
+            epochs: old.epochs,
+        })
+        .collect();
+    for c in vanished {
+        rs.record_closed(c);
+    }
+    rs.prs = fresh;
+    rs.baselined = true;
+}
+
+fn config_repos(v: &Value) -> Vec<String> {
+    v.as_array().unwrap().iter().map(str_of).collect()
+}
+
+/// The state after the events of the scenario, applied step by step. The steps add what the cycle does around the events that
+/// is not an event and that the comparison needs: the repository set of the config, the silent baseline of a repository
+/// polled for the first time (or again after a removal, a forced baseline or a lost state).
+fn replay(sc: &Value) -> State {
+    let log = log_of(sc);
+    let mut state = State::new();
+    let mut set = config_repos(&sc["config"]["repos"]);
+    let mut need_sync = false;
+    state.repos = Some(set.clone());
+    for r in &set {
+        state.repo.insert(
+            r.clone(),
+            RepoState::new(&str_of(&sc["config"]["start_time"])),
+        );
+    }
+    for (i, step) in sc["cycles"].as_array().unwrap().iter().enumerate() {
+        // `hints` name the repositories polled in the step; a step without hints (the crash scenarios) polled every repository
+        // it has an observation for.
+        let hints = &sc["expected_events"][i]["hints"];
+        let polled: Vec<String> = match hints.as_object() {
+            Some(h) => h.keys().cloned().collect(),
+            None => step["observation"]
+                .as_object()
+                .map(|o| o.keys().cloned().collect())
+                .unwrap_or_default(),
+        };
+        let change = &step["config_change"];
+        if let Some(r) = change.get("repos").filter(|r| !r.is_null()) {
+            set = config_repos(r);
+        }
+        let forced = change["baseline"] == true;
+        let lost = matches!(
+            step["file_op"].as_str(),
+            Some("delete-state" | "corrupt-state")
+        );
+        if forced || lost {
+            for rs in state.repo.values_mut() {
+                rs.baselined = false;
+                rs.restack_due.clear();
+                rs.restack_done.clear();
+            }
+        }
+        if lost {
+            // the state is rebuilt from the journal alone; the set of repositories is learned again by the next cycle
+            let mut rebuilt = State::new();
+            for (_, e) in log.iter().filter(|(s, _)| *s < i) {
+                rebuilt.apply(e);
+            }
+            state = rebuilt;
+            need_sync = true;
+        }
+        if need_sync && step["action"] == "cycle" {
+            state.repos = Some(set.clone());
+            for r in &set {
+                state
+                    .repo
+                    .entry(r.clone())
+                    .or_insert_with(|| RepoState::new(&str_of(&step["time"])));
+            }
+            need_sync = false;
+        }
+        // what the cycle does to the state besides the events is lost when the process dies before the state is written
+        let persists = step["crash"].is_null() || step["crash"]["point"] == "state";
+        let mut events: Vec<&Event> = log
+            .iter()
+            .filter(|(s, _)| *s == i)
+            .map(|(_, e)| e)
+            .collect();
+        let lead = events
+            .iter()
+            .take_while(|e| e.kind() == Kind::ReposChanged)
+            .count();
+        for e in events.drain(..lead) {
+            check_apply(&mut state, e);
+        }
+        for repo in polled.iter().filter(|_| persists) {
+            let obs = &step["observation"][repo];
+            if obs["error"].is_null() && state.repos.iter().flatten().any(|r| r == repo) {
+                let rs = state
+                    .repo
+                    .entry(repo.clone())
+                    .or_insert_with(|| RepoState::new(""));
+                if !rs.baselined {
+                    seed_baseline(rs, obs["prs"].as_array().unwrap(), sc);
+                } else {
+                    // a PR that became ignored vanishes silently
+                    for o in obs["prs"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .filter(|o| ignored(o, sc))
+                    {
+                        let n = o["number"].as_u64().unwrap();
+                        if let Some(old) = rs.prs.remove(&n) {
+                            rs.record_closed(ClosedPr {
+                                number: n,
+                                generation: old.generation,
+                                epochs: old.epochs,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        for e in events {
+            check_apply(&mut state, e);
+        }
+    }
+    state
+}
+
+/// Applies an event, and checks that applying it again changes nothing and the effect on the restack work the table of the spec
+/// names for merges and restack events.
+fn check_apply(state: &mut State, e: &Event) {
+    state.apply(e);
+    let once = state.clone();
+    state.apply(e);
+    assert_eq!(*state, once, "applying {} twice", e.id);
+    if let (Details::Merged(d), Some(repo), Some(n)) = (&e.details, e.repo.as_deref(), e.pr) {
+        let rs = &state.repo[repo];
+        assert!(!rs.prs.contains_key(&n), "{}", e.id);
+        let due = rs
+            .restack_due
+            .iter()
+            .find(|x| {
+                x.merged_pr == n
+                    && key_merged(x.merge_commit.as_deref())
+                        == key_merged(d.merge_commit.as_deref())
+            })
+            .unwrap_or_else(|| panic!("no restack work after {}", e.id));
+        assert_eq!(
+            (&due.old_parent, &due.base, &due.head_ref),
+            (&d.head, &d.base, &d.head_ref),
+            "{}",
+            e.id
+        );
+    }
+    if let (Details::RestackNeeded(_), Some(repo)) = (&e.details, e.repo.as_deref()) {
+        assert!(state.repo[repo].restack_done.contains(&e.id), "{}", e.id);
+    }
+}
+
+fn epochs_of(v: &Value) -> Epochs {
+    let n = |k: &str| v[k].as_u64().unwrap();
+    Epochs {
+        head: n("head"),
+        checks: n("checks"),
+        mergeable: n("mergeable"),
+        ready: n("ready"),
+        base: n("base"),
+    }
+}
+
+/// Compares the replayed state with `expected_state_view` on what follows from the events and the baseline alone:
+///
+/// - `repos`, `skipped`, `repos_epoch`;
+/// - per PR in the view: it exists in the replay and the replay has no other; `head`, `base`, `draft`, `generation` and the
+///   epochs `head`, `mergeable`, `ready`, `base`; the epoch `checks` is at most the view's (a silent change of the class to
+///   pending or none also raises it, and that is a cycle effect);
+/// - closed records of the replay: the same generation and epochs (but `checks`) in the view;
+/// - health: `episode`, `stall_episode`, `error_open`, `stalled`, `last_code` (while an error is open), `failures` at most the
+///   view's (failures without an event are counted by the cycle).
+///
+/// Not compared (cycle effects, W3): `cycle`, `interval_seconds`, `last_ok`, `since`, `default_branch`, `class`,
+/// `class_candidate`, `pending_*`, `timeout_fired`, the mergeable fields and candidate, `detail_due`, `gone`, `restack_due` and
+/// `restack_done` (the cycle clears them after the restack), `next_try`, title, author, labels, head_ref, fork.
+fn compare_view(name: &str, state: &State, view: &Value) -> Vec<String> {
+    let mut bad = Vec::new();
+    let mut check = |what: String, ok: bool| {
+        if !ok {
+            bad.push(format!("{name}: {what}"));
+        }
+    };
+    check(
+        "repos".into(),
+        state.repos.clone().unwrap_or_default() == config_repos(&view["repos"]),
+    );
+    let skipped: Vec<(String, String)> = state
+        .skipped
+        .iter()
+        .map(|s| (s.path.clone(), s.reason.clone()))
+        .collect();
+    let want: Vec<(String, String)> = view["skipped"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| (str_of(&s["path"]), str_of(&s["reason"])))
+        .collect();
+    check("skipped".into(), skipped == want);
+    check(
+        "repos_epoch".into(),
+        state.repos_epoch == view["repos_epoch"].as_u64().unwrap(),
+    );
+    let health = |h: &stw::watch::state::Health, v: &Value, what: String, bad: &mut Vec<String>| {
+        let ok = h.episode == v["episode"].as_u64().unwrap()
+            && h.stall_episode == v["stall_episode"].as_u64().unwrap()
+            && h.error_open == (v["error_open"] == true)
+            && h.stalled == (v["stalled"] == true)
+            && (!h.error_open || h.last_code == str_of(&v["last_code"]))
+            && h.failures <= v["failures"].as_u64().unwrap();
+        if !ok {
+            bad.push(format!("{name}: health of {what}: {h:?} against {v}"));
+        }
+    };
+    let none = stw::watch::state::Health::default();
+    health(
+        state.health.get("").unwrap_or(&none),
+        &view["run_health"],
+        "the run".into(),
+        &mut bad,
+    );
+    for (repo, rv) in view["repo"].as_object().unwrap() {
+        health(
+            state.health.get(repo).unwrap_or(&none),
+            &rv["health"],
+            repo.clone(),
+            &mut bad,
+        );
+        let Some(rs) = state.repo.get(repo) else {
+            if !rv["prs"].as_object().unwrap().is_empty() {
+                bad.push(format!(
+                    "{name}: {repo} has PRs in the view and no record in the replay"
+                ));
+            }
+            continue;
+        };
+        let vp = rv["prs"].as_object().unwrap();
+        let mine: Vec<String> = rs.prs.keys().map(u64::to_string).collect();
+        let theirs: Vec<String> = vp.keys().cloned().collect();
+        if mine != theirs {
+            bad.push(format!("{name}: {repo} PRs {mine:?} against {theirs:?}"));
+            continue;
+        }
+        for (n, p) in vp {
+            let m = &rs.prs[&n.parse().unwrap()];
+            let e = epochs_of(&p["epochs"]);
+            let ok = m.head == str_of(&p["head"])
+                && m.base == str_of(&p["base"])
+                && m.draft == (p["draft"] == true)
+                && m.generation == p["generation"].as_u64().unwrap()
+                && (
+                    m.epochs.head,
+                    m.epochs.mergeable,
+                    m.epochs.ready,
+                    m.epochs.base,
+                ) == (e.head, e.mergeable, e.ready, e.base)
+                && m.epochs.checks <= e.checks;
+            if !ok {
+                bad.push(format!("{name}: {repo}#{n}: {m:?} against {p}"));
+            }
+        }
+        for c in &rs.closed {
+            let found = rv["closed"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|v| v["number"].as_u64() == Some(c.number));
+            let ok = found.is_some_and(|v| {
+                let e = epochs_of(&v["epochs"]);
+                v["generation"].as_u64() == Some(c.generation)
+                    && (
+                        c.epochs.head,
+                        c.epochs.mergeable,
+                        c.epochs.ready,
+                        c.epochs.base,
+                    ) == (e.head, e.mergeable, e.ready, e.base)
+                    && c.epochs.checks <= e.checks
+            });
+            if !ok {
+                bad.push(format!("{name}: {repo} closed {c:?} against {:?}", found));
+            }
+        }
+    }
+    bad
+}
+
+#[test]
+fn the_events_of_every_cycle_scenario_replayed_through_apply_reach_the_expected_state() {
+    let all = watch_cycle_scenarios();
+    assert_eq!(all.len(), 194);
+    let mut bad = Vec::new();
+    for (name, sc) in &all {
+        let state = replay(sc);
+        bad.extend(compare_view(name, &state, &sc["expected_state_view"]));
+    }
+    assert!(
+        bad.is_empty(),
+        "{} mismatches, first: {:#?}",
+        bad.len(),
+        &bad[..bad.len().min(8)]
+    );
+}
