@@ -423,3 +423,23 @@ proptest! {
         prop_assert!(!s.contains(bidi));
     }
 }
+
+use stw::watch::event::format_utc;
+
+#[test]
+fn utc_time_is_formatted_with_a_z_and_no_fraction() {
+    assert_eq!(format_utc(0), "1970-01-01T00:00:00Z");
+    assert_eq!(format_utc(-1), "1969-12-31T23:59:59Z");
+    assert_eq!(format_utc(1_000_000_000), "2001-09-09T01:46:40Z");
+    assert_eq!(format_utc(951_782_400), "2000-02-29T00:00:00Z");
+    assert_eq!(format_utc(951_868_800), "2000-03-01T00:00:00Z");
+    assert_eq!(format_utc(4_102_444_800), "2100-01-01T00:00:00Z");
+    assert_eq!(format_utc(1_792_003_723), "2026-10-14T18:48:43Z");
+}
+
+proptest! {
+    #[test]
+    fn utc_time_round_trips_through_the_reader(secs in 0i64..253_402_300_799) {
+        prop_assert_eq!(stw::github::parse_utc(&format_utc(secs)), Some(secs));
+    }
+}
