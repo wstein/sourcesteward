@@ -152,7 +152,8 @@ impl Core {
         baseline: bool,
         out: &mut dyn Output,
     ) -> Result<(Core, OpenReport), WatchError> {
-        let lock = lock::acquire_with(dir, 1, std::time::Duration::ZERO)?;
+        ensure_state_dir(dir)?;
+        let lock = lock::acquire(dir)?;
         Core::start(dir, baseline, lock, out)
     }
 
@@ -162,18 +163,74 @@ impl Core {
         lock: DirLock,
         out: &mut dyn Output,
     ) -> Result<(Core, OpenReport), WatchError> {
-        let _ = (baseline, out);
-        Ok((
-            Core {
-                dir: dir.to_path_buf(),
-                state: State::new(),
-                baseline,
-                journal: Journal::open(dir)?,
-                lock: Some(lock),
-                broken: false,
-            },
-            OpenReport::default(),
-        ))
+        let journal = Journal::open(dir)?;
+        let tail = journal.tail();
+        let mut report = OpenReport {
+            truncated_tail_bytes: journal.junk_bytes(),
+            ..OpenReport::default()
+        };
+        let mut lost = false;
+        let loaded = match load_state(dir) {
+            Ok(s) => s,
+            Err(WatchError::CorruptState(_)) if baseline => {
+                lost = true;
+                None
+            }
+            Err(e) => return Err(e),
+        };
+        let mut state = match loaded {
+            Some(s) => s,
+            None => {
+                lost |= tail > 0;
+                State::new()
+            }
+        };
+        if state.applied_seq > tail || state.printed_seq > tail {
+            if !baseline {
+                return Err(WatchError::CorruptState(format!(
+                    "the journal ends at {tail}, behind the state"
+                )));
+            }
+            state = State::new();
+            lost = true;
+        }
+        let events = journal.after(state.applied_seq)?;
+        for ev in &events {
+            state.apply(ev); // the replay: counters and observed effects, idempotent
+        }
+        report.replayed = events.len() as u64;
+        state.applied_seq = tail;
+        let mut core = Core {
+            dir: dir.to_path_buf(),
+            state,
+            baseline,
+            journal,
+            lock: Some(lock),
+            broken: false,
+        };
+        if lost {
+            // The journal rebuilt the counters; the observed truth is unknown: baseline silently.
+            core.state.printed_seq = tail;
+            core.state.repos = None;
+            core.state.skipped.clear();
+            core.baseline = true;
+            report.lost = true;
+        }
+        if !events.is_empty() || lost {
+            save_state(dir, &core.state)?;
+            out.after(Step::ReplayState)?;
+        }
+        let pending = core.journal.after(core.state.printed_seq)?;
+        for (i, ev) in pending.iter().enumerate() {
+            out.print(ev)?;
+            out.after(Step::ReplayPrint(i + 1))?;
+        }
+        report.reprinted = pending.len() as u64;
+        if !pending.is_empty() {
+            core.state.printed_seq = tail;
+            save_state(dir, &core.state)?;
+        }
+        Ok((core, report))
     }
 
     /// `seq` of the last journalled event.
