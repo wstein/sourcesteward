@@ -584,6 +584,7 @@ fn the_json_has_the_rebase_object_landed_via_and_the_summary() {
             "worktree",
             "similarity",
             "rebase",
+            "squash",
             "landed_via"
         ])
     );

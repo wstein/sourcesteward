@@ -288,6 +288,7 @@ fn json_field_names_are_the_documented_ones() {
             "worktree",
             "similarity",
             "rebase",
+            "squash",
             "landed_via"
         ])
     );

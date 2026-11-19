@@ -608,11 +608,11 @@ fn similarity_stage(
     Ok(())
 }
 
-/// The proofs of the branches that get squash evidence: where nothing settled the branch, or a stage that only
-/// advises (`similar-patches`, `rebase-identity`) took the place of such a proof. A branch with a deletion proof, an
-/// open pull request, a backup name or no commit of its own has none.
+/// The proofs of the branches that get squash evidence: where nothing settled the branch, or `similar-patches` took
+/// the place of such a proof. A branch with a deletion proof, an open pull request, a backup name, no commit of its own
+/// or a strong rebase (`rebase-identity`: it did not land as a squash) has none.
 fn squash_judged(proof: &str) -> bool {
-    judged(proof) || matches!(proof, "similar-patches" | "rebase-identity")
+    judged(proof) || proof == "similar-patches"
 }
 
 /// The squash stage (layer 1): for each branch that `squash_judged` names, the merged pull request of the branch (from
@@ -970,6 +970,7 @@ pub fn to_json(root: &str, gh: &GithubState, plans: &[RepoPlan]) -> Value {
                            "worktree": b.worktree.as_ref().map(|w| json!({"path": worktrees::show(&w.dir), "removable_proof": w.proof, "outside_worktrees_dir": w.outside, "blocker": jopt(w.blocker.as_deref())})).unwrap_or(Value::Null),
                            "similarity": b.similarity.as_ref().map(similarity_json).unwrap_or(Value::Null),
                            "rebase": b.rebase.as_ref().map(rebase_json).unwrap_or(Value::Null),
+                           "squash": b.squash.as_ref().map(squash_json).unwrap_or(Value::Null),
                            "landed_via": json!({"kind": b.landed_via.kind.as_str(), "basis": b.landed_via.basis.as_str(), "strength": b.landed_via.strength.as_str()})})
                 })
                 .collect();
@@ -1096,6 +1097,29 @@ fn rebase_json(r: &RebasePlan) -> Value {
            "skipped": {"merges": rep.skipped.merges, "empty": rep.skipped.empty},
            "window": {"commits": rep.window_commits, "stop": stop, "cut": rep.stop == Stop::Window, "stopped_at": stopped_at},
            "api": api, "mapping": mapping, "remaining": remaining})
+}
+
+fn squash_json(s: &SquashPlan) -> Value {
+    let (p, e) = (&s.pr, &s.subject);
+    let id = |o: Option<ObjectId>| {
+        o.map(|x| Value::String(x.to_string()))
+            .unwrap_or(Value::Null)
+    };
+    let pr = json!({"state": if p.not_read.is_none() { "read" } else { "not-read" },
+                    "reason": p.not_read.map(|r| Value::String(r.as_str().into())).unwrap_or(Value::Null),
+                    "number": p.number, "merged": p.number.map(|_| true),
+                    "merge_commit": id(p.merge_commit), "merge_commit_in_clone": p.merge_commit_in_clone,
+                    "merge_commit_on_base": p.merge_commit_on_base, "merge_commit_parents": p.merge_commit_parents,
+                    "head_is_tip": p.head_is_tip, "head_in_branch": p.head_in_branch,
+                    "commits_after_head": p.commits_after_head});
+    let subject = json!({"candidate": id(e.candidate),
+                         "basis": e.basis.map(|b| Value::String(b.as_str().into())).unwrap_or(Value::Null),
+                         "candidate_subject": e.candidate.map(|_| Value::String(e.candidate_subject.clone())).unwrap_or(Value::Null),
+                         "candidates": e.candidates, "pr_number_in_subject": e.pr_number_in_subject,
+                         "subject_equal": e.subject_equal, "subjects_total": e.subjects_total,
+                         "subjects_in_body": e.subjects_in_body, "pull_request_trailer": e.pull_request_trailer,
+                         "window": {"days": tidy_similarity::WINDOW_DAYS, "commits": e.window_commits, "cut": e.window_cut}});
+    json!({"pr": pr, "subject": subject})
 }
 
 /// Branches with the proof `rebase-identity` (they are counted in `review`, too).

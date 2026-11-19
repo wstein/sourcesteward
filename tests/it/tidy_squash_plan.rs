@@ -1,7 +1,7 @@
 //! The squash stage of `stw tidy plan` (layer 1, package 5a): what is in `BranchPlan::squash`, for which branches, and
 //! that the decision never depends on it. The text of the stage in `--explain` and the JSON are in the same file below.
 use crate::common::*;
-use crate::tidy_rebase_plan::*;
+use crate::tidy_rebase_plan::{json_of, *};
 use crate::tidy_squash::{land_squash, on_main};
 use gix::ObjectId;
 use stw::github::AnyPr;
@@ -197,20 +197,32 @@ fn a_branch_in_a_worktree_keeps_the_object_and_a_stage_proof_keeps_its_place() {
     let b = get(&p, "feat");
     assert_eq!((b.decision, b.proof), ("keep", "in-worktree"));
     assert!(b.squash.is_some());
-    // a similar-patches branch gets the object too
+    // a similar-patches branch gets the object too: the same change by somebody else with one line resolved
     let mut w = world();
     let t = w.commits_on(None, &[c(0)])[0];
     w.fx.branch("sim", t);
-    // the same change as one more commit on main with a different line: 97.5 %
-    w.land_resolved(&[c(0)], MERGE_SECS);
+    let r = resolved(&c(0));
+    let other = Stamp::new("Other", "o@example.com", MERGE_SECS);
+    let m = w.fx.commit_at(
+        Some(w.main),
+        &[(r.file.as_str(), Some(r.body.as_str()))],
+        "something else",
+        other,
+        other,
+    );
+    w.set_main(m);
     let p = plan_off(&w, ApiReason::Offline);
     let b = get(&p, "sim");
-    assert!(
-        b.proof == "similar-patches" || b.proof == "rebase-identity",
-        "{}",
-        b.proof
-    );
+    assert_eq!((b.decision, b.proof), ("review", "similar-patches"));
     assert!(b.squash.is_some());
+    // a strong rebase did not land as a squash
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("rb", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let p = plan_off(&w, ApiReason::Offline);
+    assert_eq!(get(&p, "rb").proof, "rebase-identity");
+    assert!(get(&p, "rb").squash.is_none());
 }
 
 #[test]
@@ -229,4 +241,151 @@ fn the_decision_is_the_same_whatever_the_stage_finds() {
     assert_eq!(s.subject.subjects_in_body, 3);
     // a different squash of the same title
     let _ = on_main;
+}
+
+// ---- the JSON ----
+
+use serde_json::Value;
+
+fn branch_json<'a>(v: &'a Value, name: &str) -> &'a Value {
+    v["repos"][0]["branches"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|b| b["branch"] == name)
+        .unwrap_or_else(|| panic!("no branch {name}"))
+}
+
+fn key_list(v: &Value) -> Vec<String> {
+    let mut k: Vec<String> = v
+        .as_object()
+        .map(|m| m.keys().cloned().collect())
+        .unwrap_or_default();
+    k.sort();
+    k
+}
+
+fn sorted(names: &[&str]) -> Vec<String> {
+    let mut v: Vec<String> = names.iter().map(|s| s.to_string()).collect();
+    v.sort();
+    v
+}
+
+#[test]
+fn the_json_has_the_squash_object_with_the_pull_request_and_the_subject() {
+    let (w, ids, m) = moved();
+    let p = plan_with(&w, Some(vec![pr(7, ids[1], m)]), &opts());
+    let v = json_of(&p);
+    assert_eq!(v["schema_version"], 2);
+    let b = branch_json(&v, "feat");
+    let s = &b["squash"];
+    assert_eq!(key_list(s), sorted(&["pr", "subject"]));
+    assert_eq!(
+        key_list(&s["pr"]),
+        sorted(&[
+            "state",
+            "reason",
+            "number",
+            "merged",
+            "merge_commit",
+            "merge_commit_in_clone",
+            "merge_commit_on_base",
+            "merge_commit_parents",
+            "head_is_tip",
+            "head_in_branch",
+            "commits_after_head"
+        ])
+    );
+    let pr = &s["pr"];
+    assert_eq!(pr["state"], "read");
+    assert_eq!(pr["reason"], Value::Null);
+    assert_eq!(pr["number"], 7);
+    assert_eq!(pr["merged"], true);
+    assert_eq!(pr["merge_commit"], m.to_string());
+    assert_eq!(pr["merge_commit_in_clone"], true);
+    assert_eq!(pr["merge_commit_on_base"], true);
+    assert_eq!(pr["merge_commit_parents"], 1);
+    assert_eq!(pr["head_is_tip"], false);
+    assert_eq!(pr["head_in_branch"], true);
+    assert_eq!(pr["commits_after_head"], 1);
+    assert_eq!(
+        key_list(&s["subject"]),
+        sorted(&[
+            "candidate",
+            "basis",
+            "candidate_subject",
+            "candidates",
+            "pr_number_in_subject",
+            "subject_equal",
+            "subjects_total",
+            "subjects_in_body",
+            "pull_request_trailer",
+            "window"
+        ])
+    );
+    let sub = &s["subject"];
+    assert_eq!(sub["candidate"], m.to_string());
+    assert_eq!(sub["basis"], "merge-commit");
+    assert_eq!(sub["candidate_subject"], "step 0 (#7)");
+    assert_eq!(sub["candidates"], 1);
+    assert_eq!(sub["pr_number_in_subject"], 7);
+    assert_eq!(sub["subject_equal"], true);
+    assert_eq!(sub["subjects_total"], 3);
+    assert_eq!(sub["subjects_in_body"], 0);
+    assert_eq!(sub["pull_request_trailer"], false);
+    assert_eq!(
+        key_list(&sub["window"]),
+        sorted(&["days", "commits", "cut"])
+    );
+    assert_eq!(sub["window"]["days"], 7);
+    assert_eq!(sub["window"]["cut"], false);
+}
+
+#[test]
+fn the_json_names_the_reason_where_the_pull_request_was_not_read_and_leaves_the_rest_null() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    land_squash(&mut w, &list, "other words", "");
+    let p = plan_off(&w, ApiReason::NoToken);
+    let v = json_of(&p);
+    let s = &branch_json(&v, "feat")["squash"];
+    let pr = &s["pr"];
+    assert_eq!(pr["state"], "not-read");
+    assert_eq!(pr["reason"], "no-token");
+    for k in [
+        "number",
+        "merged",
+        "merge_commit",
+        "merge_commit_in_clone",
+        "merge_commit_on_base",
+        "merge_commit_parents",
+        "head_is_tip",
+        "head_in_branch",
+        "commits_after_head",
+    ] {
+        assert_eq!(pr[k], Value::Null, "{k}");
+    }
+    // nothing found on the base: the keys are there, the candidate is null
+    let sub = &s["subject"];
+    assert_eq!(sub["candidate"], Value::Null);
+    assert_eq!(sub["basis"], Value::Null);
+    assert_eq!(sub["candidate_subject"], Value::Null);
+    assert_eq!(sub["candidates"], 0);
+    assert_eq!(sub["subject_equal"], false);
+    assert_eq!(sub["subjects_total"], 2);
+}
+
+#[test]
+fn the_json_of_a_branch_the_stage_left_out_has_a_null_squash() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    w.land_resolved(&list, MERGE_SECS);
+    let p = plan_off(&w, ApiReason::Offline);
+    let v = json_of(&p);
+    let b = branch_json(&v, "feat");
+    assert_eq!(b["proof"], "rebase-identity");
+    assert!(b["squash"].is_null());
+    assert!(b.as_object().unwrap().contains_key("squash"));
 }
