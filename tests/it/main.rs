@@ -5,6 +5,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod absorb_units;
 mod add;
 mod auth;
 mod carryover;
