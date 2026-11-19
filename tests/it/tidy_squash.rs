@@ -278,6 +278,7 @@ fn the_number_of_a_pull_request_is_read_from_the_end_of_a_subject() {
     assert_eq!(n("Title (#7x)"), None);
     assert_eq!(n("Title (# 7)"), None);
     assert_eq!(n("Title (#-7)"), None);
+    assert_eq!(n("Title (#+7)"), None);
     assert_eq!(n("Title (#99999999999999999999999)"), None);
     assert_eq!(n("Title"), None);
     assert_eq!(n(""), None);

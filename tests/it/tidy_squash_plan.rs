@@ -88,6 +88,11 @@ fn the_detail_names_nothing_where_the_merge_commit_is_not_on_the_base_or_the_hea
         b.squash.as_ref().unwrap().pr.merge_commit_on_base,
         Some(false)
     );
+    // a merge commit that is not on the base is no candidate either
+    assert_ne!(
+        b.squash.as_ref().unwrap().subject.basis,
+        Some(SubjectBasis::MergeCommit)
+    );
     assert_eq!(
         b.detail,
         "pull request #7 merged, but the branch has 3 commit(s) not in refs/remotes/origin/main"
@@ -154,6 +159,22 @@ fn a_list_without_a_usable_pull_request_for_the_branch_says_so() {
     );
     // the squash evidence does not touch what the fork pull request already meant for the proof (name only, as before)
     assert_eq!(b.proof, "pull-request-merged-branch-moved");
+}
+
+#[test]
+fn of_two_merged_pull_requests_the_one_the_proof_names_is_read() {
+    // the list is newest first: the proof takes the last merged one of it (#7), the latest merge time is #8
+    let (w, ids, m) = moved();
+    let mut late = pr(8, ids[0], m);
+    late.merged_at = Some(MERGE_SECS + 500);
+    let p = plan_with(&w, Some(vec![late, pr(7, ids[1], m)]), &opts());
+    let b = get(&p, "feat");
+    assert!(
+        b.detail.starts_with("pull request #7 merged"),
+        "{}",
+        b.detail
+    );
+    assert_eq!(b.squash.as_ref().unwrap().pr.number, Some(7));
 }
 
 #[test]
