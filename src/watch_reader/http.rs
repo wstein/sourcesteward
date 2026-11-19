@@ -524,8 +524,13 @@ pub fn valid_host(s: &str) -> bool {
 // ---- the reader ------------------------------------------------------------------------------------------
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
 use std::sync::Mutex;
 use std::time::Duration;
+
+use serde_json::{Map, Value};
+
+use crate::github::Client;
 
 /// One request takes at most this long (Go: `DefaultRequestTimeout`).
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -682,6 +687,14 @@ pub struct PullListResult {
     pub unchanged: bool,
 }
 
+fn list_page_limit(per_page: u32) -> usize {
+    if per_page == 12 {
+        MAX_PAGES_12 as usize
+    } else {
+        MAX_PAGES_25 as usize
+    }
+}
+
 #[derive(Default)]
 struct Inner {
     calls: BTreeMap<Kind, CallCount>,
@@ -716,16 +729,166 @@ pub fn api_destination(host: &str) -> (String, String) {
     }
 }
 
-/// The items of one list page (stub).
-pub fn parse_pull_items(_body: &[u8]) -> Result<Vec<PullItem>, WatchError> {
-    Err(malformed("stub"))
+fn header<'a>(h: &'a ureq::http::HeaderMap, name: &str) -> &'a str {
+    h.get(name).and_then(|v| v.to_str().ok()).unwrap_or("")
+}
+
+fn rate_of_headers(h: &ureq::http::HeaderMap) -> RateInfo {
+    parse_rate_headers(
+        header(h, "x-ratelimit-limit"),
+        header(h, "x-ratelimit-remaining"),
+        header(h, "x-ratelimit-reset"),
+    )
+}
+
+fn oversize(list: bool) -> WatchError {
+    if list {
+        WatchError::new(
+            Code::PageTooLarge,
+            "list page exceeds the one MiB body limit",
+        )
+    } else {
+        malformed("response exceeds the one MiB body limit")
+    }
+}
+
+/// The new `owner/name` a Location header names, only for an `/repos/OWNER/NAME/` path on the API host.
+fn moved_name(location: &str, api_host: &str) -> Option<String> {
+    let (host, path) = if let Some((_, rest)) = location.split_once("://") {
+        let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        let authority = &rest[..end];
+        (
+            authority.rsplit_once('@').map_or(authority, |(_, h)| h),
+            &rest[end..],
+        )
+    } else if let Some(rest) = location.strip_prefix("//") {
+        let end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+        (&rest[..end], &rest[end..])
+    } else {
+        ("", location)
+    };
+    if !host.is_empty() && host != api_host {
+        return None;
+    }
+    let path = path.split(['?', '#']).next().unwrap_or("");
+    let parts: Vec<&str> = path.trim_start_matches('/').split('/').collect();
+    for i in 0..3 {
+        if i + 2 >= parts.len() {
+            break;
+        }
+        if parts[i] == "repos" {
+            let name = format!("{}/{}", parts[i + 1], parts[i + 2]);
+            if valid_repo(&name) {
+                return Some(name);
+            }
+            break;
+        }
+    }
+    None
+}
+
+fn parse_item_str(o: &Map<String, Value>, key: &str) -> Option<String> {
+    match o.get(key) {
+        None | Some(Value::Null) => Some(String::new()),
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+fn parse_obj<'a>(o: &'a Map<String, Value>, key: &str) -> Option<Option<&'a Map<String, Value>>> {
+    match o.get(key) {
+        None | Some(Value::Null) => Some(None),
+        Some(Value::Object(m)) => Some(Some(m)),
+        _ => None,
+    }
+}
+
+fn parse_item(p: &Value) -> Option<PullItem> {
+    let o = p.as_object()?;
+    let number = match o.get("number") {
+        None | Some(Value::Null) => 0,
+        Some(Value::Number(n)) => n.as_u64().or_else(|| n.as_i64().map(|_| 0))?,
+        _ => return None,
+    };
+    let draft = match o.get("draft") {
+        None | Some(Value::Null) => false,
+        Some(Value::Bool(b)) => *b,
+        _ => return None,
+    };
+    let user = parse_obj(o, "user")?
+        .map(|u| parse_item_str(u, "login"))
+        .unwrap_or_else(|| Some(String::new()))?;
+    let mut labels = Vec::new();
+    match o.get("labels") {
+        None | Some(Value::Null) => {}
+        Some(Value::Array(a)) => {
+            for l in a {
+                let lo = l.as_object()?;
+                labels.push(parse_item_str(lo, "name")?);
+            }
+        }
+        _ => return None,
+    }
+    let (head_sha, head_ref) = match parse_obj(o, "head")? {
+        Some(h) => (parse_item_str(h, "sha")?, parse_item_str(h, "ref")?),
+        None => (String::new(), String::new()),
+    };
+    let (base_sha, base_ref) = match parse_obj(o, "base")? {
+        Some(b) => (parse_item_str(b, "sha")?, parse_item_str(b, "ref")?),
+        None => (String::new(), String::new()),
+    };
+    Some(PullItem {
+        number,
+        title: parse_item_str(o, "title")?,
+        user,
+        labels,
+        draft,
+        head_sha,
+        head_ref,
+        base_ref,
+        base_sha,
+    })
+}
+
+/// The list items of one page; anything that is not an array of objects with a number and a head SHA is malformed.
+pub fn parse_pull_items(body: &[u8]) -> Result<Vec<PullItem>, WatchError> {
+    let bad = || malformed("list page is not a JSON array of pull requests");
+    let v: Value = serde_json::from_slice(body).map_err(|_| bad())?;
+    let arr = v.as_array().ok_or_else(bad)?;
+    let mut items = Vec::with_capacity(arr.len());
+    for p in arr {
+        let it = parse_item(p).ok_or_else(bad)?;
+        if it.number < 1
+            || !valid_sha(&it.head_sha)
+            || (!it.base_sha.is_empty() && !valid_sha(&it.base_sha))
+        {
+            return Err(malformed("list item without a valid number or head SHA"));
+        }
+        items.push(it);
+    }
+    Ok(items)
+}
+
+/// The pages up to the last non-empty one; a trailing empty page is only the stored result of a probe past a full
+/// last page.
+fn content_pages(pages: &[PullPage]) -> usize {
+    let mut n = pages.len();
+    while n > 0 && pages[n - 1].items.is_empty() {
+        n -= 1;
+    }
+    n
 }
 
 impl WatchHttp {
     /// A reader for the API at `base` (no trailing slash; `https://api.github.com`, a GitHub Enterprise URL, or a test
     /// server). `api_host` is the host a refused redirect may name the repository on.
     pub fn new(token: String, base: String, api_host: String) -> WatchHttp {
-        let agent: ureq::Agent = ureq::Agent::config_builder().build().into();
+        let agent: ureq::Agent = ureq::Agent::config_builder()
+            .max_redirects(0)
+            .http_status_as_error(false)
+            .user_agent(concat!("stw/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .into();
         WatchHttp {
             agent,
             token,
@@ -736,21 +899,133 @@ impl WatchHttp {
         }
     }
 
-    /// The request counts since the last call; resets them.
+    /// A reader with the token and the API base of an existing client (`STW_GITHUB_API_URL` is honored by the client).
+    pub fn from_client(c: &Client) -> WatchHttp {
+        let base = c.api_base().to_string();
+        let host = base
+            .split_once("://")
+            .map_or(base.as_str(), |(_, r)| r)
+            .split('/')
+            .next()
+            .unwrap_or("")
+            .to_string();
+        WatchHttp::new(c.basic_auth().1, base, host)
+    }
+
+    /// The deadline of each following request: positive and at most 30 s; a longer value is refused, not capped.
+    pub fn set_request_timeout(&mut self, d: Duration) -> Result<(), String> {
+        if d.is_zero() || d > REQUEST_TIMEOUT {
+            return Err(format!(
+                "request timeout must be positive and at most {REQUEST_TIMEOUT:?}"
+            ));
+        }
+        self.timeout = d;
+        Ok(())
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, Inner> {
+        self.inner.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn count(&self, kind: Kind, not_modified: bool) {
+        let mut g = self.lock();
+        let c = g.calls.entry(kind).or_default();
+        c.requests += 1;
+        if not_modified {
+            c.not_modified += 1;
+        }
+    }
+
+    /// The request counts since the last call; resets them. Requests that cost rate limit are `requests -
+    /// not_modified`, except `RateLimit`, which is free.
     pub fn take_calls(&self) -> BTreeMap<Kind, CallCount> {
-        std::mem::take(&mut self.inner.lock().unwrap().calls)
+        std::mem::take(&mut self.lock().calls)
     }
 
     /// The most recent rate-limit state seen in any response.
     pub fn last_rate_limit(&self) -> RateInfo {
-        self.inner.lock().unwrap().last
+        self.lock().last
     }
 
-    /// Remember that list pages of `repo` exceeded the body limit at 25.
+    /// Remember that list pages of `repo` exceeded the body limit at 25 (the halved size lives in memory only).
     pub fn mark_halved(&self, repo: &str) {
-        self.inner.lock().unwrap().halved.insert(repo.to_string());
+        self.lock().halved.insert(repo.to_string());
     }
 
+    fn is_halved(&self, repo: &str) -> bool {
+        self.lock().halved.contains(repo)
+    }
+
+    fn request_failure(&self, e: &ureq::Error) -> WatchError {
+        if matches!(e, ureq::Error::Timeout(_)) {
+            WatchError::new(Code::Network, "request canceled or exceeded its deadline")
+        } else {
+            WatchError::new(Code::Network, "HTTP read failed")
+        }
+    }
+
+    fn status_failure(
+        &self,
+        resp: &mut ureq::http::Response<ureq::Body>,
+        rate: RateInfo,
+    ) -> WatchError {
+        let status = resp.status().as_u16();
+        if status == 301 || status == 308 {
+            let mut e = WatchError::new(
+                Code::RepoMoved,
+                "repository moved; update the repository list (redirect not followed)",
+            );
+            e.status = status;
+            if let Some(name) = moved_name(header(resp.headers(), "location"), &self.api_host) {
+                e.message = format!(
+                    "repository moved to {name}; update the repository list (redirect not followed)"
+                );
+                e.new_name = name;
+            }
+            return e;
+        }
+        let mut e = match status {
+            401 => WatchError::new(Code::Unauthorized, "authentication was refused"),
+            403 | 429 => {
+                if status == 429 || self.rate_limit_evidence(resp, &rate) {
+                    let mut e = WatchError::new(Code::RateLimited, "rate limit reached");
+                    e.retry_after =
+                        parse_retry_after(header(resp.headers(), "retry-after")).unwrap_or(0);
+                    e
+                } else {
+                    WatchError::new(Code::Forbidden, "access was refused")
+                }
+            }
+            404 => WatchError::new(Code::Forbidden, "resource not found or not accessible"),
+            s if s >= 500 => WatchError::new(Code::Http5xx, "server error"),
+            // any other redirect never reaches the caller as an answer: no status, as with the Go client
+            300..=399 => return malformed("redirects are not followed"),
+            _ => malformed("unexpected HTTP status"),
+        };
+        e.status = status;
+        e.rate = rate;
+        e
+    }
+
+    /// A 403 is a rate limit when the primary remaining is exhausted, a Retry-After header came (secondary limit), or
+    /// the documented message is in the first 4096 bytes of the body.
+    fn rate_limit_evidence(
+        &self,
+        resp: &mut ureq::http::Response<ureq::Body>,
+        rate: &RateInfo,
+    ) -> bool {
+        let h = resp.headers();
+        if (rate.known && rate.remaining == 0)
+            || header(h, "x-ratelimit-remaining") == "0"
+            || !header(h, "retry-after").is_empty()
+        {
+            return true;
+        }
+        crate::github::mentions_rate_limit(&crate::github::error_body_head(resp))
+    }
+
+    /// The one conditional GET. `endpoint` is the escaped path and query without the API prefix; the allowlist checks
+    /// it before any credential leaves the process.
     fn fetch(
         &self,
         kind: Kind,
@@ -758,15 +1033,89 @@ impl WatchHttp {
         etag: &str,
         list: bool,
     ) -> Result<WatchResponse, WatchError> {
-        let _ = (kind, endpoint, etag, list);
-        let _ = (
-            &self.agent,
-            &self.token,
-            &self.api_host,
-            self.timeout,
-            &self.base,
-        );
-        Err(WatchError::new(Code::Network, "stub"))
+        if !valid_etag(etag) {
+            return Err(malformed("invalid ETag"));
+        }
+        if !read_endpoint_allowed(endpoint) {
+            return Err(malformed("endpoint is not an allowed watch read"));
+        }
+        let url = format!("{}/{endpoint}", self.base);
+        let mut req = self
+            .agent
+            .get(&url)
+            .config()
+            .timeout_global(Some(self.timeout))
+            .build()
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28");
+        if !etag.is_empty() {
+            req = req.header("If-None-Match", etag);
+        }
+        let mut resp = match req.call() {
+            Ok(r) => r,
+            Err(e) => {
+                self.count(kind, false);
+                return Err(self.request_failure(&e));
+            }
+        };
+        let rate = rate_of_headers(resp.headers());
+        if rate.known {
+            self.lock().last = rate;
+        }
+        let status = resp.status().as_u16();
+        let link = header(resp.headers(), "link").to_string();
+        if status == 304 {
+            self.count(kind, true);
+            if etag.is_empty() {
+                return Err(malformed("unsolicited 304 response"));
+            }
+            return Ok(WatchResponse {
+                status: 304,
+                not_modified: true,
+                etag: etag.to_string(),
+                link,
+                body: Vec::new(),
+                rate,
+            });
+        }
+        self.count(kind, false);
+        if status != 200 {
+            return Err(self.status_failure(&mut resp, rate));
+        }
+        let declared = header(resp.headers(), "content-length").parse::<u64>().ok();
+        if declared.is_some_and(|n| n > MAX_BODY as u64) {
+            return Err(oversize(list));
+        }
+        let mut body = Vec::new();
+        let read = resp
+            .body_mut()
+            .as_reader()
+            .take(MAX_BODY as u64 + 1)
+            .read_to_end(&mut body);
+        if let Err(e) = read {
+            return Err(if e.kind() == std::io::ErrorKind::TimedOut {
+                WatchError::new(Code::Network, "request canceled or exceeded its deadline")
+            } else {
+                WatchError::new(Code::Network, "HTTP read failed")
+            });
+        }
+        if body.len() > MAX_BODY {
+            return Err(oversize(list));
+        }
+        let etag_out = header(resp.headers(), "etag");
+        Ok(WatchResponse {
+            status: 200,
+            not_modified: false,
+            etag: if valid_etag(etag_out) {
+                etag_out.to_string()
+            } else {
+                String::new()
+            },
+            link,
+            body,
+            rate,
+        })
     }
 
     fn repo_path(repo: &str) -> Result<String, WatchError> {
@@ -875,7 +1224,7 @@ impl WatchHttp {
     }
 
     /// `actions/runs?head_sha=SHA` page 1 to 10: the fallback for a token that cannot read check runs.
-    pub fn actions_runs(
+    pub fn actions_runs_page(
         &self,
         repo: &str,
         sha: &str,
@@ -890,19 +1239,146 @@ impl WatchHttp {
         )
     }
 
-    /// `rate_limit` (stub).
+    /// `rate_limit` (free of rate limit): the core resource.
     pub fn rate_limit(&self) -> Result<RateInfo, WatchError> {
-        self.fetch(Kind::RateLimit, "rate_limit", "", false)?;
-        Ok(RateInfo::default())
+        let res = self.fetch(Kind::RateLimit, "rate_limit", "", false)?;
+        let bad = || malformed("rate_limit response is not usable");
+        let v: Value = serde_json::from_slice(&res.body).map_err(|_| bad())?;
+        let core = &v["resources"]["core"];
+        let (Some(limit), Some(remaining), Some(reset)) = (
+            core["limit"].as_i64(),
+            core["remaining"].as_i64(),
+            core["reset"].as_i64(),
+        ) else {
+            return Err(bad());
+        };
+        if limit <= 0 || remaining < 0 || reset <= 0 {
+            return Err(bad());
+        }
+        let info = RateInfo {
+            known: true,
+            limit: limit as u64,
+            remaining: remaining as u64,
+            reset,
+        };
+        self.lock().last = info;
+        Ok(info)
     }
 
-    /// Lists the open pull requests of `repo` (stub).
+    /// Lists the open pull requests of `repo` with conditional requests. It follows the Link `rel="next"` header (the
+    /// next page must be exactly the current one plus one), halves the page size to 12 on a body-limit error and
+    /// restarts at page 1, and stops with `TooManyPrs` above `max_open` (1 to 2000) pull requests. A refused 301 is
+    /// `RepoMoved`. Nothing is retried except the halving.
     pub fn list_open_pulls(
         &self,
-        _repo: &str,
-        _prior: &PullListState,
-        _max_open: usize,
+        repo: &str,
+        prior: &PullListState,
+        max_open: usize,
     ) -> Result<PullListResult, WatchError> {
-        Err(WatchError::new(Code::Network, "stub"))
+        if !(1..=MAX_OPEN_PRS).contains(&max_open) {
+            return Err(malformed("max_open_prs is outside 1..2000"));
+        }
+        let mut per_page = if self.is_halved(repo) { 12 } else { 25 };
+        loop {
+            match self.list_at(repo, per_page, prior, max_open) {
+                Err(e) if e.code == Code::PageTooLarge && per_page == 25 => {
+                    self.mark_halved(repo);
+                    // restart at page 1: page numbers of different sizes are never mixed
+                    per_page = 12;
+                }
+                r => return r,
+            }
+        }
+    }
+
+    fn list_at(
+        &self,
+        repo: &str,
+        per_page: u32,
+        prior: &PullListState,
+        max_open: usize,
+    ) -> Result<PullListResult, WatchError> {
+        let usable = prior.per_page == per_page;
+        let pp = per_page as usize;
+        let limit = list_page_limit(per_page);
+        let max_pages = max_open.div_ceil(pp).min(limit);
+        let mut out = PullListResult {
+            state: PullListState {
+                per_page,
+                pages: Vec::new(),
+            },
+            items: Vec::new(),
+            unchanged: true,
+        };
+        let too_many = || {
+            WatchError::new(
+                Code::TooManyPrs,
+                "more open pull requests than max_open_prs",
+            )
+        };
+        let mut page = 1usize;
+        loop {
+            if page > limit {
+                return Err(too_many());
+            }
+            let stored =
+                if usable && page <= prior.pages.len() && !prior.pages[page - 1].etag.is_empty() {
+                    Some(&prior.pages[page - 1])
+                } else {
+                    None
+                };
+            let etag = stored.map_or("", |s| s.etag.as_str());
+            let res = self.pull_list_page(repo, per_page, page as u64, etag)?;
+            let entry = if res.not_modified {
+                let s = stored.ok_or_else(|| malformed("304 for a page without stored data"))?;
+                PullPage {
+                    etag: res.etag.clone(),
+                    link: s.link.clone(),
+                    items: s.items.clone(),
+                }
+            } else {
+                let items = parse_pull_items(&res.body)?;
+                if !items.is_empty() || page <= prior.pages.len() || !usable {
+                    out.unchanged = false;
+                }
+                PullPage {
+                    etag: res.etag.clone(),
+                    link: res.link.clone(),
+                    items,
+                }
+            };
+            let page_len = entry.items.len();
+            let link = entry.link.clone();
+            out.items.extend(entry.items.iter().cloned());
+            out.state.pages.push(entry);
+            if out.items.len() > max_open {
+                return Err(too_many());
+            }
+            let next = next_page_from_link(&link);
+            if !link.is_empty() && next.is_none() && has_next_rel(&link) {
+                return Err(malformed("unusable Link header"));
+            }
+            let Some(next) = next else {
+                // A 304 reuses the stored Link, so an exactly full last page may hide an older PR that was
+                // reopened behind it: probe the next page once (conditional, allowlisted).
+                if res.not_modified && page_len == pp && page < limit {
+                    page += 1;
+                    continue;
+                }
+                if content_pages(&prior.pages) != content_pages(&out.state.pages)
+                    || prior.per_page != per_page
+                {
+                    out.unchanged = false;
+                }
+                return Ok(out);
+            };
+            if next != page as u64 + 1 {
+                return Err(malformed("Link next is not the following page"));
+            }
+            if page >= max_pages {
+                return Err(too_many());
+            }
+            page += 1;
+        }
     }
 }
