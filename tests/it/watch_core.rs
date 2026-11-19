@@ -288,3 +288,107 @@ proptest! {
         }
     }
 }
+
+use serde_json::json;
+use stw::watch::event::Event;
+
+fn null_lists_to_empty(v: &mut Value) {
+    match v {
+        Value::Object(m) => {
+            for (k, x) in m.iter_mut() {
+                if x.is_null()
+                    && ["added", "removed", "skipped", "failing", "pending"].contains(&k.as_str())
+                {
+                    *x = json!([]);
+                } else {
+                    null_lists_to_empty(x);
+                }
+            }
+        }
+        Value::Array(a) => a.iter_mut().for_each(null_lists_to_empty),
+        _ => {}
+    }
+}
+
+#[test]
+fn every_kind_encodes_to_the_keys_of_the_contract_in_the_order_of_the_contract() {
+    let mut seen = std::collections::BTreeSet::new();
+    for c in cases("event-json-shapes") {
+        if c["input"]["op"] != "encode" {
+            continue;
+        }
+        let mut input = c["input"]["event"].clone();
+        null_lists_to_empty(&mut input);
+        let ev =
+            Event::from_line(&input.to_string()).unwrap_or_else(|e| panic!("{}: {e}", c["name"]));
+        seen.insert(ev.kind());
+        let line = ev.to_line();
+        assert!(!line.contains('\n'));
+        let got: Value = serde_json::from_str(&line).unwrap();
+        let mut want: Value =
+            serde_json::from_str(c["expected"]["line"].as_str().unwrap()).unwrap();
+        null_lists_to_empty(&mut want);
+        assert_eq!(got, want, "{}", c["name"]);
+        // the order of the keys is the order of the contract (Go writes the same)
+        let keys = |v: &Value| v.as_object().unwrap().keys().cloned().collect::<Vec<_>>();
+        assert_eq!(keys(&got), keys(&want), "{}", c["name"]);
+        assert_eq!(
+            keys(&got["details"]),
+            keys(&want["details"]),
+            "{}",
+            c["name"]
+        );
+        let mut sorted = keys(&got["details"]);
+        sorted.sort();
+        let expected_keys: Vec<String> = c["expected"]["detail_keys"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|k| k.as_str().unwrap().to_string())
+            .collect();
+        assert_eq!(sorted, expected_keys, "{}", c["name"]);
+        assert_eq!(
+            Event::from_line(&line).unwrap(),
+            ev,
+            "round trip of {}",
+            c["name"]
+        );
+    }
+    assert_eq!(seen.len(), 15);
+}
+
+#[test]
+fn a_line_is_decoded_strictly() {
+    for c in cases("event-json-shapes") {
+        if c["input"]["op"] != "decode" {
+            continue;
+        }
+        let got = Event::from_line(c["input"]["line"].as_str().unwrap()).is_ok();
+        assert_eq!(
+            got,
+            c["expected"]["accepted"].as_bool().unwrap(),
+            "{}",
+            c["name"]
+        );
+    }
+    let ok = |details: &str| {
+        format!(
+            r#"{{"schema_version":1,"seq":1,"id":"x","time":"t","repo":null,"pr":null,"kind":"closed","details":{details}}}"#
+        )
+    };
+    assert!(Event::from_line(&ok(r#"{"head":"a","base":"b"}"#)).is_ok());
+    // lists are never null, numbers are non-negative integers, a key occurs once
+    let green = r#"{"schema_version":1,"seq":1,"id":"x","time":"t","repo":"o/r","pr":1,"kind":"checks-red","details":{"failing":null}}"#;
+    assert!(Event::from_line(green).is_err());
+    assert!(Event::from_line(&ok(r#"{}"#).replace(r#""pr":null"#, r#""pr":-1"#)).is_err());
+    assert!(Event::from_line(&ok(r#"{}"#).replace(r#""pr":null"#, r#""pr":1.5"#)).is_err());
+    assert!(Event::from_line(&ok(r#"{"head":"a","head":"b"}"#)).is_err());
+    assert!(Event::from_line(&ok(r#"{}"#).replace(r#""seq":1,"#, r#""seq":1,"seq":2,"#)).is_err());
+    assert!(Event::from_line(&ok(r#"{}"#).replace(r#""kind":"closed","#, "")).is_err());
+    assert!(Event::from_line("").is_err());
+    assert!(Event::from_line("[]").is_err());
+    assert!(
+        Event::from_line(&format!("{} ", ok("{}"))).is_ok(),
+        "trailing white space is not data"
+    );
+}
