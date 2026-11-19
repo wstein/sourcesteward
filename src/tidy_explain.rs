@@ -5,7 +5,7 @@
 //! The texts of commits that the reports carry (subjects, paths, lines) are masked where they are read
 //! (`tidy_similarity::mask_bytes`); only what the plan holds unmasked (the upstream name) is escaped here.
 use crate::github::reads::escape_untrusted;
-use crate::tidy::{BranchPlan, RebasePlan, SimilarityPlan};
+use crate::tidy::{BranchPlan, RebasePlan, SimilarityPlan, SquashPlan};
 use crate::tidy_rebase::{
     LandedKind, MapEntry, RebaseReport, Remaining, Strength, RB_CONTENT_HIGH,
 };
@@ -54,7 +54,106 @@ pub fn lines(b: &BranchPlan, base: &str) -> Vec<String> {
         out.extend(mapping(&r.report, base));
         out.extend(pull_request(r, base));
     }
+    if let Some(sq) = &b.squash {
+        out.extend(squash(sq, base));
+    }
     out
+}
+
+/// The squash evidence (layer 1): the merged pull request and the commit of the base that looks like the squash.
+fn squash(sq: &SquashPlan, base: &str) -> Vec<String> {
+    let (p, e) = (&sq.pr, &sq.subject);
+    let mut out = Vec::new();
+    if let Some(reason) = p.not_read {
+        out.push(format!(
+            "squash: pull request not read ({})",
+            reason.as_str()
+        ));
+    } else {
+        let mut line = format!("squash: pull request #{} merged", p.number.unwrap_or(0));
+        match (
+            p.merge_commit,
+            p.merge_commit_in_clone,
+            p.merge_commit_on_base,
+        ) {
+            (None, ..) => line += ", no merge commit",
+            (Some(m), Some(false), _) => {
+                line += &format!(", merge commit {} is not in the clone", sha7(m))
+            }
+            (Some(m), _, Some(true)) => {
+                line += &format!(
+                    ", merge commit {} is on {base} with {} parent(s)",
+                    sha7(m),
+                    p.merge_commit_parents.unwrap_or(0)
+                )
+            }
+            (Some(m), _, Some(false)) => match p.merge_commit_parents {
+                Some(1) => line += &format!(", merge commit {} is not on {base}", sha7(m)),
+                n => {
+                    line += &format!(
+                        ", merge commit {} has {} parent(s), not one",
+                        sha7(m),
+                        n.unwrap_or(0)
+                    )
+                }
+            },
+            (Some(m), _, None) => {
+                line += &format!(", merge commit {} could not be checked", sha7(m))
+            }
+        }
+        match (p.head_is_tip, p.head_in_branch, p.commits_after_head) {
+            (Some(true), ..) => line += "; the head is the tip of the branch",
+            (_, Some(true), Some(n)) => {
+                line += &format!("; the head is in the branch, {n} commit(s) after it")
+            }
+            (_, Some(false), _) => line += "; the head is not in the branch",
+            _ => line += "; the head could not be checked",
+        }
+        out.push(line);
+    }
+    match (e.candidate, e.basis) {
+        (Some(c), Some(basis)) => {
+            use crate::tidy_squash::SubjectBasis;
+            let how = match basis {
+                SubjectBasis::MergeCommit => "the merge commit of the pull request",
+                SubjectBasis::PrNumber => "the subject ends on the number of the pull request",
+                SubjectBasis::Subject => "same title as a commit of the branch",
+            };
+            let number = e
+                .pr_number_in_subject
+                .map(|n| format!(", number #{n} in the subject"))
+                .unwrap_or_default();
+            out.push(format!(
+                "squash: subject: candidate {} '{}' ({how}), {} candidate(s){number}, title equal to a branch commit: {}, {} of {} branch subject(s) listed in its body, Pull-request trailer: {}",
+                sha7(c),
+                cut(&e.candidate_subject, MAX_LINE),
+                e.candidates,
+                yes(e.subject_equal),
+                e.subjects_in_body,
+                e.subjects_total,
+                yes(e.pull_request_trailer)
+            ));
+        }
+        _ => out.push(format!(
+            "squash: subject: no commit on {base} with a title of one of the {} branch commit(s)",
+            e.subjects_total
+        )),
+    }
+    if e.window_cut {
+        out.push(format!(
+            "squash: the walk over {base} stopped after {} commit(s) (limit): older commits were not read",
+            e.window_commits
+        ));
+    }
+    out
+}
+
+fn yes(b: bool) -> &'static str {
+    if b {
+        "yes"
+    } else {
+        "no"
+    }
 }
 
 /// `(b7 -> m7 method value %)` for a mapped commit, with the hints that go with it.

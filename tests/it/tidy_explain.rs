@@ -12,8 +12,10 @@ fn under(text: &str, branch: &str) -> Vec<String> {
             break;
         }
     }
+    // the `squash:` lines of the squash stage are pinned in tidy_squash_plan.rs
     it.take_while(|l| l.starts_with("    "))
         .map(|l| l[4..].to_string())
+        .filter(|l| !l.starts_with("squash: "))
         .collect()
 }
 
@@ -796,7 +798,7 @@ fn the_sections_of_a_stage_that_is_off_are_left_out() {
     );
     assert_eq!(
         none.lines()
-            .filter(|l| l.starts_with("    "))
+            .filter(|l| l.starts_with("    ") && !l.starts_with("    squash: "))
             .collect::<Vec<_>>(),
         ["    why: keep: 3 commit(s) not in origin/main, no proof of landing found"]
     );

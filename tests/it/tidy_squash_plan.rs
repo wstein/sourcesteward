@@ -389,3 +389,140 @@ fn the_json_of_a_branch_the_stage_left_out_has_a_null_squash() {
     assert!(b["squash"].is_null());
     assert!(b.as_object().unwrap().contains_key("squash"));
 }
+
+// ---- --explain ----
+
+fn under(text: &str, branch: &str) -> Vec<String> {
+    let mut it = text.lines();
+    let marker = format!("  {branch}  [");
+    for l in it.by_ref() {
+        if l.contains(&marker) {
+            break;
+        }
+    }
+    it.take_while(|l| l.starts_with("    "))
+        .map(|l| l[4..].to_string())
+        .collect()
+}
+
+fn squash_lines(p: &stw::tidy::RepoPlan, branch: &str) -> Vec<String> {
+    let t = stw::tidy::render_explained(std::slice::from_ref(p), true);
+    under(&t, branch)
+        .into_iter()
+        .filter(|l| l.starts_with("squash: "))
+        .collect()
+}
+
+#[test]
+fn explain_tells_what_the_pull_request_and_the_subject_found() {
+    let (w, ids, m) = moved();
+    let p = plan_with(&w, Some(vec![pr(7, ids[1], m)]), &opts());
+    let s7 = &m.to_string()[..7];
+    assert_eq!(
+        squash_lines(&p, "feat"),
+        vec![
+            format!("squash: pull request #7 merged, merge commit {s7} is on origin/main with 1 parent(s); the head is in the branch, 1 commit(s) after it"),
+            format!("squash: subject: candidate {s7} 'step 0 (#7)' (the merge commit of the pull request), 1 candidate(s), number #7 in the subject, title equal to a branch commit: yes, 0 of 3 branch subject(s) listed in its body, Pull-request trailer: no"),
+        ]
+    );
+}
+
+#[test]
+fn explain_names_the_reason_the_pull_request_was_not_read_and_the_subject_basis() {
+    let mut w = world();
+    let list = cs(0, 2);
+    w.branch("feat", &list);
+    let hit = land_squash(
+        &mut w,
+        &list,
+        "step 1 (#9)",
+        "* step 0\n* step 1\n\nPull-request: https://github.com/test/fixture/pull/9",
+    );
+    let p = plan_off(&w, ApiReason::Offline);
+    let s7 = &hit.to_string()[..7];
+    assert_eq!(
+        squash_lines(&p, "feat"),
+        vec![
+            "squash: pull request not read (offline)".to_string(),
+            format!("squash: subject: candidate {s7} 'step 1 (#9)' (same title as a commit of the branch), 1 candidate(s), number #9 in the subject, title equal to a branch commit: yes, 2 of 2 branch subject(s) listed in its body, Pull-request trailer: no"),
+        ]
+    );
+}
+
+#[test]
+fn explain_says_so_where_there_is_no_candidate() {
+    let mut w = world();
+    w.branch("feat", &cs(0, 2));
+    w.foreign(1);
+    let p = plan_off(&w, ApiReason::NoToken);
+    assert_eq!(
+        squash_lines(&p, "feat"),
+        vec![
+            "squash: pull request not read (no-token)".to_string(),
+            "squash: subject: no commit on origin/main with a title of one of the 2 branch commit(s)"
+                .to_string(),
+        ]
+    );
+}
+
+#[test]
+fn explain_says_where_the_walk_over_the_base_was_cut() {
+    let w = world();
+    w.branch("feat", &cs(0, 1));
+    let mut p = plan_off(&w, ApiReason::Offline);
+    let sq = p.branches[0].squash.as_mut().expect("squash object");
+    sq.subject.window_cut = true;
+    sq.subject.window_commits = 50_000;
+    assert_eq!(
+        squash_lines(&p, "feat").last().unwrap(),
+        "squash: the walk over origin/main stopped after 50000 commit(s) (limit): older commits were not read"
+    );
+}
+
+#[test]
+fn explain_describes_a_merge_commit_that_is_no_squash_or_not_there() {
+    let (w, ids, _) = moved();
+    let side = w.commits_on(
+        None,
+        &[C {
+            subject: "side".into(),
+            ..c(8)
+        }],
+    )[0];
+    let p = plan_with(&w, Some(vec![pr(7, ids[1], side)]), &opts());
+    assert_eq!(
+        squash_lines(&p, "feat")[0],
+        format!(
+            "squash: pull request #7 merged, merge commit {} is not on origin/main; the head is in the branch, 1 commit(s) after it",
+            &side.to_string()[..7]
+        )
+    );
+    let (w, ids, _) = moved();
+    let mut gone = pr(7, ids[1], ids[1]);
+    gone.merge_commit_sha = "ab".repeat(20);
+    let p = plan_with(&w, Some(vec![gone]), &opts());
+    assert_eq!(
+        squash_lines(&p, "feat")[0],
+        "squash: pull request #7 merged, merge commit abababa is not in the clone; the head is in the branch, 1 commit(s) after it"
+    );
+}
+
+#[test]
+fn explain_masks_the_subject_of_the_candidate() {
+    let mut w = world();
+    let ids = w.branch("feat", &cs(0, 1));
+    let hit = w.fx.commit_at(
+        Some(w.main),
+        &[("x.txt", Some("x\n"))],
+        b"ti\x1b[31mtle \xe2\x80\xae (#7)",
+        Stamp::new("Other", "o@example.com", T0 + 30),
+        Stamp::new("Other", "o@example.com", T0 + 30),
+    );
+    w.set_main(hit);
+    let mut q = pr(7, ids[0], hit);
+    q.head_sha = "0".repeat(40);
+    let p = plan_with(&w, Some(vec![q]), &opts());
+    let l = squash_lines(&p, "feat").join("\n");
+    assert!(l.contains("candidate"), "{l}");
+    assert!(!l.contains('\u{1b}') && !l.contains('\u{202e}'), "{l:?}");
+}
