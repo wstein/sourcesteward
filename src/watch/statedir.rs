@@ -117,6 +117,6 @@ pub fn default_state_dir(id: &str, xdg_state_home: Option<&str>, home: Option<&s
 }
 
 /// The age below which a heartbeat counts as alive: `max(3 x interval, 180)` seconds.
-pub fn status_freshness_seconds(_interval_seconds: u64) -> u64 {
-    0
+pub fn status_freshness_seconds(interval_seconds: u64) -> u64 {
+    interval_seconds.saturating_mul(3).max(180)
 }
