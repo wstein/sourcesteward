@@ -36,6 +36,7 @@ stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
+stw absorb    [--plan] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
 stw ready-check NUMBER [--repo OWNER/NAME] [--human | --json]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH] [--human | --json]
@@ -52,6 +53,7 @@ stw lint pr-text FILE [--ready] [--human | --json]
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
+| `absorb` | new, no Go counterpart: the PLAN of folding the staged changes into the unpushed commits that own the changed lines (which commit takes each hunk, the `fixup!` commits, how many commits get new SHAs), see "`stw absorb plan`". Nothing is folded yet: `--apply` does not exist | nothing (no ref, no file, no object, no index refresh) |
 | `ready-check` | the seven read-only conditions for a pull request | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `lint review`, `lint pr-text` | new, no Go counterpart: the text of a review comment or of a PR text from a file against the same rules (and the patch-id of `BASE...HEAD` against a local repository), see "Text files: `lint review`, `lint pr-text`" | nothing |
@@ -1021,6 +1023,7 @@ version text that cannot be read, is refused (fail closed, `git_error: version`,
 | `lint review` with `--base` and `--head` | 2.30 | `git diff` and `git patch-id --stable`, the fail-closed value; without those two flags no Git call | `tests/it/lint_files.rs` |
 | `status --fetch`, `sync` (default), `sync --prune`, `--no-prune` | 2.30 | `fetch --prune --no-prune-tags` (2.17); 2.30 is the fail-closed value, formally 2.17 | 2.17.0 |
 | `sync --submodules`, `sync restore`, `add` | 2.36 | `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command); these ops read the index | 2.36.0 (config/core) |
+| `absorb` | 2.46 | `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch the missing objects of a partial clone; the one call is `git blame` | 2.46.0 (backends.md of the Go repository) |
 | `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
 
 The 2.36 bound is documentary: with Git 2.35.3 no test of `add`, `sync --submodules` or `sync restore` failed (48 failures,
@@ -1173,6 +1176,144 @@ JSON (schema 2): `schema_version`, `command: "prove"`, `verdict`, `proved`, `pr`
 `ends{old_head,new_head,old_base,new_base,base_source,old_base_source}` (`old_base_source`: `merge-base` or `flag`; `base_source`: `merge-base`, `flag` or `old-parent`; null when the revisions did not
 resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]}`), `reasons[]` (all reasons that apply),
 `hint` (the `--base` hint or null) and `line` (the `Carried-over:` line for `proved`, else null).
+
+## `stw absorb plan`
+
+**Purpose.** After review feedback or a late fix, the staged hunks belong back into the commits that introduced the lines.
+`stw absorb` computes the PLAN of that: for every staged hunk the commit that owns it (or why none does), the `fixup!`
+commits that would fold the hunks in (one per target commit, hunks named) and how many commits would get new SHAs. It folds
+nothing: no add, commit, rebase, ref, file, object or index refresh, no network, no hook, no editor. `--apply` (the
+fold, with this plan's checksum, an op log snapshot first and `stw oplog undo` as the way back) is a later step and does not
+exist: the flag is an unknown flag (exit 2). New behavior without a Go counterpart; the specification, the 64 counter-proofs
+of the Python spike and the comparison with git-absorb are in `spikes/stw/absorb/README.md` (continuation of Spec 018,
+"Fix up"); decisions D-20261119-07 to D-20261119-11.
+
+```
+stw absorb [--plan] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
+```
+
+| Flag | Meaning |
+| --- | --- |
+| (none), `--plan`, `--human` | the plan as text, one line per fact (the default); `--plan` is accepted so that a later `--apply --plan-sum SUM` reads the same way |
+| `--json` | the plan as one JSON document (not with `--human`) |
+| `--base REV` | the stack is `REV..HEAD`; REV must be an ancestor of HEAD; the stack limit does not apply |
+| `--max-stack N` | at most N commits in the stack, default 10 (the default of git-absorb; its `absorb.maxStack` is not read) |
+| `--ambiguous-newest` | a hunk whose lines come from several commits goes to the newest of them (the behavior of git-absorb) instead of being skipped as `ambiguous` |
+| `--root PATH`, `--repo NAME` | as for `prove` and `restack plan`: the repository is the one of the current directory unless `--repo` names another of the workspace |
+
+There is no `--offline`: nothing leaves the machine. Git only; `jj` and GitButler checkouts are refused.
+
+**The method** is that of git-absorb 0.9.0. The stack is the first-parent chain of HEAD that no remote-tracking branch
+contains (and, without `--base`, no other local branch), cut at the first merge commit, the first commit whose author is not the
+`user.name`/`user.email` of the Git configuration, or the limit. Staged changes only (the index against HEAD; the work tree is
+never read) and only modified text files: added, deleted, renamed (a delete plus an add, rename detection is off), type-changed,
+submodule, symbolic link, binary and mode-only changes are listed under `files_skipped`. Each hunk (a zero-context Myers diff
+without the indent heuristic) is moved before the changes of the stack commits, newest first; the target is the newest commit
+whose changes do not commute with it (`basis`: `overlaps-lines`, or `file-added` when that commit created the file). The removed
+lines are blamed in HEAD (`origins`: evidence, not the decision). A hunk that cannot be placed is `skipped` with a `reason`:
+`no-candidate` (commutes with every stack commit and its removed lines, if any, come from the stack; pure insertions land
+here), `ambiguous` (the removed lines come from two or more commits; the target that would be chosen stays named),
+`conflict` (the removed lines are not where the commuted hunk says in the target's blob), `outside-range` (the lines come from a commit beyond
+the stack), `published` (from a commit a remote-tracking branch contains), `foreign` (from a commit by another author;
+priority published, foreign, outside-range).
+
+**Output** (`schema_version` 1; keys are added, never renamed). Keys in this order, all always present: `schema_version`,
+`command` (`absorb`), `mode` (`plan`), `head`, `branch`, `index_digest` (SHA-256 of `git ls-files -s -z`), `base` (as given or
+null), `max_stack`, `stack` (`sha`, `subject`, newest first), `stack_end` (`root`, `merge`, `foreign`, `limit`, `base`,
+`published`, `branch`), `hunks` (`id` `h1`.., `path`, `old` and `new` `{start, count}` as in `@@ -a,b +c,d @@`, `assignment`
+`absorbed`|`skipped`, `target` `{sha, subject}`|null, `basis`, `reason`, `origins` `[{sha, subject, lines}]`), `files_skipped`
+(`path`, `reason`: `added`, `deleted`, `typechange`, `submodule`, `symlink`, `binary`, `mode-only`, `other`), `fixups` (`target`,
+`subject` `fixup! <subject>` or `fixup! <full SHA>` when the subject is not unique in the stack, `hunks`), `rewrite` (`count`,
+`commits`: the old SHAs of the target commits and all their descendants, oldest first; `ref`; `new_shas`: null, the successors
+are unknown before the fold), `summary`, `effects` (`writes: []`, `index_refresh`, `network`, `hooks`, `prompts`: all empty or
+false), `plan_sum`. `plan_sum` is the SHA-256 over the whole document (ref, index digest, hunks with assignment and reason,
+fixups, rewrite), the options and the paths unmasked, as sorted-key compact JSON with ASCII escapes (the encoding of the spike,
+`absorb::canonical_json`); a fold would recompute the plan and refuse on another checksum. The unmasked paths add nothing a
+changed path does not already change in the document (the index digest covers them); they are in the sum as specified. Paths,
+subjects and the branch name are masked in text and JSON: control, bidi and zero-width characters, line and paragraph
+separators and every byte of an invalid UTF-8 sequence become `?`. The text lists the same facts (`absorb plan (read-only): head
+.. on .. , stack n commit(s), ends at ..`, `h1 path -3,1 +3,2 -> sha7 subject (basis)` or `.. skipped: reason`, `file path
+skipped: reason`, `fixup! subject <- h1, h3`, `rewrite: n commit(s) get new SHAs (oldest sha7); nothing was written`) and names no
+command. The same state gives the same bytes (no time, no random, `LC_ALL=C` for blame).
+
+**Exit codes and error codes.** 0: a plan was produced, also when every hunk is skipped. 1: a refusal with a typed code (on stderr
+as `stw absorb: <code>: <message>`; with `--json` also the document `{"schema_version":1,"command":"absorb","error":{"code","message"}}`
+on stdout). 2: usage error (unknown flag, `--apply`, `--max-stack 0`, no repository).
+
+| Code | Meaning |
+| --- | --- |
+| `nothing-staged` | the index equals HEAD (git-absorb exits 0 here) |
+| `unmerged-index` | the index has unmerged paths |
+| `not-owned` | HEAD itself is by another author |
+| `published` | HEAD itself is contained in a remote-tracking branch |
+| `no-commits`, `detached-head`, `no-identity`, `bad-base` | no commit yet; HEAD on no branch; `user.name` or `user.email` unset; `--base` is no commit or no ancestor of HEAD |
+| `environment-override` | `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`, `GIT_COMMON_DIR` or `GIT_OBJECT_DIRECTORY` is set and not empty |
+| `unsupported-backend`, `ambiguous-backend`, `invalid-metadata` | a `.jj` directory (in the working directory or above it up to the repository root) or GitButler metadata (`.git/gitbutler`, `refs/gitbutler/*`, `refs/heads/gitbutler/workspace`); both; a `.jj` that is no directory. Detected first; no fallback to Git writes |
+| `partial-clone-unsupported` | the repository is a partial clone (`remote.*.promisor` or `extensions.partialclone`) and a read failed: objects are missing; nothing is fetched, ever |
+| `blame-failed` | `git blame` of the removed lines failed (no git, too old, an error) or the path is not UTF-8 text: no plan without that evidence, never an empty `origins` |
+| `git-failed` | any other unreadable object, ref or index |
+
+**Git boundary and safety.** Everything is read through gix; the one `git` call is `git blame --porcelain --no-textconv
+--ignore-revs-file= -L a,b <sha> -- <path>` (`Op::BlameLines`, `--literal-pathspecs`, `GIT_NO_LAZY_FETCH=1`, `GIT_OPTIONAL_LOCKS=0`,
+no hook, no pager, floor git 2.46), once per hunk with removed lines. gix itself runs `git config -lz --show-origin ...` once to
+find the system configuration of the installation, and the runner `git --version`; both read-only. A refusal at backend
+detection runs no blame. External diff, textconv, hooks, the repository's diff settings and the work tree do not reach the plan
+(tests). The repository tree and the index file are byte-equal before and after, also with a stale stat cache.
+
+**Limits, named.** Only the first-parent chain; a hunk is checked against the stack commits' blobs, not replayed (the fold is
+not built). The attributes `-diff`, `binary` and textconv are not consulted (a file git would show as "Binary files differ"
+because of an attribute is planned as text; NUL in the first 8000 bytes still means binary, as in git). Commit messages are
+read as stored (`i18n.commitEncoding` is not applied, no mailmap), the subject is the first paragraph on one line (`%s`). A
+remote-tracking ref that is no commit is ignored (`git log --remotes` would fail). A repository with `skip-worktree`, sparse or
+intent-to-add entries, linked work trees and bare repositories are not specially treated. A path that is not UTF-8 text has no
+blame: a hunk that removes lines there is `blame-failed`; pure insertions there are planned. The set of commits a remote-tracking
+ref contains is computed in full for every plan (cost grows with the history).
+
+**Deviations**, one by one. From git-absorb 0.9.0 (inherited from the spike): (1) a hunk whose removed lines come from several
+commits is skipped as `ambiguous`, `--ambiguous-newest` restores git-absorb (the worst silent error is half a hunk in one commit);
+(2) a modified symlink is skipped, git-absorb treats it as text; (3) nothing staged is exit 1 `nothing-staged`, git-absorb exits 0;
+(4) commits a remote-tracking branch contains are never targets (`published`), git-absorb does not read them; (5) `absorb.maxStack`
+and `--no-limit` are not read; (6) per hunk reasons instead of one warning; (7) one fixup per target commit in the plan, git-absorb
+one per hunk unless `oneFixupPerCommit`; (8) the diff is gix's Myers without indent heuristic, git-absorb uses libgit2: no
+disagreement in 237 + 28 + 1 comparisons, unproven in general. From the Python spike: (9) reads run in process; `git` is only
+`blame` (the spike ran plumbing: `rev-parse`, `log`, `diff-index`, `diff-tree`, `cat-file`, ...); (10) `--repo` is a workspace
+repository name and `--root` is the workspace, as in the other stw commands (the spike took a path); (11) JSON is one compact line
+(the spike printed `", "` and `": "` separators; the documents are equal after parsing, key order and `plan_sum` included);
+(12) `--human` is the text; (13) the search for `.jj` starts in the current directory (the spike: the `--repo` path); (14) a branch
+is excluded from the other local branches by its exact name (the spike passed it to `git log --exclude=` as a pattern; ref names
+cannot hold glob characters, so no difference is observable); (15) `base` in the document is masked like the other text (the
+checksum has it unmasked); (16) a path that is not UTF-8 text has no blame, see above (the spike handled it); (17) attributes
+(`-diff`) are not consulted, see above (the spike let git decide).
+
+**License.** The commutation test (`src/absorb_commute.rs`) and the stack and target rules (`src/absorb.rs`) are a translation of
+git-absorb 0.9.0 (BSD 3-Clause, Copyright (c) 2018, Stephen Jung) through the accepted spike. Both files carry
+`SPDX-License-Identifier: EUPL-1.2 AND BSD-3-Clause`; the license text is `LICENSE-git-absorb-BSD-3` in this directory and must stay
+with every redistribution, in source and in binary form (documentation or other materials). The test files `tests/it/absorb_*.rs`
+carry the same line where they take cases from the spike.
+
+**Cost.** Worst case of the spike README (a synthetic history of 2450 commits, a 3000-line file whose lines 0 to 999 every commit
+changed, a staged insertion at line 2000 with no candidate, `--base` the root: all 2449 commit diffs are read): the spike 10.0 to
+10.4 s (one `git diff-tree` per commit); this port, debug build (the one `cargo test` runs), `--base <root>`: 6.24 to 6.30 s,
+27 MB peak (3 runs, this host, aarch64); the plan document is equal to the spike's (checksum included). Release build (`opt-level 3`, `lto` switched off for the measurement, as the profile of `Cargo.toml` says thin): 0.49 to 0.62 s, 16 MB
+(3 runs, same host and history; the git-absorb figure of the spike README is 0.64 to 0.73 s). A stack of 10 (the default) reads ten commit diffs. The work is the Myers diff of each commit's version of the file; the
+set of commits of the remote-tracking branches is the other cost, in a repository of 1462 commits it does not show.
+
+**Tests and counter-proofs.** `tests/it/absorb_*.rs` (115 tests: units, the 91 cases of the spike as CLI tests on throwaway
+repositories, the read-only proofs), `tests/it/sha256.rs` (4), `tests/it/git_runner_blame.rs` (5); each test commit was red against the stub
+before the implementation followed. The oracle `tests/it/absorb_oracle.rs` compares the plan with the output of the spike on 27
+named scenarios and 60 pseudo-random repositories, in the default mode, with `--ambiguous-newest` and with `--max-stack 3`
+(237 documents equal, key order and `plan_sum` included; skipped, with a message, when `python3` or the spike is missing);
+a second comparison on 14 commits of a clone of this workspace (28 staged changes, the Rust plan against the spike): 28 equal.
+git-absorb itself is not installed on this host; the comparison with it is the one in `spikes/stw/absorb/README.md` (162 of 163).
+Mutations `AB1` to `AB99` in `tests/mutation/mutate.sh`: 99 of 99 killed at their named test (the first run left five alive: `AB34` was an equivalent mutant and is now the limit that hides the commit proving the limit was hit, `AB64` was equivalent because the git directory is the common directory in an ordinary repository and now removes both lookups, `AB70` and `AB71` named a test that does not reach the added side of a replacement, `AB80` named the oracle test, which cannot run in the mutation copy because the spike is not there, so the subject has its own test). The oracle test is therefore not part of any kill.
+
+**UNKNOWN (not checked).** git older than 2.47.3 (2.46 is a claim from the release notes); macOS; the `extensions.partialclone`
+key alone (no test; the promisor key is tested); a type change of a file inside a stack commit; the `conflict` reason from a real
+history (it needs a hunk the commutation test places and the blob check refuses: not constructed, tested as a verdict
+and as `lines_match` only; a mutation that always says consistent is not killed); an installed jj or GitButler (markers only);
+linked work trees, bare repositories, sparse checkouts; `GIT_DIR` and the other overrides in a caller's environment are
+refused, not served; a very large diff is read in full (no output bound); the comparison with
+git-absorb versions other than 0.9.0.
 
 ## Stack preview: `stw restack plan` (M1/M2: port plus new)
 
@@ -1549,7 +1690,7 @@ the heartbeat file. Not run: the observer-session, http-reader and run-loop scen
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1439 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1538 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
