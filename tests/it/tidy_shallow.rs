@@ -582,3 +582,47 @@ fn the_first_parent_index_of_the_base_ends_at_a_listed_commit() {
     assert_eq!(idx.len(), 1);
     assert_eq!(idx.stop(), Stop::Missing(a1));
 }
+
+#[test]
+fn a_listed_merge_commit_with_both_parents_there_is_a_boundary_and_no_delete() {
+    // `m1 <- m2` is main; `mrg` is `e` (the patch of `m2`) on a merge commit of `q1` and `q2` that `.git/shallow` lists
+    // although both parents are in the object database: git does not follow them, the plan must not either
+    let fx = Fx::new();
+    let m1 = mkc(&fx, None, &[("m1.txt", Some("m1\n"))], "m1", T0 - 8 * DAY);
+    let m2 = mkc(
+        &fx,
+        Some(m1),
+        &[("landed.txt", Some("L\n"))],
+        "feat: landed",
+        T0 - 7 * DAY,
+    );
+    let q1 = mkc(&fx, None, &[("q1.txt", Some("q1\n"))], "q1", T0 - 30 * DAY);
+    let q2 = mkc(&fx, None, &[("q2.txt", Some("q2\n"))], "q2", T0 - 29 * DAY);
+    let st = Stamp::new("T", "t@example.com", T0 - 12 * DAY);
+    let mg = fx.commit_at_parents(
+        vec![q1, q2],
+        Some(q1),
+        &[("q2.txt", Some("q2\n"))],
+        "merge",
+        st,
+        st,
+    );
+    let e = mkc(
+        &fx,
+        Some(mg),
+        &[("landed.txt", Some("L\n"))],
+        "feat: landed",
+        T0 - 2 * DAY,
+    );
+    fx.remote("main", m2);
+    fx.origin_head("main");
+    fx.branch("main", m2);
+    fx.set_head("main");
+    fx.checkout_head();
+    fx.branch("mrg", e);
+    make_shallow(&fx, &[m1, mg], &[]);
+    let p = plan_of(&fx);
+    let b = get(&p, "mrg");
+    assert_eq!((b.decision, b.proof), ("review", "shallow-history"));
+    assert_eq!(b.shallow.map(|g| g.unreadable_commits), Some(1));
+}
