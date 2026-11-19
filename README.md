@@ -1752,13 +1752,93 @@ the silent `pending`/`none` class changes (and so the exact checks epoch), `pend
 Not corpus-driven but written by hand: journal truncation and corruption, modes, work-tree refusal, atomic files, the lock (same process and a child process),
 the heartbeat file. Not run: the observer-session, http-reader and run-loop scenarios (W2, W4).
 
+## Watch reader (port, W2)
+
+`src/watch_reader/` is the reader and observer of `stw watch` (package W2 of the port; the Go reference is
+`internal/hosting/watch_*.go`, `internal/watchcmd/observer.go`, `pullsread.go` and the remote rules of `resolve.go`). It has no
+cycle (W3), no state directory or journal (W1) and no command (W4). Every request is a GET; there is no write path (a test scans
+the sources for write calls). The token comes from the client (`WatchHttp::from_client`), goes only into the `Authorization`
+header and never into an output, an error text, an observation or the store (`token_never_in_output`). No `git` or `gh`
+process, no new crate: the transport is `ureq` as in `src/github.rs`.
+
+- `http.rs`: the pure rules (endpoint allowlist, branch segment encoding and guard, Link header, `X-RateLimit-*`, Retry-After,
+  `assess_rate_limit`, `rate_limited_until`, `split_remote`, `parse_remote`, `valid_host`) and `WatchHttp`, the reader:
+  conditional GET (`If-None-Match`, a 304 is a typed result that returns the validator that was sent), `list_open_pulls`
+  (Link paging, 25 per page, halving to 12 on a body over 1 MiB and restart at page 1 with the halved size kept in memory only, a
+  probe past a full last page after a 304, bounds 80 / 167 pages and `max_open_prs` 1 to 2000), a deadline of at most 30 s per
+  request, a body limit of 1 MiB (also by `Content-Length`), no redirects. Time is never read: the caller passes Unix seconds.
+- `cond_store.rs`: `CondStore`, the validators the core keeps between cycles, and its serialized form (see below).
+- `obs.rs`: the types of the observation: `RepoObservation` (`default_branch`, `prs`, `gone`, the replacement `cond`), `PrObs`
+  (with `DetailObs` mergeable and state, and `ChecksObs` runs, statuses and `via`), `GoneObs` (merged, merge commit, `method_hint`
+  merge / rebase-or-squash / unknown), `Hints` and `KnownPr` (what the accepted state tells the observer), `ObserveError`
+  (code, run-wide, wait) and `ObserveFailure` (an error, or `Canceled`). `checks_class` gives `none|pending|green|red`; the shape of
+  a red head and the failing names belong to W3. The texts are raw GitHub text; they are escaped where an event is made.
+- `host.rs`: `HostObserver` over the trait `WatchRead` (`WatchHttp` implements it; the tests use a fake that mirrors the Go
+  one). It reads only what the state makes necessary: the list every cycle, `branches/BASE` once per base, `pulls/N` for a new
+  PR, a new head, a moved base, after a merge, when due and on the slow refresh, check runs and statuses for pending, unobserved
+  or changed PRs (a stored candidate is confirmed with a read without validators), and `pulls/N` once for a PR that left the
+  list. `after_cycle` reads `rate_limit` (free): below 10 percent of the limit the interval is to be doubled, below 50
+  remaining a hold is armed that the next `observe` reports once as a run-wide `rate-limited` (reset plus 5 s).
+  `read_pull_commits` reads a page of `pulls/N/commits` for the restack. For W3: `observe(repo, &Hints, Option<&CondStore>,
+  &AtomicBool)` returns the snapshot and the replacement store; the core keeps the store.
+
+Endpoints (all GET, checked against the allowlist before a credential leaves): `pulls?state=open&per_page=25|12&page=N`,
+`pulls/N`, `pulls/N/commits?per_page=100&page=1..3`, `branches/SEG`, `commits/SHA`, `commits/SHA/check-runs` and `.../statuses`
+(`per_page=100`, pages 1 to 10), `rate_limit`, and (new) `actions/runs?head_sha=SHA` (pages 1 to 10).
+
+Error classes (`Code`): `rate-limited` (429, or 403 with remaining 0, a Retry-After header or the text "rate limit" or "abuse
+detection" in the first 4096 bytes), `unauthorized` (401), `forbidden` (other 403, and 404 with its status kept), `http-5xx`,
+`malformed-response` (other statuses, bad bodies, an unsolicited 304, a redirect other than 301/308), `too-many-open-prs`,
+`page-too-large`, `repo-moved` (301/308, never followed; the new name only for a `/repos/OWNER/NAME/` path on the API host),
+`network` (connection failure, deadline). Messages are fixed text of at most 200 bytes.
+
+The store of validators (`schema_version` 1, a new Rust layout; the Go `Conditional` layout is not used): `{"schema_version": 1,
+"list": {"per_page": 0|12|25, "pages": [{"etag", "link", "items": [...]}]}, "tips": {BRANCH: {"etag", "sha"}},
+"validators": {"pulls/N" | "checks/SHA/runs" | "checks/SHA/statuses": ETAG}}` in a fixed key order with sorted maps. `from_json` is
+strict (unknown fields, other versions, bad ETags, SHAs, keys, sizes) and bounded (80 / 167 pages, 25 items per page, 20 000
+validators, 5 000 tips); a refused store means one unconditional round. `prune` drops what is no longer open.
+
+Tests: `tests/it/watch_reader.rs`. Replayed from the corpus: all 25 `http-reader` scenarios against a raw HTTP server on
+127.0.0.1 (port 0; every request is checked for GET, bearer token and `If-None-Match`), all 14 `observer-session` scenarios
+against a fake reader (the Go test fake; the `conditional` flag is, as in the export, the last validator sent under that
+call name), and 14 `vectors` files with 198 cases (remotes and hosts, URL rules, branch segments, allowlist, Link, rate limit,
+Retry-After, pull detail, default branch, commit list) plus the class field of 43 cases of `classify_checks`. Not replayed in
+W2, by design: the other 15 `vectors` files (backoff, freshness, ids, event JSON, restack candidates, human lines, config,
+flags, workspace; packages W1, W3, W4), 194 `watch-cycles` and 13 `run-loop` scenarios. Not mappable from the three kinds: 0.
+Own tests without a Go counterpart: the store (round trip, golden bytes, 25 refusals, bounds, prune), the Actions fallback,
+each rate-limit evidence alone, pages of check runs and statuses, a missing base branch, the request timeout, a refused
+connection, hostile Link headers, the page bound of an endless list, masked diagnostics. Mutations `WR1` to `WR89`.
+
+Deviations from Go (W2 part of the list of the plan, section 4):
+
+- D5: error texts are fixed Rust texts (no go-gh text), the code mapping is unchanged; `message` never carries a body or the token.
+- D6: the observation holds raw GitHub text; escaping (`escape_untrusted`) is applied where an event or a diagnostic is made. The
+  one diagnostic of this layer (a base name that is refused) is escaped here.
+- D9: rate-limit and backoff times are Unix seconds passed in; nothing reads the clock, nothing sleeps.
+- D10: the default branch is guessed as in Go (`main`, then `master`, from the bases of the open PRs); `base.repo.default_branch`
+  of the list items is not used.
+- D11 (new): a 403 on `check-runs` falls back to the Actions runs of the head (`actions/runs?head_sha=`, the newest run per
+  workflow and event, `status_ci::latest_runs`); the runs have no output text, `ChecksObs::via` is `ActionsRuns`, one line per
+  repository on `take_diagnostics` ("checks via actions-runs"). Both refused: `forbidden`. A 404 is not a fallback.
+- The corpus ties the observer to a Go `Reader` interface; here it is the trait `WatchRead` (same calls, same order).
+- A cancellation (`ObserveFailure::Canceled`) is noticed when a read fails, as in Go; there is no context, a request ends at its
+  deadline of 30 s at the latest. Signals belong to W4.
+- U+FFFD in a branch name is refused (it is what invalid UTF-8 becomes in the exported corpus); the other branch rules are Go's.
+- Dates: `merged_at` is validated with an own RFC 3339 check (`valid_rfc3339`: Go's `time.Parse` form with fraction and offset).
+- JSON types are checked strictly where Go's decoder is (a number where a string is expected is `malformed-response`); a value
+  of the right type but empty is kept as empty.
+- A tip SHA must be 40 lower-case hex (Go: 40 characters), so that a stored tip always passes the strict store.
+- A validator that is empty is not stored (Go stored the empty string); a read without validator is the same.
+- `max_open_prs` is a `usize`: the corpus values -1 and 0 are the refused value 0.
+- The call accounting (`take_calls`) is the reader's own, as in Go; `Client::stats` is not fed.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1538 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1627 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
