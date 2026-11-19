@@ -104,3 +104,16 @@ pub fn decide(
     }
     Ok(())
 }
+
+/// The JSON text that the plan checksum covers: object keys sorted, no white space, every non-ASCII character as `\uXXXX`
+/// (a character above the BMP as a surrogate pair). The encoding of the Python spike (`json.dumps(sort_keys=True,
+/// separators=(",", ":"))`), so that the two programs agree on the checksum.
+pub fn canonical_json(_value: &Value) -> String {
+    String::new()
+}
+
+/// SHA-256 over `{"options":..,"plan":..,"raw_paths":[..]}` in the encoding of `canonical_json`. `raw_paths` are the
+/// paths as bytes, unmasked; a byte of an invalid UTF-8 sequence is `\udcXX`.
+pub fn plan_sum(_options: &Value, _raw_paths: &[Vec<u8>], _plan: &Value) -> String {
+    String::new()
+}

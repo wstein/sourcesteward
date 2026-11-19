@@ -11,6 +11,7 @@ mod absorb_oracle;
 mod absorb_output;
 mod absorb_readonly;
 mod absorb_stack;
+mod absorb_sum;
 mod absorb_targets;
 mod absorb_units;
 mod add;
