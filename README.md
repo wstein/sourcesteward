@@ -256,9 +256,9 @@ Deviations from Go in these flags:
 18. `tidy plan --explain` (new; Go has `--explain` with a `next_command` per kept candidate, issue 388): Rust prints the evidence only and never a command for someone else to run
     (rule of this README, "Output for agents"), so there is no `next command`; the text is derived from the data of the plan (README "Explanation in `tidy plan --explain`"), the JSON is
     unchanged (it already holds the data), and the flag is not on `tidy apply`.
-19. Shallow clones in `tidy plan` (new; README "Shallow clones"): Go has no rule for them. A branch whose commits reach the boundary of a `--depth` clone, or that has no partner in the part of the base
-    that is there, is `review` with the proof `shallow-history` (never `delete`, never `unmerged`), JSON `shallow`. Limit: the boundary of a shallow clone is read from the object database
-    (a non-merge commit whose parent is missing); the behavior in a partial clone (`--filter`, no shallow file) is UNKNOWN.
+19. Shallow clones in `tidy plan` (new; README "Shallow clones"): Go has no rule for them. A branch whose commits reach the boundary of a shallow clone, or that has no partner in the part of the base
+    that is there, is `review` with the proof `shallow-history` (never `delete`, never `unmerged`), JSON `shallow`. Limit: the boundary is what `.git/shallow` lists (a merge commit too) or a commit with a parent that is
+    missing; the behavior in a partial clone (`--filter`, no shallow file) is UNKNOWN.
 
 ## agent-rules
 
@@ -749,13 +749,19 @@ several candidates is taken (the spec leaves the tie open). Not here: the conten
 
 ## Shallow clones
 
-In a clone made with `git clone --depth N` the commit at the boundary (listed in `.git/shallow`) has no parent in the object database, so its patch cannot be read.
-Before this rule `tidy plan` failed for the whole repository with `An object with id ... could not be found` as soon as a branch reached the boundary
-(`--depth 3` and `--depth 4` of a small repository; the ledger entry of 2026-11-18). Now the plan is made and nothing is concluded from a part of the history:
+In a clone made with `git clone --depth N` (or `--shallow-since`, `--shallow-exclude`) the commits listed in `.git/shallow` are the boundary: for git they have no parents, whether the
+parents are in the object database or not (another ref can hold them), and `git log` stops there. Before this rule `tidy plan` failed for the whole repository with
+`An object with id ... could not be found` as soon as a branch reached a boundary commit whose parent is missing (`--depth 3` and `--depth 4` of a small repository; the ledger entry of
+2026-11-18). Now the plan is made and nothing is concluded from a part of the history:
 
-- A non-merge commit of `base..tip` whose parent is missing is `unreadable` (`shallow.unreadable_commits`). The equal-patches walk (`unmatched_commits`) does not read it, and as long as
-  one exists the branch has no `equal-patches` proof; the similarity, rebase and squash judgment of that branch's commits does not run (`similarity` and `rebase` are null).
-- A commit of the base at the boundary is no partner. Where the walk over `tip..base` reached it while a commit of the branch still had no partner (`shallow.base_cut`), a partner may lie behind it
+- The commits of `base..tip` are those of `git rev-list tip ^base` in this clone (`repo::range_commits`): a listed commit has no parents on either side. The walk of gix hides everything
+  behind a listed commit on the `base` side where the objects are there, and so counts fewer commits than git; it is used only in a full clone. `unique_commits`, the upstream
+  counts, the walks of the rebase and squash stages and the first-parent index of the rebase stage follow the same view.
+- A commit of `base..tip` that is at the boundary (listed, a merge commit too, or with a parent that is missing) is `unreadable` (`shallow.unreadable_commits`): what is behind it is not
+  known and a non-merge one has no patch to read. The equal-patches walk (`unmatched_commits`) does not read it, and as long as one exists the branch has no `equal-patches` proof; the
+  similarity and rebase judgment of that branch's commits does not run (`similarity` and `rebase` are null). The squash stage is not changed by this rule: it runs where its own rule says
+  (it reads heads and subjects, no patch).
+- A commit of the base at the boundary is no partner. Where the walk over `tip..base` reached one while a commit of the branch still had no partner (`shallow.base_cut`), a partner may lie behind it
   (`shallow.without_partner` commits have none in the part that is there).
 - Where either holds and no other proof applies (the proof would be `unmerged`), the branch is `review` with the proof `shallow-history` and the detail names the cause and `git fetch --unshallow`.
   Never `delete`, never `keep` with `unmerged`. A proof that needs no history (`merged-ancestor`, a merged pull request with exactly this head, `open-pull-request`, a backup name) is unchanged;
@@ -1454,7 +1460,7 @@ cancellation of the HTTP client, the layout of the conditional-request store, an
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1357 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1379 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
