@@ -10,10 +10,7 @@
 //! (no renames) or `diff.renames=copies` (copies too), with `diff.renameLimit`, and with `-M<n>`; the
 //! patch ID here is the one of git's built-in defaults.
 //!
-//! Deviations from git (all in rare cases; named in the README):
-//! * equal scores in the final order are broken by destination and source order; git's qsort order is not
-//!   specified and differs between C libraries (two identical sources competing for two destinations of
-//!   equal similarity can be paired the other way round);
+//! Deviations from git (named in the README):
 //! * git's `diff.renames=copies`, `-C`, `-B` and `diff.renameLimit` are not supported (fixed defaults);
 //! * `.gitattributes` (`binary`, `-diff`, `diff=<driver>`) is not read, as for the whole patch ID.
 use std::collections::{BTreeMap, HashMap};
@@ -137,11 +134,32 @@ fn estimate(
     Ok(copied * MAX_SCORE / max_size)
 }
 
+#[derive(Clone, Copy)]
 struct Candidate {
     score: u64,
     same_name: bool,
     dst: usize,
     src: usize,
+}
+
+/// git's `score_compare` order of two slots: an empty slot is worse than any candidate.
+fn rank(c: &Option<Candidate>) -> Option<(u64, bool)> {
+    c.as_ref().map(|c| (c.score, c.same_name))
+}
+
+/// git's `record_if_better`: the new candidate takes the place of the worst slot (the first one of several
+/// equally bad slots) when it is strictly better than that slot; so of equal candidates the first four stay,
+/// each in the slot of the one it replaced, and that slot order decides ties in the final order.
+fn record_if_better(slots: &mut [Option<Candidate>; CANDIDATES_PER_DST], new: Candidate) {
+    let mut worst = 0;
+    for i in 1..CANDIDATES_PER_DST {
+        if rank(&slots[i]) < rank(&slots[worst]) {
+            worst = i;
+        }
+    }
+    if rank(&slots[worst]) < rank(&Some(new)) {
+        slots[worst] = Some(new);
+    }
 }
 
 /// Pairs the deletions and additions of `files` (sorted by path, no renames) the way `git diff` does and
@@ -232,23 +250,25 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
         let mut all: Vec<Candidate> = Vec::new();
         for &d in &dsts {
             let dst = files[d].new.unwrap();
-            let mut mine: Vec<Candidate> = Vec::new();
+            // the four slots of one destination, filled as git's `record_if_better` fills them
+            let mut slots: [Option<Candidate>; CANDIDATES_PER_DST] = Default::default();
             for &s in &srcs {
                 let score = estimate(&mut blobs, files[s].old.unwrap(), dst)?;
-                if score >= MINIMUM_SCORE {
-                    mine.push(Candidate {
+                record_if_better(
+                    &mut slots,
+                    Candidate {
                         score,
                         same_name: basename(&files[s].path) == basename(&files[d].path),
                         dst: d,
                         src: s,
-                    });
-                }
+                    },
+                );
             }
-            mine.sort_by_key(|c| std::cmp::Reverse((c.score, c.same_name)));
-            mine.truncate(CANDIDATES_PER_DST);
-            all.extend(mine);
+            all.extend(slots.into_iter().flatten());
         }
+        // git: STABLE_QSORT of the slots of all destinations, destination by destination, slot by slot
         all.sort_by_key(|c| std::cmp::Reverse((c.score, c.same_name)));
+        all.retain(|c| c.score >= MINIMUM_SCORE);
         for c in all {
             if renamed[c.dst].is_none() && !src_used[c.src] {
                 src_used[c.src] = true;
