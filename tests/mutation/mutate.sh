@@ -5014,6 +5014,15 @@ m SHW21 'the plain walk of gix is used in a shallow clone' src/repo/mod.rs \
 m SHW22 'the first-parent index goes on behind a listed commit' src/tidy_rebase.rs \
   'if let (true, Some(parent)) = (listed.contains(&id), next) {' 'if let (false, Some(parent)) = (listed.contains(&id), next) {' \
   tidy_shallow the_first_parent_index_of_the_base_ends_at_a_listed_commit
+m SHW23 'a listed merge commit is no boundary' src/repo/mod.rs \
+  '    if listed.contains(&id) {
+        return Ok(true);
+    }
+    let c = repo.find_commit(id)?;' '    let c = repo.find_commit(id)?;
+    if listed.contains(&id) && c.parent_ids().count() < 2 {
+        return Ok(true);
+    }' \
+  tidy_shallow a_listed_merge_commit_with_both_parents_there_is_a_boundary_and_no_delete
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
