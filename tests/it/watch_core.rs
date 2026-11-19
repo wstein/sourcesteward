@@ -575,7 +575,7 @@ use stw::watch::event::{
     BaseChanged, ChecksGreen, ChecksRed, Closed, HeadChanged, MergeableChanged, Merged,
     PendingTimeout, RestackNeeded,
 };
-use stw::watch::state::{Class, ClosedPr, Epochs, PrState, MAX_CLOSED_PRS};
+use stw::watch::state::{Class, ClosedPr, Epochs, PrState};
 
 fn state_with(events: &[Event]) -> State {
     let mut s = State::new();
@@ -686,15 +686,19 @@ fn a_close_remembers_the_larger_counters_and_keeps_at_most_five_thousand_records
         "the counters of the older record survive a close of a PR without a record"
     );
     let rs = s.repo.get_mut(REPO).unwrap();
-    for n in 2..(MAX_CLOSED_PRS as u64 + 10) {
+    for n in 2..5010u64 {
         rs.record_closed(ClosedPr {
             number: n,
             generation: 0,
             epochs: Epochs::default(),
         });
     }
-    assert_eq!(rs.closed.len(), MAX_CLOSED_PRS);
-    assert_eq!(rs.closed.last().unwrap().number, MAX_CLOSED_PRS as u64 + 9);
+    assert_eq!(
+        rs.closed.len(),
+        5000,
+        "the cap is written out here, not read from the constant"
+    );
+    assert_eq!(rs.closed.last().unwrap().number, 5009);
     assert!(rs.closed_record(1).is_none(), "the oldest is dropped");
 }
 
