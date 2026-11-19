@@ -4982,7 +4982,7 @@ m SHW12 'a commit that the shallow file lists is no boundary' src/repo/mod.rs \
   tidy_shallow a_commit_listed_in_the_shallow_file_is_a_boundary_although_its_parent_is_there
 m SHW13 'a commit with a missing parent is no boundary' src/repo/mod.rs \
   'let missing = c.parent_ids().any(|p| !repo.has_object(p.detach()));' 'let missing = false;' \
-  tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_only_where_it_is_listed
+  tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_too
 m SHW14 'the explained sentence names the wrong cause' src/tidy_explain.rs \
   'Some(g) if g.unreadable_commits > 0 => format!(' 'Some(g) if g.unreadable_commits == 0 => format!(' \
   tidy_shallow the_explained_text_says_which_part_of_the_history_is_missing

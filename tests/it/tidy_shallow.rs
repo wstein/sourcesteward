@@ -449,8 +449,7 @@ fn a_boundary_of_the_base_met_before_the_last_partner_is_no_cut() {
 }
 
 #[test]
-fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_only_where_it_is_listed(
-) {
+fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_too() {
     let fx = Fx::new();
     let gone = mkc(&fx, None, &[("z.txt", Some("z\n"))], "gone", T0 - 40 * DAY);
     let gone2 = mkc(&fx, None, &[("y.txt", Some("y\n"))], "gone2", T0 - 41 * DAY);
@@ -464,7 +463,9 @@ fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_on
     );
     let s = Stamp::new("T", "t@example.com", T0 - 5 * DAY);
     let merge = fx.commit_at_parents(vec![gone, gone2], Some(gone), &[], "merge", s, s);
-    make_shallow(&fx, &[edge, merge], &[gone, gone2]);
+    let gone3 = mkc(&fx, None, &[("x.txt", Some("x\n"))], "gone3", T0 - 42 * DAY);
+    let unlisted = fx.commit_at_parents(vec![gone3, gone], Some(gone3), &[], "unlisted", s, s);
+    make_shallow(&fx, &[edge, merge], &[gone, gone2, gone3]);
     let u = unmatched_of(&fx, base, edge);
     assert_eq!(u.unreadable, vec![edge]);
     assert_eq!(u.with_patch, 0);
@@ -475,6 +476,9 @@ fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_on
         (u.with_patch, u.commits.len(), u.unreadable),
         (0, 0, vec![merge])
     );
+    // a merge commit that is not listed but has a parent that is gone hides what is behind it as well
+    let u = unmatched_of(&fx, base, unlisted);
+    assert_eq!(u.unreadable, vec![unlisted]);
 }
 
 #[test]
@@ -492,6 +496,8 @@ fn a_commit_listed_in_the_shallow_file_is_a_boundary_although_its_parent_is_ther
     let p = plan_of(&fx);
     let b = get(&p, "cut");
     assert_eq!((b.decision, b.proof), ("review", "shallow-history"));
+    // `git log` stops at `p2`: `p1` is not a commit of the branch in this clone
+    assert_eq!(b.unique, 1);
     assert_eq!(b.shallow.map(|g| g.unreadable_commits), Some(1));
 }
 
@@ -518,4 +524,51 @@ fn a_gone_upstream_or_a_moved_pull_request_stays_what_it_was() {
         get(&p, "deep_gone").shallow.map(|g| g.unreadable_commits),
         Some(1)
     );
+}
+
+/// `b0` (a boundary, listed) has the parent `y`, which is in the object database; `t1` is on `y`; `a2 <- a1` is a chain.
+fn listed_parent_world() -> (Fx, ObjectId, ObjectId, ObjectId, ObjectId, ObjectId) {
+    let fx = Fx::new();
+    let y = mkc(&fx, None, &[("y.txt", Some("y\n"))], "y", T0 - 9 * DAY);
+    let b0 = mkc(
+        &fx,
+        Some(y),
+        &[("b0.txt", Some("b0\n"))],
+        "b0",
+        T0 - 8 * DAY,
+    );
+    let t1 = mkc(
+        &fx,
+        Some(y),
+        &[("t1.txt", Some("t1\n"))],
+        "t1",
+        T0 - 7 * DAY,
+    );
+    let a1 = mkc(&fx, None, &[("a1.txt", Some("a1\n"))], "a1", T0 - 6 * DAY);
+    let a2 = mkc(
+        &fx,
+        Some(a1),
+        &[("a2.txt", Some("a2\n"))],
+        "a2",
+        T0 - 5 * DAY,
+    );
+    make_shallow(&fx, &[b0, a2], &[]);
+    (fx, y, b0, t1, a1, a2)
+}
+
+#[test]
+fn the_range_is_the_one_git_sees_where_the_shallow_file_lists_a_commit_with_its_parent_there() {
+    let (fx, y, b0, t1, _, _) = listed_parent_world();
+    let repo = fx.repo();
+    // git: `b0` has no parents, so `y` is reachable from `t1` only and is not hidden by `b0`
+    let mut got = stw::repo::range_commits(&repo, t1, b0).unwrap();
+    got.sort();
+    let mut want = vec![t1, y];
+    want.sort();
+    assert_eq!(got, want);
+    // and `b0` is not reduced by what `t1` reaches
+    assert_eq!(stw::repo::range_commits(&repo, b0, t1).unwrap(), vec![b0]);
+    // nothing is listed in a full clone: the plain walk
+    std::fs::remove_file(fx.path.join(".git/shallow")).unwrap();
+    assert_eq!(stw::repo::range_commits(&repo, b0, t1).unwrap(), vec![b0]);
 }
