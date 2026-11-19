@@ -13,6 +13,7 @@ use std::fmt;
 
 pub mod apply;
 pub mod event;
+pub mod journal;
 pub mod state;
 pub mod statedir;
 

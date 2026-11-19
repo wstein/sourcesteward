@@ -1543,3 +1543,204 @@ fn state_json_is_written_atomically_and_read_back() {
         "a Go state file is not ours"
     );
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The journal: gapless seq from the lines, a truncated tail, corruption.
+use std::io::Write as _;
+
+use stw::watch::journal::{scan, Journal, JOURNAL_NAME, MAX_LINE_BYTES};
+
+fn ready_event(n: u64) -> Event {
+    let id =
+        stw::watch::event::event_id(Some("o/r"), Some(1), Kind::ReadyStateChanged, &key_ready(n));
+    Event::new(
+        id,
+        "2026-10-22T09:00:00Z".into(),
+        Some("o/r".into()),
+        Some(1),
+        Details::ReadyStateChanged(ReadyStateChanged {
+            from: "ready".into(),
+            to: "draft".into(),
+        }),
+    )
+}
+
+fn append_n(j: &mut Journal, n: u64) {
+    for i in 1..=n {
+        j.append(&ready_event(i)).unwrap();
+    }
+}
+
+fn raw(dir: &Path) -> Vec<u8> {
+    std::fs::read(dir.join(JOURNAL_NAME)).unwrap()
+}
+
+#[test]
+fn a_new_journal_is_empty_private_and_numbers_the_events_from_one() {
+    let t = tmp();
+    let mut j = Journal::open(t.path()).unwrap();
+    assert_eq!((j.tail(), j.junk_bytes()), (0, 0));
+    assert_eq!(mode(&t.path().join(JOURNAL_NAME)), 0o600);
+    let a = j.append(&ready_event(1)).unwrap();
+    let b = j.append(&ready_event(2)).unwrap();
+    assert_eq!((a.seq, b.seq, j.tail()), (1, 2, 2));
+    let lines = String::from_utf8(raw(t.path())).unwrap();
+    assert_eq!(lines.lines().count(), 2);
+    assert!(lines.ends_with('\n'));
+    assert_eq!(Event::from_line(lines.lines().next().unwrap()).unwrap(), a);
+    // the seq of the event handed in is ignored
+    let mut e = ready_event(3);
+    e.seq = 99;
+    assert_eq!(j.append(&e).unwrap().seq, 3);
+}
+
+#[test]
+fn the_next_seq_comes_from_the_last_line_after_a_reopen() {
+    let t = tmp();
+    append_n(&mut Journal::open(t.path()).unwrap(), 5);
+    let mut j = Journal::open(t.path()).unwrap();
+    assert_eq!(j.tail(), 5);
+    assert_eq!(j.append(&ready_event(6)).unwrap().seq, 6);
+    let after: Vec<u64> = j.after(3).unwrap().iter().map(|e| e.seq).collect();
+    assert_eq!(after, [4, 5, 6]);
+    assert!(j.after(6).unwrap().is_empty());
+    assert!(j.after(100).unwrap().is_empty());
+    assert_eq!(j.after(0).unwrap().len(), 6);
+}
+
+#[test]
+fn a_journal_larger_than_a_megabyte_keeps_its_tail() {
+    // the spike took the seq from an offset one megabyte before the end; the lines are the source here
+    let t = tmp();
+    let mut j = Journal::open(t.path()).unwrap();
+    let mut e = ready_event(1);
+    if let Details::ReadyStateChanged(d) = &mut e.details {
+        d.from = "x".repeat(2000);
+    }
+    for _ in 0..700 {
+        j.append(&e).unwrap();
+    }
+    assert!(raw(t.path()).len() > 1 << 20);
+    drop(j);
+    let mut j = Journal::open(t.path()).unwrap();
+    assert_eq!(j.tail(), 700);
+    assert_eq!(j.append(&e).unwrap().seq, 701);
+}
+
+#[test]
+fn a_truncated_last_line_is_reported_ignored_and_cut_off_by_the_next_append() {
+    let t = tmp();
+    append_n(&mut Journal::open(t.path()).unwrap(), 2);
+    let path = t.path().join(JOURNAL_NAME);
+    let good = std::fs::metadata(&path).unwrap().len();
+    for tail in [
+        &b"{\"schema_version\":1,\"seq\":3,\"id\":\"x"[..],
+        b"garbage without a newline",
+        b"\x00\x00\x00",
+        b"{",
+    ] {
+        let mut f = std::fs::OpenOptions::new()
+            .append(true)
+            .open(&path)
+            .unwrap();
+        f.write_all(tail).unwrap();
+        drop(f);
+        let mut j = Journal::open(t.path()).unwrap();
+        assert_eq!(
+            (j.tail(), j.junk_bytes()),
+            (2, tail.len() as u64),
+            "{tail:?}"
+        );
+        assert_eq!(j.after(0).unwrap().len(), 2);
+        assert_eq!(j.append(&ready_event(3)).unwrap().seq, 3);
+        assert_eq!(j.junk_bytes(), 0);
+        // every line of the file validates again and nothing of the junk is left
+        let mut n = 0;
+        scan(&path, &mut |_| n += 1).unwrap();
+        assert_eq!(n, 3);
+        // restore two events for the next round
+        std::fs::OpenOptions::new()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_len(good)
+            .unwrap();
+    }
+}
+
+#[test]
+fn a_complete_line_that_is_not_a_valid_event_is_corruption() {
+    let t = tmp();
+    append_n(&mut Journal::open(t.path()).unwrap(), 2);
+    let path = t.path().join(JOURNAL_NAME);
+    let original = std::fs::read_to_string(&path).unwrap();
+    let lines: Vec<&str> = original.lines().collect();
+    for (what, content) in [
+        (
+            "an invalid line in the middle",
+            format!("{}\nnot json\n{}\n", lines[0], lines[1]),
+        ),
+        (
+            "an invalid last line with a newline",
+            format!("{}\n{}\nnot json\n", lines[0], lines[1]),
+        ),
+        (
+            "a gap in seq",
+            format!(
+                "{}\n{}\n",
+                lines[0],
+                lines[1].replace("\"seq\":2", "\"seq\":3")
+            ),
+        ),
+        ("a repeated seq", format!("{}\n{}\n", lines[0], lines[0])),
+        (
+            "a journal that does not start at 1",
+            format!("{}\n", lines[1]),
+        ),
+        (
+            "an unknown kind",
+            format!("{}\n", lines[0].replace("ready-state-changed", "nope")),
+        ),
+        ("a line that is not UTF-8", String::from("x")),
+    ] {
+        if what == "a line that is not UTF-8" {
+            std::fs::write(&path, [b'{', 0xff, b'\n']).unwrap();
+        } else {
+            std::fs::write(&path, content).unwrap();
+        }
+        let err = Journal::open(t.path())
+            .err()
+            .unwrap_or_else(|| panic!("{what} was accepted"));
+        assert!(matches!(err, WatchError::CorruptState(_)), "{what}: {err}");
+        assert!(scan(&path, &mut |_| {}).is_err(), "{what}");
+    }
+}
+
+#[test]
+fn a_line_longer_than_the_limit_is_corruption_not_a_huge_allocation() {
+    let t = tmp();
+    let path = t.path().join(JOURNAL_NAME);
+    let mut big = vec![b'a'; MAX_LINE_BYTES + 10];
+    // terminated or not: too long is too long
+    std::fs::write(&path, &big).unwrap();
+    assert!(matches!(
+        Journal::open(t.path()).err(),
+        Some(WatchError::CorruptState(_))
+    ));
+    big.push(b'\n');
+    std::fs::write(&path, &big).unwrap();
+    assert!(matches!(
+        Journal::open(t.path()).err(),
+        Some(WatchError::CorruptState(_))
+    ));
+}
+
+#[test]
+fn opening_tightens_the_mode_of_an_existing_journal() {
+    let t = tmp();
+    let path = t.path().join(JOURNAL_NAME);
+    std::fs::write(&path, "").unwrap();
+    std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+    Journal::open(t.path()).unwrap();
+    assert_eq!(mode(&path), 0o600);
+}
