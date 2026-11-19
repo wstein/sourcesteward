@@ -270,6 +270,11 @@ fn id_counter_reads_the_letter_with_one_to_eight_digits() {
     }
     // the repository part is never a counter, even when it looks like one
     assert_eq!(id_counter("h7#4:new-pr:g0", 'h'), None);
+    assert_eq!(
+        id_counter("h7:watch-error:x", 'h'),
+        None,
+        "the first part of an id without a repository"
+    );
     // digits only: no sign, no space
     assert_eq!(id_counter("o/r#1:head-changed:x:h+5", 'h'), None);
     assert_eq!(id_counter("o/r#1:head-changed:x:h-5", 'h'), None);
