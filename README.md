@@ -1463,6 +1463,7 @@ clock. Tests: `tests/it/watch_core.rs` (own tests and the replay of the corpus o
 New direct dependencies, both pinned exactly: `serde` `=1.0.229` (derive; the formats are written with it) and `serde_json` `=1.0.154`
 (was `1`; feature `raw_value` added, no new crate). SHA-256 is own code (`statedir::sha256`, FIPS 180-4 and NIST vectors, padding
 boundaries checked against GNU `sha256sum`): the gix feature would add `sha2` and change gix's object-format support. No `libc`, no process.
+Licenses: `serde` and `serde_json` are `MIT OR Apache-2.0`; both are in `Cargo.lock` already through gix and ureq.
 
 **The formats are the Rust formats of the port, not the Go ones** (D-20261119-05: a new baseline when switching). So a Go state
 directory is never opened by mistake: the directory id hashes the prefix `stw-watch-rs1` (Go: `stw-watch-v1`), and `state.json` carries
@@ -1490,14 +1491,21 @@ base}, `class` (`""`, `none`, `pending`, `green`, `red`), `class_candidate` (nul
 `timeout_fired`, `mergeable`, `mergeable_state`, `conflicting`, `behind`, `mergeable_candidate`, `detail_due`, `gone`), `closed` (at most 5000),
 `restack_due`, `restack_done`) and `health` per repository and `""` for the run. `seq` is not in it.
 
-Crash model (the "Replay effects" table of Spec 035): `Core::commit` journals each event (fsync), applies it (`State::apply`, idempotent:
-counters are raised to the value in the event id and never lowered, every other effect sets or removes), prints it, then writes `state.json`
-with `applied_seq` = `printed_seq` = the last seq. `Core::open` replays the lines past `applied_seq` and prints those past `printed_seq` again
-(at-least-once). A lost or corrupt state with a journal, or a state ahead of the journal, is an error unless the baseline is forced; then it
-is rebuilt from the journal silently (no reprint, the first cycle is a baseline). After an error the session is unusable until reopened.
+Order of a cycle, which W3 follows (as Go `Watcher.Cycle`): the cycle emits an event and applies it to `Core::state` at once (`State::apply`),
+then does its own bookkeeping that is no event (`cycle`, `last_ok`, debounce candidates, `detail_due`, silent class changes), and
+`Core::commit` then journals each event (fsync), prints it and writes `state.json` with `applied_seq` = `printed_seq` = the last seq.
+`commit` does not apply: a second application would undo the bookkeeping (head-changed resets the checks and sets `detail_due`).
+
+Crash model (the "Replay effects" table of Spec 035): an event is journalled exactly once. `Core::open` replays the lines past `applied_seq`
+into the state (`apply` is idempotent: counters are raised to the value in the event id and never lowered, every other effect sets or
+removes) and prints those past `printed_seq` again (at-least-once). A missing `state.json` with a journal is rebuilt from the journal silently
+(no reprint, the set of repositories is learned again, the first cycle is a baseline), also without a forced baseline (as Go). A corrupt
+`state.json`, or a state whose `applied_seq` or `printed_seq` is beyond the journal, is an error unless the baseline is forced; then it
+is rebuilt the same way. After an error the session is unusable until reopened.
 
 Lock: `std::fs::File::try_lock` on `lock` (D3; no `libc`), a second watcher gets `WatchError::Locked(pid)` (exit 3 in W4), retried for about one
-second so a `--status` probe does not look like a second watcher; `holder` probes with a shared lock and never creates the file.
+second so a `--status` probe does not look like a second watcher; `holder` probes with a shared lock and never creates the file. The lock
+file gets mode 0600 when it is taken (also when it existed with another mode).
 `read_status` (`--status --json`): fresh when the heartbeat is younger than `max(3 x interval, 180 s)`; reads only, no lock taken.
 
 Event ids keep the Go form `REPO#PR:KIND:KEY` (`-` for an absent part); the corpus proves that the key functions rebuild every id of the 194
@@ -1517,6 +1525,9 @@ Deviations from the Go behavior (named one by one; D numbers are those of the po
 7. `id_counter` accepts digits only (Go's `Atoi` also took `+5`).
 8. `repos` is `null` instead of an empty slice for "not set yet", so an empty set is not mistaken for the first run.
 9. `restack-needed` keeps `argv` (D-20261119-03); the choice of `argv` and `--human` are W3/W4.
+10. Lock: an error other than "busy" (the file cannot be opened or locked) is `Io` at once, not `Locked` after five attempts.
+11. `lock::holder` reports "not held" when the probe fails with an error other than "busy"; Go reports "held".
+12. `journal.jsonl` is opened as it is: a symbolic link is followed (as Go); the state directory itself is checked (mode, work tree), its files are not.
 
 What the corpus drives in W1 (`tests/it/watch_core.rs`): vectors `event_id`, `id_counter`, `event_json` (22 cases), `workspace_id` (which inputs share an
 id; the Go id values are format-dependent), `default_state_dir`, `status_freshness_seconds`, `merged_due_head_fork`: 8 of the 33 vectors
