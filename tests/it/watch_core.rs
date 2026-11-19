@@ -1745,6 +1745,17 @@ fn a_complete_line_that_is_not_a_valid_event_is_corruption() {
 fn a_line_longer_than_the_limit_is_corruption_not_a_huge_allocation() {
     let t = tmp();
     let path = t.path().join(JOURNAL_NAME);
+    // a valid event is refused for its length alone
+    let mut long = ready_event(1);
+    long.seq = 1;
+    if let Details::ReadyStateChanged(d) = &mut long.details {
+        d.from = "x".repeat(MAX_LINE_BYTES);
+    }
+    std::fs::write(&path, format!("{}\n", long.to_line())).unwrap();
+    assert!(matches!(
+        Journal::open(t.path()).err(),
+        Some(WatchError::CorruptState(_))
+    ));
     let mut big = vec![b'a'; MAX_LINE_BYTES + 10];
     // terminated or not: too long is too long
     std::fs::write(&path, &big).unwrap();
