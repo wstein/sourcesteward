@@ -1574,7 +1574,7 @@ fn state_json_is_written_atomically_and_read_back() {
 // The journal: gapless seq from the lines, a truncated tail, corruption.
 use std::io::Write as _;
 
-use stw::watch::journal::{scan, Journal, JOURNAL_NAME, MAX_LINE_BYTES};
+use stw::watch::journal::{scan, Journal, JOURNAL_NAME};
 
 fn ready_event(n: u64) -> Event {
     let id =
@@ -1753,14 +1753,14 @@ fn a_line_longer_than_the_limit_is_corruption_not_a_huge_allocation() {
     let mut long = ready_event(1);
     long.seq = 1;
     if let Details::ReadyStateChanged(d) = &mut long.details {
-        d.from = "x".repeat(MAX_LINE_BYTES);
+        d.from = "x".repeat(4 << 20); // the limit is 4 MiB; written out, not read from the constant
     }
     std::fs::write(&path, format!("{}\n", long.to_line())).unwrap();
     assert!(matches!(
         Journal::open(t.path()).err(),
         Some(WatchError::CorruptState(_))
     ));
-    let mut big = vec![b'a'; MAX_LINE_BYTES + 10];
+    let mut big = vec![b'a'; (4 << 20) + 10];
     // terminated or not: too long is too long
     std::fs::write(&path, &big).unwrap();
     assert!(matches!(
