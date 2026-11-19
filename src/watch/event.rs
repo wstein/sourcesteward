@@ -503,6 +503,22 @@ pub fn sanitize(text: &[u8], max_bytes: usize) -> String {
 /// Seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ` (UTC, no fraction). Years before 0 and after 9999 are not formatted
 /// meaningfully; the clock of the watcher never gets there.
 pub fn format_utc(secs: i64) -> String {
-    let _ = secs;
-    String::new()
+    let days = secs.div_euclid(86_400);
+    let rem = secs.rem_euclid(86_400);
+    // Civil date from the day count (H. Hinnant's algorithm).
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    format!(
+        "{y:04}-{m:02}-{d:02}T{:02}:{:02}:{:02}Z",
+        rem / 3600,
+        rem % 3600 / 60,
+        rem % 60
+    )
 }
