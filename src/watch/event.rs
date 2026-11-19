@@ -9,7 +9,6 @@ use std::fmt;
 
 use serde::ser::SerializeStruct;
 use serde::{Deserialize, Serialize, Serializer};
-use serde_json::Value;
 
 /// `schema_version` of every event line.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -280,27 +279,28 @@ impl Details {
         }
     }
 
-    /// Decodes the `details` object of `kind`: unknown keys are refused, missing keys are the zero value.
-    pub fn decode(kind: Kind, value: Value) -> Result<Details, String> {
-        fn d<T: serde::de::DeserializeOwned>(v: Value) -> Result<T, String> {
-            serde_json::from_value(v).map_err(|e| e.to_string())
+    /// Decodes the `details` object (JSON text) of `kind`: unknown and repeated keys are refused, missing keys are the zero
+    /// value.
+    pub fn decode(kind: Kind, json: &str) -> Result<Details, String> {
+        fn d<T: serde::de::DeserializeOwned>(json: &str) -> Result<T, String> {
+            serde_json::from_str(json).map_err(|e| e.to_string())
         }
         Ok(match kind {
-            Kind::NewPr => Details::NewPr(d(value)?),
-            Kind::HeadChanged => Details::HeadChanged(d(value)?),
-            Kind::ChecksGreen => Details::ChecksGreen(d(value)?),
-            Kind::ChecksRed => Details::ChecksRed(d(value)?),
-            Kind::ChecksPendingTimeout => Details::ChecksPendingTimeout(d(value)?),
-            Kind::MergeableChanged => Details::MergeableChanged(d(value)?),
-            Kind::ReadyStateChanged => Details::ReadyStateChanged(d(value)?),
-            Kind::BaseChanged => Details::BaseChanged(d(value)?),
-            Kind::Merged => Details::Merged(d(value)?),
-            Kind::Closed => Details::Closed(d(value)?),
-            Kind::RestackNeeded => Details::RestackNeeded(d(value)?),
-            Kind::ReposChanged => Details::ReposChanged(d(value)?),
-            Kind::WatchError => Details::WatchError(d(value)?),
-            Kind::WatchRecovered => Details::WatchRecovered(d(value)?),
-            Kind::WatchStalled => Details::WatchStalled(d(value)?),
+            Kind::NewPr => Details::NewPr(d(json)?),
+            Kind::HeadChanged => Details::HeadChanged(d(json)?),
+            Kind::ChecksGreen => Details::ChecksGreen(d(json)?),
+            Kind::ChecksRed => Details::ChecksRed(d(json)?),
+            Kind::ChecksPendingTimeout => Details::ChecksPendingTimeout(d(json)?),
+            Kind::MergeableChanged => Details::MergeableChanged(d(json)?),
+            Kind::ReadyStateChanged => Details::ReadyStateChanged(d(json)?),
+            Kind::BaseChanged => Details::BaseChanged(d(json)?),
+            Kind::Merged => Details::Merged(d(json)?),
+            Kind::Closed => Details::Closed(d(json)?),
+            Kind::RestackNeeded => Details::RestackNeeded(d(json)?),
+            Kind::ReposChanged => Details::ReposChanged(d(json)?),
+            Kind::WatchError => Details::WatchError(d(json)?),
+            Kind::WatchRecovered => Details::WatchRecovered(d(json)?),
+            Kind::WatchStalled => Details::WatchStalled(d(json)?),
         })
     }
 }
@@ -356,15 +356,15 @@ impl Event {
             repo: Option<String>,
             pr: Option<u64>,
             kind: String,
-            details: Value,
+            details: Box<serde_json::value::RawValue>,
         }
         let raw: Raw = serde_json::from_str(line).map_err(|e| e.to_string())?;
         if raw.schema_version != SCHEMA_VERSION {
             return Err(format!("unsupported schema_version {}", raw.schema_version));
         }
         let kind = Kind::parse(&raw.kind).ok_or_else(|| format!("unknown kind {:?}", raw.kind))?;
-        let details =
-            Details::decode(kind, raw.details).map_err(|e| format!("{} details: {e}", raw.kind))?;
+        let details = Details::decode(kind, raw.details.get())
+            .map_err(|e| format!("{} details: {e}", raw.kind))?;
         Ok(Event {
             seq: raw.seq,
             id: raw.id,
