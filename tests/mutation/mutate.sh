@@ -5586,6 +5586,300 @@ m AB99 'the error document is printed without --json' src/cli.rs \
             print_json(&f.to_json());' '        if true {
             print_json(&f.to_json());' \
   absorb_guards the_error_document_is_written_for_json_only
+m WR1 'no If-None-Match is sent' src/watch_reader/http.rs \
+  'req = req.header("If-None-Match", etag);' 'let _ = etag;' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR2 'a 304 returns the ETag of the answer, not the validator that was sent' src/watch_reader/http.rs \
+  'etag: etag.to_string(),
+                link,' 'etag: header(resp.headers(), "etag").to_string(),
+                link,' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR3 'an unsolicited 304 is accepted' src/watch_reader/http.rs \
+  'return Err(malformed("unsolicited 304 response"));' '{}' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR4 'redirects are followed' src/watch_reader/http.rs \
+  '.max_redirects(0)' '.max_redirects(5)' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR5 'the rate-limit text in a 403 body is no evidence' src/watch_reader/http.rs \
+  'crate::github::mentions_rate_limit(&crate::github::error_body_head(resp))' 'false' \
+  watch_reader rate_limit_evidence_each_source_alone
+m WR6 'a remaining count of 0 in the header is no evidence' src/watch_reader/http.rs \
+  '|| header(h, "x-ratelimit-remaining") == "0"' '|| false' \
+  watch_reader rate_limit_evidence_each_source_alone
+m WR7 'a Retry-After header is no evidence' src/watch_reader/http.rs \
+  '|| !header(h, "retry-after").is_empty()' '|| false' \
+  watch_reader rate_limit_evidence_each_source_alone
+m WR8 'a 429 is not a rate limit by itself' src/watch_reader/http.rs \
+  'if status == 429 || self.rate_limit_evidence(resp, &rate) {' 'if self.rate_limit_evidence(resp, &rate) {' \
+  watch_reader rate_limit_evidence_each_source_alone
+m WR9 'a negative remaining count is evidence' src/watch_reader/http.rs \
+  'if limit <= 0 || remaining < 0 || reset <= 0 {
+        return RateInfo::default();' 'if limit <= 0 || remaining < -9 || reset <= 0 {
+        return RateInfo::default();' \
+  watch_reader vector_parse_rate_headers
+m WR10 'Retry-After up to two days is accepted' src/watch_reader/http.rs \
+  '(0..=24 * 3600).contains(&s)' '(0..=48 * 3600).contains(&s)' \
+  watch_reader vector_parse_retry_after
+m WR11 'the wait threshold is 51' src/watch_reader/http.rs \
+  'if info.remaining < RATE_WAIT_BELOW {' 'if info.remaining <= RATE_WAIT_BELOW {' \
+  watch_reader vector_assess_rate_limit
+m WR12 'the slow threshold is inclusive' src/watch_reader/http.rs \
+  'if u128::from(info.remaining) * 10 < u128::from(info.limit) {' 'if u128::from(info.remaining) * 10 <= u128::from(info.limit) {' \
+  watch_reader vector_assess_rate_limit
+m WR13 'the reset slack is 6 s' src/watch_reader/http.rs \
+  'pub const RESET_SLACK_SECS: i64 = 5;' 'pub const RESET_SLACK_SECS: i64 = 6;' \
+  watch_reader vector_rate_limited_until
+m WR14 'a reset in the past is waited for' src/watch_reader/http.rs \
+  'if rate.known && rate.reset > now {' 'if rate.known {' \
+  watch_reader vector_rate_limited_until
+m WR15 'the next page is not checked against the current page plus one' src/watch_reader/http.rs \
+  'if next != page as u64 + 1 {' 'if false {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR16 'the halved page size is not kept' src/watch_reader/http.rs \
+  'self.mark_halved(repo);
+                    // restart' '{}
+                    // restart' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR17 'a 304 on a full last page is not probed' src/watch_reader/http.rs \
+  'if res.not_modified && page_len == pp && page < limit {' 'if false {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR18 'a Link with an unusable next is accepted' src/watch_reader/http.rs \
+  'if !link.is_empty() && next.is_none() && has_next_rel(&link) {' 'if false {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR19 'max_open_prs is not bounded' src/watch_reader/http.rs \
+  'if !(1..=MAX_OPEN_PRS).contains(&max_open) {' 'if max_open == 0 {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR20 'exactly max_open_prs open PRs are too many' src/watch_reader/http.rs \
+  'if out.items.len() > max_open {' 'if out.items.len() >= max_open {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR21 'the page bound is one page more' src/watch_reader/http.rs \
+  'if page >= max_pages {' 'if page > max_pages {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR22 'a body over 1 MiB is read whole' src/watch_reader/http.rs \
+  'if body.len() > MAX_BODY {' 'if body.len() > MAX_BODY + 1 {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR23 'the declared length is not checked' src/watch_reader/http.rs \
+  'declared.is_some_and(|n| n > MAX_BODY as u64)' 'false' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR24 'the endpoint allowlist is not applied' src/watch_reader/http.rs \
+  'if !read_endpoint_allowed(endpoint) {' 'if false {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR25 'a validator with a line break is sent' src/watch_reader/http.rs \
+  'if !valid_etag(etag) {
+            return Err(malformed("invalid ETag"));' 'if false {
+            return Err(malformed("invalid ETag"));' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR26 'a redirect to another host names the repository' src/watch_reader/http.rs \
+  'if !host.is_empty() && host != api_host {' 'if false {' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR27 'a 404 is not forbidden' src/watch_reader/http.rs \
+  '404 => WatchError::new(Code::Forbidden, "resource not found or not accessible"),' '404 => WatchError::new(Code::Malformed, "resource not found or not accessible"),' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR28 'a 500 is not http-5xx' src/watch_reader/http.rs \
+  's if s >= 500 =>' 's if s > 500 =>' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR29 'the Debug text of the reader shows the token' src/watch_reader/http.rs \
+  'write!(f, "WatchHttp {{ base: {:?}, token: <hidden> }}", self.base)' 'write!(f, "WatchHttp {{ base: {:?}, token: {} }}", self.base, self.token)' \
+  watch_reader token_never_in_output
+m WR30 'the token is not sent as a bearer' src/watch_reader/http.rs \
+  '&format!("Bearer {}", self.token)' '&format!("Token {}", self.token)' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR31 'the request timeout is not set' src/watch_reader/http.rs \
+  'self.timeout = d;' 'let _ = d;' \
+  watch_reader a_hung_server_ends_at_the_request_timeout
+m WR32 'a request timeout above 30 s is accepted' src/watch_reader/http.rs \
+  'if d.is_zero() || d > REQUEST_TIMEOUT {' 'if d.is_zero() || d > REQUEST_TIMEOUT * 100 {' \
+  watch_reader a_hung_server_ends_at_the_request_timeout
+m WR33 'the source holds a write call' src/watch_reader/http.rs \
+  'let url = format!("{}/{endpoint}", self.base);' 'let url = format!("{}/{endpoint}", self.base); // .delete(' \
+  watch_reader the_reader_has_no_write_path
+m WR34 'a branch name with .. is accepted' src/watch_reader/http.rs \
+  '|| n.contains("..")
+' '|| false
+' \
+  watch_reader vector_encode_branch_segment
+m WR35 'a percent sign in a branch name is accepted' src/watch_reader/http.rs \
+  '" ~^:?*[\\%".contains(c)' '" ~^:?*[\\".contains(c)' \
+  watch_reader vector_encode_branch_segment
+m WR36 'the escapes of a branch segment are lower case' src/watch_reader/http.rs \
+  'const HEX: &[u8; 16] = b"0123456789ABCDEF";' 'const HEX: &[u8; 16] = b"0123456789abcdef";' \
+  watch_reader vector_encode_branch_segment
+m WR37 'a branch segment is not compared with its own encoding' src/watch_reader/http.rs \
+  'valid_branch_name(&name) && path_escape(&name) == raw' 'valid_branch_name(&name)' \
+  watch_reader vector_branch_segment_valid
+m WR38 'list page 81 at 25 per page is allowed' src/watch_reader/http.rs \
+  'return digits_from_one(page).is_some_and(|p| p <= limit);' 'return digits_from_one(page).is_some_and(|p| p <= limit + 1);' \
+  watch_reader vector_endpoint_allowlist
+m WR39 'commit page 4 is allowed' src/watch_reader/http.rs \
+  'pub const MAX_COMMIT_PAGES: u64 = 3;' 'pub const MAX_COMMIT_PAGES: u64 = 4;' \
+  watch_reader vector_endpoint_allowlist
+m WR40 'check page 11 is allowed' src/watch_reader/http.rs \
+  'pub const MAX_CHECK_PAGES: u64 = 10;' 'pub const MAX_CHECK_PAGES: u64 = 11;' \
+  watch_reader http_reader_scenarios_are_replayed
+m WR41 'any relation counts as next' src/watch_reader/http.rs \
+  '.any(|r| r.eq_ignore_ascii_case("next"))' '.any(|r| !r.is_empty())' \
+  watch_reader vector_next_page_from_link
+m WR42 'page 0 is a next page' src/watch_reader/http.rs \
+  'return (1..=1_000_000).contains(&page).then_some(page as u64);' 'return (0..=1_000_000).contains(&page).then_some(page as u64);' \
+  watch_reader vector_next_page_from_link
+m WR43 'the host of a remote is compared case-sensitively' src/watch_reader/http.rs \
+  'if !h.eq_ignore_ascii_case(host) {' 'if h != host {' \
+  watch_reader vector_parse_remote
+m WR44 'a port of six digits is valid' src/watch_reader/http.rs \
+  'if p.is_empty() || p.len() > 5 ||' 'if p.is_empty() || p.len() > 6 ||' \
+  watch_reader vector_valid_host
+m WR45 'a moved base tip does not force the detail' src/watch_reader/host.rs \
+  '|| tips.contains(&it.base_ref)
+' '
+' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR46 'a merge does not force the detail of the open PRs' src/watch_reader/host.rs \
+  '|| merged_any;' '|| false;' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR47 'a due detail is not forced' src/watch_reader/host.rs \
+  '|| k.is_some_and(|k| k.detail_due)' '|| false' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR48 'the slow refresh is not staggered by number' src/watch_reader/host.rs \
+  'hints.cycle.saturating_add(it.number) % hints.detail_every == 0' 'hints.cycle % hints.detail_every == 0' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR49 'the fork flag is always an answer' src/watch_reader/host.rs \
+  'p.fork_known = true;' 'p.fork_known = false;' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR50 'a stored candidate does not force a fresh read' src/watch_reader/host.rs \
+  '|| !cand.is_empty();' '|| false;' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR51 'a changed class does not force a fresh read' src/watch_reader/host.rs \
+  '(!last.is_empty() && last != class)' 'false' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR52 'a fresh read keeps its validator' src/watch_reader/host.rs \
+  'self.read_checks(repo, &it.head_sha, inflight, &mut cond)' 'self.read_checks(repo, &it.head_sha, false, &mut cond)' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR53 'a pending PR is not read again' src/watch_reader/host.rs \
+  '|| class == CLASS_PENDING
+' '
+' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR54 'ignored PRs are read' src/watch_reader/host.rs \
+  'if !self.ignored(it) {
+                let k' 'if true {
+                let k' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR55 'the rate-limit wait is not armed' src/watch_reader/host.rs \
+  'if d.advice == Advice::Wait {' 'if false {' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR56 'the slow advice is dropped' src/watch_reader/host.rs \
+  'd.advice == Advice::Slow
+' 'false
+' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR57 'the hold is reported again' src/watch_reader/host.rs \
+  'let until = std::mem::take(&mut self.hold_until);' 'let until = self.hold_until;' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR58 'a rate-limited read has no wait' src/watch_reader/host.rs \
+  'oe.retry_in = e.rate_limited_until(now).saturating_sub(now).max(0) as u64;' 'oe.retry_in = 0;' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR59 'a canceled run is a repository failure' src/watch_reader/host.rs \
+  'if cancel.load(Ordering::SeqCst) {' 'if false {' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR60 'two parents are not a merge' src/watch_reader/host.rs \
+  'Some(2) => MethodHint::Merge,' 'Some(2) => MethodHint::RebaseOrSquash,' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR61 'a time stamp that is not RFC 3339 is accepted' src/watch_reader/host.rs \
+  'if merged && !valid_rfc3339(&merged_at) {' 'if false {' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR62 'a short head SHA of a closed PR is accepted' src/watch_reader/host.rs \
+  'if !valid_sha(&head_sha)
+            || (merged' 'if false
+            || (merged' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR63 'a PR that is still open counts as gone' src/watch_reader/host.rs \
+  'if state == "open" {
+            return Ok(None);' 'if false {
+            return Ok(None);' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR64 'a missing base branch fails the repository' src/watch_reader/host.rs \
+  'Err(e) if e.code == Code::Forbidden && e.status == 404 => continue,' '' \
+  watch_reader a_missing_base_branch_is_no_failure
+m WR65 'an older status of a context counts too' src/watch_reader/host.rs \
+  'if seen.insert(context.clone()) {' 'if true {' \
+  watch_reader check_runs_and_statuses_follow_pages_and_keep_the_newest_status_of_a_context
+m WR66 'check run pages stop after the first' src/watch_reader/host.rs \
+  'if arr.is_empty() || runs.len() as u64 >= total {' 'if true {' \
+  watch_reader check_runs_and_statuses_follow_pages_and_keep_the_newest_status_of_a_context
+m WR67 'status pages stop after the first' src/watch_reader/host.rs \
+  'if arr.len() < 100 {
+                break;' 'if true {
+                break;' \
+  watch_reader check_runs_and_statuses_follow_pages_and_keep_the_newest_status_of_a_context
+m WR68 'master is guessed before main' src/watch_reader/host.rs \
+  'for name in ["main", "master"] {' 'for name in ["master", "main"] {' \
+  watch_reader vector_observe_default_branch
+m WR69 'the fork flag is case-sensitive' src/watch_reader/host.rs \
+  'h.to_lowercase() != b.to_lowercase()' 'h != b' \
+  watch_reader vector_decode_pull_detail
+m WR70 'a page of 100 commits has no more' src/watch_reader/host.rs \
+  'Ok((shas, arr.len() >= 100))' 'Ok((shas, arr.len() > 100))' \
+  watch_reader vector_decode_pull_commits
+m WR71 'the fallback also takes a 404' src/watch_reader/host.rs \
+  'if e.code == Code::Forbidden && e.status == 403 =>' 'if e.code == Code::Forbidden =>' \
+  watch_reader a_404_on_check_runs_is_not_the_fallback
+m WR72 'the Actions fallback is announced every cycle' src/watch_reader/host.rs \
+  'if self.warned.insert(format!("{repo}\0actions-runs")) {' 'if true {' \
+  watch_reader a_token_without_checks_falls_back_to_actions_runs
+m WR73 'the base name in the diagnostic is not escaped' src/watch_reader/host.rs \
+  'let (name, _) = escape_untrusted(&it.base_ref, 200);' 'let name = it.base_ref.clone();' \
+  watch_reader observer_masks_the_untrusted_base_name_in_its_diagnostic
+m WR74 'the detail validator is not kept' src/watch_reader/host.rs \
+  'cond.validators.insert(detail_key(number), res.etag.clone());' '{}' \
+  watch_reader observer_session_scenarios_are_replayed
+m WR75 'the tip validator is not kept' src/watch_reader/host.rs \
+  'etag: res.etag.clone(),
+                    sha,' 'etag: String::new(),
+                    sha,' \
+  watch_reader observer_over_http_reads_then_uses_validators
+m WR76 'cancelled is not a failing conclusion' src/watch_reader/obs.rs \
+  '"failure" | "cancelled" |' '"failure" |' \
+  watch_reader vector_checks_class
+m WR77 'a pending status is not pending' src/watch_reader/obs.rs \
+  '|| statuses.iter().any(|s| s.state == "pending");' '|| false;' \
+  watch_reader vector_checks_class
+m WR78 'an empty head is green' src/watch_reader/obs.rs \
+  '} else if runs.len() + statuses.len() > 0 {' '} else if runs.len() + statuses.len() >= 0 {' \
+  watch_reader vector_checks_class
+m WR79 'the store accepts other versions' src/watch_reader/cond_store.rs \
+  'if o["schema_version"].as_u64() != Some(SCHEMA_VERSION) {' 'if false {' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+m WR80 'the store accepts unknown fields' src/watch_reader/cond_store.rs \
+  'if o.len() != keys.len() || !keys.iter().all(|k| o.contains_key(*k)) {' 'if !keys.iter().all(|k| o.contains_key(*k)) {' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+m WR81 'the store does not know the size 12' src/watch_reader/cond_store.rs \
+  'Some(12) => 12,' '' \
+  watch_reader cond_store_layout_is_documented_and_deterministic
+m WR82 'the page bound of the store is not applied' src/watch_reader/cond_store.rs \
+  'if pages_v.len() > limit {' 'if false {' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+m WR83 'a stored ETag is not checked' src/watch_reader/cond_store.rs \
+  'if valid_etag(&s) {' 'if true {' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+m WR84 'a validator key may start with 0' src/watch_reader/cond_store.rs \
+  '&& !n.starts_with('\''0'\'')' '' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+m WR85 'the number of validators is unbounded' src/watch_reader/cond_store.rs \
+  'if val_o.len() > MAX_VALIDATORS {' 'if false {' \
+  watch_reader cond_store_bounds_the_number_of_validators
+m WR86 'prune keeps the tips of old bases' src/watch_reader/cond_store.rs \
+  'self.tips.retain(|b, _| bases.contains(b.as_str()));' '' \
+  watch_reader cond_store_prune_keeps_only_open_prs_heads_and_bases
+m WR87 'prune keeps the validators of old PRs' src/watch_reader/cond_store.rs \
+  'self.validators.retain(|k, _| keep.contains(k));' '' \
+  watch_reader cond_store_prune_keeps_only_open_prs_heads_and_bases
+m WR88 'the keys of a page are written in another order' src/watch_reader/cond_store.rs \
+  '"list": {"per_page": self.list.per_page, "pages": pages},' '"list": {"pages": pages, "per_page": self.list.per_page},' \
+  watch_reader cond_store_layout_is_documented_and_deterministic
+m WR89 'a tip with a bad SHA is accepted' src/watch_reader/cond_store.rs \
+  'if encode_branch_segment(b).is_none() || !valid_sha(&sha) {' 'if encode_branch_segment(b).is_none() {' \
+  watch_reader cond_store_refuses_what_does_not_fit_the_layout
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
