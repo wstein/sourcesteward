@@ -1315,6 +1315,8 @@ linked work trees, bare repositories; a sparse index (observed: `files_skipped` 
 refused, not served; a very large diff is read in full by gix (the output of `blame` is bound, deviation 18); the comparison with
 git-absorb versions other than 0.9.0.
 
+**Observation.** After the watch port landed there are two SHA-256 implementations in the crate: `src/sha256.rs` (the checksum of this plan) and `watch::statedir::sha256`. They are not merged here (ledger).
+
 ## Stack preview: `stw restack plan` (M1/M2: port plus new)
 
 `stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]` (read-only: no ref, no file,
