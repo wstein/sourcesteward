@@ -5,6 +5,8 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod absorb_fx;
+mod absorb_targets;
 mod absorb_units;
 mod add;
 mod auth;
