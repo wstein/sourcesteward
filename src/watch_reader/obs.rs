@@ -170,10 +170,34 @@ pub enum ObserveFailure {
     Canceled,
 }
 
+fn is_failure_conclusion(c: &str) -> bool {
+    matches!(
+        c,
+        "failure" | "cancelled" | "timed_out" | "action_required" | "startup_failure"
+    )
+}
+
 /// The class of a head: `red` when a completed run failed or a status is `failure` or `error`, else `pending` when a
 /// run is not completed or a status is `pending`, else `green` when anything was reported, else `none`. The shape of
 /// a red head and the failing names belong to the core (`ClassifyChecks`); the observer needs the class only to
 /// notice a debounce candidate in flight.
-pub fn checks_class(_runs: &[CheckRun], _statuses: &[StatusContext]) -> &'static str {
-    ""
+pub fn checks_class(runs: &[CheckRun], statuses: &[StatusContext]) -> &'static str {
+    let failing = runs
+        .iter()
+        .any(|r| r.status == "completed" && is_failure_conclusion(&r.conclusion))
+        || statuses
+            .iter()
+            .any(|s| s.state == "failure" || s.state == "error");
+    if failing {
+        return CLASS_RED;
+    }
+    let pending = runs.iter().any(|r| r.status != "completed")
+        || statuses.iter().any(|s| s.state == "pending");
+    if pending {
+        CLASS_PENDING
+    } else if runs.len() + statuses.len() > 0 {
+        CLASS_GREEN
+    } else {
+        CLASS_NONE
+    }
 }
