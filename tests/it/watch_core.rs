@@ -676,6 +676,15 @@ fn a_close_remembers_the_larger_counters_and_keeps_at_most_five_thousand_records
         (1, 1, 9),
         "the record is replaced, not doubled"
     );
+    s.apply(&ev(
+        Some(1),
+        &key_generation(2),
+        Details::Closed(Closed::default()),
+    ));
+    assert_eq!(
+        s.repo[REPO].closed[0].epochs.checks, 9,
+        "the counters of the older record survive a close of a PR without a record"
+    );
     let rs = s.repo.get_mut(REPO).unwrap();
     for n in 2..(MAX_CLOSED_PRS as u64 + 10) {
         rs.record_closed(ClosedPr {
