@@ -566,3 +566,501 @@ fn a_state_file_of_another_format_version_or_shape_is_refused() {
     }
     assert!(State::decode(text.as_bytes()).is_ok());
 }
+use stw::watch::event::{
+    BaseChanged, ChecksGreen, ChecksRed, Closed, HeadChanged, MergeableChanged, Merged,
+    PendingTimeout, RestackNeeded,
+};
+use stw::watch::state::{Class, ClosedPr, Epochs, PrState, MAX_CLOSED_PRS};
+
+fn state_with(events: &[Event]) -> State {
+    let mut s = State::new();
+    for e in events {
+        s.apply(e);
+    }
+    s
+}
+
+fn pr(s: &State, n: u64) -> &PrState {
+    &s.repo[REPO].prs[&n]
+}
+
+#[test]
+fn a_new_pr_is_recorded_with_its_generation_and_a_due_detail_read() {
+    let mut e = new_pr(4, H1);
+    e.id = event_id(Some(REPO), Some(4), Kind::NewPr, &key_generation(2));
+    let s = state_with(&[e]);
+    let p = pr(&s, 4);
+    assert_eq!(
+        (
+            p.title.as_str(),
+            p.author.as_str(),
+            p.base.as_str(),
+            p.head_ref.as_str(),
+            p.head.as_str()
+        ),
+        ("PR 4", "alice", "main", "feat/4", H1)
+    );
+    assert_eq!(
+        (p.generation, p.class, p.detail_due, p.gone, p.fork, p.draft),
+        (2, Class::NoChecks, true, false, false, false)
+    );
+}
+
+#[test]
+fn a_reopened_pr_keeps_the_counters_of_its_closed_record() {
+    let mut s = State::new();
+    s.apply(&new_pr(4, H1));
+    s.apply(&ev(
+        Some(4),
+        &key_head(H2, 3),
+        Details::HeadChanged(HeadChanged {
+            old: H1.into(),
+            new: H2.into(),
+        }),
+    ));
+    s.apply(&ev(
+        Some(4),
+        &key_generation(0),
+        Details::Closed(Closed {
+            head: H2.into(),
+            base: "main".into(),
+        }),
+    ));
+    assert!(s.repo[REPO].prs.is_empty());
+    assert_eq!(
+        s.repo[REPO].closed,
+        vec![ClosedPr {
+            number: 4,
+            generation: 0,
+            epochs: Epochs {
+                head: 3,
+                ..Epochs::default()
+            }
+        }]
+    );
+    s.apply(&ev(
+        Some(4),
+        &key_generation(1),
+        Details::NewPr(NewPr {
+            head: H2.into(),
+            ..NewPr::default()
+        }),
+    ));
+    let p = pr(&s, 4);
+    assert_eq!((p.generation, p.epochs.head), (1, 3));
+}
+
+#[test]
+fn a_close_remembers_the_larger_counters_and_keeps_at_most_five_thousand_records() {
+    let mut s = State::new();
+    s.apply(&ev(
+        Some(1),
+        &key_generation(0),
+        Details::Closed(Closed::default()),
+    ));
+    s.repo.get_mut(REPO).unwrap().closed[0].epochs.checks = 9;
+    s.apply(&new_pr(1, H1));
+    s.apply(&ev(
+        Some(1),
+        &key_generation(1),
+        Details::Closed(Closed::default()),
+    ));
+    let rec = &s.repo[REPO].closed;
+    assert_eq!(
+        (rec.len(), rec[0].generation, rec[0].epochs.checks),
+        (1, 1, 9),
+        "the record is replaced, not doubled"
+    );
+    let rs = s.repo.get_mut(REPO).unwrap();
+    for n in 2..(MAX_CLOSED_PRS as u64 + 10) {
+        rs.record_closed(ClosedPr {
+            number: n,
+            generation: 0,
+            epochs: Epochs::default(),
+        });
+    }
+    assert_eq!(rs.closed.len(), MAX_CLOSED_PRS);
+    assert_eq!(rs.closed.last().unwrap().number, MAX_CLOSED_PRS as u64 + 9);
+    assert!(rs.closed_record(1).is_none(), "the oldest is dropped");
+}
+
+#[test]
+fn head_changed_sets_the_head_raises_the_epoch_and_forgets_the_checks() {
+    let mut s = State::new();
+    s.apply(&new_pr(4, H1));
+    {
+        let p = s.repo.get_mut(REPO).unwrap().prs.get_mut(&4).unwrap();
+        p.class = Class::Red;
+        p.class_candidate = Some(Class::Green);
+        p.timeout_fired = true;
+        p.pending_since = T0.into();
+        p.pending_names = vec!["ci".into()];
+        p.detail_due = false;
+        p.epochs.checks = 5;
+    }
+    s.apply(&ev(
+        Some(4),
+        &key_head(H2, 2),
+        Details::HeadChanged(HeadChanged {
+            old: H1.into(),
+            new: H2.into(),
+        }),
+    ));
+    let p = pr(&s, 4);
+    assert_eq!(
+        (p.head.as_str(), p.epochs.head, p.epochs.checks),
+        (H2, 2, 5),
+        "checks epoch survives"
+    );
+    assert_eq!(
+        (
+            p.class,
+            p.class_candidate,
+            p.timeout_fired,
+            p.pending_since.as_str()
+        ),
+        (Class::Unobserved, None, false, "")
+    );
+    assert!(p.pending_names.is_empty() && p.detail_due);
+    // a counter is never lowered
+    s.apply(&ev(
+        Some(4),
+        &key_head(H1, 1),
+        Details::HeadChanged(HeadChanged {
+            old: H2.into(),
+            new: H1.into(),
+        }),
+    ));
+    assert_eq!(pr(&s, 4).epochs.head, 2);
+}
+
+#[test]
+fn a_checks_event_of_the_current_head_sets_the_class_and_one_of_another_head_only_the_counter() {
+    let mut s = State::new();
+    s.apply(&new_pr(4, H1));
+    let green = |head: &str, e: u64| {
+        ev(
+            Some(4),
+            &key_checks(head, e),
+            Details::ChecksGreen(ChecksGreen {
+                head: head.into(),
+                ..ChecksGreen::default()
+            }),
+        )
+    };
+    s.apply(&green(H1, 3));
+    assert_eq!(
+        (pr(&s, 4).class, pr(&s, 4).epochs.checks),
+        (Class::Green, 3)
+    );
+    s.apply(&green(H2, 7));
+    assert_eq!(
+        (pr(&s, 4).class, pr(&s, 4).epochs.checks),
+        (Class::Green, 7),
+        "counter only"
+    );
+    let red = ev(
+        Some(4),
+        &key_checks(H1, 8),
+        Details::ChecksRed(ChecksRed {
+            head: H1.into(),
+            ..ChecksRed::default()
+        }),
+    );
+    s.apply(&red);
+    let p = pr(&s, 4);
+    assert_eq!(
+        (p.class, p.epochs.checks, p.class_candidate, p.timeout_fired),
+        (Class::Red, 8, None, false)
+    );
+    assert!(p.pending_since.is_empty() && p.pending_names.is_empty());
+}
+
+#[test]
+fn a_pending_timeout_fires_once_for_the_head_and_keeps_the_pending_names() {
+    let mut s = State::new();
+    s.apply(&new_pr(4, H1));
+    let t = |head: &str, e: u64| {
+        ev(
+            Some(4),
+            &key_timeout(head, e),
+            Details::ChecksPendingTimeout(PendingTimeout {
+                head: head.into(),
+                pending: vec!["a".into(), "b".into()],
+                since: "2026-10-22T08:00:00Z".into(),
+            }),
+        )
+    };
+    s.apply(&t(H1, 2));
+    let p = pr(&s, 4);
+    assert_eq!(
+        (
+            p.class,
+            p.timeout_fired,
+            p.pending_since.as_str(),
+            p.epochs.checks
+        ),
+        (Class::Pending, true, "2026-10-22T08:00:00Z", 2)
+    );
+    assert_eq!(p.pending_names, ["a", "b"]);
+    // another head: the counter is raised, the state stays
+    let mut other = s.clone();
+    other.apply(&ev(
+        Some(4),
+        &key_head(H2, 1),
+        Details::HeadChanged(HeadChanged {
+            old: H1.into(),
+            new: H2.into(),
+        }),
+    ));
+    other.apply(&t(H1, 9));
+    assert_eq!(
+        (
+            pr(&other, 4).class,
+            pr(&other, 4).timeout_fired,
+            pr(&other, 4).epochs.checks
+        ),
+        (Class::Unobserved, false, 9)
+    );
+}
+
+#[test]
+fn mergeable_ready_and_base_events_set_their_fields_and_counters() {
+    let mut s = State::new();
+    s.apply(&new_pr(4, H1));
+    s.repo
+        .get_mut(REPO)
+        .unwrap()
+        .prs
+        .get_mut(&4)
+        .unwrap()
+        .detail_due = false;
+    s.repo
+        .get_mut(REPO)
+        .unwrap()
+        .prs
+        .get_mut(&4)
+        .unwrap()
+        .mergeable_candidate = Some(stw::watch::state::MergeCandidate {
+        mergeable: false,
+        behind: false,
+        state: "dirty".into(),
+    });
+    s.apply(&ev(
+        Some(4),
+        &key_mergeable(H1, 2),
+        Details::MergeableChanged(MergeableChanged {
+            mergeable: Some(false),
+            state: "dirty".into(),
+            conflicting: true,
+            behind: false,
+            base: "main".into(),
+        }),
+    ));
+    let p = pr(&s, 4);
+    assert_eq!(
+        (
+            p.mergeable,
+            p.mergeable_state.as_str(),
+            p.conflicting,
+            p.behind,
+            p.epochs.mergeable
+        ),
+        (Some(false), "dirty", true, false, 2)
+    );
+    assert!(p.mergeable_candidate.is_none());
+    // `null` (not computed) keeps the old value
+    s.apply(&ev(
+        Some(4),
+        &key_mergeable(H1, 3),
+        Details::MergeableChanged(MergeableChanged {
+            mergeable: None,
+            state: "unknown".into(),
+            ..MergeableChanged::default()
+        }),
+    ));
+    assert_eq!(
+        (pr(&s, 4).mergeable, pr(&s, 4).epochs.mergeable),
+        (Some(false), 3)
+    );
+    s.apply(&ev(
+        Some(4),
+        &key_ready(4),
+        Details::ReadyStateChanged(ReadyStateChanged {
+            from: "ready".into(),
+            to: "draft".into(),
+        }),
+    ));
+    assert_eq!((pr(&s, 4).draft, pr(&s, 4).epochs.ready), (true, 4));
+    s.apply(&ev(
+        Some(4),
+        &key_ready(5),
+        Details::ReadyStateChanged(ReadyStateChanged {
+            from: "draft".into(),
+            to: "ready".into(),
+        }),
+    ));
+    assert!(!pr(&s, 4).draft);
+    s.apply(&ev(
+        Some(4),
+        &key_base(6),
+        Details::BaseChanged(BaseChanged {
+            old: "main".into(),
+            new: "dev".into(),
+        }),
+    ));
+    let p = pr(&s, 4);
+    assert_eq!(
+        (p.base.as_str(), p.epochs.base, p.detail_due),
+        ("dev", 6, true)
+    );
+}
+
+#[test]
+fn a_merge_removes_the_pr_records_the_restack_work_once_and_makes_every_detail_read_due() {
+    let mut s = State::new();
+    s.apply(&new_pr(1, H1));
+    s.apply(&new_pr(2, H2));
+    for n in [1, 2] {
+        s.repo
+            .get_mut(REPO)
+            .unwrap()
+            .prs
+            .get_mut(&n)
+            .unwrap()
+            .detail_due = false;
+    }
+    let merged = ev(
+        Some(1),
+        &key_merged(Some("m1")),
+        Details::Merged(Merged {
+            merge_commit: Some("m1".into()),
+            base: "main".into(),
+            head: H1.into(),
+            head_ref: "feat/1".into(),
+            merged_at: T0.into(),
+            method_hint: "merge".into(),
+        }),
+    );
+    s.apply(&merged);
+    s.apply(&merged);
+    let rs = &s.repo[REPO];
+    assert!(!rs.prs.contains_key(&1) && rs.prs[&2].detail_due);
+    assert_eq!(rs.restack_due.len(), 1, "the same merge is one record");
+    let d = &rs.restack_due[0];
+    assert_eq!(
+        (
+            d.merged_pr,
+            d.merge_commit.as_deref(),
+            d.old_parent.as_str(),
+            d.base.as_str(),
+            d.head_ref.as_str()
+        ),
+        (1, Some("m1"), H1, "main", "feat/1")
+    );
+    assert!(
+        !d.head_fork,
+        "PR 1 was observed open with its head in the base repository"
+    );
+}
+
+#[test]
+fn a_merge_of_an_unobserved_or_forked_pr_has_a_fork_head() {
+    let merged = |n: u64| {
+        ev(
+            Some(n),
+            &key_merged(None),
+            Details::Merged(Merged {
+                merge_commit: None,
+                ..Merged::default()
+            }),
+        )
+    };
+    let mut s = State::new();
+    s.apply(&merged(9));
+    assert!(
+        s.repo[REPO].restack_due[0].head_fork,
+        "never observed: unknown head repository"
+    );
+    let mut forked = new_pr(5, H1);
+    if let Details::NewPr(d) = &mut forked.details {
+        d.fork = true;
+    }
+    s.apply(&forked);
+    s.apply(&merged(5));
+    assert!(
+        s.repo[REPO]
+            .restack_due
+            .iter()
+            .find(|d| d.merged_pr == 5)
+            .unwrap()
+            .head_fork
+    );
+    // a second merge commit of the same PR number is another record
+    s.apply(&ev(
+        Some(9),
+        &key_merged(Some("x")),
+        Details::Merged(Merged {
+            merge_commit: Some("x".into()),
+            ..Merged::default()
+        }),
+    ));
+    assert_eq!(
+        s.repo[REPO]
+            .restack_due
+            .iter()
+            .filter(|d| d.merged_pr == 9)
+            .count(),
+        2
+    );
+}
+
+#[test]
+fn a_restack_event_marks_the_pair_done_once() {
+    let mut s = State::new();
+    let e = ev(
+        Some(2),
+        &key_restack(1, Some("m1")),
+        Details::RestackNeeded(RestackNeeded {
+            merged_pr: 1,
+            ..RestackNeeded::default()
+        }),
+    );
+    s.apply(&e);
+    s.apply(&e);
+    assert_eq!(s.repo[REPO].restack_done, std::slice::from_ref(&e.id));
+    assert!(
+        s.repo[REPO].prs.is_empty(),
+        "a restack event does not create a PR"
+    );
+}
+
+#[test]
+fn an_event_of_a_pr_without_a_record_creates_it_to_keep_the_counters() {
+    let s = state_with(&[ev(
+        Some(4),
+        &key_ready(3),
+        Details::ReadyStateChanged(ReadyStateChanged {
+            from: "ready".into(),
+            to: "draft".into(),
+        }),
+    )]);
+    assert_eq!(
+        (pr(&s, 4).epochs.ready, pr(&s, 4).draft, pr(&s, 4).class),
+        (3, true, Class::Unobserved)
+    );
+    assert_eq!(s.repo[REPO].since, T0);
+    // a checks event teaches the rebuilt PR its head
+    let s = state_with(&[ev(
+        Some(4),
+        &key_checks(H1, 2),
+        Details::ChecksGreen(ChecksGreen {
+            head: H1.into(),
+            ..ChecksGreen::default()
+        }),
+    )]);
+    assert_eq!(
+        (pr(&s, 4).head.as_str(), pr(&s, 4).class),
+        (H1, Class::Green)
+    );
+}
