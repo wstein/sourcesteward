@@ -212,8 +212,8 @@ pub struct Unmatched {
     pub with_patch: usize,
     /// Those without a partner, sorted by commit ID (the `+` lines of `git cherry`).
     pub commits: Vec<ObjectId>,
-    /// Non-merge commits of `base..tip` at the boundary of a shallow clone: their parent is not there, so their patch is
-    /// unknown. They are in neither `with_patch` nor `commits`; sorted by commit ID.
+    /// Commits of `base..tip` at the boundary of a shallow clone (listed in `.git/shallow`): what is behind them is
+    /// unknown and a non-merge one has no patch to read. They are in neither `with_patch` nor `commits`; sorted by commit ID.
     pub unreadable: Vec<ObjectId>,
     /// The walk over `tip..base` reached the boundary of a shallow clone while a commit still had no partner: a partner
     /// may lie behind it.
@@ -235,13 +235,14 @@ pub fn unmatched_commits(
     base: ObjectId,
     tip: ObjectId,
 ) -> Result<Unmatched> {
-    let shallow = repo.is_shallow().unwrap_or(false);
+    let listed = repo::shallow_boundary(repo)?;
+    let shallow = !listed.is_empty();
     let mut needed: HashMap<PatchKey, Vec<ObjectId>> = HashMap::new();
     let mut unreadable = Vec::new();
     let mut with_patch = 0;
     for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
         let info = info?;
-        if shallow && tidy_similarity::at_boundary(repo, info.id)? {
+        if shallow && repo::at_boundary(repo, &listed, info.id)? {
             unreadable.push(info.id);
             continue;
         }
@@ -254,7 +255,7 @@ pub fn unmatched_commits(
     if !needed.is_empty() {
         for info in repo.rev_walk([base]).with_hidden([tip]).all()? {
             let info = info?;
-            if shallow && tidy_similarity::at_boundary(repo, info.id)? {
+            if shallow && repo::at_boundary(repo, &listed, info.id)? {
                 saw_boundary = true;
                 continue;
             }

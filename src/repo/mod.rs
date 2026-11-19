@@ -470,6 +470,30 @@ pub fn count_range(repo: &gix::Repository, include: ObjectId, exclude: ObjectId)
     Ok(n)
 }
 
+/// The commits that `.git/shallow` lists. For git each of them has no parents, whether its parents are in the object
+/// database or not (`git log` stops there). Empty in a full clone.
+pub fn shallow_boundary(repo: &gix::Repository) -> Result<std::collections::HashSet<ObjectId>> {
+    Ok(repo
+        .shallow_commits()?
+        .map(|list| list.iter().copied().collect())
+        .unwrap_or_default())
+}
+
+/// A commit at the boundary of a shallow clone: one that `listed` names (a merge commit too), or one with a parent that is
+/// not in the object database. What is behind it is not known, and a non-merge one has no patch to read.
+pub fn at_boundary(
+    repo: &gix::Repository,
+    listed: &std::collections::HashSet<ObjectId>,
+    id: ObjectId,
+) -> Result<bool> {
+    if listed.contains(&id) {
+        return Ok(true);
+    }
+    let c = repo.find_commit(id)?;
+    let missing = c.parent_ids().any(|p| !repo.has_object(p.detach()));
+    Ok(missing)
+}
+
 /// True if `a` is reachable from `b` (or equal).
 pub fn is_ancestor(repo: &gix::Repository, a: ObjectId, b: ObjectId) -> Result<bool> {
     if a == b {

@@ -442,16 +442,6 @@ fn has_missing_parent(repo: &gix::Repository, id: ObjectId) -> Result<bool> {
     Ok(missing)
 }
 
-/// A non-merge commit whose parent is not in the object database: the boundary of a shallow clone, with no patch to read.
-pub(crate) fn at_boundary(repo: &gix::Repository, id: ObjectId) -> Result<bool> {
-    let c = repo.find_commit(id)?;
-    let mut parents = c.parent_ids();
-    Ok(match (parents.next(), parents.next()) {
-        (Some(p), None) => !repo.has_object(p.detach()),
-        _ => false,
-    })
-}
-
 /// The window rule: a candidate is at most `window_secs` older than the commit (author time); newer is fine.
 pub fn in_window(commit_time: i64, candidate_time: i64, window_secs: i64) -> bool {
     candidate_time >= commit_time.saturating_sub(window_secs)
