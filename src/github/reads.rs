@@ -342,7 +342,7 @@ fn parse_status(v: &Value, b: &Budget) -> Option<CommitStatus> {
     })
 }
 
-fn parse_workflow_run(v: &Value, _b: &Budget) -> Option<WorkflowRun> {
+pub(crate) fn parse_workflow_run(v: &Value, _b: &Budget) -> Option<WorkflowRun> {
     if !v.is_object()
         || !["name", "event", "conclusion", "created_at"]
             .iter()
