@@ -122,7 +122,7 @@
       }
     },
     {
-      "name": "",
+      "name": "(empty)",
       "input": {
         "remote": "",
         "host": "github.com"
