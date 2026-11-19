@@ -5,10 +5,13 @@
 //! is why the state directory id uses its own hash prefix and a Go directory is never opened by mistake. README section
 //! "Watch core (port, W1)" documents state.json, journal.jsonl, the lock, the heartbeat and every deviation from Go.
 //!
-//! Crash model (the "Replay effects" table of Spec 035): an event is journalled exactly once (fsync), then applied to the
-//! state (idempotent, `apply`), then printed; `state.json` follows with `applied_seq` = `printed_seq` = the last seq.
-//! After a crash the start replays the journal lines past `applied_seq` into the state and prints the lines past
-//! `printed_seq` again (at-least-once output).
+//! Order of a cycle (W3 follows it, as Go `Watcher.Cycle`): the cycle emits an event and applies it to `Core::state` at once
+//! (`State::apply`), does its own bookkeeping that is no event, and `Core::commit` then journals each event (fsync), prints
+//! it and writes `state.json` with `applied_seq` = `printed_seq` = the last seq. `commit` does not apply.
+//!
+//! Crash model (the "Replay effects" table of Spec 035): an event is journalled exactly once. After a crash the start replays
+//! the journal lines past `applied_seq` into the state (`apply` is idempotent: counters are raised, never lowered, every
+//! other effect sets or removes) and prints the lines past `printed_seq` again (at-least-once output).
 use std::fmt;
 use std::path::{Path, PathBuf};
 
@@ -237,10 +240,11 @@ impl Core {
         self.journal.tail()
     }
 
-    /// Commits the events of one cycle in the order of the spec: each is appended to the journal and fsynced, then applied to
-    /// the state (idempotent: a cycle that applied them while computing changes nothing), then printed, then `state.json` is
-    /// written with `applied_seq` = `printed_seq` = the last seq. Returns the events as journalled (with their `seq`). After
-    /// an error the session is unusable: open the directory again, as after a crash.
+    /// Commits the events of one cycle: each is appended to the journal and fsynced, then printed, then `state.json` is
+    /// written with `applied_seq` = `printed_seq` = the last seq. It does not apply the events (Go: `Watcher.Cycle`): the
+    /// cycle applies each event to `state` when it emits it (`State::apply`), then does its own bookkeeping that is no event,
+    /// and `state` is what is saved. Only the replay at start applies, for the lines past `applied_seq`. Returns the events as
+    /// journalled (with their `seq`). After an error the session is unusable: open the directory again, as after a crash.
     pub fn commit(
         &mut self,
         events: &[Event],
@@ -256,9 +260,6 @@ impl Core {
         for (i, ev) in events.iter().enumerate() {
             written.push(self.journal.append(ev)?);
             out.after(Step::Append(i + 1))?;
-        }
-        for ev in &written {
-            self.state.apply(ev);
         }
         for (i, ev) in written.iter().enumerate() {
             out.print(ev)?;
