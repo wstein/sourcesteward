@@ -4131,7 +4131,7 @@ m TP26 'a branch without a patch is all matched' src/tidy.rs \
   'self.with_patch > 0 && self.commits.is_empty()' 'self.commits.is_empty()' \
   tidy_similarity_plan modified_partial_squash_and_empty_branches_stay_unmerged_with_their_class
 m TP27 'unmatched commits leave out the first of a key' src/tidy.rs \
-  'needed.entry(p).or_default().push(info.id);' 'needed.entry(p).or_default();' \
+  'needed.entry(p).or_default().push(id);' 'needed.entry(p).or_default();' \
   tidy_similarity_plan unmatched_commits_are_the_branch_commits_without_a_patch_partner_on_main
 m TP28 'a value below the low threshold is shown as the low threshold' src/tidy_similarity.rs \
   'if p >= t && !self.ge_pct(low_pct) {
@@ -4940,7 +4940,7 @@ m SHW1 'a commit at the boundary of the branch does not block equal-patches' src
   'self.with_patch > 0 && self.commits.is_empty() && self.unreadable.is_empty()' 'self.with_patch > 0 && self.commits.is_empty() && true' \
   tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
 m SHW2 'a commit at the boundary of the branch is not listed as unreadable' src/tidy.rs \
-  'unreadable.push(info.id);' 'let _ = info.id;' \
+  'unreadable.push(id);' 'let _ = id;' \
   tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
 m SHW3 'a boundary of the base is not noted' src/tidy.rs \
   'saw_boundary = true;' 'saw_boundary = false;' \
@@ -5001,6 +5001,16 @@ m SHW18 'upstream-gone is replaced by shallow-history' src/tidy.rs \
 m SHW19 'pull-request-merged-branch-moved is replaced by shallow-history' src/tidy.rs \
   'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), "unmerged" | "pull-request-merged-branch-moved") = (bp.shallow, bp.proof) {' \
   tidy_shallow a_gone_upstream_or_a_moved_pull_request_stays_what_it_was
+m SHW20 'the walk follows the parents of a listed commit' src/repo/mod.rs \
+  '    if listed.contains(&id) {
+        return Ok(Vec::new());' '    if false {
+        return Ok(Vec::new());' \
+  tidy_shallow the_range_is_the_one_git_sees_where_the_shallow_file_lists_a_commit_with_its_parent_there
+m SHW21 'the plain walk of gix is used in a shallow clone' src/repo/mod.rs \
+  '    if listed.is_empty() {
+        let mut out' '    if true {
+        let mut out' \
+  tidy_shallow the_range_is_the_one_git_sees_where_the_shallow_file_lists_a_commit_with_its_parent_there
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
