@@ -520,3 +520,389 @@ pub fn valid_host(s: &str) -> bool {
         && b.iter()
             .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'.' | b'-'))
 }
+
+// ---- the reader ------------------------------------------------------------------------------------------
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Mutex;
+use std::time::Duration;
+
+/// One request takes at most this long (Go: `DefaultRequestTimeout`).
+pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The watch-error codes this layer produces (`contracts/watch-events.md`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Code {
+    RateLimited,
+    Network,
+    Unauthorized,
+    Forbidden,
+    Http5xx,
+    Malformed,
+    TooManyPrs,
+    PageTooLarge,
+    RepoMoved,
+}
+
+impl Code {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Code::RateLimited => "rate-limited",
+            Code::Network => "network",
+            Code::Unauthorized => "unauthorized",
+            Code::Forbidden => "forbidden",
+            Code::Http5xx => "http-5xx",
+            Code::Malformed => "malformed-response",
+            Code::TooManyPrs => "too-many-open-prs",
+            Code::PageTooLarge => "page-too-large",
+            Code::RepoMoved => "repo-moved",
+        }
+    }
+}
+
+/// The only error type of the reader. The message is fixed, bounded text: neither response bodies, headers nor the
+/// token reach it (the one variable part, `new_name`, passed `valid_repo`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WatchError {
+    pub code: Code,
+    pub message: String,
+    /// The HTTP status when there was a response. An inaccessible repository is a 404, classified `Forbidden` with
+    /// status 404 so that callers can tell a deleted branch (`branches/BASE`) apart.
+    pub status: u16,
+    /// The `owner/name` of a refused 301, when its Location names the repository (never followed).
+    pub new_name: String,
+    /// Evidence of `RateLimited`.
+    pub rate: RateInfo,
+    pub retry_after: u64,
+}
+
+impl WatchError {
+    pub fn new(code: Code, message: impl Into<String>) -> WatchError {
+        WatchError {
+            code,
+            message: message.into(),
+            status: 0,
+            new_name: String::new(),
+            rate: RateInfo::default(),
+            retry_after: 0,
+        }
+    }
+
+    /// When to try again after a `RateLimited` error (Unix seconds).
+    pub fn rate_limited_until(&self, now: i64) -> i64 {
+        rate_limited_until(self.retry_after, &self.rate, now)
+    }
+}
+
+impl std::fmt::Display for WatchError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "watch read failed: {}: {}",
+            self.code.as_str(),
+            self.message
+        )
+    }
+}
+
+impl std::error::Error for WatchError {}
+
+fn malformed(msg: &str) -> WatchError {
+    WatchError::new(Code::Malformed, msg)
+}
+
+/// Groups requests for the per-poll accounting.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Kind {
+    List,
+    Detail,
+    Commits,
+    Branch,
+    Commit,
+    Checks,
+    RateLimit,
+    Actions,
+}
+
+/// Requests of one kind; `not_modified` is the subset answered 304 (those cost no rate limit).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct CallCount {
+    pub requests: u64,
+    pub not_modified: u64,
+}
+
+/// One successful read. For a 304 `not_modified` is set, the body is empty and `etag` is the validator that was
+/// sent, unchanged (a weak prefix included).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct WatchResponse {
+    pub status: u16,
+    pub not_modified: bool,
+    pub etag: String,
+    pub link: String,
+    pub body: Vec<u8>,
+    pub rate: RateInfo,
+}
+
+/// The part of a list item the watcher keeps.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PullItem {
+    pub number: u64,
+    pub title: String,
+    pub user: String,
+    pub labels: Vec<String>,
+    pub draft: bool,
+    pub head_sha: String,
+    pub head_ref: String,
+    pub base_ref: String,
+    pub base_sha: String,
+}
+
+/// One stored list page: the ETag and Link header of the response and the parsed items, so that a 304 needs no body.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PullPage {
+    pub etag: String,
+    pub link: String,
+    pub items: Vec<PullItem>,
+}
+
+/// What must be kept between two listings of one repository. `per_page` is 0 (nothing stored), 25 or 12 and only says
+/// what size the stored pages have, so that their ETags are reused only for that size; it never selects the size of
+/// the next listing (the halved size lives in the reader until the process ends).
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PullListState {
+    pub per_page: u32,
+    pub pages: Vec<PullPage>,
+}
+
+/// A complete listing. `unchanged`: every page was a 304. The caller stores `state` and passes it to the next call.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct PullListResult {
+    pub state: PullListState,
+    pub items: Vec<PullItem>,
+    pub unchanged: bool,
+}
+
+#[derive(Default)]
+struct Inner {
+    calls: BTreeMap<Kind, CallCount>,
+    last: RateInfo,
+    halved: BTreeSet<String>,
+}
+
+/// The GET-only reader for `stw watch`. It sleeps never and retries never (except the halving of the list page size);
+/// callers decide when to poll again. Safe for concurrent use.
+pub struct WatchHttp {
+    agent: ureq::Agent,
+    token: String,
+    base: String,
+    /// The host (with port) a refused redirect may name the repository on; `api.github.com` for github.com.
+    api_host: String,
+    timeout: Duration,
+    inner: Mutex<Inner>,
+}
+
+impl std::fmt::Debug for WatchHttp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "WatchHttp {{ base: {:?}, token: <hidden> }}", self.base)
+    }
+}
+
+/// The API host and path prefix of a forge host: `api.github.com` for `github.com`, else `HOST/api/v3`.
+pub fn api_destination(host: &str) -> (String, String) {
+    if host == "github.com" || host.ends_with(".ghe.com") {
+        (format!("api.{host}"), String::new())
+    } else {
+        (host.to_string(), "/api/v3".to_string())
+    }
+}
+
+/// The items of one list page (stub).
+pub fn parse_pull_items(_body: &[u8]) -> Result<Vec<PullItem>, WatchError> {
+    Err(malformed("stub"))
+}
+
+impl WatchHttp {
+    /// A reader for the API at `base` (no trailing slash; `https://api.github.com`, a GitHub Enterprise URL, or a test
+    /// server). `api_host` is the host a refused redirect may name the repository on.
+    pub fn new(token: String, base: String, api_host: String) -> WatchHttp {
+        let agent: ureq::Agent = ureq::Agent::config_builder().build().into();
+        WatchHttp {
+            agent,
+            token,
+            base: base.trim_end_matches('/').to_string(),
+            api_host,
+            timeout: REQUEST_TIMEOUT,
+            inner: Mutex::new(Inner::default()),
+        }
+    }
+
+    /// The request counts since the last call; resets them.
+    pub fn take_calls(&self) -> BTreeMap<Kind, CallCount> {
+        std::mem::take(&mut self.inner.lock().unwrap().calls)
+    }
+
+    /// The most recent rate-limit state seen in any response.
+    pub fn last_rate_limit(&self) -> RateInfo {
+        self.inner.lock().unwrap().last
+    }
+
+    /// Remember that list pages of `repo` exceeded the body limit at 25.
+    pub fn mark_halved(&self, repo: &str) {
+        self.inner.lock().unwrap().halved.insert(repo.to_string());
+    }
+
+    fn fetch(
+        &self,
+        kind: Kind,
+        endpoint: &str,
+        etag: &str,
+        list: bool,
+    ) -> Result<WatchResponse, WatchError> {
+        let _ = (kind, endpoint, etag, list);
+        let _ = (
+            &self.agent,
+            &self.token,
+            &self.api_host,
+            self.timeout,
+            &self.base,
+        );
+        Err(WatchError::new(Code::Network, "stub"))
+    }
+
+    fn repo_path(repo: &str) -> Result<String, WatchError> {
+        if valid_repo(repo) {
+            Ok(format!("repos/{repo}"))
+        } else {
+            Err(malformed("invalid repository name"))
+        }
+    }
+
+    /// One page of open pull requests (`per_page` 25 or 12; the page is bounded by the allowlist).
+    pub fn pull_list_page(
+        &self,
+        repo: &str,
+        per_page: u32,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::List,
+            &format!("{base}/pulls?state=open&per_page={per_page}&page={page}"),
+            etag,
+            true,
+        )
+    }
+
+    /// `pulls/N`.
+    pub fn pull_detail(
+        &self,
+        repo: &str,
+        number: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(Kind::Detail, &format!("{base}/pulls/{number}"), etag, false)
+    }
+
+    /// Page 1 to 3 of `pulls/N/commits` (100 per page).
+    pub fn pull_commits(
+        &self,
+        repo: &str,
+        number: u64,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::Commits,
+            &format!("{base}/pulls/{number}/commits?per_page=100&page={page}"),
+            etag,
+            false,
+        )
+    }
+
+    /// `branches/BASE`; the name is encoded by `encode_branch_segment`.
+    pub fn branch(&self, repo: &str, name: &str, etag: &str) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        let seg = encode_branch_segment(name).ok_or_else(|| malformed("invalid branch name"))?;
+        self.fetch(Kind::Branch, &format!("{base}/branches/{seg}"), etag, false)
+    }
+
+    /// `commits/SHA` (40 lower-case hex).
+    pub fn commit(&self, repo: &str, sha: &str, etag: &str) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(Kind::Commit, &format!("{base}/commits/{sha}"), etag, false)
+    }
+
+    fn checks(
+        &self,
+        repo: &str,
+        sha: &str,
+        which: &str,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::Checks,
+            &format!("{base}/commits/{sha}/{which}?per_page=100&page={page}"),
+            etag,
+            false,
+        )
+    }
+
+    /// `commits/SHA/check-runs` page 1 to 10.
+    pub fn check_runs(
+        &self,
+        repo: &str,
+        sha: &str,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        self.checks(repo, sha, "check-runs", page, etag)
+    }
+
+    /// `commits/SHA/statuses` page 1 to 10.
+    pub fn statuses(
+        &self,
+        repo: &str,
+        sha: &str,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        self.checks(repo, sha, "statuses", page, etag)
+    }
+
+    /// `actions/runs?head_sha=SHA` page 1 to 10: the fallback for a token that cannot read check runs.
+    pub fn actions_runs(
+        &self,
+        repo: &str,
+        sha: &str,
+        page: u64,
+    ) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::Actions,
+            &format!("{base}/actions/runs?head_sha={sha}&per_page=100&page={page}"),
+            "",
+            false,
+        )
+    }
+
+    /// `rate_limit` (stub).
+    pub fn rate_limit(&self) -> Result<RateInfo, WatchError> {
+        self.fetch(Kind::RateLimit, "rate_limit", "", false)?;
+        Ok(RateInfo::default())
+    }
+
+    /// Lists the open pull requests of `repo` (stub).
+    pub fn list_open_pulls(
+        &self,
+        _repo: &str,
+        _prior: &PullListState,
+        _max_open: usize,
+    ) -> Result<PullListResult, WatchError> {
+        Err(WatchError::new(Code::Network, "stub"))
+    }
+}
