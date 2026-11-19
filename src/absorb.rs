@@ -1,16 +1,40 @@
 // SPDX-License-Identifier: EUPL-1.2 AND BSD-3-Clause
 //! `stw absorb` (new behavior, no Go counterpart): the read-only PLAN of folding the staged changes into the unpushed
-//! commits that own the changed lines. STUB: the real implementation follows.
+//! commits that own the changed lines. It computes and writes nothing: no add, commit, rebase, ref, file or index refresh.
+//!
+//! The method is that of git-absorb 0.9.0 (BSD 3-Clause, Copyright (c) 2018 Stephen Jung; see `absorb_commute`): the stack
+//! is the first-parent chain of HEAD that no remote-tracking branch (and, without `--base`, no other local branch)
+//! contains, up to a merge commit, a commit by another author or the limit; a staged hunk belongs to the newest stack
+//! commit whose changes do not commute with it. The stack and target rules follow `src/stack.rs` and `src/lib.rs` of
+//! git-absorb through the accepted Python spike `spikes/stw/absorb/stw-absorb-plan`, which this module is compared with
+//! (`tests/it/absorb_oracle.rs`); deviations are listed in README.md, section `stw absorb plan`.
+//!
+//! Git boundary: everything is read through gix (refs, commits, trees, the index, blobs, the hunks of a zero-context
+//! Myers diff). The only `git` call is `blame` (`Op::BlameLines`, `via: git`) for the lines a hunk removes: gix has no
+//! blame. A failing blame is an error, never an empty evidence list. A partial clone is not served: a read that fails in
+//! one is `partial-clone-unsupported`, and nothing is ever fetched.
+use std::collections::BTreeMap;
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
+use gix::ObjectId;
 use serde_json::{json, Value};
 
 use crate::git_runner::Runner;
+use crate::repo;
 
 /// Commits in the stack without `--base`.
 pub const DEFAULT_MAX_STACK: u32 = 10;
 /// `schema_version` of the JSON document.
 pub const SCHEMA_VERSION: u32 = 1;
+/// Variables that would make the repository another one than the one the command works in.
+const OVERRIDES: [&str; 5] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+];
 
 pub struct Options {
     pub base: Option<String>,
@@ -32,6 +56,13 @@ impl Fail {
     }
 }
 
+fn fail<T>(code: &'static str, message: impl Into<String>) -> Result<T, Fail> {
+    Err(Fail {
+        code,
+        message: message.into(),
+    })
+}
+
 pub struct Plan {
     doc: Value,
 }
@@ -45,16 +76,295 @@ impl Plan {
     }
 }
 
-/// The variable that makes the repository ambiguous, if one is set.
+/// The variable that makes the repository ambiguous, if one is set (an empty value counts as unset).
 pub fn environment_override() -> Option<Fail> {
-    None
+    OVERRIDES
+        .iter()
+        .find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty()))
+        .map(|v| Fail {
+            code: "environment-override",
+            message: format!(
+                "{v} is set: the repository would not be the one of the current directory; unset it"
+            ),
+        })
 }
 
-pub fn plan(_dir: &Path, _start: &Path, _runner: &Runner, _opts: &Options) -> Result<Plan, Fail> {
-    Err(Fail {
-        code: "not-implemented",
-        message: "stw absorb is not implemented yet".into(),
-    })
+/// One path of the index or of the tree of HEAD: the mode (`0o100644`, `0o100755`, `0o120000`, `0o160000`) and the blob.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+struct Item {
+    mode: u32,
+    id: ObjectId,
+}
+
+const GITLINK: u32 = 0o160000;
+const SYMLINK: u32 = 0o120000;
+
+/// What kind of object a mode names: a regular file (either mode), a link or a gitlink.
+fn class(mode: u32) -> u32 {
+    match mode {
+        GITLINK | SYMLINK => mode,
+        _ => 0o100000,
+    }
+}
+
+/// One staged change of a path (no rename detection): the status letters of `git diff-index --raw`. The fields are read by
+/// the plan of the next commit; the guards only ask whether there is one.
+#[allow(dead_code)]
+struct Change {
+    path: Vec<u8>,
+    status: char,
+    old: Option<Item>,
+    new: Option<Item>,
+}
+
+struct Planner<'a> {
+    repo: gix::Repository,
+    opts: &'a Options,
+    /// The repository is a partial clone: a failing read means a missing object.
+    partial: bool,
+    head: ObjectId,
+    ref_name: Vec<u8>,
+    ident: (Vec<u8>, Vec<u8>),
+    base: Option<ObjectId>,
+}
+
+/// The plan of the staged changes of the repository at `dir` (its work tree root). `start` is the directory the command
+/// runs in (the search for a `.jj` directory starts there and ends at `dir`).
+pub fn plan(dir: &Path, start: &Path, _runner: &Runner, opts: &Options) -> Result<Plan, Fail> {
+    let repo = repo::open(dir).map_err(|e| Fail {
+        code: "git-failed",
+        message: format!("cannot open the repository: {e}"),
+    })?;
+    detect_backend(&repo, dir, start)?;
+    let partial = is_partial(&repo);
+    let mut p = Planner {
+        repo,
+        opts,
+        partial,
+        head: ObjectId::null(gix::hash::Kind::Sha1),
+        ref_name: Vec::new(),
+        ident: (Vec::new(), Vec::new()),
+        base: None,
+    };
+    p.run()
+}
+
+fn exists(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok()
+}
+
+/// Backend metadata is read before anything else: `.jj` in the directory or above it up to the work tree root, GitButler
+/// markers in the git directories or the refs. Git is the only supported backend; there is no fallback to Git writes.
+fn detect_backend(repo: &gix::Repository, top: &Path, start: &Path) -> Result<(), Fail> {
+    let mut jj = false;
+    let mut d = if start.starts_with(top) { start } else { top };
+    loop {
+        let marker = d.join(".jj");
+        if let Ok(md) = std::fs::symlink_metadata(&marker) {
+            if md.file_type().is_symlink() || !md.is_dir() {
+                return fail(
+                    "invalid-metadata",
+                    format!(
+                        "{} is not a directory",
+                        sanitize_bytes(marker.as_os_str().as_bytes())
+                    ),
+                );
+            }
+            jj = true;
+            break;
+        }
+        match d.parent() {
+            Some(up) if d != top => d = up,
+            _ => break,
+        }
+    }
+    let butler = exists(&repo.git_dir().join("gitbutler"))
+        || exists(&repo.common_dir().join("gitbutler"))
+        || has_butler_refs(repo);
+    match (jj, butler) {
+        (true, true) => fail(
+            "ambiguous-backend",
+            "jj and GitButler metadata are both present; ownership is ambiguous and nothing was read",
+        ),
+        (true, false) => fail(
+            "unsupported-backend",
+            "jj workspace (.jj found): stw absorb supports Git only and never falls back to Git writes",
+        ),
+        (false, true) => fail(
+            "unsupported-backend",
+            "GitButler-managed repository: stw absorb supports Git only and never falls back to Git writes",
+        ),
+        (false, false) => Ok(()),
+    }
+}
+
+/// Any `refs/gitbutler/*` or the exact workspace branch `refs/heads/gitbutler/workspace`.
+fn has_butler_refs(repo: &gix::Repository) -> bool {
+    let any = repo
+        .references()
+        .and_then(|p| {
+            p.prefixed("refs/gitbutler/")
+                .map(|mut i| i.next().is_some())
+        })
+        .unwrap_or(false);
+    any || matches!(
+        repo.try_find_reference("refs/heads/gitbutler/workspace"),
+        Ok(Some(_))
+    )
+}
+
+/// A promisor remote or `extensions.partialclone`: objects may be missing and nothing is fetched.
+fn is_partial(repo: &gix::Repository) -> bool {
+    let snap = repo.config_snapshot();
+    let cfg = snap.plumbing();
+    let promisor = cfg
+        .sections_by_name("remote")
+        .into_iter()
+        .flatten()
+        .any(|s| s.header().subsection_name().is_some() && s.body().value("promisor").is_some());
+    promisor || cfg.string("extensions.partialclone").is_some()
+}
+
+impl Planner<'_> {
+    /// A failed read: in a partial clone an object is missing, else the repository is unreadable.
+    fn read_err(&self, what: &str, e: impl std::fmt::Display) -> Fail {
+        if self.partial {
+            Fail {
+                code: "partial-clone-unsupported",
+                message: format!("{what} failed in a partial clone (objects may be missing; no lazy fetch is allowed): {e}"),
+            }
+        } else {
+            Fail {
+                code: "git-failed",
+                message: format!("{what} failed: {e}"),
+            }
+        }
+    }
+
+    fn rd<T, E: std::fmt::Display>(&self, what: &str, r: Result<T, E>) -> Result<T, Fail> {
+        r.map_err(|e| self.read_err(what, e))
+    }
+
+    fn run(&mut self) -> Result<Plan, Fail> {
+        let head = self.rd("reading HEAD", self.repo.head())?;
+        if head.is_unborn() {
+            return fail("no-commits", "the repository has no commit yet");
+        }
+        let Some(name) = head.referent_name() else {
+            return fail("detached-head", "HEAD is not on a branch");
+        };
+        self.ref_name = name.as_bstr().to_vec();
+        self.head = self.rd("reading HEAD", self.repo.head_id())?.detach();
+        self.ident = self.identity()?;
+        if let Some(rev) = &self.opts.base {
+            self.base = Some(self.resolve_base(rev)?);
+        }
+        let changes = self.staged()?;
+        if changes.is_empty() {
+            return fail("nothing-staged", "nothing is staged: the index equals HEAD");
+        }
+        fail("not-implemented", "stw absorb is not implemented yet")
+    }
+
+    fn identity(&self) -> Result<(Vec<u8>, Vec<u8>), Fail> {
+        let snap = self.repo.config_snapshot();
+        let mut out = Vec::new();
+        for key in ["user.name", "user.email"] {
+            match snap.string(key).filter(|v| !v.is_empty()) {
+                Some(v) => out.push(v.to_vec()),
+                None => {
+                    return fail(
+                        "no-identity",
+                        format!("{key} is not set in the Git configuration"),
+                    )
+                }
+            }
+        }
+        let email = out.pop().unwrap_or_default();
+        Ok((out.pop().unwrap_or_default(), email))
+    }
+
+    fn resolve_base(&self, rev: &str) -> Result<ObjectId, Fail> {
+        let bad = || Fail {
+            code: "bad-base",
+            message: format!("--base {} is not a commit", sanitize(rev)),
+        };
+        let id = self
+            .repo
+            .rev_parse_single(format!("{rev}^{{commit}}").as_str())
+            .map_err(|_| bad())?
+            .detach();
+        if !repo::is_ancestor(&self.repo, id, self.head).unwrap_or(false) {
+            return fail(
+                "bad-base",
+                format!("--base {} is not an ancestor of HEAD", sanitize(rev)),
+            );
+        }
+        Ok(id)
+    }
+
+    /// The staged changes, sorted by path: the index against the tree of HEAD. An unmerged path is a refusal.
+    fn staged(&self) -> Result<Vec<Change>, Fail> {
+        let index = self.rd("reading the index", self.repo.index_or_empty())?;
+        let mut new: BTreeMap<Vec<u8>, Item> = BTreeMap::new();
+        for e in index.entries() {
+            if e.stage_raw() != 0 {
+                return fail(
+                    "unmerged-index",
+                    "the index has unmerged paths (a merge is in progress)",
+                );
+            }
+            new.insert(
+                e.path(&index).to_vec(),
+                Item {
+                    mode: e.mode.bits(),
+                    id: e.id,
+                },
+            );
+        }
+        let commit = self.rd("reading HEAD", self.repo.find_commit(self.head))?;
+        let tree = self.rd("reading the tree of HEAD", commit.tree())?;
+        let mut rec = gix::traverse::tree::Recorder::default();
+        self.rd(
+            "reading the tree of HEAD",
+            tree.traverse().breadthfirst(&mut rec),
+        )?;
+        let mut old: BTreeMap<Vec<u8>, Item> = BTreeMap::new();
+        for e in rec.records {
+            if !e.mode.is_tree() {
+                old.insert(
+                    e.filepath.to_vec(),
+                    Item {
+                        mode: u32::from(e.mode.value()),
+                        id: e.oid,
+                    },
+                );
+            }
+        }
+        let mut out = Vec::new();
+        for path in old
+            .keys()
+            .chain(new.keys())
+            .collect::<std::collections::BTreeSet<_>>()
+        {
+            let (o, n) = (old.get(path).copied(), new.get(path).copied());
+            let status = match (o, n) {
+                (Some(a), Some(b)) if a == b => continue,
+                (Some(a), Some(b)) if class(a.mode) != class(b.mode) => 'T',
+                (Some(_), Some(_)) => 'M',
+                (None, Some(_)) => 'A',
+                (Some(_), None) => 'D',
+                (None, None) => continue,
+            };
+            out.push(Change {
+                path: path.clone(),
+                status,
+                old: o,
+                new: n,
+            });
+        }
+        Ok(out)
+    }
 }
 
 /// Bidi controls, zero-width characters and line and paragraph separators (the C0 and C1 controls are tested by range).
