@@ -97,8 +97,8 @@ func TestExportScenarios(t *testing.T) {
 	}
 	_ = restIn{}
 	w.Add("percent in a head branch is skipped, a plain name is kept", map[string]any{
-		"due":      map[string]any{"merged_pr": 10, "old_parent": old, "base": "main", "head_ref": "p"},
-		"open":     []map[string]any{{"number": 11, "base": "p", "head_ref": "bad%20name"}, {"number": 12, "base": "main", "head_ref": "feat/ok"}},
+		"due":              map[string]any{"merged_pr": 10, "old_parent": old, "base": "main", "head_ref": "p"},
+		"open":             []map[string]any{{"number": 11, "base": "p", "head_ref": "bad%20name"}, {"number": 12, "base": "main", "head_ref": "feat/ok"}},
 		"commit_page_body": f.body,
 	}, map[string]any{"candidate_prs": prs, "diagnostics": len(diag), "commit_reads": len(f.got)})
 	if err := watchexport.Write(dir, w.Name, w); err != nil {
