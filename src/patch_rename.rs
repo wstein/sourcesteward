@@ -33,6 +33,8 @@ const MINIMUM_BASENAME_SCORE: u64 = MINIMUM_SCORE + (MAX_SCORE - MINIMUM_SCORE) 
 /// git's default `diff.renameLimit`: inexact detection is skipped when `sources * destinations` is larger
 /// than the square of it (and one of them is larger than the limit).
 const RENAME_LIMIT: u64 = 1000;
+/// git's limit of identical candidates the exact pass looks at for one destination (`find_identical_files`).
+const EXACT_CANDIDATES: usize = 100;
 /// git's `NUM_CANDIDATE_PER_DST`.
 const CANDIDATES_PER_DST: usize = 4;
 /// git's `HASHBASE` in `diffcore-delta.c`.
@@ -181,6 +183,7 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
     for d in (0..n).filter(|i| added(&files[*i])) {
         let (dkind, did) = files[d].new.unwrap();
         let mut best: Option<(usize, bool)> = None;
+        let mut looked_at = 0;
         for &s in by_id.get(&did).into_iter().flatten() {
             let skind = files[s].old.unwrap().0;
             // git (find_identical_files): the modes of two files that are not both regular must be equal, so a
@@ -192,6 +195,12 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
             let same = basename(&files[s].path) == basename(&files[d].path);
             if best.is_none_or(|(_, b)| same && !b) {
                 best = Some((s, same));
+            }
+            // git (find_identical_files): the first candidate with the base name ends the search, and so do
+            // 100 usable candidates: of more identical sources the later ones are not looked at
+            looked_at += 1;
+            if same || looked_at >= EXACT_CANDIDATES {
+                break;
             }
         }
         if let Some((s, _)) = best {
