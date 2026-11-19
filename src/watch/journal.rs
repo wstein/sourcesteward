@@ -46,12 +46,52 @@ fn corrupt(msg: String) -> WatchError {
 /// Reads the whole file line by line (memory is bounded by one line), validates every complete line and calls `visit` for
 /// each event in order.
 pub fn scan(path: &Path, visit: &mut dyn FnMut(&Event)) -> Result<ScanEnd, WatchError> {
-    let _ = (path, visit);
-    Ok(ScanEnd {
-        tail: 0,
-        good: 0,
-        size: 0,
-    })
+    let file = File::open(path)
+        .map_err(|e| WatchError::Io(format!("cannot read {}: {e}", path.display())))?;
+    let size = file
+        .metadata()
+        .map_err(|e| WatchError::Io(format!("cannot read {}: {e}", path.display())))?
+        .len();
+    let mut reader = BufReader::new(file);
+    let (mut tail, mut good) = (0u64, 0u64);
+    let mut buf = Vec::new();
+    loop {
+        buf.clear();
+        let n = (&mut reader)
+            .take(MAX_LINE_BYTES as u64 + 1)
+            .read_until(b'\n', &mut buf)
+            .map_err(|e| WatchError::Io(format!("cannot read {}: {e}", path.display())))?;
+        if n == 0 {
+            break;
+        }
+        if buf.last() != Some(&b'\n') {
+            if n > MAX_LINE_BYTES {
+                return Err(corrupt(format!(
+                    "line {} is longer than {MAX_LINE_BYTES} bytes",
+                    tail + 1
+                )));
+            }
+            break; // an unterminated tail: a truncated write
+        }
+        if n > MAX_LINE_BYTES {
+            return Err(corrupt(format!(
+                "line {} is longer than {MAX_LINE_BYTES} bytes",
+                tail + 1
+            )));
+        }
+        let line = std::str::from_utf8(&buf[..n - 1])
+            .map_err(|_| corrupt(format!("line {} is not UTF-8", tail + 1)))?;
+        let ev = Event::from_line(line)
+            .map_err(|e| corrupt(format!("line {} does not validate: {e}", tail + 1)))?;
+        let want = tail + 1;
+        if ev.seq != want {
+            return Err(corrupt(format!("seq {} where {want} was expected", ev.seq)));
+        }
+        visit(&ev);
+        tail = want;
+        good += n as u64;
+    }
+    Ok(ScanEnd { tail, good, size })
 }
 
 /// The journal of one state directory, open for appending. One writer: the caller holds the directory lock.
