@@ -1397,15 +1397,45 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 
 The hint in `stw status` (new behavior without a Go counterpart; the owner accepts it live, recipe `scratch/abnahme-rezepte/rezept-stw-status-hook-hint.md`): under each repository that was read, one line when at least one of the two hooks is not ours, nothing when both are ours and nothing blocks them. `op log hooks: not installed (post-rewrite, reference-transaction); install with: stw oplog hooks install` names the hooks that are missing. Where `install` would refuse (`core.hooksPath` set, a hook that is not ours, a hooks directory that is a symbolic link) the line is `op log hooks: not active, install is refused here (<reason>); see: stw oplog hooks status`, without the install command. A set `core.hooksPath` or a linked hooks directory counts as blocked even when both files are ours, because git does not run them there. Only a hint: status installs nothing and writes nothing, starts no program, the exit code does not change, and a repository that could not be read has no line. It is the one place where stw prints a command (owner decision 2026-11-13); the JSON has the state only. JSON (additive, `schema_version` stays 2; also in `status PATH`, whose one-line text has no hint line): per repository `oplog_hooks`, null for a repository that could not be read, else `{state, reason, missing}`: `state` `installed`, `missing` or `blocked`; `reason` null, `hooks-path`, `foreign-hook` or `hooks-dir-symlink`; `missing` the names of the hooks that are not ours. There is no switch to hide the hint (no other status hint has one). Mutations `HH1` to `HH11`.
 
+## Watch scenarios (port corpus)
+
+`tests/fixtures/watch/` holds 279 scenarios, the test corpus for the port of `stw watch` (the Go `stw watch` stays the
+reference; `stw watch` itself is not part of this crate yet). They are generated from the Go tests of
+`legacy/sourcesteward` and are independent of the Go file formats: each gives the inputs (observations per cycle, answers of a
+fake forge, flags of the command) and the expected semantic outputs (events with kind, repository, PR, details, order and
+step, a semantic view of the accepted state, exit codes). Event ids and journal sequence numbers are only additional
+information, marked as format-dependent. Format and semantics: [`tests/fixtures/watch/FORMAT.md`](tests/fixtures/watch/FORMAT.md).
+
+```
+bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # GO_SRC: the Go source tree (read only, copied), OUTDIR: absolute, ignored by Git
+```
+
+The driver copies the Go tree into a private work directory, lays the exporter (`tests/oracle/watch_scenarios/`, Go test
+files) into the copy, runs `go test` there and writes the scenarios and `index.json`; two exports are byte-identical. The corpus
+in the tree is written with `WATCH_SCENARIOS_WRITE_FIXTURES=1` and the path `tests/fixtures/watch`. `tests/it/watch_scenarios.rs`
+checks only the structure (required fields, unique names, step order, FORMAT.md names every field); the semantics are played in
+the packages of the port. Mutations `WS1` to `WS39`.
+
+The corpus holds 279 scenarios: 194 of kind `watch-cycles` (the core: diff, debounce, checks classes, timeout,
+backoff, restack, health, baseline, lost state, replay and crash points of every kind, generated forge sequences), 33
+`vectors` (pure functions: classification, shape, backoff, ids, restack candidates, human lines, config, remotes, flags, URL
+and rate-limit rules), 14 `observer-session` and 25 `http-reader` (the observer and the HTTP reader
+against a fake forge: the answers of the forge as data), 13 `run-loop` (the command with a fake clock: modes, exit
+codes). Not exportable as scenarios (written by hand in the packages W1 and W4): the journal file (truncated and corrupt tails),
+modes and checks of the state directory (work tree, `.stw`, symlinks), the lock and the second watcher, the heartbeat file, signals,
+cross builds, the source checks of the Go packages (no imports, no write verbs), the `gh` token lookup, per-request deadlines and
+cancellation of the HTTP client, the layout of the conditional-request store, and the config and FIFO checks that need files.
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1286 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1325 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
+bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
 ```
 
 Integration tests live in one binary: new tests go to `tests/it/<name>.rs` with a `mod <name>;` line in `tests/it/main.rs` (one link instead of one per file; `slug_cases`, `review_states`, `snapshots_cli` and `snapshots_symlink` stay separate binaries).
