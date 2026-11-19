@@ -5011,6 +5011,9 @@ m SHW21 'the plain walk of gix is used in a shallow clone' src/repo/mod.rs \
         let mut out' '    if true {
         let mut out' \
   tidy_shallow the_range_is_the_one_git_sees_where_the_shallow_file_lists_a_commit_with_its_parent_there
+m SHW22 'the first-parent index goes on behind a listed commit' src/tidy_rebase.rs \
+  'if let (true, Some(parent)) = (listed.contains(&id), next) {' 'if let (false, Some(parent)) = (listed.contains(&id), next) {' \
+  tidy_shallow the_first_parent_index_of_the_base_ends_at_a_listed_commit
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
