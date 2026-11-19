@@ -702,6 +702,48 @@ tip_matches_run,head_in_branch,kind,strength}`, `mapping[{commit,subject,main,po
 counted in `review`, too. Text: one line per `rebase-identity` branch, `(N of them rebase-identity)` in the summary line, and `; landed via <kind> (<basis>, <strength>)` on a line whose
 branch landed by a mapping or the pull request (not for an ancestor).
 
+## Squash evidence in `tidy plan`
+
+A squash merge writes the whole branch as one commit on the base (new ID, one parent, the author time of the merge, mostly `(#N)` in the subject). The squash stage is layer 1 of the
+squash metrics (package 5a; specification `scratch/stw-tidy-squash/spec.md`, summary in `spikes/stw/tidy-similarity/README.md`): it reads what is cheap and exact, the merged pull
+request of the branch and the subjects on the base. It proves nothing about the content (layer 2, package 5b, will) and decides nothing: **it never changes a decision or a proof**, and a
+squash is never `delete`. Code: `src/tidy_squash.rs` (pure functions) and the stage in `src/tidy.rs`; tests `tests/it/tidy_squash.rs` and `tests/it/tidy_squash_plan.rs`; mutations `SQ11` to `SQ56`
+(a gap in the numbers: the others belong to packages 5b and 5c).
+
+For which branches: those whose proof is `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged` or `similar-patches` (also where a worktree makes them `in-worktree`). Not for a deletion proof,
+an open pull request, a backup branch, a branch without a commit of its own or `rebase-identity` (a strong rebase did not land as a squash): `squash` is null there. There is no flag; the stage
+runs with `--offline` and without a token, too.
+
+Pull request (`squash.pr`): from the list of pull requests the plan already holds (no request of its own). The pull request of the branch is the merged one with this head branch whose head is in
+the repository itself (`head.repo.full_name` equals the slug of `origin`, compared without regard to case; a fork with the same branch name and a deleted fork do not count; with no slug nothing is
+compared); where the plan names a merged pull request already (the proof `pull-request-merged-branch-moved`) that one, else the latest merge time, then the higher number. The existing proofs still
+match by branch name alone (a fork pull request with the name of a branch still counts there; open question). `merge_commit_on_base` is true when `merge_commit_sha` is an ancestor of the base and has
+exactly one parent; two parents are a real merge commit (false, `merge_commit_parents` 2). `head_is_tip`, `head_in_branch` (the head is the tip or an ancestor of it) and `commits_after_head`
+(commits of the branch that are not in the head; only where the head is in the branch). A commit or head that is not in the clone, or a walk that fails on a missing object, leaves the answer null.
+Where the proof is `pull-request-merged-branch-moved` and the merge commit is on the base the detail gets `; pull request merge commit <sha7> on <base>, N commit(s) after the pull request head`
+(or `, the pull request head is not in the branch`). Without a usable pull request: `state` `not-read` and `reason` `offline`, `no-token`, `no-pull-request` (the list has none for the branch),
+`rate-limited` or `request-failed`: no error, no change of the exit code.
+
+Subject (`squash.subject`): the commits of the first-parent chain of the base (the same walk as the rebase index, no diff), non-merge, with an author time at most 7 days older than the oldest commit of
+the branch. The candidate, strongest first: (1) the merge commit of the pull request where it is on the base (`basis` `merge-commit`, the sure one); (2) the commit whose subject ends on `(#N)` with
+the number of the pull request (`pr-number`); (3) a commit whose title equals the title of a branch commit (`subject`). Title: the subject without a trailing `(#N)`, a leading `<digits>: ` (JBS issue)
+and leading `[group]` words; a subject that is only such decoration is never compared. Of several, the oldest (ties by ID); `candidates` counts what the basis found. Further: `pr_number_in_subject`
+(the number at the end of the candidate's subject, whatever it is), `subject_equal`, `subjects_total` (non-merge commits of the branch), `subjects_in_body` (branch subjects that are a line `* <subject>`
+of the candidate's body), `pull_request_trailer` (the body has `Pull-request: .../pull/N` with the number of the pull request), `window{days,commits,cut}` (commits of the base read; `cut`: the walk
+stopped at 50 000). The candidate subject is masked like all commit text. The class of a squash is not set here: the same title with other content ("revert and again") would match.
+
+JSON, additive in schema 2: per branch `squash` null or `{pr, subject}`; `pr`: `state`, `reason`, `number`, `merged` (true where read), `merge_commit`, `merge_commit_in_clone`, `merge_commit_on_base`,
+`merge_commit_parents`, `head_is_tip`, `head_in_branch`, `commits_after_head`; `subject`: `candidate`, `basis`, `candidate_subject`, `candidates`, `pr_number_in_subject`, `subject_equal`,
+`subjects_total`, `subjects_in_body`, `pull_request_trailer`, `window`. No new key in `summary`. `landed_via` is unchanged (the pull request mapping of the rebase stage already gives `squash`).
+Text without `--explain`: only the detail above is new. With `--explain`: `squash: pull request #N merged, merge commit <sha7> is on <base> with 1 parent(s); the head is in the branch, K commit(s)
+after it`, or `squash: pull request not read (<reason>)`, then `squash: subject: candidate <sha7> '<subject>' (<basis>), N candidate(s), number #M in the subject, title equal to a branch commit: yes|no, S
+of T branch subject(s) listed in its body, Pull-request trailer: yes|no` or `squash: subject: no commit on <base> with a title of one of the T branch commit(s)`, and a line where the walk was cut.
+
+Deviations from the specification (5a), one by one: (1) the detail says `pull request merge commit` where the spec says `squash merge commit`: a one-parent merge commit is also a rebase of one commit
+(this owner's repositories merge by rebase); (2) `squash.pr` has `merge_commit_in_clone` (spec: a reason text for a missing object) and the subject object has `basis`, `candidate_subject`, `candidates` and
+`window`; (3) a pull request whose `head.repo` is empty counts as a fork where the slug is known; (4) no squash object for `rebase-identity` and for deletion proofs (spec silent); (5) the oldest of
+several candidates is taken (the spec leaves the tie open). Not here: the content layer, the classes `squashed-patches` and `partial`, `summary.squashed`, the oracle (5b, 5c), `landed_via` from layer 2.
+
 ## Explanation in `tidy plan --explain`
 
 `stw tidy plan --explain` prints under each branch of the text plan (indented by four spaces) the evidence that led to the decision, or the evidence that is missing. It reads
@@ -734,6 +776,8 @@ Lines, in this order (a section is left out where its stage did not run: `--no-s
   with the reason why the pull request mapping is a hint (commits after the head; for a merge or a squash `the branch has commits after the pull request head`, derived from
   `head_in_branch` because the commits are not listed; the head not in the branch) and that it gives no proof of its own (only the commit mapping makes `rebase-identity`), the `pull request mapping:` table (method `api`) and
   `remaining after the pull request head`.
+- `squash: ...` (where the branch has a `squash` object; no flag leaves it out): the pull request line (`squash: pull request #N merged, merge commit <sha7> is on|is not on <base>|is not in the clone|has N parent(s), not one`,
+  `; the head is the tip of the branch|is in the branch, K commit(s) after it|is not in the branch|could not be checked`, or `squash: pull request not read (<reason>)`), the subject line and, where the walk over the base was cut, one line saying so. Layer 1 only: no proof.
 
 All text from a commit (subjects, paths, lines) is escaped (control, invisible and direction characters; bytes that are not UTF-8 as `\xNN`), and so is the name of the upstream.
 
@@ -1359,7 +1403,7 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1255 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1286 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 ```
@@ -1521,6 +1565,9 @@ on a single file), the ref is restored but files already written stay; `git stat
   commits mapped, one ordered block, content at least 95 % per commit (at least 70 % and below 95 % is `modified`), no later version (amend after landing), at least one identity.
   The index stops by a run of 64 old author times, never by the committer time; the boundary commit of a shallow clone is skipped. The pull request (`evaluate_api`, on given inputs, no request) and
   `landed_via` (merge, rebase, squash, unknown with basis and strength). Mutations `RB1` to `RB68`; the plan wiring (rebase stage, pull request reads, `landed_via`, flag): `TR1` to `TR52`.
+- Squash evidence, layer 1 (`src/tidy_squash.rs`, wired into `tidy plan` as `squash` per branch (README "Squash evidence in `tidy plan`"); specification `scratch/stw-tidy-squash/spec.md`, package 5a):
+  the merged pull request (merge commit on the base with one parent, the head in the branch, commits after it) and the subject on the base (`(#N)`, title equality, list in the body, `Pull-request`
+  trailer); no diff, no request, no class, no decision. Mutations `SQ11` to `SQ56` (5a part).
 - `tidy plan --explain`: `src/tidy_explain.rs` (the text) and the flag in `src/cli.rs`; tests `tests/it/tidy_explain.rs`; mutations `TX1` to `TX38`.
 - The oracle of `tidy plan`: `src/tidy_oracle.rs` (pure comparisons), `tests/it/tidy_oracle.rs`, the ignored tests `tests/it/oracle_tidy.rs`, the driver `tests/oracle/tidy_oracle.sh`; mutations `OR1` to `OR35`.
 - Fast-forward with checkout: `src/sync/fast_forward.rs` (checks first, writes after; index tree cache removed by hand, gix issue 2421).
