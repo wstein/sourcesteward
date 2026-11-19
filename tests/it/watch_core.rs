@@ -1,6 +1,6 @@
 //! The watch core (port package W1): `src/watch/`. Pure functions and files of the state directory; the replay of the
 //! scenario corpus (`tests/fixtures/watch/`) is at the end of this file.
-use stw::watch::statedir::{sha256, sha256_hex};
+use stw::watch::statedir::{sha256, sha256_hex, workspace_id, IdSource};
 
 #[test]
 fn sha256_matches_the_nist_vectors() {
@@ -57,4 +57,57 @@ fn sha256_padding_boundaries_agree_with_sha256sum() {
     ] {
         assert_eq!(sha256_hex(&vec![b'a'; n]), want, "length {n}");
     }
+}
+
+#[test]
+fn the_workspace_id_is_sixteen_hex_digits_of_the_prefixed_hash() {
+    // printf 'stw-watch-rs1\ngithub.com\nrepos:a/b' | sha256sum
+    let a_b = ["a/b".to_string()];
+    assert_eq!(
+        workspace_id("github.com", IdSource::Repos(&a_b)),
+        "0465033cc48d07a5"
+    );
+    // ... 'repos:a/b\nc/d'
+    let two = ["c/d".to_string(), "a/b".to_string()];
+    assert_eq!(
+        workspace_id("github.com", IdSource::Repos(&two)),
+        "431f3da077950d4c"
+    );
+    // ... 'workspace:/w/root'
+    assert_eq!(
+        workspace_id("github.com", IdSource::Workspace("/w/root")),
+        "8633f7f15d37c015"
+    );
+    // ... host ghe.example
+    assert_eq!(
+        workspace_id("ghe.example", IdSource::Repos(&a_b)),
+        "c7ecea5836adf0b7"
+    );
+    // no repositories: the text ends after `repos:`
+    assert_eq!(
+        workspace_id("github.com", IdSource::Repos(&[])),
+        "d6b4026bb7cb9651"
+    );
+}
+
+#[test]
+fn the_repository_list_is_lower_cased_deduplicated_and_sorted_before_hashing() {
+    let base = ["a/b".to_string(), "c/d".to_string()];
+    let id = workspace_id("github.com", IdSource::Repos(&base));
+    let shuffled = [
+        "C/D".to_string(),
+        "a/b".to_string(),
+        "A/B".to_string(),
+        "c/d".to_string(),
+    ];
+    assert_eq!(workspace_id("github.com", IdSource::Repos(&shuffled)), id);
+    assert_eq!(id.len(), 16);
+    assert!(id
+        .bytes()
+        .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)));
+    assert_ne!(workspace_id("github.com", IdSource::Workspace("/a")), id);
+    assert_ne!(
+        workspace_id("github.com", IdSource::Workspace("/a")),
+        workspace_id("github.com", IdSource::Workspace("/b"))
+    );
 }
