@@ -23,7 +23,7 @@ for r in "${repos[@]}"; do
     total=$((total+1))
     if [ "$want" = "$got" ]; then same=$((same+1)); echo "same $(basename "$r") $c ${want:-empty}"; else
       diff=$((diff+1))
-      # classify: binary (abbreviated blob ids, depend on the repository), empty (no diff), text (hunk placement or a tie between equal renames)
+      # classify: binary (abbreviated blob ids, depend on the repository), empty (no diff), text (hunk placement: the indent heuristic of git)
       patch=$(git -C "$r" diff-tree -p -M --root --no-commit-id "$c")
       if [ -z "$patch" ]; then cls=empty; elif printf '%s\n' "$patch" | grep -q '^Binary files\|^GIT binary'; then cls=binary; else cls=text; fi
       echo "DIFF($cls) $(basename "$r") $c git=${want:-empty} stw=$got"
