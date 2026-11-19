@@ -4828,6 +4828,78 @@ m WS38 'TMPDIR inside a Git tree is not guarded' tests/oracle/watch_scenarios.sh
 m WS39 'the variable alone lets the driver write any directory' tests/oracle/watch_scenarios.sh \
   '[ "${WATCH_SCENARIOS_WRITE_FIXTURES:-}" = 1 ] && [ "$OUT" = "$FIXTURES" ]' '[ "${WATCH_SCENARIOS_WRITE_FIXTURES:-}" = 1 ]' \
   watch_scenarios the_driver_only_writes_the_tracked_fixtures_directory_with_the_explicit_variable
+m PI1 "exact renames are not detected (an empty file is no inexact match)" src/patch_rename.rs \
+  '        if let Some((s, _)) = best {' '        if let Some((s, _)) = best.filter(|_| false) {' \
+  patchid_git pinned::t::empty_file_rename
+m PI2 "a similarity of exactly 50 percent is not a rename" src/patch_rename.rs \
+  "                if score >= MINIMUM_SCORE {
+                    mine.push(Candidate {" "                if score > MINIMUM_SCORE {
+                    mine.push(Candidate {" \
+  patchid_git pinned::t::exactly_half_similar
+m PI3 "the similarity threshold is 40 percent" src/patch_rename.rs \
+  'const MINIMUM_SCORE: u64 = 30_000;' 'const MINIMUM_SCORE: u64 = 24_000;' \
+  patchid_git pinned::t::just_below_half
+m PI4 "the printed similarity index is one too high" src/patch_rename.rs \
+  'renamed[c.dst] = Some((c.src, c.score * 100 / MAX_SCORE));' 'renamed[c.dst] = Some((c.src, c.score * 100 / MAX_SCORE + 1));' \
+  patchid_git pinned::t::rename_change
+m PI5 "the similarity index line is not hashed" src/patch_id.rs \
+  "        text(&mut out, format!(\"similarity index {percent}%\").as_bytes());" '        let _ = percent;' \
+  patchid_git pinned::t::pure_rename
+m PI6 "the words rename from/to stand inside the quotes of a quoted name" src/patch_id.rs \
+  "l.extend_from_slice(&quote_path(b\"\", path.as_ref()));" 'l = quote_path(words, path.as_ref());' \
+  patchid_git pinned::t::names_with_blank_and_utf8
+m PI7 "exact renames do not prefer the same base name" src/patch_rename.rs \
+  'if best.is_none_or(|(_, b)| same && !b) {' 'if best.is_none() {' \
+  patchid_git pinned::t::identical_twins_second_matches_name
+m PI8 "the rename limit is 2000" src/patch_rename.rs \
+  'const RENAME_LIMIT: u64 = 1000;' 'const RENAME_LIMIT: u64 = 2000;' \
+  patchid_git pinned::t::over_the_rename_limit
+m PI9 "the base-name pass is skipped" src/patch_rename.rs \
+  '    for (name, s) in &src_names {' '    for (name, s) in src_names.iter().filter(|_| false) {' \
+  patchid_git pinned::t::basename_pair_wins_over_better_match
+m PI10 "a source can be the source of several renames" src/patch_rename.rs \
+  'if renamed[c.dst].is_none() && !src_used[c.src] {' 'if renamed[c.dst].is_none() {' \
+  patchid_git pinned::t::one_source_two_similar_additions
+m PI11 "the span hash loses the characters of the beginning of a line" src/patch_rename.rs \
+  'accum2 = (accum2 << 7) ^ (old_1 >> 25);' 'accum2 = (accum2 << 6) ^ (old_1 >> 26);' \
+  patchid_git pinned::t::deleted_and_added_unrelated
+m PI12 "a span is a whole line, not at most 64 bytes" src/patch_rename.rs \
+  "if n < 64 && c != b'\\n' {" "if n < 4096 && c != b'\\n' {" \
+  patchid_git pinned::t::rename_of_long_lines
+m PI13 "a carriage return before a line feed counts for the similarity" src/patch_rename.rs \
+  "if text && c == b'\\r'" "if false && c == b'\\r'" \
+  patchid_git pinned::t::rename_with_crlf
+m PI14 "a change of the file type is one modification" src/patch_id.rs \
+  '(Some(o), Some(n)) if type_class(o.0) != type_class(n.0) => {' '(Some(o), Some(n)) if type_class(o.0) != type_class(n.0) && false => {' \
+  patchid_git units::t::file_replaced_by_symlink
+m PI15 "a file diff without hunks ends its unit" src/patch_id.rs \
+  '    fn text(&mut self, l: &[u8]) -> Result<()> {' "    fn text(&mut self, l: &[u8]) -> Result<()> {
+        if starts_with(l, \"diff \") && self.before == -1 {
+            self.flush()?;
+        }" \
+  patchid_git units::t::mode_change_then_text_change
+m PI16 "the diff line after a binary file is hashed" src/patch_id.rs \
+  '                self.binary = false;' "                self.binary = false;
+                self.hash_line(l);" \
+  patchid_git units::t::binary_then_text
+m PI17 "the last unit is not added when a binary file ended it" src/patch_id.rs \
+  '        if self.patchlen > 0 {' '        if self.patchlen > 0 && !self.binary {' \
+  patchid_git units::t::binary_modified
+m PI18 "the zero blob id of a deleted binary file has the wrong length" src/patch_id.rs \
+  "n.unwrap_or_else(|| \"0\".repeat(len))," "n.unwrap_or_else(|| \"0\".repeat(len + 1))," \
+  patchid_git units::t::binary_deleted
+m PI19 "the abbreviated blob ids of a binary file are not hashed" src/patch_id.rs \
+  '                self.cur.update(ids.0.as_bytes());' '                let _ = &ids.0;' \
+  patchid_git units::t::binary_modified
+m PI20 "a mode change is not a header line" src/patch_id.rs \
+  '(Some((ko, _)), Some((kn, _))) if ko != kn => {' '(Some((ko, _)), Some((kn, _))) if ko != kn && false => {' \
+  patchid_git units::t::mode_and_content_change
+m PI21 "a unit does not end at the next diff line after a hunk" src/patch_id.rs \
+  "            self.flush()?;
+            self.before = -1;
+            self.after = -1;" "            self.before = -1;
+            self.after = -1;" \
+  patchid_git pinned::t::contents_swapped
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
