@@ -4921,6 +4921,19 @@ m PI28 "three candidates per destination" src/patch_rename.rs \
   "const CANDIDATES_PER_DST: usize = 4;" "const CANDIDATES_PER_DST: usize = 3;" \
   patchid_git pinned::t::five_identical_sources_five_destinations
 
+m PI29 "the exact pass looks at 101 identical candidates" src/patch_rename.rs \
+  "const EXACT_CANDIDATES: usize = 100;" "const EXACT_CANDIDATES: usize = 101;" \
+  patchid_git pinned::t::exact_candidates_100
+m PI30 "the base-name pair needs one more than 75 percent" src/patch_rename.rs \
+  "const MINIMUM_BASENAME_SCORE: u64 = MINIMUM_SCORE + (MAX_SCORE - MINIMUM_SCORE) / 2;" "const MINIMUM_BASENAME_SCORE: u64 = MINIMUM_SCORE + (MAX_SCORE - MINIMUM_SCORE) / 2 + 1;" \
+  patchid_git pinned::t::basename_exactly_75_against_better_source
+m PI31 "exactly 75 percent is not enough for a base-name pair" src/patch_rename.rs \
+  "if score >= MINIMUM_BASENAME_SCORE" "if score > MINIMUM_BASENAME_SCORE" \
+  patchid_git pinned::t::basename_exactly_75_against_better_source
+m PI32 "the base name does not rank a candidate slot" src/patch_rename.rs \
+  "c.as_ref().map(|c| (c.score, c.same_name))" "c.as_ref().map(|c| (c.score, false))" \
+  patchid_git pinned::t::fifth_equal_source_has_the_base_name
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
