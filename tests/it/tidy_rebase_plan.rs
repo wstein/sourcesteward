@@ -917,6 +917,7 @@ pub(crate) fn merged_pr(
         merge_commit_sha: merge,
         merged_at: Some(at),
         title: "t".into(),
+        ..Default::default()
     }
 }
 

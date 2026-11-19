@@ -59,6 +59,23 @@ fn the_pull_list_carries_the_merge_commit_the_merge_time_and_the_title() {
     assert_eq!(prs[2].title, "Closed");
 }
 
+#[test]
+fn the_pull_list_carries_the_repository_of_the_head() {
+    let api = FakeRoutes::start(|_, _| {
+        let body = format!(
+            r#"[{{"number":7,"state":"closed","title":"a","merged_at":"2023-11-14T22:13:20Z","merge_commit_sha":"{SHA_A}","head":{{"ref":"feat","sha":"{SHA_B}","repo":{{"full_name":"o/r"}}}}}},
+               {{"number":8,"state":"closed","title":"b","merged_at":"2023-11-14T22:13:20Z","merge_commit_sha":"{SHA_A}","head":{{"ref":"feat","sha":"{SHA_B}","repo":{{"full_name":"fork/r"}}}}}},
+               {{"number":9,"state":"closed","title":"c","merged_at":"2023-11-14T22:13:20Z","merge_commit_sha":"{SHA_A}","head":{{"ref":"feat","sha":"{SHA_B}","repo":null}}}},
+               {{"number":10,"state":"open","title":"d","merged_at":null,"merge_commit_sha":null,"head":{{"ref":"feat","sha":"{SHA_B}"}}}}]"#
+        );
+        (200, vec![], body)
+    });
+    let prs = client(&api).all_prs("o/r", 500).unwrap();
+    let repos: Vec<&str> = prs.iter().map(|p| p.head_repo.as_str()).collect();
+    // a deleted fork has `repo: null`, an answer without the field has none: both are empty
+    assert_eq!(repos, ["o/r", "fork/r", "", ""]);
+}
+
 fn commit_json(sha: &str, name: &str, mail: &str, date: &str, msg: &str) -> String {
     format!(
         r#"{{"sha":"{sha}","commit":{{"author":{{"name":"{name}","email":"{mail}","date":"{date}"}},"message":"{msg}"}}}}"#

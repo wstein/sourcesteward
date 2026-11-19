@@ -70,6 +70,9 @@ pub struct AnyPr {
     /// `merged_at` in seconds since the epoch; `None` for a pull request that is not merged.
     pub merged_at: Option<i64>,
     pub title: String,
+    /// `head.repo.full_name`: the repository the head branch lives in (a fork differs from the target repository);
+    /// empty when GitHub sent none (the fork was deleted).
+    pub head_repo: String,
 }
 
 /// The commits of a pull request, or the fact that there are too many to read in one request.
@@ -599,6 +602,10 @@ impl Client {
                     merge_commit_sha: p["merge_commit_sha"].as_str().unwrap_or("").to_string(),
                     merged_at: p["merged_at"].as_str().and_then(parse_utc),
                     title: p["title"].as_str().unwrap_or("").to_string(),
+                    head_repo: p["head"]["repo"]["full_name"]
+                        .as_str()
+                        .unwrap_or("")
+                        .to_string(),
                 });
             }
             if items.len() < 100 {
