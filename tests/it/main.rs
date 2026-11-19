@@ -8,6 +8,7 @@ mod common;
 mod absorb_fx;
 mod absorb_guards;
 mod absorb_output;
+mod absorb_readonly;
 mod absorb_stack;
 mod absorb_targets;
 mod absorb_units;
