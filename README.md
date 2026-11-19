@@ -1283,7 +1283,7 @@ repository name and `--root` is the workspace, as in the other stw commands (the
 is excluded from the other local branches by its exact name (the spike passed it to `git log --exclude=` as a pattern; ref names
 cannot hold glob characters, so no difference is observable); (15) `base` in the document is masked like the other text (the
 checksum has it unmasked); (16) a path that is not UTF-8 text has no blame, see above (the spike handled it); (17) attributes
-(`-diff`) are not consulted, see above (the spike let git decide).
+(`-diff`) are not consulted, see above (the spike let git decide); (18) the output of one `git blame` is bound by the runner (1 MiB per stream): a hunk that removes about 15,000 lines or more gets `blame-failed` (the spike has no bound and plans it); (19) a file whose only staged change is the mode and that is binary is `binary` here, the spike says `mode-only`; (20) a sparse index is not handled (see the limits): the spike did not handle it either, no deviation to the spike, named because the result is wrong, not refused.
 
 **License.** The commutation test (`src/absorb_commute.rs`) and the stack and target rules (`src/absorb.rs`) are a translation of
 git-absorb 0.9.0 (BSD 3-Clause, Copyright (c) 2018, Stephen Jung) through the accepted spike. Both files carry
@@ -1311,8 +1311,8 @@ Mutations `AB1` to `AB99` in `tests/mutation/mutate.sh`: 99 of 99 killed at thei
 key alone (no test; the promisor key is tested); a type change of a file inside a stack commit; the `conflict` reason from a real
 history (it needs a hunk the commutation test places and the blob check refuses: not constructed, tested as a verdict
 and as `lines_match` only; a mutation that always says consistent is not killed); an installed jj or GitButler (markers only);
-linked work trees, bare repositories, sparse checkouts; `GIT_DIR` and the other overrides in a caller's environment are
-refused, not served; a very large diff is read in full (no output bound); the comparison with
+linked work trees, bare repositories; a sparse index (observed: `files_skipped` then names directory entries as `added` and `deleted`, e.g. `b/`, and `index_digest` differs from the SHA-256 of `git ls-files -s -z`; a typed refusal `sparse-index-unsupported` is a behavior fix, not done, in the ledger); `GIT_DIR` and the other overrides in a caller's environment are
+refused, not served; a very large diff is read in full by gix (the output of `blame` is bound, deviation 18); the comparison with
 git-absorb versions other than 0.9.0.
 
 ## Stack preview: `stw restack plan` (M1/M2: port plus new)
