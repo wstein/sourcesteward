@@ -3,7 +3,7 @@
 //! the file; `holder` reads it for `--status`.
 use std::fs::{File, OpenOptions, TryLockError};
 use std::io::Read;
-use std::os::unix::fs::{FileExt, OpenOptionsExt};
+use std::os::unix::fs::{FileExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 use std::time::Duration;
 
@@ -44,6 +44,8 @@ pub fn acquire_with(dir: &Path, attempts: u32, pause: Duration) -> Result<DirLoc
         .mode(0o600)
         .open(&path)
         .map_err(|e| WatchError::Io(format!("cannot open {}: {e}", path.display())))?;
+    file.set_permissions(std::fs::Permissions::from_mode(0o600))
+        .map_err(|e| WatchError::Io(format!("cannot set the mode of {}: {e}", path.display())))?;
     for i in 0..attempts.max(1) {
         match file.try_lock() {
             Ok(()) => {
