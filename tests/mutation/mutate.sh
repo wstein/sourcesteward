@@ -4832,9 +4832,7 @@ m PI1 "exact renames are not detected (an empty file is no inexact match)" src/p
   '        if let Some((s, _)) = best {' '        if let Some((s, _)) = best.filter(|_| false) {' \
   patchid_git pinned::t::empty_file_rename
 m PI2 "a similarity of exactly 50 percent is not a rename" src/patch_rename.rs \
-  "                if score >= MINIMUM_SCORE {
-                    mine.push(Candidate {" "                if score > MINIMUM_SCORE {
-                    mine.push(Candidate {" \
+  "all.retain(|c| c.score >= MINIMUM_SCORE);" "all.retain(|c| c.score > MINIMUM_SCORE);" \
   patchid_git pinned::t::exactly_half_similar
 m PI3 "the similarity threshold is 40 percent" src/patch_rename.rs \
   'const MINIMUM_SCORE: u64 = 30_000;' 'const MINIMUM_SCORE: u64 = 24_000;' \
@@ -4900,6 +4898,28 @@ m PI21 "a unit does not end at the next diff line after a hunk" src/patch_id.rs 
             self.after = -1;" "            self.before = -1;
             self.after = -1;" \
   patchid_git pinned::t::contents_swapped
+
+m PI22 "the base-name pass takes a pair from 50 percent" src/patch_rename.rs \
+  "if score >= MINIMUM_BASENAME_SCORE" "if score >= MINIMUM_SCORE" \
+  patchid_git pinned::t::basename_60_loses_to_other_95
+m PI23 "an exact rename pairs a symlink with a regular file" src/patch_rename.rs \
+  "let modes_fit = (is_regular(skind) && is_regular(dkind)) || skind == dkind;" "let modes_fit = true;" \
+  patchid_git pinned::t::symlink_deleted_regular_added_same_blob
+m PI24 "exactly 1000 sources and 1000 destinations are above the rename limit" src/patch_rename.rs \
+  "(nd > RENAME_LIMIT || ns > RENAME_LIMIT) && nd * ns > RENAME_LIMIT * RENAME_LIMIT" "nd * ns >= RENAME_LIMIT * RENAME_LIMIT" \
+  patchid_git pinned::t::at_the_rename_limit
+m PI25 "a base name that occurs twice counts as unique" src/patch_rename.rs \
+  ".and_modify(|e| *e = None)" ".and_modify(|_| ())" \
+  patchid_git pinned::t::basename_not_unique_among_sources
+m PI26 "an equal candidate replaces a slot" src/patch_rename.rs \
+  "if rank(&slots[worst]) < rank(&Some(new)) {" "if rank(&slots[worst]) <= rank(&Some(new)) {" \
+  patchid_git pinned::t::five_identical_sources_five_destinations
+m PI27 "the last of equally bad slots is the worst" src/patch_rename.rs \
+  "if rank(&slots[i]) < rank(&slots[worst]) {" "if rank(&slots[i]) <= rank(&slots[worst]) {" \
+  patchid_git pinned::t::slot_order_tie
+m PI28 "three candidates per destination" src/patch_rename.rs \
+  "const CANDIDATES_PER_DST: usize = 4;" "const CANDIDATES_PER_DST: usize = 3;" \
+  patchid_git pinned::t::five_identical_sources_five_destinations
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
