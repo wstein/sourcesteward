@@ -545,6 +545,65 @@ mod pinned {
             .collect();
         change(fx, before, after)
     }
+    fn exact_candidates_cap(fx: &Fx, k: usize) -> ObjectId {
+        // k identical sources with other base names, then z/target.txt; the destination is n/target.txt
+        let mut before: Tree = (1..=k)
+            .map(|i| t(Box::leak(format!("e/f{i:03}").into_boxed_str()), "same\n"))
+            .collect();
+        before.push(t("z/target.txt", "same\n"));
+        change(fx, before, vec![t("n/target.txt", "same\n")])
+    }
+    fn exact_candidates_99(fx: &Fx) -> ObjectId {
+        exact_candidates_cap(fx, 99)
+    }
+    fn exact_candidates_100(fx: &Fx) -> ObjectId {
+        exact_candidates_cap(fx, 100)
+    }
+    fn exact_candidates_101(fx: &Fx) -> ObjectId {
+        exact_candidates_cap(fx, 101)
+    }
+    fn basename_exactly_75_against_better_source(fx: &Fx) -> ObjectId {
+        let k = "aaaaaaaaa\nbbbbbbbbb\nccccccccc\nddddddddd\n";
+        let o = "aaaaaaaaa\nbbbbbbbbb\nccccccccc\nzzzzzzzzz\nyyyyyyyyy\n";
+        let d = "aaaaaaaaa\nbbbbbbbbb\nccccccccc\nzzzzzzzzz\n";
+        change(
+            fx,
+            vec![t("d1/k.txt", k), t("o.txt", o)],
+            vec![t("d2/k.txt", d)],
+        )
+    }
+    fn basename_74_against_better_source(fx: &Fx) -> ObjectId {
+        let k = "aaaaaaaaaa\nbbbbbbbbbb\ncccccccccc\nddddddddd\n";
+        let o = "aaaaaaaaaa\nbbbbbbbbbb\ncccccccccc\nzzzzzzzzz\nyyyyyyyyy\n";
+        let d = "aaaaaaaaaa\nbbbbbbbbbb\ncccccccccc\nzzzzzzzzz\n";
+        change(
+            fx,
+            vec![t("d1/k.txt", k), t("o.txt", o)],
+            vec![t("d2/k.txt", d)],
+        )
+    }
+    fn fifth_equal_source_has_the_base_name(fx: &Fx) -> ObjectId {
+        let src = body(20, "s");
+        let dst = format!(
+            "{}{}",
+            src.lines()
+                .take(14)
+                .map(|l| format!("{l}\n"))
+                .collect::<String>(),
+            body(6, "n")
+        );
+        change(
+            fx,
+            vec![
+                t("s/a1", &src),
+                t("s/a2", &src),
+                t("s/a3", &src),
+                t("s/a4", &src),
+                t("s/z/y", &src),
+            ],
+            vec![t("d/y", &dst)],
+        )
+    }
     fn symlink_rename(fx: &Fx) -> ObjectId {
         change(fx, vec![l("old", "target")], vec![l("new", "target")])
     }
@@ -621,6 +680,12 @@ mod pinned {
             identical_sources_one_destination => "afd7bad30add69e58e522e830c4909213f37b573",
             at_the_rename_limit => "c0a9756bc84969c411135d8bc5881ebafd586454",
             five_identical_sources_five_destinations => "036cbbdef7e4ea0ec2d1b8f962bf220d9059b566",
+            exact_candidates_99 => "8c3b3c0760976ce7f213f6283fccbd04f6018ff2",
+            exact_candidates_100 => "e56fbd0161aba199ddc8e3ae4c99fe938d17343d",
+            exact_candidates_101 => "8e5fdc01beea5e30403b01967065956496045776",
+            basename_exactly_75_against_better_source => "fe174102debc2ba39b8bc859743a96ebc3f2c640",
+            basename_74_against_better_source => "8b9766b982e83655d92f2bbc5d753ecc9e83541f",
+            fifth_equal_source_has_the_base_name => "70e522c9940206d0de7ca3af33830fec888444cc",
             symlink_rename => "8e78bdefc8f0bc26c65eb193a6d5d3cac408bab2",
             contents_swapped => "302ba4b49782057e95797e0093b1c6a3ef85897a",
             rename_and_similar_new_file => "e248fd04bca57a4b299358385809c420d8d8238e",
