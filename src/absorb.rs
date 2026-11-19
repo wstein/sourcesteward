@@ -21,7 +21,7 @@ use gix::ObjectId;
 use serde_json::{json, Value};
 
 use crate::git_runner::Runner;
-use crate::repo;
+use crate::{repo, sha256};
 
 /// Commits in the stack without `--base`.
 pub const DEFAULT_MAX_STACK: u32 = 10;
@@ -415,15 +415,96 @@ pub fn decide(
     Ok(())
 }
 
-/// The JSON text that the plan checksum covers: object keys sorted, no white space, every non-ASCII character as `\uXXXX`
-/// (a character above the BMP as a surrogate pair). The encoding of the Python spike (`json.dumps(sort_keys=True,
+/// The JSON text that the plan checksum covers: object keys sorted, no white space, every character outside space..~ as
+/// `\uXXXX` (a character above the BMP as a surrogate pair). The encoding of the Python spike (`json.dumps(sort_keys=True,
 /// separators=(",", ":"))`), so that the two programs agree on the checksum.
-pub fn canonical_json(_value: &Value) -> String {
-    String::new()
+pub fn canonical_json(value: &Value) -> String {
+    let mut out = String::new();
+    canon(value, &mut out);
+    out
+}
+
+fn canon(v: &Value, out: &mut String) {
+    match v {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(n) => out.push_str(&n.to_string()),
+        Value::String(s) => {
+            out.push('"');
+            escape_into(s, out);
+            out.push('"');
+        }
+        Value::Array(a) => {
+            out.push('[');
+            for (i, x) in a.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                canon(x, out);
+            }
+            out.push(']');
+        }
+        Value::Object(m) => {
+            let mut keys: Vec<&String> = m.keys().collect();
+            keys.sort();
+            out.push('{');
+            for (i, k) in keys.into_iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push('"');
+                escape_into(k, out);
+                out.push_str("\":");
+                canon(&m[k.as_str()], out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+fn escape_into(s: &str, out: &mut String) {
+    use std::fmt::Write;
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\u{8}' => out.push_str("\\b"),
+            '\u{c}' => out.push_str("\\f"),
+            ' '..='~' => out.push(c),
+            _ => {
+                for unit in c.encode_utf16(&mut [0; 2]) {
+                    let _ = write!(out, "\\u{unit:04x}");
+                }
+            }
+        }
+    }
 }
 
 /// SHA-256 over `{"options":..,"plan":..,"raw_paths":[..]}` in the encoding of `canonical_json`. `raw_paths` are the
 /// paths as bytes, unmasked; a byte of an invalid UTF-8 sequence is `\udcXX`.
-pub fn plan_sum(_options: &Value, _raw_paths: &[Vec<u8>], _plan: &Value) -> String {
-    String::new()
+pub fn plan_sum(options: &Value, raw_paths: &[Vec<u8>], plan: &Value) -> String {
+    use std::fmt::Write;
+    let mut text = String::from("{\"options\":");
+    canon(options, &mut text);
+    text.push_str(",\"plan\":");
+    canon(plan, &mut text);
+    text.push_str(",\"raw_paths\":[");
+    for (i, p) in raw_paths.iter().enumerate() {
+        if i > 0 {
+            text.push(',');
+        }
+        text.push('"');
+        for chunk in p.utf8_chunks() {
+            escape_into(chunk.valid(), &mut text);
+            for b in chunk.invalid() {
+                let _ = write!(text, "\\udc{b:02x}");
+            }
+        }
+        text.push('"');
+    }
+    text.push_str("]}");
+    sha256::hex(text.as_bytes())
 }
