@@ -38,5 +38,6 @@ pub mod tidy_rebase;
 pub mod tidy_similarity;
 pub mod tidy_squash;
 pub mod watch;
+pub mod watch_reader;
 
 pub(crate) mod workspace;
