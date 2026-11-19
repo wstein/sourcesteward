@@ -291,7 +291,15 @@ impl Forge {
             routes: Arc::new(Mutex::new(BTreeMap::new())),
             log: Arc::new(Mutex::new(Vec::new())),
         };
-        f.set_routes(routes);
+        {
+            // among the routes of the scenario head the first one of a URI is served; a later one with the same
+            // URI is what `set_routes` of a call puts in place
+            let mut g = f.routes.lock().unwrap();
+            for r in routes {
+                let (uri, route) = route_of(r);
+                g.entry(uri).or_insert(route);
+            }
+        }
         let (routes, log) = (f.routes.clone(), f.log.clone());
         std::thread::spawn(move || {
             for stream in listener.incoming() {
