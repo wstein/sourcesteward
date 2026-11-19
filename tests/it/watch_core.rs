@@ -1064,3 +1064,268 @@ fn an_event_of_a_pr_without_a_record_creates_it_to_keep_the_counters() {
         (H1, Class::Green)
     );
 }
+use stw::watch::event::{WatchError as WatchErrorDetails, WatchRecovered, WatchStalled};
+use stw::watch::state::RepoState;
+
+#[test]
+fn repos_changed_updates_the_set_the_skipped_list_and_the_baseline_marks() {
+    let mut s = State::new();
+    s.repos = Some(vec!["a/a".into(), "b/b".into()]);
+    for r in ["a/a", "b/b"] {
+        let mut rs = RepoState::new(T0);
+        rs.baselined = true;
+        rs.restack_due.push(stw::watch::state::RestackDue {
+            merged_pr: 1,
+            merge_commit: None,
+            old_parent: "x".into(),
+            base: "main".into(),
+            head_ref: "h".into(),
+            head_fork: false,
+        });
+        rs.restack_done.push("id".into());
+        rs.conditional = Some(serde_json::json!({"pages": {}}));
+        s.repo.insert(r.to_string(), rs);
+    }
+    s.health_mut("b/b").next_try = "2026-10-22T09:10:00Z".into();
+    s.apply(&repos_event(
+        3,
+        &["c/c"],
+        &["b/b"],
+        &[("/w/x", "no github remote")],
+    ));
+    assert_eq!(
+        s.repos.as_deref(),
+        Some(&["a/a".to_string(), "c/c".to_string()][..])
+    );
+    assert_eq!(s.repos_epoch, 3);
+    assert_eq!(
+        s.skipped,
+        vec![Skipped {
+            path: "/w/x".into(),
+            reason: "no github remote".into()
+        }]
+    );
+    let b = &s.repo["b/b"];
+    assert!(
+        !b.baselined
+            && b.restack_due.is_empty()
+            && b.restack_done.is_empty()
+            && b.conditional.is_none(),
+        "the removed record stays, reset"
+    );
+    assert_eq!(s.health["b/b"].next_try, "");
+    let c = &s.repo["c/c"];
+    assert!(!c.baselined);
+    assert_eq!(c.since, T0);
+    assert!(s.repo["a/a"].baselined, "untouched");
+    // a repository that comes back needs its own baseline again; a repeated add is not doubled
+    s.apply(&repos_event(4, &["b/b", "c/c"], &[], &[]));
+    assert_eq!(
+        s.repos.as_deref(),
+        Some(&["a/a".to_string(), "c/c".to_string(), "b/b".to_string()][..])
+    );
+    assert!(s.skipped.is_empty());
+    s.apply(&repos_event(2, &[], &[], &[]));
+    assert_eq!(s.repos_epoch, 4, "never lowered");
+}
+
+fn run_ev(repo: Option<&str>, key: &str, details: Details) -> Event {
+    let id = event_id(repo, None, details.kind(), key);
+    Event::new(id, T0.to_string(), repo.map(str::to_string), None, details)
+}
+
+fn error_event(repo: Option<&str>, code: &str, episode: u64, failures: u64, retry: u64) -> Event {
+    run_ev(
+        repo,
+        &key_error(code, episode, failures),
+        Details::WatchError(WatchErrorDetails {
+            code: code.into(),
+            message: "m".into(),
+            failures,
+            retry_in_seconds: retry,
+            repo: repo.map(str::to_string),
+        }),
+    )
+}
+
+#[test]
+fn health_events_set_the_episode_the_open_error_and_the_retry_time() {
+    let mut s = State::new();
+    s.apply(&error_event(Some(REPO), "network", 2, 1, 120));
+    let h = &s.health[REPO];
+    assert_eq!(
+        (
+            h.episode,
+            h.failures,
+            h.last_code.as_str(),
+            h.error_open,
+            h.next_try.as_str()
+        ),
+        (2, 1, "network", true, "2026-10-22T09:02:00Z")
+    );
+    s.apply(&error_event(Some(REPO), "forbidden", 2, 3, 60));
+    assert_eq!(
+        (s.health[REPO].failures, s.health[REPO].last_code.as_str()),
+        (3, "forbidden")
+    );
+    s.apply(&error_event(Some(REPO), "network", 1, 2, 60));
+    assert_eq!(
+        (s.health[REPO].episode, s.health[REPO].failures),
+        (2, 3),
+        "never lowered"
+    );
+    // an error without a repository is the run level
+    s.apply(&error_event(None, "rate-limited", 1, 1, 30));
+    assert!(s.health[""].error_open && s.health[""].episode == 1);
+    assert_eq!(s.health.len(), 2);
+    // recovery after the error episode
+    let rec = run_ev(
+        Some(REPO),
+        &key_recovered_error(2),
+        Details::WatchRecovered(WatchRecovered {
+            after_failures: 3,
+            repo: Some(REPO.into()),
+        }),
+    );
+    s.apply(&rec);
+    let h = &s.health[REPO];
+    assert_eq!(
+        (h.error_open, h.failures, h.last_code.as_str(), h.episode),
+        (false, 0, "", 2)
+    );
+}
+
+#[test]
+fn a_stall_and_its_recovery_use_the_stall_episode_and_leave_the_error_state_alone() {
+    let mut s = State::new();
+    s.health_mut(REPO).error_open = true;
+    s.health_mut(REPO).last_code = "network".into();
+    let stalled = run_ev(
+        Some(REPO),
+        &key_stall(3),
+        Details::WatchStalled(WatchStalled {
+            since: T0.into(),
+            threshold_seconds: 600,
+            repo: REPO.into(),
+        }),
+    );
+    s.apply(&stalled);
+    assert_eq!(
+        (s.health[REPO].stalled, s.health[REPO].stall_episode),
+        (true, 3)
+    );
+    let rec = run_ev(
+        Some(REPO),
+        &key_stall(3),
+        Details::WatchRecovered(WatchRecovered {
+            after_failures: 5,
+            repo: Some(REPO.into()),
+        }),
+    );
+    s.apply(&rec);
+    let h = &s.health[REPO];
+    assert_eq!(
+        (
+            h.stalled,
+            h.stall_episode,
+            h.error_open,
+            h.last_code.as_str()
+        ),
+        (false, 3, true, "network")
+    );
+}
+
+#[test]
+fn applying_the_same_event_again_changes_nothing() {
+    let mut events = vec![
+        new_pr(1, H1),
+        new_pr(2, H2),
+        ev(
+            Some(1),
+            &key_head(H2, 1),
+            Details::HeadChanged(HeadChanged {
+                old: H1.into(),
+                new: H2.into(),
+            }),
+        ),
+        ev(
+            Some(1),
+            &key_checks(H2, 1),
+            Details::ChecksRed(ChecksRed {
+                head: H2.into(),
+                failing: vec!["ci".into()],
+                ..ChecksRed::default()
+            }),
+        ),
+        ev(
+            Some(1),
+            &key_ready(1),
+            Details::ReadyStateChanged(ReadyStateChanged {
+                from: "ready".into(),
+                to: "draft".into(),
+            }),
+        ),
+        ev(
+            Some(1),
+            &key_base(1),
+            Details::BaseChanged(BaseChanged {
+                old: "main".into(),
+                new: "dev".into(),
+            }),
+        ),
+        ev(
+            Some(1),
+            &key_mergeable(H2, 1),
+            Details::MergeableChanged(MergeableChanged {
+                mergeable: Some(true),
+                ..MergeableChanged::default()
+            }),
+        ),
+        ev(
+            Some(1),
+            &key_timeout(H2, 1),
+            Details::ChecksPendingTimeout(PendingTimeout {
+                head: H2.into(),
+                pending: vec!["x".into()],
+                since: T0.into(),
+            }),
+        ),
+        repos_event(1, &["n/n"], &[], &[("/p", "r")]),
+        ev(
+            Some(2),
+            &key_restack(1, Some("m")),
+            Details::RestackNeeded(RestackNeeded::default()),
+        ),
+        ev(
+            Some(1),
+            &key_merged(Some("m")),
+            Details::Merged(Merged {
+                merge_commit: Some("m".into()),
+                head: H2.into(),
+                ..Merged::default()
+            }),
+        ),
+        ev(
+            Some(2),
+            &key_generation(0),
+            Details::Closed(Closed::default()),
+        ),
+    ];
+    events.push(run_ev(
+        Some(REPO),
+        &key_stall(1),
+        Details::WatchStalled(WatchStalled {
+            since: T0.into(),
+            threshold_seconds: 600,
+            repo: REPO.into(),
+        }),
+    ));
+    events.push(error_event(None, "network", 1, 1, 5));
+    let mut s = State::new();
+    for e in &events {
+        s.apply(e);
+        let once = s.clone();
+        s.apply(e);
+        assert_eq!(s, once, "{}", e.id);
+    }
+}
