@@ -7,6 +7,7 @@ mod common;
 
 mod absorb_fx;
 mod absorb_guards;
+mod absorb_oracle;
 mod absorb_output;
 mod absorb_readonly;
 mod absorb_stack;
