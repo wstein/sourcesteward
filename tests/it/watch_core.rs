@@ -1881,3 +1881,113 @@ fn a_second_process_is_locked_out_and_the_lock_is_free_when_it_dies() {
     assert_eq!(holder(t.path()), None);
     acquire_with(t.path(), 1, NO_WAIT).unwrap();
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The status report.
+use stw::watch::lock::acquire;
+use stw::watch::statedir::read_status;
+
+#[test]
+fn the_status_is_read_from_the_directory_alone() {
+    let t = tmp();
+    let dir = t.path().join("s");
+    ensure_state_dir(&dir).unwrap();
+    let mut st = State::new();
+    st.interval_seconds = 600;
+    st.repos = Some(vec!["a/a".into(), "b/b".into()]);
+    let mut ra = RepoState::new("2026-10-14T18:00:00Z");
+    ra.last_ok = "2026-10-14T18:30:00Z".into();
+    st.repo.insert("a/a".into(), ra);
+    let h = st.health_mut("a/a");
+    (h.failures, h.error_open, h.last_code) = (2, true, "network".into());
+    let h = st.health_mut("b/b");
+    (h.failures, h.error_open, h.last_code) = (1, false, "forbidden".into());
+    save_state(&dir, &st).unwrap();
+    let mut j = Journal::open(&dir).unwrap();
+    append_n(&mut j, 3);
+    let beat = stw::github::parse_utc("2026-10-14T18:40:00Z").unwrap();
+    write_heartbeat(&dir, beat, 77, "stream").unwrap();
+    let lock = acquire(&dir).unwrap();
+    let s = read_status(&dir, beat + 1799).unwrap();
+    assert!(s.fresh, "3 x 600 s = 1800 s");
+    assert!(!read_status(&dir, beat + 1800).unwrap().fresh);
+    assert_eq!(
+        (s.seq, s.interval_seconds, s.lock_held, s.lock_pid),
+        (3, 600, true, Some(std::process::id()))
+    );
+    let hb = s.heartbeat.clone().unwrap();
+    assert_eq!(
+        (hb.time.as_str(), hb.age_seconds, hb.pid),
+        ("2026-10-14T18:40:00Z", 1799, 77)
+    );
+    assert_eq!(s.repos.len(), 2);
+    assert_eq!(
+        (
+            s.repos[0].repo.as_str(),
+            s.repos[0].last_ok.as_deref(),
+            s.repos[0].age_seconds,
+            s.repos[0].failures,
+            s.repos[0].open_error.as_deref()
+        ),
+        (
+            "a/a",
+            Some("2026-10-14T18:30:00Z"),
+            Some(600 + 1799),
+            2,
+            Some("network")
+        )
+    );
+    assert_eq!(
+        (
+            s.repos[1].last_ok.as_deref(),
+            s.repos[1].age_seconds,
+            s.repos[1].failures,
+            s.repos[1].open_error.as_deref()
+        ),
+        (None, None, 1, None),
+        "no last read; the error is closed"
+    );
+    let json: serde_json::Value = serde_json::to_value(&s).unwrap();
+    assert_eq!(
+        json.as_object()
+            .unwrap()
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>(),
+        [
+            "schema_version",
+            "state_dir",
+            "heartbeat",
+            "fresh",
+            "interval_seconds",
+            "seq",
+            "lock_held",
+            "repos"
+        ]
+    );
+    drop(lock);
+    assert!(!read_status(&dir, beat).unwrap().lock_held);
+}
+
+#[test]
+fn a_missing_directory_is_not_fresh_and_not_an_error_while_a_corrupt_file_or_a_relative_path_is() {
+    let t = tmp();
+    let s = read_status(&t.path().join("nothing"), 0).unwrap();
+    assert!(!s.fresh && s.heartbeat.is_none() && s.repos.is_empty() && !s.lock_held);
+    assert_eq!((s.seq, s.interval_seconds), (0, 60));
+    assert_eq!(
+        read_status(Path::new("rel"), 0).unwrap_err(),
+        WatchError::StateDirUsage
+    );
+    std::fs::write(t.path().join("state.json"), "{").unwrap();
+    assert!(matches!(
+        read_status(t.path(), 0),
+        Err(WatchError::CorruptState(_))
+    ));
+    std::fs::remove_file(t.path().join("state.json")).unwrap();
+    std::fs::write(t.path().join("journal.jsonl"), "garbage\n").unwrap();
+    assert!(matches!(
+        read_status(t.path(), 0),
+        Err(WatchError::CorruptState(_))
+    ));
+}
