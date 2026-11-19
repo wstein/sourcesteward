@@ -4,8 +4,11 @@ use crate::common::*;
 use gix::ObjectId;
 use serde_json::Value;
 use std::process::Command;
+use stw::github::AnyPr;
 use stw::repo::RepoRef;
-use stw::tidy::{plan_repo_with_opts, PlanOpts, PrProof, RepoPlan, Similarity};
+use stw::tidy::{
+    plan_repo_with_opts, unmatched_commits, PatchCache, PlanOpts, PrProof, RepoPlan, Similarity,
+};
 
 const T0: i64 = 1_700_000_000;
 const DAY: i64 = 86_400;
@@ -126,13 +129,17 @@ fn opts() -> PlanOpts {
 }
 
 fn plan_of(fx: &Fx) -> RepoPlan {
+    plan_with_prs(fx, None)
+}
+
+fn plan_with_prs(fx: &Fx, prs: Option<Vec<AnyPr>>) -> RepoPlan {
     let p = plan_repo_with_opts(
         &RepoRef {
             name: "fx".into(),
             path: fx.path.clone(),
         },
         PrProof {
-            prs: None,
+            prs,
             note: "off".into(),
             api: Default::default(),
         },
@@ -315,4 +322,105 @@ fn a_real_git_clone_with_depth_gives_a_plan_through_the_cli() {
     let side = branch_json(&v, "side");
     assert_eq!(side["decision"], "review", "{out}");
     assert_eq!(side["proof"], "shallow-history", "{out}");
+}
+
+#[test]
+fn a_merged_pull_request_with_exactly_this_head_still_deletes_in_a_shallow_clone() {
+    let fx = shallow_world(true);
+    let pr = AnyPr {
+        head_ref: "deep".into(),
+        head_sha: fx.tip("deep").to_string(),
+        number: 7,
+        state: "MERGED",
+        ..Default::default()
+    };
+    let p = plan_with_prs(&fx, Some(vec![pr]));
+    let b = get(&p, "deep");
+    assert_eq!(
+        (b.decision, b.proof),
+        ("delete", "merged-pull-request-head")
+    );
+    assert_eq!(b.shallow.map(|g| g.unreadable_commits), Some(1));
+}
+
+fn unmatched_of(fx: &Fx, base: ObjectId, tip: ObjectId) -> stw::tidy::Unmatched {
+    let repo = fx.repo();
+    unmatched_commits(&repo, &mut PatchCache::default(), base, tip).unwrap()
+}
+
+fn make_shallow(fx: &Fx, boundaries: &[ObjectId], gone: &[ObjectId]) {
+    let git = fx.path.join(".git");
+    let list: String = boundaries.iter().map(|b| format!("{b}\n")).collect();
+    std::fs::write(git.join("shallow"), list).unwrap();
+    for g in gone {
+        let hex = g.to_string();
+        std::fs::remove_file(git.join("objects").join(&hex[..2]).join(&hex[2..])).unwrap();
+    }
+}
+
+#[test]
+fn a_boundary_of_the_base_met_before_the_last_partner_is_no_cut() {
+    // main = merge(a, b), `a` is a boundary (its parent is gone), `b <- c`, and `c` has the patch of the branch commit
+    let fx = Fx::new();
+    let gone = mkc(&fx, None, &[("z.txt", Some("z\n"))], "gone", T0 - 40 * DAY);
+    let a = mkc(&fx, Some(gone), &[("a.txt", Some("a\n"))], "a", T0 - DAY);
+    let c = mkc(&fx, None, &[("p.txt", Some("p\n"))], "c", T0 - 9 * DAY);
+    let b = mkc(&fx, Some(c), &[("b.txt", Some("b\n"))], "b", T0 - 8 * DAY);
+    let m = fx.commit_at_parents(
+        vec![a, b],
+        Some(a),
+        &[("b.txt", Some("b\n"))],
+        "merge",
+        Stamp::new("T", "t@example.com", T0 - 2 * DAY),
+        Stamp::new("T", "t@example.com", T0 - 2 * DAY),
+    );
+    let r1 = mkc(&fx, None, &[("p.txt", Some("p\n"))], "r1", T0 - 5 * DAY);
+    let r2 = mkc(&fx, None, &[("q.txt", Some("q\n"))], "r2", T0 - 5 * DAY);
+    make_shallow(&fx, &[a], &[gone]);
+    let u = unmatched_of(&fx, m, r1);
+    assert_eq!(
+        (u.with_patch, u.commits.len(), u.unreadable.len()),
+        (1, 0, 0)
+    );
+    assert!(
+        !u.base_cut,
+        "every commit has its partner: nothing hides one"
+    );
+    assert!(u.all_matched());
+    // a commit without a partner makes the same walk reach the boundary: a partner may lie behind it
+    let u = unmatched_of(&fx, m, r2);
+    assert_eq!(
+        (u.with_patch, u.commits.len(), u.unreadable.len()),
+        (1, 1, 0)
+    );
+    assert!(u.base_cut);
+    assert!(!u.all_matched());
+}
+
+#[test]
+fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_but_a_merge_is_not_one() {
+    let fx = Fx::new();
+    let gone = mkc(&fx, None, &[("z.txt", Some("z\n"))], "gone", T0 - 40 * DAY);
+    let gone2 = mkc(&fx, None, &[("y.txt", Some("y\n"))], "gone2", T0 - 41 * DAY);
+    let base = mkc(&fx, None, &[("p.txt", Some("p\n"))], "base", T0 - 9 * DAY);
+    let edge = mkc(
+        &fx,
+        Some(gone),
+        &[("e.txt", Some("e\n"))],
+        "edge",
+        T0 - 6 * DAY,
+    );
+    let s = Stamp::new("T", "t@example.com", T0 - 5 * DAY);
+    let merge = fx.commit_at_parents(vec![gone, gone2], Some(gone), &[], "merge", s, s);
+    make_shallow(&fx, &[edge, merge], &[gone, gone2]);
+    let u = unmatched_of(&fx, base, edge);
+    assert_eq!(u.unreadable, vec![edge]);
+    assert_eq!(u.with_patch, 0);
+    assert!(!u.all_matched());
+    // a merge commit has no patch whatever its parents: it is no boundary commit
+    let u = unmatched_of(&fx, base, merge);
+    assert_eq!(
+        (u.with_patch, u.commits.len(), u.unreadable.len()),
+        (0, 0, 0)
+    );
 }
