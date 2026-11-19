@@ -24,6 +24,7 @@ use crate::tidy_rebase::{
     RebaseReport, Strength,
 };
 use crate::tidy_similarity::{self, BranchReport};
+use crate::tidy_squash::{PrEvidence, SubjectEvidence};
 
 #[derive(Clone, Debug)]
 pub struct BranchPlan {
@@ -43,6 +44,8 @@ pub struct BranchPlan {
     pub similarity: Option<SimilarityPlan>,
     /// What the rebase stage found; None where the stage did not run or failed for this branch.
     pub rebase: Option<RebasePlan>,
+    /// What the squash evidence (layer 1) found; None where the stage did not run for this branch.
+    pub squash: Option<SquashPlan>,
     /// How the branch landed, with the basis; `unknown` where nothing says.
     pub landed_via: LandedVia,
     /// The number of a merged pull request of this branch whose head is not the tip (the branch moved on). Not in
@@ -57,6 +60,15 @@ pub struct RebasePlan {
     pub report: RebaseReport,
     /// The pull request mapping, or the reason there is none.
     pub api: ApiReport,
+}
+
+/// The result of the squash stage (layer 1) for one branch.
+#[derive(Clone, Debug)]
+pub struct SquashPlan {
+    /// The merged pull request of the branch, or the reason there is none.
+    pub pr: PrEvidence,
+    /// The commit of the base that looks like the squash.
+    pub subject: SubjectEvidence,
 }
 
 /// The two thresholds of the similarity stage, in percent (`1..=100`, `low <= high`).
@@ -395,6 +407,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             worktree: None,
             similarity: None,
             rebase: None,
+            squash: None,
             landed_via: LandedVia {
                 kind: LandedKind::Unknown,
                 basis: Basis::None,
@@ -491,6 +504,15 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
     if let Some(th) = opts.similarity {
         similarity_stage(&repo, base_tip, &base, th, &mut sim_cache, &mut rows)?;
     }
+    squash_stage(
+        &repo,
+        base_tip,
+        &base,
+        slug.as_deref(),
+        prs.as_deref(),
+        proof.api,
+        &mut rows,
+    );
     for Row { mut bp, .. } in rows {
         let br = bp.branch.clone();
         bp.landed_via = landed_via(
@@ -584,6 +606,116 @@ fn similarity_stage(
         });
     }
     Ok(())
+}
+
+/// The proofs of the branches that get squash evidence: where nothing settled the branch, or a stage that only
+/// advises (`similar-patches`, `rebase-identity`) took the place of such a proof. A branch with a deletion proof, an
+/// open pull request, a backup name or no commit of its own has none.
+fn squash_judged(proof: &str) -> bool {
+    judged(proof) || matches!(proof, "similar-patches" | "rebase-identity")
+}
+
+/// The squash stage (layer 1): for each branch that `squash_judged` names, the merged pull request of the branch (from
+/// the list the plan already holds, no request) and the commit of the base whose subject looks like the squash. It
+/// decides nothing. Where the proof is `pull-request-merged-branch-moved` and the merge commit of the pull request is
+/// on the base the detail says so. A failure for a branch (or for the index of the base) leaves the plan standing and
+/// says so in the detail.
+fn squash_stage(
+    repo: &gix::Repository,
+    base_tip: ObjectId,
+    base: &str,
+    slug: Option<&str>,
+    prs: Option<&[AnyPr]>,
+    api: PrApi,
+    rows: &mut [Row],
+) {
+    use crate::tidy_squash as sq;
+    let fail = |bp: &mut BranchPlan, e: &Error| {
+        bp.detail += &format!("; squash evidence not computed ({e})")
+    };
+    let lim = tidy_similarity::Limits::default();
+    let mut sides: Vec<Option<sq::BranchCommits>> = Vec::new();
+    let mut since: Option<i64> = None;
+    for row in rows.iter_mut() {
+        if !squash_judged(row.bp.proof) || row.bp.unique == 0 {
+            sides.push(None);
+            continue;
+        }
+        match sq::branch_commits(repo, base_tip, row.tip) {
+            Ok(side) => {
+                if let Some(t) = side.oldest_author_secs {
+                    since = Some(since.map_or(t, |o: i64| o.min(t)));
+                }
+                sides.push(Some(side));
+            }
+            Err(e) => {
+                fail(&mut row.bp, &e);
+                sides.push(None);
+            }
+        }
+    }
+    if sides.iter().all(Option::is_none) {
+        return;
+    }
+    let from = since.map(|t| t.saturating_sub(lim.window_secs));
+    let index = match sq::SquashIndex::build(repo, base_tip, from, tidy_rebase::RB_MAX_WINDOW) {
+        Ok(i) => i,
+        Err(e) => {
+            for (row, side) in rows.iter_mut().zip(&sides) {
+                if side.is_some() {
+                    fail(&mut row.bp, &e);
+                }
+            }
+            return;
+        }
+    };
+    for (row, side) in rows.iter_mut().zip(sides) {
+        let Some(side) = side else {
+            continue;
+        };
+        let pr = match prs {
+            Some(list) => match sq::pick_pr(list, &row.bp.branch, slug, row.pr_moved) {
+                Some(p) => sq::evaluate_pr(repo, base_tip, row.tip, p),
+                None => sq::PrEvidence::not_read(ApiReason::NoPullRequest),
+            },
+            None => sq::PrEvidence::not_read(match api {
+                PrApi::Off(r) => r,
+                PrApi::Client(_) => ApiReason::NoPullRequest,
+            }),
+        };
+        let pr_ref = pr.number.map(|number| sq::PrRef {
+            number,
+            merge_commit: pr
+                .merge_commit
+                .filter(|_| pr.merge_commit_on_base == Some(true)),
+        });
+        let subject =
+            match sq::evaluate_subject(repo, &index, &side, pr_ref.as_ref(), lim.window_secs) {
+                Ok(s) => s,
+                Err(e) => {
+                    fail(&mut row.bp, &e);
+                    continue;
+                }
+            };
+        if row.bp.proof == "pull-request-merged-branch-moved" && pr.number == row.pr_moved {
+            if let (Some(m), Some(true)) = (pr.merge_commit, pr.merge_commit_on_base) {
+                row.bp.detail += &format!(
+                    "; pull request merge commit {} on {base}",
+                    &m.to_string()[..7]
+                );
+                match (pr.head_in_branch, pr.commits_after_head) {
+                    (Some(true), Some(n)) => {
+                        row.bp.detail += &format!(", {n} commit(s) after the pull request head")
+                    }
+                    (Some(false), _) => {
+                        row.bp.detail += ", the pull request head is not in the branch"
+                    }
+                    _ => {}
+                }
+            }
+        }
+        row.bp.squash = Some(SquashPlan { pr, subject });
+    }
 }
 
 /// One branch while the stages run: its plan so far and what the stages need besides.
@@ -1107,6 +1239,7 @@ mod tests {
             worktree: None,
             similarity: None,
             rebase: None,
+            squash: None,
             landed_via: LandedVia {
                 kind: LandedKind::Unknown,
                 basis: Basis::None,

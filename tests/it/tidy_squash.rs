@@ -305,7 +305,7 @@ fn a_subject_is_reduced_to_its_title_before_two_are_compared() {
 }
 
 /// main after `n` commits that are not related to the branch (author time `t0 + k`).
-fn on_main(w: &mut W, subject: &str, body: &str, secs: i64, tag: &str) -> ObjectId {
+pub fn on_main(w: &mut W, subject: &str, body: &str, secs: i64, tag: &str) -> ObjectId {
     let s = Stamp::new("Other", "o@example.com", secs);
     let f = format!("m-{tag}.txt");
     let msg = if body.is_empty() {
