@@ -1,6 +1,8 @@
 //! The watch core (port package W1): `src/watch/`. Pure functions and files of the state directory; the replay of the
 //! scenario corpus (`tests/fixtures/watch/`) is at the end of this file.
-use stw::watch::statedir::{default_state_dir, sha256, sha256_hex, workspace_id, IdSource};
+use stw::watch::statedir::{
+    default_state_dir, sha256, sha256_hex, status_freshness_seconds, workspace_id, IdSource,
+};
 
 #[test]
 fn sha256_matches_the_nist_vectors() {
@@ -126,4 +128,12 @@ fn the_default_state_dir_follows_xdg_then_home() {
         default_state_dir("abc", None, Some("/h")).to_str(),
         Some("/h/.local/state/stw/watch/abc")
     );
+}
+
+#[test]
+fn the_freshness_window_is_three_intervals_but_at_least_three_minutes() {
+    for (iv, want) in [(10, 180), (60, 180), (61, 183), (120, 360), (600, 1800)] {
+        assert_eq!(status_freshness_seconds(iv), want, "interval {iv}");
+    }
+    assert_eq!(status_freshness_seconds(u64::MAX), u64::MAX, "no overflow");
 }
