@@ -303,6 +303,86 @@ mod pinned {
             vec![t("z/f.txt", &a)],
         )
     }
+    fn identical_twins_second_matches_name(fx: &Fx) -> ObjectId {
+        let a = body(30, "a");
+        change(
+            fx,
+            vec![t("x/g.txt", &a), t("y/f.txt", &a)],
+            vec![t("z/f.txt", &a)],
+        )
+    }
+    fn inexact_twins_prefer_same_name(fx: &Fx) -> ObjectId {
+        let a = body(30, "a");
+        change(
+            fx,
+            vec![t("x/g.txt", &a), t("y/f.txt", &a)],
+            vec![t("z/f.txt", &edited(&a, "a line 7\n", "CHANGED\n"))],
+        )
+    }
+    fn one_source_two_similar_additions(fx: &Fx) -> ObjectId {
+        let a = body(30, "a");
+        let few = edited(&a, "a line 7\n", "CHANGED\n");
+        let more = a.replacen("a line", "b line", 8);
+        change(
+            fx,
+            vec![t("old.txt", &a)],
+            vec![t("new1.txt", &few), t("new2.txt", &more)],
+        )
+    }
+    fn rename_of_long_lines(fx: &Fx) -> ObjectId {
+        let long = format!("{}A\n", "x".repeat(199));
+        let changed = format!("{}B\n", "x".repeat(199));
+        change(fx, vec![t("old.txt", &long)], vec![t("new.txt", &changed)])
+    }
+    fn over_the_rename_limit(fx: &Fx) -> ObjectId {
+        // 1001 renames with a change and with other base names (no base-name pass): no exact match, and
+        // 1001 * 1001 is above the limit of 1000 * 1000
+        let name = |dir: &str, k: usize| -> &'static str {
+            Box::leak(
+                format!("{dir}/{}{k}.txt", if dir == "d" { "f" } else { "g" }).into_boxed_str(),
+            )
+        };
+        let text = |k: usize, changed: bool| -> String {
+            let mut s: String = (0..20).map(|l| format!("file {k} line {l}\n")).collect();
+            if changed {
+                s = s.replacen("line 3\n", "CHANGED\n", 1);
+            }
+            s
+        };
+        let before: Tree = (0..1001)
+            .map(|k| t(name("d", k), &text(k, false)))
+            .collect();
+        let after: Tree = (0..1001).map(|k| t(name("e", k), &text(k, true))).collect();
+        change(fx, before, after)
+    }
+    fn basename_pair_wins_over_better_match(fx: &Fx) -> ObjectId {
+        let a = body(30, "a");
+        let b = a.replacen("a line", "b line", 2);
+        let dst = b.replacen("a line 20\n", "CHANGED\n", 1);
+        change(
+            fx,
+            vec![t("x/m.txt", &a), t("y/other.txt", &b)],
+            vec![t("z/m.txt", &dst)],
+        )
+    }
+    fn over_the_rename_limit_with_same_base_names(fx: &Fx) -> ObjectId {
+        let name = |dir: &str, k: usize| -> &'static str {
+            Box::leak(format!("{dir}/f{k}.txt").into_boxed_str())
+        };
+        let text = |k: usize, changed: bool| -> String {
+            let s: String = (0..20).map(|l| format!("file {k} line {l}\n")).collect();
+            if changed {
+                s.replacen("line 3\n", "CHANGED\n", 1)
+            } else {
+                s
+            }
+        };
+        let before: Tree = (0..1001)
+            .map(|k| t(name("d", k), &text(k, false)))
+            .collect();
+        let after: Tree = (0..1001).map(|k| t(name("e", k), &text(k, true))).collect();
+        change(fx, before, after)
+    }
     fn symlink_rename(fx: &Fx) -> ObjectId {
         change(fx, vec![l("old", "target")], vec![l("new", "target")])
     }
@@ -359,6 +439,13 @@ mod pinned {
             multi_commit_second => "5a96ed9fe4629de3f3f05f15ee1651edcb0fac30",
             names_with_blank_and_utf8 => "4449962a572ccd90b7d2ad9a652ea7c9b7c410ab",
             identical_twins => "b9569c6eaf4c93a870e36e28abf7837b59e3d07c",
+            identical_twins_second_matches_name => "2d69bc2b85fcdbd83c72b1bad75a7da4dce61071",
+            inexact_twins_prefer_same_name => "6662417c0745888c6defd23c31f1bf4efd4449a3",
+            one_source_two_similar_additions => "4f98db5f786258764d252ad75ae2c5b907c76299",
+            rename_of_long_lines => "d66faf3b2224f2d97c3bc11fac4703f9cabda7d2",
+            over_the_rename_limit => "2cb38b08225341f12cc97e09f3e7ddefe85ac168",
+            basename_pair_wins_over_better_match => "1d23266830b3621936a2e49822fc548d3882b398",
+            over_the_rename_limit_with_same_base_names => "356080e043890aff1c73e55eae758945580f1cf9",
             symlink_rename => "8e78bdefc8f0bc26c65eb193a6d5d3cac408bab2",
             contents_swapped => "302ba4b49782057e95797e0093b1c6a3ef85897a",
             rename_and_similar_new_file => "e248fd04bca57a4b299358385809c420d8d8238e",
