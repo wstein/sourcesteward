@@ -1,4 +1,6 @@
 //! stw: everyday git and GitHub workflows for agents, on gitoxide, without `git` or `gh` binaries.
+pub mod absorb;
+pub mod absorb_commute;
 pub mod add;
 pub mod auth;
 pub mod carryover;
@@ -20,6 +22,7 @@ pub mod replay;
 pub mod repo;
 pub mod restack_plan;
 pub mod review;
+pub mod sha256;
 pub mod status;
 pub mod status_all;
 pub mod status_ci;

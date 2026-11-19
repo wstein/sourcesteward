@@ -12,9 +12,9 @@ use crate::github::GithubState;
 use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
-    add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove, restack_plan,
-    status, status_all, status_review, status_stats, sync, tidy, tidy_apply, tidy_history,
-    tidy_similarity,
+    absorb, add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove,
+    restack_plan, status, status_all, status_review, status_stats, sync, tidy, tidy_apply,
+    tidy_history, tidy_similarity,
 };
 
 const EXIT_CODES: &str = "\
@@ -69,6 +69,9 @@ enum Command {
     /// Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
     #[command(after_help = PROVE_HELP)]
     Prove(ProveArgs),
+    /// Plan where the staged changes would go: the unpushed commit that owns each hunk (read-only, writes nothing)
+    #[command(after_help = ABSORB_HELP)]
+    Absorb(AbsorbArgs),
     /// Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Restack {
@@ -632,6 +635,84 @@ fn run_prove(a: ProveArgs) -> Result<u8> {
         print!("{}", proof.render_human());
     }
     Ok(if proof.proved { exit::OK } else { exit::FAILED })
+}
+
+const ABSORB_HELP: &str = "\
+New in stw (no Go counterpart); specification and limits: README.md, section `stw absorb plan`. Computes the PLAN of
+folding the staged changes into the unpushed commits that own the changed lines (the method of git-absorb: the newest
+commit of the stack whose changes do not commute with the hunk). It writes nothing: no add, commit, rebase, ref, file or
+index refresh, no network, no hook; a partial clone is refused (no lazy fetch). Git only: a jj or GitButler checkout is
+refused. The stack: the first-parent commits of HEAD that no remote-tracking branch (and, without --base, no other
+local branch) contains, by the author of `user.name` and `user.email`, up to a merge commit. A hunk that cannot be
+placed is skipped with its reason (no-candidate, ambiguous, conflict, outside-range, published, foreign). The only git
+program that runs is `git blame` for the removed lines (read-only, GIT_NO_LAZY_FETCH=1).
+
+Exit codes:
+  0  a plan was produced (also when every hunk is skipped)
+  1  refused with a typed error code (nothing-staged, not-owned, published, unmerged-index, environment-override,
+     partial-clone-unsupported, blame-failed, unsupported-backend, ...); with --json the error is the document
+  2  usage error";
+
+#[derive(Args)]
+struct AbsorbArgs {
+    /// Print one JSON object instead of text
+    #[arg(long, conflicts_with = "human")]
+    json: bool,
+    /// Print the human list (the default)
+    #[arg(long)]
+    human: bool,
+    /// The plan is the only mode of this version; accepted so that a later `--apply --plan-sum SUM` reads the same way
+    #[arg(long)]
+    plan: bool,
+    /// The stack is REV..HEAD (REV an ancestor of HEAD); the stack limit does not apply [default: the commits no remote-tracking branch contains]
+    #[arg(long, value_name = "REV")]
+    base: Option<String>,
+    /// At most N commits in the stack (without --base)
+    #[arg(long, value_name = "N", default_value_t = absorb::DEFAULT_MAX_STACK,
+          value_parser = clap::value_parser!(u32).range(1..=100_000))]
+    max_stack: u32,
+    /// A hunk whose lines come from several commits goes to the newest of them instead of being skipped as ambiguous
+    #[arg(long)]
+    ambiguous_newest: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+}
+
+fn run_absorb(a: AbsorbArgs) -> Result<u8> {
+    let opts = absorb::Options {
+        base: a.base.clone(),
+        max_stack: a.max_stack as usize,
+        ambiguous_newest: a.ambiguous_newest,
+    };
+    let refused = |f: absorb::Fail| {
+        eprintln!("stw absorb: {}: {}", f.code, f.message);
+        if a.json {
+            print_json(&f.to_json());
+        }
+        Ok(exit::FAILED)
+    };
+    if let Some(f) = absorb::environment_override() {
+        return refused(f);
+    }
+    let r = selected_repo(a.root.as_deref(), a.repo.as_deref())?;
+    let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    match absorb::plan(&dir, &cwd, git_runner::shared(), &opts) {
+        Ok(plan) => {
+            if a.json {
+                print_json(plan.to_json());
+            } else {
+                print!("{}", plan.render_human());
+            }
+            Ok(exit::OK)
+        }
+        Err(f) => refused(f),
+    }
 }
 
 const RESTACK_PLAN_HELP: &str = "\
@@ -1826,6 +1907,7 @@ fn git_command_label(command: &Command) -> &'static str {
             command: ReviewCommand::CarryOver(_),
         } => "review carry-over",
         Command::Prove(_) => "prove",
+        Command::Absorb(_) => "absorb",
         Command::ReadyCheck(_) => "ready-check",
         Command::Lint {
             command: LintCommand::Review(_),
@@ -2046,6 +2128,7 @@ fn run(command: Command) -> Result<u8> {
             command: ReviewCommand::CarryOver(a),
         } => run_carry_over(a),
         Command::Prove(a) => run_prove(a),
+        Command::Absorb(a) => run_absorb(a),
         Command::Restack {
             command: RestackCommand::Plan(a),
         } => run_restack_plan(a),
