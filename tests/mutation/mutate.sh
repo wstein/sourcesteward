@@ -4695,6 +4695,136 @@ m SQ55 'the pull request the plan names is not passed to the choice' src/tidy.rs
 m SQ56 'a branch with a deletion proof or a gate gets squash evidence' src/tidy.rs \
   'judged(proof) || proof == "similar-patches"' 'true' \
   tidy_squash_plan the_stage_leaves_out_what_a_proof_or_a_gate_already_settled
+m WS1 'a scenario without `function` is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"function": "valid_host",' '"fn": "valid_host",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS2 'a vector scenario without `cases` is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"cases": [' '"rows": [' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS3 'a scenario without a description is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"description": "A host' '"summary": "A host' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS4 'format_version 2 is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"format_version": 1,' '"format_version": 2,' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS5 'a name that differs from the file name is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"name": "watch-valid-host",' '"name": "watch-valid-hosts",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS6 'an unknown scenario kind is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"kind": "vectors",' '"kind": "vector",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS7 'a scenario without `source.go_tests` is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"go_tests": [' '"tests": [' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS8 'a `format_dependent` that is not a list is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"format_dependent": [],' '"format_dependent": {},' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS9 'a repeated case name is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"name": "ghe.example.com:8443",' '"name": "github.com",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS10 'an unknown function is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"function": "valid_host",' '"function": "valid_hosts",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS11 'an undocumented top-level field is accepted' tests/fixtures/watch/watch-valid-host.json \
+  '"function": "valid_host",' '"function": "valid_host",
+  "extra": 1,' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS12 '`expect_unique_event_ids` may be false' tests/fixtures/watch/new-pr-details.json \
+  '"expect_unique_event_ids": true' '"expect_unique_event_ids": false' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS13 'a cycle scenario without `expected_state_view` is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"expected_state_view": {' '"state_view": {' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS14 'a cycle step out of order is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"step": 1,
+      "action": "cycle",' '"step": 5,
+      "action": "cycle",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS15 'a journal that does not match the event ordinals is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"expected_journal_ordinals": [
+    1
+  ]' '"expected_journal_ordinals": [
+    2
+  ]' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS16 'a clock that runs backwards is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"time": "2026-10-22T09:02:00Z",
+      "note"' '"time": "2000-01-01T00:00:00Z",
+      "note"' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS17 'an observation without `prs` is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"prs": [],' '"prs_": [],' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS18 'an unknown event kind is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"kind": "new-pr",' '"kind": "new-prs",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS19 'a printed ordinal outside the journal is accepted' tests/fixtures/watch/new-pr-details.json \
+  '"printed": [
+        1
+      ]' '"printed": [
+        9
+      ]' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS20 'an http scenario call without `op` is accepted' tests/fixtures/watch/http-unsolicited-304-is-malformed.json \
+  '"op": "pull_detail",' '"operation": "pull_detail",' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS21 'an http expectation with a wrong call number is accepted' tests/fixtures/watch/http-unsolicited-304-is-malformed.json \
+  '"call": 1,' '"call": 7,' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS22 'an observer step without `after_cycle_first` is accepted' tests/fixtures/watch/observe-skips-ignored-prs.json \
+  '"after_cycle_first": false,' '"after_first": false,' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS23 'a run-loop expectation without `exit_code` is accepted' tests/fixtures/watch/run-stream-ends-on-interrupt.json \
+  '"exit_code": 0,' '"code": 0,' \
+  watch_scenarios every_scenario_file_passes_the_structure_check
+m WS24 'FORMAT.md need not name `jitter_seconds`' tests/fixtures/watch/FORMAT.md \
+  '`jitter_seconds`' 'jitter_seconds' \
+  watch_scenarios format_md_names_every_field_the_check_requires
+m WS25 'FORMAT.md need not name `declared_content_length`' tests/fixtures/watch/FORMAT.md \
+  '`declared_content_length`' 'declared_content_length' \
+  watch_scenarios format_md_names_every_field_the_check_requires
+m WS26 'FORMAT.md need not name `status_now_offset_seconds`' tests/fixtures/watch/FORMAT.md \
+  '`status_now_offset_seconds`' 'status_now_offset_seconds' \
+  watch_scenarios format_md_names_every_field_the_check_requires
+m WS27 'FORMAT.md need not name the function `watch_read_endpoint_allowed`' tests/fixtures/watch/FORMAT.md \
+  '`watch_read_endpoint_allowed`' 'watch_read_endpoint_allowed' \
+  watch_scenarios format_md_names_every_field_the_check_requires
+m WS28 'FORMAT.md need not name `error_mentions`' tests/fixtures/watch/FORMAT.md \
+  '`error_mentions`' 'error_mentions' \
+  watch_scenarios format_md_names_every_field_the_check_requires
+m WS29 'the driver does not refuse a directory inside a Git tree that does not ignore it' tests/oracle/watch_scenarios.sh \
+  'check-ignore -q "$gprobe$gtail/" || die' 'true || die' \
+  watch_scenarios the_driver_refuses_a_directory_inside_a_git_tree_that_does_not_ignore_it
+m WS30 'the driver leaves its work directory behind' tests/oracle/watch_scenarios.sh \
+  'else rm -rf "$WORK"; fi' 'else :; fi' \
+  watch_scenarios the_driver_refuses_a_directory_inside_a_git_tree_that_does_not_ignore_it
+m WS31 'the driver accepts a relative OUTDIR or TMPDIR through the guard' tests/oracle/watch_scenarios.sh \
+  '*) die "$gname must be an absolute path: $gpath" ;; esac' '*) : ;; esac' \
+  watch_scenarios the_driver_refuses_missing_empty_relative_and_wrong_source_arguments
+m WS32 'the driver accepts / as OUTDIR' tests/oracle/watch_scenarios.sh \
+  '[ "$gpath" != / ] || die "$gname must not be /"' 'true' \
+  watch_scenarios the_driver_refuses_missing_empty_relative_and_wrong_source_arguments
+m WS33 'the driver accepts a GO_SRC with ..' tests/oracle/watch_scenarios.sh \
+  'case $GO_SRC in *..*) die' 'case $GO_SRC in *..x*) die' \
+  watch_scenarios the_driver_refuses_missing_empty_relative_and_wrong_source_arguments
+m WS34 'the driver accepts a directory that is not the Go module' tests/oracle/watch_scenarios.sh \
+  '|| die "GO_SRC is not the sourcesteward Go module: $GO_SRC"' '|| true' \
+  watch_scenarios the_driver_refuses_missing_empty_relative_and_wrong_source_arguments
+m WS35 'the driver writes into a foreign non-empty directory' tests/oracle/watch_scenarios.sh \
+  'if [ -n "$(ls -A "$OUT" 2> /dev/null)" ] && [ ! -f "$OUT/index.json" ]; then' 'if false; then' \
+  watch_scenarios the_driver_replaces_only_the_json_of_an_earlier_export_and_refuses_other_directories
+m WS36 'the driver removes the json of an earlier export before the new export succeeded' tests/oracle/watch_scenarios.sh \
+  'mkdir "$WORK/go" "$WORK/out"' 'rm -f "$OUT"/*.json; mkdir "$WORK/go" "$WORK/out"' \
+  watch_scenarios the_driver_replaces_only_the_json_of_an_earlier_export_and_refuses_other_directories
+m WS37 'an empty TMPDIR counts as not given' tests/oracle/watch_scenarios.sh \
+  'tmp=${TMPDIR-/tmp}' 'tmp=${TMPDIR:-/tmp}' \
+  watch_scenarios the_driver_refuses_an_empty_relative_or_tracked_tmpdir
+m WS38 'TMPDIR inside a Git tree is not guarded' tests/oracle/watch_scenarios.sh \
+  'guard_dir TMPDIR "$tmp"' 'true' \
+  watch_scenarios the_driver_refuses_an_empty_relative_or_tracked_tmpdir
+m WS39 'the variable alone lets the driver write any directory' tests/oracle/watch_scenarios.sh \
+  '[ "${WATCH_SCENARIOS_WRITE_FIXTURES:-}" = 1 ] && [ "$OUT" = "$FIXTURES" ]' '[ "${WATCH_SCENARIOS_WRITE_FIXTURES:-}" = 1 ]' \
+  watch_scenarios the_driver_only_writes_the_tracked_fixtures_directory_with_the_explicit_variable
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
