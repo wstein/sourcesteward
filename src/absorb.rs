@@ -72,8 +72,76 @@ impl Plan {
     pub fn to_json(&self) -> &Value {
         &self.doc
     }
+    /// One line per fact, deterministic, no command for the caller to type; derived from the document, so that text and
+    /// JSON cannot disagree.
     pub fn render_human(&self) -> String {
-        String::new()
+        use std::fmt::Write;
+        let d = &self.doc;
+        let text = |v: &Value| v.as_str().unwrap_or_default().to_string();
+        let short = |v: &Value| text(v).chars().take(7).collect::<String>();
+        let mut out = String::new();
+        let _ = writeln!(
+            out,
+            "absorb plan (read-only): head {} on {}, stack {} commit(s), ends at {}",
+            short(&d["head"]),
+            text(&d["branch"]),
+            d["stack"].as_array().map_or(0, Vec::len),
+            text(&d["stack_end"])
+        );
+        for h in d["hunks"].as_array().into_iter().flatten() {
+            let range = format!(
+                "-{},{} +{},{}",
+                h["old"]["start"], h["old"]["count"], h["new"]["start"], h["new"]["count"]
+            );
+            if h["assignment"] == "absorbed" {
+                let _ = writeln!(
+                    out,
+                    "{} {} {range} -> {} {} ({})",
+                    text(&h["id"]),
+                    text(&h["path"]),
+                    short(&h["target"]["sha"]),
+                    text(&h["target"]["subject"]),
+                    text(&h["basis"])
+                );
+            } else {
+                let _ = writeln!(
+                    out,
+                    "{} {} {range} skipped: {}",
+                    text(&h["id"]),
+                    text(&h["path"]),
+                    text(&h["reason"])
+                );
+            }
+        }
+        for f in d["files_skipped"].as_array().into_iter().flatten() {
+            let _ = writeln!(
+                out,
+                "file {} skipped: {}",
+                text(&f["path"]),
+                text(&f["reason"])
+            );
+        }
+        for f in d["fixups"].as_array().into_iter().flatten() {
+            let ids: Vec<String> = f["hunks"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(text)
+                .collect();
+            let _ = writeln!(out, "{} <- {}", text(&f["subject"]), ids.join(", "));
+        }
+        let rw = &d["rewrite"];
+        let oldest = rw["commits"]
+            .as_array()
+            .and_then(|c| c.first())
+            .map(|c| format!(" (oldest {})", short(c)))
+            .unwrap_or_default();
+        let _ = writeln!(
+            out,
+            "rewrite: {} commit(s) get new SHAs{oldest}; nothing was written",
+            rw["count"]
+        );
+        out
     }
 }
 
