@@ -1,0 +1,115 @@
+{
+  "format_version": 1,
+  "name": "link-header-next-page",
+  "kind": "vectors",
+  "description": "The page number of the `rel=\"next\"` entry of a Link header (rel with or without quotes); missing, malformed, zero and overflowing numbers give nothing.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchLinkHeaderParsing"
+    ]
+  },
+  "format_dependent": [],
+  "function": "next_page_from_link",
+  "cases": [
+    {
+      "name": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=2>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=4>; rel=\"last\"",
+      "input": {
+        "link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=2>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=4>; rel=\"last\""
+      },
+      "expected": {
+        "found": true,
+        "page": 2
+      }
+    },
+    {
+      "name": "<https://api.github.com/repos/a/b/pulls?page=3&state=open&per_page=25>; rel=\"next\"",
+      "input": {
+        "link": "<https://api.github.com/repos/a/b/pulls?page=3&state=open&per_page=25>; rel=\"next\""
+      },
+      "expected": {
+        "found": true,
+        "page": 3
+      }
+    },
+    {
+      "name": "<https://api.github.com/repos/a/b/pulls?state=open&per_page=25&page=4>; rel=\"last\", <https://api.github.com/repos/a/b/pulls?state=open&per_page=25&page=1>; rel=\"first\"",
+      "input": {
+        "link": "<https://api.github.com/repos/a/b/pulls?state=open&per_page=25&page=4>; rel=\"last\", <https://api.github.com/repos/a/b/pulls?state=open&per_page=25&page=1>; rel=\"first\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "",
+      "input": {
+        "link": ""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "<https://api.github.com/x?page=abc>; rel=\"next\"",
+      "input": {
+        "link": "<https://api.github.com/x?page=abc>; rel=\"next\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "<https://api.github.com/x?page=0>; rel=\"next\"",
+      "input": {
+        "link": "<https://api.github.com/x?page=0>; rel=\"next\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "<https://api.github.com/x?page=99999999999999999999>; rel=\"next\"",
+      "input": {
+        "link": "<https://api.github.com/x?page=99999999999999999999>; rel=\"next\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "garbage; rel=\"next\"",
+      "input": {
+        "link": "garbage; rel=\"next\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "<https://api.github.com/x?page=2>; rel=\"prev\"",
+      "input": {
+        "link": "<https://api.github.com/x?page=2>; rel=\"prev\""
+      },
+      "expected": {
+        "found": false,
+        "page": 0
+      }
+    },
+    {
+      "name": "<https://api.github.com/x?page=2>; rel=next",
+      "input": {
+        "link": "<https://api.github.com/x?page=2>; rel=next"
+      },
+      "expected": {
+        "found": true,
+        "page": 2
+      }
+    }
+  ]
+}

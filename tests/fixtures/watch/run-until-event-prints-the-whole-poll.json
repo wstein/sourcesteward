@@ -1,0 +1,227 @@
+{
+  "format_version": 1,
+  "name": "run-until-event-prints-the-whole-poll",
+  "kind": "run-loop",
+  "description": "`--until-event` matching a kind still prints every event of that poll before it exits.",
+  "source": {
+    "go_tests": [
+      "watchcmd/run_test.go:TestUntilEventMatchesAfterThePollThatPrintedIt"
+    ]
+  },
+  "format_dependent": [
+    "go",
+    "status_text"
+  ],
+  "config": {
+    "repos": [
+      "o/r"
+    ],
+    "host": "github.com",
+    "interval_seconds": 60,
+    "detail_every": 10,
+    "pending_timeout_seconds": 2700,
+    "max_open_prs": 2000,
+    "jitter_seconds": 0,
+    "start_time": "2026-10-22T09:00:00Z"
+  },
+  "invocations": [
+    {
+      "note": "",
+      "action": "run",
+      "mode": "until-event",
+      "until_kinds": [
+        "head-changed"
+      ],
+      "timeout_seconds": 3600,
+      "max_idle_seconds": 0,
+      "human": false,
+      "baseline": false,
+      "advance_seconds": 0,
+      "worlds": [
+        {
+          "after_sleeps": 0,
+          "world": {
+            "list_items": [
+              {
+                "number": 1,
+                "title": "PR 1",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "1111111111111111111111111111111111111111",
+                "head_ref": "feat/1",
+                "base_ref": "main"
+              },
+              {
+                "number": 2,
+                "title": "PR 2",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "2222222222222222222222222222222222222222",
+                "head_ref": "feat/2",
+                "base_ref": "main"
+              }
+            ],
+            "list_error": null,
+            "pull_details": {
+              "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "2": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "3": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "4": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "5": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "6": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "7": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "8": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "9": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+            },
+            "pull_detail_etags": {},
+            "branch_tips": {
+              "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "check_runs": {},
+            "commit_statuses": {},
+            "commits": {},
+            "pull_commits": {},
+            "rate_limit": null,
+            "call_errors": {}
+          }
+        },
+        {
+          "after_sleeps": 1,
+          "world": {
+            "list_items": [
+              {
+                "number": 1,
+                "title": "PR 1",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "cccccccccccccccccccccccccccccccccccccccc",
+                "head_ref": "feat/1",
+                "base_ref": "main"
+              },
+              {
+                "number": 2,
+                "title": "PR 2",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "dddddddddddddddddddddddddddddddddddddddd",
+                "head_ref": "feat/2",
+                "base_ref": "main"
+              },
+              {
+                "number": 3,
+                "title": "PR 3",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "3333333333333333333333333333333333333333",
+                "head_ref": "feat/3",
+                "base_ref": "main"
+              }
+            ],
+            "list_error": null,
+            "pull_details": {
+              "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "2": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "3": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "4": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "5": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "6": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "7": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "8": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "9": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+            },
+            "pull_detail_etags": {},
+            "branch_tips": {
+              "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "check_runs": {},
+            "commit_statuses": {},
+            "commits": {},
+            "pull_commits": {},
+            "rate_limit": null,
+            "call_errors": {}
+          }
+        }
+      ],
+      "cancel_after_sleeps": 0,
+      "state_dir_kind": "",
+      "state_file": "",
+      "reader_cannot_open": false,
+      "status_json": false,
+      "status_now_offset_seconds": 0
+    }
+  ],
+  "expected": [
+    {
+      "invocation": 1,
+      "exit_code": 0,
+      "error_mentions": [],
+      "stdout_events": [
+        {
+          "kind": "head-changed",
+          "repo": "o/r",
+          "pr": 1,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "old": "1111111111111111111111111111111111111111",
+            "new": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "go": {
+            "seq": 1
+          }
+        },
+        {
+          "kind": "head-changed",
+          "repo": "o/r",
+          "pr": 2,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "old": "2222222222222222222222222222222222222222",
+            "new": "dddddddddddddddddddddddddddddddddddddddd"
+          },
+          "go": {
+            "seq": 2
+          }
+        },
+        {
+          "kind": "new-pr",
+          "repo": "o/r",
+          "pr": 3,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "title": "PR 3",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/3",
+            "head": "3333333333333333333333333333333333333333",
+            "fork": false
+          },
+          "go": {
+            "seq": 3
+          }
+        }
+      ],
+      "stdout_lines": [],
+      "sleeps_seconds": [
+        60
+      ],
+      "status_fresh": null,
+      "status_text": null
+    }
+  ]
+}

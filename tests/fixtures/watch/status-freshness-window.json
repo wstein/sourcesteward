@@ -1,0 +1,60 @@
+{
+  "format_version": 1,
+  "name": "status-freshness-window",
+  "kind": "vectors",
+  "description": "How old the heartbeat may be for `--status` to report fresh: the larger of 3 intervals and 3 minutes.",
+  "source": {
+    "go_tests": [
+      "status_test.go:TestStatusFreshnessWindow"
+    ]
+  },
+  "format_dependent": [],
+  "function": "status_freshness_seconds",
+  "cases": [
+    {
+      "name": "interval 10s",
+      "input": {
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 180
+      }
+    },
+    {
+      "name": "interval 60s",
+      "input": {
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 180
+      }
+    },
+    {
+      "name": "interval 61s",
+      "input": {
+        "interval_seconds": 61
+      },
+      "expected": {
+        "seconds": 183
+      }
+    },
+    {
+      "name": "interval 120s",
+      "input": {
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 360
+      }
+    },
+    {
+      "name": "interval 600s",
+      "input": {
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 1800
+      }
+    }
+  ]
+}

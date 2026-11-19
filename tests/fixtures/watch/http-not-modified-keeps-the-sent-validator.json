@@ -1,0 +1,74 @@
+{
+  "format_version": 1,
+  "name": "http-not-modified-keeps-the-sent-validator",
+  "kind": "http-reader",
+  "description": "A 304 returns the validator that was sent, weak prefix included, even if the server repeats another form.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchNotModifiedKeepsSentValidator"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 304,
+      "headers": {
+        "ETag": "\"strong\""
+      },
+      "body": "",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "W/\"v1\"",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": null,
+      "response": {
+        "status": 304,
+        "not_modified": true,
+        "etag": "W/\"v1\"",
+        "link": "",
+        "body": "",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": "W/\"v1\""
+        }
+      ]
+    }
+  ]
+}

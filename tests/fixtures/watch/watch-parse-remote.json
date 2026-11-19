@@ -1,0 +1,246 @@
+{
+  "format_version": 1,
+  "name": "watch-parse-remote",
+  "kind": "vectors",
+  "description": "OWNER/NAME of a remote URL for a host (https, ssh://, scp-like; .git and a trailing slash removed; a local path, another host, extra path segments and `..` refused).",
+  "source": {
+    "go_tests": [
+      "watchcmd/resolve_test.go:TestParseRemoteAcceptsTheGitHubSpellings"
+    ]
+  },
+  "format_dependent": [],
+  "function": "parse_remote",
+  "cases": [
+    {
+      "name": "https://github.com/wstein/anchorage.git",
+      "input": {
+        "remote": "https://github.com/wstein/anchorage.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/anchorage"
+      }
+    },
+    {
+      "name": "https://github.com/wstein/anchorage",
+      "input": {
+        "remote": "https://github.com/wstein/anchorage",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/anchorage"
+      }
+    },
+    {
+      "name": "https://github.com/wstein/anchorage/",
+      "input": {
+        "remote": "https://github.com/wstein/anchorage/",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/anchorage"
+      }
+    },
+    {
+      "name": "https://user@github.com/wstein/a.b.git",
+      "input": {
+        "remote": "https://user@github.com/wstein/a.b.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a.b"
+      }
+    },
+    {
+      "name": "git@github.com:wstein/a.git",
+      "input": {
+        "remote": "git@github.com:wstein/a.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "ssh://git@github.com/wstein/a.git",
+      "input": {
+        "remote": "ssh://git@github.com/wstein/a.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "ssh://git@github.com:22/wstein/a.git",
+      "input": {
+        "remote": "ssh://git@github.com:22/wstein/a.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "https://GitHub.com/wstein/a",
+      "input": {
+        "remote": "https://GitHub.com/wstein/a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "https://github.com/wstein/a.git/",
+      "input": {
+        "remote": "https://github.com/wstein/a.git/",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "  https://github.com/wstein/a.git\n",
+      "input": {
+        "remote": "  https://github.com/wstein/a.git\n",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "wstein/a"
+      }
+    },
+    {
+      "name": "",
+      "input": {
+        "remote": "",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "/srv/git/a.git",
+      "input": {
+        "remote": "/srv/git/a.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "../a",
+      "input": {
+        "remote": "../a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "https://example.org/wstein/a",
+      "input": {
+        "remote": "https://example.org/wstein/a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "https://github.com/wstein",
+      "input": {
+        "remote": "https://github.com/wstein",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "https://github.com/wstein/a/b",
+      "input": {
+        "remote": "https://github.com/wstein/a/b",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "git@gitlab.com:wstein/a.git",
+      "input": {
+        "remote": "git@gitlab.com:wstein/a.git",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "https://github.com/wstein/../a",
+      "input": {
+        "remote": "https://github.com/wstein/../a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "https://github.com.evil.example/wstein/a",
+      "input": {
+        "remote": "https://github.com.evil.example/wstein/a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "file:///github.com/wstein/a",
+      "input": {
+        "remote": "file:///github.com/wstein/a",
+        "host": "github.com"
+      },
+      "expected": {
+        "ok": false,
+        "repo": ""
+      }
+    },
+    {
+      "name": "enterprise host",
+      "input": {
+        "remote": "git@ghe.example.com:team/x.git",
+        "host": "ghe.example.com"
+      },
+      "expected": {
+        "ok": true,
+        "repo": "team/x"
+      }
+    }
+  ]
+}

@@ -1,0 +1,79 @@
+{
+  "format_version": 1,
+  "name": "rate-limited-wait-until",
+  "kind": "vectors",
+  "description": "Until when a rate-limited answer holds the run: retry-after plus 5 s, else reset plus 5 s (only if in the future), else 65 s from now.",
+  "source": {
+    "go_tests": [
+      "watch_ratelimit_test.go:TestRateLimitedWaitUntil"
+    ]
+  },
+  "format_dependent": [],
+  "function": "rate_limited_until",
+  "cases": [
+    {
+      "name": "retry-after",
+      "input": {
+        "now_unix": 1699999000,
+        "retry_after_seconds": 60,
+        "rate_limit": {
+          "known": true,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 1700000000
+        }
+      },
+      "expected": {
+        "until_unix": 1699999065
+      }
+    },
+    {
+      "name": "reset",
+      "input": {
+        "now_unix": 1699999000,
+        "retry_after_seconds": 0,
+        "rate_limit": {
+          "known": true,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 1700000000
+        }
+      },
+      "expected": {
+        "until_unix": 1700000005
+      }
+    },
+    {
+      "name": "stale reset in the past",
+      "input": {
+        "now_unix": 1699999000,
+        "retry_after_seconds": 0,
+        "rate_limit": {
+          "known": true,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 1699995400
+        }
+      },
+      "expected": {
+        "until_unix": 1699999065
+      }
+    },
+    {
+      "name": "nothing known",
+      "input": {
+        "now_unix": 1699999000,
+        "retry_after_seconds": 0,
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "expected": {
+        "until_unix": 1699999065
+      }
+    }
+  ]
+}

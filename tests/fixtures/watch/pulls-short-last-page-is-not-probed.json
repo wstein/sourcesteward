@@ -1,0 +1,192 @@
+{
+  "format_version": 1,
+  "name": "pulls-short-last-page-is-not-probed",
+  "kind": "http-reader",
+  "description": "A short last page (24 of 25) is never probed on a 304.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsProbesPastAFullLastPageOnNotModified"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":4,\"title\":\"t4\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000004\",\"ref\":\"feat/4\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ec\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":5,\"title\":\"t5\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000005\",\"ref\":\"feat/5\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ed\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":6,\"title\":\"t6\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000006\",\"ref\":\"feat/6\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ee\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":7,\"title\":\"t7\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000007\",\"ref\":\"feat/7\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ef\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":8,\"title\":\"t8\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000008\",\"ref\":\"feat/8\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f0\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":9,\"title\":\"t9\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000009\",\"ref\":\"feat/9\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f1\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":10,\"title\":\"t10\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000a\",\"ref\":\"feat/10\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f2\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":11,\"title\":\"t11\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000b\",\"ref\":\"feat/11\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f3\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":12,\"title\":\"t12\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000c\",\"ref\":\"feat/12\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f4\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":13,\"title\":\"t13\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000d\",\"ref\":\"feat/13\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f5\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":14,\"title\":\"t14\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000e\",\"ref\":\"feat/14\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f6\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":15,\"title\":\"t15\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000f\",\"ref\":\"feat/15\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f7\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":16,\"title\":\"t16\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000010\",\"ref\":\"feat/16\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f8\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":17,\"title\":\"t17\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000011\",\"ref\":\"feat/17\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":18,\"title\":\"t18\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000012\",\"ref\":\"feat/18\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fa\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":19,\"title\":\"t19\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000013\",\"ref\":\"feat/19\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fb\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":20,\"title\":\"t20\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000014\",\"ref\":\"feat/20\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fc\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":21,\"title\":\"t21\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000015\",\"ref\":\"feat/21\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fd\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":22,\"title\":\"t22\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000016\",\"ref\":\"feat/22\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fe\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":23,\"title\":\"t23\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000017\",\"ref\":\"feat/23\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ff\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":24,\"title\":\"t24\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000018\",\"ref\":\"feat/24\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000400\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"q1\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "previous",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": null,
+      "response": null,
+      "list": {
+        "items": 24,
+        "numbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "unchanged": false,
+        "per_page": 25,
+        "pages": [
+          {
+            "etag": "\"q1\"",
+            "has_link": false,
+            "items": 24
+          }
+        ],
+        "first_item": {
+          "number": 1,
+          "title": "t1",
+          "user": "u",
+          "labels": [
+            "l1",
+            "l2"
+          ],
+          "draft": false,
+          "head_sha": "0000000000000000000000000000000000000001",
+          "head_ref": "feat/1",
+          "base_ref": "main",
+          "base_sha": "00000000000000000000000000000000000003e9"
+        }
+      },
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": null,
+      "response": null,
+      "list": {
+        "items": 24,
+        "numbers": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "unchanged": true,
+        "per_page": 25,
+        "pages": [
+          {
+            "etag": "\"q1\"",
+            "has_link": false,
+            "items": 24
+          }
+        ],
+        "first_item": {
+          "number": 1,
+          "title": "t1",
+          "user": "u",
+          "labels": [
+            "l1",
+            "l2"
+          ],
+          "draft": false,
+          "head_sha": "0000000000000000000000000000000000000001",
+          "head_ref": "feat/1",
+          "base_ref": "main",
+          "base_sha": "00000000000000000000000000000000000003e9"
+        }
+      },
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": "\"q1\""
+        }
+      ]
+    }
+  ]
+}

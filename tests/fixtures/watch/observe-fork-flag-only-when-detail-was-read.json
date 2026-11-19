@@ -1,0 +1,319 @@
+{
+  "format_version": 1,
+  "name": "observe-fork-flag-only-when-detail-was-read",
+  "kind": "observer-session",
+  "description": "The fork flag is reported as an answer (fork_known) only when pulls/N was read with a body in this observation; an unread or 304-answered detail reports no answer.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveReportsTheForkFlagOnlyWhenPullDetailWasRead"
+    ]
+  },
+  "format_dependent": [],
+  "config": {
+    "max_open_prs": 2000,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "clock": "2026-10-22T09:00:00Z"
+  },
+  "steps": [
+    {
+      "note": "baseline: detail read",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"x/fork\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {
+          "1": "\"d1\""
+        },
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "nothing read",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"x/fork\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {
+          "1": "\"d1\""
+        },
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 2,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "none",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "slow refresh answered 304",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"x/fork\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {
+          "1": "\"d1\""
+        },
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 9,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "none",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    }
+  ],
+  "expected": [
+    {
+      "step": 1,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": true,
+            "fork_known": true,
+            "detail": {
+              "mergeable": true,
+              "state": "clean"
+            },
+            "checks": {
+              "runs": [],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": false
+        },
+        {
+          "call": "detail/1",
+          "conditional": false
+        },
+        {
+          "call": "runs/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 2,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": null
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "runs/1111",
+          "conditional": true
+        },
+        {
+          "call": "stats/1111",
+          "conditional": true
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 3,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": null
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "detail/1",
+          "conditional": true
+        },
+        {
+          "call": "runs/1111",
+          "conditional": true
+        },
+        {
+          "call": "stats/1111",
+          "conditional": true
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    }
+  ]
+}

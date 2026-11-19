@@ -1,0 +1,2823 @@
+{
+  "format_version": 1,
+  "count": 279,
+  "by_kind": {
+    "http-reader": 25,
+    "observer-session": 14,
+    "run-loop": 13,
+    "vectors": 33,
+    "watch-cycles": 194
+  },
+  "scenarios": [
+    {
+      "name": "backoff-doubles-to-the-cap",
+      "kind": "vectors",
+      "file": "backoff-doubles-to-the-cap.json",
+      "description": "The wait after the nth consecutive failure of a repository: the interval, doubled with each failure, capped at the smaller of 10 minutes and 10 times the interval.",
+      "go_tests": [
+        "health_test.go:TestBackoffDoublesToTheCap"
+      ],
+      "size": 36
+    },
+    {
+      "name": "branch-segment-encode",
+      "kind": "vectors",
+      "file": "branch-segment-encode.json",
+      "description": "A branch name as one URL path segment: `/` becomes %2F, non-ASCII is percent-encoded; names git cannot use (empty, `..`, leading `-`, control characters, `@{`, lock suffix, a `%` ...) and names over 255 bytes are refused (the PR is then observed without the base tip read).",
+      "go_tests": [
+        "watch_branch_test.go:TestEncodeBranchSegment",
+        "watch_branch_test.go:TestEncodeBranchSegmentRefusesInvalidNames"
+      ],
+      "size": 35
+    },
+    {
+      "name": "branch-segment-guard",
+      "kind": "vectors",
+      "file": "branch-segment-guard.json",
+      "description": "The raw path segment the transport accepts for a branch: only what EncodeBranchSegment produces (an uppercase %2F, percent-encoded UTF-8); double encoding, dot segments, control characters, a literal slash and lowercase escapes are refused.",
+      "go_tests": [
+        "watch_branch_test.go:TestBranchSegmentGuardRefusesAttackStrings"
+      ],
+      "size": 25
+    },
+    {
+      "name": "checks-classify-classes",
+      "kind": "vectors",
+      "file": "checks-classify-classes.json",
+      "description": "The check class and the total of a head from its check runs and commit statuses (none, green, pending, red; skipped and neutral count green; a failure wins over pending).",
+      "go_tests": [
+        "checks_test.go:TestClassifyChecksClasses"
+      ],
+      "size": 16
+    },
+    {
+      "name": "checks-classify-failing-names",
+      "kind": "vectors",
+      "file": "checks-classify-failing-names.json",
+      "description": "The failing names are sorted, at most 20, and counted in full.",
+      "go_tests": [
+        "checks_test.go:TestClassifyFailingNamesAreSortedBoundedAndCounted"
+      ],
+      "size": 2
+    },
+    {
+      "name": "checks-debounce-and-epochs",
+      "kind": "watch-cycles",
+      "file": "checks-debounce-and-epochs.json",
+      "description": "Check classes need two consecutive sightings; every accepted class change (also pending) bumps the checks epoch.",
+      "go_tests": [
+        "core_test.go:TestChecksAreDebouncedAndEveryAcceptedClassChangeBumpsTheEpoch"
+      ],
+      "size": 9
+    },
+    {
+      "name": "checks-none-never-green",
+      "kind": "watch-cycles",
+      "file": "checks-none-never-green.json",
+      "description": "An empty check list (class none) never produces checks-green; an accepted pending emits nothing.",
+      "go_tests": [
+        "core_test.go:TestChecksNoneNeverProducesGreenAndPendingEmitsNothing"
+      ],
+      "size": 5
+    },
+    {
+      "name": "checks-not-read-keeps-class",
+      "kind": "watch-cycles",
+      "file": "checks-not-read-keeps-class.json",
+      "description": "A cycle that did not read checks leaves the accepted class alone.",
+      "go_tests": [
+        "core_test.go:TestChecksReadOnlyWhenObservedLeavesAcceptedClassAlone"
+      ],
+      "size": 4
+    },
+    {
+      "name": "checks-red-shape-stack",
+      "kind": "watch-cycles",
+      "file": "checks-red-shape-stack.json",
+      "description": "A red head on a stacked base with the stack message has shape stack-merge-shape.",
+      "go_tests": [
+        "core_test.go:TestChecksRedShapeStack"
+      ],
+      "size": 3
+    },
+    {
+      "name": "checks-shape-rules",
+      "kind": "vectors",
+      "file": "checks-shape-rules.json",
+      "description": "The failure shape of a red head: real, stack-merge-shape or unknown, by the ordered rules (real markers first, stack patterns only on a stacked base and only if every failure is a plain failure with a pattern).",
+      "go_tests": [
+        "checks_test.go:TestShapeRules"
+      ],
+      "size": 22
+    },
+    {
+      "name": "checks-shape-text-bound",
+      "kind": "vectors",
+      "file": "checks-shape-text-bound.json",
+      "description": "Only the first 4 KiB of the summary and of the text count for the shape.",
+      "go_tests": [
+        "checks_test.go:TestShapeReadsOnlyFirst4KiBOfSummaryAndText"
+      ],
+      "size": 3
+    },
+    {
+      "name": "closed-reopened-closed-generations",
+      "kind": "watch-cycles",
+      "file": "closed-reopened-closed-generations.json",
+      "description": "A closed PR that reopens gets the next generation; closed and new-pr ids carry it.",
+      "go_tests": [
+        "core_test.go:TestClosedReopenedClosedGenerations"
+      ],
+      "size": 4
+    },
+    {
+      "name": "closed-replay-pins-generation",
+      "kind": "watch-cycles",
+      "file": "closed-replay-pins-generation.json",
+      "description": "The replay records the generation of a closed line so a later reopen gets generation 2.",
+      "go_tests": [
+        "review_test.go:TestClosedReplayPinsTheGenerationAcrossASecondReopen"
+      ],
+      "size": 6
+    },
+    {
+      "name": "commit-list-decode",
+      "kind": "vectors",
+      "file": "commit-list-decode.json",
+      "description": "The page of pulls/N/commits as the restacker reads it: the 40-hex SHAs in order, `more` when the page holds 100 items, a malformed body or a malformed transport error as `malformed`, any other transport error as `other`; the page is read unconditionally (no validator).",
+      "go_tests": [
+        "watchhost/commits_test.go:TestHostingCommitsDecodes",
+        "watchhost/commits_test.go:TestHostingCommitsFullPageHasMore",
+        "watchhost/commits_test.go:TestHostingCommitsMalformed"
+      ],
+      "size": 9
+    },
+    {
+      "name": "corrupt-state-is-an-error-unless-baseline",
+      "kind": "watch-cycles",
+      "file": "corrupt-state-is-an-error-unless-baseline.json",
+      "description": "A corrupt state is an error when opening, never silently reset; a forced baseline repairs it.",
+      "go_tests": [
+        "core_test.go:TestCorruptStateIsAnErrorUnlessBaseline"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-after-append-before-print",
+      "kind": "watch-cycles",
+      "file": "crash-after-append-before-print.json",
+      "description": "A crash after the journal append and before the print: nothing was printed; the start prints the event once.",
+      "go_tests": [
+        "crash_test.go:TestCrashAfterAppendBeforePrintPrintsOnceOnRestart"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-flapped-append1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-flapped-none.json",
+      "description": "Replay effects, kind base-changed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-flapped-print1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-flapped-state1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-still-append1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-still-none.json",
+      "description": "Replay effects, kind base-changed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-still-print1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-base-changed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-base-changed-still-state1.json",
+      "description": "Replay effects, kind base-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-base-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-checks-green-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-flapped-append1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-green-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-flapped-none.json",
+      "description": "Replay effects, kind checks-green: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-green-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-flapped-print1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-green-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-flapped-state1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-green-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-still-append1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-green-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-still-none.json",
+      "description": "Replay effects, kind checks-green: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-green-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-still-print1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-green-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-green-still-state1.json",
+      "description": "Replay effects, kind checks-green: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-green-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-pending-timeout-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-flapped-append1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 7
+    },
+    {
+      "name": "crash-checks-pending-timeout-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-flapped-none.json",
+      "description": "Replay effects, kind checks-pending-timeout: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 7
+    },
+    {
+      "name": "crash-checks-pending-timeout-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-flapped-print1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 7
+    },
+    {
+      "name": "crash-checks-pending-timeout-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-flapped-state1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 7
+    },
+    {
+      "name": "crash-checks-pending-timeout-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-still-append1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 6
+    },
+    {
+      "name": "crash-checks-pending-timeout-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-still-none.json",
+      "description": "Replay effects, kind checks-pending-timeout: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 6
+    },
+    {
+      "name": "crash-checks-pending-timeout-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-still-print1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 6
+    },
+    {
+      "name": "crash-checks-pending-timeout-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-pending-timeout-still-state1.json",
+      "description": "Replay effects, kind checks-pending-timeout: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-pending-timeout-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 6
+    },
+    {
+      "name": "crash-checks-red-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-flapped-append1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-red-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-flapped-none.json",
+      "description": "Replay effects, kind checks-red: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-red-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-flapped-print1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-red-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-flapped-state1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-checks-red-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-still-append1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-red-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-still-none.json",
+      "description": "Replay effects, kind checks-red: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-red-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-still-print1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-checks-red-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-checks-red-still-state1.json",
+      "description": "Replay effects, kind checks-red: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-checks-red-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-closed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-flapped-append1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-closed-flapped-none.json",
+      "description": "Replay effects, kind closed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-flapped-print1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-flapped-state1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-still-append1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-closed-still-none.json",
+      "description": "Replay effects, kind closed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-still-print1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-closed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-closed-still-state1.json",
+      "description": "Replay effects, kind closed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-closed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-flapped-append1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-flapped-none.json",
+      "description": "Replay effects, kind head-changed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-flapped-print1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-flapped-state1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-still-append1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-still-none.json",
+      "description": "Replay effects, kind head-changed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-still-print1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-head-changed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-head-changed-still-state1.json",
+      "description": "Replay effects, kind head-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-head-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-mergeable-changed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-flapped-append1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-mergeable-changed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-flapped-none.json",
+      "description": "Replay effects, kind mergeable-changed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-mergeable-changed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-flapped-print1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-mergeable-changed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-flapped-state1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 5
+    },
+    {
+      "name": "crash-mergeable-changed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-still-append1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-mergeable-changed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-still-none.json",
+      "description": "Replay effects, kind mergeable-changed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-mergeable-changed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-still-print1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-mergeable-changed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-mergeable-changed-still-state1.json",
+      "description": "Replay effects, kind mergeable-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-mergeable-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-merged-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-append1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-flapped-append2",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-append2.json",
+      "description": "Replay effects, kind merged: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-none.json",
+      "description": "Replay effects, kind merged: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-print1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-flapped-print2",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-print2.json",
+      "description": "Replay effects, kind merged: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-flapped-state1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-append1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-append2",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-append2.json",
+      "description": "Replay effects, kind merged: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-none.json",
+      "description": "Replay effects, kind merged: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-print1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-print2",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-print2.json",
+      "description": "Replay effects, kind merged: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-merged-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-merged-still-state1.json",
+      "description": "Replay effects, kind merged: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-merged-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-new-pr-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-flapped-append1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-new-pr-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-flapped-none.json",
+      "description": "Replay effects, kind new-pr: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-new-pr-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-flapped-print1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-new-pr-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-flapped-state1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-new-pr-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-still-append1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-new-pr-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-still-none.json",
+      "description": "Replay effects, kind new-pr: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-new-pr-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-still-print1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-new-pr-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-new-pr-still-state1.json",
+      "description": "Replay effects, kind new-pr: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-new-pr-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-flapped-append1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-flapped-none.json",
+      "description": "Replay effects, kind ready-state-changed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-flapped-print1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-flapped-state1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-still-append1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-still-none.json",
+      "description": "Replay effects, kind ready-state-changed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-still-print1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-ready-state-changed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-ready-state-changed-still-state1.json",
+      "description": "Replay effects, kind ready-state-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-ready-state-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-flapped-append1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-flapped-none.json",
+      "description": "Replay effects, kind repos-changed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-flapped-print1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-flapped-state1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-still-append1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-still-none.json",
+      "description": "Replay effects, kind repos-changed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-still-print1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-repos-changed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-repos-changed-still-state1.json",
+      "description": "Replay effects, kind repos-changed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-repos-changed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-flapped-append2",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-flapped-append2.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-flapped-none.json",
+      "description": "Replay effects, kind restack-needed: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-flapped-print1.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-flapped-print2",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-flapped-print2.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-flapped-state1.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-append1.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-append2",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-append2.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-none.json",
+      "description": "Replay effects, kind restack-needed: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-print1.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-print2",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-print2.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-restack-needed-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-restack-needed-still-state1.json",
+      "description": "Replay effects, kind restack-needed: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-restack-needed-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-flapped-append1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-flapped-none.json",
+      "description": "Replay effects, kind watch-error: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-flapped-print1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-flapped-state1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-still-append1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-still-none.json",
+      "description": "Replay effects, kind watch-error: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-still-print1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-error-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-error-still-state1.json",
+      "description": "Replay effects, kind watch-error: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-error-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-recovered-flapped-append1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-flapped-append1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-flapped-none.json",
+      "description": "Replay effects, kind watch-recovered: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-flapped-print1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-flapped-state1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-still-append1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-still-none.json",
+      "description": "Replay effects, kind watch-recovered: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-still-print1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-recovered-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-recovered-still-state1.json",
+      "description": "Replay effects, kind watch-recovered: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-recovered-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 4
+    },
+    {
+      "name": "crash-watch-stalled-flapped-append2",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-flapped-append2.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-flapped-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-flapped-none.json",
+      "description": "Replay effects, kind watch-stalled: the cycle that emits it runs without a crash, then the first poll sees the flapped observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-flapped-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-flapped-print1.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-flapped-print2",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-flapped-print2.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-flapped-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-flapped-state1.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the flapped observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-flapped-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-append1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-append1.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step append 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-append2",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-append2.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step append 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-none",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-none.json",
+      "description": "Replay effects, kind watch-stalled: the cycle that emits it runs without a crash, then the first poll sees the still observation.",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-print1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-print1.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step print 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-print2",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-print2.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step print 2 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "crash-watch-stalled-still-state1",
+      "kind": "watch-cycles",
+      "file": "crash-watch-stalled-still-state1.json",
+      "description": "Replay effects, kind watch-stalled: the process dies after durable step state 1 of the cycle that emits it; the restart polls and sees the still observation. The journal holds the event exactly once and equals the crash-free run (crash-watch-stalled-still-none).",
+      "go_tests": [
+        "crash_test.go:TestReplayEffectsCrashMatrix"
+      ],
+      "size": 3
+    },
+    {
+      "name": "default-state-dir",
+      "kind": "vectors",
+      "file": "default-state-dir.json",
+      "description": "The default state directory from the environment. Format-dependent (F3).",
+      "go_tests": [
+        "statedir_test.go:TestDefaultStateDir"
+      ],
+      "size": 2
+    },
+    {
+      "name": "event-id-counter",
+      "kind": "vectors",
+      "file": "event-id-counter.json",
+      "description": "How Go reads a counter (epoch, episode, generation) back from an event id when it rebuilds a lost state: the colon-separated part made of one letter and 1 to 8 digits, never a hex SHA. Format-dependent.",
+      "go_tests": [
+        "event_test.go:TestParseIDCounters"
+      ],
+      "size": 10
+    },
+    {
+      "name": "event-id-keys",
+      "kind": "vectors",
+      "file": "event-id-keys.json",
+      "description": "How Go builds the event id (repo#pr:kind:key and the key of every kind). Format-dependent: a Rust port may use other ids as long as they are unique and stable per transition; the scenarios assert uniqueness, not these strings.",
+      "go_tests": [
+        "event_test.go:TestEventIDs"
+      ],
+      "size": 19
+    },
+    {
+      "name": "event-json-shapes",
+      "kind": "vectors",
+      "file": "event-json-shapes.json",
+      "description": "The JSON object of an event as Go writes it (every kind, no key omitted, lists never null) and the objects Go refuses to decode (unknown key, unknown kind, wrong schema version). The lines are format-dependent in key order and escaping; the key sets per kind and the refusals are the contract.",
+      "go_tests": [
+        "event_test.go:TestEveryKindHasExactlyTheContractKeysAndNeverOmitsOne",
+        "event_test.go:TestEventJSONRoundTripAndStrictDetails"
+      ],
+      "size": 22
+    },
+    {
+      "name": "first-run-silent-baseline",
+      "kind": "watch-cycles",
+      "file": "first-run-silent-baseline.json",
+      "description": "The first successful read is a silent baseline; the next cycle announces only the change.",
+      "go_tests": [
+        "core_test.go:TestFirstRunIsASilentBaselineAndWritesState"
+      ],
+      "size": 2
+    },
+    {
+      "name": "flap-back-after-crash-next-epoch",
+      "kind": "watch-cycles",
+      "file": "flap-back-after-crash-next-epoch.json",
+      "description": "A flap back after a crash is a new event with the next epoch and nothing is lost.",
+      "go_tests": [
+        "crash_test.go:TestFlapBackAfterCrashIsANewEventWithTheNextEpochAndNothingIsLost"
+      ],
+      "size": 4
+    },
+    {
+      "name": "forced-baseline-after-state",
+      "kind": "watch-cycles",
+      "file": "forced-baseline-after-state.json",
+      "description": "A forced baseline after a state exists is silent and replaces the accepted view; counters survive so ids stay unique.",
+      "go_tests": [
+        "core_test.go:TestForcedBaselineAfterStateExistsIsSilentAndReplacesState"
+      ],
+      "size": 4
+    },
+    {
+      "name": "fork-flag-travels-in-new-pr-and-replay",
+      "kind": "watch-cycles",
+      "file": "fork-flag-travels-in-new-pr-and-replay.json",
+      "description": "The fork flag travels in the new-pr event and is restored by the replay after a crash.",
+      "go_tests": [
+        "review_test.go:TestForkFlagTravelsInTheNewPREventAndIsRestoredByReplay"
+      ],
+      "size": 3
+    },
+    {
+      "name": "generated-sequence-seed-01",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-01.json",
+      "description": "Generated forge sequence (seed 1, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-02",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-02.json",
+      "description": "Generated forge sequence (seed 2, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-03",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-03.json",
+      "description": "Generated forge sequence (seed 3, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-04",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-04.json",
+      "description": "Generated forge sequence (seed 4, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-05",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-05.json",
+      "description": "Generated forge sequence (seed 5, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-06",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-06.json",
+      "description": "Generated forge sequence (seed 6, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-07",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-07.json",
+      "description": "Generated forge sequence (seed 7, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-08",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-08.json",
+      "description": "Generated forge sequence (seed 8, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-09",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-09.json",
+      "description": "Generated forge sequence (seed 9, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-10",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-10.json",
+      "description": "Generated forge sequence (seed 10, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-11",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-11.json",
+      "description": "Generated forge sequence (seed 11, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "generated-sequence-seed-12",
+      "kind": "watch-cycles",
+      "file": "generated-sequence-seed-12.json",
+      "description": "Generated forge sequence (seed 12, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+      "go_tests": [
+        "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+      ],
+      "size": 14
+    },
+    {
+      "name": "gone-unreadable-retried",
+      "kind": "watch-cycles",
+      "file": "gone-unreadable-retried.json",
+      "description": "A PR that left the list with an unreadable pulls/N is retried every cycle and never guessed.",
+      "go_tests": [
+        "core_test.go:TestGoneButUnreadablePRIsRetriedAndNeverGuessed"
+      ],
+      "size": 4
+    },
+    {
+      "name": "head-change-resets-checks-and-candidates",
+      "kind": "watch-cycles",
+      "file": "head-change-resets-checks-and-candidates.json",
+      "description": "A head change clears the class and the stored candidates.",
+      "go_tests": [
+        "core_test.go:TestHeadChangeResetsChecksAndCandidates"
+      ],
+      "size": 5
+    },
+    {
+      "name": "head-changed-every-force-push",
+      "kind": "watch-cycles",
+      "file": "head-changed-every-force-push.json",
+      "description": "head-changed fires on every force push including a return to an earlier head; every transition is a distinct event.",
+      "go_tests": [
+        "core_test.go:TestHeadChangedFiresOnEveryForcePushIncludingAReturn"
+      ],
+      "size": 4
+    },
+    {
+      "name": "http-conditional-round-trip",
+      "kind": "http-reader",
+      "file": "http-conditional-round-trip.json",
+      "description": "A GET with and without a validator: a 200 carries ETag, body and the rate-limit headers, a request without a validator sends no If-None-Match; a 304 is a typed result (not an error) with no body; the accounting counts 2 requests and 1 not modified.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchConditionalRoundTripAndNotModified"
+      ],
+      "size": 2
+    },
+    {
+      "name": "http-error-classification",
+      "kind": "http-reader",
+      "file": "http-error-classification.json",
+      "description": "HTTP status and body to error code: 401 unauthorized; 403 forbidden (404 too, with its status kept); a 403 with rate-limit evidence (remaining 0, Retry-After, or the secondary-limit text) and 429 rate-limited; 5xx http-5xx; any other success status and a body over 1 MiB malformed. The error text never carries the response body or a token and is bounded.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchErrorClassification"
+      ],
+      "size": 11
+    },
+    {
+      "name": "http-negative-remaining-is-no-rate-limit-evidence",
+      "kind": "http-reader",
+      "file": "http-negative-remaining-is-no-rate-limit-evidence.json",
+      "description": "A 403 whose only rate evidence is a negative remaining is forbidden, not rate-limited.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchNegativeRateRemainingIsUnknown"
+      ],
+      "size": 1
+    },
+    {
+      "name": "http-not-modified-keeps-the-sent-validator",
+      "kind": "http-reader",
+      "file": "http-not-modified-keeps-the-sent-validator.json",
+      "description": "A 304 returns the validator that was sent, weak prefix included, even if the server repeats another form.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchNotModifiedKeepsSentValidator"
+      ],
+      "size": 1
+    },
+    {
+      "name": "http-rate-limited-carries-reset-and-retry-after",
+      "kind": "http-reader",
+      "file": "http-rate-limited-carries-reset-and-retry-after.json",
+      "description": "A rate-limited error carries the Retry-After seconds and the reset time from the headers.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchRateLimitedCarriesResetAndRetryAfter"
+      ],
+      "size": 1
+    },
+    {
+      "name": "http-redirects-refused-and-repo-moved",
+      "kind": "http-reader",
+      "file": "http-redirects-refused-and-repo-moved.json",
+      "description": "A 301 is never followed: repo-moved, with the new owner/name from the Location only if it names the repository safely (a hostile name, another host, an id URL or no Location give no name); any other redirect is malformed; the body of the redirect never leaks.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchRedirectsRefusedAndRepoMoved"
+      ],
+      "size": 6
+    },
+    {
+      "name": "http-token-never-in-errors",
+      "kind": "http-reader",
+      "file": "http-token-never-in-errors.json",
+      "description": "A server that echoes the Authorization header in an error body does not make the token reachable from the error.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchTokenNeverInErrorsOrBodies"
+      ],
+      "size": 1
+    },
+    {
+      "name": "http-typed-functions-and-refused-inputs",
+      "kind": "http-reader",
+      "file": "http-typed-functions-and-refused-inputs.json",
+      "description": "Every typed read (list page, pulls/N, its commits, branch tip with an encoded name, commit, check runs, statuses, rate_limit) sends exactly its allowlisted GET; invalid inputs (bad repo names, number 0, a header-injecting validator, page and page-size bounds, a raw or dot branch name, a non-SHA commit) are refused before any request.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchTypedFunctionsAndRefusedInputs"
+      ],
+      "size": 22
+    },
+    {
+      "name": "http-unsolicited-304-is-malformed",
+      "kind": "http-reader",
+      "file": "http-unsolicited-304-is-malformed.json",
+      "description": "A 304 without a validator in the request is a malformed response.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchUnsolicited304IsMalformed"
+      ],
+      "size": 1
+    },
+    {
+      "name": "human-lines-golden",
+      "kind": "vectors",
+      "file": "human-lines-golden.json",
+      "description": "The `--human` line of every kind: HH:MM:SS (UTC), repo#pr, kind, a summary; SHAs shortened to 7 characters. The restack-needed line carries Go's git command (owner decision F1: kept as in Go).",
+      "go_tests": [
+        "watchcmd/human_test.go:TestHumanLinesGolden"
+      ],
+      "size": 20
+    },
+    {
+      "name": "human-lines-untrusted-text",
+      "kind": "vectors",
+      "file": "human-lines-untrusted-text.json",
+      "description": "Text from the forge in a `--human` line never carries raw control characters, bidi or line separators, and a line is one line and bounded. The exact escaping is Go's (`untrusted.Esc`); the Rust port escapes differently (deviation D6), so only the properties are the contract.",
+      "go_tests": [
+        "watchcmd/human_test.go:TestHumanEscapesControlCharactersAndBoundsText",
+        "watchcmd/human_test.go:TestHumanEscapesEveryTextField"
+      ],
+      "size": 14
+    },
+    {
+      "name": "ignored-authors-and-labels",
+      "kind": "watch-cycles",
+      "file": "ignored-authors-and-labels.json",
+      "description": "Ignored authors and labels produce no events; a PR that becomes ignored vanishes silently.",
+      "go_tests": [
+        "core_test.go:TestIgnoredAuthorsAndLabelsProduceNoEvents"
+      ],
+      "size": 5
+    },
+    {
+      "name": "link-header-next-page",
+      "kind": "vectors",
+      "file": "link-header-next-page.json",
+      "description": "The page number of the `rel=\"next\"` entry of a Link header (rel with or without quotes); missing, malformed, zero and overflowing numbers give nothing.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchLinkHeaderParsing"
+      ],
+      "size": 10
+    },
+    {
+      "name": "lost-state-keeps-counters-of-unconfigured-repos",
+      "kind": "watch-cycles",
+      "file": "lost-state-keeps-counters-of-unconfigured-repos.json",
+      "description": "A lost state keeps the epoch counters of repositories that are no longer configured; they return with the next epoch.",
+      "go_tests": [
+        "review_test.go:TestLostStateKeepsCountersOfRepositoriesNoLongerConfigured"
+      ],
+      "size": 5
+    },
+    {
+      "name": "lost-state-rebuild-raises-checks-epoch",
+      "kind": "watch-cycles",
+      "file": "lost-state-rebuild-raises-checks-epoch.json",
+      "description": "A lost state rebuild raises the checks epoch of a baseline PR from the journal so later ids stay unique.",
+      "go_tests": [
+        "review_test.go:TestLostStateRebuildRaisesTheChecksEpochOfABaselinePR"
+      ],
+      "size": 6
+    },
+    {
+      "name": "lost-state-rebuilds-counters",
+      "kind": "watch-cycles",
+      "file": "lost-state-rebuilds-counters.json",
+      "description": "A lost state rebuilds the epoch counters from the journal so a later head-changed gets the next epoch; the old journal is not reprinted.",
+      "go_tests": [
+        "core_test.go:TestLostStateKeepsIDsUniqueByRebuildingCountersFromTheJournal"
+      ],
+      "size": 4
+    },
+    {
+      "name": "lost-state-replay-timeout-at-higher-epoch",
+      "kind": "watch-cycles",
+      "file": "lost-state-replay-timeout-at-higher-epoch.json",
+      "description": "The replay of a lost state restores the checks epoch and the fired flag of a timeout journalled at epoch 2.",
+      "go_tests": [
+        "review_test.go:TestLostStateReplayOfATimeoutAtAHigherEpoch"
+      ],
+      "size": 10
+    },
+    {
+      "name": "lost-state-silent-baseline-seq-gapless",
+      "kind": "watch-cycles",
+      "file": "lost-state-silent-baseline-seq-gapless.json",
+      "description": "A lost state with a non-empty journal is a silent baseline and the journal continues without a gap.",
+      "go_tests": [
+        "core_test.go:TestSeqIsGaplessFromTheJournalTailEvenWithoutState"
+      ],
+      "size": 5
+    },
+    {
+      "name": "merge-marks-open-prs-detail-due",
+      "kind": "watch-cycles",
+      "file": "merge-marks-open-prs-detail-due.json",
+      "description": "A merge marks the other open PRs due for a detail read; a detail observation clears the mark.",
+      "go_tests": [
+        "core_test.go:TestMergeMarksOtherOpenPRsDueForADetailRead"
+      ],
+      "size": 3
+    },
+    {
+      "name": "mergeable-behind-enters-and-leaves",
+      "kind": "watch-cycles",
+      "file": "mergeable-behind-enters-and-leaves.json",
+      "description": "Entering and leaving behind is a mergeable-changed; a change of the state text alone is silent.",
+      "go_tests": [
+        "core_test.go:TestMergeableBehindEntersAndLeaves"
+      ],
+      "size": 6
+    },
+    {
+      "name": "mergeable-debounced-null-keeps",
+      "kind": "watch-cycles",
+      "file": "mergeable-debounced-null-keeps.json",
+      "description": "mergeable-changed needs two sightings; a null mergeable keeps the previous value; a flap back is silent.",
+      "go_tests": [
+        "core_test.go:TestMergeableIsDebouncedAndNullKeepsThePreviousValue"
+      ],
+      "size": 6
+    },
+    {
+      "name": "merged-and-restack-needed",
+      "kind": "watch-cycles",
+      "file": "merged-and-restack-needed.json",
+      "description": "A merge emits merged, then restack-needed for the children in ascending PR order; restack_due is cleared at the end of the cycle.",
+      "go_tests": [
+        "core_test.go:TestMergedAndRestackNeeded"
+      ],
+      "size": 3
+    },
+    {
+      "name": "merged-records-head-fork",
+      "kind": "vectors",
+      "file": "merged-records-head-fork.json",
+      "description": "The merge records whether the merged PR's head lives in a fork: false only if the PR was observed open with its head in the base repository; a fork-merged or unobserved PR never yields class-1 candidates.",
+      "go_tests": [
+        "restack_test.go:TestMergedDueRecordsHeadFork"
+      ],
+      "size": 3
+    },
+    {
+      "name": "merged-unreadable-commit",
+      "kind": "watch-cycles",
+      "file": "merged-unreadable-commit.json",
+      "description": "A merge whose commit is unreadable has the key unknown and a null new parent.",
+      "go_tests": [
+        "core_test.go:TestMergedWithUnreadableCommitHasUnknownKeyAndNullParent"
+      ],
+      "size": 2
+    },
+    {
+      "name": "new-pr-details",
+      "kind": "watch-cycles",
+      "file": "new-pr-details.json",
+      "description": "The details of new-pr and its time.",
+      "go_tests": [
+        "core_test.go:TestNewPRDetailsAndKeys"
+      ],
+      "size": 2
+    },
+    {
+      "name": "null-mergeable-keeps-detail-due",
+      "kind": "watch-cycles",
+      "file": "null-mergeable-keeps-detail-due.json",
+      "description": "A confirming read that finds mergeability still being computed keeps the detail read due until a non-null read resolves the candidate.",
+      "go_tests": [
+        "candidate_test.go:TestNullMergeableKeepsTheDetailReadDueWhileACandidateIsStored"
+      ],
+      "size": 6
+    },
+    {
+      "name": "observe-baseline-reads-every-pr-fully",
+      "kind": "observer-session",
+      "file": "observe-baseline-reads-every-pr-fully.json",
+      "description": "The first observation of a repository reads every PR fully: list, pulls/N, branch tips, check runs and commit statuses; a null mergeable is `not computed`; the fork flag comes from pulls/N; check data keeps title, summary and text; a status context is taken once (the newest).",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveBaselineReadsEveryPRFully"
+      ],
+      "size": 1
+    },
+    {
+      "name": "observe-confirms-a-debounce-candidate",
+      "kind": "observer-session",
+      "file": "observe-confirms-a-debounce-candidate.json",
+      "description": "A class that changed upstream is reported; the stored candidate (accepted class still differs) makes the next read fresh, not conditional, so the second sighting reaches the core; once the core accepted the class the PR is settled and not read.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveConfirmsADebounceCandidateWithAFreshRead"
+      ],
+      "size": 5
+    },
+    {
+      "name": "observe-confirms-a-stored-candidate-in-a-new-process",
+      "kind": "observer-session",
+      "file": "observe-confirms-a-stored-candidate-in-a-new-process.json",
+      "description": "A candidate stored by the core survives a restart: the memory of the observer is gone, so the known PR itself (class candidate) makes a fresh read due.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveConfirmsAStoredCandidateInANewProcess"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-default-branch-guess",
+      "kind": "vectors",
+      "file": "observe-default-branch-guess.json",
+      "description": "The default branch is guessed from the bases of the open PRs (main, then master; stacked bases and unknown names give nothing); the allowlist has no repository read.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveGuessesTheDefaultBranch"
+      ],
+      "size": 7
+    },
+    {
+      "name": "observe-detail-after-a-merge-in-the-same-cycle",
+      "kind": "observer-session",
+      "file": "observe-detail-after-a-merge-in-the-same-cycle.json",
+      "description": "When a known PR left the open list and pulls/N says merged, every open PR is re-read; the merged PR is reported as gone with merge commit, head, base, merged_at and method hint (one parent: rebase-or-squash).",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveReadsDetailWhenItIsNeeded/a_merge_in_the_same_cycle"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-detail-due-flag-and-slow-refresh",
+      "kind": "observer-session",
+      "file": "observe-detail-due-flag-and-slow-refresh.json",
+      "description": "A PR marked due gets a fresh read; every detail_every cycles the PR numbered so that (cycle + number) mod 10 = 0 gets a conditional refresh (staggered by number).",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveReadsDetailWhenItIsNeeded/due_flag_and_the_staggered_slow_refresh"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-detail-when-base-tip-moved",
+      "kind": "observer-session",
+      "file": "observe-detail-when-base-tip-moved.json",
+      "description": "A moved base tip (the only evidence that the base moved) makes the PRs on that base due for a fresh, unconditional pulls/N read; PRs on other bases are not read.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveReadsDetailWhenItIsNeeded/base_tip_moved"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-detail-when-head-changed",
+      "kind": "observer-session",
+      "file": "observe-detail-when-head-changed.json",
+      "description": "A PR whose head changed gets a fresh pulls/N read and its checks read; the other PRs are left alone.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveReadsDetailWhenItIsNeeded/head_changed"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-fork-flag-only-when-detail-was-read",
+      "kind": "observer-session",
+      "file": "observe-fork-flag-only-when-detail-was-read.json",
+      "description": "The fork flag is reported as an answer (fork_known) only when pulls/N was read with a body in this observation; an unread or 304-answered detail reports no answer.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveReportsTheForkFlagOnlyWhenPullDetailWasRead"
+      ],
+      "size": 3
+    },
+    {
+      "name": "observe-gone-closed-merged-and-still-open",
+      "kind": "observer-session",
+      "file": "observe-gone-closed-merged-and-still-open.json",
+      "description": "A PR that left the list is read once via pulls/N: closed (no merge), merged with two parents (merge), merged with an unreadable commit (null commit, unknown), still open (stays unresolved); an unreadable commit only makes the hint unknown; an unreadable pulls/N fails the repository.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveGoneClosedMergedMethodAndStillOpen"
+      ],
+      "size": 3
+    },
+    {
+      "name": "observe-keeps-watching-when-a-base-name-is-refused",
+      "kind": "observer-session",
+      "file": "observe-keeps-watching-when-a-base-name-is-refused.json",
+      "description": "A base branch name that cannot be encoded for a URL is skipped with one diagnostic per run; the PRs on it are still observed.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveKeepsWatchingWhenABaseNameIsRefused"
+      ],
+      "size": 2
+    },
+    {
+      "name": "observe-maps-failures-and-the-rate-limit",
+      "kind": "observer-session",
+      "file": "observe-maps-failures-and-the-rate-limit.json",
+      "description": "Read failures map to watch-error codes; a rate limit below 10 percent asks for a slower interval; below 50 remaining arms a hold that the next Observe reports once as a run-wide rate-limited error (wait until reset + 5 s); a canceled run is not a repository failure.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveMapsFailuresAndTheRateLimit"
+      ],
+      "size": 7
+    },
+    {
+      "name": "observe-refuses-invalid-values-of-a-gone-pr",
+      "kind": "observer-session",
+      "file": "observe-refuses-invalid-values-of-a-gone-pr.json",
+      "description": "pulls/N of a PR that left the list is validated: a merge commit with an escape or in uppercase, a short head, an unparsable or missing merged_at, a closed PR with a bad head are malformed responses.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveRefusesInvalidValuesOfAGonePR"
+      ],
+      "size": 6
+    },
+    {
+      "name": "observe-skips-ignored-prs",
+      "kind": "observer-session",
+      "file": "observe-skips-ignored-prs.json",
+      "description": "Ignored PRs (author or label) stay in the list for the core but cost no detail and no checks read.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveSkipsIgnoredPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "observe-steady-state-reads-only-the-basics",
+      "kind": "observer-session",
+      "file": "observe-steady-state-reads-only-the-basics.json",
+      "description": "In the steady state (all PRs accepted green, no due flag, no moved base) a cycle reads the list and one conditional branch tip per base; no detail, no checks, nothing reported for PRs.",
+      "go_tests": [
+        "watchcmd/observer_test.go:TestObserveSteadyStateReadsNothingBeyondTheConditionalBasics"
+      ],
+      "size": 2
+    },
+    {
+      "name": "partial-batch-crash-after-append-1",
+      "kind": "watch-cycles",
+      "file": "partial-batch-crash-after-append-1.json",
+      "description": "A crash after journal append 1 of 4 leaves a partial batch; the poll after the restart completes the rest in the order of the crash-free run.",
+      "go_tests": [
+        "crash_test.go:TestPartialBatchCrashCompletesInOrder"
+      ],
+      "size": 3
+    },
+    {
+      "name": "partial-batch-crash-after-append-2",
+      "kind": "watch-cycles",
+      "file": "partial-batch-crash-after-append-2.json",
+      "description": "A crash after journal append 2 of 4 leaves a partial batch; the poll after the restart completes the rest in the order of the crash-free run.",
+      "go_tests": [
+        "crash_test.go:TestPartialBatchCrashCompletesInOrder"
+      ],
+      "size": 3
+    },
+    {
+      "name": "partial-batch-crash-after-append-3",
+      "kind": "watch-cycles",
+      "file": "partial-batch-crash-after-append-3.json",
+      "description": "A crash after journal append 3 of 4 leaves a partial batch; the poll after the restart completes the rest in the order of the crash-free run.",
+      "go_tests": [
+        "crash_test.go:TestPartialBatchCrashCompletesInOrder"
+      ],
+      "size": 3
+    },
+    {
+      "name": "partial-batch-crash-free",
+      "kind": "watch-cycles",
+      "file": "partial-batch-crash-free.json",
+      "description": "Four events in one cycle without a crash (the reference of the partial batch scenarios).",
+      "go_tests": [
+        "crash_test.go:TestPartialBatchCrashCompletesInOrder"
+      ],
+      "size": 2
+    },
+    {
+      "name": "pending-timeout-disabled-with-zero",
+      "kind": "watch-cycles",
+      "file": "pending-timeout-disabled-with-zero.json",
+      "description": "A pending timeout of 0 disables checks-pending-timeout.",
+      "go_tests": [
+        "core_test.go:TestPendingTimeoutDisabledWithZero"
+      ],
+      "size": 81
+    },
+    {
+      "name": "pending-timeout-once-per-period",
+      "kind": "watch-cycles",
+      "file": "pending-timeout-once-per-period.json",
+      "description": "checks-pending-timeout fires once per pending period (limit 10 minutes) and again after a class change.",
+      "go_tests": [
+        "core_test.go:TestPendingTimeoutFiresOncePerPendingPeriod"
+      ],
+      "size": 29
+    },
+    {
+      "name": "pulls-304-reuses-stored-link-and-items",
+      "kind": "http-reader",
+      "file": "pulls-304-reuses-stored-link-and-items.json",
+      "description": "With the stored state every page is requested conditionally; all 304 means unchanged with the stored items; the Link chain comes from the stored Link because GitHub's 304 has none; a changed middle page is replaced while the others stay 304.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPulls304ReusesStoredLinkAndItems",
+        "watch_pulls_test.go:TestListOpenPullsStoredLinkSurvivesLinklessNotModified"
+      ],
+      "size": 3
+    },
+    {
+      "name": "pulls-errors-pass-through",
+      "kind": "http-reader",
+      "file": "pulls-errors-pass-through.json",
+      "description": "A 301 on the list is repo-moved with the new name; a rate-limited list is not retried.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsErrorsPassThrough"
+      ],
+      "size": 2
+    },
+    {
+      "name": "pulls-halved-page-size-is-in-memory-only",
+      "kind": "http-reader",
+      "file": "pulls-halved-page-size-is-in-memory-only.json",
+      "description": "The halved page size lives in the reader until restart (per repository); it is not read from the stored state: a new reader with the stored 12-sized state starts at 25 without validators.",
+      "go_tests": [
+        "watch_pulls_test.go:TestHalvedPageSizeIsInMemoryOnly"
+      ],
+      "size": 4
+    },
+    {
+      "name": "pulls-halves-page-size-and-restarts-at-page-one",
+      "kind": "http-reader",
+      "file": "pulls-halves-page-size-and-restarts-at-page-one.json",
+      "description": "A page over 1 MiB halves the page size to 12 and restarts at page 1; 12 is kept for the repository (conditional requests at 12 afterwards).",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsHalvesAndRestartsAtPageOne"
+      ],
+      "size": 2
+    },
+    {
+      "name": "pulls-no-probe-beyond-the-allowlist-bound",
+      "kind": "http-reader",
+      "file": "pulls-no-probe-beyond-the-allowlist-bound.json",
+      "description": "At the page bound (80 full pages) a 304 listing does not probe a page beyond the allowlist: 80 requests.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsNoProbeBeyondAllowlistBound"
+      ],
+      "size": 2
+    },
+    {
+      "name": "pulls-page-too-large-at-twelve",
+      "kind": "http-reader",
+      "file": "pulls-page-too-large-at-twelve.json",
+      "description": "A page over 1 MiB at 12 per page (by body or by declared length) is page-too-large after exactly two requests.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsPageTooLargeAtTwelve"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-page-too-large-by-declared-length",
+      "kind": "http-reader",
+      "file": "pulls-page-too-large-by-declared-length.json",
+      "description": "The declared Content-Length alone over 1 MiB gives page-too-large too.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsPageTooLargeAtTwelve"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-paginate-with-link-across-three-pages",
+      "kind": "http-reader",
+      "file": "pulls-paginate-with-link-across-three-pages.json",
+      "description": "The open list is read page by page by the Link rel=next header (25 per page, the next page must be exactly the current plus one); the items are parsed to number, title, user, labels, draft, head sha and ref, base ref and sha; each page's ETag and Link are kept.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsPaginatesWithLinkAcrossThreePages"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-probes-past-a-full-last-page-on-304",
+      "kind": "http-reader",
+      "file": "pulls-probes-past-a-full-last-page-on-304.json",
+      "description": "A 304 reuses the stored Link, so an exactly full last page could hide a reopened PR behind it: the next page is probed once (first time unconditionally, then conditionally); a 200 is authoritative and needs no probe; a short last page is never probed.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsProbesPastAFullLastPageOnNotModified"
+      ],
+      "size": 4
+    },
+    {
+      "name": "pulls-rejects-bad-bounds-links-and-items",
+      "kind": "http-reader",
+      "file": "pulls-rejects-bad-bounds-links-and-items.json",
+      "description": "max_open_prs outside 1..2000 is refused without a request; a Link that skips a page, goes backwards or has no number is never followed (malformed); malformed list bodies (not an array, number 0, short sha, non-objects, not JSON) are malformed.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsRejectsBadBoundsAndLinks"
+      ],
+      "size": 11
+    },
+    {
+      "name": "pulls-short-last-page-is-not-probed",
+      "kind": "http-reader",
+      "file": "pulls-short-last-page-is-not-probed.json",
+      "description": "A short last page (24 of 25) is never probed on a 304.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsProbesPastAFullLastPageOnNotModified"
+      ],
+      "size": 2
+    },
+    {
+      "name": "pulls-too-many-open-prs-12-per-page-max-2000",
+      "kind": "http-reader",
+      "file": "pulls-too-many-open-prs-12-per-page-max-2000.json",
+      "description": "An endless list at 12 per page with max_open_prs 2000 stops with too-many-open-prs after exactly 167 pages.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-too-many-open-prs-25-per-page-max-2000",
+      "kind": "http-reader",
+      "file": "pulls-too-many-open-prs-25-per-page-max-2000.json",
+      "description": "An endless list at 25 per page with max_open_prs 2000 stops with too-many-open-prs after exactly 80 pages.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-too-many-open-prs-25-per-page-max-25",
+      "kind": "http-reader",
+      "file": "pulls-too-many-open-prs-25-per-page-max-25.json",
+      "description": "An endless list at 25 per page with max_open_prs 25 stops with too-many-open-prs after exactly 1 pages.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-too-many-open-prs-25-per-page-max-30",
+      "kind": "http-reader",
+      "file": "pulls-too-many-open-prs-25-per-page-max-30.json",
+      "description": "An endless list at 25 per page with max_open_prs 30 stops with too-many-open-prs after exactly 2 pages.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "pulls-too-many-open-prs-on-the-last-page",
+      "kind": "http-reader",
+      "file": "pulls-too-many-open-prs-on-the-last-page.json",
+      "description": "More items than max_open_prs on the last page is too-many-open-prs.",
+      "go_tests": [
+        "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+      ],
+      "size": 1
+    },
+    {
+      "name": "rate-limit-assess",
+      "kind": "vectors",
+      "file": "rate-limit-assess.json",
+      "description": "The slowdown policy: none; slow (remaining below 10 percent of the limit: double the interval); wait (remaining below 50 or exhausted: wait until reset + 5 s).",
+      "go_tests": [
+        "watch_ratelimit_test.go:TestAssessRateLimit"
+      ],
+      "size": 8
+    },
+    {
+      "name": "rate-limit-headers",
+      "kind": "vectors",
+      "file": "rate-limit-headers.json",
+      "description": "The X-RateLimit-* headers: a negative remaining is not evidence (unknown); zero remaining is.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchNegativeRateRemainingIsUnknown"
+      ],
+      "size": 3
+    },
+    {
+      "name": "rate-limited-wait-until",
+      "kind": "vectors",
+      "file": "rate-limited-wait-until.json",
+      "description": "Until when a rate-limited answer holds the run: retry-after plus 5 s, else reset plus 5 s (only if in the future), else 65 s from now.",
+      "go_tests": [
+        "watch_ratelimit_test.go:TestRateLimitedWaitUntil"
+      ],
+      "size": 4
+    },
+    {
+      "name": "ready-state-and-base-changed",
+      "kind": "watch-cycles",
+      "file": "ready-state-and-base-changed.json",
+      "description": "ready-state-changed and base-changed are immediate.",
+      "go_tests": [
+        "core_test.go:TestReadyStateAndBaseChangedAreImmediate"
+      ],
+      "size": 4
+    },
+    {
+      "name": "reopened-pr-keeps-counters",
+      "kind": "watch-cycles",
+      "file": "reopened-pr-keeps-counters.json",
+      "description": "A reopened PR keeps its epoch counters so event ids stay unique.",
+      "go_tests": [
+        "core_test.go:TestReopenedPRKeepsItsCountersSoIDsStayUnique"
+      ],
+      "size": 5
+    },
+    {
+      "name": "repos-changed-added-removed-abab",
+      "kind": "watch-cycles",
+      "file": "repos-changed-added-removed-abab.json",
+      "description": "A repository added gets a silent baseline; every change of the repository set is a distinct repos-changed (ABAB).",
+      "go_tests": [
+        "core_test.go:TestReposChangedAddedRepoGetsASilentBaselineAndAbaAbIDsAreDistinct"
+      ],
+      "size": 5
+    },
+    {
+      "name": "repos-changed-skipped-submodule",
+      "kind": "watch-cycles",
+      "file": "repos-changed-skipped-submodule.json",
+      "description": "A skipped submodule is reported once in repos-changed.",
+      "go_tests": [
+        "core_test.go:TestReposChangedReportsASkippedSubmodule"
+      ],
+      "size": 3
+    },
+    {
+      "name": "repository-in-backoff-not-polled",
+      "kind": "watch-cycles",
+      "file": "repository-in-backoff-not-polled.json",
+      "description": "A repository in backoff is not polled; recovery comes with the first successful poll after it.",
+      "go_tests": [
+        "health_test.go:TestRepositoryInBackoffIsNotPolled"
+      ],
+      "size": 5
+    },
+    {
+      "name": "restack-candidates",
+      "kind": "vectors",
+      "file": "restack-candidates.json",
+      "description": "Which open PRs must be restacked after a merge: class 1 child-of-merged-branch by the base name alone, class 2 contains-merged-commits by the old parent in the commit list (at most 3 pages), ascending by PR number. The `argv` of a candidate is Go's fixed git command; it is null for a fork head or an unknown merge commit (owner decision F1: kept as in Go, an exception to D-20261103-03).",
+      "go_tests": [
+        "restack_test.go:TestRestackRebaseMergeFixture",
+        "restack_test.go:TestRestackNullsAndFork",
+        "restack_test.go:TestRestackPagingAndCap",
+        "restack_test.go:TestRestackSkipsUnnamableBranch",
+        "restack_test.go:TestRestackErrors",
+        "restack_test.go:TestRestackHeadRefEqualsBaseUsesCommitCheck",
+        "restack_test.go:TestRestackForkHeadHasNoClassOne",
+        "restack_test.go:TestRestackStopsAtFirstHit"
+      ],
+      "size": 12
+    },
+    {
+      "name": "restack-hosting-name-check",
+      "kind": "vectors",
+      "file": "restack-hosting-name-check.json",
+      "description": "The restacker of `stw watch` refuses a head branch that the hosting reader cannot put into a URL segment (a percent sign, for example) with a diagnostic, and goes on with the others.",
+      "go_tests": [
+        "watchhost/commits_test.go:TestNewRestackerUsesHostingNameCheck"
+      ],
+      "size": 1
+    },
+    {
+      "name": "retry-after-header",
+      "kind": "vectors",
+      "file": "retry-after-header.json",
+      "description": "The Retry-After header in seconds: 0 to 86400 accepted, anything else (negative, over a day, garbage, empty) is no evidence.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchRetryAfterUpperBound"
+      ],
+      "size": 7
+    },
+    {
+      "name": "run-human-output-and-slowdown",
+      "kind": "run-loop",
+      "file": "run-human-output-and-slowdown.json",
+      "description": "`--human` prints the human line; a rate limit below 10 percent doubles the wait between polls.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestHumanOutputAndSlowdown"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-interrupted-until-event-is-a-failure",
+      "kind": "run-loop",
+      "file": "run-interrupted-until-event-is-a-failure.json",
+      "description": "An interrupted `--until-event` exits 1 (interrupted) and never looks like a match.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestInterruptedUntilEventIsAFailureAndNeverAMatch"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-once-baseline-then-transitions",
+      "kind": "run-loop",
+      "file": "run-once-baseline-then-transitions.json",
+      "description": "`--once`: the first run is a silent baseline (exit 0, no output); the next prints only the transition; `--baseline` after a state exists prints nothing and replaces the state.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestOnceBaselineIsSilentThenPrintsOnlyTransitions"
+      ],
+      "size": 4
+    },
+    {
+      "name": "run-once-fails-only-when-no-repository-could-be-read",
+      "kind": "run-loop",
+      "file": "run-once-fails-only-when-no-repository-could-be-read.json",
+      "description": "`--once` exits 1 only when no repository could be read at all; the failure is still data on stdout (a watch-error event); a readable repository exits 0.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestOnceFailsOnlyWhenNoRepositoryCouldBeRead"
+      ],
+      "size": 2
+    },
+    {
+      "name": "run-rate-limit-holds-the-whole-run",
+      "kind": "run-loop",
+      "file": "run-rate-limit-holds-the-whole-run.json",
+      "description": "An exhausted rate limit holds the whole run until the reset: one run-level watch-error rate-limited (repo null) and a sleep of at least 9 minutes.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestRateLimitedHoldsTheWholeRun"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-restack-needed-end-to-end",
+      "kind": "run-loop",
+      "file": "run-restack-needed-end-to-end.json",
+      "description": "A merge read through the observer produces restack-needed for the child on the merged branch (class 1) and for the PR whose commits contain the old head (class 2), not for the unrelated PR; the event carries old parent, new parent, merged PR and Go's argv (owner decision F1).",
+      "go_tests": [
+        "watchcmd/run_test.go:TestRestackNeededEventsAreProducedEndToEnd"
+      ],
+      "size": 2
+    },
+    {
+      "name": "run-status-fresh-stale-missing",
+      "kind": "run-loop",
+      "file": "run-status-fresh-stale-missing.json",
+      "description": "`--status`: fresh within the window (exit 0), stale (exit 5, JSON fresh=false), missing heartbeat (exit 5), a relative directory (exit 2).",
+      "go_tests": [
+        "watchcmd/run_test.go:TestRunStatus"
+      ],
+      "size": 4
+    },
+    {
+      "name": "run-stream-ends-on-interrupt",
+      "kind": "run-loop",
+      "file": "run-stream-ends-on-interrupt.json",
+      "description": "A `--stream` interrupted (SIGINT/SIGTERM) ends with exit 0.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestStreamEndsOnInterruptAndOnMaxIdle"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-stream-ends-on-max-idle",
+      "kind": "run-loop",
+      "file": "run-stream-ends-on-max-idle.json",
+      "description": "A `--stream` with `--max-idle 150s` and no event ends with exit 0 after exactly 150 s of sleeping.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestStreamEndsOnInterruptAndOnMaxIdle"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-until-event-matches-a-kind",
+      "kind": "run-loop",
+      "file": "run-until-event-matches-a-kind.json",
+      "description": "`--until-event`: exits 0 as soon as a poll printed an event of a requested kind; the wait between polls is the interval.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestUntilEventExitsZeroOnAMatchingKind"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-until-event-prints-the-whole-poll",
+      "kind": "run-loop",
+      "file": "run-until-event-prints-the-whole-poll.json",
+      "description": "`--until-event` matching a kind still prints every event of that poll before it exits.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestUntilEventMatchesAfterThePollThatPrintedIt"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-until-event-timeout-exits-four",
+      "kind": "run-loop",
+      "file": "run-until-event-timeout-exits-four.json",
+      "description": "`--until-event` without a matching event ends exactly at the timeout with exit 4 and no output; the last sleep is shortened to the remaining time.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestUntilEventTimeoutExitsFourWithoutOutput"
+      ],
+      "size": 1
+    },
+    {
+      "name": "run-usage-and-failure-exit-codes",
+      "kind": "run-loop",
+      "file": "run-usage-and-failure-exit-codes.json",
+      "description": "Exit codes before any read: a relative state directory and a state directory inside a Git work tree are usage errors (2, nothing created); a state directory with a wide mode, a reader that cannot open (no token: `hosting-api-unavailable`, before any request) and a corrupt state (never silently reset, the message names --baseline) are failures (1); `--baseline` repairs the corrupt state.",
+      "go_tests": [
+        "watchcmd/run_test.go:TestUsageAndFailureExitCodes"
+      ],
+      "size": 6
+    },
+    {
+      "name": "run-wide-rate-limit-holds-the-poll",
+      "kind": "watch-cycles",
+      "file": "run-wide-rate-limit-holds-the-poll.json",
+      "description": "A run-wide failure (rate-limited) holds the whole poll, is reported without a repo, and recovers without one.",
+      "go_tests": [
+        "health_test.go:TestRunWideRateLimitHoldsThePollAndRecoversWithoutARepo"
+      ],
+      "size": 4
+    },
+    {
+      "name": "second-merge-same-child-distinct-ids",
+      "kind": "watch-cycles",
+      "file": "second-merge-same-child-distinct-ids.json",
+      "description": "A second merge for the same child is a distinct restack-needed transition.",
+      "go_tests": [
+        "core_test.go:TestSecondMergeForTheSameChildGetsADistinctID"
+      ],
+      "size": 3
+    },
+    {
+      "name": "status-fresh-stale-after-a-failing-cycle",
+      "kind": "watch-cycles",
+      "file": "status-fresh-stale-after-a-failing-cycle.json",
+      "description": "The heartbeat freshness window (3 minutes at a 60 s interval) and the per-repository status after a failing cycle.",
+      "go_tests": [
+        "status_test.go:TestReadStatusFreshStaleAndMissing"
+      ],
+      "size": 2
+    },
+    {
+      "name": "status-freshness-window",
+      "kind": "vectors",
+      "file": "status-freshness-window.json",
+      "description": "How old the heartbeat may be for `--status` to report fresh: the larger of 3 intervals and 3 minutes.",
+      "go_tests": [
+        "status_test.go:TestStatusFreshnessWindow"
+      ],
+      "size": 5
+    },
+    {
+      "name": "stdout-twice-when-crash-follows-print",
+      "kind": "watch-cycles",
+      "file": "stdout-twice-when-crash-follows-print.json",
+      "description": "A crash after the print leaves the event on stdout twice (at-least-once); the journal holds it once and a completed cycle prints nothing more.",
+      "go_tests": [
+        "crash_test.go:TestStdoutHasTheEventTwiceWhenTheCrashFollowsThePrint"
+      ],
+      "size": 4
+    },
+    {
+      "name": "stored-candidates-visible-in-hints",
+      "kind": "watch-cycles",
+      "file": "stored-candidates-visible-in-hints.json",
+      "description": "A stored class candidate and a stored mergeability candidate show in the hints for the observer (detail read due).",
+      "go_tests": [
+        "candidate_test.go:TestStoredCandidatesAreVisibleToTheObserver"
+      ],
+      "size": 3
+    },
+    {
+      "name": "timeout-no-refire-after-forced-baseline",
+      "kind": "watch-cycles",
+      "file": "timeout-no-refire-after-forced-baseline.json",
+      "description": "A pending timeout that already fired is not fired again after a forced baseline.",
+      "go_tests": [
+        "review_test.go:TestTimeoutDoesNotRefireAfterForcedBaseline"
+      ],
+      "size": 26
+    },
+    {
+      "name": "timeout-no-refire-after-lost-state",
+      "kind": "watch-cycles",
+      "file": "timeout-no-refire-after-lost-state.json",
+      "description": "A pending timeout that already fired is not fired again after a lost state.",
+      "go_tests": [
+        "review_test.go:TestTimeoutDoesNotRefireAfterLostState"
+      ],
+      "size": 26
+    },
+    {
+      "name": "timeout-no-refire-after-repo-remove-readd",
+      "kind": "watch-cycles",
+      "file": "timeout-no-refire-after-repo-remove-readd.json",
+      "description": "A pending timeout that already fired is not fired again after the repository was removed and added again.",
+      "go_tests": [
+        "review_test.go:TestTimeoutDoesNotRefireAfterRepositoryRemoveAndReAdd"
+      ],
+      "size": 27
+    },
+    {
+      "name": "unknown-fork-never-overwrites-persisted",
+      "kind": "watch-cycles",
+      "file": "unknown-fork-never-overwrites-persisted.json",
+      "description": "A fork flag read without pulls/N is not an answer: it never overwrites a persisted fork flag, also not through a baseline.",
+      "go_tests": [
+        "status_test.go:TestUnknownForkNeverOverwritesAPersistedFork"
+      ],
+      "size": 8
+    },
+    {
+      "name": "watch-config-parse",
+      "kind": "vectors",
+      "file": "watch-config-parse.json",
+      "description": "The strict profile of `.stw/watch.toml`: every key read; unknown keys and tables, wrong types, duplicate keys, a missing or different schema_version, bad repo names, out-of-range numbers and invalid TOML are errors (usage, exit 2).",
+      "go_tests": [
+        "watchcmd/config_test.go:TestParseConfigReadsEveryKey",
+        "watchcmd/config_test.go:TestParseConfigIsStrict"
+      ],
+      "size": 22
+    },
+    {
+      "name": "watch-decode-pull-detail",
+      "kind": "vectors",
+      "file": "watch-decode-pull-detail.json",
+      "description": "The fields read from pulls/N: mergeable (null = not computed), mergeable_state, rebaseable, head sha, and the fork flag (head repository missing or different from the base repository, case-insensitive); a body that is not an object is malformed.",
+      "go_tests": [
+        "watchcmd/pullsread_test.go:TestDecodePullDetailReadsHeadSHAAndRebaseable",
+        "watchcmd/pullsread_test.go:TestDecodePullDetailNullsAndFork"
+      ],
+      "size": 5
+    },
+    {
+      "name": "watch-endpoint-allowlist",
+      "kind": "vectors",
+      "file": "watch-endpoint-allowlist.json",
+      "description": "The GET endpoints the watch reader may call (pulls list with page bounds 80 at 25 and 167 at 12, pulls/N, its commits up to page 3, branches with an encoded segment, commits/SHA with check-runs and statuses, rate_limit) and what it refuses. Only GET exists (the Go guard refuses every write method on every endpoint; Rust must have no write path).",
+      "go_tests": [
+        "watch_endpoint_test.go:TestWatchEndpointAllowlist",
+        "watch_ratelimit_test.go:TestWatchGuardRefusesEveryWriteMethodOnEveryWatchEndpoint"
+      ],
+      "size": 42
+    },
+    {
+      "name": "watch-error-episodes",
+      "kind": "watch-cycles",
+      "file": "watch-error-episodes.json",
+      "description": "watch-error per episode and code; a long outage also stalls; recovery closes the episode; a second episode gets a new id.",
+      "go_tests": [
+        "health_test.go:TestWatchErrorEpisodes"
+      ],
+      "size": 8
+    },
+    {
+      "name": "watch-error-every-tenth-failure",
+      "kind": "watch-cycles",
+      "file": "watch-error-every-tenth-failure.json",
+      "description": "watch-error repeats at the 1st, 10th and 20th failure of an episode.",
+      "go_tests": [
+        "health_test.go:TestWatchErrorRepeatsEveryTenthFailure"
+      ],
+      "size": 167
+    },
+    {
+      "name": "watch-error-message-sanitized-and-bounded",
+      "kind": "watch-cycles",
+      "file": "watch-error-message-sanitized-and-bounded.json",
+      "description": "The error message is sanitized (no control characters) and bounded to 512 bytes.",
+      "go_tests": [
+        "health_test.go:TestMessageIsSanitizedAndBounded"
+      ],
+      "size": 2
+    },
+    {
+      "name": "watch-parse-remote",
+      "kind": "vectors",
+      "file": "watch-parse-remote.json",
+      "description": "OWNER/NAME of a remote URL for a host (https, ssh://, scp-like; .git and a trailing slash removed; a local path, another host, extra path segments and `..` refused).",
+      "go_tests": [
+        "watchcmd/resolve_test.go:TestParseRemoteAcceptsTheGitHubSpellings"
+      ],
+      "size": 21
+    },
+    {
+      "name": "watch-prepare-flags",
+      "kind": "vectors",
+      "file": "watch-prepare-flags.json",
+      "description": "The validated run of `stw watch` from its flags (and a config file given as text): defaults (stream, 60 s, detail every 10, pending timeout 45 min, 2000 open PRs), `--until-event` (timeout 590 s), the flags that exclude each other and every usage error (exit 2: nothing read, nothing written), the config merge (flags win), and the state directory of `--status`.",
+      "go_tests": [
+        "watchcmd/prepare_test.go:TestPrepareDefaults",
+        "watchcmd/prepare_test.go:TestPrepareRejectsInvalidCombinations",
+        "watchcmd/prepare_test.go:TestPrepareMergesTheConfigAndLetsFlagsOverrideIt",
+        "watchcmd/prepare_test.go:TestPrepareStatusResolvesTheStateDirectory"
+      ],
+      "size": 36
+    },
+    {
+      "name": "watch-resolve-repositories",
+      "kind": "vectors",
+      "file": "watch-resolve-repositories.json",
+      "description": "The repository set of a run: --repo flags, then the workspace members with a GitHub remote on the host, then the config repos, in this order, without duplicates (case-insensitive); everything else in the workspace is skipped and reported with a reason; no source, a bad name, a failing discovery, a workspace without a GitHub repository and more than 256 repositories are usage errors.",
+      "go_tests": [
+        "watchcmd/resolve_test.go:TestResolveUnionsFlagsWorkspaceAndConfigInOrder",
+        "watchcmd/resolve_test.go:TestResolveUsageErrors"
+      ],
+      "size": 8
+    },
+    {
+      "name": "watch-split-remote",
+      "kind": "vectors",
+      "file": "watch-split-remote.json",
+      "description": "Host and path of a remote URL without judging either; a local path or an unsupported scheme is refused.",
+      "go_tests": [
+        "watchcmd/resolve_test.go:TestSplitRemoteReturnsHostAndPathWithoutJudgingThem"
+      ],
+      "size": 11
+    },
+    {
+      "name": "watch-stalled-once-both-episodes-recover",
+      "kind": "watch-cycles",
+      "file": "watch-stalled-once-both-episodes-recover.json",
+      "description": "watch-stalled fires once per stall; recovery emits watch-recovered for the error episode first, then the stall.",
+      "go_tests": [
+        "health_test.go:TestWatchStalledOncePerStallAndBothEpisodesRecover"
+      ],
+      "size": 9
+    },
+    {
+      "name": "watch-valid-host",
+      "kind": "vectors",
+      "file": "watch-valid-host.json",
+      "description": "A host name with an optional port for `--host`.",
+      "go_tests": [
+        "watchcmd/prepare_test.go:TestValidHost"
+      ],
+      "size": 11
+    },
+    {
+      "name": "workspace-id",
+      "kind": "vectors",
+      "file": "workspace-id.json",
+      "description": "The state directory id: the first 16 hex digits of SHA-256 over host and workspace root or the sorted, de-duplicated, lowercased repository list. Format-dependent (F3: a Rust port may use another id).",
+      "go_tests": [
+        "statedir_test.go:TestWorkspaceID"
+      ],
+      "size": 6
+    }
+  ]
+}

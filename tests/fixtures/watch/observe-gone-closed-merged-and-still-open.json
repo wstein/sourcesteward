@@ -1,0 +1,504 @@
+{
+  "format_version": 1,
+  "name": "observe-gone-closed-merged-and-still-open",
+  "kind": "observer-session",
+  "description": "A PR that left the list is read once via pulls/N: closed (no merge), merged with two parents (merge), merged with an unreadable commit (null commit, unknown), still open (stays unresolved); an unreadable commit only makes the hint unknown; an unreadable pulls/N fails the repository.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveGoneClosedMergedMethodAndStillOpen"
+    ]
+  },
+  "format_dependent": [],
+  "config": {
+    "max_open_prs": 2000,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "clock": "2026-10-22T09:00:00Z"
+  },
+  "steps": [
+    {
+      "note": "gone PRs",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+          "5": "{\"state\":\"closed\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"5555555555555555555555555555555555555555\",\"ref\":\"feat/5\"}}",
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}",
+          "7": "{\"state\":\"open\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"7777777777777777777777777777777777777777\",\"ref\":\"feat/7\"}}",
+          "8": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":null,\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"8888888888888888888888888888888888888888\",\"ref\":\"feat/8\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {
+          "dddddddddddddddddddddddddddddddddddddddd": "{\"parents\":[{\"sha\":\"1\"},{\"sha\":\"2\"}]}"
+        },
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 5,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 7,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 8,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "the commit read fails",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+          "5": "{\"state\":\"closed\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"5555555555555555555555555555555555555555\",\"ref\":\"feat/5\"}}",
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}",
+          "7": "{\"state\":\"open\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"7777777777777777777777777777777777777777\",\"ref\":\"feat/7\"}}",
+          "8": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":null,\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"8888888888888888888888888888888888888888\",\"ref\":\"feat/8\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {
+          "dddddddddddddddddddddddddddddddddddddddd": "{\"parents\":[{\"sha\":\"1\"},{\"sha\":\"2\"}]}"
+        },
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {
+          "commit/dddd": {
+            "kind": "watch",
+            "code": "network",
+            "message": "x",
+            "retry_after_seconds": 0
+          }
+        }
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 2,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 5,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 7,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 8,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "pulls/6 is unreadable",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+          "5": "{\"state\":\"closed\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"5555555555555555555555555555555555555555\",\"ref\":\"feat/5\"}}",
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}",
+          "7": "{\"state\":\"open\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"7777777777777777777777777777777777777777\",\"ref\":\"feat/7\"}}",
+          "8": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":null,\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"8888888888888888888888888888888888888888\",\"ref\":\"feat/8\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {
+          "dddddddddddddddddddddddddddddddddddddddd": "{\"parents\":[{\"sha\":\"1\"},{\"sha\":\"2\"}]}"
+        },
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {
+          "commit/dddd": {
+            "kind": "watch",
+            "code": "network",
+            "message": "x",
+            "retry_after_seconds": 0
+          },
+          "detail/6": {
+            "kind": "watch",
+            "code": "http-5xx",
+            "message": "boom",
+            "retry_after_seconds": 0
+          }
+        }
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 3,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 5,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 7,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          },
+          {
+            "number": 8,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    }
+  ],
+  "expected": [
+    {
+      "step": 1,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": true,
+            "detail": {
+              "mergeable": true,
+              "state": "clean"
+            },
+            "checks": {
+              "runs": [],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {
+          "5": {
+            "merged": false,
+            "merge_commit": null,
+            "merged_at": "",
+            "base": "main",
+            "head": "5555555555555555555555555555555555555555",
+            "head_ref": "feat/5",
+            "method_hint": "unknown"
+          },
+          "6": {
+            "merged": true,
+            "merge_commit": "dddddddddddddddddddddddddddddddddddddddd",
+            "merged_at": "2026-10-22T08:00:00Z",
+            "base": "main",
+            "head": "6666666666666666666666666666666666666666",
+            "head_ref": "feat/6",
+            "method_hint": "merge"
+          },
+          "8": {
+            "merged": true,
+            "merge_commit": null,
+            "merged_at": "2026-10-22T08:00:00Z",
+            "base": "main",
+            "head": "8888888888888888888888888888888888888888",
+            "head_ref": "feat/8",
+            "method_hint": "unknown"
+          }
+        }
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/5",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        },
+        {
+          "call": "commit/dddd",
+          "conditional": false
+        },
+        {
+          "call": "detail/7",
+          "conditional": false
+        },
+        {
+          "call": "detail/8",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": false
+        },
+        {
+          "call": "detail/1",
+          "conditional": false
+        },
+        {
+          "call": "runs/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 2,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": true,
+            "detail": {
+              "mergeable": true,
+              "state": "clean"
+            },
+            "checks": {
+              "runs": [],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {
+          "5": {
+            "merged": false,
+            "merge_commit": null,
+            "merged_at": "",
+            "base": "main",
+            "head": "5555555555555555555555555555555555555555",
+            "head_ref": "feat/5",
+            "method_hint": "unknown"
+          },
+          "6": {
+            "merged": true,
+            "merge_commit": "dddddddddddddddddddddddddddddddddddddddd",
+            "merged_at": "2026-10-22T08:00:00Z",
+            "base": "main",
+            "head": "6666666666666666666666666666666666666666",
+            "head_ref": "feat/6",
+            "method_hint": "unknown"
+          },
+          "8": {
+            "merged": true,
+            "merge_commit": null,
+            "merged_at": "2026-10-22T08:00:00Z",
+            "base": "main",
+            "head": "8888888888888888888888888888888888888888",
+            "head_ref": "feat/8",
+            "method_hint": "unknown"
+          }
+        }
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/5",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        },
+        {
+          "call": "commit/dddd",
+          "conditional": false
+        },
+        {
+          "call": "detail/7",
+          "conditional": false
+        },
+        {
+          "call": "detail/8",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "detail/1",
+          "conditional": false
+        },
+        {
+          "call": "runs/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 3,
+      "observation": null,
+      "error": {
+        "code": "http-5xx",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/5",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    }
+  ]
+}

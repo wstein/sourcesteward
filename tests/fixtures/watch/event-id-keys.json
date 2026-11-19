@@ -1,0 +1,265 @@
+{
+  "format_version": 1,
+  "name": "event-id-keys",
+  "kind": "vectors",
+  "description": "How Go builds the event id (repo#pr:kind:key and the key of every kind). Format-dependent: a Rust port may use other ids as long as they are unique and stable per transition; the scenarios assert uniqueness, not these strings.",
+  "source": {
+    "go_tests": [
+      "event_test.go:TestEventIDs"
+    ]
+  },
+  "format_dependent": [
+    "expected"
+  ],
+  "function": "event_id",
+  "cases": [
+    {
+      "name": "new-pr",
+      "input": {
+        "fn": "event_id",
+        "args": {
+          "key": "g0",
+          "kind": "new-pr",
+          "pr": 41,
+          "repo": "o/r"
+        }
+      },
+      "expected": {
+        "id": "o/r#41:new-pr:g0"
+      }
+    },
+    {
+      "name": "watch-recovered without pr",
+      "input": {
+        "fn": "event_id",
+        "args": {
+          "key": "e1",
+          "kind": "watch-recovered",
+          "pr": null,
+          "repo": "o/r"
+        }
+      },
+      "expected": {
+        "id": "o/r#-:watch-recovered:e1"
+      }
+    },
+    {
+      "name": "run-level watch-error",
+      "input": {
+        "fn": "event_id",
+        "args": {
+          "key": "rate-limited:e1:f1",
+          "kind": "watch-error",
+          "pr": null,
+          "repo": ""
+        }
+      },
+      "expected": {
+        "id": "-:watch-error:rate-limited:e1:f1"
+      }
+    },
+    {
+      "name": "repos-changed",
+      "input": {
+        "fn": "event_id",
+        "args": {
+          "key": "p3",
+          "kind": "repos-changed",
+          "pr": null,
+          "repo": ""
+        }
+      },
+      "expected": {
+        "id": "-:repos-changed:p3"
+      }
+    },
+    {
+      "name": "key head",
+      "input": {
+        "fn": "key_head",
+        "args": {
+          "epoch": 4,
+          "head": "dddddddddddddddddddddddddddddddddddddddd"
+        }
+      },
+      "expected": {
+        "id": "dddddddddddddddddddddddddddddddddddddddd:h4"
+      }
+    },
+    {
+      "name": "key checks",
+      "input": {
+        "fn": "key_checks",
+        "args": {
+          "epoch": 3,
+          "head": "cccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "expected": {
+        "id": "cccccccccccccccccccccccccccccccccccccccc:c3"
+      }
+    },
+    {
+      "name": "key timeout",
+      "input": {
+        "fn": "key_timeout",
+        "args": {
+          "epoch": 3,
+          "head": "cccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "expected": {
+        "id": "cccccccccccccccccccccccccccccccccccccccc:c3:t"
+      }
+    },
+    {
+      "name": "key mergeable",
+      "input": {
+        "fn": "key_mergeable",
+        "args": {
+          "epoch": 2,
+          "head": "cccccccccccccccccccccccccccccccccccccccc"
+        }
+      },
+      "expected": {
+        "id": "cccccccccccccccccccccccccccccccccccccccc:m2"
+      }
+    },
+    {
+      "name": "key ready",
+      "input": {
+        "fn": "key_ready",
+        "args": {
+          "epoch": 5
+        }
+      },
+      "expected": {
+        "id": "r5"
+      }
+    },
+    {
+      "name": "key base",
+      "input": {
+        "fn": "key_base",
+        "args": {
+          "epoch": 6
+        }
+      },
+      "expected": {
+        "id": "b6"
+      }
+    },
+    {
+      "name": "key generation",
+      "input": {
+        "fn": "key_generation",
+        "args": {
+          "generation": 1
+        }
+      },
+      "expected": {
+        "id": "g1"
+      }
+    },
+    {
+      "name": "key merged",
+      "input": {
+        "fn": "key_merged",
+        "args": {
+          "merge_commit": "dddddddddddddddddddddddddddddddddddddddd"
+        }
+      },
+      "expected": {
+        "id": "dddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    {
+      "name": "key merged unknown",
+      "input": {
+        "fn": "key_merged",
+        "args": {
+          "merge_commit": null
+        }
+      },
+      "expected": {
+        "id": "unknown"
+      }
+    },
+    {
+      "name": "key restack",
+      "input": {
+        "fn": "key_restack",
+        "args": {
+          "merge_commit": "dddddddddddddddddddddddddddddddddddddddd",
+          "merged_pr": 41
+        }
+      },
+      "expected": {
+        "id": "41:dddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    {
+      "name": "key restack unknown",
+      "input": {
+        "fn": "key_restack",
+        "args": {
+          "merge_commit": null,
+          "merged_pr": 41
+        }
+      },
+      "expected": {
+        "id": "41:unknown"
+      }
+    },
+    {
+      "name": "key repos",
+      "input": {
+        "fn": "key_repos",
+        "args": {
+          "epoch": 2
+        }
+      },
+      "expected": {
+        "id": "p2"
+      }
+    },
+    {
+      "name": "key error",
+      "input": {
+        "fn": "key_error",
+        "args": {
+          "code": "network",
+          "episode": 2,
+          "failures": 10
+        }
+      },
+      "expected": {
+        "id": "network:e2:f10"
+      }
+    },
+    {
+      "name": "key recovered",
+      "input": {
+        "fn": "key_recovered_error",
+        "args": {
+          "episode": 2
+        }
+      },
+      "expected": {
+        "id": "e2"
+      }
+    },
+    {
+      "name": "key stall",
+      "input": {
+        "fn": "key_stall",
+        "args": {
+          "episode": 3
+        }
+      },
+      "expected": {
+        "id": "s3"
+      }
+    }
+  ]
+}

@@ -1,0 +1,401 @@
+{
+  "format_version": 1,
+  "name": "watch-config-parse",
+  "kind": "vectors",
+  "description": "The strict profile of `.stw/watch.toml`: every key read; unknown keys and tables, wrong types, duplicate keys, a missing or different schema_version, bad repo names, out-of-range numbers and invalid TOML are errors (usage, exit 2).",
+  "source": {
+    "go_tests": [
+      "watchcmd/config_test.go:TestParseConfigReadsEveryKey",
+      "watchcmd/config_test.go:TestParseConfigIsStrict"
+    ]
+  },
+  "format_dependent": [
+    "go_message"
+  ],
+  "function": "parse_config",
+  "cases": [
+    {
+      "name": "every key",
+      "input": {
+        "toml": "schema_version = 1\nrepos = [\"wstein/crewbook\", \"wstein/sourcesteward\"]\ninterval = \"90s\"\ndetail_every = 4\nmax_open_prs = 500\n[ignore]\nauthors = [\"dependabot[bot]\"]      # no events at all\nlabels  = [\"no-watch\"]\n[shape]\nstack_patterns = [\"PR must target repository main\"]\n"
+      },
+      "expected": {
+        "ok": true,
+        "repos": [
+          "wstein/crewbook",
+          "wstein/sourcesteward"
+        ],
+        "interval_seconds": 90,
+        "detail_every": 4,
+        "max_open_prs": 500,
+        "ignore_authors": [
+          "dependabot[bot]"
+        ],
+        "ignore_labels": [
+          "no-watch"
+        ],
+        "stack_patterns": [
+          "PR must target repository main"
+        ],
+        "go_message": ""
+      }
+    },
+    {
+      "name": "minimal",
+      "input": {
+        "toml": "schema_version = 1\n"
+      },
+      "expected": {
+        "ok": true,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": ""
+      }
+    },
+    {
+      "name": "authors wrong type",
+      "input": {
+        "toml": "schema_version = 1\n[ignore]\nauthors = 1\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: ignore.authors must be an array of strings"
+      }
+    },
+    {
+      "name": "bad repo",
+      "input": {
+        "toml": "schema_version = 1\nrepos = [\"a\"]\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: repos entry \"a\" is not OWNER/NAME"
+      }
+    },
+    {
+      "name": "detail_every zero",
+      "input": {
+        "toml": "schema_version = 1\ndetail_every = 0\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: detail_every must be an integer of at least 1"
+      }
+    },
+    {
+      "name": "duplicate key",
+      "input": {
+        "toml": "schema_version = 1\nschema_version = 1\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: line 2: duplicate key schema_version"
+      }
+    },
+    {
+      "name": "empty pattern",
+      "input": {
+        "toml": "schema_version = 1\n[shape]\nstack_patterns = [\"\"]\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: shape.stack_patterns must not contain an empty string"
+      }
+    },
+    {
+      "name": "interval 10s",
+      "input": {
+        "toml": "schema_version = 1\ninterval = \"10s\"\n"
+      },
+      "expected": {
+        "ok": true,
+        "repos": [],
+        "interval_seconds": 10,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": ""
+      }
+    },
+    {
+      "name": "interval garbage",
+      "input": {
+        "toml": "schema_version = 1\ninterval = \"soon\"\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: interval: \"soon\" is not a duration such as 60s"
+      }
+    },
+    {
+      "name": "interval not string",
+      "input": {
+        "toml": "schema_version = 1\ninterval = 60\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: interval must be a string such as \"60s\""
+      }
+    },
+    {
+      "name": "interval too short",
+      "input": {
+        "toml": "schema_version = 1\ninterval = \"5s\"\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: interval: 5s is below the minimum of 10s"
+      }
+    },
+    {
+      "name": "invalid toml profile",
+      "input": {
+        "toml": "schema_version = 1\nrepos = [\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: line 2: the array is not closed"
+      }
+    },
+    {
+      "name": "max_open_prs 2000",
+      "input": {
+        "toml": "schema_version = 1\nmax_open_prs = 2000\n"
+      },
+      "expected": {
+        "ok": true,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 2000,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": ""
+      }
+    },
+    {
+      "name": "max_open_prs over",
+      "input": {
+        "toml": "schema_version = 1\nmax_open_prs = 2001\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: max_open_prs must be an integer from 1 to 2000"
+      }
+    },
+    {
+      "name": "max_open_prs zero",
+      "input": {
+        "toml": "schema_version = 1\nmax_open_prs = 0\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: max_open_prs must be an integer from 1 to 2000"
+      }
+    },
+    {
+      "name": "no schema_version",
+      "input": {
+        "toml": "repos = [\"a/b\"]\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: schema_version = 1 is required"
+      }
+    },
+    {
+      "name": "repos wrong type",
+      "input": {
+        "toml": "schema_version = 1\nrepos = \"a/b\"\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: repos must be an array of strings"
+      }
+    },
+    {
+      "name": "unknown ignore key",
+      "input": {
+        "toml": "schema_version = 1\n[ignore]\nbots = [\"x\"]\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: unknown key \"bots\" in [ignore]"
+      }
+    },
+    {
+      "name": "unknown key",
+      "input": {
+        "toml": "schema_version = 1\nbogus = 1\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: unknown key \"bogus\""
+      }
+    },
+    {
+      "name": "unknown shape key",
+      "input": {
+        "toml": "schema_version = 1\n[shape]\ncheck_names = [\"x\"]\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: unknown key \"check_names\" in [shape]"
+      }
+    },
+    {
+      "name": "unknown table",
+      "input": {
+        "toml": "schema_version = 1\n[other]\na = 1\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: unknown key \"other\""
+      }
+    },
+    {
+      "name": "wrong version",
+      "input": {
+        "toml": "schema_version = 2\n"
+      },
+      "expected": {
+        "ok": false,
+        "repos": [],
+        "interval_seconds": 0,
+        "detail_every": 0,
+        "max_open_prs": 0,
+        "ignore_authors": [],
+        "ignore_labels": [],
+        "stack_patterns": [],
+        "go_message": "watch.toml: schema_version = 1 is required"
+      }
+    }
+  ]
+}

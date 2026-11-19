@@ -1,0 +1,82 @@
+{
+  "format_version": 1,
+  "name": "watch-decode-pull-detail",
+  "kind": "vectors",
+  "description": "The fields read from pulls/N: mergeable (null = not computed), mergeable_state, rebaseable, head sha, and the fork flag (head repository missing or different from the base repository, case-insensitive); a body that is not an object is malformed.",
+  "source": {
+    "go_tests": [
+      "watchcmd/pullsread_test.go:TestDecodePullDetailReadsHeadSHAAndRebaseable",
+      "watchcmd/pullsread_test.go:TestDecodePullDetailNullsAndFork"
+    ]
+  },
+  "format_dependent": [],
+  "function": "decode_pull_detail",
+  "cases": [
+    {
+      "name": "array",
+      "input": {
+        "body": "[1]"
+      },
+      "expected": {
+        "error_code": "malformed-response",
+        "ok": false
+      }
+    },
+    {
+      "name": "base repo missing",
+      "input": {
+        "body": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{}}"
+      },
+      "expected": {
+        "fork": true,
+        "head_sha": "",
+        "mergeable": true,
+        "mergeable_state": "clean",
+        "ok": true,
+        "rebaseable": null
+      }
+    },
+    {
+      "name": "complete",
+      "input": {
+        "body": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"rebaseable\":false,\"head\":{\"sha\":\"cccccccccccccccccccccccccccccccccccccccc\",\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"O/R\"}}}"
+      },
+      "expected": {
+        "fork": false,
+        "head_sha": "cccccccccccccccccccccccccccccccccccccccc",
+        "mergeable": true,
+        "mergeable_state": "clean",
+        "ok": true,
+        "rebaseable": false
+      }
+    },
+    {
+      "name": "different repository",
+      "input": {
+        "body": "{\"head\":{\"repo\":{\"full_name\":\"x/fork\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+      },
+      "expected": {
+        "fork": true,
+        "head_sha": "",
+        "mergeable": null,
+        "mergeable_state": "",
+        "ok": true,
+        "rebaseable": null
+      }
+    },
+    {
+      "name": "nulls and fork",
+      "input": {
+        "body": "{\"mergeable\":null,\"mergeable_state\":\"unknown\",\"rebaseable\":null,\"head\":{\"repo\":null},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+      },
+      "expected": {
+        "fork": true,
+        "head_sha": "",
+        "mergeable": null,
+        "mergeable_state": "unknown",
+        "ok": true,
+        "rebaseable": null
+      }
+    }
+  ]
+}

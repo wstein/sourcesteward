@@ -1,0 +1,78 @@
+{
+  "format_version": 1,
+  "name": "retry-after-header",
+  "kind": "vectors",
+  "description": "The Retry-After header in seconds: 0 to 86400 accepted, anything else (negative, over a day, garbage, empty) is no evidence.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchRetryAfterUpperBound"
+    ]
+  },
+  "format_dependent": [],
+  "function": "parse_retry_after",
+  "cases": [
+    {
+      "name": "\"0\"",
+      "input": {
+        "header": "0"
+      },
+      "expected": {
+        "seconds": 0
+      }
+    },
+    {
+      "name": "\"30\"",
+      "input": {
+        "header": "30"
+      },
+      "expected": {
+        "seconds": 30
+      }
+    },
+    {
+      "name": "\"86400\"",
+      "input": {
+        "header": "86400"
+      },
+      "expected": {
+        "seconds": 86400
+      }
+    },
+    {
+      "name": "\"86401\"",
+      "input": {
+        "header": "86401"
+      },
+      "expected": {
+        "seconds": 0
+      }
+    },
+    {
+      "name": "\"-1\"",
+      "input": {
+        "header": "-1"
+      },
+      "expected": {
+        "seconds": 0
+      }
+    },
+    {
+      "name": "\"abc\"",
+      "input": {
+        "header": "abc"
+      },
+      "expected": {
+        "seconds": 0
+      }
+    },
+    {
+      "name": "\"\"",
+      "input": {
+        "header": ""
+      },
+      "expected": {
+        "seconds": 0
+      }
+    }
+  ]
+}

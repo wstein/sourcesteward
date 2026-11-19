@@ -1,0 +1,577 @@
+{
+  "format_version": 1,
+  "name": "http-error-classification",
+  "kind": "http-reader",
+  "description": "HTTP status and body to error code: 401 unauthorized; 403 forbidden (404 too, with its status kept); a 403 with rate-limit evidence (remaining 0, Retry-After, or the secondary-limit text) and 429 rate-limited; 5xx http-5xx; any other success status and a body over 1 MiB malformed. The error text never carries the response body or a token and is bounded.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchErrorClassification"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/1",
+      "status": 401,
+      "headers": null,
+      "body": "{\"message\":\"Bad credentials\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/2",
+      "status": 403,
+      "headers": null,
+      "body": "{\"message\":\"Resource not accessible\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/3",
+      "status": 403,
+      "headers": {
+        "X-RateLimit-Remaining": "0",
+        "X-RateLimit-Reset": "1700000100"
+      },
+      "body": "{\"message\":\"API rate limit exceeded\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/4",
+      "status": 403,
+      "headers": {
+        "Retry-After": "60"
+      },
+      "body": "{\"message\":\"You have exceeded a secondary rate limit.\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/5",
+      "status": 403,
+      "headers": null,
+      "body": "{\"message\":\"You have exceeded a secondary rate limit\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/6",
+      "status": 429,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 404,
+      "headers": null,
+      "body": "{\"message\":\"Not Found\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/8",
+      "status": 500,
+      "headers": null,
+      "body": "oops",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/9",
+      "status": 503,
+      "headers": null,
+      "body": "oops",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/10",
+      "status": 201,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/11",
+      "status": 200,
+      "headers": null,
+      "body": "",
+      "body_repeat": {
+        "text": "x",
+        "count": 1048577
+      },
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 1,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 2,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 3,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 4,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 5,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 6,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 8,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 9,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 10,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 11,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "unauthorized",
+        "status": 401,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": {
+        "code": "forbidden",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/2",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 3,
+      "error": {
+        "code": "rate-limited",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/3",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 4,
+      "error": {
+        "code": "rate-limited",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 60,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/4",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 5,
+      "error": {
+        "code": "rate-limited",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/5",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 6,
+      "error": {
+        "code": "rate-limited",
+        "status": 429,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/6",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 7,
+      "error": {
+        "code": "forbidden",
+        "status": 404,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 8,
+      "error": {
+        "code": "http-5xx",
+        "status": 500,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/8",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 9,
+      "error": {
+        "code": "http-5xx",
+        "status": 503,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/9",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 10,
+      "error": {
+        "code": "malformed-response",
+        "status": 201,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/10",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 11,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/11",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

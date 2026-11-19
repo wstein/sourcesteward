@@ -1,0 +1,119 @@
+{
+  "format_version": 1,
+  "name": "rate-limit-assess",
+  "kind": "vectors",
+  "description": "The slowdown policy: none; slow (remaining below 10 percent of the limit: double the interval); wait (remaining below 50 or exhausted: wait until reset + 5 s).",
+  "source": {
+    "go_tests": [
+      "watch_ratelimit_test.go:TestAssessRateLimit"
+    ]
+  },
+  "format_dependent": [],
+  "function": "assess_rate_limit",
+  "cases": [
+    {
+      "name": "unknown",
+      "input": {
+        "known": false,
+        "limit": 0,
+        "remaining": 0,
+        "reset_unix": 0
+      },
+      "expected": {
+        "advice": "none",
+        "until_unix": 0
+      }
+    },
+    {
+      "name": "plenty",
+      "input": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 4000,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "none",
+        "until_unix": 0
+      }
+    },
+    {
+      "name": "exactly 10 percent",
+      "input": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 500,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "none",
+        "until_unix": 0
+      }
+    },
+    {
+      "name": "below 10 percent",
+      "input": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 499,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "slow",
+        "until_unix": 0
+      }
+    },
+    {
+      "name": "49 left",
+      "input": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 49,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "wait",
+        "until_unix": 1700000005
+      }
+    },
+    {
+      "name": "50 left is slow, not wait",
+      "input": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 50,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "slow",
+        "until_unix": 0
+      }
+    },
+    {
+      "name": "exhausted",
+      "input": {
+        "known": true,
+        "limit": 60,
+        "remaining": 0,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "wait",
+        "until_unix": 1700000005
+      }
+    },
+    {
+      "name": "limit 60, 5 left (below 10 percent, below 50)",
+      "input": {
+        "known": true,
+        "limit": 60,
+        "remaining": 5,
+        "reset_unix": 1700000000
+      },
+      "expected": {
+        "advice": "wait",
+        "until_unix": 1700000005
+      }
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+{
+  "format_version": 1,
+  "name": "http-conditional-round-trip",
+  "kind": "http-reader",
+  "description": "A GET with and without a validator: a 200 carries ETag, body and the rate-limit headers, a request without a validator sends no If-None-Match; a 304 is a typed result (not an error) with no body; the accounting counts 2 requests and 1 not modified.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchConditionalRoundTripAndNotModified"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 0,
+      "headers": {
+        "X-RateLimit-Limit": "5000",
+        "X-RateLimit-Remaining": "4990",
+        "X-RateLimit-Reset": "1700000000"
+      },
+      "body": "{\"number\":7}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"v1\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "\"v1\"",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"v1\"",
+        "link": "",
+        "body": "{\"number\":7}",
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 4990,
+          "reset_unix": 1700000000
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": null,
+      "response": {
+        "status": 304,
+        "not_modified": true,
+        "etag": "\"v1\"",
+        "link": "",
+        "body": "",
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 4990,
+          "reset_unix": 1700000000
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": "\"v1\""
+        }
+      ]
+    }
+  ]
+}

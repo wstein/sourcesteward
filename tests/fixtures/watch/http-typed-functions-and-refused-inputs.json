@@ -1,0 +1,912 @@
+{
+  "format_version": 1,
+  "name": "http-typed-functions-and-refused-inputs",
+  "kind": "http-reader",
+  "description": "Every typed read (list page, pulls/N, its commits, branch tip with an encoded name, commit, check runs, statuses, rate_limit) sends exactly its allowlisted GET; invalid inputs (bad repo names, number 0, a header-injecting validator, page and page-size bounds, a raw or dot branch name, a non-SHA commit) are refused before any request.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchTypedFunctionsAndRefusedInputs"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/7/commits?per_page=100&page=2",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/branches/feat%2Fx",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/check-runs?per_page=100&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/statuses?per_page=100&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "rate_limit",
+      "status": 200,
+      "headers": null,
+      "body": "{\"resources\":{\"core\":{\"limit\":5000,\"remaining\":4000,\"reset\":1700000000}}}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_list_page",
+      "repo": "a/b",
+      "number": 0,
+      "page": 2,
+      "per_page": 25,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_commits",
+      "repo": "a/b",
+      "number": 7,
+      "page": 2,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "branch",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "feat/x",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "commit",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "check_runs",
+      "repo": "a/b",
+      "number": 0,
+      "page": 1,
+      "per_page": 0,
+      "name": "",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "statuses",
+      "repo": "a/b",
+      "number": 0,
+      "page": 1,
+      "per_page": 0,
+      "name": "",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "rate_limit",
+      "repo": "",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/../b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b/c",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "../b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "bad\r\nX: y",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_list_page",
+      "repo": "a/b",
+      "number": 0,
+      "page": 1,
+      "per_page": 100,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_list_page",
+      "repo": "a/b",
+      "number": 0,
+      "page": 81,
+      "per_page": 25,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_list_page",
+      "repo": "a/b",
+      "number": 0,
+      "page": 168,
+      "per_page": 12,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_commits",
+      "repo": "a/b",
+      "number": 7,
+      "page": 4,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "branch",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "..",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "branch",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "%2e%2e",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "branch",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "a%2Fb",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "commit",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "main",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "check_runs",
+      "repo": "a/b",
+      "number": 0,
+      "page": 11,
+      "per_page": 0,
+      "name": "",
+      "sha": "0123456789abcdef0123456789abcdef01234567",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 3,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7/commits?per_page=100&page=2",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 4,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/branches/feat%2Fx",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 5,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 6,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/check-runs?per_page=100&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 7,
+      "error": null,
+      "response": {
+        "status": 200,
+        "not_modified": false,
+        "etag": "\"e\"",
+        "link": "",
+        "body": "{}",
+        "rate_limit": {
+          "known": false,
+          "limit": 0,
+          "remaining": 0,
+          "reset_unix": 0
+        }
+      },
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/statuses?per_page=100&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 8,
+      "error": null,
+      "response": null,
+      "list": null,
+      "rate_info": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 4000,
+        "reset_unix": 1700000000
+      },
+      "requests": [
+        {
+          "uri": "rate_limit",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 9,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 10,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 11,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 12,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 13,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 14,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 15,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 16,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 17,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 18,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 19,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 20,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 21,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 22,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    }
+  ]
+}

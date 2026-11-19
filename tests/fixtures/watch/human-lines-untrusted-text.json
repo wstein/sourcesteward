@@ -1,0 +1,394 @@
+{
+  "format_version": 1,
+  "name": "human-lines-untrusted-text",
+  "kind": "vectors",
+  "description": "Text from the forge in a `--human` line never carries raw control characters, bidi or line separators, and a line is one line and bounded. The exact escaping is Go's (`untrusted.Esc`); the Rust port escapes differently (deviation D6), so only the properties are the contract.",
+  "source": {
+    "go_tests": [
+      "watchcmd/human_test.go:TestHumanEscapesControlCharactersAndBoundsText",
+      "watchcmd/human_test.go:TestHumanEscapesEveryTextField"
+    ]
+  },
+  "format_dependent": [
+    "go_line"
+  ],
+  "function": "human_line_properties",
+  "cases": [
+    {
+      "name": "new-pr title with escape, newline, bidi",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "new-pr",
+          "details": {
+            "title": "a\u001b[31mred\nline‮\u0000",
+            "author": "al\rice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "",
+            "head": "1111111111111111111111111111111111111111",
+            "fork": false
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 new-pr a\\x1b[31mred\\nline\\u202e\\x00 by al\\rice into main",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "new-pr title of 500 characters",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "new-pr",
+          "details": {
+            "title": "éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé",
+            "author": "a",
+            "draft": false,
+            "base": "main",
+            "head_ref": "",
+            "head": "1111111111111111111111111111111111111111",
+            "fork": false
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 new-pr éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé... by a into main",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "unknown kind",
+      "input": {
+        "event": {
+          "schema_version": 0,
+          "seq": 0,
+          "id": "",
+          "time": "garbage",
+          "repo": null,
+          "pr": null,
+          "kind": "future-kind",
+          "details": null
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "garbage - future-kind",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "new-pr every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "new-pr",
+          "details": {
+            "title": "x\u001b[31m\u2028‮",
+            "author": "x\u001b[31m\u2028‮",
+            "draft": false,
+            "base": "x\u001b[31m\u2028‮",
+            "head_ref": "x\u001b[31m\u2028‮",
+            "head": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "fork": false
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 new-pr x\\x1b[31m\\u009b\\u2028\\u202e\\x7f by x\\x1b[31m\\u009b\\u2028\\u202e\\x7f into x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "checks-red every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "checks-red",
+          "details": {
+            "head": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "failing": [
+              "x\u001b[31m\u2028‮"
+            ],
+            "failing_total": 1,
+            "shape": "x\u001b[31m\u2028‮",
+            "base": "x\u001b[31m\u2028‮",
+            "draft": false
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 checks-red x\\x1b[31m\\u009b\\u2028\\u202e\\x7f (x\\x1b[31m\\u009b\\u2028\\u202e\\x7f)",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "checks-pending-timeout every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "checks-pending-timeout",
+          "details": {
+            "head": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "pending": [
+              "x\u001b[31m\u2028‮"
+            ],
+            "since": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 checks-pending-timeout x\\x1b[31m\\u009b\\u2028\\u202e\\x7f pending since x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "mergeable-changed every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "mergeable-changed",
+          "details": {
+            "mergeable": true,
+            "state": "x\u001b[31m\u2028‮",
+            "conflicting": false,
+            "behind": false,
+            "base": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 mergeable-changed mergeable=true state=x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "ready-state-changed every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "ready-state-changed",
+          "details": {
+            "from": "x\u001b[31m\u2028‮",
+            "to": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 ready-state-changed x\\x1b[31m\\u009b\\u2028\\u202e\\x7f -> x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "base-changed every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "base-changed",
+          "details": {
+            "old": "x\u001b[31m\u2028‮",
+            "new": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 base-changed x\\x1b[31m\\u009b\\u2028\\u202e\\x7f -> x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "merged every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "merged",
+          "details": {
+            "merge_commit": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "base": "x\u001b[31m\u2028‮",
+            "head": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "head_ref": "x\u001b[31m\u2028‮",
+            "merged_at": "",
+            "method_hint": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 merged into x\\x1b[31m\\u009b\\u2028\\u202e\\x7f as x\\x1b[31m\\ufffd (x\\x1b[31m\\u009b\\u2028\\u202e\\x7f)",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "closed every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 1,
+          "kind": "closed",
+          "details": {
+            "head": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "base": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#1 closed without merge (base x\\x1b[31m\\u009b\\u2028\\u202e\\x7f)",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "restack-needed every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": 2,
+          "kind": "restack-needed",
+          "details": {
+            "merged_pr": 1,
+            "base": "x\u001b[31m\u2028‮",
+            "reason": "x\u001b[31m\u2028‮",
+            "old_parent": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "new_parent": "x\u001b[31m\u2028‮0000000000000000000000000000000000000000",
+            "new_parent_source": "",
+            "branch": "x\u001b[31m\u2028‮",
+            "argv": [
+              "git"
+            ]
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r#2 restack-needed after #1: git rebase --onto x\\x1b[31m\\ufffd x\\x1b[31m\\ufffd x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "watch-error every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": null,
+          "kind": "watch-error",
+          "details": {
+            "code": "x\u001b[31m\u2028‮",
+            "message": "x\u001b[31m\u2028‮",
+            "failures": 0,
+            "retry_in_seconds": 0,
+            "repo": null
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r watch-error x\\x1b[31m\\u009b\\u2028\\u202e\\x7f: x\\x1b[31m\\u009b\\u2028\\u202e\\x7f (failure 0, retry in 0s)",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    },
+    {
+      "name": "watch-stalled every field",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "o/r",
+          "pr": null,
+          "kind": "watch-stalled",
+          "details": {
+            "since": "x\u001b[31m\u2028‮",
+            "threshold_seconds": 0,
+            "repo": "x\u001b[31m\u2028‮"
+          }
+        }
+      },
+      "expected": {
+        "at_most_400_runes": true,
+        "go_line": "10:04:10 o/r watch-stalled no success since x\\x1b[31m\\u009b\\u2028\\u202e\\x7f",
+        "no_raw_control_characters": true,
+        "single_line": true
+      }
+    }
+  ]
+}

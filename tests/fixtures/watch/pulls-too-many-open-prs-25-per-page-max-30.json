@@ -1,0 +1,101 @@
+{
+  "format_version": 1,
+  "name": "pulls-too-many-open-prs-25-per-page-max-30",
+  "kind": "http-reader",
+  "description": "An endless list at 25 per page with max_open_prs 30 stops with too-many-open-prs after exactly 2 pages.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=2>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e1\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=3>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e2\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=3",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=4>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e3\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 30,
+      "prior_list_state": "per_page_only",
+      "prior_per_page": 25,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "too-many-open-prs",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

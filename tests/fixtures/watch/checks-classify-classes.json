@@ -1,0 +1,482 @@
+{
+  "format_version": 1,
+  "name": "checks-classify-classes",
+  "kind": "vectors",
+  "description": "The check class and the total of a head from its check runs and commit statuses (none, green, pending, red; skipped and neutral count green; a failure wins over pending).",
+  "source": {
+    "go_tests": [
+      "checks_test.go:TestClassifyChecksClasses"
+    ]
+  },
+  "format_dependent": [],
+  "function": "classify_checks",
+  "cases": [
+    {
+      "name": "none",
+      "input": {
+        "runs": [],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "none",
+        "total": 0,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [],
+        "shape": ""
+      }
+    },
+    {
+      "name": "green",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "success",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "green",
+        "total": 1,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [],
+        "shape": ""
+      }
+    },
+    {
+      "name": "skipped and neutral are green",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "skipped",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "neutral",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "green",
+        "total": 2,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [],
+        "shape": ""
+      }
+    },
+    {
+      "name": "pending run",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "in_progress",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "success",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "pending",
+        "total": 2,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [
+          "a"
+        ],
+        "shape": ""
+      }
+    },
+    {
+      "name": "queued run",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "pending",
+        "total": 1,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [
+          "a"
+        ],
+        "shape": ""
+      }
+    },
+    {
+      "name": "pending status",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "pending",
+            "description": ""
+          }
+        ],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "pending",
+        "total": 1,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [
+          "ci"
+        ],
+        "shape": ""
+      }
+    },
+    {
+      "name": "failure wins over pending",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "in_progress",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "b"
+        ],
+        "failing_total": 1,
+        "pending": [
+          "a"
+        ],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "cancelled",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "timed_out",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "timed_out",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "action_required",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "action_required",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "startup_failure",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "startup_failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "status failure",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "failure",
+            "description": ""
+          }
+        ],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "ci"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "status error",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "error",
+            "description": ""
+          }
+        ],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "ci"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "status success",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "success",
+            "description": ""
+          }
+        ],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "green",
+        "total": 1,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [],
+        "shape": ""
+      }
+    },
+    {
+      "name": "completed run with an unknown conclusion counts green",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "stale",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "green",
+        "total": 1,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [],
+        "shape": ""
+      }
+    },
+    {
+      "name": "failing status and pending run: red",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [
+          {
+            "context": "s",
+            "state": "failure",
+            "description": ""
+          }
+        ],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "s"
+        ],
+        "failing_total": 1,
+        "pending": [
+          "a"
+        ],
+        "shape": "unknown"
+      }
+    }
+  ]
+}

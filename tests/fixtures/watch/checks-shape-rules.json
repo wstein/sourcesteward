@@ -1,0 +1,686 @@
+{
+  "format_version": 1,
+  "name": "checks-shape-rules",
+  "kind": "vectors",
+  "description": "The failure shape of a red head: real, stack-merge-shape or unknown, by the ordered rules (real markers first, stack patterns only on a stacked base and only if every failure is a plain failure with a pattern).",
+  "source": {
+    "go_tests": [
+      "checks_test.go:TestShapeRules"
+    ]
+  },
+  "format_dependent": [],
+  "function": "classify_checks",
+  "cases": [
+    {
+      "name": "stack on stacked base",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "stack text on default branch is unknown",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "both patterns",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "PR must target repository main",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "a",
+          "b"
+        ],
+        "failing_total": 2,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "mixed shape and other is unknown",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "runner shutdown",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "a",
+          "b"
+        ],
+        "failing_total": 2,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "real wins over stack",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          },
+          {
+            "name": "b",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "--- FAIL: TestX (0.00s)",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "a",
+          "b"
+        ],
+        "failing_total": 2,
+        "pending": [],
+        "shape": "real"
+      }
+    },
+    {
+      "name": "real FAIL line",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "ok\nFAIL\tpkg 0.1s",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "real"
+      }
+    },
+    {
+      "name": "real panic",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "panic: boom",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "real"
+      }
+    },
+    {
+      "name": "real Error",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Error: nope",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "real"
+      }
+    },
+    {
+      "name": "real _test.go line",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "x_test.go:42: bad",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "real"
+      }
+    },
+    {
+      "name": "_test.go without digits is not real",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "x_test.go: bad",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "FAIL inside a word is not real",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "FAILURE reported",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "empty text is unknown",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "name alone never qualifies",
+      "input": {
+        "runs": [
+          {
+            "name": "Unexpected synthetic merge parents",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "Unexpected synthetic merge parents"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "cancelled is unknown even with text",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "cancelled",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "extra pattern",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "custom marker",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": [
+          "custom marker"
+        ]
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "patterns are case sensitive",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "unexpected synthetic merge parents",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "status failure with description",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "failure",
+            "description": "PR must target repository main"
+          }
+        ],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "ci"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "status error is unknown",
+      "input": {
+        "runs": [],
+        "statuses": [
+          {
+            "context": "ci",
+            "state": "error",
+            "description": "PR must target repository main"
+          }
+        ],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "ci"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "unknown default branch is unknown",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "stack pattern in the title",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "Unexpected synthetic merge parents",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "stack pattern in the text field",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": "Unexpected synthetic merge parents"
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 1,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [],
+        "shape": "stack-merge-shape"
+      }
+    },
+    {
+      "name": "a pending run next to a stack failure does not matter",
+      "input": {
+        "runs": [
+          {
+            "name": "a",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "Unexpected synthetic merge parents",
+            "text": ""
+          },
+          {
+            "name": "p",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "feature",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 2,
+        "failing": [
+          "a"
+        ],
+        "failing_total": 1,
+        "pending": [
+          "p"
+        ],
+        "shape": "stack-merge-shape"
+      }
+    }
+  ]
+}

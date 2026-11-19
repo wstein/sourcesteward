@@ -1,0 +1,1430 @@
+{
+  "format_version": 1,
+  "name": "watch-prepare-flags",
+  "kind": "vectors",
+  "description": "The validated run of `stw watch` from its flags (and a config file given as text): defaults (stream, 60 s, detail every 10, pending timeout 45 min, 2000 open PRs), `--until-event` (timeout 590 s), the flags that exclude each other and every usage error (exit 2: nothing read, nothing written), the config merge (flags win), and the state directory of `--status`.",
+  "source": {
+    "go_tests": [
+      "watchcmd/prepare_test.go:TestPrepareDefaults",
+      "watchcmd/prepare_test.go:TestPrepareRejectsInvalidCombinations",
+      "watchcmd/prepare_test.go:TestPrepareMergesTheConfigAndLetsFlagsOverrideIt",
+      "watchcmd/prepare_test.go:TestPrepareStatusResolvesTheStateDirectory"
+    ]
+  },
+  "format_dependent": [
+    "go_message"
+  ],
+  "function": "prepare_flags",
+  "cases": [
+    {
+      "name": "defaults: stream",
+      "input": {
+        "repo": [
+          "o/a",
+          "o/b"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a",
+            "o/b"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "until-event with two kinds",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [
+          "merged",
+          "checks-green"
+        ],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "until-event",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [
+            "checks-green",
+            "merged"
+          ],
+          "timeout_seconds": 590,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "once, human, baseline",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": true,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": true,
+        "human": true,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "once",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": true,
+          "baseline": true,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "once and stream",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": true,
+        "stream": true,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--once, --stream and --until-event are mutually exclusive"
+      }
+    },
+    {
+      "name": "once and until-event",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": true,
+        "stream": false,
+        "until_event": [
+          "merged"
+        ],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--once, --stream and --until-event are mutually exclusive"
+      }
+    },
+    {
+      "name": "unknown kind (review-state-changed is reserved)",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [
+          "review-state-changed"
+        ],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--until-event: \"review-state-changed\" is not an event kind"
+      }
+    },
+    {
+      "name": "timeout without until-event",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": "5m",
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--timeout is only valid with --until-event"
+      }
+    },
+    {
+      "name": "timeout zero",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [
+          "merged"
+        ],
+        "timeout": "0",
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--timeout \"0\" must be a duration above 0"
+      }
+    },
+    {
+      "name": "timeout garbage",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [
+          "merged"
+        ],
+        "timeout": "soon",
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--timeout \"soon\" must be a duration above 0"
+      }
+    },
+    {
+      "name": "timeout 5m with until-event",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [
+          "merged"
+        ],
+        "timeout": "5m",
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "until-event",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [
+            "merged"
+          ],
+          "timeout_seconds": 300,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "interval 9s is too short",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": "9s",
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--interval: 9s is below the minimum of 10s"
+      }
+    },
+    {
+      "name": "interval 10s",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": "10s",
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 10,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "detail-every zero",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": 0,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--detail-every must be at least 1"
+      }
+    },
+    {
+      "name": "detail-every 3",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": 3,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 60,
+          "detail_every": 3,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "max-idle with once",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": true,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": "5m",
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--max-idle is only valid with --stream"
+      }
+    },
+    {
+      "name": "max-idle with stream",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": "150s",
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 150,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "negative pending timeout",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": "-1s",
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--pending-timeout \"-1s\" is not a duration of 0 or more"
+      }
+    },
+    {
+      "name": "pending timeout 0 disables",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": "0",
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 0,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "relative state dir",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "state",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--state-dir must be an absolute path"
+      }
+    },
+    {
+      "name": "absolute state dir",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "/state/dir",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 60,
+          "detail_every": 10,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 2000,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "o/a"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [],
+          "ignore_labels": [],
+          "stack_patterns": []
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "bad host",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "git hub.com/x",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--host \"git hub<dir>com/x\" is not a host name"
+      }
+    },
+    {
+      "name": "bad repo",
+      "input": {
+        "repo": [
+          "nope"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--repo \"nope\" is not OWNER/NAME"
+      }
+    },
+    {
+      "name": "json without status",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": true,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--json is only valid with --status"
+      }
+    },
+    {
+      "name": "status with once",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": true,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--status only takes --state-dir, --json and the repository selection of the run it reports on"
+      }
+    },
+    {
+      "name": "status with baseline",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": true,
+        "human": false,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--status only takes --state-dir, --json and the repository selection of the run it reports on"
+      }
+    },
+    {
+      "name": "status with interval",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": "30s",
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--status only takes --state-dir, --json and the repository selection of the run it reports on"
+      }
+    },
+    {
+      "name": "status with human",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": true,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--status only takes --state-dir, --json and the repository selection of the run it reports on"
+      }
+    },
+    {
+      "name": "path without workspace",
+      "input": {
+        "repo": [
+          "o/a"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "/x",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "PATH is only valid with --workspace"
+      }
+    },
+    {
+      "name": "missing config file",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": true
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "--config: open <dir>/none.toml: no such file or directory"
+      }
+    },
+    {
+      "name": "no source",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "no repository: give --repo, --workspace or a config file with repos"
+      }
+    },
+    {
+      "name": "status with state dir",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "/state/dir",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": true,
+        "json": true,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": true,
+        "run": null,
+        "status_state_dir_is_absolute": true,
+        "status_state_dir_explicit": "/state/dir",
+        "go_message": ""
+      }
+    },
+    {
+      "name": "status from repositories",
+      "input": {
+        "repo": [
+          "o/a",
+          "o/b"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": true,
+        "run": null,
+        "status_state_dir_is_absolute": true,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "status without directory or repositories",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": true,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": null,
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "no repository: give --repo, --workspace or a config file with repos"
+      }
+    },
+    {
+      "name": "config merged, flag repo first",
+      "input": {
+        "repo": [
+          "flag/first"
+        ],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": "schema_version = 1\nrepos = [\"wstein/crewbook\", \"wstein/sourcesteward\"]\ninterval = \"90s\"\ndetail_every = 4\nmax_open_prs = 500\n[ignore]\nauthors = [\"dependabot[bot]\"]\nlabels  = [\"no-watch\"]\n[shape]\nstack_patterns = [\"PR must target repository main\"]\n",
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 90,
+          "detail_every": 4,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 500,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "flag/first",
+            "wstein/crewbook",
+            "wstein/sourcesteward"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [
+            "dependabot[bot]"
+          ],
+          "ignore_labels": [
+            "no-watch"
+          ],
+          "stack_patterns": [
+            "PR must target repository main"
+          ]
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "flags override the config",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": "30s",
+        "detail_every": 2,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": "schema_version = 1\nrepos = [\"wstein/crewbook\", \"wstein/sourcesteward\"]\ninterval = \"90s\"\ndetail_every = 4\nmax_open_prs = 500\n[ignore]\nauthors = [\"dependabot[bot]\"]\nlabels  = [\"no-watch\"]\n[shape]\nstack_patterns = [\"PR must target repository main\"]\n",
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": true,
+        "is_status": false,
+        "run": {
+          "mode": "stream",
+          "interval_seconds": 30,
+          "detail_every": 2,
+          "pending_timeout_seconds": 2700,
+          "max_open_prs": 500,
+          "host": "github.com",
+          "human": false,
+          "baseline": false,
+          "repos": [
+            "wstein/crewbook",
+            "wstein/sourcesteward"
+          ],
+          "until_kinds": [],
+          "timeout_seconds": 0,
+          "max_idle_seconds": 0,
+          "ignore_authors": [
+            "dependabot[bot]"
+          ],
+          "ignore_labels": [
+            "no-watch"
+          ],
+          "stack_patterns": [
+            "PR must target repository main"
+          ]
+        },
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": ""
+      }
+    },
+    {
+      "name": "invalid config file is a usage error",
+      "input": {
+        "repo": [],
+        "once": false,
+        "stream": false,
+        "until_event": [],
+        "timeout": null,
+        "interval": null,
+        "detail_every": null,
+        "max_idle": null,
+        "pending_timeout": null,
+        "state_dir": "",
+        "host": "",
+        "baseline": false,
+        "human": false,
+        "status": false,
+        "json": false,
+        "workspace_path": "",
+        "config_file_content": "schema_version = 1\nbogus = 1\n",
+        "config_file_missing": false
+      },
+      "expected": {
+        "ok": false,
+        "is_status": false,
+        "run": null,
+        "status_state_dir_is_absolute": false,
+        "status_state_dir_explicit": null,
+        "go_message": "<dir>/watch.toml: unknown key \"bogus\""
+      }
+    }
+  ]
+}

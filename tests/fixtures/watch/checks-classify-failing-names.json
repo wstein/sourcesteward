@@ -1,0 +1,535 @@
+{
+  "format_version": 1,
+  "name": "checks-classify-failing-names",
+  "kind": "vectors",
+  "description": "The failing names are sorted, at most 20, and counted in full.",
+  "source": {
+    "go_tests": [
+      "checks_test.go:TestClassifyFailingNamesAreSortedBoundedAndCounted"
+    ]
+  },
+  "format_dependent": [],
+  "function": "classify_checks",
+  "cases": [
+    {
+      "name": "30 failing runs given in descending order",
+      "input": {
+        "runs": [
+          {
+            "name": "job-29",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-28",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-27",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-26",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-25",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-24",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-23",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-22",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-21",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-20",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-19",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-18",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-17",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-16",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-15",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-14",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-13",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-12",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-11",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-10",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-09",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-08",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-07",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-06",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-05",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-04",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-03",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-02",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-01",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "job-00",
+            "status": "completed",
+            "conclusion": "failure",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "red",
+        "total": 30,
+        "failing": [
+          "job-00",
+          "job-01",
+          "job-02",
+          "job-03",
+          "job-04",
+          "job-05",
+          "job-06",
+          "job-07",
+          "job-08",
+          "job-09",
+          "job-10",
+          "job-11",
+          "job-12",
+          "job-13",
+          "job-14",
+          "job-15",
+          "job-16",
+          "job-17",
+          "job-18",
+          "job-19"
+        ],
+        "failing_total": 30,
+        "pending": [],
+        "shape": "unknown"
+      }
+    },
+    {
+      "name": "25 pending runs: the pending names are sorted and bounded too",
+      "input": {
+        "runs": [
+          {
+            "name": "p-24",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-23",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-22",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-21",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-20",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-19",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-18",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-17",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-16",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-15",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-14",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-13",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-12",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-11",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-10",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-09",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-08",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-07",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-06",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-05",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-04",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-03",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-02",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-01",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          },
+          {
+            "name": "p-00",
+            "status": "queued",
+            "conclusion": "",
+            "title": "",
+            "summary": "",
+            "text": ""
+          }
+        ],
+        "statuses": [],
+        "base": "main",
+        "default_branch": "main",
+        "stack_patterns": []
+      },
+      "expected": {
+        "class": "pending",
+        "total": 25,
+        "failing": [],
+        "failing_total": 0,
+        "pending": [
+          "p-00",
+          "p-01",
+          "p-02",
+          "p-03",
+          "p-04",
+          "p-05",
+          "p-06",
+          "p-07",
+          "p-08",
+          "p-09",
+          "p-10",
+          "p-11",
+          "p-12",
+          "p-13",
+          "p-14",
+          "p-15",
+          "p-16",
+          "p-17",
+          "p-18",
+          "p-19"
+        ],
+        "shape": ""
+      }
+    }
+  ]
+}

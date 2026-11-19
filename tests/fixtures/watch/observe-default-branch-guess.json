@@ -1,0 +1,92 @@
+{
+  "format_version": 1,
+  "name": "observe-default-branch-guess",
+  "kind": "vectors",
+  "description": "The default branch is guessed from the bases of the open PRs (main, then master; stacked bases and unknown names give nothing); the allowlist has no repository read.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveGuessesTheDefaultBranch"
+    ]
+  },
+  "format_dependent": [],
+  "function": "observe_default_branch",
+  "cases": [
+    {
+      "name": "main",
+      "input": {
+        "pr_bases": [
+          "main"
+        ]
+      },
+      "expected": {
+        "default_branch": "main"
+      }
+    },
+    {
+      "name": "master",
+      "input": {
+        "pr_bases": [
+          "master"
+        ]
+      },
+      "expected": {
+        "default_branch": "master"
+      }
+    },
+    {
+      "name": "main over master",
+      "input": {
+        "pr_bases": [
+          "master",
+          "main"
+        ]
+      },
+      "expected": {
+        "default_branch": "main"
+      }
+    },
+    {
+      "name": "stacked and main",
+      "input": {
+        "pr_bases": [
+          "feat/1",
+          "main"
+        ]
+      },
+      "expected": {
+        "default_branch": "main"
+      }
+    },
+    {
+      "name": "only stacked",
+      "input": {
+        "pr_bases": [
+          "feat/1"
+        ]
+      },
+      "expected": {
+        "default_branch": ""
+      }
+    },
+    {
+      "name": "no open PR",
+      "input": {
+        "pr_bases": []
+      },
+      "expected": {
+        "default_branch": ""
+      }
+    },
+    {
+      "name": "develop is unknown",
+      "input": {
+        "pr_bases": [
+          "develop"
+        ]
+      },
+      "expected": {
+        "default_branch": ""
+      }
+    }
+  ]
+}

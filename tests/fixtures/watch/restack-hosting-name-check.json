@@ -1,0 +1,46 @@
+{
+  "format_version": 1,
+  "name": "restack-hosting-name-check",
+  "kind": "vectors",
+  "description": "The restacker of `stw watch` refuses a head branch that the hosting reader cannot put into a URL segment (a percent sign, for example) with a diagnostic, and goes on with the others.",
+  "source": {
+    "go_tests": [
+      "watchhost/commits_test.go:TestNewRestackerUsesHostingNameCheck"
+    ]
+  },
+  "format_dependent": [],
+  "function": "restack_with_hosting_branch_check",
+  "cases": [
+    {
+      "name": "percent in a head branch is skipped, a plain name is kept",
+      "input": {
+        "commit_page_body": "[{\"sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}]",
+        "due": {
+          "base": "main",
+          "head_ref": "p",
+          "merged_pr": 10,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "open": [
+          {
+            "base": "p",
+            "head_ref": "bad%20name",
+            "number": 11
+          },
+          {
+            "base": "main",
+            "head_ref": "feat/ok",
+            "number": 12
+          }
+        ]
+      },
+      "expected": {
+        "candidate_prs": [
+          12
+        ],
+        "commit_reads": 1,
+        "diagnostics": 1
+      }
+    }
+  ]
+}

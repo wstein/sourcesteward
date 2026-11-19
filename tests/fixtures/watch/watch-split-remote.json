@@ -1,0 +1,136 @@
+{
+  "format_version": 1,
+  "name": "watch-split-remote",
+  "kind": "vectors",
+  "description": "Host and path of a remote URL without judging either; a local path or an unsupported scheme is refused.",
+  "source": {
+    "go_tests": [
+      "watchcmd/resolve_test.go:TestSplitRemoteReturnsHostAndPathWithoutJudgingThem"
+    ]
+  },
+  "format_dependent": [],
+  "function": "split_remote",
+  "cases": [
+    {
+      "name": "https://github.com/wstein/a.git",
+      "input": {
+        "remote": "https://github.com/wstein/a.git"
+      },
+      "expected": {
+        "host": "github.com",
+        "ok": true,
+        "path": "wstein/a.git"
+      }
+    },
+    {
+      "name": "git@gitlab.com:team/x",
+      "input": {
+        "remote": "git@gitlab.com:team/x"
+      },
+      "expected": {
+        "host": "gitlab.com",
+        "ok": true,
+        "path": "team/x"
+      }
+    },
+    {
+      "name": "ssh://git@ghe.example.com:22/t/x",
+      "input": {
+        "remote": "ssh://git@ghe.example.com:22/t/x"
+      },
+      "expected": {
+        "host": "ghe.example.com",
+        "ok": true,
+        "path": "t/x"
+      }
+    },
+    {
+      "name": "https://github.com/wstein/../a",
+      "input": {
+        "remote": "https://github.com/wstein/../a"
+      },
+      "expected": {
+        "host": "github.com",
+        "ok": true,
+        "path": "wstein/../a"
+      }
+    },
+    {
+      "name": "  https://GitHub.com/wstein/a/\n",
+      "input": {
+        "remote": "  https://GitHub.com/wstein/a/\n"
+      },
+      "expected": {
+        "host": "GitHub.com",
+        "ok": true,
+        "path": "wstein/a/"
+      }
+    },
+    {
+      "name": "https://github.com/wstein/a/b/c.git",
+      "input": {
+        "remote": "https://github.com/wstein/a/b/c.git"
+      },
+      "expected": {
+        "host": "github.com",
+        "ok": true,
+        "path": "wstein/a/b/c.git"
+      }
+    },
+    {
+      "name": "",
+      "input": {
+        "remote": ""
+      },
+      "expected": {
+        "host": "",
+        "ok": false,
+        "path": ""
+      }
+    },
+    {
+      "name": "/srv/git/a.git",
+      "input": {
+        "remote": "/srv/git/a.git"
+      },
+      "expected": {
+        "host": "",
+        "ok": false,
+        "path": ""
+      }
+    },
+    {
+      "name": "../a",
+      "input": {
+        "remote": "../a"
+      },
+      "expected": {
+        "host": "",
+        "ok": false,
+        "path": ""
+      }
+    },
+    {
+      "name": "file:///github.com/wstein/a",
+      "input": {
+        "remote": "file:///github.com/wstein/a"
+      },
+      "expected": {
+        "host": "",
+        "ok": false,
+        "path": ""
+      }
+    },
+    {
+      "name": "ftp://github.com/a/b",
+      "input": {
+        "remote": "ftp://github.com/a/b"
+      },
+      "expected": {
+        "host": "",
+        "ok": false,
+        "path": ""
+      }
+    }
+  ]
+}

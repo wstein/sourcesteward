@@ -1,0 +1,137 @@
+{
+  "format_version": 1,
+  "name": "pulls-errors-pass-through",
+  "kind": "http-reader",
+  "description": "A 301 on the list is repo-moved with the new name; a rate-limited list is not retried.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsErrorsPassThrough"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 301,
+      "headers": {
+        "Location": "https://api.github.com/repos/new/name/pulls?state=open&per_page=25&page=1"
+      },
+      "body": "x",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 403,
+      "headers": {
+        "Retry-After": "30"
+      },
+      "body": "{\"message\":\"secondary rate limit\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 403,
+          "headers": {
+            "Retry-After": "30"
+          },
+          "body": "{\"message\":\"secondary rate limit\"}",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "",
+          "not_modified_on_matching_validator": false,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "new/name",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": {
+        "code": "rate-limited",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 30,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,370 @@
+{
+  "format_version": 1,
+  "name": "observe-refuses-invalid-values-of-a-gone-pr",
+  "kind": "observer-session",
+  "description": "pulls/N of a PR that left the list is validated: a merge commit with an escape or in uppercase, a short head, an unparsable or missing merged_at, a closed PR with a bad head are malformed responses.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveRefusesInvalidValuesOfAGonePR"
+    ]
+  },
+  "format_dependent": [],
+  "config": {
+    "max_open_prs": 2000,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "clock": "2026-10-22T09:00:00Z"
+  },
+  "steps": [
+    {
+      "note": "closed with a bad head",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":false,\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"x\",\"ref\":\"f\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "merge commit with an escape",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"\u001b[31mdddddddddddddddddddddddddddddd\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "merged_at garbage",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"merged_at\":\"yesterday\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "merged_at missing",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "short head",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"dddddddddddddddddddddddddddddddddddddddd\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"abc\",\"ref\":\"feat/6\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "uppercase merge commit",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {
+          "6": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"6666666666666666666666666666666666666666\",\"ref\":\"feat/6\"}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 6,
+            "head": "",
+            "class": "",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    }
+  ],
+  "expected": [
+    {
+      "step": 1,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 2,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 3,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 4,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 5,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 6,
+      "observation": null,
+      "error": {
+        "code": "malformed-response",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "detail/6",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    }
+  ]
+}

@@ -1,0 +1,128 @@
+{
+  "format_version": 1,
+  "name": "event-id-counter",
+  "kind": "vectors",
+  "description": "How Go reads a counter (epoch, episode, generation) back from an event id when it rebuilds a lost state: the colon-separated part made of one letter and 1 to 8 digits, never a hex SHA. Format-dependent.",
+  "source": {
+    "go_tests": [
+      "event_test.go:TestParseIDCounters"
+    ]
+  },
+  "format_dependent": [
+    "input",
+    "expected"
+  ],
+  "function": "id_counter",
+  "cases": [
+    {
+      "name": "o/r#4:head-changed:SHA:h12 letter h",
+      "input": {
+        "id": "o/r#4:head-changed:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:h12",
+        "letter": "h"
+      },
+      "expected": {
+        "counter": 12,
+        "found": true
+      }
+    },
+    {
+      "name": "o/r#4:checks-pending-timeout:SHA:c7:t letter c",
+      "input": {
+        "id": "o/r#4:checks-pending-timeout:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:c7:t",
+        "letter": "c"
+      },
+      "expected": {
+        "counter": 7,
+        "found": true
+      }
+    },
+    {
+      "name": "-:watch-error:rate-limited:e3:f10 letter e",
+      "input": {
+        "id": "-:watch-error:rate-limited:e3:f10",
+        "letter": "e"
+      },
+      "expected": {
+        "counter": 3,
+        "found": true
+      }
+    },
+    {
+      "name": "o/r#4:new-pr:g0 letter h",
+      "input": {
+        "id": "o/r#4:new-pr:g0",
+        "letter": "h"
+      },
+      "expected": {
+        "counter": 0,
+        "found": false
+      }
+    },
+    {
+      "name": "o/r#4:head-changed:SHA:h12 letter c",
+      "input": {
+        "id": "o/r#4:head-changed:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:h12",
+        "letter": "c"
+      },
+      "expected": {
+        "counter": 0,
+        "found": false
+      }
+    },
+    {
+      "name": "o/r#4:checks-green:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1:c2 letter c",
+      "input": {
+        "id": "o/r#4:checks-green:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1:c2",
+        "letter": "c"
+      },
+      "expected": {
+        "counter": 2,
+        "found": true
+      }
+    },
+    {
+      "name": "o/r#4:head-changed:SHA:h123456789 letter h",
+      "input": {
+        "id": "o/r#4:head-changed:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:h123456789",
+        "letter": "h"
+      },
+      "expected": {
+        "counter": 0,
+        "found": false
+      }
+    },
+    {
+      "name": "o/r#4:head-changed:SHA:h12345678 letter h",
+      "input": {
+        "id": "o/r#4:head-changed:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:h12345678",
+        "letter": "h"
+      },
+      "expected": {
+        "counter": 12345678,
+        "found": true
+      }
+    },
+    {
+      "name": "o/r#4:head-changed:SHA:hx letter h",
+      "input": {
+        "id": "o/r#4:head-changed:3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182:hx",
+        "letter": "h"
+      },
+      "expected": {
+        "counter": 0,
+        "found": false
+      }
+    },
+    {
+      "name": "o/r#4:new-pr:g12 letter g",
+      "input": {
+        "id": "o/r#4:new-pr:g12",
+        "letter": "g"
+      },
+      "expected": {
+        "counter": 12,
+        "found": true
+      }
+    }
+  ]
+}

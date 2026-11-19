@@ -1,0 +1,1152 @@
+{
+  "format_version": 1,
+  "name": "closed-replay-pins-generation",
+  "kind": "watch-cycles",
+  "description": "The replay records the generation of a closed line so a later reopen gets generation 2.",
+  "source": {
+    "go_tests": [
+      "review_test.go:TestClosedReplayPinsTheGenerationAcrossASecondReopen"
+    ]
+  },
+  "format_dependent": [
+    "go"
+  ],
+  "config": {
+    "repos": [
+      "o/r"
+    ],
+    "skipped": [],
+    "host": "github.com",
+    "start_time": "2026-10-22T09:00:00Z",
+    "interval_seconds": 60,
+    "pending_timeout_seconds": 2700,
+    "detail_every": 0,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "stack_patterns": [],
+    "mode": "once"
+  },
+  "restacker": {
+    "candidates": {},
+    "rule": "by-merged-pr"
+  },
+  "cycles": [
+    {
+      "step": 1,
+      "action": "cycle",
+      "time": "2026-10-22T09:01:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 2,
+      "action": "cycle",
+      "time": "2026-10-22T09:02:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 3,
+      "action": "cycle",
+      "time": "2026-10-22T09:03:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 4,
+      "action": "cycle",
+      "time": "2026-10-22T09:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": {
+        "point": "append",
+        "n": 1
+      },
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 5,
+      "action": "open",
+      "time": "2026-10-22T09:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": true,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 6,
+      "action": "cycle",
+      "time": "2026-10-22T09:05:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "5151515151515151515151515151515151515151",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 6,
+              "title": "PR 6",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "6161616161616161616161616161616161616161",
+              "head_ref": "feat/6",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    }
+  ],
+  "expected_events": [
+    {
+      "step": 1,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": {
+        "o/r": {
+          "cycle": 1,
+          "detail_every": 10,
+          "known": []
+        }
+      },
+      "state_after": {
+        "cycle": 1,
+        "repos_epoch": 0,
+        "interval_seconds": 60,
+        "repos": [
+          "o/r"
+        ],
+        "skipped": [],
+        "repo": {
+          "o/r": {
+            "baselined": true,
+            "since": "2026-10-22T09:01:00Z",
+            "last_ok": "2026-10-22T09:01:00Z",
+            "default_branch": "main",
+            "prs": {
+              "5": {
+                "number": 5,
+                "title": "PR 5",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "5151515151515151515151515151515151515151",
+                "head_ref": "feat/5",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              },
+              "6": {
+                "number": 6,
+                "title": "PR 6",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "6161616161616161616161616161616161616161",
+                "head_ref": "feat/6",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              }
+            },
+            "closed": [],
+            "restack_due": [],
+            "restack_done": [],
+            "health": {
+              "failures": 0,
+              "episode": 0,
+              "error_open": false,
+              "last_code": "",
+              "stalled": false,
+              "stall_episode": 0,
+              "next_try": ""
+            }
+          }
+        },
+        "run_health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "go_message": ""
+    },
+    {
+      "step": 2,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 1,
+          "step": 2,
+          "time": "2026-10-22T09:02:00Z",
+          "kind": "closed",
+          "repo": "o/r",
+          "pr": 5,
+          "details": {
+            "head": "5151515151515151515151515151515151515151",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/r#5:closed:g0",
+            "seq": 1
+          }
+        }
+      ],
+      "printed": [
+        1
+      ],
+      "hints": {
+        "o/r": {
+          "cycle": 2,
+          "detail_every": 10,
+          "known": [
+            {
+              "number": 5,
+              "head": "5151515151515151515151515151515151515151",
+              "class": "",
+              "class_candidate": "",
+              "detail_due": true
+            },
+            {
+              "number": 6,
+              "head": "6161616161616161616161616161616161616161",
+              "class": "",
+              "class_candidate": "",
+              "detail_due": true
+            }
+          ]
+        }
+      },
+      "state_after": {
+        "cycle": 2,
+        "repos_epoch": 0,
+        "interval_seconds": 60,
+        "repos": [
+          "o/r"
+        ],
+        "skipped": [],
+        "repo": {
+          "o/r": {
+            "baselined": true,
+            "since": "2026-10-22T09:01:00Z",
+            "last_ok": "2026-10-22T09:02:00Z",
+            "default_branch": "main",
+            "prs": {
+              "6": {
+                "number": 6,
+                "title": "PR 6",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "6161616161616161616161616161616161616161",
+                "head_ref": "feat/6",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              }
+            },
+            "closed": [
+              {
+                "number": 5,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                }
+              }
+            ],
+            "restack_due": [],
+            "restack_done": [],
+            "health": {
+              "failures": 0,
+              "episode": 0,
+              "error_open": false,
+              "last_code": "",
+              "stalled": false,
+              "stall_episode": 0,
+              "next_try": ""
+            }
+          }
+        },
+        "run_health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "go_message": ""
+    },
+    {
+      "step": 3,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 2,
+          "step": 3,
+          "time": "2026-10-22T09:03:00Z",
+          "kind": "new-pr",
+          "repo": "o/r",
+          "pr": 5,
+          "details": {
+            "title": "PR 5",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/5",
+            "head": "5151515151515151515151515151515151515151",
+            "fork": false
+          },
+          "go": {
+            "id": "o/r#5:new-pr:g1",
+            "seq": 2
+          }
+        }
+      ],
+      "printed": [
+        2
+      ],
+      "hints": {
+        "o/r": {
+          "cycle": 3,
+          "detail_every": 10,
+          "known": [
+            {
+              "number": 6,
+              "head": "6161616161616161616161616161616161616161",
+              "class": "",
+              "class_candidate": "",
+              "detail_due": true
+            }
+          ]
+        }
+      },
+      "state_after": {
+        "cycle": 3,
+        "repos_epoch": 0,
+        "interval_seconds": 60,
+        "repos": [
+          "o/r"
+        ],
+        "skipped": [],
+        "repo": {
+          "o/r": {
+            "baselined": true,
+            "since": "2026-10-22T09:01:00Z",
+            "last_ok": "2026-10-22T09:03:00Z",
+            "default_branch": "main",
+            "prs": {
+              "5": {
+                "number": 5,
+                "title": "PR 5",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "5151515151515151515151515151515151515151",
+                "head_ref": "feat/5",
+                "base": "main",
+                "fork": false,
+                "generation": 1,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "none",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              },
+              "6": {
+                "number": 6,
+                "title": "PR 6",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "6161616161616161616161616161616161616161",
+                "head_ref": "feat/6",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              }
+            },
+            "closed": [
+              {
+                "number": 5,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                }
+              }
+            ],
+            "restack_due": [],
+            "restack_done": [],
+            "health": {
+              "failures": 0,
+              "episode": 0,
+              "error_open": false,
+              "last_code": "",
+              "stalled": false,
+              "stall_episode": 0,
+              "next_try": ""
+            }
+          }
+        },
+        "run_health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "go_message": ""
+    },
+    {
+      "step": 4,
+      "result": "crashed",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 3,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "closed",
+          "repo": "o/r",
+          "pr": 5,
+          "details": {
+            "head": "5151515151515151515151515151515151515151",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/r#5:closed:g1",
+            "seq": 3
+          }
+        }
+      ],
+      "printed": [],
+      "hints": {
+        "o/r": {
+          "cycle": 4,
+          "detail_every": 10,
+          "known": [
+            {
+              "number": 5,
+              "head": "5151515151515151515151515151515151515151",
+              "class": "none",
+              "class_candidate": "",
+              "detail_due": true
+            },
+            {
+              "number": 6,
+              "head": "6161616161616161616161616161616161616161",
+              "class": "",
+              "class_candidate": "",
+              "detail_due": true
+            }
+          ]
+        }
+      },
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 5,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [
+        3
+      ],
+      "hints": null,
+      "state_after": {
+        "cycle": 3,
+        "repos_epoch": 0,
+        "interval_seconds": 60,
+        "repos": [
+          "o/r"
+        ],
+        "skipped": [],
+        "repo": {
+          "o/r": {
+            "baselined": true,
+            "since": "2026-10-22T09:01:00Z",
+            "last_ok": "2026-10-22T09:03:00Z",
+            "default_branch": "main",
+            "prs": {
+              "6": {
+                "number": 6,
+                "title": "PR 6",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "6161616161616161616161616161616161616161",
+                "head_ref": "feat/6",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              }
+            },
+            "closed": [
+              {
+                "number": 5,
+                "generation": 1,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                }
+              }
+            ],
+            "restack_due": [],
+            "restack_done": [],
+            "health": {
+              "failures": 0,
+              "episode": 0,
+              "error_open": false,
+              "last_code": "",
+              "stalled": false,
+              "stall_episode": 0,
+              "next_try": ""
+            }
+          }
+        },
+        "run_health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "go_message": ""
+    },
+    {
+      "step": 6,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 4,
+          "step": 6,
+          "time": "2026-10-22T09:05:00Z",
+          "kind": "new-pr",
+          "repo": "o/r",
+          "pr": 5,
+          "details": {
+            "title": "PR 5",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/5",
+            "head": "5151515151515151515151515151515151515151",
+            "fork": false
+          },
+          "go": {
+            "id": "o/r#5:new-pr:g2",
+            "seq": 4
+          }
+        }
+      ],
+      "printed": [
+        4
+      ],
+      "hints": {
+        "o/r": {
+          "cycle": 4,
+          "detail_every": 10,
+          "known": [
+            {
+              "number": 6,
+              "head": "6161616161616161616161616161616161616161",
+              "class": "",
+              "class_candidate": "",
+              "detail_due": true
+            }
+          ]
+        }
+      },
+      "state_after": {
+        "cycle": 4,
+        "repos_epoch": 0,
+        "interval_seconds": 60,
+        "repos": [
+          "o/r"
+        ],
+        "skipped": [],
+        "repo": {
+          "o/r": {
+            "baselined": true,
+            "since": "2026-10-22T09:01:00Z",
+            "last_ok": "2026-10-22T09:05:00Z",
+            "default_branch": "main",
+            "prs": {
+              "5": {
+                "number": 5,
+                "title": "PR 5",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "5151515151515151515151515151515151515151",
+                "head_ref": "feat/5",
+                "base": "main",
+                "fork": false,
+                "generation": 2,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "none",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              },
+              "6": {
+                "number": 6,
+                "title": "PR 6",
+                "author": "alice",
+                "labels": [],
+                "draft": false,
+                "head": "6161616161616161616161616161616161616161",
+                "head_ref": "feat/6",
+                "base": "main",
+                "fork": false,
+                "generation": 0,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                },
+                "class": "",
+                "class_candidate": "",
+                "pending_since": "",
+                "pending_names": [],
+                "timeout_fired": false,
+                "mergeable": null,
+                "mergeable_state": "",
+                "conflicting": false,
+                "behind": false,
+                "mergeable_candidate": null,
+                "detail_due": true,
+                "gone": false
+              }
+            },
+            "closed": [
+              {
+                "number": 5,
+                "generation": 1,
+                "epochs": {
+                  "head": 0,
+                  "checks": 0,
+                  "mergeable": 0,
+                  "ready": 0,
+                  "base": 0
+                }
+              }
+            ],
+            "restack_due": [],
+            "restack_done": [],
+            "health": {
+              "failures": 0,
+              "episode": 0,
+              "error_open": false,
+              "last_code": "",
+              "stalled": false,
+              "stall_episode": 0,
+              "next_try": ""
+            }
+          }
+        },
+        "run_health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "go_message": ""
+    }
+  ],
+  "expected_state_view": {
+    "cycle": 4,
+    "repos_epoch": 0,
+    "interval_seconds": 60,
+    "repos": [
+      "o/r"
+    ],
+    "skipped": [],
+    "repo": {
+      "o/r": {
+        "baselined": true,
+        "since": "2026-10-22T09:01:00Z",
+        "last_ok": "2026-10-22T09:05:00Z",
+        "default_branch": "main",
+        "prs": {
+          "5": {
+            "number": 5,
+            "title": "PR 5",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "5151515151515151515151515151515151515151",
+            "head_ref": "feat/5",
+            "base": "main",
+            "fork": false,
+            "generation": 2,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "none",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": null,
+            "mergeable_state": "",
+            "conflicting": false,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": true,
+            "gone": false
+          },
+          "6": {
+            "number": 6,
+            "title": "PR 6",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "6161616161616161616161616161616161616161",
+            "head_ref": "feat/6",
+            "base": "main",
+            "fork": false,
+            "generation": 0,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": null,
+            "mergeable_state": "",
+            "conflicting": false,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": true,
+            "gone": false
+          }
+        },
+        "closed": [
+          {
+            "number": 5,
+            "generation": 1,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            }
+          }
+        ],
+        "restack_due": [],
+        "restack_done": [],
+        "health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      }
+    },
+    "run_health": {
+      "failures": 0,
+      "episode": 0,
+      "error_open": false,
+      "last_code": "",
+      "stalled": false,
+      "stall_episode": 0,
+      "next_try": ""
+    }
+  },
+  "state_view_ignore": [],
+  "expected_journal_ordinals": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "expect_unique_event_ids": true,
+  "status_probes": []
+}

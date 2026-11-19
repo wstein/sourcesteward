@@ -1,0 +1,99 @@
+{
+  "format_version": 1,
+  "name": "workspace-id",
+  "kind": "vectors",
+  "description": "The state directory id: the first 16 hex digits of SHA-256 over host and workspace root or the sorted, de-duplicated, lowercased repository list. Format-dependent (F3: a Rust port may use another id).",
+  "source": {
+    "go_tests": [
+      "statedir_test.go:TestWorkspaceID"
+    ]
+  },
+  "format_dependent": [
+    "expected"
+  ],
+  "function": "workspace_id",
+  "cases": [
+    {
+      "name": "github.com \"\" [C/D a/b A/B]",
+      "input": {
+        "host": "github.com",
+        "workspace_root": "",
+        "repos": [
+          "C/D",
+          "a/b",
+          "A/B"
+        ]
+      },
+      "expected": {
+        "id": "54c7f4a089e18dae"
+      }
+    },
+    {
+      "name": "github.com \"/w/root\" [a/b]",
+      "input": {
+        "host": "github.com",
+        "workspace_root": "/w/root",
+        "repos": [
+          "a/b"
+        ]
+      },
+      "expected": {
+        "id": "ed569e7596a66e60"
+      }
+    },
+    {
+      "name": "github.com \"\" [a/b]",
+      "input": {
+        "host": "github.com",
+        "workspace_root": "",
+        "repos": [
+          "a/b"
+        ]
+      },
+      "expected": {
+        "id": "9c2fb627be6d6864"
+      }
+    },
+    {
+      "name": "ghe.example \"\" [a/b]",
+      "input": {
+        "host": "ghe.example",
+        "workspace_root": "",
+        "repos": [
+          "a/b"
+        ]
+      },
+      "expected": {
+        "id": "59114e1dddb9f834"
+      }
+    },
+    {
+      "name": "github.com \"\" [a/b c/d]",
+      "input": {
+        "host": "github.com",
+        "workspace_root": "",
+        "repos": [
+          "a/b",
+          "c/d"
+        ]
+      },
+      "expected": {
+        "id": "54c7f4a089e18dae"
+      }
+    },
+    {
+      "name": "github.com \"\" [c/d a/b]",
+      "input": {
+        "host": "github.com",
+        "workspace_root": "",
+        "repos": [
+          "c/d",
+          "a/b"
+        ]
+      },
+      "expected": {
+        "id": "54c7f4a089e18dae"
+      }
+    }
+  ]
+}

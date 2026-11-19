@@ -1,0 +1,114 @@
+{
+  "format_version": 1,
+  "name": "watch-valid-host",
+  "kind": "vectors",
+  "description": "A host name with an optional port for `--host`.",
+  "source": {
+    "go_tests": [
+      "watchcmd/prepare_test.go:TestValidHost"
+    ]
+  },
+  "format_dependent": [],
+  "function": "valid_host",
+  "cases": [
+    {
+      "name": "github.com",
+      "input": {
+        "host": "github.com"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "ghe.example.com:8443",
+      "input": {
+        "host": "ghe.example.com:8443"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a",
+      "input": {
+        "host": "a"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "",
+      "input": {
+        "host": ""
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "-x.com",
+      "input": {
+        "host": "-x.com"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "a b",
+      "input": {
+        "host": "a b"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "x.com/",
+      "input": {
+        "host": "x.com/"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "x.com:123456",
+      "input": {
+        "host": "x.com:123456"
+      },
+      "expected": {
+        "valid": false
+      }
+    },
+    {
+      "name": "x.com:65535",
+      "input": {
+        "host": "x.com:65535"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a..b",
+      "input": {
+        "host": "a..b"
+      },
+      "expected": {
+        "valid": true
+      }
+    },
+    {
+      "name": "a.b-",
+      "input": {
+        "host": "a.b-"
+      },
+      "expected": {
+        "valid": false
+      }
+    }
+  ]
+}

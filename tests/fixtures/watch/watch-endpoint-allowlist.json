@@ -1,0 +1,436 @@
+{
+  "format_version": 1,
+  "name": "watch-endpoint-allowlist",
+  "kind": "vectors",
+  "description": "The GET endpoints the watch reader may call (pulls list with page bounds 80 at 25 and 167 at 12, pulls/N, its commits up to page 3, branches with an encoded segment, commits/SHA with check-runs and statuses, rate_limit) and what it refuses. Only GET exists (the Go guard refuses every write method on every endpoint; Rust must have no write path).",
+  "source": {
+    "go_tests": [
+      "watch_endpoint_test.go:TestWatchEndpointAllowlist",
+      "watch_ratelimit_test.go:TestWatchGuardRefusesEveryWriteMethodOnEveryWatchEndpoint"
+    ]
+  },
+  "format_dependent": [],
+  "function": "watch_read_endpoint_allowed",
+  "cases": [
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=25&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=25&page=80",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=25&page=80",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=12&page=167",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=12&page=167",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/pulls/7",
+      "input": {
+        "endpoint": "repos/a/b/pulls/7",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/pulls/7/commits?per_page=100&page=3",
+      "input": {
+        "endpoint": "repos/a/b/pulls/7/commits?per_page=100&page=3",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/branches/main",
+      "input": {
+        "endpoint": "repos/a/b/branches/main",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/branches/feat%2Fx",
+      "input": {
+        "endpoint": "repos/a/b/branches/feat%2Fx",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/branches/release%2Fv1.2",
+      "input": {
+        "endpoint": "repos/a/b/branches/release%2Fv1.2",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/branches/feature%2F%C3%BCn%C3%AF",
+      "input": {
+        "endpoint": "repos/a/b/branches/feature%2F%C3%BCn%C3%AF",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567",
+      "input": {
+        "endpoint": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/check-runs?per_page=100&page=1",
+      "input": {
+        "endpoint": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/check-runs?per_page=100&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/statuses?per_page=100&page=2",
+      "input": {
+        "endpoint": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/statuses?per_page=100&page=2",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "rate_limit",
+      "input": {
+        "endpoint": "rate_limit",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": true
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=25&page=81",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=25&page=81",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=12&page=168",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=12&page=168",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=25&page=0",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=25&page=0",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=100&page=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=100&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=closed&per_page=25&page=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=closed&per_page=25&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls?state=open&per_page=25&page=1&x=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls?state=open&per_page=25&page=1&x=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls/7/commits?per_page=100&page=4",
+      "input": {
+        "endpoint": "repos/a/b/pulls/7/commits?per_page=100&page=4",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls/0/commits?per_page=100&page=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls/0/commits?per_page=100&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/pulls/7/commits?per_page=30&page=1",
+      "input": {
+        "endpoint": "repos/a/b/pulls/7/commits?per_page=30&page=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/feat/x",
+      "input": {
+        "endpoint": "repos/a/b/branches/feat/x",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/",
+      "input": {
+        "endpoint": "repos/a/b/branches/",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/feat%2fx",
+      "input": {
+        "endpoint": "repos/a/b/branches/feat%2fx",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/..%2F",
+      "input": {
+        "endpoint": "repos/a/b/branches/..%2F",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/%252F",
+      "input": {
+        "endpoint": "repos/a/b/branches/%252F",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/%2e%2e",
+      "input": {
+        "endpoint": "repos/a/b/branches/%2e%2e",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/%00",
+      "input": {
+        "endpoint": "repos/a/b/branches/%00",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/%5C",
+      "input": {
+        "endpoint": "repos/a/b/branches/%5C",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/main?x=1",
+      "input": {
+        "endpoint": "repos/a/b/branches/main?x=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/commits/abc",
+      "input": {
+        "endpoint": "repos/a/b/commits/abc",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/commits/0123456789ABCDEF0123456789ABCDEF01234567",
+      "input": {
+        "endpoint": "repos/a/b/commits/0123456789ABCDEF0123456789ABCDEF01234567",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/comments",
+      "input": {
+        "endpoint": "repos/a/b/commits/0123456789abcdef0123456789abcdef01234567/comments",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/../b/commits/0123456789abcdef0123456789abcdef01234567",
+      "input": {
+        "endpoint": "repos/../b/commits/0123456789abcdef0123456789abcdef01234567",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/../commits/0123456789abcdef0123456789abcdef01234567",
+      "input": {
+        "endpoint": "repos/a/../commits/0123456789abcdef0123456789abcdef01234567",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/../../rate_limit",
+      "input": {
+        "endpoint": "repos/a/../../rate_limit",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/branches/main/../../x",
+      "input": {
+        "endpoint": "repos/a/b/branches/main/../../x",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "rate_limit?x=1",
+      "input": {
+        "endpoint": "rate_limit?x=1",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "rate_limit/",
+      "input": {
+        "endpoint": "rate_limit/",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "user",
+      "input": {
+        "endpoint": "user",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    },
+    {
+      "name": "repos/a/b/git/refs",
+      "input": {
+        "endpoint": "repos/a/b/git/refs",
+        "method": "GET"
+      },
+      "expected": {
+        "allowed": false
+      }
+    }
+  ]
+}

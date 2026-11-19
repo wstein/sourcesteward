@@ -1,0 +1,557 @@
+{
+  "format_version": 1,
+  "name": "event-json-shapes",
+  "kind": "vectors",
+  "description": "The JSON object of an event as Go writes it (every kind, no key omitted, lists never null) and the objects Go refuses to decode (unknown key, unknown kind, wrong schema version). The lines are format-dependent in key order and escaping; the key sets per kind and the refusals are the contract.",
+  "source": {
+    "go_tests": [
+      "event_test.go:TestEveryKindHasExactlyTheContractKeysAndNeverOmitsOne",
+      "event_test.go:TestEventJSONRoundTripAndStrictDetails"
+    ]
+  },
+  "format_dependent": [
+    "line"
+  ],
+  "function": "event_json",
+  "cases": [
+    {
+      "name": "decode missing detail key",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"closed\",\"details\":{\"head\":\"a\"}}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": true
+      }
+    },
+    {
+      "name": "decode reserved review kind",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"review-state-changed\",\"details\":{}}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "decode schema version 2",
+      "input": {
+        "line": "{\"schema_version\":2,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"closed\",\"details\":{\"head\":\"a\",\"base\":\"b\"}}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "decode trailing data",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"closed\",\"details\":{\"head\":\"a\",\"base\":\"b\"}} {}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "decode unknown detail key",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"head-changed\",\"details\":{\"old\":\"a\",\"new\":\"b\",\"extra\":1}}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "decode unknown envelope key",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"closed\",\"details\":{\"head\":\"a\",\"base\":\"b\"},\"extra\":1}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "decode unknown kind",
+      "input": {
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"t\",\"repo\":null,\"pr\":null,\"kind\":\"nope\",\"details\":{}}",
+        "op": "decode"
+      },
+      "expected": {
+        "accepted": false
+      }
+    },
+    {
+      "name": "encode base-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "base-changed",
+          "details": {
+            "old": "a",
+            "new": "b"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "new",
+          "old"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"base-changed\",\"details\":{\"old\":\"a\",\"new\":\"b\"}}"
+      }
+    },
+    {
+      "name": "encode checks-green",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "checks-green",
+          "details": {
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "draft": false,
+            "base": "main",
+            "total": 3
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "base",
+          "draft",
+          "head",
+          "total"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"checks-green\",\"details\":{\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"draft\":false,\"base\":\"main\",\"total\":3}}"
+      }
+    },
+    {
+      "name": "encode checks-pending-timeout",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "checks-pending-timeout",
+          "details": {
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "pending": [
+              "a"
+            ],
+            "since": "2026-10-22T09:00:00Z"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "head",
+          "pending",
+          "since"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"checks-pending-timeout\",\"details\":{\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"pending\":[\"a\"],\"since\":\"2026-10-22T09:00:00Z\"}}"
+      }
+    },
+    {
+      "name": "encode checks-red",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "checks-red",
+          "details": {
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "failing": [
+              "a"
+            ],
+            "failing_total": 1,
+            "shape": "real",
+            "base": "main",
+            "draft": false
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "base",
+          "draft",
+          "failing",
+          "failing_total",
+          "head",
+          "shape"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"checks-red\",\"details\":{\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"failing\":[\"a\"],\"failing_total\":1,\"shape\":\"real\",\"base\":\"main\",\"draft\":false}}"
+      }
+    },
+    {
+      "name": "encode closed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "closed",
+          "details": {
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "base": "main"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "base",
+          "head"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"closed\",\"details\":{\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"base\":\"main\"}}"
+      }
+    },
+    {
+      "name": "encode head-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "head-changed",
+          "details": {
+            "old": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "new": "9d8c7b6a5f4e3d2c1b0a99887766554433221100"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "new",
+          "old"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"head-changed\",\"details\":{\"old\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"new\":\"9d8c7b6a5f4e3d2c1b0a99887766554433221100\"}}"
+      }
+    },
+    {
+      "name": "encode mergeable-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "mergeable-changed",
+          "details": {
+            "mergeable": null,
+            "state": "dirty",
+            "conflicting": false,
+            "behind": false,
+            "base": "main"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "base",
+          "behind",
+          "conflicting",
+          "mergeable",
+          "state"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"mergeable-changed\",\"details\":{\"mergeable\":null,\"state\":\"dirty\",\"conflicting\":false,\"behind\":false,\"base\":\"main\"}}"
+      }
+    },
+    {
+      "name": "encode merged",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "merged",
+          "details": {
+            "merge_commit": null,
+            "base": "main",
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "head_ref": "f",
+            "merged_at": "2026-10-22T09:00:00Z",
+            "method_hint": "unknown"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "base",
+          "head",
+          "head_ref",
+          "merge_commit",
+          "merged_at",
+          "method_hint"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"merged\",\"details\":{\"merge_commit\":null,\"base\":\"main\",\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"head_ref\":\"f\",\"merged_at\":\"2026-10-22T09:00:00Z\",\"method_hint\":\"unknown\"}}"
+      }
+    },
+    {
+      "name": "encode new-pr",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "new-pr",
+          "details": {
+            "title": "t",
+            "author": "a",
+            "draft": false,
+            "base": "main",
+            "head_ref": "f",
+            "head": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "fork": false
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "author",
+          "base",
+          "draft",
+          "fork",
+          "head",
+          "head_ref",
+          "title"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"new-pr\",\"details\":{\"title\":\"t\",\"author\":\"a\",\"draft\":false,\"base\":\"main\",\"head_ref\":\"f\",\"head\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"fork\":false}}"
+      }
+    },
+    {
+      "name": "encode ready-state-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "ready-state-changed",
+          "details": {
+            "from": "draft",
+            "to": "ready"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "from",
+          "to"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"ready-state-changed\",\"details\":{\"from\":\"draft\",\"to\":\"ready\"}}"
+      }
+    },
+    {
+      "name": "encode repos-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 2,
+          "id": "y",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": null,
+          "pr": null,
+          "kind": "repos-changed",
+          "details": {
+            "added": null,
+            "removed": null,
+            "skipped": null
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "added",
+          "removed",
+          "skipped"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":2,\"id\":\"y\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":null,\"pr\":null,\"kind\":\"repos-changed\",\"details\":{\"added\":null,\"removed\":null,\"skipped\":null}}"
+      }
+    },
+    {
+      "name": "encode restack-needed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "restack-needed",
+          "details": {
+            "merged_pr": 3,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182",
+            "new_parent": null,
+            "new_parent_source": "merge_commit_sha",
+            "branch": "f",
+            "argv": null
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "argv",
+          "base",
+          "branch",
+          "merged_pr",
+          "new_parent",
+          "new_parent_source",
+          "old_parent",
+          "reason"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"restack-needed\",\"details\":{\"merged_pr\":3,\"base\":\"main\",\"reason\":\"contains-merged-commits\",\"old_parent\":\"3f2a9c1d0b7e4a5f6c8d9e0a1b2c3d4e5f607182\",\"new_parent\":null,\"new_parent_source\":\"merge_commit_sha\",\"branch\":\"f\",\"argv\":null}}"
+      }
+    },
+    {
+      "name": "encode watch-error",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "watch-error",
+          "details": {
+            "code": "network",
+            "message": "m",
+            "failures": 1,
+            "retry_in_seconds": 60,
+            "repo": null
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "code",
+          "failures",
+          "message",
+          "repo",
+          "retry_in_seconds"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"watch-error\",\"details\":{\"code\":\"network\",\"message\":\"m\",\"failures\":1,\"retry_in_seconds\":60,\"repo\":null}}"
+      }
+    },
+    {
+      "name": "encode watch-recovered",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "watch-recovered",
+          "details": {
+            "after_failures": 2,
+            "repo": null
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "after_failures",
+          "repo"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"watch-recovered\",\"details\":{\"after_failures\":2,\"repo\":null}}"
+      }
+    },
+    {
+      "name": "encode watch-stalled",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T09:00:00Z",
+          "repo": "o/r",
+          "pr": 7,
+          "kind": "watch-stalled",
+          "details": {
+            "since": "2026-10-22T09:00:00Z",
+            "threshold_seconds": 600,
+            "repo": "o/r"
+          }
+        },
+        "op": "encode"
+      },
+      "expected": {
+        "accepted": true,
+        "detail_keys": [
+          "repo",
+          "since",
+          "threshold_seconds"
+        ],
+        "line": "{\"schema_version\":1,\"seq\":1,\"id\":\"x\",\"time\":\"2026-10-22T09:00:00Z\",\"repo\":\"o/r\",\"pr\":7,\"kind\":\"watch-stalled\",\"details\":{\"since\":\"2026-10-22T09:00:00Z\",\"threshold_seconds\":600,\"repo\":\"o/r\"}}"
+      }
+    }
+  ]
+}

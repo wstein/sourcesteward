@@ -1,0 +1,45 @@
+{
+  "format_version": 1,
+  "name": "merged-records-head-fork",
+  "kind": "vectors",
+  "description": "The merge records whether the merged PR's head lives in a fork: false only if the PR was observed open with its head in the base repository; a fork-merged or unobserved PR never yields class-1 candidates.",
+  "source": {
+    "go_tests": [
+      "restack_test.go:TestMergedDueRecordsHeadFork"
+    ]
+  },
+  "format_dependent": [],
+  "function": "merged_due_head_fork",
+  "cases": [
+    {
+      "name": "same repository",
+      "input": {
+        "observed_fork": false,
+        "observed_open_pr": true
+      },
+      "expected": {
+        "head_fork": false
+      }
+    },
+    {
+      "name": "fork",
+      "input": {
+        "observed_fork": true,
+        "observed_open_pr": true
+      },
+      "expected": {
+        "head_fork": true
+      }
+    },
+    {
+      "name": "unobserved",
+      "input": {
+        "observed_fork": false,
+        "observed_open_pr": false
+      },
+      "expected": {
+        "head_fork": true
+      }
+    }
+  ]
+}

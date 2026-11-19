@@ -1,0 +1,1427 @@
+{
+  "format_version": 1,
+  "name": "pulls-too-many-open-prs-25-per-page-max-2000",
+  "kind": "http-reader",
+  "description": "An endless list at 25 per page with max_open_prs 2000 stops with too-many-open-prs after exactly 80 pages.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsTooManyOpenPRs"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=2>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e1\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=3>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e2\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=3",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=4>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e3\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=4",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=5>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":4,\"title\":\"t4\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000004\",\"ref\":\"feat/4\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ec\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e4\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=5",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=6>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":5,\"title\":\"t5\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000005\",\"ref\":\"feat/5\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ed\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e5\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=6",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=7>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":6,\"title\":\"t6\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000006\",\"ref\":\"feat/6\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ee\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e6\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=7",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=8>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":7,\"title\":\"t7\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000007\",\"ref\":\"feat/7\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ef\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e7\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=8",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":8,\"title\":\"t8\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000008\",\"ref\":\"feat/8\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f0\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e8\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=9",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=10>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":9,\"title\":\"t9\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000009\",\"ref\":\"feat/9\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f1\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e9\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=10",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=11>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":10,\"title\":\"t10\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000a\",\"ref\":\"feat/10\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f2\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e10\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=11",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=12>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":11,\"title\":\"t11\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000b\",\"ref\":\"feat/11\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f3\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e11\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=12",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=13>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":12,\"title\":\"t12\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000c\",\"ref\":\"feat/12\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f4\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e12\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=13",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=14>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":13,\"title\":\"t13\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000d\",\"ref\":\"feat/13\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f5\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e13\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=14",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=15>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":14,\"title\":\"t14\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000000e\",\"ref\":\"feat/14\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f6\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e14\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=15",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=16>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":15,\"title\":\"t15\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000000f\",\"ref\":\"feat/15\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f7\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e15\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=16",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=17>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":16,\"title\":\"t16\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000010\",\"ref\":\"feat/16\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f8\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e16\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=17",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=18>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":17,\"title\":\"t17\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000011\",\"ref\":\"feat/17\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003f9\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e17\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=18",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=19>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":18,\"title\":\"t18\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000012\",\"ref\":\"feat/18\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fa\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e18\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=19",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=20>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":19,\"title\":\"t19\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000013\",\"ref\":\"feat/19\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e19\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=20",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=21>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":20,\"title\":\"t20\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000014\",\"ref\":\"feat/20\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fc\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e20\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=21",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=22>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":21,\"title\":\"t21\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000015\",\"ref\":\"feat/21\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fd\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e21\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=22",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=23>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":22,\"title\":\"t22\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000016\",\"ref\":\"feat/22\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003fe\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e22\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=23",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=24>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":23,\"title\":\"t23\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000017\",\"ref\":\"feat/23\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ff\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e23\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=24",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=25>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":24,\"title\":\"t24\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000018\",\"ref\":\"feat/24\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000400\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e24\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=25",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=26>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":25,\"title\":\"t25\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000019\",\"ref\":\"feat/25\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000401\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e25\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=26",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=27>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":26,\"title\":\"t26\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000001a\",\"ref\":\"feat/26\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000402\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e26\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=27",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=28>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":27,\"title\":\"t27\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000001b\",\"ref\":\"feat/27\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000403\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e27\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=28",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=29>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":28,\"title\":\"t28\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000001c\",\"ref\":\"feat/28\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000404\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e28\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=29",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=30>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":29,\"title\":\"t29\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000001d\",\"ref\":\"feat/29\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000405\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e29\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=30",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=31>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":30,\"title\":\"t30\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000001e\",\"ref\":\"feat/30\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000406\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e30\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=31",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=32>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":31,\"title\":\"t31\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000001f\",\"ref\":\"feat/31\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000407\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e31\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=32",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=33>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":32,\"title\":\"t32\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000020\",\"ref\":\"feat/32\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000408\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e32\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=33",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=34>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":33,\"title\":\"t33\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000021\",\"ref\":\"feat/33\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000409\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e33\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=34",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=35>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":34,\"title\":\"t34\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000022\",\"ref\":\"feat/34\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040a\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e34\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=35",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=36>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":35,\"title\":\"t35\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000023\",\"ref\":\"feat/35\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040b\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e35\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=36",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=37>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":36,\"title\":\"t36\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000024\",\"ref\":\"feat/36\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040c\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e36\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=37",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=38>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":37,\"title\":\"t37\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000025\",\"ref\":\"feat/37\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040d\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e37\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=38",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=39>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":38,\"title\":\"t38\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000026\",\"ref\":\"feat/38\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040e\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e38\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=39",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=40>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":39,\"title\":\"t39\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000027\",\"ref\":\"feat/39\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000040f\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e39\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=40",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=41>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":40,\"title\":\"t40\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000028\",\"ref\":\"feat/40\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000410\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e40\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=41",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=42>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":41,\"title\":\"t41\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000029\",\"ref\":\"feat/41\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000411\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e41\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=42",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=43>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":42,\"title\":\"t42\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000002a\",\"ref\":\"feat/42\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000412\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e42\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=43",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=44>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":43,\"title\":\"t43\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000002b\",\"ref\":\"feat/43\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000413\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e43\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=44",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=45>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":44,\"title\":\"t44\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000002c\",\"ref\":\"feat/44\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000414\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e44\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=45",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=46>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":45,\"title\":\"t45\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000002d\",\"ref\":\"feat/45\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000415\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e45\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=46",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=47>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":46,\"title\":\"t46\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000002e\",\"ref\":\"feat/46\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000416\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e46\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=47",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=48>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":47,\"title\":\"t47\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000002f\",\"ref\":\"feat/47\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000417\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e47\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=48",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=49>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":48,\"title\":\"t48\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000030\",\"ref\":\"feat/48\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000418\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e48\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=49",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=50>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":49,\"title\":\"t49\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000031\",\"ref\":\"feat/49\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000419\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e49\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=50",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=51>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":50,\"title\":\"t50\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000032\",\"ref\":\"feat/50\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041a\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e50\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=51",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=52>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":51,\"title\":\"t51\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000033\",\"ref\":\"feat/51\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041b\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e51\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=52",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=53>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":52,\"title\":\"t52\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000034\",\"ref\":\"feat/52\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041c\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e52\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=53",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=54>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":53,\"title\":\"t53\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000035\",\"ref\":\"feat/53\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041d\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e53\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=54",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=55>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":54,\"title\":\"t54\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000036\",\"ref\":\"feat/54\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041e\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e54\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=55",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=56>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":55,\"title\":\"t55\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000037\",\"ref\":\"feat/55\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000041f\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e55\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=56",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=57>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":56,\"title\":\"t56\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000038\",\"ref\":\"feat/56\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000420\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e56\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=57",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=58>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":57,\"title\":\"t57\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000039\",\"ref\":\"feat/57\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000421\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e57\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=58",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=59>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":58,\"title\":\"t58\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000003a\",\"ref\":\"feat/58\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000422\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e58\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=59",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=60>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":59,\"title\":\"t59\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000003b\",\"ref\":\"feat/59\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000423\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e59\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=60",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=61>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":60,\"title\":\"t60\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000003c\",\"ref\":\"feat/60\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000424\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e60\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=61",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=62>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":61,\"title\":\"t61\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000003d\",\"ref\":\"feat/61\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000425\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e61\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=62",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=63>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":62,\"title\":\"t62\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000003e\",\"ref\":\"feat/62\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000426\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e62\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=63",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=64>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":63,\"title\":\"t63\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000003f\",\"ref\":\"feat/63\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000427\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e63\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=64",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=65>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":64,\"title\":\"t64\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000040\",\"ref\":\"feat/64\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000428\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e64\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=65",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=66>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":65,\"title\":\"t65\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000041\",\"ref\":\"feat/65\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000429\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e65\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=66",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=67>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":66,\"title\":\"t66\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000042\",\"ref\":\"feat/66\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042a\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e66\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=67",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=68>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":67,\"title\":\"t67\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000043\",\"ref\":\"feat/67\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042b\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e67\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=68",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=69>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":68,\"title\":\"t68\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000044\",\"ref\":\"feat/68\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042c\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e68\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=69",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=70>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":69,\"title\":\"t69\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000045\",\"ref\":\"feat/69\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042d\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e69\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=70",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=71>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":70,\"title\":\"t70\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000046\",\"ref\":\"feat/70\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042e\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e70\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=71",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=72>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":71,\"title\":\"t71\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000047\",\"ref\":\"feat/71\"},\"base\":{\"ref\":\"main\",\"sha\":\"000000000000000000000000000000000000042f\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e71\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=72",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=73>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":72,\"title\":\"t72\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000048\",\"ref\":\"feat/72\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000430\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e72\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=73",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=74>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":73,\"title\":\"t73\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000049\",\"ref\":\"feat/73\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000431\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e73\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=74",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=75>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":74,\"title\":\"t74\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000004a\",\"ref\":\"feat/74\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000432\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e74\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=75",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=76>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":75,\"title\":\"t75\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000004b\",\"ref\":\"feat/75\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000433\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e75\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=76",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=77>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":76,\"title\":\"t76\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000004c\",\"ref\":\"feat/76\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000434\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e76\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=77",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=78>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":77,\"title\":\"t77\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000004d\",\"ref\":\"feat/77\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000435\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e77\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=78",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=79>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":78,\"title\":\"t78\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"000000000000000000000000000000000000004e\",\"ref\":\"feat/78\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000436\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e78\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=79",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=80>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":79,\"title\":\"t79\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"000000000000000000000000000000000000004f\",\"ref\":\"feat/79\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000437\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e79\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=80",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=81>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":80,\"title\":\"t80\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000050\",\"ref\":\"feat/80\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000438\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e80\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=81",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=82>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":81,\"title\":\"t81\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000051\",\"ref\":\"feat/81\"},\"base\":{\"ref\":\"main\",\"sha\":\"0000000000000000000000000000000000000439\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e81\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "per_page_only",
+      "prior_per_page": 25,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "too-many-open-prs",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=2",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=3",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=4",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=5",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=6",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=7",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=8",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=9",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=10",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=11",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=12",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=13",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=14",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=15",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=16",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=17",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=18",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=19",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=20",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=21",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=22",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=23",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=24",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=25",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=26",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=27",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=28",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=29",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=30",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=31",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=32",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=33",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=34",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=35",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=36",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=37",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=38",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=39",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=40",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=41",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=42",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=43",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=44",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=45",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=46",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=47",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=48",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=49",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=50",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=51",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=52",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=53",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=54",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=55",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=56",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=57",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=58",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=59",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=60",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=61",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=62",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=63",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=64",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=65",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=66",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=67",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=68",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=69",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=70",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=71",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=72",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=73",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=74",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=75",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=76",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=77",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=78",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=79",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=80",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

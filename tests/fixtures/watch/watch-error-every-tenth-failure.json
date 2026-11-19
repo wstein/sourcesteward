@@ -1,0 +1,5891 @@
+{
+  "format_version": 1,
+  "name": "watch-error-every-tenth-failure",
+  "kind": "watch-cycles",
+  "description": "watch-error repeats at the 1st, 10th and 20th failure of an episode.",
+  "source": {
+    "go_tests": [
+      "health_test.go:TestWatchErrorRepeatsEveryTenthFailure"
+    ]
+  },
+  "format_dependent": [
+    "go"
+  ],
+  "config": {
+    "repos": [
+      "o/r"
+    ],
+    "skipped": [],
+    "host": "github.com",
+    "start_time": "2026-10-22T09:00:00Z",
+    "interval_seconds": 60,
+    "pending_timeout_seconds": 2700,
+    "detail_every": 0,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "stack_patterns": [],
+    "mode": "once"
+  },
+  "restacker": {
+    "candidates": {},
+    "rule": "by-merged-pr"
+  },
+  "cycles": [
+    {
+      "step": 1,
+      "action": "cycle",
+      "time": "2026-10-22T09:01:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "1111111111111111111111111111111111111111",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 2,
+      "action": "cycle",
+      "time": "2026-10-22T09:02:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 3,
+      "action": "cycle",
+      "time": "2026-10-22T09:03:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 4,
+      "action": "cycle",
+      "time": "2026-10-22T09:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 5,
+      "action": "cycle",
+      "time": "2026-10-22T09:05:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 6,
+      "action": "cycle",
+      "time": "2026-10-22T09:06:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 7,
+      "action": "cycle",
+      "time": "2026-10-22T09:07:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 8,
+      "action": "cycle",
+      "time": "2026-10-22T09:08:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 9,
+      "action": "cycle",
+      "time": "2026-10-22T09:09:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 10,
+      "action": "cycle",
+      "time": "2026-10-22T09:10:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 11,
+      "action": "cycle",
+      "time": "2026-10-22T09:11:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 12,
+      "action": "cycle",
+      "time": "2026-10-22T09:12:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 13,
+      "action": "cycle",
+      "time": "2026-10-22T09:13:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 14,
+      "action": "cycle",
+      "time": "2026-10-22T09:14:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 15,
+      "action": "cycle",
+      "time": "2026-10-22T09:15:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 16,
+      "action": "cycle",
+      "time": "2026-10-22T09:16:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 17,
+      "action": "cycle",
+      "time": "2026-10-22T09:17:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 18,
+      "action": "cycle",
+      "time": "2026-10-22T09:18:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 19,
+      "action": "cycle",
+      "time": "2026-10-22T09:19:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 20,
+      "action": "cycle",
+      "time": "2026-10-22T09:20:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 21,
+      "action": "cycle",
+      "time": "2026-10-22T09:21:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 22,
+      "action": "cycle",
+      "time": "2026-10-22T09:22:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 23,
+      "action": "cycle",
+      "time": "2026-10-22T09:23:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 24,
+      "action": "cycle",
+      "time": "2026-10-22T09:24:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 25,
+      "action": "cycle",
+      "time": "2026-10-22T09:25:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 26,
+      "action": "cycle",
+      "time": "2026-10-22T09:26:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 27,
+      "action": "cycle",
+      "time": "2026-10-22T09:27:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 28,
+      "action": "cycle",
+      "time": "2026-10-22T09:28:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 29,
+      "action": "cycle",
+      "time": "2026-10-22T09:29:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 30,
+      "action": "cycle",
+      "time": "2026-10-22T09:30:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 31,
+      "action": "cycle",
+      "time": "2026-10-22T09:31:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 32,
+      "action": "cycle",
+      "time": "2026-10-22T09:32:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 33,
+      "action": "cycle",
+      "time": "2026-10-22T09:33:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 34,
+      "action": "cycle",
+      "time": "2026-10-22T09:34:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 35,
+      "action": "cycle",
+      "time": "2026-10-22T09:35:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 36,
+      "action": "cycle",
+      "time": "2026-10-22T09:36:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 37,
+      "action": "cycle",
+      "time": "2026-10-22T09:37:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 38,
+      "action": "cycle",
+      "time": "2026-10-22T09:38:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 39,
+      "action": "cycle",
+      "time": "2026-10-22T09:39:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 40,
+      "action": "cycle",
+      "time": "2026-10-22T09:40:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 41,
+      "action": "cycle",
+      "time": "2026-10-22T09:41:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 42,
+      "action": "cycle",
+      "time": "2026-10-22T09:42:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 43,
+      "action": "cycle",
+      "time": "2026-10-22T09:43:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 44,
+      "action": "cycle",
+      "time": "2026-10-22T09:44:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 45,
+      "action": "cycle",
+      "time": "2026-10-22T09:45:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 46,
+      "action": "cycle",
+      "time": "2026-10-22T09:46:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 47,
+      "action": "cycle",
+      "time": "2026-10-22T09:47:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 48,
+      "action": "cycle",
+      "time": "2026-10-22T09:48:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 49,
+      "action": "cycle",
+      "time": "2026-10-22T09:49:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 50,
+      "action": "cycle",
+      "time": "2026-10-22T09:50:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 51,
+      "action": "cycle",
+      "time": "2026-10-22T09:51:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 52,
+      "action": "cycle",
+      "time": "2026-10-22T09:52:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 53,
+      "action": "cycle",
+      "time": "2026-10-22T09:53:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 54,
+      "action": "cycle",
+      "time": "2026-10-22T09:54:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 55,
+      "action": "cycle",
+      "time": "2026-10-22T09:55:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 56,
+      "action": "cycle",
+      "time": "2026-10-22T09:56:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 57,
+      "action": "cycle",
+      "time": "2026-10-22T09:57:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 58,
+      "action": "cycle",
+      "time": "2026-10-22T09:58:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 59,
+      "action": "cycle",
+      "time": "2026-10-22T09:59:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 60,
+      "action": "cycle",
+      "time": "2026-10-22T10:00:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 61,
+      "action": "cycle",
+      "time": "2026-10-22T10:01:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 62,
+      "action": "cycle",
+      "time": "2026-10-22T10:02:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 63,
+      "action": "cycle",
+      "time": "2026-10-22T10:03:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 64,
+      "action": "cycle",
+      "time": "2026-10-22T10:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 65,
+      "action": "cycle",
+      "time": "2026-10-22T10:05:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 66,
+      "action": "cycle",
+      "time": "2026-10-22T10:06:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 67,
+      "action": "cycle",
+      "time": "2026-10-22T10:07:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 68,
+      "action": "cycle",
+      "time": "2026-10-22T10:08:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 69,
+      "action": "cycle",
+      "time": "2026-10-22T10:09:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 70,
+      "action": "cycle",
+      "time": "2026-10-22T10:10:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 71,
+      "action": "cycle",
+      "time": "2026-10-22T10:11:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 72,
+      "action": "cycle",
+      "time": "2026-10-22T10:12:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 73,
+      "action": "cycle",
+      "time": "2026-10-22T10:13:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 74,
+      "action": "cycle",
+      "time": "2026-10-22T10:14:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 75,
+      "action": "cycle",
+      "time": "2026-10-22T10:15:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 76,
+      "action": "cycle",
+      "time": "2026-10-22T10:16:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 77,
+      "action": "cycle",
+      "time": "2026-10-22T10:17:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 78,
+      "action": "cycle",
+      "time": "2026-10-22T10:18:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 79,
+      "action": "cycle",
+      "time": "2026-10-22T10:19:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 80,
+      "action": "cycle",
+      "time": "2026-10-22T10:20:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 81,
+      "action": "cycle",
+      "time": "2026-10-22T10:21:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 82,
+      "action": "cycle",
+      "time": "2026-10-22T10:22:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 83,
+      "action": "cycle",
+      "time": "2026-10-22T10:23:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 84,
+      "action": "cycle",
+      "time": "2026-10-22T10:24:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 85,
+      "action": "cycle",
+      "time": "2026-10-22T10:25:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 86,
+      "action": "cycle",
+      "time": "2026-10-22T10:26:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 87,
+      "action": "cycle",
+      "time": "2026-10-22T10:27:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 88,
+      "action": "cycle",
+      "time": "2026-10-22T10:28:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 89,
+      "action": "cycle",
+      "time": "2026-10-22T10:29:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 90,
+      "action": "cycle",
+      "time": "2026-10-22T10:30:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 91,
+      "action": "cycle",
+      "time": "2026-10-22T10:31:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 92,
+      "action": "cycle",
+      "time": "2026-10-22T10:32:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 93,
+      "action": "cycle",
+      "time": "2026-10-22T10:33:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 94,
+      "action": "cycle",
+      "time": "2026-10-22T10:34:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 95,
+      "action": "cycle",
+      "time": "2026-10-22T10:35:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 96,
+      "action": "cycle",
+      "time": "2026-10-22T10:36:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 97,
+      "action": "cycle",
+      "time": "2026-10-22T10:37:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 98,
+      "action": "cycle",
+      "time": "2026-10-22T10:38:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 99,
+      "action": "cycle",
+      "time": "2026-10-22T10:39:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 100,
+      "action": "cycle",
+      "time": "2026-10-22T10:40:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 101,
+      "action": "cycle",
+      "time": "2026-10-22T10:41:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 102,
+      "action": "cycle",
+      "time": "2026-10-22T10:42:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 103,
+      "action": "cycle",
+      "time": "2026-10-22T10:43:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 104,
+      "action": "cycle",
+      "time": "2026-10-22T10:44:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 105,
+      "action": "cycle",
+      "time": "2026-10-22T10:45:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 106,
+      "action": "cycle",
+      "time": "2026-10-22T10:46:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 107,
+      "action": "cycle",
+      "time": "2026-10-22T10:47:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 108,
+      "action": "cycle",
+      "time": "2026-10-22T10:48:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 109,
+      "action": "cycle",
+      "time": "2026-10-22T10:49:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 110,
+      "action": "cycle",
+      "time": "2026-10-22T10:50:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 111,
+      "action": "cycle",
+      "time": "2026-10-22T10:51:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 112,
+      "action": "cycle",
+      "time": "2026-10-22T10:52:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 113,
+      "action": "cycle",
+      "time": "2026-10-22T10:53:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 114,
+      "action": "cycle",
+      "time": "2026-10-22T10:54:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 115,
+      "action": "cycle",
+      "time": "2026-10-22T10:55:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 116,
+      "action": "cycle",
+      "time": "2026-10-22T10:56:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 117,
+      "action": "cycle",
+      "time": "2026-10-22T10:57:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 118,
+      "action": "cycle",
+      "time": "2026-10-22T10:58:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 119,
+      "action": "cycle",
+      "time": "2026-10-22T10:59:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 120,
+      "action": "cycle",
+      "time": "2026-10-22T11:00:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 121,
+      "action": "cycle",
+      "time": "2026-10-22T11:01:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 122,
+      "action": "cycle",
+      "time": "2026-10-22T11:02:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 123,
+      "action": "cycle",
+      "time": "2026-10-22T11:03:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 124,
+      "action": "cycle",
+      "time": "2026-10-22T11:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 125,
+      "action": "cycle",
+      "time": "2026-10-22T11:05:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 126,
+      "action": "cycle",
+      "time": "2026-10-22T11:06:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 127,
+      "action": "cycle",
+      "time": "2026-10-22T11:07:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 128,
+      "action": "cycle",
+      "time": "2026-10-22T11:08:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 129,
+      "action": "cycle",
+      "time": "2026-10-22T11:09:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 130,
+      "action": "cycle",
+      "time": "2026-10-22T11:10:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 131,
+      "action": "cycle",
+      "time": "2026-10-22T11:11:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 132,
+      "action": "cycle",
+      "time": "2026-10-22T11:12:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 133,
+      "action": "cycle",
+      "time": "2026-10-22T11:13:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 134,
+      "action": "cycle",
+      "time": "2026-10-22T11:14:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 135,
+      "action": "cycle",
+      "time": "2026-10-22T11:15:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 136,
+      "action": "cycle",
+      "time": "2026-10-22T11:16:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 137,
+      "action": "cycle",
+      "time": "2026-10-22T11:17:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 138,
+      "action": "cycle",
+      "time": "2026-10-22T11:18:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 139,
+      "action": "cycle",
+      "time": "2026-10-22T11:19:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 140,
+      "action": "cycle",
+      "time": "2026-10-22T11:20:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 141,
+      "action": "cycle",
+      "time": "2026-10-22T11:21:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 142,
+      "action": "cycle",
+      "time": "2026-10-22T11:22:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 143,
+      "action": "cycle",
+      "time": "2026-10-22T11:23:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 144,
+      "action": "cycle",
+      "time": "2026-10-22T11:24:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 145,
+      "action": "cycle",
+      "time": "2026-10-22T11:25:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 146,
+      "action": "cycle",
+      "time": "2026-10-22T11:26:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 147,
+      "action": "cycle",
+      "time": "2026-10-22T11:27:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 148,
+      "action": "cycle",
+      "time": "2026-10-22T11:28:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 149,
+      "action": "cycle",
+      "time": "2026-10-22T11:29:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 150,
+      "action": "cycle",
+      "time": "2026-10-22T11:30:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 151,
+      "action": "cycle",
+      "time": "2026-10-22T11:31:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 152,
+      "action": "cycle",
+      "time": "2026-10-22T11:32:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 153,
+      "action": "cycle",
+      "time": "2026-10-22T11:33:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 154,
+      "action": "cycle",
+      "time": "2026-10-22T11:34:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 155,
+      "action": "cycle",
+      "time": "2026-10-22T11:35:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 156,
+      "action": "cycle",
+      "time": "2026-10-22T11:36:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 157,
+      "action": "cycle",
+      "time": "2026-10-22T11:37:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 158,
+      "action": "cycle",
+      "time": "2026-10-22T11:38:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 159,
+      "action": "cycle",
+      "time": "2026-10-22T11:39:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 160,
+      "action": "cycle",
+      "time": "2026-10-22T11:40:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 161,
+      "action": "cycle",
+      "time": "2026-10-22T11:41:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 162,
+      "action": "cycle",
+      "time": "2026-10-22T11:42:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 163,
+      "action": "cycle",
+      "time": "2026-10-22T11:43:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 164,
+      "action": "cycle",
+      "time": "2026-10-22T11:44:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 165,
+      "action": "cycle",
+      "time": "2026-10-22T11:45:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 166,
+      "action": "cycle",
+      "time": "2026-10-22T11:46:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 167,
+      "action": "cycle",
+      "time": "2026-10-22T11:47:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/r": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        }
+      }
+    }
+  ],
+  "expected_events": [
+    {
+      "step": 1,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 2,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 1,
+          "step": 2,
+          "time": "2026-10-22T09:02:00Z",
+          "kind": "watch-error",
+          "repo": "o/r",
+          "pr": null,
+          "details": {
+            "code": "network",
+            "message": "boom network",
+            "failures": 1,
+            "retry_in_seconds": 60,
+            "repo": "o/r"
+          },
+          "go": {
+            "id": "o/r#-:watch-error:network:e1:f1",
+            "seq": 1
+          }
+        }
+      ],
+      "printed": [
+        1
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 3,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 4,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 5,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 6,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 7,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 8,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 9,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 10,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 11,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 2,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "watch-stalled",
+          "repo": "o/r",
+          "pr": null,
+          "details": {
+            "since": "2026-10-22T09:01:00Z",
+            "threshold_seconds": 600,
+            "repo": "o/r"
+          },
+          "go": {
+            "id": "o/r#-:watch-stalled:s1",
+            "seq": 2
+          }
+        }
+      ],
+      "printed": [
+        2
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 12,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 13,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 14,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 15,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 16,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 17,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 18,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 19,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 20,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 21,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 22,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 23,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 24,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 25,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 26,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 27,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 28,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 29,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 30,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 31,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 32,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 33,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 34,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 35,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 36,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 37,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 38,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 39,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 40,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 41,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 42,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 43,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 44,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 45,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 46,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 47,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 48,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 49,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 50,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 51,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 52,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 53,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 54,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 55,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 56,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 57,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 58,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 59,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 60,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 61,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 62,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 63,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 64,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 65,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 66,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 67,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 3,
+          "step": 67,
+          "time": "2026-10-22T10:07:00Z",
+          "kind": "watch-error",
+          "repo": "o/r",
+          "pr": null,
+          "details": {
+            "code": "network",
+            "message": "boom network",
+            "failures": 10,
+            "retry_in_seconds": 600,
+            "repo": "o/r"
+          },
+          "go": {
+            "id": "o/r#-:watch-error:network:e1:f10",
+            "seq": 3
+          }
+        }
+      ],
+      "printed": [
+        3
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 68,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 69,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 70,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 71,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 72,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 73,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 74,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 75,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 76,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 77,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 78,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 79,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 80,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 81,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 82,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 83,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 84,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 85,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 86,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 87,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 88,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 89,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 90,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 91,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 92,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 93,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 94,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 95,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 96,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 97,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 98,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 99,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 100,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 101,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 102,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 103,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 104,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 105,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 106,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 107,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 108,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 109,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 110,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 111,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 112,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 113,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 114,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 115,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 116,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 117,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 118,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 119,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 120,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 121,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 122,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 123,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 124,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 125,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 126,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 127,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 128,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 129,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 130,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 131,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 132,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 133,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 134,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 135,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 136,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 137,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 138,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 139,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 140,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 141,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 142,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 143,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 144,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 145,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 146,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 147,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 148,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 149,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 150,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 151,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 152,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 153,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 154,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 155,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 156,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 157,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 158,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 159,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 160,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 161,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 162,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 163,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 164,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 165,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 166,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 167,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 4,
+          "step": 167,
+          "time": "2026-10-22T11:47:00Z",
+          "kind": "watch-error",
+          "repo": "o/r",
+          "pr": null,
+          "details": {
+            "code": "network",
+            "message": "boom network",
+            "failures": 20,
+            "retry_in_seconds": 600,
+            "repo": "o/r"
+          },
+          "go": {
+            "id": "o/r#-:watch-error:network:e1:f20",
+            "seq": 4
+          }
+        }
+      ],
+      "printed": [
+        4
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    }
+  ],
+  "expected_state_view": {
+    "cycle": 167,
+    "repos_epoch": 0,
+    "interval_seconds": 60,
+    "repos": [
+      "o/r"
+    ],
+    "skipped": [],
+    "repo": {
+      "o/r": {
+        "baselined": true,
+        "since": "2026-10-22T09:01:00Z",
+        "last_ok": "2026-10-22T09:01:00Z",
+        "default_branch": "main",
+        "prs": {
+          "1": {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "generation": 0,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": null,
+            "mergeable_state": "",
+            "conflicting": false,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": true,
+            "gone": false
+          }
+        },
+        "closed": [],
+        "restack_due": [],
+        "restack_done": [],
+        "health": {
+          "failures": 20,
+          "episode": 1,
+          "error_open": true,
+          "last_code": "network",
+          "stalled": true,
+          "stall_episode": 1,
+          "next_try": "2026-10-22T11:57:00Z"
+        }
+      }
+    },
+    "run_health": {
+      "failures": 0,
+      "episode": 0,
+      "error_open": false,
+      "last_code": "",
+      "stalled": false,
+      "stall_episode": 0,
+      "next_try": ""
+    }
+  },
+  "state_view_ignore": [],
+  "expected_journal_ordinals": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "expect_unique_event_ids": true,
+  "status_probes": []
+}

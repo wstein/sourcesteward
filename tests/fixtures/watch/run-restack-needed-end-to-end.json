@@ -1,0 +1,316 @@
+{
+  "format_version": 1,
+  "name": "run-restack-needed-end-to-end",
+  "kind": "run-loop",
+  "description": "A merge read through the observer produces restack-needed for the child on the merged branch (class 1) and for the PR whose commits contain the old head (class 2), not for the unrelated PR; the event carries old parent, new parent, merged PR and Go's argv (owner decision F1).",
+  "source": {
+    "go_tests": [
+      "watchcmd/run_test.go:TestRestackNeededEventsAreProducedEndToEnd"
+    ]
+  },
+  "format_dependent": [
+    "go",
+    "status_text"
+  ],
+  "config": {
+    "repos": [
+      "o/r"
+    ],
+    "host": "github.com",
+    "interval_seconds": 60,
+    "detail_every": 10,
+    "pending_timeout_seconds": 2700,
+    "max_open_prs": 2000,
+    "jitter_seconds": 0,
+    "start_time": "2026-10-22T09:00:00Z"
+  },
+  "invocations": [
+    {
+      "note": "",
+      "action": "run",
+      "mode": "once",
+      "until_kinds": [],
+      "timeout_seconds": 0,
+      "max_idle_seconds": 0,
+      "human": false,
+      "baseline": false,
+      "advance_seconds": 0,
+      "worlds": [
+        {
+          "after_sleeps": 0,
+          "world": {
+            "list_items": [
+              {
+                "number": 1,
+                "title": "PR 1",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "1111111111111111111111111111111111111111",
+                "head_ref": "feat/1",
+                "base_ref": "main"
+              },
+              {
+                "number": 2,
+                "title": "PR 2",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "2222222222222222222222222222222222222222",
+                "head_ref": "feat/2",
+                "base_ref": "feat/1"
+              },
+              {
+                "number": 3,
+                "title": "PR 3",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "3333333333333333333333333333333333333333",
+                "head_ref": "feat/3",
+                "base_ref": "main"
+              },
+              {
+                "number": 4,
+                "title": "PR 4",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "4444444444444444444444444444444444444444",
+                "head_ref": "feat/4",
+                "base_ref": "main"
+              }
+            ],
+            "list_error": null,
+            "pull_details": {
+              "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "2": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "3": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "4": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "5": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "6": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "7": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "8": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "9": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+            },
+            "pull_detail_etags": {},
+            "branch_tips": {
+              "feat/1": "ffffffffffffffffffffffffffffffffffffffff",
+              "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "check_runs": {},
+            "commit_statuses": {},
+            "commits": {},
+            "pull_commits": {},
+            "rate_limit": null,
+            "call_errors": {}
+          }
+        }
+      ],
+      "cancel_after_sleeps": 0,
+      "state_dir_kind": "",
+      "state_file": "",
+      "reader_cannot_open": false,
+      "status_json": false,
+      "status_now_offset_seconds": 0
+    },
+    {
+      "note": "",
+      "action": "run",
+      "mode": "once",
+      "until_kinds": [],
+      "timeout_seconds": 0,
+      "max_idle_seconds": 0,
+      "human": false,
+      "baseline": false,
+      "advance_seconds": 60,
+      "worlds": [
+        {
+          "after_sleeps": 0,
+          "world": {
+            "list_items": [
+              {
+                "number": 2,
+                "title": "PR 2",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "2222222222222222222222222222222222222222",
+                "head_ref": "feat/2",
+                "base_ref": "feat/1"
+              },
+              {
+                "number": 3,
+                "title": "PR 3",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "3333333333333333333333333333333333333333",
+                "head_ref": "feat/3",
+                "base_ref": "main"
+              },
+              {
+                "number": 4,
+                "title": "PR 4",
+                "user": "alice",
+                "labels": [
+                  "x"
+                ],
+                "draft": false,
+                "head_sha": "4444444444444444444444444444444444444444",
+                "head_ref": "feat/4",
+                "base_ref": "main"
+              }
+            ],
+            "list_error": null,
+            "pull_details": {
+              "1": "{\"state\":\"closed\",\"merged\":true,\"merge_commit_sha\":\"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\",\"merged_at\":\"2026-10-22T08:00:00Z\",\"base\":{\"ref\":\"main\"},\"head\":{\"sha\":\"1111111111111111111111111111111111111111\",\"ref\":\"feat/1\"}}",
+              "2": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "3": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "4": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "5": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "6": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "7": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "8": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}",
+              "9": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+            },
+            "pull_detail_etags": {},
+            "branch_tips": {
+              "feat/1": "ffffffffffffffffffffffffffffffffffffffff",
+              "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            },
+            "check_runs": {},
+            "commit_statuses": {},
+            "commits": {
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee": "{\"parents\":[{\"sha\":\"x\"}]}"
+            },
+            "pull_commits": {
+              "3": "[{\"sha\":\"1111111111111111111111111111111111111111\"},{\"sha\":\"3333333333333333333333333333333333333333\"}]",
+              "4": "[{\"sha\":\"4444444444444444444444444444444444444444\"}]"
+            },
+            "rate_limit": null,
+            "call_errors": {}
+          }
+        }
+      ],
+      "cancel_after_sleeps": 0,
+      "state_dir_kind": "",
+      "state_file": "",
+      "reader_cannot_open": false,
+      "status_json": false,
+      "status_now_offset_seconds": 0
+    }
+  ],
+  "expected": [
+    {
+      "invocation": 1,
+      "exit_code": 0,
+      "error_mentions": [],
+      "stdout_events": [],
+      "stdout_lines": [],
+      "sleeps_seconds": [],
+      "status_fresh": null,
+      "status_text": null
+    },
+    {
+      "invocation": 2,
+      "exit_code": 0,
+      "error_mentions": [],
+      "stdout_events": [
+        {
+          "kind": "merged",
+          "repo": "o/r",
+          "pr": 1,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "merge_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "base": "main",
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "merged_at": "2026-10-22T08:00:00Z",
+            "method_hint": "rebase-or-squash"
+          },
+          "go": {
+            "seq": 1
+          }
+        },
+        {
+          "kind": "restack-needed",
+          "repo": "o/r",
+          "pr": 2,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "child-of-merged-branch",
+            "old_parent": "1111111111111111111111111111111111111111",
+            "new_parent": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/2",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "1111111111111111111111111111111111111111",
+              "feat/2"
+            ]
+          },
+          "go": {
+            "seq": 2
+          }
+        },
+        {
+          "kind": "restack-needed",
+          "repo": "o/r",
+          "pr": 3,
+          "time": "2026-10-22T09:01:00Z",
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "1111111111111111111111111111111111111111",
+            "new_parent": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/3",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "1111111111111111111111111111111111111111",
+              "feat/3"
+            ]
+          },
+          "go": {
+            "seq": 3
+          }
+        }
+      ],
+      "stdout_lines": [],
+      "sleeps_seconds": [],
+      "status_fresh": null,
+      "status_text": null
+    }
+  ]
+}

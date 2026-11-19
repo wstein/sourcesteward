@@ -1,0 +1,90 @@
+{
+  "format_version": 1,
+  "name": "pulls-page-too-large-at-twelve",
+  "kind": "http-reader",
+  "description": "A page over 1 MiB at 12 per page (by body or by declared length) is page-too-large after exactly two requests.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsPageTooLargeAtTwelve"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 200,
+      "headers": null,
+      "body": "",
+      "body_repeat": {
+        "text": "x",
+        "count": 1048577
+      },
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=12&page=1",
+      "status": 200,
+      "headers": null,
+      "body": "",
+      "body_repeat": {
+        "text": "x",
+        "count": 1048577
+      },
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "page-too-large",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        },
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=12&page=1",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

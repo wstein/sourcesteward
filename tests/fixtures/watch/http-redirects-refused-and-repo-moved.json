@@ -1,0 +1,340 @@
+{
+  "format_version": 1,
+  "name": "http-redirects-refused-and-repo-moved",
+  "kind": "http-reader",
+  "description": "A 301 is never followed: repo-moved, with the new owner/name from the Location only if it names the repository safely (a hostile name, another host, an id URL or no Location give no name); any other redirect is malformed; the body of the redirect never leaks.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchRedirectsRefusedAndRepoMoved"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/1",
+      "status": 301,
+      "headers": {
+        "Location": "https://api.github.com/repos/new/name/pulls/1"
+      },
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/2",
+      "status": 301,
+      "headers": {
+        "Location": "https://api.github.com/repositories/12345/pulls/2"
+      },
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/3",
+      "status": 301,
+      "headers": {
+        "Location": "https://api.github.com/repos/../x/pulls/3"
+      },
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/4",
+      "status": 301,
+      "headers": {
+        "Location": "https://evil.test/repos/new/name/pulls/4"
+      },
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/5",
+      "status": 301,
+      "headers": {},
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls/6",
+      "status": 302,
+      "headers": {
+        "Location": "https://evil.test/secret"
+      },
+      "body": "secret",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/new/name/pulls/1",
+      "status": 200,
+      "headers": null,
+      "body": "{}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 1,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 2,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 3,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 4,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 5,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 6,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "new/name",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 2,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/2",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 3,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/3",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 4,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/4",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 5,
+      "error": {
+        "code": "repo-moved",
+        "status": 301,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/5",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 6,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/6",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

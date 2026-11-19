@@ -1,0 +1,39 @@
+{
+  "format_version": 1,
+  "name": "default-state-dir",
+  "kind": "vectors",
+  "description": "The default state directory from the environment. Format-dependent (F3).",
+  "source": {
+    "go_tests": [
+      "statedir_test.go:TestDefaultStateDir"
+    ]
+  },
+  "format_dependent": [
+    "expected"
+  ],
+  "function": "default_state_dir",
+  "cases": [
+    {
+      "name": "XDG_STATE_HOME=\"/x/state\" HOME=\"/h\"",
+      "input": {
+        "xdg_state_home": "/x/state",
+        "home": "/h",
+        "id": "abc"
+      },
+      "expected": {
+        "path": "/x/state/stw/watch/abc"
+      }
+    },
+    {
+      "name": "XDG_STATE_HOME=\"\" HOME=\"/h\"",
+      "input": {
+        "xdg_state_home": "",
+        "home": "/h",
+        "id": "abc"
+      },
+      "expected": {
+        "path": "/h/.local/state/stw/watch/abc"
+      }
+    }
+  ]
+}

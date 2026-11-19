@@ -1,0 +1,73 @@
+{
+  "format_version": 1,
+  "name": "http-negative-remaining-is-no-rate-limit-evidence",
+  "kind": "http-reader",
+  "description": "A 403 whose only rate evidence is a negative remaining is forbidden, not rate-limited.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchNegativeRateRemainingIsUnknown"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 403,
+      "headers": {
+        "X-RateLimit-Limit": "5000",
+        "X-RateLimit-Remaining": "-1",
+        "X-RateLimit-Reset": "1700000000"
+      },
+      "body": "{\"message\":\"Resource not accessible\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "forbidden",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,366 @@
+{
+  "format_version": 1,
+  "name": "branch-segment-encode",
+  "kind": "vectors",
+  "description": "A branch name as one URL path segment: `/` becomes %2F, non-ASCII is percent-encoded; names git cannot use (empty, `..`, leading `-`, control characters, `@{`, lock suffix, a `%` ...) and names over 255 bytes are refused (the PR is then observed without the base tip read).",
+  "source": {
+    "go_tests": [
+      "watch_branch_test.go:TestEncodeBranchSegment",
+      "watch_branch_test.go:TestEncodeBranchSegmentRefusesInvalidNames"
+    ]
+  },
+  "format_dependent": [],
+  "function": "encode_branch_segment",
+  "cases": [
+    {
+      "name": "\"main\"",
+      "input": {
+        "name": "main"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "main"
+      }
+    },
+    {
+      "name": "\"feat/x\"",
+      "input": {
+        "name": "feat/x"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "feat%2Fx"
+      }
+    },
+    {
+      "name": "\"release/v1.2\"",
+      "input": {
+        "name": "release/v1.2"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "release%2Fv1.2"
+      }
+    },
+    {
+      "name": "\"feature/ünï\"",
+      "input": {
+        "name": "feature/ünï"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "feature%2F%C3%BCn%C3%AF"
+      }
+    },
+    {
+      "name": "\"日本\"",
+      "input": {
+        "name": "日本"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "%E6%97%A5%E6%9C%AC"
+      }
+    },
+    {
+      "name": "\"\"",
+      "input": {
+        "name": ""
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"..\"",
+      "input": {
+        "name": ".."
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a..b\"",
+      "input": {
+        "name": "a..b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"-x\"",
+      "input": {
+        "name": "-x"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a@{b\"",
+      "input": {
+        "name": "a@{b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a/\"",
+      "input": {
+        "name": "a/"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"/a\"",
+      "input": {
+        "name": "/a"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a//b\"",
+      "input": {
+        "name": "a//b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"x.lock\"",
+      "input": {
+        "name": "x.lock"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a/x.lock\"",
+      "input": {
+        "name": "a/x.lock"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a\\x00b\"",
+      "input": {
+        "name": "a\u0000b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a\\nb\"",
+      "input": {
+        "name": "a\nb"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a\\x7fb\"",
+      "input": {
+        "name": "ab"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a b\"",
+      "input": {
+        "name": "a b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a~b\"",
+      "input": {
+        "name": "a~b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a^b\"",
+      "input": {
+        "name": "a^b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a:b\"",
+      "input": {
+        "name": "a:b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a?b\"",
+      "input": {
+        "name": "a?b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a*b\"",
+      "input": {
+        "name": "a*b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a[b\"",
+      "input": {
+        "name": "a[b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a\\\\b\"",
+      "input": {
+        "name": "a\\b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a%2Fb\"",
+      "input": {
+        "name": "a%2Fb"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"%252F\"",
+      "input": {
+        "name": "%252F"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"\\xff\"",
+      "input": {
+        "name": "�"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\".hidden\"",
+      "input": {
+        "name": ".hidden"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a/.b\"",
+      "input": {
+        "name": "a/.b"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"a.\"",
+      "input": {
+        "name": "a."
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"@\"",
+      "input": {
+        "name": "@"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"256 bytes\"",
+      "input": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "ok": false,
+        "segment": ""
+      }
+    },
+    {
+      "name": "\"255 bytes\"",
+      "input": {
+        "name": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expected": {
+        "ok": true,
+        "segment": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  ]
+}

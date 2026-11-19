@@ -1,0 +1,375 @@
+{
+  "format_version": 1,
+  "name": "backoff-doubles-to-the-cap",
+  "kind": "vectors",
+  "description": "The wait after the nth consecutive failure of a repository: the interval, doubled with each failure, capped at the smaller of 10 minutes and 10 times the interval.",
+  "source": {
+    "go_tests": [
+      "health_test.go:TestBackoffDoublesToTheCap"
+    ]
+  },
+  "format_dependent": [],
+  "function": "backoff_seconds",
+  "cases": [
+    {
+      "name": "interval 60s, failure 1",
+      "input": {
+        "failures": 1,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 60
+      }
+    },
+    {
+      "name": "interval 60s, failure 2",
+      "input": {
+        "failures": 2,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 120
+      }
+    },
+    {
+      "name": "interval 60s, failure 3",
+      "input": {
+        "failures": 3,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 240
+      }
+    },
+    {
+      "name": "interval 60s, failure 4",
+      "input": {
+        "failures": 4,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 480
+      }
+    },
+    {
+      "name": "interval 60s, failure 5",
+      "input": {
+        "failures": 5,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 60s, failure 6",
+      "input": {
+        "failures": 6,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 60s, failure 7",
+      "input": {
+        "failures": 7,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 60s, failure 8",
+      "input": {
+        "failures": 8,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 60s, failure 9",
+      "input": {
+        "failures": 9,
+        "interval_seconds": 60
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 10s, failure 1",
+      "input": {
+        "failures": 1,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 10
+      }
+    },
+    {
+      "name": "interval 10s, failure 2",
+      "input": {
+        "failures": 2,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 20
+      }
+    },
+    {
+      "name": "interval 10s, failure 3",
+      "input": {
+        "failures": 3,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 40
+      }
+    },
+    {
+      "name": "interval 10s, failure 4",
+      "input": {
+        "failures": 4,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 80
+      }
+    },
+    {
+      "name": "interval 10s, failure 5",
+      "input": {
+        "failures": 5,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 100
+      }
+    },
+    {
+      "name": "interval 10s, failure 6",
+      "input": {
+        "failures": 6,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 100
+      }
+    },
+    {
+      "name": "interval 10s, failure 7",
+      "input": {
+        "failures": 7,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 100
+      }
+    },
+    {
+      "name": "interval 10s, failure 8",
+      "input": {
+        "failures": 8,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 100
+      }
+    },
+    {
+      "name": "interval 10s, failure 9",
+      "input": {
+        "failures": 9,
+        "interval_seconds": 10
+      },
+      "expected": {
+        "seconds": 100
+      }
+    },
+    {
+      "name": "interval 120s, failure 1",
+      "input": {
+        "failures": 1,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 120
+      }
+    },
+    {
+      "name": "interval 120s, failure 2",
+      "input": {
+        "failures": 2,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 240
+      }
+    },
+    {
+      "name": "interval 120s, failure 3",
+      "input": {
+        "failures": 3,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 480
+      }
+    },
+    {
+      "name": "interval 120s, failure 4",
+      "input": {
+        "failures": 4,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 120s, failure 5",
+      "input": {
+        "failures": 5,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 120s, failure 6",
+      "input": {
+        "failures": 6,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 120s, failure 7",
+      "input": {
+        "failures": 7,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 120s, failure 8",
+      "input": {
+        "failures": 8,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 120s, failure 9",
+      "input": {
+        "failures": 9,
+        "interval_seconds": 120
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 1",
+      "input": {
+        "failures": 1,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 2",
+      "input": {
+        "failures": 2,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 3",
+      "input": {
+        "failures": 3,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 4",
+      "input": {
+        "failures": 4,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 5",
+      "input": {
+        "failures": 5,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 6",
+      "input": {
+        "failures": 6,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 7",
+      "input": {
+        "failures": 7,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 8",
+      "input": {
+        "failures": 8,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    },
+    {
+      "name": "interval 600s, failure 9",
+      "input": {
+        "failures": 9,
+        "interval_seconds": 600
+      },
+      "expected": {
+        "seconds": 600
+      }
+    }
+  ]
+}

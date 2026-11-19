@@ -1,0 +1,57 @@
+{
+  "format_version": 1,
+  "name": "rate-limit-headers",
+  "kind": "vectors",
+  "description": "The X-RateLimit-* headers: a negative remaining is not evidence (unknown); zero remaining is.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchNegativeRateRemainingIsUnknown"
+    ]
+  },
+  "format_dependent": [],
+  "function": "parse_rate_headers",
+  "cases": [
+    {
+      "name": "remaining -1",
+      "input": {
+        "limit": "5000",
+        "remaining": "-1",
+        "reset": "1700000000"
+      },
+      "expected": {
+        "known": false,
+        "limit": 0,
+        "remaining": 0,
+        "reset_unix": 0
+      }
+    },
+    {
+      "name": "remaining 0",
+      "input": {
+        "limit": "5000",
+        "remaining": "0",
+        "reset": "1700000000"
+      },
+      "expected": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 0,
+        "reset_unix": 1700000000
+      }
+    },
+    {
+      "name": "remaining 4990",
+      "input": {
+        "limit": "5000",
+        "remaining": "4990",
+        "reset": "1700000000"
+      },
+      "expected": {
+        "known": true,
+        "limit": 5000,
+        "remaining": 4990,
+        "reset_unix": 1700000000
+      }
+    }
+  ]
+}

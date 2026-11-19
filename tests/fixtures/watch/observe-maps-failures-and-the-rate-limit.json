@@ -1,0 +1,349 @@
+{
+  "format_version": 1,
+  "name": "observe-maps-failures-and-the-rate-limit",
+  "kind": "observer-session",
+  "description": "Read failures map to watch-error codes; a rate limit below 10 percent asks for a slower interval; below 50 remaining arms a hold that the next Observe reports once as a run-wide rate-limited error (wait until reset + 5 s); a canceled run is not a repository failure.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveMapsFailuresAndTheRateLimit"
+    ]
+  },
+  "format_dependent": [],
+  "config": {
+    "max_open_prs": 2000,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "clock": "2026-10-22T09:00:00Z"
+  },
+  "steps": [
+    {
+      "note": "too many open PRs",
+      "world": {
+        "list_items": [],
+        "list_error": {
+          "kind": "watch",
+          "code": "too-many-open-prs",
+          "message": "more open pull requests than max_open_prs",
+          "retry_after_seconds": 0
+        },
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "rate limited with retry-after 30 s",
+      "world": {
+        "list_items": [],
+        "list_error": {
+          "kind": "watch",
+          "code": "rate-limited",
+          "message": "rate limit reached",
+          "retry_after_seconds": 30
+        },
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 2,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "an unclassified error is network",
+      "world": {
+        "list_items": [],
+        "list_error": {
+          "kind": "plain",
+          "code": "",
+          "message": "something else",
+          "retry_after_seconds": 0
+        },
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 3,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "remaining 400 of 5000: slow, the read still works",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 400,
+          "reset_in_seconds": 3600
+        },
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 4,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": true,
+      "context_canceled": false
+    },
+    {
+      "note": "remaining 10: the hold is reported",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 10,
+          "reset_in_seconds": 600
+        },
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 5,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": true,
+      "context_canceled": false
+    },
+    {
+      "note": "the hold is reported once",
+      "world": {
+        "list_items": [],
+        "list_error": null,
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 10,
+          "reset_in_seconds": 600
+        },
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 6,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "a canceled context is not a repository failure",
+      "world": {
+        "list_items": [],
+        "list_error": {
+          "kind": "watch",
+          "code": "network",
+          "message": "canceled",
+          "retry_after_seconds": 0
+        },
+        "pull_details": {},
+        "pull_detail_etags": {},
+        "branch_tips": {},
+        "check_runs": {},
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 10,
+          "reset_in_seconds": 600
+        },
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 7,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": true
+    }
+  ],
+  "expected": [
+    {
+      "step": 1,
+      "observation": null,
+      "error": {
+        "code": "too-many-open-prs",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 2,
+      "observation": null,
+      "error": {
+        "code": "rate-limited",
+        "run_wide": true,
+        "retry_in_seconds": 35,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 3,
+      "observation": null,
+      "error": {
+        "code": "network",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": false
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 4,
+      "observation": {
+        "default_branch": "",
+        "prs": [],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": true
+    },
+    {
+      "step": 5,
+      "observation": null,
+      "error": {
+        "code": "rate-limited",
+        "run_wide": true,
+        "retry_in_seconds": 605,
+        "canceled": false
+      },
+      "calls": [],
+      "diagnostics": [],
+      "slow_after_cycle": false
+    },
+    {
+      "step": 6,
+      "observation": {
+        "default_branch": "",
+        "prs": [],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 7,
+      "observation": null,
+      "error": {
+        "code": "",
+        "run_wide": false,
+        "retry_in_seconds": 0,
+        "canceled": true
+      },
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    }
+  ]
+}

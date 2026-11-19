@@ -1,0 +1,538 @@
+{
+  "format_version": 1,
+  "name": "observe-confirms-a-debounce-candidate",
+  "kind": "observer-session",
+  "description": "A class that changed upstream is reported; the stored candidate (accepted class still differs) makes the next read fresh, not conditional, so the second sighting reaches the core; once the core accepted the class the PR is settled and not read.",
+  "source": {
+    "go_tests": [
+      "watchcmd/observer_test.go:TestObserveConfirmsADebounceCandidateWithAFreshRead"
+    ]
+  },
+  "format_dependent": [],
+  "config": {
+    "max_open_prs": 2000,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "clock": "2026-10-22T09:00:00Z"
+  },
+  "steps": [
+    {
+      "note": "baseline: pending",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {
+          "1111111111111111111111111111111111111111": "{\"total_count\":1,\"check_runs\":[{\"name\":\"ci\",\"status\":\"in_progress\",\"conclusion\":null,\"output\":{}}]}"
+        },
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 1,
+        "detail_every": 10,
+        "known": []
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "unchanged pending: a conditional read, answered 304",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {
+          "1111111111111111111111111111111111111111": "{\"total_count\":1,\"check_runs\":[{\"name\":\"ci\",\"status\":\"in_progress\",\"conclusion\":null,\"output\":{}}]}"
+        },
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 2,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "pending",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "the run completed: the change is reported",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {
+          "1111111111111111111111111111111111111111": "{\"total_count\":1,\"check_runs\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"output\":{}}]}"
+        },
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 3,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "pending",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "the core has only a candidate: a fresh read",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {
+          "1111111111111111111111111111111111111111": "{\"total_count\":1,\"check_runs\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"output\":{}}]}"
+        },
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 4,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "pending",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    },
+    {
+      "note": "the core accepted green: not read",
+      "world": {
+        "list_items": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "user": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head_sha": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base_ref": "main"
+          }
+        ],
+        "list_error": null,
+        "pull_details": {
+          "1": "{\"mergeable\":true,\"mergeable_state\":\"clean\",\"head\":{\"repo\":{\"full_name\":\"o/r\"}},\"base\":{\"repo\":{\"full_name\":\"o/r\"}}}"
+        },
+        "pull_detail_etags": {},
+        "branch_tips": {
+          "main": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "check_runs": {
+          "1111111111111111111111111111111111111111": "{\"total_count\":1,\"check_runs\":[{\"name\":\"ci\",\"status\":\"completed\",\"conclusion\":\"success\",\"output\":{}}]}"
+        },
+        "commit_statuses": {},
+        "commits": {},
+        "pull_commits": {},
+        "rate_limit": null,
+        "call_errors": {}
+      },
+      "new_process": false,
+      "hints": {
+        "cycle": 5,
+        "detail_every": 10,
+        "known": [
+          {
+            "number": 1,
+            "head": "1111111111111111111111111111111111111111",
+            "class": "green",
+            "class_candidate": "",
+            "detail_due": false
+          }
+        ]
+      },
+      "after_cycle_first": false,
+      "context_canceled": false
+    }
+  ],
+  "expected": [
+    {
+      "step": 1,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": true,
+            "detail": {
+              "mergeable": true,
+              "state": "clean"
+            },
+            "checks": {
+              "runs": [
+                {
+                  "name": "ci",
+                  "status": "in_progress",
+                  "conclusion": "",
+                  "title": "",
+                  "summary": "",
+                  "text": ""
+                }
+              ],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": false
+        },
+        {
+          "call": "detail/1",
+          "conditional": false
+        },
+        {
+          "call": "runs/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 2,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": null
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "runs/1111",
+          "conditional": true
+        },
+        {
+          "call": "stats/1111",
+          "conditional": true
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 3,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": {
+              "runs": [
+                {
+                  "name": "ci",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "title": "",
+                  "summary": "",
+                  "text": ""
+                }
+              ],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "runs/1111",
+          "conditional": true
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 4,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": {
+              "runs": [
+                {
+                  "name": "ci",
+                  "status": "completed",
+                  "conclusion": "success",
+                  "title": "",
+                  "summary": "",
+                  "text": ""
+                }
+              ],
+              "statuses": []
+            }
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        },
+        {
+          "call": "runs/1111",
+          "conditional": false
+        },
+        {
+          "call": "stats/1111",
+          "conditional": false
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    },
+    {
+      "step": 5,
+      "observation": {
+        "default_branch": "main",
+        "prs": [
+          {
+            "number": 1,
+            "title": "PR 1",
+            "author": "alice",
+            "labels": [
+              "x"
+            ],
+            "draft": false,
+            "head": "1111111111111111111111111111111111111111",
+            "head_ref": "feat/1",
+            "base": "main",
+            "fork": false,
+            "fork_known": false,
+            "detail": null,
+            "checks": null
+          }
+        ],
+        "gone": {}
+      },
+      "error": null,
+      "calls": [
+        {
+          "call": "list",
+          "conditional": false
+        },
+        {
+          "call": "branch/main",
+          "conditional": true
+        }
+      ],
+      "diagnostics": [],
+      "slow_after_cycle": null
+    }
+  ]
+}

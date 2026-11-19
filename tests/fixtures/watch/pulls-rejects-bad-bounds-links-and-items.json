@@ -1,0 +1,629 @@
+{
+  "format_version": 1,
+  "name": "pulls-rejects-bad-bounds-links-and-items",
+  "kind": "http-reader",
+  "description": "max_open_prs outside 1..2000 is refused without a request; a Link that skips a page, goes backwards or has no number is never followed (malformed); malformed list bodies (not an array, number 0, short sha, non-objects, not JSON) are malformed.",
+  "source": {
+    "go_tests": [
+      "watch_pulls_test.go:TestListOpenPullsRejectsBadBoundsAndLinks"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=3>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=1>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+      },
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": {
+        "Link": "<https://api.github.com/x?page=zzz>; rel=\"next\""
+      },
+      "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "{\"a\":1}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "[{\"number\":0}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "[{\"number\":1,\"head\":{\"sha\":\"short\"}}]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "[1]",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    },
+    {
+      "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+      "status": 0,
+      "headers": null,
+      "body": "not json",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "\"e\"",
+      "not_modified_on_matching_validator": true,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": -1,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2001,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": {
+            "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=3>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+          },
+          "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "link 0"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": {
+            "Link": "<https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=1>; rel=\"next\", <https://api.github.com/repositories/1/pulls?state=open&per_page=25&page=9>; rel=\"last\""
+          },
+          "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "link 1"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": {
+            "Link": "<https://api.github.com/x?page=zzz>; rel=\"next\""
+          },
+          "body": "[{\"number\":1,\"title\":\"t1\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000001\",\"ref\":\"feat/1\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003e9\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":2,\"title\":\"t2\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":true,\"head\":{\"sha\":\"0000000000000000000000000000000000000002\",\"ref\":\"feat/2\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003ea\"},\"ignored\":{\"x\":[1,2,3]}},{\"number\":3,\"title\":\"t3\",\"user\":{\"login\":\"u\"},\"labels\":[{\"name\":\"l1\"},{\"name\":\"l2\"}],\"draft\":false,\"head\":{\"sha\":\"0000000000000000000000000000000000000003\",\"ref\":\"feat/3\"},\"base\":{\"ref\":\"main\",\"sha\":\"00000000000000000000000000000000000003eb\"},\"ignored\":{\"x\":[1,2,3]}}]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "link 2"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": null,
+          "body": "{\"a\":1}",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "body {\"a\":1}"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": null,
+          "body": "[{\"number\":0}]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "body [{\"number\":0}]"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": null,
+          "body": "[{\"number\":1,\"head\":{\"sha\":\"short\"}}]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "body [{\"number\":1,\"head\":{\"sha\":\"short\"}}]"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": null,
+          "body": "[1]",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "body [1]"
+    },
+    {
+      "op": "list_open_pulls",
+      "repo": "a/b",
+      "number": 0,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 2000,
+      "prior_list_state": "none",
+      "prior_per_page": 0,
+      "new_reader_before": true,
+      "reader_already_halved": false,
+      "set_routes": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "status": 0,
+          "headers": null,
+          "body": "not json",
+          "body_repeat": null,
+          "declared_content_length": 0,
+          "etag": "\"e\"",
+          "not_modified_on_matching_validator": true,
+          "echo_authorization_header": false
+        }
+      ],
+      "note": "body not json"
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 2,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 3,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": []
+    },
+    {
+      "call": 4,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 5,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 6,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 7,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 8,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 9,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 10,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    },
+    {
+      "call": 11,
+      "error": {
+        "code": "malformed-response",
+        "status": 0,
+        "new_name": "",
+        "retry_after_seconds": 0,
+        "rate_limit": null,
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls?state=open&per_page=25&page=1",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}

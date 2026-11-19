@@ -1,0 +1,4397 @@
+{
+  "format_version": 1,
+  "name": "generated-sequence-seed-02",
+  "kind": "watch-cycles",
+  "description": "Generated forge sequence (seed 2, 14 cycles, two repositories, failures, merges, closes, reopens, unreadable merges and repository set changes) without a crash. The Go property test shows that the same sequence with random crashes yields the same journal.",
+  "source": {
+    "go_tests": [
+      "fuzz_test.go:TestRandomCrashesYieldTheCrashFreeJournal"
+    ]
+  },
+  "format_dependent": [
+    "go"
+  ],
+  "config": {
+    "repos": [
+      "o/a",
+      "o/b"
+    ],
+    "skipped": [],
+    "host": "github.com",
+    "start_time": "2026-10-22T09:00:00Z",
+    "interval_seconds": 60,
+    "pending_timeout_seconds": 300,
+    "detail_every": 0,
+    "ignore_authors": [],
+    "ignore_labels": [],
+    "stack_patterns": [],
+    "mode": "once"
+  },
+  "restacker": {
+    "rule": "every-open-pr-above-merged",
+    "reason": "contains-merged-commits",
+    "argv": [
+      "git",
+      "rebase"
+    ]
+  },
+  "cycles": [
+    {
+      "step": 1,
+      "action": "cycle",
+      "time": "2026-10-22T09:01:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 2,
+      "action": "cycle",
+      "time": "2026-10-22T09:02:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 3,
+      "action": "cycle",
+      "time": "2026-10-22T09:03:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 4,
+      "action": "cycle",
+      "time": "2026-10-22T09:04:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 5,
+      "action": "cycle",
+      "time": "2026-10-22T09:05:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 6,
+      "action": "cycle",
+      "time": "2026-10-22T09:06:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 7,
+      "action": "cycle",
+      "time": "2026-10-22T09:07:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 8,
+      "action": "cycle",
+      "time": "2026-10-22T09:08:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": {
+            "code": "network",
+            "message": "boom network",
+            "run_wide": false,
+            "retry_in_seconds": 0
+          },
+          "default_branch": "",
+          "prs": [],
+          "gone": {}
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {
+            "2": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 9,
+      "action": "cycle",
+      "time": "2026-10-22T09:09:00Z",
+      "note": "",
+      "config_change": {
+        "repos": [
+          "o/a"
+        ]
+      },
+      "restart_before": true,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 1,
+              "title": "PR 1",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/1",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": null
+            },
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": null
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {}
+        }
+      }
+    },
+    {
+      "step": 10,
+      "action": "cycle",
+      "time": "2026-10-22T09:10:00Z",
+      "note": "",
+      "config_change": {
+        "repos": [
+          "o/a",
+          "o/b"
+        ]
+      },
+      "restart_before": true,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/2",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 11,
+      "action": "cycle",
+      "time": "2026-10-22T09:11:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "3": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            },
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 12,
+      "action": "cycle",
+      "time": "2026-10-22T09:12:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": null,
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 2,
+              "title": "PR 2",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/2",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 13,
+      "action": "cycle",
+      "time": "2026-10-22T09:13:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        }
+      }
+    },
+    {
+      "step": 14,
+      "action": "cycle",
+      "time": "2026-10-22T09:14:00Z",
+      "note": "",
+      "config_change": null,
+      "restart_before": false,
+      "file_op": "",
+      "crash": null,
+      "observation": {
+        "o/a": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "clean"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "t",
+                    "status": "completed",
+                    "conclusion": "failure",
+                    "title": "",
+                    "summary": "--- FAIL: TestX",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/4",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": true,
+                "state": "behind"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "5": {
+              "merged": false,
+              "merge_commit": null,
+              "merged_at": "",
+              "base": "main",
+              "head": "cccccccccccccccccccccccccccccccccccccccc",
+              "head_ref": "",
+              "method_hint": ""
+            }
+          }
+        },
+        "o/b": {
+          "error": null,
+          "default_branch": "main",
+          "prs": [
+            {
+              "number": 3,
+              "title": "PR 3",
+              "author": "alice",
+              "labels": [],
+              "draft": true,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/3",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "completed",
+                    "conclusion": "success",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 4,
+              "title": "PR 4",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/4",
+              "base": "dev",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": null,
+                "state": "unknown"
+              },
+              "checks": {
+                "runs": [
+                  {
+                    "name": "ci",
+                    "status": "in_progress",
+                    "conclusion": "",
+                    "title": "",
+                    "summary": "",
+                    "text": ""
+                  }
+                ],
+                "statuses": []
+              }
+            },
+            {
+              "number": 5,
+              "title": "PR 5",
+              "author": "alice",
+              "labels": [],
+              "draft": false,
+              "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "head_ref": "feat/5",
+              "base": "main",
+              "fork": false,
+              "fork_known": false,
+              "detail": {
+                "mergeable": false,
+                "state": "dirty"
+              },
+              "checks": null
+            }
+          ],
+          "gone": {
+            "1": {
+              "merged": true,
+              "merge_commit": "c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6c6",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            },
+            "2": {
+              "merged": true,
+              "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+              "merged_at": "2026-10-22T09:30:00Z",
+              "base": "main",
+              "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "head_ref": "feat/x",
+              "method_hint": "rebase-or-squash"
+            }
+          }
+        }
+      }
+    }
+  ],
+  "expected_events": [
+    {
+      "step": 1,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [],
+      "printed": [],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 2,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 1,
+          "step": 2,
+          "time": "2026-10-22T09:02:00Z",
+          "kind": "head-changed",
+          "repo": "o/a",
+          "pr": 1,
+          "details": {
+            "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "go": {
+            "id": "o/a#1:head-changed:cccccccccccccccccccccccccccccccccccccccc:h1",
+            "seq": 1
+          }
+        },
+        {
+          "ordinal": 2,
+          "step": 2,
+          "time": "2026-10-22T09:02:00Z",
+          "kind": "head-changed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "go": {
+            "id": "o/a#4:head-changed:cccccccccccccccccccccccccccccccccccccccc:h1",
+            "seq": 2
+          }
+        },
+        {
+          "ordinal": 3,
+          "step": 2,
+          "time": "2026-10-22T09:02:00Z",
+          "kind": "head-changed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "go": {
+            "id": "o/a#5:head-changed:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:h1",
+            "seq": 3
+          }
+        }
+      ],
+      "printed": [
+        1,
+        2,
+        3
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 3,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 4,
+          "step": 3,
+          "time": "2026-10-22T09:03:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "from": "ready",
+            "to": "draft"
+          },
+          "go": {
+            "id": "o/a#4:ready-state-changed:r1",
+            "seq": 4
+          }
+        },
+        {
+          "ordinal": 5,
+          "step": 3,
+          "time": "2026-10-22T09:03:00Z",
+          "kind": "head-changed",
+          "repo": "o/b",
+          "pr": 1,
+          "details": {
+            "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "go": {
+            "id": "o/b#1:head-changed:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:h1",
+            "seq": 5
+          }
+        },
+        {
+          "ordinal": 6,
+          "step": 3,
+          "time": "2026-10-22T09:03:00Z",
+          "kind": "head-changed",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "old": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "go": {
+            "id": "o/b#2:head-changed:cccccccccccccccccccccccccccccccccccccccc:h1",
+            "seq": 6
+          }
+        }
+      ],
+      "printed": [
+        4,
+        5,
+        6
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 4,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 7,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "checks-green",
+          "repo": "o/a",
+          "pr": 2,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "draft": false,
+            "base": "main",
+            "total": 1
+          },
+          "go": {
+            "id": "o/a#2:checks-green:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c1",
+            "seq": 7
+          }
+        },
+        {
+          "ordinal": 8,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "from": "draft",
+            "to": "ready"
+          },
+          "go": {
+            "id": "o/a#4:ready-state-changed:r2",
+            "seq": 8
+          }
+        },
+        {
+          "ordinal": 9,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "closed",
+          "repo": "o/a",
+          "pr": 1,
+          "details": {
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/a#1:closed:g0",
+            "seq": 9
+          }
+        },
+        {
+          "ordinal": 10,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/b",
+          "pr": 1,
+          "details": {
+            "from": "ready",
+            "to": "draft"
+          },
+          "go": {
+            "id": "o/b#1:ready-state-changed:r1",
+            "seq": 10
+          }
+        },
+        {
+          "ordinal": 11,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "checks-green",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "draft": false,
+            "base": "main",
+            "total": 1
+          },
+          "go": {
+            "id": "o/b#2:checks-green:cccccccccccccccccccccccccccccccccccccccc:c1",
+            "seq": 11
+          }
+        },
+        {
+          "ordinal": 12,
+          "step": 4,
+          "time": "2026-10-22T09:04:00Z",
+          "kind": "checks-green",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "draft": false,
+            "base": "main",
+            "total": 1
+          },
+          "go": {
+            "id": "o/b#3:checks-green:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c1",
+            "seq": 12
+          }
+        }
+      ],
+      "printed": [
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 5,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 13,
+          "step": 5,
+          "time": "2026-10-22T09:05:00Z",
+          "kind": "head-changed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "old": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "new": "cccccccccccccccccccccccccccccccccccccccc"
+          },
+          "go": {
+            "id": "o/a#5:head-changed:cccccccccccccccccccccccccccccccccccccccc:h2",
+            "seq": 13
+          }
+        },
+        {
+          "ordinal": 14,
+          "step": 5,
+          "time": "2026-10-22T09:05:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "from": "ready",
+            "to": "draft"
+          },
+          "go": {
+            "id": "o/b#3:ready-state-changed:r1",
+            "seq": 14
+          }
+        },
+        {
+          "ordinal": 15,
+          "step": 5,
+          "time": "2026-10-22T09:05:00Z",
+          "kind": "new-pr",
+          "repo": "o/b",
+          "pr": 4,
+          "details": {
+            "title": "PR 4",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/4",
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fork": false
+          },
+          "go": {
+            "id": "o/b#4:new-pr:g0",
+            "seq": 15
+          }
+        }
+      ],
+      "printed": [
+        13,
+        14,
+        15
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 6,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 16,
+          "step": 6,
+          "time": "2026-10-22T09:06:00Z",
+          "kind": "new-pr",
+          "repo": "o/a",
+          "pr": 1,
+          "details": {
+            "title": "PR 1",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/1",
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "fork": false
+          },
+          "go": {
+            "id": "o/a#1:new-pr:g1",
+            "seq": 16
+          }
+        },
+        {
+          "ordinal": 17,
+          "step": 6,
+          "time": "2026-10-22T09:06:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "from": "ready",
+            "to": "draft"
+          },
+          "go": {
+            "id": "o/a#5:ready-state-changed:r1",
+            "seq": 17
+          }
+        },
+        {
+          "ordinal": 18,
+          "step": 6,
+          "time": "2026-10-22T09:06:00Z",
+          "kind": "closed",
+          "repo": "o/b",
+          "pr": 5,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/b#5:closed:g0",
+            "seq": 18
+          }
+        }
+      ],
+      "printed": [
+        16,
+        17,
+        18
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 7,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 19,
+          "step": 7,
+          "time": "2026-10-22T09:07:00Z",
+          "kind": "watch-error",
+          "repo": "o/a",
+          "pr": null,
+          "details": {
+            "code": "network",
+            "message": "boom network",
+            "failures": 1,
+            "retry_in_seconds": 60,
+            "repo": "o/a"
+          },
+          "go": {
+            "id": "o/a#-:watch-error:network:e1:f1",
+            "seq": 19
+          }
+        },
+        {
+          "ordinal": 20,
+          "step": 7,
+          "time": "2026-10-22T09:07:00Z",
+          "kind": "mergeable-changed",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "mergeable": true,
+            "state": "clean",
+            "conflicting": false,
+            "behind": false,
+            "base": "main"
+          },
+          "go": {
+            "id": "o/b#2:mergeable-changed:cccccccccccccccccccccccccccccccccccccccc:m1",
+            "seq": 20
+          }
+        },
+        {
+          "ordinal": 21,
+          "step": 7,
+          "time": "2026-10-22T09:07:00Z",
+          "kind": "new-pr",
+          "repo": "o/b",
+          "pr": 5,
+          "details": {
+            "title": "PR 5",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/5",
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fork": false
+          },
+          "go": {
+            "id": "o/b#5:new-pr:g1",
+            "seq": 21
+          }
+        }
+      ],
+      "printed": [
+        19,
+        20,
+        21
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 8,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 22,
+          "step": 8,
+          "time": "2026-10-22T09:08:00Z",
+          "kind": "closed",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/b#2:closed:g0",
+            "seq": 22
+          }
+        }
+      ],
+      "printed": [
+        22
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 9,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 23,
+          "step": 9,
+          "time": "2026-10-22T09:09:00Z",
+          "kind": "repos-changed",
+          "repo": null,
+          "pr": null,
+          "details": {
+            "added": [],
+            "removed": [
+              "o/b"
+            ],
+            "skipped": []
+          },
+          "go": {
+            "id": "-:repos-changed:p1",
+            "seq": 23
+          }
+        }
+      ],
+      "printed": [
+        23
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 10,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 24,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "repos-changed",
+          "repo": null,
+          "pr": null,
+          "details": {
+            "added": [
+              "o/b"
+            ],
+            "removed": [],
+            "skipped": []
+          },
+          "go": {
+            "id": "-:repos-changed:p2",
+            "seq": 24
+          }
+        },
+        {
+          "ordinal": 25,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "watch-recovered",
+          "repo": "o/a",
+          "pr": null,
+          "details": {
+            "after_failures": 2,
+            "repo": "o/a"
+          },
+          "go": {
+            "id": "o/a#-:watch-recovered:e1",
+            "seq": 25
+          }
+        },
+        {
+          "ordinal": 26,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "base-changed",
+          "repo": "o/a",
+          "pr": 2,
+          "details": {
+            "old": "main",
+            "new": "dev"
+          },
+          "go": {
+            "id": "o/a#2:base-changed:b1",
+            "seq": 26
+          }
+        },
+        {
+          "ordinal": 27,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "checks-red",
+          "repo": "o/a",
+          "pr": 2,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failing": [
+              "t"
+            ],
+            "failing_total": 1,
+            "shape": "real",
+            "base": "dev",
+            "draft": false
+          },
+          "go": {
+            "id": "o/a#2:checks-red:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c2",
+            "seq": 27
+          }
+        },
+        {
+          "ordinal": 28,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "ready-state-changed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "from": "ready",
+            "to": "draft"
+          },
+          "go": {
+            "id": "o/a#4:ready-state-changed:r3",
+            "seq": 28
+          }
+        },
+        {
+          "ordinal": 29,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "checks-red",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "failing": [
+              "t"
+            ],
+            "failing_total": 1,
+            "shape": "real",
+            "base": "main",
+            "draft": true
+          },
+          "go": {
+            "id": "o/a#4:checks-red:cccccccccccccccccccccccccccccccccccccccc:c1",
+            "seq": 29
+          }
+        },
+        {
+          "ordinal": 30,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "merged",
+          "repo": "o/a",
+          "pr": 1,
+          "details": {
+            "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "base": "main",
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "head_ref": "feat/x",
+            "merged_at": "2026-10-22T09:30:00Z",
+            "method_hint": "rebase-or-squash"
+          },
+          "go": {
+            "id": "o/a#1:merged:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 30
+          }
+        },
+        {
+          "ordinal": 31,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 2,
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "cccccccccccccccccccccccccccccccccccccccc",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/2",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#2:restack-needed:1:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 31
+          }
+        },
+        {
+          "ordinal": 32,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 3,
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "cccccccccccccccccccccccccccccccccccccccc",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/3",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#3:restack-needed:1:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 32
+          }
+        },
+        {
+          "ordinal": 33,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "cccccccccccccccccccccccccccccccccccccccc",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/4",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#4:restack-needed:1:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 33
+          }
+        },
+        {
+          "ordinal": 34,
+          "step": 10,
+          "time": "2026-10-22T09:10:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "merged_pr": 1,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "cccccccccccccccccccccccccccccccccccccccc",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/5",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#5:restack-needed:1:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 34
+          }
+        }
+      ],
+      "printed": [
+        24,
+        25,
+        26,
+        27,
+        28,
+        29,
+        30,
+        31,
+        32,
+        33,
+        34
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 11,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 35,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "checks-green",
+          "repo": "o/a",
+          "pr": 3,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "draft": false,
+            "base": "main",
+            "total": 1
+          },
+          "go": {
+            "id": "o/a#3:checks-green:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c1",
+            "seq": 35
+          }
+        },
+        {
+          "ordinal": 36,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "mergeable-changed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "mergeable": true,
+            "state": "behind",
+            "conflicting": false,
+            "behind": true,
+            "base": "main"
+          },
+          "go": {
+            "id": "o/a#5:mergeable-changed:cccccccccccccccccccccccccccccccccccccccc:m1",
+            "seq": 36
+          }
+        },
+        {
+          "ordinal": 37,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "merged",
+          "repo": "o/a",
+          "pr": 2,
+          "details": {
+            "merge_commit": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "base": "main",
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_ref": "feat/x",
+            "merged_at": "2026-10-22T09:30:00Z",
+            "method_hint": "rebase-or-squash"
+          },
+          "go": {
+            "id": "o/a#2:merged:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "seq": 37
+          }
+        },
+        {
+          "ordinal": 38,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 3,
+          "details": {
+            "merged_pr": 2,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_parent": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/3",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#3:restack-needed:2:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "seq": 38
+          }
+        },
+        {
+          "ordinal": 39,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 4,
+          "details": {
+            "merged_pr": 2,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_parent": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/4",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#4:restack-needed:2:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "seq": 39
+          }
+        },
+        {
+          "ordinal": 40,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "restack-needed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "merged_pr": 2,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "new_parent": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/5",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/a#5:restack-needed:2:c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "seq": 40
+          }
+        },
+        {
+          "ordinal": 41,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "head-changed",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "old": "cccccccccccccccccccccccccccccccccccccccc",
+            "new": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          },
+          "go": {
+            "id": "o/b#2:head-changed:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb:h2",
+            "seq": 41
+          }
+        },
+        {
+          "ordinal": 42,
+          "step": 11,
+          "time": "2026-10-22T09:11:00Z",
+          "kind": "closed",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/b#3:closed:g0",
+            "seq": 42
+          }
+        }
+      ],
+      "printed": [
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 12,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 43,
+          "step": 12,
+          "time": "2026-10-22T09:12:00Z",
+          "kind": "mergeable-changed",
+          "repo": "o/a",
+          "pr": 3,
+          "details": {
+            "mergeable": true,
+            "state": "clean",
+            "conflicting": false,
+            "behind": false,
+            "base": "main"
+          },
+          "go": {
+            "id": "o/a#3:mergeable-changed:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:m1",
+            "seq": 43
+          }
+        },
+        {
+          "ordinal": 44,
+          "step": 12,
+          "time": "2026-10-22T09:12:00Z",
+          "kind": "new-pr",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "title": "PR 3",
+            "author": "alice",
+            "draft": true,
+            "base": "main",
+            "head_ref": "feat/3",
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fork": false
+          },
+          "go": {
+            "id": "o/b#3:new-pr:g1",
+            "seq": 44
+          }
+        }
+      ],
+      "printed": [
+        43,
+        44
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 13,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 45,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "checks-red",
+          "repo": "o/a",
+          "pr": 3,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "failing": [
+              "t"
+            ],
+            "failing_total": 1,
+            "shape": "real",
+            "base": "main",
+            "draft": false
+          },
+          "go": {
+            "id": "o/a#3:checks-red:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c2",
+            "seq": 45
+          }
+        },
+        {
+          "ordinal": 46,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "mergeable-changed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "mergeable": false,
+            "state": "dirty",
+            "conflicting": true,
+            "behind": false,
+            "base": "main"
+          },
+          "go": {
+            "id": "o/a#5:mergeable-changed:cccccccccccccccccccccccccccccccccccccccc:m2",
+            "seq": 46
+          }
+        },
+        {
+          "ordinal": 47,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "checks-green",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "draft": true,
+            "base": "main",
+            "total": 1
+          },
+          "go": {
+            "id": "o/b#3:checks-green:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa:c2",
+            "seq": 47
+          }
+        },
+        {
+          "ordinal": 48,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "merged",
+          "repo": "o/b",
+          "pr": 2,
+          "details": {
+            "merge_commit": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "base": "main",
+            "head": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "head_ref": "feat/x",
+            "merged_at": "2026-10-22T09:30:00Z",
+            "method_hint": "rebase-or-squash"
+          },
+          "go": {
+            "id": "o/b#2:merged:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 48
+          }
+        },
+        {
+          "ordinal": 49,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "restack-needed",
+          "repo": "o/b",
+          "pr": 3,
+          "details": {
+            "merged_pr": 2,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/3",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/b#3:restack-needed:2:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 49
+          }
+        },
+        {
+          "ordinal": 50,
+          "step": 13,
+          "time": "2026-10-22T09:13:00Z",
+          "kind": "restack-needed",
+          "repo": "o/b",
+          "pr": 4,
+          "details": {
+            "merged_pr": 2,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "new_parent": "c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "new_parent_source": "merge_commit_sha",
+            "branch": "feat/4",
+            "argv": [
+              "git",
+              "rebase"
+            ]
+          },
+          "go": {
+            "id": "o/b#4:restack-needed:2:c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4c4",
+            "seq": 50
+          }
+        }
+      ],
+      "printed": [
+        45,
+        46,
+        47,
+        48,
+        49,
+        50
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    },
+    {
+      "step": 14,
+      "result": "ok",
+      "error_kind": "",
+      "retry_in_seconds": 0,
+      "events": [
+        {
+          "ordinal": 51,
+          "step": 14,
+          "time": "2026-10-22T09:14:00Z",
+          "kind": "closed",
+          "repo": "o/a",
+          "pr": 5,
+          "details": {
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "base": "main"
+          },
+          "go": {
+            "id": "o/a#5:closed:g0",
+            "seq": 51
+          }
+        },
+        {
+          "ordinal": 52,
+          "step": 14,
+          "time": "2026-10-22T09:14:00Z",
+          "kind": "new-pr",
+          "repo": "o/b",
+          "pr": 5,
+          "details": {
+            "title": "PR 5",
+            "author": "alice",
+            "draft": false,
+            "base": "main",
+            "head_ref": "feat/5",
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "fork": false
+          },
+          "go": {
+            "id": "o/b#5:new-pr:g2",
+            "seq": 52
+          }
+        }
+      ],
+      "printed": [
+        51,
+        52
+      ],
+      "hints": null,
+      "state_after": null,
+      "go_message": ""
+    }
+  ],
+  "expected_state_view": {
+    "cycle": 14,
+    "repos_epoch": 2,
+    "interval_seconds": 60,
+    "repos": [
+      "o/a",
+      "o/b"
+    ],
+    "skipped": [],
+    "repo": {
+      "o/a": {
+        "baselined": true,
+        "since": "2026-10-22T09:01:00Z",
+        "last_ok": "2026-10-22T09:14:00Z",
+        "default_branch": "main",
+        "prs": {
+          "3": {
+            "number": 3,
+            "title": "PR 3",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_ref": "feat/3",
+            "base": "main",
+            "fork": false,
+            "generation": 0,
+            "epochs": {
+              "head": 0,
+              "checks": 2,
+              "mergeable": 1,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "red",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": true,
+            "mergeable_state": "clean",
+            "conflicting": false,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": false,
+            "gone": false
+          },
+          "4": {
+            "number": 4,
+            "title": "PR 4",
+            "author": "alice",
+            "labels": [],
+            "draft": true,
+            "head": "cccccccccccccccccccccccccccccccccccccccc",
+            "head_ref": "feat/4",
+            "base": "main",
+            "fork": false,
+            "generation": 0,
+            "epochs": {
+              "head": 1,
+              "checks": 2,
+              "mergeable": 0,
+              "ready": 3,
+              "base": 0
+            },
+            "class": "pending",
+            "class_candidate": "",
+            "pending_since": "2026-10-22T09:12:00Z",
+            "pending_names": [
+              "ci"
+            ],
+            "timeout_fired": false,
+            "mergeable": true,
+            "mergeable_state": "behind",
+            "conflicting": false,
+            "behind": true,
+            "mergeable_candidate": null,
+            "detail_due": false,
+            "gone": false
+          }
+        },
+        "closed": [
+          {
+            "number": 1,
+            "generation": 0,
+            "epochs": {
+              "head": 1,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            }
+          },
+          {
+            "number": 5,
+            "generation": 0,
+            "epochs": {
+              "head": 2,
+              "checks": 1,
+              "mergeable": 2,
+              "ready": 1,
+              "base": 0
+            }
+          }
+        ],
+        "restack_due": [],
+        "restack_done": [],
+        "health": {
+          "failures": 0,
+          "episode": 1,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      },
+      "o/b": {
+        "baselined": true,
+        "since": "2026-10-22T09:01:00Z",
+        "last_ok": "2026-10-22T09:14:00Z",
+        "default_branch": "main",
+        "prs": {
+          "3": {
+            "number": 3,
+            "title": "PR 3",
+            "author": "alice",
+            "labels": [],
+            "draft": true,
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_ref": "feat/3",
+            "base": "main",
+            "fork": false,
+            "generation": 1,
+            "epochs": {
+              "head": 0,
+              "checks": 2,
+              "mergeable": 0,
+              "ready": 1,
+              "base": 0
+            },
+            "class": "green",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": null,
+            "mergeable_state": "",
+            "conflicting": false,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": false,
+            "gone": false
+          },
+          "4": {
+            "number": 4,
+            "title": "PR 4",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_ref": "feat/4",
+            "base": "dev",
+            "fork": false,
+            "generation": 0,
+            "epochs": {
+              "head": 0,
+              "checks": 1,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "red",
+            "class_candidate": "pending",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": false,
+            "mergeable_state": "dirty",
+            "conflicting": true,
+            "behind": false,
+            "mergeable_candidate": {
+              "mergeable": true,
+              "behind": true,
+              "state": "behind"
+            },
+            "detail_due": true,
+            "gone": false
+          },
+          "5": {
+            "number": 5,
+            "title": "PR 5",
+            "author": "alice",
+            "labels": [],
+            "draft": false,
+            "head": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "head_ref": "feat/5",
+            "base": "main",
+            "fork": false,
+            "generation": 2,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            },
+            "class": "none",
+            "class_candidate": "",
+            "pending_since": "",
+            "pending_names": [],
+            "timeout_fired": false,
+            "mergeable": false,
+            "mergeable_state": "dirty",
+            "conflicting": true,
+            "behind": false,
+            "mergeable_candidate": null,
+            "detail_due": false,
+            "gone": false
+          }
+        },
+        "closed": [
+          {
+            "number": 1,
+            "generation": 0,
+            "epochs": {
+              "head": 1,
+              "checks": 1,
+              "mergeable": 0,
+              "ready": 1,
+              "base": 0
+            }
+          },
+          {
+            "number": 2,
+            "generation": 0,
+            "epochs": {
+              "head": 1,
+              "checks": 2,
+              "mergeable": 1,
+              "ready": 0,
+              "base": 0
+            }
+          },
+          {
+            "number": 3,
+            "generation": 0,
+            "epochs": {
+              "head": 0,
+              "checks": 1,
+              "mergeable": 0,
+              "ready": 1,
+              "base": 0
+            }
+          },
+          {
+            "number": 5,
+            "generation": 1,
+            "epochs": {
+              "head": 0,
+              "checks": 0,
+              "mergeable": 0,
+              "ready": 0,
+              "base": 0
+            }
+          }
+        ],
+        "restack_due": [],
+        "restack_done": [],
+        "health": {
+          "failures": 0,
+          "episode": 0,
+          "error_open": false,
+          "last_code": "",
+          "stalled": false,
+          "stall_episode": 0,
+          "next_try": ""
+        }
+      }
+    },
+    "run_health": {
+      "failures": 0,
+      "episode": 0,
+      "error_open": false,
+      "last_code": "",
+      "stalled": false,
+      "stall_episode": 0,
+      "next_try": ""
+    }
+  },
+  "state_view_ignore": [],
+  "expected_journal_ordinals": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    34,
+    35,
+    36,
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52
+  ],
+  "expect_unique_event_ids": true,
+  "status_probes": []
+}

@@ -1,0 +1,711 @@
+{
+  "format_version": 1,
+  "name": "restack-candidates",
+  "kind": "vectors",
+  "description": "Which open PRs must be restacked after a merge: class 1 child-of-merged-branch by the base name alone, class 2 contains-merged-commits by the old parent in the commit list (at most 3 pages), ascending by PR number. The `argv` of a candidate is Go's fixed git command; it is null for a fork head or an unknown merge commit (owner decision F1: kept as in Go, an exception to D-20261103-03).",
+  "source": {
+    "go_tests": [
+      "restack_test.go:TestRestackRebaseMergeFixture",
+      "restack_test.go:TestRestackNullsAndFork",
+      "restack_test.go:TestRestackPagingAndCap",
+      "restack_test.go:TestRestackSkipsUnnamableBranch",
+      "restack_test.go:TestRestackErrors",
+      "restack_test.go:TestRestackHeadRefEqualsBaseUsesCommitCheck",
+      "restack_test.go:TestRestackForkHeadHasNoClassOne",
+      "restack_test.go:TestRestackStopsAtFirstHit"
+    ]
+  },
+  "format_dependent": [],
+  "function": "restack_candidates",
+  "cases": [
+    {
+      "name": "recorded rebase merge (testdata/rebase_merge.json): class 1 by base name, class 2 by the old head in the child's commits",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": "34efceb54ad88a9efc691e507a0c70558ab6ca8b",
+          "old_parent": "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+          "base": "main",
+          "head_ref": "parent",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 11,
+            "base": "parent",
+            "head_ref": "child-a",
+            "head": "c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1",
+            "fork": false
+          },
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "child",
+            "head": "c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2",
+            "fork": false
+          },
+          {
+            "number": 99,
+            "base": "main",
+            "head_ref": "unrelated",
+            "head": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "fork": false
+          },
+          {
+            "number": 98,
+            "base": "other",
+            "head_ref": "elsewhere",
+            "head": "ffffffffffffffffffffffffffffffffffffffff",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "11": [
+            "b501c2a98522229a331b3c2e91c478c117cdc9ce",
+            "b1af07a5113fe7198ec7b2b965d52acef825cbbc"
+          ],
+          "12": [
+            "226d30bb2c2dc3e65322bcb41a4f50f6da7ec4f5",
+            "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+            "b501c2a98522229a331b3c2e91c478c117cdc9ce",
+            "b1af07a5113fe7198ec7b2b965d52acef825cbbc"
+          ],
+          "99": [
+            "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 11,
+            "reason": "child-of-merged-branch",
+            "branch": "child-a",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "34efceb54ad88a9efc691e507a0c70558ab6ca8b",
+              "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+              "child-a"
+            ]
+          },
+          {
+            "pr": 12,
+            "reason": "contains-merged-commits",
+            "branch": "child",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "34efceb54ad88a9efc691e507a0c70558ab6ca8b",
+              "a97d7c5fd03a128f55bb0e37910bc29b88699100",
+              "child"
+            ]
+          }
+        ],
+        "commit_reads": [
+          "12:1",
+          "99:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "unknown merge commit gives null argv",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "feat/p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 11,
+            "base": "feat/p",
+            "head_ref": "c11",
+            "head": "",
+            "fork": true
+          },
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c12",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 11,
+            "reason": "child-of-merged-branch",
+            "branch": "c11",
+            "argv": null
+          },
+          {
+            "pr": 12,
+            "reason": "contains-merged-commits",
+            "branch": "c12",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "12:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "fork child gives null argv, the other child the fixed argv",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "feat/p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 11,
+            "base": "feat/p",
+            "head_ref": "c11",
+            "head": "",
+            "fork": true
+          },
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c12",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 11,
+            "reason": "child-of-merged-branch",
+            "branch": "c11",
+            "argv": null
+          },
+          {
+            "pr": 12,
+            "reason": "contains-merged-commits",
+            "branch": "c12",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+              "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "c12"
+            ]
+          }
+        ],
+        "commit_reads": [
+          "12:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "the old parent on page 3 at page size 2 is found",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "0101010101010101010101010101010101010101",
+            "0202020202020202020202020202020202020202",
+            "0303030303030303030303030303030303030303",
+            "0404040404040404040404040404040404040404",
+            "0505050505050505050505050505050505050505",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 2,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 12,
+            "reason": "contains-merged-commits",
+            "branch": "c",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "12:1",
+          "12:2",
+          "12:3"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "beyond the 3-page cap the old parent is not found and no fourth read happens",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "0101010101010101010101010101010101010101",
+            "0202020202020202020202020202020202020202",
+            "0303030303030303030303030303030303030303",
+            "0404040404040404040404040404040404040404",
+            "0505050505050505050505050505050505050505",
+            "0606060606060606060606060606060606060606",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 2,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [],
+        "commit_reads": [
+          "12:1",
+          "12:2",
+          "12:3"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "a head branch that cannot be named is skipped with a diagnostic",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 11,
+            "base": "p",
+            "head_ref": "bad%20name",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "-rf",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 13,
+            "base": "main",
+            "head_ref": "ok/branch",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ],
+          "13": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": "reject-percent"
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 13,
+            "reason": "contains-merged-commits",
+            "branch": "ok/branch",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "13:1"
+        ],
+        "diagnostics": 2,
+        "diagnostic_prs": [
+          11,
+          12
+        ],
+        "error": ""
+      }
+    },
+    {
+      "name": "a malformed commit list skips that PR with a diagnostic",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c12",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 13,
+            "base": "main",
+            "head_ref": "c13",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "13": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": {
+          "12": "malformed"
+        },
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 13,
+            "reason": "contains-merged-commits",
+            "branch": "c13",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "12:1",
+          "13:1"
+        ],
+        "diagnostics": 1,
+        "diagnostic_prs": [
+          12
+        ],
+        "error": ""
+      }
+    },
+    {
+      "name": "any other read failure is returned so the core retries next cycle",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c12",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 13,
+            "base": "main",
+            "head_ref": "c13",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": null,
+        "page_size": 0,
+        "commit_errors": {
+          "12": "other"
+        },
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [],
+        "commit_reads": [
+          "12:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": "commit-read-failed"
+      }
+    },
+    {
+      "name": "head ref equal to base: no class 1, only the commit check",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "main",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 13,
+            "base": "main",
+            "head_ref": "d",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "0101010101010101010101010101010101010101"
+          ],
+          "13": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          ]
+        },
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 13,
+            "reason": "contains-merged-commits",
+            "branch": "d",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "12:1",
+          "13:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "a merged fork head has no class 1",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "feat/x",
+          "head_fork": true
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "feat/x",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": null,
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [],
+        "commit_reads": [],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "the first hit ends the reading even when more pages exist",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 12,
+            "base": "main",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": {
+          "12": [
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "0101010101010101010101010101010101010101",
+            "0202020202020202020202020202020202020202",
+            "0303030303030303030303030303030303030303"
+          ]
+        },
+        "page_size": 2,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 12,
+            "reason": "contains-merged-commits",
+            "branch": "c",
+            "argv": null
+          }
+        ],
+        "commit_reads": [
+          "12:1"
+        ],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    },
+    {
+      "name": "the merged PR itself is never a candidate",
+      "input": {
+        "due": {
+          "merged_pr": 10,
+          "merge_commit": null,
+          "old_parent": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "base": "main",
+          "head_ref": "p",
+          "head_fork": false
+        },
+        "open": [
+          {
+            "number": 10,
+            "base": "main",
+            "head_ref": "p",
+            "head": "",
+            "fork": false
+          },
+          {
+            "number": 12,
+            "base": "p",
+            "head_ref": "c",
+            "head": "",
+            "fork": false
+          }
+        ],
+        "commit_lists": null,
+        "page_size": 0,
+        "commit_errors": null,
+        "branch_name_rule": ""
+      },
+      "expected": {
+        "candidates": [
+          {
+            "pr": 12,
+            "reason": "child-of-merged-branch",
+            "branch": "c",
+            "argv": null
+          }
+        ],
+        "commit_reads": [],
+        "diagnostics": 0,
+        "diagnostic_prs": [],
+        "error": ""
+      }
+    }
+  ]
+}

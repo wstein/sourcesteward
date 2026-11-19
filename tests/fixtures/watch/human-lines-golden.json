@@ -1,0 +1,513 @@
+{
+  "format_version": 1,
+  "name": "human-lines-golden",
+  "kind": "vectors",
+  "description": "The `--human` line of every kind: HH:MM:SS (UTC), repo#pr, kind, a summary; SHAs shortened to 7 characters. The restack-needed line carries Go's git command (owner decision F1: kept as in Go).",
+  "source": {
+    "go_tests": [
+      "watchcmd/human_test.go:TestHumanLinesGolden"
+    ]
+  },
+  "format_dependent": [],
+  "function": "human_line",
+  "cases": [
+    {
+      "name": "new-pr",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "new-pr",
+          "details": {
+            "title": "docs(035): stw watch",
+            "author": "wstein",
+            "draft": true,
+            "base": "main",
+            "head_ref": "docs/x",
+            "head": "3333333333333333333333333333333333333333",
+            "fork": false
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 new-pr docs(035): stw watch by wstein into main (draft)"
+      }
+    },
+    {
+      "name": "head-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "head-changed",
+          "details": {
+            "old": "3333333333333333333333333333333333333333",
+            "new": "9999999999999999999999999999999999999999"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 head-changed 3333333 -> 9999999"
+      }
+    },
+    {
+      "name": "checks-green",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "checks-green",
+          "details": {
+            "head": "3333333333333333333333333333333333333333",
+            "draft": false,
+            "base": "main",
+            "total": 5
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 checks-green 5 checks on 3333333"
+      }
+    },
+    {
+      "name": "checks-red one",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "checks-red",
+          "details": {
+            "head": "3333333333333333333333333333333333333333",
+            "failing": [
+              "docs-check"
+            ],
+            "failing_total": 1,
+            "shape": "real",
+            "base": "main",
+            "draft": false
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 checks-red docs-check (real)"
+      }
+    },
+    {
+      "name": "checks-red many",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "checks-red",
+          "details": {
+            "head": "3333333333333333333333333333333333333333",
+            "failing": [
+              "a",
+              "b"
+            ],
+            "failing_total": 5,
+            "shape": "unknown",
+            "base": "main",
+            "draft": false
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 checks-red a, b and 3 more (unknown)"
+      }
+    },
+    {
+      "name": "checks-pending-timeout",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "checks-pending-timeout",
+          "details": {
+            "head": "3333333333333333333333333333333333333333",
+            "pending": [
+              "ci"
+            ],
+            "since": "2026-10-22T09:00:00Z"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 checks-pending-timeout ci pending since 2026-10-22T09:00:00Z"
+      }
+    },
+    {
+      "name": "mergeable behind",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "mergeable-changed",
+          "details": {
+            "mergeable": true,
+            "state": "behind",
+            "conflicting": false,
+            "behind": true,
+            "base": "main"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 mergeable-changed mergeable=true state=behind (behind)"
+      }
+    },
+    {
+      "name": "mergeable conflicting",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "mergeable-changed",
+          "details": {
+            "mergeable": false,
+            "state": "dirty",
+            "conflicting": true,
+            "behind": false,
+            "base": "main"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 mergeable-changed mergeable=false state=dirty (conflicting)"
+      }
+    },
+    {
+      "name": "ready-state-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "ready-state-changed",
+          "details": {
+            "from": "draft",
+            "to": "ready"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 ready-state-changed draft -> ready"
+      }
+    },
+    {
+      "name": "base-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "base-changed",
+          "details": {
+            "old": "feat/x",
+            "new": "main"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 base-changed feat/x -> main"
+      }
+    },
+    {
+      "name": "merged",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "merged",
+          "details": {
+            "merge_commit": "9999999999999999999999999999999999999999",
+            "base": "main",
+            "head": "3333333333333333333333333333333333333333",
+            "head_ref": "docs/x",
+            "merged_at": "",
+            "method_hint": "rebase-or-squash"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 merged into main as 9999999 (rebase-or-squash)"
+      }
+    },
+    {
+      "name": "merged unknown commit",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "merged",
+          "details": {
+            "merge_commit": null,
+            "base": "main",
+            "head": "3333333333333333333333333333333333333333",
+            "head_ref": "",
+            "merged_at": "",
+            "method_hint": "unknown"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 merged into main as unknown (unknown)"
+      }
+    },
+    {
+      "name": "closed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 41,
+          "kind": "closed",
+          "details": {
+            "head": "3333333333333333333333333333333333333333",
+            "base": "main"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#41 closed without merge (base main)"
+      }
+    },
+    {
+      "name": "restack-needed with command",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 42,
+          "kind": "restack-needed",
+          "details": {
+            "merged_pr": 41,
+            "base": "main",
+            "reason": "contains-merged-commits",
+            "old_parent": "3333333333333333333333333333333333333333",
+            "new_parent": "9999999999999999999999999999999999999999",
+            "new_parent_source": "",
+            "branch": "feat/035-impl",
+            "argv": [
+              "git",
+              "-c",
+              "rebase.updateRefs=false",
+              "-c",
+              "rerere.enabled=false",
+              "rebase",
+              "--onto",
+              "9999999999999999999999999999999999999999",
+              "3333333333333333333333333333333333333333",
+              "feat/035-impl"
+            ]
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#42 restack-needed after #41: git rebase --onto 9999999 3333333 feat/035-impl"
+      }
+    },
+    {
+      "name": "restack-needed without command",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": 42,
+          "kind": "restack-needed",
+          "details": {
+            "merged_pr": 41,
+            "base": "main",
+            "reason": "child-of-merged-branch",
+            "old_parent": "3333333333333333333333333333333333333333",
+            "new_parent": null,
+            "new_parent_source": "",
+            "branch": "someone:feat",
+            "argv": null
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward#42 restack-needed after #41: no command (someone:feat)"
+      }
+    },
+    {
+      "name": "repos-changed",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": null,
+          "pr": null,
+          "kind": "repos-changed",
+          "details": {
+            "added": [
+              "o/a"
+            ],
+            "removed": [
+              "o/b",
+              "o/c"
+            ],
+            "skipped": [
+              {
+                "path": "x",
+                "reason": "r"
+              }
+            ]
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 - repos-changed +1 -2 skipped 1"
+      }
+    },
+    {
+      "name": "watch-error",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": null,
+          "kind": "watch-error",
+          "details": {
+            "code": "network",
+            "message": "HTTP read failed",
+            "failures": 3,
+            "retry_in_seconds": 240,
+            "repo": "wstein/sourcesteward"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward watch-error network: HTTP read failed (failure 3, retry in 240s)"
+      }
+    },
+    {
+      "name": "watch-error run level",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": null,
+          "pr": null,
+          "kind": "watch-error",
+          "details": {
+            "code": "rate-limited",
+            "message": "wait",
+            "failures": 1,
+            "retry_in_seconds": 60,
+            "repo": null
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 - watch-error rate-limited: wait (failure 1, retry in 60s)"
+      }
+    },
+    {
+      "name": "watch-recovered",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": null,
+          "kind": "watch-recovered",
+          "details": {
+            "after_failures": 3,
+            "repo": "wstein/sourcesteward"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward watch-recovered after 3 failures"
+      }
+    },
+    {
+      "name": "watch-stalled",
+      "input": {
+        "event": {
+          "schema_version": 1,
+          "seq": 1,
+          "id": "x",
+          "time": "2026-10-22T10:04:10Z",
+          "repo": "wstein/sourcesteward",
+          "pr": null,
+          "kind": "watch-stalled",
+          "details": {
+            "since": "2026-10-22T09:00:00Z",
+            "threshold_seconds": 600,
+            "repo": "wstein/sourcesteward"
+          }
+        }
+      },
+      "expected": {
+        "line": "10:04:10 wstein/sourcesteward watch-stalled no success since 2026-10-22T09:00:00Z"
+      }
+    }
+  ]
+}

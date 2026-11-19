@@ -1,0 +1,238 @@
+{
+  "format_version": 1,
+  "name": "commit-list-decode",
+  "kind": "vectors",
+  "description": "The page of pulls/N/commits as the restacker reads it: the 40-hex SHAs in order, `more` when the page holds 100 items, a malformed body or a malformed transport error as `malformed`, any other transport error as `other`; the page is read unconditionally (no validator).",
+  "source": {
+    "go_tests": [
+      "watchhost/commits_test.go:TestHostingCommitsDecodes",
+      "watchhost/commits_test.go:TestHostingCommitsFullPageHasMore",
+      "watchhost/commits_test.go:TestHostingCommitsMalformed"
+    ]
+  },
+  "format_dependent": [],
+  "function": "decode_pull_commits",
+  "cases": [
+    {
+      "name": "two commits, extra fields ignored",
+      "input": {
+        "body": "[{\"sha\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"commit\":{\"message\":\"x\"}},{\"sha\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"}]",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        ],
+        "more": false,
+        "error_kind": "",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "a full page of 100 has more",
+      "input": {
+        "body": "[{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"},{\"sha\":\"abababababababababababababababababababab\"}]",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab",
+          "abababababababababababababababababababab"
+        ],
+        "more": true,
+        "error_kind": "",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "not json",
+      "input": {
+        "body": "{",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "malformed",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "not an array",
+      "input": {
+        "body": "{}",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "malformed",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "sha that is not 40 hex",
+      "input": {
+        "body": "[{\"sha\":\"XYZ\"}]",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "malformed",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "uppercase sha",
+      "input": {
+        "body": "[{\"sha\":\"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\"}]",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "malformed",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "empty list",
+      "input": {
+        "body": "[]",
+        "transport_error": ""
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "transport error malformed",
+      "input": {
+        "body": "[]",
+        "transport_error": "malformed"
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "malformed",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    },
+    {
+      "name": "transport error other",
+      "input": {
+        "body": "[]",
+        "transport_error": "other"
+      },
+      "expected": {
+        "shas": [],
+        "more": false,
+        "error_kind": "other",
+        "request": "o/r#12 p2 etag=\"\""
+      }
+    }
+  ]
+}

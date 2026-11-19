@@ -1,0 +1,79 @@
+{
+  "format_version": 1,
+  "name": "http-rate-limited-carries-reset-and-retry-after",
+  "kind": "http-reader",
+  "description": "A rate-limited error carries the Retry-After seconds and the reset time from the headers.",
+  "source": {
+    "go_tests": [
+      "watch_reader_test.go:TestWatchRateLimitedCarriesResetAndRetryAfter"
+    ]
+  },
+  "format_dependent": [],
+  "host": "github.com",
+  "routes": [
+    {
+      "uri": "repos/a/b/pulls/7",
+      "status": 403,
+      "headers": {
+        "Retry-After": "90",
+        "X-RateLimit-Limit": "5000",
+        "X-RateLimit-Remaining": "12",
+        "X-RateLimit-Reset": "1700000100"
+      },
+      "body": "{\"message\":\"secondary rate limit\"}",
+      "body_repeat": null,
+      "declared_content_length": 0,
+      "etag": "",
+      "not_modified_on_matching_validator": false,
+      "echo_authorization_header": false
+    }
+  ],
+  "calls": [
+    {
+      "op": "pull_detail",
+      "repo": "a/b",
+      "number": 7,
+      "page": 0,
+      "per_page": 0,
+      "name": "",
+      "sha": "",
+      "if_none_match": "",
+      "max_open_prs": 0,
+      "prior_list_state": "",
+      "prior_per_page": 0,
+      "new_reader_before": false,
+      "reader_already_halved": false,
+      "set_routes": null,
+      "note": ""
+    }
+  ],
+  "expected": [
+    {
+      "call": 1,
+      "error": {
+        "code": "rate-limited",
+        "status": 403,
+        "new_name": "",
+        "retry_after_seconds": 90,
+        "rate_limit": {
+          "known": true,
+          "limit": 5000,
+          "remaining": 12,
+          "reset_unix": 1700000100
+        },
+        "message_leaks_secret_or_body": false,
+        "message_at_most_200_bytes": true,
+        "canceled": false
+      },
+      "response": null,
+      "list": null,
+      "rate_info": null,
+      "requests": [
+        {
+          "uri": "repos/a/b/pulls/7",
+          "if_none_match": ""
+        }
+      ]
+    }
+  ]
+}
