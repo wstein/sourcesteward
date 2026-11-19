@@ -1,4 +1,5 @@
 //! The state directory of a watcher: its id and default place, SHA-256 for the id, the freshness window of `--status`.
+use std::collections::BTreeSet;
 use std::path::PathBuf;
 
 /// Prefix of the text the workspace id hashes. It differs from the Go watcher's `stw-watch-v1`, so a Go state directory
@@ -88,8 +89,20 @@ pub enum IdSource<'a> {
 
 /// The first 16 hex digits of SHA-256 over `ID_PREFIX`, the host and either `workspace:ROOT` or `repos:` followed by the
 /// lower-cased, de-duplicated, sorted repositories joined with `\n`.
-pub fn workspace_id(_host: &str, _source: IdSource<'_>) -> String {
-    String::new()
+pub fn workspace_id(host: &str, source: IdSource<'_>) -> String {
+    let mut text = format!("{ID_PREFIX}{host}\n");
+    match source {
+        IdSource::Workspace(root) => {
+            text.push_str("workspace:");
+            text.push_str(root);
+        }
+        IdSource::Repos(repos) => {
+            let list: BTreeSet<String> = repos.iter().map(|r| r.to_lowercase()).collect();
+            text.push_str("repos:");
+            text.push_str(&list.into_iter().collect::<Vec<_>>().join("\n"));
+        }
+    }
+    sha256_hex(text.as_bytes())[..16].to_string()
 }
 
 /// `$XDG_STATE_HOME/stw/watch/<id>`, else `$HOME/.local/state/stw/watch/<id>`. An empty or missing value counts as unset.
