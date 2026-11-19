@@ -364,8 +364,10 @@ pub struct Status {
 /// Reads the status of `dir` at `now_secs`. A missing directory, state or heartbeat is not an error: the result is simply not
 /// fresh. A corrupt `state.json` or journal is `CorruptState`.
 pub fn read_status(dir: &Path, now_secs: i64) -> Result<Status, WatchError> {
-    let _ = now_secs;
-    Ok(Status {
+    if !dir.is_absolute() {
+        return Err(WatchError::StateDirUsage);
+    }
+    let mut s = Status {
         schema_version: 1,
         state_dir: dir.display().to_string(),
         heartbeat: None,
@@ -375,5 +377,49 @@ pub fn read_status(dir: &Path, now_secs: i64) -> Result<Status, WatchError> {
         lock_held: false,
         repos: Vec::new(),
         lock_pid: None,
-    })
+    };
+    if let Some(st) = load_state(dir)? {
+        if st.interval_seconds > 0 {
+            s.interval_seconds = st.interval_seconds;
+        }
+        for r in st.repos.iter().flatten() {
+            let mut sr = StatusRepo {
+                repo: r.clone(),
+                last_ok: None,
+                age_seconds: None,
+                failures: 0,
+                open_error: None,
+            };
+            if let Some(rs) = st.repo.get(r).filter(|rs| !rs.last_ok.is_empty()) {
+                if let Some(t) = crate::github::parse_utc(&rs.last_ok) {
+                    sr.last_ok = Some(rs.last_ok.clone());
+                    sr.age_seconds = Some(u64::try_from(now_secs.saturating_sub(t)).unwrap_or(0));
+                }
+            }
+            if let Some(h) = st.health.get(r) {
+                sr.failures = h.failures;
+                if h.error_open && !h.last_code.is_empty() {
+                    sr.open_error = Some(h.last_code.clone());
+                }
+            }
+            s.repos.push(sr);
+        }
+    }
+    let journal = dir.join(crate::watch::journal::JOURNAL_NAME);
+    if journal.exists() {
+        s.seq = crate::watch::journal::scan(&journal, &mut |_| {})?.tail;
+    }
+    if let Some(pid) = crate::watch::lock::holder(dir) {
+        s.lock_held = true;
+        s.lock_pid = pid;
+    }
+    if let Some(hb) = read_heartbeat(dir, now_secs)? {
+        s.fresh = hb.age_seconds < status_freshness_seconds(s.interval_seconds);
+        s.heartbeat = Some(StatusHeartbeat {
+            time: hb.time,
+            age_seconds: hb.age_seconds,
+            pid: hb.pid,
+        });
+    }
+    Ok(s)
 }
