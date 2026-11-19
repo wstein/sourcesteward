@@ -939,3 +939,705 @@ fn cond_store_prune_keeps_only_open_prs_heads_and_bases() {
         vec!["feat/1"]
     );
 }
+
+// ---- the observer: vectors and observer-session scenarios -------------------------------------------------
+
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::atomic::AtomicBool;
+
+use stw::github::reads::WorkflowRun;
+use stw::watch_reader::host::{
+    decode_pull_detail, guess_default_branch, read_pull_commits, CommitsError, HostObserver,
+    WatchRead,
+};
+use stw::watch_reader::http::PullListResult;
+use stw::watch_reader::obs::{Hints, KnownPr, ObserveFailure, RepoObservation};
+
+#[test]
+fn vector_decode_pull_detail() {
+    let n = each_case(
+        "watch-decode-pull-detail",
+        "decode_pull_detail",
+        |name, i, e| {
+            let got = decode_pull_detail(i["body"].as_str().unwrap().as_bytes());
+            match got {
+                Err(err) => {
+                    assert_eq!(e["ok"], false, "{name}: {err}");
+                    assert_eq!(err.code.as_str(), s(&e["error_code"]), "{name}");
+                }
+                Ok(d) => {
+                    assert_eq!(e["ok"], true, "{name}");
+                    assert_eq!(d.fork, e["fork"].as_bool().unwrap(), "{name}");
+                    assert_eq!(d.head_sha, s(&e["head_sha"]), "{name}");
+                    assert_eq!(d.mergeable, e["mergeable"].as_bool(), "{name}");
+                    assert_eq!(d.mergeable_state, s(&e["mergeable_state"]), "{name}");
+                    assert_eq!(d.rebaseable, e["rebaseable"].as_bool(), "{name}");
+                }
+            }
+        },
+    );
+    assert_eq!(n, 5);
+}
+
+#[test]
+fn vector_observe_default_branch() {
+    let n = each_case(
+        "observe-default-branch-guess",
+        "observe_default_branch",
+        |name, i, e| {
+            let bases: Vec<&str> = i["pr_bases"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|b| b.as_str().unwrap())
+                .collect();
+            assert_eq!(
+                guess_default_branch(&bases),
+                s(&e["default_branch"]),
+                "{name}"
+            );
+        },
+    );
+    assert_eq!(n, 7);
+}
+
+#[test]
+fn vector_decode_pull_commits() {
+    let n = each_case("commit-list-decode", "decode_pull_commits", |name, i, e| {
+        let fake = CommitsFake {
+            body: i["body"].as_str().unwrap().to_string(),
+            transport: s(&i["transport_error"]).to_string(),
+            seen: RefCell::new(String::new()),
+        };
+        let got = read_pull_commits(&fake, "o/r", 12, 2);
+        assert_eq!(*fake.seen.borrow(), s(&e["request"]), "{name}: request");
+        let want_kind = s(&e["error_kind"]);
+        match got {
+            Ok((shas, more)) => {
+                assert_eq!(want_kind, "", "{name}");
+                let want: Vec<&str> = e["shas"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|x| x.as_str().unwrap())
+                    .collect();
+                assert_eq!(
+                    shas.iter().map(String::as_str).collect::<Vec<_>>(),
+                    want,
+                    "{name}"
+                );
+                assert_eq!(more, e["more"].as_bool().unwrap(), "{name}");
+            }
+            Err(CommitsError::Malformed) => assert_eq!(want_kind, "malformed", "{name}"),
+            Err(CommitsError::Other(_)) => assert_eq!(want_kind, "other", "{name}"),
+        }
+    });
+    assert_eq!(n, 9);
+}
+
+struct CommitsFake {
+    body: String,
+    transport: String,
+    seen: RefCell<String>,
+}
+
+impl WatchRead for CommitsFake {
+    fn pull_commits(
+        &self,
+        repo: &str,
+        number: u64,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        *self.seen.borrow_mut() = format!("{repo}#{number} p{page} etag={etag:?}");
+        match self.transport.as_str() {
+            "malformed" => Err(WatchError::new(Code::Malformed, "x")),
+            "other" => Err(WatchError::new(Code::Network, "x")),
+            _ => Ok(WatchResponse {
+                status: 200,
+                body: self.body.clone().into_bytes(),
+                ..WatchResponse::default()
+            }),
+        }
+    }
+    fn list_open_pulls(
+        &self,
+        _: &str,
+        _: &PullListState,
+        _: usize,
+    ) -> Result<PullListResult, WatchError> {
+        unreachable!()
+    }
+    fn pull_detail(&self, _: &str, _: u64, _: &str) -> Result<WatchResponse, WatchError> {
+        unreachable!()
+    }
+    fn branch(&self, _: &str, _: &str, _: &str) -> Result<WatchResponse, WatchError> {
+        unreachable!()
+    }
+    fn commit(&self, _: &str, _: &str, _: &str) -> Result<WatchResponse, WatchError> {
+        unreachable!()
+    }
+    fn check_runs(&self, _: &str, _: &str, _: u64, _: &str) -> Result<WatchResponse, WatchError> {
+        unreachable!()
+    }
+    fn statuses(&self, _: &str, _: &str, _: u64, _: &str) -> Result<WatchResponse, WatchError> {
+        unreachable!()
+    }
+    fn rate_limit(&self) -> Result<stw::watch_reader::http::RateInfo, WatchError> {
+        unreachable!()
+    }
+}
+
+/// The fake reader of the Go tests (`observer_test.go: fakeReader`): canned documents, a validator for details, tips,
+/// runs and statuses, and every call recorded with the validator it carried.
+#[derive(Default)]
+struct World {
+    items: Vec<PullItem>,
+    list_error: Option<WatchError>,
+    details: HashMap<u64, String>,
+    detail_etags: HashMap<u64, String>,
+    tips: HashMap<String, String>,
+    runs: HashMap<String, String>,
+    stats: HashMap<String, String>,
+    commits: HashMap<String, String>,
+    pulls: HashMap<u64, String>,
+    rate: stw::watch_reader::http::RateInfo,
+    errs: HashMap<String, WatchError>,
+    actions: Option<Vec<WorkflowRun>>,
+}
+
+#[derive(Default)]
+struct FakeReader {
+    w: World,
+    calls: RefCell<Vec<String>>,
+    etags: RefCell<HashMap<String, String>>,
+}
+
+impl FakeReader {
+    fn note(&self, call: String, etag: &str) -> Result<(), WatchError> {
+        self.etags
+            .borrow_mut()
+            .insert(call.clone(), etag.to_string());
+        self.calls.borrow_mut().push(call.clone());
+        match self.w.errs.get(&call) {
+            Some(e) => Err(e.clone()),
+            None => Ok(()),
+        }
+    }
+    fn ok(etag: &str, body: &str) -> WatchResponse {
+        WatchResponse {
+            status: 200,
+            etag: etag.into(),
+            body: body.as_bytes().to_vec(),
+            ..WatchResponse::default()
+        }
+    }
+    fn not_modified(etag: &str) -> WatchResponse {
+        WatchResponse {
+            status: 304,
+            not_modified: true,
+            etag: etag.into(),
+            ..WatchResponse::default()
+        }
+    }
+}
+
+impl WatchRead for FakeReader {
+    fn list_open_pulls(
+        &self,
+        _repo: &str,
+        _prior: &PullListState,
+        _max: usize,
+    ) -> Result<PullListResult, WatchError> {
+        self.calls.borrow_mut().push("list".into());
+        if let Some(e) = &self.w.list_error {
+            return Err(e.clone());
+        }
+        let state = PullListState {
+            per_page: 25,
+            pages: vec![PullPage {
+                etag: "\"p1\"".into(),
+                link: String::new(),
+                items: self.w.items.clone(),
+            }],
+        };
+        Ok(PullListResult {
+            state,
+            items: self.w.items.clone(),
+            unchanged: false,
+        })
+    }
+    fn pull_detail(&self, _repo: &str, n: u64, etag: &str) -> Result<WatchResponse, WatchError> {
+        self.note(format!("detail/{n}"), etag)?;
+        let tag = self.w.detail_etags.get(&n).cloned().unwrap_or_default();
+        if !etag.is_empty() && etag == tag {
+            return Ok(Self::not_modified(etag));
+        }
+        Ok(Self::ok(
+            &tag,
+            self.w.details.get(&n).map_or("", String::as_str),
+        ))
+    }
+    fn branch(&self, _repo: &str, name: &str, etag: &str) -> Result<WatchResponse, WatchError> {
+        self.note(format!("branch/{name}"), etag)?;
+        let tip = self.w.tips.get(name).cloned().unwrap_or_default();
+        let tag = format!("\"t-{tip}\"");
+        if etag == tag {
+            return Ok(Self::not_modified(etag));
+        }
+        Ok(Self::ok(
+            &tag,
+            &format!("{{\"commit\":{{\"sha\":\"{tip}\"}}}}"),
+        ))
+    }
+    fn commit(&self, _repo: &str, sha: &str, etag: &str) -> Result<WatchResponse, WatchError> {
+        self.note(format!("commit/{}", &sha[..4]), etag)?;
+        Ok(Self::ok(
+            "",
+            self.w.commits.get(sha).map_or("", String::as_str),
+        ))
+    }
+    fn pull_commits(
+        &self,
+        _repo: &str,
+        n: u64,
+        page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        self.note(format!("commits/{n}/{page}"), etag)?;
+        let body = self.w.pulls.get(&n).map_or("", String::as_str);
+        Ok(Self::ok(
+            "",
+            if body.is_empty() || page > 1 {
+                "[]"
+            } else {
+                body
+            },
+        ))
+    }
+    fn check_runs(
+        &self,
+        _repo: &str,
+        sha: &str,
+        _page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        self.note(format!("runs/{}", &sha[..4]), etag)?;
+        let body = self.w.runs.get(sha).map_or("", String::as_str);
+        let tag = format!("\"r-{}\"", body.len());
+        if etag == tag {
+            return Ok(Self::not_modified(etag));
+        }
+        Ok(Self::ok(
+            &tag,
+            if body.is_empty() {
+                "{\"total_count\":0,\"check_runs\":[]}"
+            } else {
+                body
+            },
+        ))
+    }
+    fn statuses(
+        &self,
+        _repo: &str,
+        sha: &str,
+        _page: u64,
+        etag: &str,
+    ) -> Result<WatchResponse, WatchError> {
+        self.note(format!("stats/{}", &sha[..4]), etag)?;
+        let body = self.w.stats.get(sha).map_or("", String::as_str);
+        let tag = format!("\"s-{}\"", body.len());
+        if etag == tag {
+            return Ok(Self::not_modified(etag));
+        }
+        Ok(Self::ok(&tag, if body.is_empty() { "[]" } else { body }))
+    }
+    fn rate_limit(&self) -> Result<stw::watch_reader::http::RateInfo, WatchError> {
+        Ok(self.w.rate)
+    }
+    fn actions_runs(&self, repo: &str, sha: &str) -> Result<Vec<WorkflowRun>, WatchError> {
+        self.calls
+            .borrow_mut()
+            .push(format!("actions/{}", &sha[..4]));
+        match &self.w.actions {
+            Some(r) => Ok(r.clone()),
+            None => {
+                let _ = repo;
+                let mut e = WatchError::new(Code::Forbidden, "access was refused");
+                e.status = 403;
+                Err(e)
+            }
+        }
+    }
+}
+
+/// The observer keeps one reader for its whole life; a scenario changes what it answers between steps.
+#[derive(Clone)]
+struct Swap(Rc<RefCell<Rc<FakeReader>>>);
+
+impl Swap {
+    fn cur(&self) -> Rc<FakeReader> {
+        self.0.borrow().clone()
+    }
+}
+
+impl WatchRead for Swap {
+    fn list_open_pulls(
+        &self,
+        r: &str,
+        p: &PullListState,
+        m: usize,
+    ) -> Result<PullListResult, WatchError> {
+        self.cur().list_open_pulls(r, p, m)
+    }
+    fn pull_detail(&self, r: &str, n: u64, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().pull_detail(r, n, e)
+    }
+    fn branch(&self, r: &str, n: &str, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().branch(r, n, e)
+    }
+    fn commit(&self, r: &str, s: &str, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().commit(r, s, e)
+    }
+    fn pull_commits(&self, r: &str, n: u64, p: u64, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().pull_commits(r, n, p, e)
+    }
+    fn check_runs(&self, r: &str, s: &str, p: u64, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().check_runs(r, s, p, e)
+    }
+    fn statuses(&self, r: &str, s: &str, p: u64, e: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().statuses(r, s, p, e)
+    }
+    fn rate_limit(&self) -> Result<stw::watch_reader::http::RateInfo, WatchError> {
+        self.cur().rate_limit()
+    }
+    fn actions_runs(&self, r: &str, s: &str) -> Result<Vec<WorkflowRun>, WatchError> {
+        self.cur().actions_runs(r, s)
+    }
+}
+
+fn code_of(name: &str) -> Code {
+    [
+        Code::RateLimited,
+        Code::Network,
+        Code::Unauthorized,
+        Code::Forbidden,
+        Code::Http5xx,
+        Code::Malformed,
+        Code::TooManyPrs,
+        Code::PageTooLarge,
+        Code::RepoMoved,
+    ]
+    .into_iter()
+    .find(|c| c.as_str() == name)
+    .unwrap_or_else(|| panic!("unknown code {name}"))
+}
+
+fn err_of(v: &Value) -> WatchError {
+    // kind "plain" is any other error: the observer reports it as `network`
+    let code = if v["kind"] == "watch" {
+        code_of(s(&v["code"]))
+    } else {
+        Code::Network
+    };
+    let mut e = WatchError::new(code, s(&v["message"]));
+    e.retry_after = v["retry_after_seconds"].as_u64().unwrap_or(0);
+    e
+}
+
+fn world_of(w: &Value, now: i64) -> World {
+    let mut out = World::default();
+    for it in w["list_items"].as_array().unwrap() {
+        out.items.push(PullItem {
+            number: it["number"].as_u64().unwrap(),
+            title: s(&it["title"]).into(),
+            user: s(&it["user"]).into(),
+            labels: it["labels"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|l| s(l).to_string())
+                .collect(),
+            draft: it["draft"].as_bool().unwrap(),
+            head_sha: s(&it["head_sha"]).into(),
+            head_ref: s(&it["head_ref"]).into(),
+            base_ref: s(&it["base_ref"]).into(),
+            base_sha: String::new(),
+        });
+    }
+    if w["list_error"].is_object() {
+        out.list_error = Some(err_of(&w["list_error"]));
+    }
+    let nums = |m: &Value| -> HashMap<u64, String> {
+        m.as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.parse().unwrap(), s(v).to_string()))
+            .collect()
+    };
+    let strs = |m: &Value| -> HashMap<String, String> {
+        m.as_object()
+            .unwrap()
+            .iter()
+            .map(|(k, v)| (k.clone(), s(v).to_string()))
+            .collect()
+    };
+    out.details = nums(&w["pull_details"]);
+    out.detail_etags = nums(&w["pull_detail_etags"]);
+    out.pulls = nums(&w["pull_commits"]);
+    out.tips = strs(&w["branch_tips"]);
+    out.runs = strs(&w["check_runs"]);
+    out.stats = strs(&w["commit_statuses"]);
+    out.commits = strs(&w["commits"]);
+    if w["rate_limit"].is_object() {
+        let r = &w["rate_limit"];
+        out.rate = stw::watch_reader::http::RateInfo {
+            known: r["known"].as_bool().unwrap(),
+            limit: r["limit"].as_u64().unwrap(),
+            remaining: r["remaining"].as_u64().unwrap(),
+            reset: now + r["reset_in_seconds"].as_i64().unwrap(),
+        };
+    }
+    for (k, e) in w["call_errors"].as_object().unwrap() {
+        out.errs.insert(k.clone(), err_of(e));
+    }
+    out
+}
+
+fn hints_of(h: &Value) -> Hints {
+    Hints {
+        cycle: h["cycle"].as_u64().unwrap(),
+        detail_every: h["detail_every"].as_u64().unwrap(),
+        known: h["known"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .map(|k| KnownPr {
+                        number: k["number"].as_u64().unwrap(),
+                        head: s(&k["head"]).into(),
+                        class: s(&k["class"]).into(),
+                        class_candidate: s(&k["class_candidate"]).into(),
+                        detail_due: k["detail_due"].as_bool().unwrap_or(false),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
+}
+
+/// The observation as the corpus writes it (`oObs` of the exporter).
+fn obs_json(o: &RepoObservation) -> Value {
+    let prs: Vec<Value> = o
+        .prs
+        .iter()
+        .map(|p| {
+            let checks = p.checks.as_ref().map(|c| {
+                serde_json::json!({
+                    "runs": c.runs.iter().map(|r| serde_json::json!({"name": r.name, "status": r.status,
+                        "conclusion": r.conclusion, "title": r.title, "summary": r.summary, "text": r.text})).collect::<Vec<_>>(),
+                    "statuses": c.statuses.iter().map(|x| serde_json::json!({"context": x.context, "state": x.state,
+                        "description": x.description})).collect::<Vec<_>>(),
+                })
+            });
+            serde_json::json!({
+                "number": p.number, "title": p.title, "author": p.author, "labels": p.labels, "draft": p.draft,
+                "head": p.head, "head_ref": p.head_ref, "base": p.base, "fork": p.fork, "fork_known": p.fork_known,
+                "detail": p.detail.as_ref().map(|d| serde_json::json!({"mergeable": d.mergeable, "state": d.state})),
+                "checks": checks,
+            })
+        })
+        .collect();
+    let gone: serde_json::Map<String, Value> = o
+        .gone
+        .iter()
+        .map(|(n, g)| {
+            (
+                n.to_string(),
+                serde_json::json!({"merged": g.merged, "merge_commit": g.merge_commit, "merged_at": g.merged_at,
+                    "base": g.base, "head": g.head, "head_ref": g.head_ref, "method_hint": g.method_hint.as_str()}),
+            )
+        })
+        .collect();
+    serde_json::json!({"default_branch": o.default_branch, "prs": prs, "gone": gone})
+}
+
+/// The calls of the fake in order; a read is conditional when the last validator sent under that call name was not
+/// empty (that is how the exporter wrote the corpus).
+fn calls_json(f: &FakeReader) -> Value {
+    let etags = f.etags.borrow();
+    Value::Array(
+        f.calls
+            .borrow()
+            .iter()
+            .map(|c| serde_json::json!({"call": c, "conditional": etags.get(c).is_some_and(|e| !e.is_empty())}))
+            .collect(),
+    )
+}
+
+fn clock_of(v: &Value) -> i64 {
+    stw::github::parse_utc(s(&v["config"]["clock"])).unwrap()
+}
+
+fn run_observer_session(name: &str, v: &Value) {
+    let now = clock_of(v);
+    let cfg = &v["config"];
+    let strs = |k: &str| -> Vec<String> {
+        cfg[k]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|x| s(x).to_string())
+            .collect()
+    };
+    let swap = Swap(Rc::new(RefCell::new(Rc::new(FakeReader::default()))));
+    let mk = |swap: &Swap| {
+        HostObserver::new(
+            swap.clone(),
+            Box::new(move || now),
+            cfg["max_open_prs"].as_u64().unwrap() as usize,
+            strs("ignore_authors"),
+            strs("ignore_labels"),
+        )
+    };
+    let mut observer = mk(&swap);
+    let mut cond: Option<stw::watch_reader::cond_store::CondStore> = None;
+    for (i, step) in v["steps"].as_array().unwrap().iter().enumerate() {
+        let ctx = format!("{name} step {}", i + 1);
+        let want = &v["expected"][i];
+        assert_eq!(want["step"], i + 1, "{ctx}");
+        if step["new_process"] == true {
+            observer = mk(&swap);
+        }
+        let fake = Rc::new(FakeReader {
+            w: world_of(&step["world"], now),
+            ..FakeReader::default()
+        });
+        *swap.0.borrow_mut() = fake.clone();
+        let cancel = AtomicBool::new(step["context_canceled"] == true);
+        let mut slow = Value::Null;
+        if step["after_cycle_first"] == true {
+            slow = observer.after_cycle().into();
+        }
+        let got = observer.observe("o/r", &hints_of(&step["hints"]), cond.as_ref(), &cancel);
+        let (obs, err) = match got {
+            Ok(o) => {
+                if let Some(c) = &o.cond {
+                    cond = Some(c.clone());
+                }
+                (obs_json(&o), Value::Null)
+            }
+            Err(ObserveFailure::Canceled) => (
+                Value::Null,
+                serde_json::json!({"code": "", "run_wide": false, "retry_in_seconds": 0, "canceled": true}),
+            ),
+            Err(ObserveFailure::Error(e)) => (
+                Value::Null,
+                serde_json::json!({"code": e.code.as_str(), "run_wide": e.run_wide, "retry_in_seconds": e.retry_in, "canceled": false}),
+            ),
+        };
+        assert_eq!(obs, want["observation"], "{ctx}: observation");
+        assert_eq!(err, want["error"], "{ctx}: error");
+        assert_eq!(calls_json(&fake), want["calls"], "{ctx}: calls");
+        let diags: Vec<String> = observer.take_diagnostics();
+        let want_diags: Vec<String> = want["diagnostics"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| s(d).to_string())
+            .collect();
+        assert_eq!(diags, want_diags, "{ctx}: diagnostics");
+        assert_eq!(slow, want["slow_after_cycle"], "{ctx}: slow_after_cycle");
+    }
+}
+
+#[test]
+fn observer_session_scenarios_are_replayed() {
+    let all = scenarios_of("observer-session");
+    assert_eq!(
+        all.len(),
+        14,
+        "the corpus has 14 observer-session scenarios"
+    );
+    for (name, v) in &all {
+        run_observer_session(name, v);
+    }
+}
+
+#[test]
+fn vector_checks_class() {
+    use stw::watch_reader::obs::{checks_class, CheckRun, StatusContext};
+    let mut total = 0;
+    for (file, n) in [
+        ("checks-classify-classes", 16),
+        ("checks-classify-failing-names", 2),
+        ("checks-shape-rules", 22),
+        ("checks-shape-text-bound", 3),
+    ] {
+        total += each_case(file, "classify_checks", |name, i, e| {
+            let runs: Vec<CheckRun> = i["runs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| CheckRun {
+                    name: s(&r["name"]).into(),
+                    status: s(&r["status"]).into(),
+                    conclusion: s(&r["conclusion"]).into(),
+                    title: s(&r["title"]).into(),
+                    summary: s(&r["summary"]).into(),
+                    text: s(&r["text"]).into(),
+                })
+                .collect();
+            let stats: Vec<StatusContext> = i["statuses"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|x| StatusContext {
+                    context: s(&x["context"]).into(),
+                    state: s(&x["state"]).into(),
+                    description: s(&x["description"]).into(),
+                })
+                .collect();
+            assert_eq!(
+                checks_class(&runs, &stats),
+                s(&e["class"]),
+                "{file}: {name}"
+            );
+        });
+        assert!(total >= n);
+    }
+    assert_eq!(total, 43);
+}
+
+#[test]
+fn rfc3339_accepts_what_go_parses() {
+    use stw::watch_reader::host::valid_rfc3339;
+    for ok in [
+        "2026-10-22T08:00:00Z",
+        "2026-10-22T08:00:00.123456789Z",
+        "2026-10-22T10:00:00+02:00",
+        "2026-10-22T08:00:00-05:30",
+        "2028-02-29T00:00:00Z",
+    ] {
+        assert!(valid_rfc3339(ok), "{ok}");
+    }
+    for bad in [
+        "",
+        "garbage",
+        "2026-10-22 08:00:00Z",
+        "2026-13-01T00:00:00Z",
+        "2026-02-30T00:00:00Z",
+        "2027-02-29T00:00:00Z",
+        "2026-10-22T24:00:00Z",
+        "2026-10-22T08:60:00Z",
+        "2026-10-22T08:00:60Z",
+        "2026-10-22T08:00:00",
+        "2026-10-22T08:00:00+0200",
+        "2026-10-22T08:00:00.Z",
+        "2026-10-22t08:00:00Z",
+        "2026-10-22T08:00:00+24:00",
+        "2026-10-22T08:00:00Zjunk",
+    ] {
+        assert!(!valid_rfc3339(bad), "{bad}");
+    }
+}
