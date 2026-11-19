@@ -1714,6 +1714,16 @@
       "size": 2
     },
     {
+      "name": "http-credentials-never-in-errors",
+      "kind": "http-reader",
+      "file": "http-credentials-never-in-errors.json",
+      "description": "A server that echoes the Authorization header in an error body does not make the token reachable from the error.",
+      "go_tests": [
+        "watch_reader_test.go:TestWatchTokenNeverInErrorsOrBodies"
+      ],
+      "size": 1
+    },
+    {
       "name": "http-error-classification",
       "kind": "http-reader",
       "file": "http-error-classification.json",
@@ -1762,16 +1772,6 @@
         "watch_reader_test.go:TestWatchRedirectsRefusedAndRepoMoved"
       ],
       "size": 6
-    },
-    {
-      "name": "http-token-never-in-errors",
-      "kind": "http-reader",
-      "file": "http-token-never-in-errors.json",
-      "description": "A server that echoes the Authorization header in an error body does not make the token reachable from the error.",
-      "go_tests": [
-        "watch_reader_test.go:TestWatchTokenNeverInErrorsOrBodies"
-      ],
-      "size": 1
     },
     {
       "name": "http-typed-functions-and-refused-inputs",

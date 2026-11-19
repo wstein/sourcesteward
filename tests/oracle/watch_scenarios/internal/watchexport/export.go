@@ -172,5 +172,8 @@ func NewVectors(name, function, desc string, dependent []string, goTests ...stri
 
 // Add appends a case.
 func (v *VectorDoc) Add(name string, input, expected any) {
+	if name == "" {
+		name = "(empty)"
+	}
 	v.Cases = append(v.Cases, Case{name, input, expected})
 }
