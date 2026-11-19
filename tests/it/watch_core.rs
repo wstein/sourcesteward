@@ -2883,3 +2883,277 @@ fn the_events_of_every_cycle_scenario_replayed_through_apply_reach_the_expected_
         &bad[..bad.len().min(8)]
     );
 }
+
+// --- the same events through the session: crash points, restarts, file operations
+
+fn crash_step(c: &Value) -> Option<Step> {
+    if c.is_null() {
+        return None;
+    }
+    let n = c["n"].as_u64().unwrap() as usize;
+    Some(match c["point"].as_str().unwrap() {
+        "append" => Step::Append(n),
+        "print" => Step::Print(n),
+        "state" => Step::State,
+        other => panic!("unknown crash point {other}"),
+    })
+}
+
+/// Plays the steps of a scenario against a state directory with the commit order of the core. Returns the journal as it ends.
+fn run_session(name: &str, sc: &Value, dir: &Path) -> Vec<Event> {
+    let log = log_of(sc);
+    let mut core: Option<Core> = None;
+    let mut corrupted = false;
+    for (i, step) in sc["cycles"].as_array().unwrap().iter().enumerate() {
+        let exp = &sc["expected_events"][i];
+        let file_op = str_of(&step["file_op"]);
+        let reopen = core.is_none()
+            || step["restart_before"] == true
+            || step["action"] == "open"
+            || !file_op.is_empty();
+        let mut rec = Rec::default();
+        if reopen {
+            if let Some(c) = core.take() {
+                c.close();
+            }
+            match file_op.as_str() {
+                "delete-state" => std::fs::remove_file(dir.join(STATE_NAME)).unwrap(),
+                "corrupt-state" => {
+                    std::fs::write(dir.join(STATE_NAME), "{corrupt").unwrap();
+                    corrupted = true;
+                }
+                _ => {}
+            }
+            let baseline = step["config_change"]["baseline"] == true;
+            match Core::open(dir, baseline, &mut rec) {
+                Ok((c, report)) => {
+                    assert!(
+                        matches!(exp["result"].as_str(), Some("ok" | "crashed")),
+                        "{name} step {}",
+                        i + 1
+                    );
+                    let want_lost = file_op == "delete-state" || (corrupted && baseline);
+                    assert_eq!(report.lost, want_lost, "{name} step {}", i + 1);
+                    corrupted = false;
+                    core = Some(c);
+                }
+                Err(e) => {
+                    assert!(matches!(e, WatchError::CorruptState(_)), "{name}: {e}");
+                    assert_eq!(
+                        (exp["result"].as_str(), exp["error_kind"].as_str()),
+                        (Some("error"), Some("corrupt-state")),
+                        "{name}"
+                    );
+                }
+            }
+        }
+        if step["action"] == "cycle" {
+            if let Some(c) = core.as_mut() {
+                let events: Vec<Event> = log
+                    .iter()
+                    .filter(|(s, _)| *s == i)
+                    .map(|(_, e)| e.clone())
+                    .collect();
+                rec.crash_after = crash_step(&step["crash"]);
+                let out = c.commit(&events, &mut rec);
+                if exp["result"] == "crashed" {
+                    assert!(
+                        out.is_err(),
+                        "{name} step {}: the crash point was not reached",
+                        i + 1
+                    );
+                    core = None;
+                } else {
+                    let written = out.unwrap_or_else(|e| panic!("{name} step {}: {e}", i + 1));
+                    for (w, (_, e)) in written.iter().zip(log.iter().filter(|(s, _)| *s == i)) {
+                        assert_eq!((w.seq, &w.id), (e.seq, &e.id), "{name}");
+                    }
+                    c.heartbeat(0, "once").unwrap();
+                }
+            }
+        }
+        let want: Vec<u64> = exp["printed"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_u64().unwrap())
+            .collect();
+        assert_eq!(rec.printed, want, "{name} step {}: printed ordinals", i + 1);
+    }
+    if let Some(c) = core.take() {
+        c.close();
+    }
+    let mut journal = Vec::new();
+    scan(&dir.join(JOURNAL_NAME), &mut |e| journal.push(e.clone())).unwrap();
+    journal
+}
+
+#[test]
+fn the_session_reproduces_the_printed_ordinals_and_the_journal_of_every_cycle_scenario() {
+    let all = watch_cycle_scenarios();
+    let (mut crashed, mut restarts, mut steps) = (0, 0, 0);
+    for (name, sc) in &all {
+        let t = tmp();
+        let dir = t.path().join("state");
+        let journal = run_session(name, sc, &dir);
+        let want: Vec<u64> = sc["expected_journal_ordinals"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_u64().unwrap())
+            .collect();
+        assert_eq!(
+            journal.iter().map(|e| e.seq).collect::<Vec<_>>(),
+            want,
+            "{name}: journal ordinals"
+        );
+        let log = log_of(sc);
+        assert_eq!(journal.len(), log.len(), "{name}: every event exactly once");
+        for (j, (_, e)) in journal.iter().zip(&log) {
+            assert_eq!(
+                (&j.id, j.kind(), &j.details),
+                (&e.id, e.kind(), &e.details),
+                "{name}"
+            );
+        }
+        for s in sc["cycles"].as_array().unwrap() {
+            steps += 1;
+            crashed += usize::from(!s["crash"].is_null());
+            restarts += usize::from(s["restart_before"] == true);
+        }
+    }
+    assert!(
+        crashed >= 100 && restarts > 50 && steps > 500,
+        "{crashed} {restarts} {steps}"
+    );
+}
+
+#[test]
+fn a_crash_scenario_ends_with_the_state_of_its_crash_free_variant() {
+    // `crash-<case>-none` is the run without a crash; the journal and the replayed state are the same for every variant.
+    let all = watch_cycle_scenarios();
+    let by_name: BTreeMap<&str, &Value> = all.iter().map(|(n, v)| (n.as_str(), v)).collect();
+    let mut pairs = 0;
+    for (name, sc) in &all {
+        let Some(case) = name.strip_prefix("crash-") else {
+            continue;
+        };
+        let Some((stem, _)) = case.rsplit_once('-') else {
+            continue;
+        };
+        let Some(none) = by_name.get(format!("crash-{stem}-none").as_str()) else {
+            continue;
+        };
+        if name.ends_with("-none") {
+            continue;
+        }
+        pairs += 1;
+        let (a, b) = (log_of(sc), log_of(none));
+        // the same events, once each; the order inside a step may differ (a crash moves the re-derivation to the next cycle)
+        let strip = |l: &[(usize, Event)]| {
+            let mut v: Vec<String> = l
+                .iter()
+                .map(|(_, e)| format!("{:?}", (e.kind(), &e.repo, e.pr, &e.details)))
+                .collect();
+            v.sort();
+            v
+        };
+        assert_eq!(
+            strip(&a),
+            strip(&b),
+            "{name}: the journal holds the events of the crash-free run"
+        );
+        let (sa, sb) = (replay(sc), replay(none));
+        // what a crashed cycle loses (its baseline, its read hints) is not compared; the counters, the set and the health are
+        assert_eq!(
+            (sa.repos_epoch, &sa.repos, &sa.health),
+            (sb.repos_epoch, &sb.repos, &sb.health),
+            "{name}: the replayed counters equal the crash-free run"
+        );
+    }
+    assert!(pairs >= 50, "{pairs}");
+}
+
+// --- the liveness report
+
+#[test]
+fn the_status_probes_of_the_corpus_are_answered_from_the_directory_alone() {
+    let mut probes = 0;
+    for (name, sc) in watch_cycle_scenarios() {
+        let list = sc["status_probes"].as_array().unwrap();
+        if list.is_empty() {
+            continue;
+        }
+        let t = tmp();
+        let dir = t.path().join("state");
+        ensure_state_dir(&dir).unwrap();
+        let view = &sc["expected_state_view"];
+        let mut s = State::new();
+        s.interval_seconds = view["interval_seconds"].as_u64().unwrap();
+        s.repos = Some(config_repos(&view["repos"]));
+        for (repo, rv) in view["repo"].as_object().unwrap() {
+            let mut rs = RepoState::new(&str_of(&rv["since"]));
+            rs.last_ok = str_of(&rv["last_ok"]);
+            s.repo.insert(repo.clone(), rs);
+            let h = &rv["health"];
+            let st = s.health_mut(repo);
+            st.failures = h["failures"].as_u64().unwrap();
+            st.error_open = h["error_open"] == true;
+            st.last_code = str_of(&h["last_code"]);
+        }
+        save_state(&dir, &s).unwrap();
+        let last = str_of(&sc["cycles"].as_array().unwrap().last().unwrap()["time"]);
+        let beat = stw::github::parse_utc(&last).unwrap();
+        write_heartbeat(&dir, beat, 4242, &str_of(&sc["config"]["mode"])).unwrap();
+        for p in list {
+            let now = beat + p["offset_seconds"].as_i64().unwrap();
+            let got = read_status(&dir, now).unwrap();
+            let e = &p["expected"];
+            assert_eq!(
+                got.fresh,
+                e["fresh"] == true,
+                "{name} +{}",
+                p["offset_seconds"]
+            );
+            assert_eq!(
+                got.heartbeat.as_ref().map(|h| h.age_seconds),
+                e["heartbeat_age_seconds"].as_u64(),
+                "{name}"
+            );
+            assert_eq!(
+                got.interval_seconds,
+                e["interval_seconds"].as_u64().unwrap(),
+                "{name}"
+            );
+            assert_eq!(got.lock_held, e["lock_held"] == true, "{name}");
+            let repos: Vec<(String, Option<u64>, u64, Option<String>)> = got
+                .repos
+                .iter()
+                .map(|r| {
+                    (
+                        r.repo.clone(),
+                        r.age_seconds,
+                        r.failures,
+                        r.open_error.clone(),
+                    )
+                })
+                .collect();
+            let want: Vec<(String, Option<u64>, u64, Option<String>)> = e["repos"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|r| {
+                    (
+                        str_of(&r["repo"]),
+                        r["last_ok_age_seconds"].as_u64(),
+                        r["failures"].as_u64().unwrap(),
+                        r["open_error"].as_str().map(str::to_string),
+                    )
+                })
+                .collect();
+            assert_eq!(repos, want, "{name}");
+            probes += 1;
+        }
+    }
+    assert_eq!(probes, 3);
+}
