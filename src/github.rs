@@ -425,6 +425,11 @@ impl Client {
         (Instant::now() >= end).then_some(total)
     }
 
+    /// The API base this client sends its requests to (no trailing slash).
+    pub fn api_base(&self) -> &str {
+        &self.base
+    }
+
     /// Credentials for git-over-HTTPS against github.com (handed to gix's transport, never printed).
     pub fn basic_auth(&self) -> (String, String) {
         ("x-access-token".to_string(), self.token.clone())
