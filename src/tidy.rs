@@ -199,12 +199,18 @@ pub struct Unmatched {
     pub with_patch: usize,
     /// Those without a partner, sorted by commit ID (the `+` lines of `git cherry`).
     pub commits: Vec<ObjectId>,
+    /// Non-merge commits of `base..tip` at the boundary of a shallow clone: their parent is not there, so their patch is
+    /// unknown. They are in neither `with_patch` nor `commits`; sorted by commit ID.
+    pub unreadable: Vec<ObjectId>,
+    /// The walk over `tip..base` reached the boundary of a shallow clone while a commit still had no partner: a partner
+    /// may lie behind it.
+    pub base_cut: bool,
 }
 
 impl Unmatched {
-    /// At least one commit with a patch, and every one has a partner: the proof `equal-patches`.
+    /// At least one commit with a patch, every one has a partner and none is unreadable: the proof `equal-patches`.
     pub fn all_matched(&self) -> bool {
-        self.with_patch > 0 && self.commits.is_empty()
+        self.with_patch > 0 && self.commits.is_empty() && self.unreadable.is_empty()
     }
 }
 
@@ -216,18 +222,29 @@ pub fn unmatched_commits(
     base: ObjectId,
     tip: ObjectId,
 ) -> Result<Unmatched> {
+    let shallow = repo.is_shallow().unwrap_or(false);
     let mut needed: HashMap<PatchKey, Vec<ObjectId>> = HashMap::new();
+    let mut unreadable = Vec::new();
     let mut with_patch = 0;
     for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
         let info = info?;
+        if shallow && tidy_similarity::at_boundary(repo, info.id)? {
+            unreadable.push(info.id);
+            continue;
+        }
         if let Some(p) = cache.get(repo, info.id)? {
             needed.entry(p).or_default().push(info.id);
             with_patch += 1;
         }
     }
+    let mut saw_boundary = false;
     if !needed.is_empty() {
         for info in repo.rev_walk([base]).with_hidden([tip]).all()? {
             let info = info?;
+            if shallow && tidy_similarity::at_boundary(repo, info.id)? {
+                saw_boundary = true;
+                continue;
+            }
             if let Some(p) = cache.get(repo, info.id)? {
                 needed.remove(&p);
                 if needed.is_empty() {
@@ -236,11 +253,15 @@ pub fn unmatched_commits(
             }
         }
     }
+    let base_cut = saw_boundary && !needed.is_empty();
     let mut commits: Vec<ObjectId> = needed.into_values().flatten().collect();
     commits.sort();
+    unreadable.sort();
     Ok(Unmatched {
         with_patch,
         commits,
+        unreadable,
+        base_cut,
     })
 }
 
