@@ -4995,6 +4995,12 @@ m SHW16 'the plan JSON has no shallow object' src/tidy.rs \
 m SHW17 'a full clone gets the shallow-history proof' src/tidy.rs \
   'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), "unmerged") = (Some(bp.shallow.unwrap_or(ShallowGap { unreadable_commits: 0, without_partner: 0, base_cut: true })), bp.proof) {' \
   tidy_shallow a_full_clone_is_unchanged
+m SHW18 'upstream-gone is replaced by shallow-history' src/tidy.rs \
+  'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), "unmerged" | "upstream-gone") = (bp.shallow, bp.proof) {' \
+  tidy_shallow a_gone_upstream_or_a_moved_pull_request_stays_what_it_was
+m SHW19 'pull-request-merged-branch-moved is replaced by shallow-history' src/tidy.rs \
+  'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), "unmerged" | "pull-request-merged-branch-moved") = (bp.shallow, bp.proof) {' \
+  tidy_shallow a_gone_upstream_or_a_moved_pull_request_stays_what_it_was
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
