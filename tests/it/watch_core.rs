@@ -2391,6 +2391,35 @@ fn a_state_ahead_of_the_journal_is_an_error_unless_the_baseline_is_forced() {
 }
 
 #[test]
+fn a_printed_seq_beyond_the_journal_is_an_error_even_when_applied_seq_is_not() {
+    // the printed counter alone is ahead: lines would be treated as printed that the journal does not have
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    emit_and_commit(
+        &mut core,
+        &[new_pr_event(1), new_pr_event(2)],
+        &mut Rec::default(),
+    )
+    .unwrap();
+    let mut state = core.state.clone();
+    core.close();
+    state.printed_seq = 3;
+    save_state(&dir, &state).unwrap();
+    let res = Core::open(&dir, false, &mut Rec::default());
+    assert!(
+        matches!(res, Err(WatchError::CorruptState(_))),
+        "printed_seq 3, journal tail 2"
+    );
+    let (core, report, _) = open(&dir, true);
+    assert!(report.lost);
+    assert_eq!(
+        (core.tail(), core.state.applied_seq, core.state.printed_seq),
+        (2, 2, 2)
+    );
+}
+
+#[test]
 fn a_truncated_journal_tail_is_reported_by_the_start_and_cut_by_the_next_commit() {
     let t = tmp();
     let dir = t.path().join("d");
