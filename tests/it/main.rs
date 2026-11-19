@@ -71,6 +71,7 @@ mod tidy_oracle;
 mod tidy_rebase;
 mod tidy_rebase_api;
 mod tidy_rebase_plan;
+mod tidy_shallow;
 mod tidy_similarity;
 mod tidy_similarity_plan;
 mod tidy_squash;
