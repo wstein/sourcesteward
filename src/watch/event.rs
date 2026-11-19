@@ -489,8 +489,15 @@ pub fn id_counter(id: &str, letter: char) -> Option<u64> {
 /// then cut to at most `max_bytes` bytes at a character boundary. Go replaces control characters by a space and invalid
 /// bytes by `?`; the Rust rule keeps the information (README deviation).
 pub fn sanitize(text: &[u8], max_bytes: usize) -> String {
-    let _ = (text, max_bytes);
-    String::new()
+    let mut s = crate::tidy_similarity::mask_bytes(text, usize::MAX);
+    if s.len() > max_bytes {
+        let mut cut = max_bytes;
+        while !s.is_char_boundary(cut) {
+            cut -= 1;
+        }
+        s.truncate(cut);
+    }
+    s
 }
 
 /// Seconds since the epoch as `YYYY-MM-DDTHH:MM:SSZ` (UTC, no fraction). Years before 0 and after 9999 are not formatted
