@@ -2058,6 +2058,19 @@ impl Output for Rec {
     }
 }
 
+/// What a cycle does: every event is applied to the state when it is emitted, then the events are committed (the commit
+/// journals, prints and saves; it does not apply).
+fn emit_and_commit(
+    core: &mut Core,
+    events: &[Event],
+    out: &mut dyn Output,
+) -> Result<Vec<Event>, WatchError> {
+    for e in events {
+        core.state.apply(e);
+    }
+    core.commit(events, out)
+}
+
 fn open(dir: &Path, baseline: bool) -> (Core, stw::watch::OpenReport, Rec) {
     let mut rec = Rec::default();
     let (c, r) = Core::open(dir, baseline, &mut rec).unwrap();
@@ -2080,14 +2093,13 @@ fn new_pr_event(n: u64) -> Event {
 }
 
 #[test]
-fn a_cycle_commits_journal_then_apply_then_print_then_state() {
+fn a_cycle_commits_journal_then_print_then_state() {
     let t = tmp();
     let (mut core, report, _) = open(&t.path().join("d"), false);
     assert_eq!(report, stw::watch::OpenReport::default());
     let mut rec = Rec::default();
-    let written = core
-        .commit(&[new_pr_event(1), new_pr_event(2)], &mut rec)
-        .unwrap();
+    let written =
+        emit_and_commit(&mut core, &[new_pr_event(1), new_pr_event(2)], &mut rec).unwrap();
     assert_eq!(written.iter().map(|e| e.seq).collect::<Vec<_>>(), [1, 2]);
     assert_eq!(
         rec.steps,
@@ -2110,7 +2122,7 @@ fn a_cycle_commits_journal_then_apply_then_print_then_state() {
     assert_eq!(on_disk, core.state);
     // an empty cycle still writes the state and prints nothing
     let mut rec = Rec::default();
-    core.commit(&[], &mut rec).unwrap();
+    emit_and_commit(&mut core, &[], &mut rec).unwrap();
     assert_eq!(
         (rec.steps.clone(), rec.printed.clone()),
         (vec![Step::State], vec![])
@@ -2118,17 +2130,54 @@ fn a_cycle_commits_journal_then_apply_then_print_then_state() {
 }
 
 #[test]
-fn an_event_that_the_cycle_applied_already_is_not_applied_twice() {
+fn a_commit_journals_prints_and_saves_but_does_not_apply() {
     let t = tmp();
     let (mut core, _, _) = open(&t.path().join("d"), false);
-    let e = new_pr_event(1);
-    core.state.apply(&e);
-    let before = core.state.clone();
-    core.commit(&[e], &mut Rec::default()).unwrap();
-    let mut after = core.state.clone();
-    after.applied_seq = 0;
-    after.printed_seq = 0;
-    assert_eq!(after, before);
+    core.commit(&[new_pr_event(1)], &mut Rec::default())
+        .unwrap();
+    assert!(
+        core.state.repo.is_empty(),
+        "applying an event is the cycle's job (Go: emit)"
+    );
+    assert_eq!((core.state.applied_seq, core.tail()), (1, 1));
+}
+
+#[test]
+fn a_commit_keeps_what_the_cycle_did_to_the_state_after_it_emitted_an_event() {
+    // Go: the cycle applies an event when it emits it and then does bookkeeping that is not an event (the detail read clears
+    // detail_due, the checks record a class candidate). A second application in the commit would undo that.
+    let t = tmp();
+    let (mut core, _, _) = open(&t.path().join("d"), false);
+    emit_and_commit(&mut core, &[new_pr_event(1)], &mut Rec::default()).unwrap();
+    let head_changed = Event::new(
+        event_id(Some("o/r"), Some(1), Kind::HeadChanged, &key_head(H2, 1)),
+        "2026-10-22T09:01:00Z".into(),
+        Some("o/r".into()),
+        Some(1),
+        Details::HeadChanged(HeadChanged {
+            old: format!("{:040}", 1),
+            new: H2.into(),
+        }),
+    );
+    core.state.apply(&head_changed);
+    {
+        let p = core
+            .state
+            .repo
+            .get_mut("o/r")
+            .unwrap()
+            .prs
+            .get_mut(&1)
+            .unwrap();
+        p.detail_due = false;
+        p.class_candidate = Some(Class::Green);
+    }
+    let before = core.state.repo["o/r"].prs[&1].clone();
+    core.commit(&[head_changed], &mut Rec::default()).unwrap();
+    assert_eq!(
+        core.state.repo["o/r"].prs[&1], before,
+        "the commit left the PR as the cycle had it"
+    );
 }
 
 #[test]
@@ -2146,16 +2195,15 @@ fn a_second_open_of_the_same_directory_is_locked_out_until_the_first_is_closed()
 fn crashed(t: &tempfile::TempDir, n: u64, step: Step) -> std::path::PathBuf {
     let dir = t.path().join("d");
     let (mut core, _, _) = open(&dir, false);
-    core.commit(&[new_pr_event(100)], &mut Rec::default())
-        .unwrap(); // seq 1 is complete
+    emit_and_commit(&mut core, &[new_pr_event(100)], &mut Rec::default()).unwrap(); // seq 1 is complete
     let events: Vec<Event> = (1..=n).map(new_pr_event).collect();
     let mut rec = Rec {
         crash_after: Some(step),
         ..Rec::default()
     };
-    assert!(core.commit(&events, &mut rec).is_err());
+    assert!(emit_and_commit(&mut core, &events, &mut rec).is_err());
     assert!(
-        core.commit(&events, &mut Rec::default()).is_err(),
+        emit_and_commit(&mut core, &events, &mut Rec::default()).is_err(),
         "a failed session stays unusable"
     );
     drop(core);
@@ -2216,7 +2264,7 @@ fn the_state_of_a_restart_equals_the_state_of_a_run_without_a_crash() {
     let clean = {
         let t = tmp();
         let (mut core, _, _) = open(&t.path().join("d"), false);
-        core.commit(&events, &mut Rec::default()).unwrap();
+        emit_and_commit(&mut core, &events, &mut Rec::default()).unwrap();
         core.state.clone()
     };
     for step in [Step::Append(3), Step::Print(1), Step::Print(3), Step::State] {
@@ -2227,7 +2275,7 @@ fn the_state_of_a_restart_equals_the_state_of_a_run_without_a_crash() {
             crash_after: Some(step),
             ..Rec::default()
         };
-        assert!(core.commit(&events, &mut rec).is_err());
+        assert!(emit_and_commit(&mut core, &events, &mut rec).is_err());
         drop(core);
         let (core, _, _) = open(&dir, false);
         assert_eq!(core.state, clean, "{step:?}");
@@ -2268,8 +2316,12 @@ fn a_lost_state_is_rebuilt_from_the_journal_silently_and_forces_a_baseline() {
     let dir = t.path().join("d");
     let (mut core, _, _) = open(&dir, false);
     core.state.repos = Some(vec!["o/r".into()]);
-    core.commit(&[new_pr_event(1), new_pr_event(2)], &mut Rec::default())
-        .unwrap();
+    emit_and_commit(
+        &mut core,
+        &[new_pr_event(1), new_pr_event(2)],
+        &mut Rec::default(),
+    )
+    .unwrap();
     core.close();
     std::fs::remove_file(dir.join(STATE_NAME)).unwrap();
     let (core, report, rec) = open(&dir, false);
@@ -2293,8 +2345,7 @@ fn a_corrupt_state_is_an_error_unless_the_baseline_is_forced() {
     let t = tmp();
     let dir = t.path().join("d");
     let (mut core, _, _) = open(&dir, false);
-    core.commit(&[new_pr_event(1)], &mut Rec::default())
-        .unwrap();
+    emit_and_commit(&mut core, &[new_pr_event(1)], &mut Rec::default()).unwrap();
     core.close();
     std::fs::write(dir.join(STATE_NAME), "{broken").unwrap();
     let err = Core::open(&dir, false, &mut Rec::default()).err().unwrap();
@@ -2315,8 +2366,12 @@ fn a_state_ahead_of_the_journal_is_an_error_unless_the_baseline_is_forced() {
     let t = tmp();
     let dir = t.path().join("d");
     let (mut core, _, _) = open(&dir, false);
-    core.commit(&[new_pr_event(1), new_pr_event(2)], &mut Rec::default())
-        .unwrap();
+    emit_and_commit(
+        &mut core,
+        &[new_pr_event(1), new_pr_event(2)],
+        &mut Rec::default(),
+    )
+    .unwrap();
     core.close();
     // the journal loses its last line (a restored backup of one file)
     let j = std::fs::read_to_string(dir.join(JOURNAL_NAME)).unwrap();
@@ -2340,8 +2395,7 @@ fn a_truncated_journal_tail_is_reported_by_the_start_and_cut_by_the_next_commit(
     let t = tmp();
     let dir = t.path().join("d");
     let (mut core, _, _) = open(&dir, false);
-    core.commit(&[new_pr_event(1)], &mut Rec::default())
-        .unwrap();
+    emit_and_commit(&mut core, &[new_pr_event(1)], &mut Rec::default()).unwrap();
     core.close();
     let mut f = std::fs::OpenOptions::new()
         .append(true)
@@ -2351,8 +2405,7 @@ fn a_truncated_journal_tail_is_reported_by_the_start_and_cut_by_the_next_commit(
     drop(f);
     let (mut core, report, _) = open(&dir, false);
     assert_eq!(report.truncated_tail_bytes, 23);
-    core.commit(&[new_pr_event(2)], &mut Rec::default())
-        .unwrap();
+    emit_and_commit(&mut core, &[new_pr_event(2)], &mut Rec::default()).unwrap();
     assert_eq!(core.tail(), 2);
     scan(&dir.join(JOURNAL_NAME), &mut |_| {}).unwrap();
 }
@@ -2995,7 +3048,7 @@ fn run_session(name: &str, sc: &Value, dir: &Path) -> Vec<Event> {
                     .map(|(_, e)| e.clone())
                     .collect();
                 rec.crash_after = crash_step(&step["crash"]);
-                let out = c.commit(&events, &mut rec);
+                let out = emit_and_commit(c, &events, &mut rec);
                 if exp["result"] == "crashed" {
                     assert!(
                         out.is_err(),
