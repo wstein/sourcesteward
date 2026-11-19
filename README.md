@@ -1454,13 +1454,91 @@ modes and checks of the state directory (work tree, `.stw`, symlinks), the lock 
 cross builds, the source checks of the Go packages (no imports, no write verbs), the `gh` token lookup, per-request deadlines and
 cancellation of the HTTP client, the layout of the conditional-request store, and the config and FIFO checks that need files.
 
+## Watch core (port, W1)
+
+First package of the port of `stw watch` to Rust (owner decisions D-20261119-02 to -05): the core, `src/watch/` (`mod.rs`,
+`event.rs`, `state.rs`, `apply.rs`, `journal.rs`, `lock.rs`, `statedir.rs`). Pure logic and files: no network (the reader is W2), no
+cycle (diff, debounce, checks classes, backoff, restack choice: W3), no command, signals or config (W4). Times are parameters, there is no
+clock. Tests: `tests/it/watch_core.rs` (own tests and the replay of the corpus of "Watch scenarios"); mutations `WK1` to `WK56`.
+New direct dependencies, both pinned exactly: `serde` `=1.0.229` (derive; the formats are written with it) and `serde_json` `=1.0.154`
+(was `1`; feature `raw_value` added, no new crate). SHA-256 is own code (`statedir::sha256`, FIPS 180-4 and NIST vectors, padding
+boundaries checked against GNU `sha256sum`): the gix feature would add `sha2` and change gix's object-format support. No `libc`, no process.
+
+**The formats are the Rust formats of the port, not the Go ones** (D-20261119-05: a new baseline when switching). So a Go state
+directory is never opened by mistake: the directory id hashes the prefix `stw-watch-rs1` (Go: `stw-watch-v1`), and `state.json` carries
+`format: "stw-watch-state"`, which a Go file lacks. Both file formats are versioned: `schema_version` 1; another version, another format or any
+unknown key is `CorruptState`, never guessed.
+
+State directory `$XDG_STATE_HOME/stw/watch/<id>/` (else `$HOME/.local/state/...`), `<id>` = the first 16 hex digits of SHA-256 over
+`stw-watch-rs1\n`, the host, `\n` and `workspace:<root>` or `repos:` plus the lower-cased, deduplicated, sorted repositories joined by `\n`.
+`--state-dir` must be absolute (usage error otherwise). The directory has mode 0700 (an existing one with another mode is refused), its files
+0600, and it is never inside a Git work tree (a `.git` entry, file or directory, in it or above it; symbolic links are resolved first) or
+below `.stw`; nothing is created when the answer is a refusal. Files: `state.json`, `journal.jsonl`, `lock`, `heartbeat`.
+
+`journal.jsonl`: one event line each (the envelope `schema_version, seq, id, time, repo, pr, kind, details`, every key always, details with
+exactly the keys of the contract, lists never null), append-only, fsynced before the event is printed, never rotated. `seq` is the `seq` of the
+last complete line plus one, read from the lines, never from a file offset (the spike's `tell() - (1 << 20)` error); the file is validated
+line by line with memory bounded by one line (limit 4 MiB). Bytes after the last newline are a truncated write: `Journal::junk_bytes`
+reports them, `after` ignores them and the next append cuts them off. A complete line that is not a valid event, a `seq` that is not the
+previous plus one, a line that is not UTF-8 or longer than the limit is `CorruptState` (not repaired).
+
+`state.json`: one compact JSON line (maps ordered, so the file is deterministic), written atomically (temporary file, fsync, rename, fsync of
+the directory): `format`, `schema_version`, `applied_seq`, `printed_seq`, `interval_seconds`, `cycle`, `repos_epoch`, `repos` (null before the first
+cycle), `skipped`, `repo` (per repository: `baselined`, `since`, `last_ok`, `default_branch`, `conditional` (opaque, W2/W3), `prs` keyed by
+number (`number`, `title`, `author`, `labels`, `draft`, `head`, `head_ref`, `base`, `fork`, `generation`, `epochs` {head, checks, mergeable, ready,
+base}, `class` (`""`, `none`, `pending`, `green`, `red`), `class_candidate` (null or a class), `pending_since`, `pending_names`,
+`timeout_fired`, `mergeable`, `mergeable_state`, `conflicting`, `behind`, `mergeable_candidate`, `detail_due`, `gone`), `closed` (at most 5000),
+`restack_due`, `restack_done`) and `health` per repository and `""` for the run. `seq` is not in it.
+
+Crash model (the "Replay effects" table of Spec 035): `Core::commit` journals each event (fsync), applies it (`State::apply`, idempotent:
+counters are raised to the value in the event id and never lowered, every other effect sets or removes), prints it, then writes `state.json`
+with `applied_seq` = `printed_seq` = the last seq. `Core::open` replays the lines past `applied_seq` and prints those past `printed_seq` again
+(at-least-once). A lost or corrupt state with a journal, or a state ahead of the journal, is an error unless the baseline is forced; then it
+is rebuilt from the journal silently (no reprint, the first cycle is a baseline). After an error the session is unusable until reopened.
+
+Lock: `std::fs::File::try_lock` on `lock` (D3; no `libc`), a second watcher gets `WatchError::Locked(pid)` (exit 3 in W4), retried for about one
+second so a `--status` probe does not look like a second watcher; `holder` probes with a shared lock and never creates the file.
+`read_status` (`--status --json`): fresh when the heartbeat is younger than `max(3 x interval, 180 s)`; reads only, no lock taken.
+
+Event ids keep the Go form `REPO#PR:KIND:KEY` (`-` for an absent part); the corpus proves that the key functions rebuild every id of the 194
+cycle scenarios and that ids are unique per scenario.
+
+Deviations from the Go behavior (named one by one; D numbers are those of the port plan):
+
+1. New file formats and a new directory id (D-20261119-05), see above.
+2. D3: the lock is `File::try_lock`; no `lock_other` stub.
+3. D4: time is UTC with `Z`, whole seconds, passed in; `format_utc` is the inverse of `github::parse_utc`.
+4. D6: text from outside is masked with the project rule (`sanitize`: bytes that are not UTF-8 as `\xNN`, `\`, control, invisible and direction
+   characters as escapes, cut in bytes at a character boundary) instead of Go's `?` and space.
+5. D7: `serde_json` does not escape `<`, `>`, `&`, U+2028 and U+2029; consumers read JSON, lines are not byte-equal to Go's.
+6. D8: no JSON-schema validator; the strict decoder refuses unknown and repeated keys, unknown kinds, schema versions other than 1, trailing data,
+   null lists and numbers that are not non-negative integers. Like Go, a missing detail key is the zero value (the corpus case "decode missing
+   detail key").
+7. `id_counter` accepts digits only (Go's `Atoi` also took `+5`).
+8. `repos` is `null` instead of an empty slice for "not set yet", so an empty set is not mistaken for the first run.
+9. `restack-needed` keeps `argv` (D-20261119-03); the choice of `argv` and `--human` are W3/W4.
+
+What the corpus drives in W1 (`tests/it/watch_core.rs`): vectors `event_id`, `id_counter`, `event_json` (22 cases), `workspace_id` (which inputs share an
+id; the Go id values are format-dependent), `default_state_dir`, `status_freshness_seconds`, `merged_due_head_fork`: 8 of the 33 vectors
+(the others belong to the cycle, the reader, the command or are Go-only). `watch-cycles`: all 194 scenarios (a) as an `apply` sequence with the
+silent baseline of the first read and the state-changing file operations of the steps, compared with `expected_state_view`, (b) through the session
+(`Core::open`, `commit`, restart, crash after each durable step, delete or corrupt the state, forced baseline) against the printed ordinals of every step and
+the journal ordinals (108 crashed steps: append 41, print 37, state 30; 6 deleted and 1 corrupted state), (c) crash variants against their crash-free
+variant (same journal, same replayed state), and the 3 status probes. Compared in (a): `repos`, `skipped`, `repos_epoch`; per PR the set, `head`, `base`,
+`draft`, `generation`, the epochs head/mergeable/ready/base (checks epoch at most the view's); closed records; health episode, stall episode, open error,
+stall, last code, failures at most the view's. **Not mapped in W1 (cycle effects, W3)**: debounce candidates, backoff times (`next_try`), check classes and
+the silent `pending`/`none` class changes (and so the exact checks epoch), `pending_*`, `timeout_fired`, mergeable fields, `detail_due`, `gone`,
+`last_ok`, `since`, `cycle`, `interval_seconds`, `restack_due`/`restack_done` after the restack (the cycle clears them), `hints`, `state_after`, the restacker choice.
+Not corpus-driven but written by hand: journal truncation and corruption, modes, work-tree refusal, atomic files, the lock (same process and a child process),
+the heartbeat file. Not run: the observer-session, http-reader and run-loop scenarios (W2, W4).
+
 ## Build and test
 
 ```
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1380 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1436 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
