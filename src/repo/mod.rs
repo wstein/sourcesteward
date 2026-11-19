@@ -494,6 +494,70 @@ pub fn at_boundary(
     Ok(missing)
 }
 
+/// The parents `git` follows from `id` in a shallow clone: none from a boundary commit, and none that are missing.
+fn walkable_parents(
+    repo: &gix::Repository,
+    listed: &std::collections::HashSet<ObjectId>,
+    id: ObjectId,
+) -> Result<Vec<ObjectId>> {
+    if listed.contains(&id) {
+        return Ok(Vec::new());
+    }
+    Ok(repo
+        .find_commit(id)?
+        .parent_ids()
+        .map(|p| p.detach())
+        .filter(|p| repo.has_object(*p))
+        .collect())
+}
+
+fn reachable_grafted(
+    repo: &gix::Repository,
+    listed: &std::collections::HashSet<ObjectId>,
+    tip: ObjectId,
+    hidden: &std::collections::HashSet<ObjectId>,
+) -> Result<Vec<ObjectId>> {
+    let mut seen = std::collections::HashSet::new();
+    let mut queue = std::collections::VecDeque::from([tip]);
+    let mut out = Vec::new();
+    while let Some(id) = queue.pop_front() {
+        if hidden.contains(&id) || !seen.insert(id) {
+            continue;
+        }
+        out.push(id);
+        queue.extend(walkable_parents(repo, listed, id)?);
+    }
+    Ok(out)
+}
+
+/// `git rev-list include ^exclude` as `git` sees it in this clone: in a shallow clone a commit that `.git/shallow` lists has
+/// no parents on either side, so the commits behind it are neither counted nor hidden (the walk of gix hides them all
+/// where the object database still holds them). In a full clone the walk of gix.
+pub fn range_commits(
+    repo: &gix::Repository,
+    include: ObjectId,
+    exclude: ObjectId,
+) -> Result<Vec<ObjectId>> {
+    let listed = shallow_boundary(repo)?;
+    if listed.is_empty() {
+        let mut out = Vec::new();
+        for info in repo.rev_walk([include]).with_hidden([exclude]).all()? {
+            out.push(info?.id);
+        }
+        return Ok(out);
+    }
+    let hidden: std::collections::HashSet<ObjectId> =
+        reachable_grafted(repo, &listed, exclude, &Default::default())?
+            .into_iter()
+            .collect();
+    reachable_grafted(repo, &listed, include, &hidden)
+}
+
+/// `range_commits(..).len()`.
+pub fn range_len(repo: &gix::Repository, include: ObjectId, exclude: ObjectId) -> Result<usize> {
+    Ok(range_commits(repo, include, exclude)?.len())
+}
+
 /// True if `a` is reachable from `b` (or equal).
 pub fn is_ancestor(repo: &gix::Repository, a: ObjectId, b: ObjectId) -> Result<bool> {
     if a == b {

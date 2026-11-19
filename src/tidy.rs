@@ -240,26 +240,24 @@ pub fn unmatched_commits(
     let mut needed: HashMap<PatchKey, Vec<ObjectId>> = HashMap::new();
     let mut unreadable = Vec::new();
     let mut with_patch = 0;
-    for info in repo.rev_walk([tip]).with_hidden([base]).all()? {
-        let info = info?;
-        if shallow && repo::at_boundary(repo, &listed, info.id)? {
-            unreadable.push(info.id);
+    for id in repo::range_commits(repo, tip, base)? {
+        if shallow && repo::at_boundary(repo, &listed, id)? {
+            unreadable.push(id);
             continue;
         }
-        if let Some(p) = cache.get(repo, info.id)? {
-            needed.entry(p).or_default().push(info.id);
+        if let Some(p) = cache.get(repo, id)? {
+            needed.entry(p).or_default().push(id);
             with_patch += 1;
         }
     }
     let mut saw_boundary = false;
     if !needed.is_empty() {
-        for info in repo.rev_walk([base]).with_hidden([tip]).all()? {
-            let info = info?;
-            if shallow && repo::at_boundary(repo, &listed, info.id)? {
+        for id in repo::range_commits(repo, base, tip)? {
+            if shallow && repo::at_boundary(repo, &listed, id)? {
                 saw_boundary = true;
                 continue;
             }
-            if let Some(p) = cache.get(repo, info.id)? {
+            if let Some(p) = cache.get(repo, id)? {
                 needed.remove(&p);
                 if needed.is_empty() {
                     break;
@@ -400,8 +398,8 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
             Some("[gone]".to_string())
         } else if let Some(ut) = up.tip {
             let (a, b) = (
-                repo::count_range(&repo, tip, ut)?,
-                repo::count_range(&repo, ut, tip)?,
+                repo::range_len(&repo, tip, ut)?,
+                repo::range_len(&repo, ut, tip)?,
             );
             match (a, b) {
                 (0, 0) => None,
@@ -412,7 +410,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         } else {
             None
         };
-        let uniq = repo::count_range(&repo, tip, base_tip)?;
+        let uniq = repo::range_len(&repo, tip, base_tip)?;
         let tipstr = tip.to_string();
         let (mut pr_same, mut pr_other, mut pr_open) = (None, None, None);
         if let Some(list) = &prs {
@@ -455,7 +453,7 @@ fn plan_inner(r: &RepoRef, proof: PrProof, opts: &PlanOpts, plan: &mut RepoPlan)
         if let Some(n) = pr_open {
             bp.proof = "open-pull-request";
             bp.detail = format!("open pull request #{n}");
-        } else if repo::is_ancestor(&repo, tip, base_tip)? {
+        } else if repo::range_len(&repo, tip, base_tip)? == 0 {
             bp.decision = "delete";
             bp.proof = "merged-ancestor";
             bp.detail = format!("tip is an ancestor of {base}");
