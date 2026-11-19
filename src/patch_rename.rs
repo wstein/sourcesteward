@@ -11,11 +11,10 @@
 //! patch ID here is the one of git's built-in defaults.
 //!
 //! Deviations from git (all in rare cases; named in the README):
-//! * git's basename-guided pass (a source and a destination with the same unique base name are scored first,
-//!   `find_basename_matches`) is not done: where a pair with the same base name and a score of at least 50 %
-//!   competes with a better pair elsewhere, git takes the base-name pair and this code the better one;
-//! * equal scores in the final order are broken by destination and source order (git's qsort order is not
-//!   specified);
+//! * equal scores in the final order are broken by destination and source order; git's qsort order is not
+//!   specified and differs between C libraries (two identical sources competing for two destinations of
+//!   equal similarity can be paired the other way round);
+//! * git's `diff.renames=copies`, `-C`, `-B` and `diff.renameLimit` are not supported (fixed defaults);
 //! * `.gitattributes` (`binary`, `-diff`, `diff=<driver>`) is not read, as for the whole patch ID.
 use std::collections::{BTreeMap, HashMap};
 
@@ -176,6 +175,42 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
         }
     }
 
+    // basename-guided pass (git's `find_basename_matches`): a source and a destination whose base name occurs
+    // once among the sources and once among the destinations left are scored first; 50 % makes a rename
+    let mut blobs = Blobs {
+        repo,
+        by_id: HashMap::new(),
+    };
+    let unique = |idx: Vec<usize>| -> HashMap<Vec<u8>, Option<usize>> {
+        let mut m: HashMap<Vec<u8>, Option<usize>> = HashMap::new();
+        for i in idx {
+            m.entry(basename(&files[i].path).to_vec())
+                .and_modify(|e| *e = None)
+                .or_insert(Some(i));
+        }
+        m
+    };
+    let src_names = unique(
+        (0..n)
+            .filter(|i| deleted(&files[*i]) && !src_used[*i])
+            .collect(),
+    );
+    let dst_names = unique(
+        (0..n)
+            .filter(|i| added(&files[*i]) && renamed[*i].is_none())
+            .collect(),
+    );
+    for (name, s) in &src_names {
+        let (Some(s), Some(Some(d))) = (*s, dst_names.get(name)) else {
+            continue;
+        };
+        let score = estimate(&mut blobs, files[s].old.unwrap(), files[*d].new.unwrap())?;
+        if score >= MINIMUM_SCORE {
+            src_used[s] = true;
+            renamed[*d] = Some((s, score * 100 / MAX_SCORE));
+        }
+    }
+
     // inexact renames: the similarity matrix of what is left
     let srcs: Vec<usize> = (0..n)
         .filter(|i| deleted(&files[*i]) && !src_used[*i])
@@ -187,10 +222,6 @@ pub(crate) fn pair_renames(repo: &gix::Repository, files: Vec<FileChange>) -> Re
     let too_many =
         (nd > RENAME_LIMIT || ns > RENAME_LIMIT) && nd * ns > RENAME_LIMIT * RENAME_LIMIT;
     if !srcs.is_empty() && !dsts.is_empty() && !too_many {
-        let mut blobs = Blobs {
-            repo,
-            by_id: HashMap::new(),
-        };
         let mut all: Vec<Candidate> = Vec::new();
         for &d in &dsts {
             let dst = files[d].new.unwrap();
