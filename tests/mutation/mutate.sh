@@ -5024,6 +5024,189 @@ m SHW23 'a listed merge commit is no boundary' src/repo/mod.rs \
     }' \
   tidy_shallow a_listed_merge_commit_with_both_parents_there_is_a_boundary_and_no_delete
 
+m WK1 'key of head-changed has no epoch marker' src/watch/event.rs \
+  'format!("{sha}:h{epoch}")' 'format!("{sha}:{epoch}")' \
+  watch_core every_key_function_gives_the_key_of_the_vector
+m WK2 'key of checks uses the head epoch letter' src/watch/event.rs \
+  'format!("{head}:c{epoch}")' 'format!("{head}:h{epoch}")' \
+  watch_core every_key_function_gives_the_key_of_the_vector
+m WK3 'key of the timeout loses its suffix' src/watch/event.rs \
+  'format!("{}:t", key_checks(head, epoch))' 'key_checks(head, epoch)' \
+  watch_core every_key_function_gives_the_key_of_the_vector
+m WK4 'an empty merge commit is a key of its own' src/watch/event.rs \
+  'Some(c) if !c.is_empty() => c.to_string(),' 'Some(c) => c.to_string(),' \
+  watch_core a_merge_commit_that_is_empty_counts_as_unknown
+m WK5 'an event without a repository has no dash prefix' src/watch/event.rs \
+  'None => "-".to_string(),' 'None => String::new(),' \
+  watch_core the_id_of_an_event_is_repo_pr_kind_key
+m WK6 'the repository part of an id can hold a counter' src/watch/event.rs \
+  'for p in parts.iter().skip(1).rev() {' 'for p in parts.iter().rev() {' \
+  watch_core id_counter_reads_the_letter_with_one_to_eight_digits
+m WK7 'a counter may have nine digits' src/watch/event.rs \
+  'digits.len() > 8' 'digits.len() > 9' \
+  watch_core id_counter_reads_the_letter_with_one_to_eight_digits
+m WK8 'the search is from the start' src/watch/event.rs \
+  'for p in parts.iter().skip(1).rev() {' 'for p in parts.iter().skip(1) {' \
+  watch_core id_counter_reads_the_letter_with_one_to_eight_digits
+m WK9 'a counter with a sign is read' src/watch/event.rs \
+  ' || !digits.bytes().all(|b| b.is_ascii_digit())' '' \
+  watch_core id_counter_reads_the_letter_with_one_to_eight_digits
+m WK10 'schema version 2 is accepted' src/watch/event.rs \
+  'if raw.schema_version != SCHEMA_VERSION {' 'if false {' \
+  watch_core a_line_is_decoded_strictly
+m WK11 'an unknown envelope key is accepted' src/watch/event.rs \
+  '#[serde(deny_unknown_fields)]
+        struct Raw {' 'struct Raw {' \
+  watch_core a_line_is_decoded_strictly
+m WK12 'the line has no repo key' src/watch/event.rs \
+  'st.serialize_field("repo", &self.repo)?;' '' \
+  watch_core every_kind_encodes_to_the_keys_of_the_contract_in_the_order_of_the_contract
+m WK13 'masked text is not cut' src/watch/event.rs \
+  's.truncate(cut);' '' \
+  watch_core text_from_outside_is_masked_and_cut
+m WK14 'the leap day of a century year is not a day' src/watch/event.rs \
+  'i64::from(m <= 2)' '0' \
+  watch_core utc_time_is_formatted_with_a_z_and_no_fraction
+m WK15 'the repository list is not lower-cased for the id' src/watch/statedir.rs \
+  'r.to_lowercase()' 'r.clone()' \
+  watch_core the_repository_list_is_lower_cased_deduplicated_and_sorted_before_hashing
+m WK16 'the repositories are joined with a comma' src/watch/statedir.rs \
+  '.join("\n"))' '.join(","))' \
+  watch_core the_workspace_id_is_sixteen_hex_digits_of_the_prefixed_hash
+m WK17 'the id uses the Go prefix' src/watch/statedir.rs \
+  '"stw-watch-rs1\n"' '"stw-watch-v1\n"' \
+  watch_core the_workspace_id_is_sixteen_hex_digits_of_the_prefixed_hash
+m WK18 'an empty XDG_STATE_HOME is used' src/watch/statedir.rs \
+  '.filter(|x| !x.is_empty())' '' \
+  watch_core the_default_state_dir_follows_xdg_then_home
+m WK19 'the freshness window is one minute at least' src/watch/statedir.rs \
+  '.max(180)' '.max(60)' \
+  watch_core the_freshness_window_is_three_intervals_but_at_least_three_minutes
+m WK20 'SHA-256 starts from another state' src/watch/statedir.rs \
+  '0x6a09e667,' '0x6a09e668,' \
+  watch_core sha256_matches_the_nist_vectors
+m WK21 'a relative state directory is accepted' src/watch/statedir.rs \
+  'if !dir.is_absolute() {
+        return Err(WatchError::StateDirUsage);
+    }
+    let dir = clean_path(dir);' 'let dir = clean_path(dir);' \
+  watch_core a_relative_state_directory_is_a_usage_error_and_nothing_is_created
+m WK22 '.stw is not recognised' src/watch/statedir.rs \
+  'n == ".stw"' 'n == ".stwx"' \
+  watch_core a_directory_inside_a_git_work_tree_or_below_dot_stw_is_refused_before_anything_is_created
+m WK23 'a Git work tree is not recognised' src/watch/statedir.rs \
+  'p.join(".git")' 'p.join(".gitx")' \
+  watch_core a_directory_inside_a_git_work_tree_or_below_dot_stw_is_refused_before_anything_is_created
+m WK24 'new directories are created group readable' src/watch/statedir.rs \
+  '.mode(0o700)' '.mode(0o755)' \
+  watch_core a_new_state_directory_is_created_private_with_its_missing_parents
+m WK25 'another mode of an existing directory is accepted' src/watch/statedir.rs \
+  'if mode != 0o700 {' 'if false {' \
+  watch_core a_directory_with_another_mode_is_refused
+m WK26 'atomic files are group readable' src/watch/statedir.rs \
+  '.create_new(true)
+            .mode(0o600)' '.create_new(true)
+            .mode(0o644)' \
+  watch_core an_atomic_write_leaves_the_content_with_mode_0600_and_no_temporary_file
+m WK27 'a clock that went back gives a huge heartbeat age' src/watch/statedir.rs \
+  'age_seconds: u64::try_from(now_secs.saturating_sub(t)).unwrap_or(0),' 'age_seconds: now_secs.saturating_sub(t) as u64,' \
+  watch_core the_heartbeat_is_one_line_with_time_pid_and_mode
+m WK28 'a heartbeat of exactly the window is fresh' src/watch/statedir.rs \
+  'hb.age_seconds < status_freshness_seconds' 'hb.age_seconds <= status_freshness_seconds' \
+  watch_core the_status_is_read_from_the_directory_alone
+m WK29 'a truncated journal tail is not cut off' src/watch/journal.rs \
+  'if size != self.good {' 'if false {' \
+  watch_core a_truncated_last_line_is_reported_ignored_and_cut_off_by_the_next_append
+m WK30 'the next seq repeats the last' src/watch/journal.rs \
+  '.checked_add(1)' '.checked_add(0)' \
+  watch_core a_new_journal_is_empty_private_and_numbers_the_events_from_one
+m WK31 'a gap in seq is accepted' src/watch/journal.rs \
+  'if ev.seq != want {' 'if false {' \
+  watch_core a_complete_line_that_is_not_a_valid_event_is_corruption
+m WK32 'the line limit is a terabyte' src/watch/journal.rs \
+  'pub const MAX_LINE_BYTES: usize = 4 << 20;' 'pub const MAX_LINE_BYTES: usize = 1 << 40;' \
+  watch_core a_line_longer_than_the_limit_is_corruption_not_a_huge_allocation
+m WK33 'an existing journal keeps its mode' src/watch/journal.rs \
+  'file.set_permissions(std::fs::Permissions::from_mode(0o600))' 'file.set_permissions(std::fs::Permissions::from_mode(0o644))' \
+  watch_core opening_tightens_the_mode_of_an_existing_journal
+m WK34 'the lock is never refused' src/watch/lock.rs \
+  'match file.try_lock() {' 'match Ok::<(), TryLockError>(()) {' \
+  watch_core a_second_handle_in_the_same_process_is_locked_out_and_sees_the_pid
+m WK35 'the holder probe sees nobody' src/watch/lock.rs \
+  'match file.try_lock_shared() {' 'match Ok::<(), TryLockError>(()) {' \
+  watch_core a_second_handle_in_the_same_process_is_locked_out_and_sees_the_pid
+m WK36 'the lock file names another pid' src/watch/lock.rs \
+  'format!("{}\n", std::process::id())' 'format!("{}\n", 1)' \
+  watch_core a_second_handle_in_the_same_process_is_locked_out_and_sees_the_pid
+m WK37 'a busy lock is not waited for' src/watch/lock.rs \
+  'std::thread::sleep(pause);' 'let _ = pause;' \
+  watch_core a_busy_lock_is_retried_for_the_pause_before_it_is_reported
+m WK38 'a counter is set, not raised' src/watch/apply.rs \
+  '*dst = (*dst).max(v);' '*dst = v;' \
+  watch_core head_changed_sets_the_head_raises_the_epoch_and_forgets_the_checks
+m WK39 'an unobserved merged PR has a head in the base repository' src/watch/apply.rs \
+  '.map(|p| p.fork).unwrap_or(true)' '.map(|p| p.fork).unwrap_or(false)' \
+  watch_core a_merge_of_an_unobserved_or_forked_pr_has_a_fork_head
+m WK40 'the same merge is recorded twice' src/watch/apply.rs \
+  'if !dup {' 'if true {' \
+  watch_core a_merge_removes_the_pr_records_the_restack_work_once_and_makes_every_detail_read_due
+m WK41 'a close forgets the counters of its older record' src/watch/apply.rs \
+  'rec.epochs = rec.epochs.max(old.epochs);' '' \
+  watch_core a_close_remembers_the_larger_counters_and_keeps_at_most_five_thousand_records
+m WK42 'a new head keeps the checks of the old head' src/watch/apply.rs \
+  'p.reset_checks();' '' \
+  watch_core head_changed_sets_the_head_raises_the_epoch_and_forgets_the_checks
+m WK43 'checks of another head change the class' src/watch/apply.rs \
+  'if head != p.head {
+        raise(&mut p.epochs.checks, e);' 'if false {
+        raise(&mut p.epochs.checks, e);' \
+  watch_core a_checks_event_of_the_current_head_sets_the_class_and_one_of_another_head_only_the_counter
+m WK44 'a timeout of another head fires' src/watch/apply.rs \
+  'if d.head != p.head {
+                return;' 'if false {
+                return;' \
+  watch_core a_pending_timeout_fires_once_for_the_head_and_keeps_the_pending_names
+m WK45 'ready-state-changed reads the state the wrong way' src/watch/apply.rs \
+  'p.draft = d.to == "draft";' 'p.draft = d.to != "draft";' \
+  watch_core mergeable_ready_and_base_events_set_their_fields_and_counters
+m WK46 'the retry time ignores retry_in_seconds' src/watch/apply.rs \
+  'format_utc(t.saturating_add(retry))' 'format_utc(t)' \
+  watch_core health_events_set_the_episode_the_open_error_and_the_retry_time
+m WK47 'closed records are capped at 5001' src/watch/state.rs \
+  'pub const MAX_CLOSED_PRS: usize = 5000;' 'pub const MAX_CLOSED_PRS: usize = 5001;' \
+  watch_core a_close_remembers_the_larger_counters_and_keeps_at_most_five_thousand_records
+m WK48 'another state format is accepted' src/watch/state.rs \
+  'if head.format.as_deref() != Some(STATE_FORMAT) {' 'if false {' \
+  watch_core a_state_file_of_another_format_version_or_shape_is_refused
+m WK49 'another state schema version is accepted' src/watch/state.rs \
+  'if head.schema_version != Some(u64::from(STATE_SCHEMA_VERSION)) {' 'if false {' \
+  watch_core a_state_file_of_another_format_version_or_shape_is_refused
+m WK50 'the commit does not apply the events' src/watch/mod.rs \
+  'for ev in &written {
+            self.state.apply(ev);
+        }' '' \
+  watch_core a_cycle_commits_journal_then_apply_then_print_then_state
+m WK51 'the commit names the wrong append step' src/watch/mod.rs \
+  'out.after(Step::Append(i + 1))?;' 'out.after(Step::Append(i))?;' \
+  watch_core a_cycle_commits_journal_then_apply_then_print_then_state
+m WK52 'a failed session can be used again' src/watch/mod.rs \
+  'self.broken = true;' 'self.broken = false;' \
+  watch_core a_crash_after_the_append_replays_and_prints_the_event_once_more_and_never_journals_it_twice
+m WK53 'a state ahead of the journal is accepted' src/watch/mod.rs \
+  'if !baseline {
+                return Err(WatchError::CorruptState(' 'if false {
+                return Err(WatchError::CorruptState(' \
+  watch_core a_state_ahead_of_the_journal_is_an_error_unless_the_baseline_is_forced
+m WK54 'a missing state with a journal is not lost' src/watch/mod.rs \
+  'lost |= tail > 0;' 'lost |= false;' \
+  watch_core a_lost_state_is_rebuilt_from_the_journal_silently_and_forces_a_baseline
+m WK55 'the start prints everything again' src/watch/mod.rs \
+  'core.journal.after(core.state.printed_seq)?' 'core.journal.after(0)?' \
+  watch_core a_crash_during_the_replay_is_repeated_safely
+m WK56 'the start replays the whole journal' src/watch/mod.rs \
+  'journal.after(state.applied_seq)?' 'journal.after(0)?' \
+  watch_core a_crash_after_the_append_replays_and_prints_the_event_once_more_and_never_journals_it_twice
+
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
