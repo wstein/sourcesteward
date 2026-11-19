@@ -245,7 +245,7 @@ Deviations from Go in these flags:
     `partial`); the window of 7 days (author time) and "without candidate" means no commit on the base with the same subject or at least half of the changed files in the window; 100 %
     can still mean different behavior when the context on the base differs; several commits of the branch can have the same partner; a commit of more than 20 000 changed lines or a blob over
     1 MiB has no value and prevents `landed`; hunks come from gix (Myers), not from git's xdiff, so a multiset can differ from git's in rare cases (UNKNOWN until the oracle). A shallow clone gives
-    a plan with the boundary commits of the base left out (`skipped.shallow`); a branch that itself reaches the boundary still fails the `equal-patches` walk (as before).
+    a plan with the boundary commits of the base left out (`skipped.shallow`); for a branch that the boundary hides, see deviation 19.
 17. Rebase evidence in `tidy plan` (new, Go has no identity or rebase stage; README "Rebase evidence in `tidy plan`"): the evidence class `rebase-identity` (decision `review`, never `delete`),
     `--no-rebase-evidence`, the JSON objects `rebase` and `landed_via`, `summary.rebase`, and the read of the commits of a merged pull request. Limits: the mailmap is not applied (raw author mail
     and name are compared, a changed mail gives no match); times have a resolution of one second and only the epoch seconds are compared (a different zone offset is noted, `tz_differs`); a
@@ -256,6 +256,9 @@ Deviations from Go in these flags:
 18. `tidy plan --explain` (new; Go has `--explain` with a `next_command` per kept candidate, issue 388): Rust prints the evidence only and never a command for someone else to run
     (rule of this README, "Output for agents"), so there is no `next command`; the text is derived from the data of the plan (README "Explanation in `tidy plan --explain`"), the JSON is
     unchanged (it already holds the data), and the flag is not on `tidy apply`.
+19. Shallow clones in `tidy plan` (new; README "Shallow clones"): Go has no rule for them. A branch whose commits reach the boundary of a `--depth` clone, or that has no partner in the part of the base
+    that is there, is `review` with the proof `shallow-history` (never `delete`, never `unmerged`), JSON `shallow`. Limit: the boundary of a shallow clone is read from the object database
+    (a non-merge commit whose parent is missing); the behavior in a partial clone (`--filter`, no shallow file) is UNKNOWN.
 
 ## agent-rules
 
@@ -360,9 +363,9 @@ would_fast_forward, skipped, errors}.
   A total is a number only when every repository with a GitHub origin gave one, else null with `state` `failed` (any), `not-read`, or `no-remote` (no repository has a GitHub origin). Schema rule:
   `counts` and `totals` are additive, `schema_version` stays `2`; `day briefing` reads this contract, so a removal or a changed
   meaning raises the version.
-- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree,similarity,rebase,landed_via}]` (`similarity` is null or the object of "Similar patches in `tidy plan`"; `rebase` is null or the object of "Rebase evidence in `tidy plan`"; `landed_via` is always there) (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
+- `tidy-plan` repo: `base`, `base_commit`, `slug`, `note`, `branches[{branch,commit,decision,proof,detail,unique_commits,upstream,upstream_track,worktree,similarity,rebase,squash,shallow,landed_via}]` (`shallow` is null or `{unreadable_commits,without_partner,base_cut}`, see "Shallow clones"; `similarity` is null or the object of "Similar patches in `tidy plan`"; `rebase` is null or the object of "Rebase evidence in `tidy plan`"; `landed_via` is always there) (`worktree` is null, or `{path,removable_proof,outside_worktrees_dir,blocker}` for a `keep`/`in-worktree` branch that `tidy apply` may remove with its worktree; `blocker` is null when `apply` will remove both, else the reason it leaves them),
   `stale_worktree_registrations[{path,locked,lock_reason}]`. Proofs: `in-worktree`, `open-pull-request`, `merged-ancestor`, `equal-patches`,
-  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `rebase-identity`, `similar-patches`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
+  `merged-pull-request-head`, `backup-older-than-days`, `backup-recent`, `rebase-identity`, `similar-patches`, `shallow-history`, `pull-request-merged-branch-moved`, `upstream-gone`, `unmerged`.
 - `sync` repo: `branch`, `upstream`, `ahead`, `behind`, `dirty_files`, `fetch` (`not-run`, `skipped-offline`,
   `ok`, `failed`, `no-remote`, `unsupported-remote`), `last_fetch_seconds_ago`, `remote_moved`, `result`
   (`none`, `fast-forward`, `fast-forwarded`, `skip`, `error`; with `--submodules` also `submodule-move`, `submodule-moved`), `reason`.
@@ -743,6 +746,25 @@ Deviations from the specification (5a), one by one: (1) the detail says `pull re
 (this owner's repositories merge by rebase); (2) `squash.pr` has `merge_commit_in_clone` (spec: a reason text for a missing object) and the subject object has `basis`, `candidate_subject`, `candidates` and
 `window`; (3) a pull request whose `head.repo` is empty counts as a fork where the slug is known; (4) no squash object for `rebase-identity` and for deletion proofs (spec silent); (5) the oldest of
 several candidates is taken (the spec leaves the tie open). Not here: the content layer, the classes `squashed-patches` and `partial`, `summary.squashed`, the oracle (5b, 5c), `landed_via` from layer 2.
+
+## Shallow clones
+
+In a clone made with `git clone --depth N` the commit at the boundary (listed in `.git/shallow`) has no parent in the object database, so its patch cannot be read.
+Before this rule `tidy plan` failed for the whole repository with `An object with id ... could not be found` as soon as a branch reached the boundary
+(`--depth 3` and `--depth 4` of a small repository; the ledger entry of 2026-11-18). Now the plan is made and nothing is concluded from a part of the history:
+
+- A non-merge commit of `base..tip` whose parent is missing is `unreadable` (`shallow.unreadable_commits`). The equal-patches walk (`unmatched_commits`) does not read it, and as long as
+  one exists the branch has no `equal-patches` proof; the similarity, rebase and squash judgment of that branch's commits does not run (`similarity` and `rebase` are null).
+- A commit of the base at the boundary is no partner. Where the walk over `tip..base` reached it while a commit of the branch still had no partner (`shallow.base_cut`), a partner may lie behind it
+  (`shallow.without_partner` commits have none in the part that is there).
+- Where either holds and no other proof applies (the proof would be `unmerged`), the branch is `review` with the proof `shallow-history` and the detail names the cause and `git fetch --unshallow`.
+  Never `delete`, never `keep` with `unmerged`. A proof that needs no history (`merged-ancestor`, a merged pull request with exactly this head, `open-pull-request`, a backup name) is unchanged;
+  `pull-request-merged-branch-moved` and `upstream-gone` stay `review` with their proof; a stage that finds evidence for a branch with only `base_cut` still replaces `shallow-history` by its own
+  `review` proof (`similar-patches`, `rebase-identity`).
+- JSON per branch `shallow`: null (a full clone, or nothing hidden) or `{unreadable_commits, without_partner, base_cut}`. `--explain` says `why: review: N of the M commit(s) not in <base> reach the shallow boundary: their patches are unknown, ...`
+  or `... have a patch without a partner in the part of it this clone holds; the boundary hides the rest`. `similarity.skipped.shallow` is unchanged.
+- Not covered: a partial clone (`--filter`; UNKNOWN); a shallow clone whose branch is merged into the base, with the
+  commits on the base inside the clone, is judged as in a full clone.
 
 ## Explanation in `tidy plan --explain`
 
