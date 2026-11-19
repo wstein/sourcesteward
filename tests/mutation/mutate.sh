@@ -4414,7 +4414,9 @@ m TX17 'commits at or above the threshold get a line' src/tidy_explain.rs \
   tidy_explain a_landed_branch_has_the_summary_line_and_no_commit_lines
 m TX18 'the plan forgets the pull request number of the branch' src/tidy.rs \
   '            pr_moved: pr_other,
+            shallow: None,
         };' '            pr_moved: None,
+            shallow: None,
         };' \
   tidy_explain each_class_of_the_plan_gets_one_sentence_with_the_proof_that_decided
 m TX19 'a gone upstream is not named where a stage replaced the proof' src/tidy_explain.rs \
@@ -4933,6 +4935,64 @@ m PI31 "exactly 75 percent is not enough for a base-name pair" src/patch_rename.
 m PI32 "the base name does not rank a candidate slot" src/patch_rename.rs \
   "c.as_ref().map(|c| (c.score, c.same_name))" "c.as_ref().map(|c| (c.score, false))" \
   patchid_git pinned::t::fifth_equal_source_has_the_base_name
+
+m SHW1 'a commit at the boundary of the branch does not block equal-patches' src/tidy.rs \
+  'self.with_patch > 0 && self.commits.is_empty() && self.unreadable.is_empty()' 'self.with_patch > 0 && self.commits.is_empty() && true' \
+  tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
+m SHW2 'a commit at the boundary of the branch is not listed as unreadable' src/tidy.rs \
+  'unreadable.push(info.id);' 'let _ = info.id;' \
+  tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
+m SHW3 'a boundary of the base is not noted' src/tidy.rs \
+  'saw_boundary = true;' 'saw_boundary = false;' \
+  tidy_shallow a_branch_without_a_partner_in_the_part_of_the_base_that_is_there_is_not_kept_as_unmerged
+m SHW4 'base_cut ignores that every commit has its partner' src/tidy.rs \
+  'let base_cut = saw_boundary && !needed.is_empty();' 'let base_cut = saw_boundary;' \
+  tidy_shallow a_boundary_of_the_base_met_before_the_last_partner_is_no_cut
+m SHW5 'a cut base alone is no gap of the branch' src/tidy.rs \
+  'if !u.unreadable.is_empty() || (u.base_cut && !u.commits.is_empty()) {' 'if !u.unreadable.is_empty() {' \
+  tidy_shallow a_branch_without_a_partner_in_the_part_of_the_base_that_is_there_is_not_kept_as_unmerged
+m SHW6 'the stages judge the readable commits of a branch with a boundary commit' src/tidy.rs \
+  'if u.unreadable.is_empty() {
+                unmatched = Some(u.commits);' 'if true {
+                unmatched = Some(u.commits);' \
+  tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
+m SHW7 'shallow-history replaces any proof, not only unmerged' src/tidy.rs \
+  'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), _) = (bp.shallow, bp.proof) {' \
+  tidy_shallow a_merged_pull_request_with_exactly_this_head_still_deletes_in_a_shallow_clone
+m SHW8 'shallow-history is keep' src/tidy.rs \
+  'bp.decision = "review";
+            bp.proof = "shallow-history";' 'bp.decision = "keep";
+            bp.proof = "shallow-history";' \
+  tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
+m SHW9 'the detail names the wrong cause' src/tidy.rs \
+  'if gap.unreadable_commits > 0 {
+        format!(' 'if gap.unreadable_commits == 0 {
+        format!(' \
+  tidy_shallow a_branch_that_reaches_the_boundary_is_review_with_the_proof_shallow_history
+m SHW10 'the JSON has no without_partner' src/tidy.rs \
+  '"without_partner": g.without_partner' '"without_partner": 0' \
+  tidy_shallow the_plan_json_names_what_is_missing_per_branch
+m SHW11 'the JSON has no unreadable_commits' src/tidy.rs \
+  '"unreadable_commits": g.unreadable_commits' '"unreadable_commits": 0' \
+  tidy_shallow the_plan_json_names_what_is_missing_per_branch
+m SHW12 'a merge commit with a missing parent is a boundary commit' src/tidy_similarity.rs \
+  '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), _) => !repo.has_object(p.detach()),' \
+  tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_but_a_merge_is_not_one
+m SHW13 'a commit with its parent is a boundary commit' src/tidy_similarity.rs \
+  '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), None) => repo.has_object(p.detach()),' \
+  tidy_shallow a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs
+m SHW14 'the explained sentence names the wrong cause' src/tidy_explain.rs \
+  'Some(g) if g.unreadable_commits > 0 => format!(' 'Some(g) if g.unreadable_commits == 0 => format!(' \
+  tidy_shallow the_explained_text_says_which_part_of_the_history_is_missing
+m SHW15 'a shallow clone is not noticed by the equal-patches walks' src/tidy.rs \
+  'let shallow = repo.is_shallow().unwrap_or(false);' 'let shallow = false;' \
+  tidy_shallow a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs
+m SHW16 'the plan JSON has no shallow object' src/tidy.rs \
+  'b.shallow.map(|g| json!(' 'None::<ShallowGap>.map(|g| json!(' \
+  tidy_shallow the_plan_json_names_what_is_missing_per_branch
+m SHW17 'a full clone gets the shallow-history proof' src/tidy.rs \
+  'if let (Some(gap), "unmerged") = (bp.shallow, bp.proof) {' 'if let (Some(gap), "unmerged") = (Some(bp.shallow.unwrap_or(ShallowGap { unreadable_commits: 0, without_partner: 0, base_cut: true })), bp.proof) {' \
+  tidy_shallow a_full_clone_is_unchanged
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
