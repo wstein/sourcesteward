@@ -1459,7 +1459,7 @@ cancellation of the HTTP client, the layout of the conditional-request store, an
 First package of the port of `stw watch` to Rust (owner decisions D-20261119-02 to -05): the core, `src/watch/` (`mod.rs`,
 `event.rs`, `state.rs`, `apply.rs`, `journal.rs`, `lock.rs`, `statedir.rs`). Pure logic and files: no network (the reader is W2), no
 cycle (diff, debounce, checks classes, backoff, restack choice: W3), no command, signals or config (W4). Times are parameters, there is no
-clock. Tests: `tests/it/watch_core.rs` (own tests and the replay of the corpus of "Watch scenarios"); mutations `WK1` to `WK56`.
+clock. Tests: `tests/it/watch_core.rs` (own tests and the replay of the corpus of "Watch scenarios"); mutations `WK1` to `WK59`.
 New direct dependencies, both pinned exactly: `serde` `=1.0.229` (derive; the formats are written with it) and `serde_json` `=1.0.154`
 (was `1`; feature `raw_value` added, no new crate). SHA-256 is own code (`statedir::sha256`, FIPS 180-4 and NIST vectors, padding
 boundaries checked against GNU `sha256sum`): the gix feature would add `sha2` and change gix's object-format support. No `libc`, no process.
@@ -1538,7 +1538,7 @@ the heartbeat file. Not run: the observer-session, http-reader and run-loop scen
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1436 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1439 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)

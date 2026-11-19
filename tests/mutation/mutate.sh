@@ -5181,14 +5181,17 @@ m WK48 'another state format is accepted' src/watch/state.rs \
 m WK49 'another state schema version is accepted' src/watch/state.rs \
   'if head.schema_version != Some(u64::from(STATE_SCHEMA_VERSION)) {' 'if false {' \
   watch_core a_state_file_of_another_format_version_or_shape_is_refused
-m WK50 'the commit does not apply the events' src/watch/mod.rs \
-  'for ev in &written {
+m WK50 'the commit applies the events again' src/watch/mod.rs \
+  'for (i, ev) in written.iter().enumerate() {
+            out.print(ev)?;' 'for ev in &written {
             self.state.apply(ev);
-        }' '' \
-  watch_core a_cycle_commits_journal_then_apply_then_print_then_state
+        }
+        for (i, ev) in written.iter().enumerate() {
+            out.print(ev)?;' \
+  watch_core a_commit_keeps_what_the_cycle_did_to_the_state_after_it_emitted_an_event
 m WK51 'the commit names the wrong append step' src/watch/mod.rs \
   'out.after(Step::Append(i + 1))?;' 'out.after(Step::Append(i))?;' \
-  watch_core a_cycle_commits_journal_then_apply_then_print_then_state
+  watch_core a_cycle_commits_journal_then_print_then_state
 m WK52 'a failed session can be used again' src/watch/mod.rs \
   'self.broken = true;' 'self.broken = false;' \
   watch_core a_crash_after_the_append_replays_and_prints_the_event_once_more_and_never_journals_it_twice
@@ -5206,6 +5209,16 @@ m WK55 'the start prints everything again' src/watch/mod.rs \
 m WK56 'the start replays the whole journal' src/watch/mod.rs \
   'journal.after(state.applied_seq)?' 'journal.after(0)?' \
   watch_core a_crash_after_the_append_replays_and_prints_the_event_once_more_and_never_journals_it_twice
+m WK57 'a printed_seq beyond the journal is accepted' src/watch/mod.rs \
+  'if state.applied_seq > tail || state.printed_seq > tail {' 'if state.applied_seq > tail {' \
+  watch_core a_printed_seq_beyond_the_journal_is_an_error_even_when_applied_seq_is_not
+m WK58 'the start does not save printed_seq after printing again' src/watch/mod.rs \
+  'core.state.printed_seq = tail;
+            save_state(dir, &core.state)?;' 'core.state.printed_seq = tail;' \
+  watch_core a_crash_during_the_replay_is_repeated_safely
+m WK59 'an existing lock file keeps its mode' src/watch/lock.rs \
+  'file.set_permissions(std::fs::Permissions::from_mode(0o600))' 'file.set_permissions(std::fs::Permissions::from_mode(0o644))' \
+  watch_core an_existing_lock_file_is_tightened_to_mode_0600
 
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
