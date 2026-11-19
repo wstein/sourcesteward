@@ -21,6 +21,7 @@ mod cli;
 mod credentials;
 mod discover_cli;
 mod git_runner;
+mod git_runner_blame;
 mod git_runner_ops;
 mod git_runner_sync_ops;
 mod github;

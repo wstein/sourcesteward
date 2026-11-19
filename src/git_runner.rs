@@ -189,6 +189,20 @@ impl RemoteRef {
     }
 }
 
+/// A path for `Op::BlameLines`: valid UTF-8 (the argument vector is text), no NUL, no line break, not empty.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BlamePath(String);
+
+impl BlamePath {
+    pub fn parse(path: &[u8]) -> Option<BlamePath> {
+        let s = std::str::from_utf8(path).ok()?;
+        (!s.is_empty() && !s.contains(['\0', '\n', '\r'])).then(|| BlamePath(s.to_string()))
+    }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// The ref namespace of `Op::FetchPullHead`; the only ref it writes is `<ROOT>pr-<n>`.
 pub const PULL_HEAD_NAMESPACE: &str = "refs/stw/carry-over/";
 
@@ -283,6 +297,15 @@ pub enum Op {
         upstream: RemoteRef,
         autostash: bool,
     },
+    /// `git blame --porcelain -L first,last <rev> -- <path>`: which commits last changed the lines `first` to `last` of
+    /// `path` at `rev` (`stw absorb`, the evidence for a removed hunk). Read-only, no network: `GIT_NO_LAZY_FETCH=1`
+    /// keeps a partial clone from fetching a missing object (the call then fails).
+    BlameLines {
+        rev: Hex40,
+        path: BlamePath,
+        first: u32,
+        last: u32,
+    },
 }
 
 fn stash_flag(autostash: bool) -> &'static str {
@@ -325,7 +348,8 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. }
-            | Op::UpdateBranchCas { .. } => Version(2, 30, 0),
+            | Op::UpdateBranchCas { .. }
+            | Op::BlameLines { .. } => Version(2, 30, 0),
         }
     }
 
@@ -335,6 +359,11 @@ impl Op {
             Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
                 "a pull request number starts at 1".into(),
             )),
+            Op::BlameLines { first, last, .. } if *first == 0 || last < first => {
+                Err(GitError::Argument(
+                    "a blame range starts at line 1 and does not end before it".into(),
+                ))
+            }
             _ => Ok(()),
         }
     }
@@ -460,6 +489,7 @@ impl Op {
                 a
             }
             Op::PatchIdStable => v(&["patch-id", "--stable"]),
+            Op::BlameLines { .. } => v(&["blame"]),
             Op::CheckAttrGitmodules { cached } => {
                 let mut a = v(&["check-attr"]);
                 if *cached {

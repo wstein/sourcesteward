@@ -331,6 +331,16 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
             Version(2, 30, 0),
         ),
         (Op::PatchIdStable, Version(2, 30, 0)),
+        // `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch missing objects of a partial clone
+        (
+            Op::BlameLines {
+                rev: h('a'),
+                path: stw::git_runner::BlamePath::parse(b"a.txt").unwrap(),
+                first: 1,
+                last: 1,
+            },
+            Version(2, 46, 0),
+        ),
         // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
         (
             Op::SyncRebase {
@@ -350,6 +360,7 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
         | Op::RangeDiff { .. }
         | Op::DiffRange { .. }
         | Op::PatchIdStable
+        | Op::BlameLines { .. }
         | Op::SubmoduleSync { .. }
         | Op::SubmoduleUpdate { .. }
         | Op::CheckAttrGitmodules { .. }
