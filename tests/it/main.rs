@@ -43,6 +43,7 @@ mod restack_plan;
 mod review_go_corpus;
 mod review_lines;
 mod review_read;
+mod sha256;
 mod slug;
 mod status_all;
 mod status_ci_main;
