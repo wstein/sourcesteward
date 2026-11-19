@@ -49,8 +49,13 @@ pub struct Epochs {
 impl Epochs {
     /// The larger of every counter.
     pub fn max(self, o: Epochs) -> Epochs {
-        let _ = o;
-        self
+        Epochs {
+            head: self.head.max(o.head),
+            checks: self.checks.max(o.checks),
+            mergeable: self.mergeable.max(o.mergeable),
+            ready: self.ready.max(o.ready),
+            base: self.base.max(o.base),
+        }
     }
 }
 
@@ -202,14 +207,31 @@ impl State {
 
     /// The file content: compact JSON, one line, newline at the end.
     pub fn encode(&self) -> Vec<u8> {
-        Vec::new()
+        let mut out = serde_json::to_vec(self)
+            .expect("the state serializes: strings, numbers and ordered maps only");
+        out.push(b'\n');
+        out
     }
 
     /// Reads `state.json`. Anything that is not a state of this format and version is an error: another `format`, another
     /// `schema_version`, an unknown or missing key, a wrong type, trailing data.
     pub fn decode(bytes: &[u8]) -> Result<State, String> {
-        let _ = bytes;
-        Err("not implemented".to_string())
+        #[derive(Deserialize)]
+        struct Head {
+            format: Option<String>,
+            schema_version: Option<u64>,
+        }
+        let head: Head = serde_json::from_slice(bytes).map_err(|e| e.to_string())?;
+        if head.format.as_deref() != Some(STATE_FORMAT) {
+            return Err("not a stw watch state (format)".to_string());
+        }
+        if head.schema_version != Some(u64::from(STATE_SCHEMA_VERSION)) {
+            return Err(format!(
+                "unsupported schema_version {:?}",
+                head.schema_version
+            ));
+        }
+        serde_json::from_slice(bytes).map_err(|e| e.to_string())
     }
 }
 
@@ -224,12 +246,19 @@ impl RepoState {
 
     /// The record of a closed-unmerged PR and its index.
     pub fn closed_record(&self, number: u64) -> Option<(usize, &ClosedPr)> {
-        let _ = number;
-        None
+        self.closed
+            .iter()
+            .enumerate()
+            .find(|(_, c)| c.number == number)
     }
 
     /// Remembers a closed-unmerged PR (replacing an older record of the same number), keeping the newest `MAX_CLOSED_PRS`.
     pub fn record_closed(&mut self, c: ClosedPr) {
-        let _ = c;
+        self.closed.retain(|x| x.number != c.number);
+        self.closed.push(c);
+        if self.closed.len() > MAX_CLOSED_PRS {
+            let drop = self.closed.len() - MAX_CLOSED_PRS;
+            self.closed.drain(..drop);
+        }
     }
 }
