@@ -514,3 +514,38 @@ fn two_runs_give_identical_bytes() {
     assert!(!a.out.is_empty());
     assert_eq!(a.out, b.out);
 }
+
+#[test]
+fn origins_count_the_lines_of_each_commit() {
+    let fx = Fx::new();
+    let t1 = l(8);
+    fx.commit1("a.txt", &t1, "feat: one");
+    let t2 = replace_line(&replace_line(&t1, 3, "l03 by c2"), 4, "l04 by c2");
+    let c2 = fx.commit1("a.txt", &t2, "feat: two");
+    fx.stage1("a.txt", &replace_line(&replace_line(&t2, 3, "x3"), 4, "x4"));
+    let p = fx.plan(&[]);
+    let h = hunk(&p, 0);
+    assert_eq!(h["assignment"], "absorbed");
+    assert_eq!(
+        h["origins"],
+        json!([{"sha": c2, "subject": "feat: two", "lines": 2}])
+    );
+}
+
+#[test]
+fn origins_come_in_the_order_of_the_first_line_of_each_commit() {
+    let fx = Fx::new();
+    let t1 = l(8);
+    fx.commit1("a.txt", &t1, "feat: one");
+    let t2 = replace_line(&t1, 4, "l04 by c2");
+    let c2 = fx.commit1("a.txt", &t2, "feat: two");
+    let t3 = replace_line(&t2, 3, "l03 by c3");
+    let c3 = fx.commit1("a.txt", &t3, "feat: three");
+    fx.stage1("a.txt", &replace_line(&replace_line(&t3, 3, "x3"), 4, "x4"));
+    let p = fx.plan(&[]);
+    // line 3 (c3) comes before line 4 (c2) although c2 is the older commit
+    assert_eq!(
+        hunk(&p, 0)["origins"],
+        json!([{"sha": c3, "subject": "feat: three", "lines": 1}, {"sha": c2, "subject": "feat: two", "lines": 1}])
+    );
+}
