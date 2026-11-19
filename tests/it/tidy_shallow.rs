@@ -27,7 +27,10 @@ fn mkc(
 /// The history of a shallow clone with two boundaries, `c0` and `b1`; the parents of both (`old`, `old2`) are not in the
 /// object database. `main` is `c0 <- m1 <- m2`. Branches:
 /// `deep` (`b1 <- e1`, `e1` has the patch of `m2`; `b1` is a boundary and not in `main`), `orphan` (a root commit with
-/// no partner), `fork` (`c0 <- f1`, no partner), `fork_equal` (`c0 <- f2`, the patch of `m1`), `merged` (the tip is `m1`).
+/// no partner), `fork` (`c0 <- f1`, no partner), `fork_equal` (`c0 <- f2`, the patch of `m1`), `merged` (the tip is `m1`),
+/// `mhidden` (`e2` with the patch of `m2` on a merge commit that is a boundary; both parents are gone), `cut` (`p1 <- p2`,
+/// `p2` has the patch of `m2` and is listed in the shallow file although `p1` is there, as when another ref holds `p1`)
+/// and `deep_gone` (the tip of `deep` with an upstream that is gone).
 fn shallow_world(shallow: bool) -> Fx {
     let fx = Fx::new();
     let old = mkc(&fx, None, &[("z.txt", Some("old\n"))], "old", T0 - 40 * DAY);
@@ -80,6 +83,50 @@ fn shallow_world(shallow: bool) -> Fx {
         "orphan work",
         T0 - 5 * DAY,
     );
+    let s1 = mkc(
+        &fx,
+        None,
+        &[("s1.txt", Some("s1\n"))],
+        "secret one",
+        T0 - 30 * DAY,
+    );
+    let s2 = mkc(
+        &fx,
+        None,
+        &[("s2.txt", Some("s2\n"))],
+        "secret two",
+        T0 - 29 * DAY,
+    );
+    let st = Stamp::new("T", "t@example.com", T0 - 12 * DAY);
+    let mg = fx.commit_at_parents(
+        vec![s1, s2],
+        Some(s1),
+        &[("s2.txt", Some("s2\n"))],
+        "merge secret",
+        st,
+        st,
+    );
+    let e2 = mkc(
+        &fx,
+        Some(mg),
+        &[("landed.txt", Some("L\n"))],
+        "feat: landed",
+        T0 - 2 * DAY,
+    );
+    let p1 = mkc(
+        &fx,
+        None,
+        &[("hidden.txt", Some("h\n"))],
+        "hidden",
+        T0 - 15 * DAY,
+    );
+    let p2 = mkc(
+        &fx,
+        Some(p1),
+        &[("landed.txt", Some("L\n"))],
+        "feat: landed",
+        T0 - 2 * DAY,
+    );
     let f1 = mkc(
         &fx,
         Some(c0),
@@ -105,13 +152,17 @@ fn shallow_world(shallow: bool) -> Fx {
         ("fork", f1),
         ("fork_equal", f2),
         ("merged", m1),
+        ("mhidden", e2),
+        ("cut", p2),
+        ("deep_gone", e1),
     ] {
         fx.branch(n, id);
     }
+    fx.track("deep_gone");
     if shallow {
         let git = fx.path.join(".git");
-        std::fs::write(git.join("shallow"), format!("{b1}\n{c0}\n")).unwrap();
-        for gone in [old, old2] {
+        std::fs::write(git.join("shallow"), format!("{b1}\n{c0}\n{mg}\n{p2}\n")).unwrap();
+        for gone in [old, old2, s1, s2] {
             let hex = gone.to_string();
             std::fs::remove_file(git.join("objects").join(&hex[..2]).join(&hex[2..])).unwrap();
         }
@@ -183,7 +234,7 @@ fn branch_json<'a>(v: &'a Value, branch: &str) -> &'a Value {
 fn a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs() {
     let fx = shallow_world(true);
     let p = plan_of(&fx);
-    assert_eq!(p.branches.len(), 5);
+    assert_eq!(p.branches.len(), 8);
     let proof = |b: &str| (get(&p, b).decision, get(&p, b).proof);
     assert_eq!(proof("merged"), ("delete", "merged-ancestor"));
     assert_eq!(proof("fork_equal"), ("delete", "equal-patches"));
@@ -398,7 +449,8 @@ fn a_boundary_of_the_base_met_before_the_last_partner_is_no_cut() {
 }
 
 #[test]
-fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_but_a_merge_is_not_one() {
+fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_only_where_it_is_listed(
+) {
     let fx = Fx::new();
     let gone = mkc(&fx, None, &[("z.txt", Some("z\n"))], "gone", T0 - 40 * DAY);
     let gone2 = mkc(&fx, None, &[("y.txt", Some("y\n"))], "gone2", T0 - 41 * DAY);
@@ -417,10 +469,53 @@ fn a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_but_a_merg
     assert_eq!(u.unreadable, vec![edge]);
     assert_eq!(u.with_patch, 0);
     assert!(!u.all_matched());
-    // a merge commit has no patch whatever its parents: it is no boundary commit
+    // a merge commit listed in the shallow file hides what is behind it: it blocks the proof like any boundary commit
     let u = unmatched_of(&fx, base, merge);
     assert_eq!(
-        (u.with_patch, u.commits.len(), u.unreadable.len()),
-        (0, 0, 0)
+        (u.with_patch, u.commits.len(), u.unreadable),
+        (0, 0, vec![merge])
+    );
+}
+
+#[test]
+fn a_merge_commit_at_the_boundary_hides_the_commits_behind_it() {
+    let fx = shallow_world(true);
+    let p = plan_of(&fx);
+    let b = get(&p, "mhidden");
+    assert_eq!((b.decision, b.proof), ("review", "shallow-history"));
+    assert_eq!(b.shallow.map(|g| g.unreadable_commits), Some(1));
+}
+
+#[test]
+fn a_commit_listed_in_the_shallow_file_is_a_boundary_although_its_parent_is_there() {
+    let fx = shallow_world(true);
+    let p = plan_of(&fx);
+    let b = get(&p, "cut");
+    assert_eq!((b.decision, b.proof), ("review", "shallow-history"));
+    assert_eq!(b.shallow.map(|g| g.unreadable_commits), Some(1));
+}
+
+#[test]
+fn a_gone_upstream_or_a_moved_pull_request_stays_what_it_was() {
+    let fx = shallow_world(true);
+    fx.branch("deep_moved", fx.tip("deep"));
+    let pr = AnyPr {
+        head_ref: "deep_moved".into(),
+        head_sha: "0".repeat(40),
+        number: 9,
+        state: "MERGED",
+        ..Default::default()
+    };
+    let p = plan_with_prs(&fx, Some(vec![pr]));
+    let proof = |b: &str| (get(&p, b).decision, get(&p, b).proof);
+    assert_eq!(proof("deep_gone"), ("review", "upstream-gone"));
+    assert_eq!(
+        proof("deep_moved"),
+        ("review", "pull-request-merged-branch-moved")
+    );
+    // the gap stays in the plan
+    assert_eq!(
+        get(&p, "deep_gone").shallow.map(|g| g.unreadable_commits),
+        Some(1)
     );
 }

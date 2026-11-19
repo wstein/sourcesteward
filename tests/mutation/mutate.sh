@@ -4977,7 +4977,7 @@ m SHW11 'the JSON has no unreadable_commits' src/tidy.rs \
   tidy_shallow the_plan_json_names_what_is_missing_per_branch
 m SHW12 'a merge commit with a missing parent is a boundary commit' src/tidy_similarity.rs \
   '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), _) => !repo.has_object(p.detach()),' \
-  tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_but_a_merge_is_not_one
+  tidy_shallow a_boundary_commit_of_the_branch_is_unreadable_and_blocks_the_proof_a_merge_only_where_it_is_listed
 m SHW13 'a commit with its parent is a boundary commit' src/tidy_similarity.rs \
   '(Some(p), None) => !repo.has_object(p.detach()),' '(Some(p), None) => repo.has_object(p.detach()),' \
   tidy_shallow a_shallow_clone_gives_a_plan_not_an_error_and_the_boundary_free_branches_keep_their_proofs
