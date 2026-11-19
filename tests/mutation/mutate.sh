@@ -5220,6 +5220,372 @@ m WK59 'an existing lock file keeps its mode' src/watch/lock.rs \
   'file.set_permissions(std::fs::Permissions::from_mode(0o600))' 'file.set_permissions(std::fs::Permissions::from_mode(0o644))' \
   watch_core an_existing_lock_file_is_tightened_to_mode_0600
 
+# stw absorb plan (src/absorb.rs, src/absorb_commute.rs, src/sha256.rs, Op::BlameLines in src/git_runner.rs, the command in src/cli.rs;
+# tests/it/absorb_*.rs, sha256.rs, git_runner_blame.rs): AB1 to AB99, one mutation per check of the new areas
+m AB1 'the SHA-256 length is written in bytes, not bits' src/sha256.rs \
+  '(data.len() as u64).wrapping_mul(8)' '(data.len() as u64)' \
+  sha256 nist_vectors
+m AB2 'the SHA-256 padding stops one byte early' src/sha256.rs \
+  'while tail.len() % 64 != 56' 'while tail.len() % 64 != 55' \
+  sha256 padding_boundaries
+m AB3 'one rotation of the SHA-256 message schedule is wrong' src/sha256.rs \
+  'w[i - 15].rotate_right(7)' 'w[i - 15].rotate_right(8)' \
+  sha256 nist_vectors
+m AB4 'the full blocks of a long message are not hashed' src/sha256.rs \
+  'for c in blocks {' 'for c in blocks.iter().take(0) {' \
+  sha256 one_million_a
+m AB5 'the anchors of an insertion start at the inserted line' src/absorb_commute.rs \
+  '            return (
+                self.add_start - 1,
+                self.add_start,
+                self.add_start - 1,
+                self.add_start + a,
+            );' '            return (
+                self.add_start,
+                self.add_start,
+                self.add_start,
+                self.add_start + a,
+            );' \
+  absorb_units anchors_of_the_shapes
+m AB6 'the anchors of a deletion end one line late' src/absorb_commute.rs \
+  '                self.rem_start - 1,
+                self.rem_start + r,
+                self.rem_start - 1,
+                self.rem_start,
+            );' '                self.rem_start - 1,
+                self.rem_start + r,
+                self.rem_start - 1,
+                self.rem_start + 1,
+            );' \
+  absorb_units anchors_of_the_shapes
+m AB7 'the anchors of a replacement start at the first removed line' src/absorb_commute.rs \
+  '        (
+            self.rem_start - 1,
+            self.rem_start + r,
+            self.add_start - 1,
+            self.add_start + a,
+        )
+    }' '        (
+            self.rem_start,
+            self.rem_start + r,
+            self.add_start - 1,
+            self.add_start + a,
+        )
+    }' \
+  absorb_units anchors_of_the_shapes
+m AB8 'the anchors of an empty hunk are zeros' src/absorb_commute.rs \
+  'return (0, 1, 0, 1);' 'return (0, 0, 0, 0);' \
+  absorb_units anchors_of_the_shapes
+m AB9 'a hunk below another is shifted the wrong way' src/absorb_commute.rs \
+  'let off = -first.offset();' 'let off = first.offset();' \
+  absorb_units commute_below_the_first_hunk_shifts_both_sides_by_minus_its_offset
+m AB10 'hunks that touch at the lower anchor are taken as overlapping' src/absorb_commute.rs \
+  'if f_low <= s_up {' 'if f_low < s_up {' \
+  absorb_units commute_after_hunk_moves_up_by_the_offset
+m AB11 'hunks that touch at the upper anchor are taken as overlapping' src/absorb_commute.rs \
+  'if s_low <= f_up {' 'if s_low < f_up {' \
+  absorb_units commute_two_insertions
+m AB12 'removals of different lines commute as repeated lines' src/absorb_commute.rs \
+  '&& all(&first.rem, &second.rem)' '&& true' \
+  absorb_units two_removals_of_the_same_repeated_line_commute_and_others_do_not
+m AB13 'insertions of different lines commute as repeated lines' src/absorb_commute.rs \
+  '&& all(&first.add, &second.add)' '&& true' \
+  absorb_units hunks_of_the_same_repeated_line_commute_whatever_the_offsets
+m AB14 'the hunks of a commit are passed first to last' src/absorb_commute.rs \
+  'for h in before.iter().rev() {' 'for h in before.iter() {' \
+  absorb_units commute_after_hunk_moves_up_by_the_offset
+m AB15 'the removed lines are looked for one line too low' src/absorb_commute.rs \
+  'let start = hunk.rem_start - 1;' 'let start = hunk.rem_start;' \
+  absorb_units consistency_check_finds_the_removed_lines_in_the_blob
+m AB16 'the removed lines are not compared with the blob' src/absorb_commute.rs \
+  '.all(|(a, b)| *a == b.as_slice());' '.all(|_| true);' \
+  absorb_units consistency_check_finds_the_removed_lines_in_the_blob
+m AB17 'an insertion may sit one line behind the end of the blob' src/absorb_commute.rs \
+  'hunk.add_start <= ls.len() as i64 + 1' 'hunk.add_start <= ls.len() as i64 + 2' \
+  absorb_units consistency_check_finds_the_removed_lines_in_the_blob
+m AB18 'the C1 controls are not masked' src/absorb.rs \
+  '(0x7f..0xa0).contains(&n)' '(0x7f..0x80).contains(&n)' \
+  absorb_units sanitize_masks_controls_bidi_zero_width_and_separators
+m AB19 'the bell is not masked' src/absorb.rs \
+  'if n < 0x20 ||' 'if n < 0x07 ||' \
+  absorb_output control_and_bidi_characters_are_masked
+m AB20 'the zero-width space is not masked' src/absorb.rs \
+  ''\''\u{200b}'\'', '\''\u{2060}'\'',' ''\''\u{2060}'\'', '\''\u{2060}'\'',' \
+  absorb_units sanitize_masks_controls_bidi_zero_width_and_separators
+m AB21 'an invalid UTF-8 sequence becomes one question mark' src/absorb.rs \
+  'chunk.invalid().len()' '1' \
+  absorb_units sanitize_bytes_masks_every_byte_of_invalid_utf8
+m AB22 'a hunk from two commits is ambiguous only from three' src/absorb.rs \
+  'if origin_commits >= 2 && !ambiguous_newest {' 'if origin_commits >= 3 && !ambiguous_newest {' \
+  absorb_units verdict_of_one_hunk
+m AB23 'the consistency check is inverted in the verdict' src/absorb.rs \
+  '    if !consistent {
+        return Err("conflict");' '    if consistent {
+        return Err("conflict");' \
+  absorb_units verdict_of_one_hunk
+m AB24 '--ambiguous-newest does not change the verdict' src/absorb.rs \
+  'origin_commits >= 2 && !ambiguous_newest' 'origin_commits >= 2' \
+  absorb_targets ambiguous_newest_flag_takes_the_newest
+m AB25 'the keys of the canonical JSON are not sorted' src/absorb.rs \
+  '            keys.sort();' '            keys.reverse();' \
+  absorb_sum keys_are_sorted_at_every_level_and_nothing_is_padded
+m AB26 'DEL is not escaped in the canonical JSON' src/absorb.rs \
+  ''\'' '\''..='\''~'\'' => out.push(c),' ''\'' '\''..='\''\u{7f}'\'' => out.push(c),' \
+  absorb_sum non_ascii_text_is_escaped_as_the_spike_does
+m AB27 'a character above the BMP is not split into a surrogate pair' src/absorb.rs \
+  'for unit in c.encode_utf16(&mut [0; 2]) {' 'for unit in [c as u32 as u16] {' \
+  absorb_sum non_ascii_text_is_escaped_as_the_spike_does
+m AB28 'a byte of an invalid UTF-8 sequence loses its value in the checksum' src/absorb.rs \
+  'let _ = write!(text, "\\udc{b:02x}");' 'let _ = write!(text, "\\udc{:02x}", 0);' \
+  absorb_sum the_checksum_covers_options_plan_and_the_unmasked_paths
+m AB29 'the checksum leaves out the raw paths' src/absorb.rs \
+  'for (i, p) in raw_paths.iter().enumerate() {' 'for (i, p) in raw_paths.iter().take(0).enumerate() {' \
+  absorb_sum the_checksum_follows_each_of_its_three_parts
+m AB30 'the checksum leaves out the options' src/absorb.rs \
+  'canon(options, &mut text);' 'canon(&Value::Null, &mut text);' \
+  absorb_sum the_checksum_follows_each_of_its_three_parts
+m AB31 'the index digest ends each entry with a line break' src/absorb.rs \
+  '            listing.push(0);' '            listing.push(b'\''\n'\'');' \
+  absorb_output json_document_has_the_keys_of_the_model
+m AB32 'the plan carries no index digest' src/absorb.rs \
+  '"index_digest": self.index_digest,' '"index_digest": "",' \
+  absorb_targets plan_sum_binds_the_index_digest
+m AB33 'the checksum is taken over no document' src/absorb.rs \
+  'let sum = plan_sum(&options, &raw, &doc);' 'let sum = plan_sum(&options, &raw, &Value::Null);' \
+  absorb_targets plan_sum_is_stable_and_follows_the_plan
+m AB34 'the stack limit hides the commit that shows the limit was hit' src/absorb.rs \
+  'self.opts.max_stack + 1
+        };' 'self.opts.max_stack
+        };' \
+  absorb_stack a_stack_of_exactly_the_limit_ends_at_the_root_not_at_the_limit
+m AB35 '--base does not lift the stack limit' src/absorb.rs \
+  'let limit = if self.base.is_some() {' 'let limit = if false {' \
+  absorb_stack base_ignores_the_limit_and_hides_older_commits
+m AB36 'a merge commit does not end the stack' src/absorb.rs \
+  'for r in recs {
+            if r.parents.len() > 1 {' 'for r in recs {
+            if r.parents.len() > 99 {' \
+  absorb_stack merge_commit_ends_the_stack
+m AB37 'a commit is foreign by its name only' src/absorb.rs \
+  '(&r.name, &r.email) != (&self.ident.0, &self.ident.1)' 'r.name != self.ident.0' \
+  absorb_stack same_name_other_email_is_foreign
+m AB38 'commits of remote-tracking branches are not hidden' src/absorb.rs \
+  'self.remote.contains(&id) || hidden.contains(&id)' 'hidden.contains(&id)' \
+  absorb_stack published_head_is_refused
+m AB39 'commits of other local branches are not hidden' src/absorb.rs \
+  'let heads = self.tips("refs/heads/", Some(&self.ref_name))?;' 'let heads = Vec::new();' \
+  absorb_stack commits_of_another_local_branch_end_the_stack
+m AB40 'the current branch hides its own commits' src/absorb.rs \
+  'self.tips("refs/heads/", Some(&self.ref_name))?' 'self.tips("refs/heads/", None)?' \
+  absorb_targets single_hunk_goes_to_the_owner_commit
+m AB41 '--base hides the commits of other local branches' src/absorb.rs \
+  'Some(b) => self.closure(vec![b])?,' 'Some(b) => {
+                let mut t = self.tips("refs/heads/", Some(&self.ref_name))?;
+                t.push(b);
+                self.closure(t)?
+            }' \
+  absorb_stack explicit_base_does_not_hide_other_local_branches
+m AB42 'a published commit is not named as the reason' src/absorb.rs \
+  'if outside.iter().any(|s| self.remote.contains(s)) {' 'if false {' \
+  absorb_stack published_ancestors_end_the_stack_and_are_classified
+m AB43 'a foreign commit is not named as the reason' src/absorb.rs \
+  '            if self.foreign(&r) {
+                return Ok("foreign");' '            if false {
+                return Ok("foreign");' \
+  absorb_stack foreign_commit_in_the_middle_ends_the_stack_and_is_classified
+m AB44 'a hunk beyond the stack is a hunk without candidate' src/absorb.rs \
+  'Ok("outside-range")' 'Ok("no-candidate")' \
+  absorb_stack stack_limit_defaults_to_ten_and_reports_it
+m AB45 'a head by another author is accepted' src/absorb.rs \
+  'if first.parents.len() <= 1 && self.foreign(first) {' 'if false {' \
+  absorb_stack head_by_another_author_is_not_owned
+m AB46 'a published head is accepted' src/absorb.rs \
+  'if self.remote.contains(&self.head) {' 'if false {' \
+  absorb_stack published_head_is_refused
+m AB47 'a stack down to the root ends at the base' src/absorb.rs \
+  'None => "root",' 'None => "base",' \
+  absorb_output json_document_has_the_keys_of_the_model
+m AB48 'a published parent is not named as the end of the stack' src/absorb.rs \
+  'Some(next) if self.remote.contains(&next) => "published",' 'Some(next) if self.remote.contains(&next) => "branch",' \
+  absorb_stack published_ancestors_end_the_stack_and_are_classified
+m AB49 'a merge commit behind the stack is not named' src/absorb.rs \
+  'if r.parents.len() > 1 {
+                    "merge"' 'if r.parents.len() > 99 {
+                    "merge"' \
+  absorb_stack a_hidden_merge_commit_after_the_stack_is_named
+m AB50 'a base that is not an ancestor of HEAD is accepted' src/absorb.rs \
+  'if !repo::is_ancestor(&self.repo, id, self.head).unwrap_or(false) {' 'if false {' \
+  absorb_stack bad_base_is_refused
+m AB51 'a symlink is planned as text' src/absorb.rs \
+  'if linkish(c.old) || linkish(c.new) {' 'if false {' \
+  absorb_output files_that_are_not_modified_text_are_reported
+m AB52 'a binary file is not skipped as binary' src/absorb.rs \
+  '        if d.binary {
+            return skip(self, "binary");' '        if false {
+            return skip(self, "binary");' \
+  absorb_output files_that_are_not_modified_text_are_reported
+m AB53 'a type change is reported as a modification' src/absorb.rs \
+  '=> '\''T'\'',' '=> '\''M'\'',' \
+  absorb_output typechange_is_reported
+m AB54 'a submodule is not skipped as a submodule' src/absorb.rs \
+  'if [c.old, c.new].iter().flatten().any(|x| x.mode == GITLINK) {' 'if false {' \
+  absorb_output files_that_are_not_modified_text_are_reported
+m AB55 'an unmerged index is read' src/absorb.rs \
+  'if e.stage_raw() != 0 {' 'if false {' \
+  absorb_guards unmerged_index_is_refused
+m AB56 'an index equal to HEAD is planned' src/absorb.rs \
+  'if changes.is_empty() {' 'if false {' \
+  absorb_guards nothing_staged
+m AB57 'a detached head is reported as no commits' src/absorb.rs \
+  'return fail("detached-head", "HEAD is not on a branch");' 'return fail("no-commits", "HEAD is not on a branch");' \
+  absorb_guards detached_head
+m AB58 'the e-mail address of the identity is not read' src/absorb.rs \
+  'for key in ["user.name", "user.email"] {' 'for key in ["user.name"] {' \
+  absorb_guards no_identity
+m AB59 'GIT_DIR and the other overrides are not refused' src/absorb.rs \
+  '.find(|v| std::env::var_os(v).is_some_and(|x| !x.is_empty()))' '.find(|_| false)' \
+  absorb_guards git_environment_overrides_are_refused
+m AB60 'GIT_COMMON_DIR is not on the list of overrides' src/absorb.rs \
+  '    "GIT_COMMON_DIR",
+' '    "GIT_DIR",
+' \
+  absorb_guards git_environment_overrides_are_refused
+m AB61 'a .jj directory above the repository counts' src/absorb.rs \
+  'Some(up) if d != top => d = up,' 'Some(up) => d = up,' \
+  absorb_guards jj_above_the_git_boundary_does_not_count
+m AB62 'a .jj directory above the working directory is not searched' src/absorb.rs \
+  'Some(up) if d != top => d = up,' 'Some(_) if d != top => break,' \
+  absorb_guards jj_in_an_ancestor_up_to_the_git_boundary
+m AB63 'a .jj file is taken for a jj workspace' src/absorb.rs \
+  'if md.file_type().is_symlink() || !md.is_dir() {' 'if false {' \
+  absorb_guards jj_marker_of_the_wrong_type_is_invalid_metadata
+m AB64 'the GitButler directory is not looked for' src/absorb.rs \
+  'exists(&repo.git_dir().join("gitbutler"))
+        || exists(&repo.common_dir().join("gitbutler"))' 'false' \
+  absorb_guards gitbutler_markers
+m AB65 'the GitButler refs are not looked for' src/absorb.rs \
+  'p.prefixed("refs/gitbutler/")' 'p.prefixed("refs/gitbutlerx/")' \
+  absorb_guards gitbutler_markers
+m AB66 'the GitButler workspace branch is not looked for' src/absorb.rs \
+  'repo.try_find_reference("refs/heads/gitbutler/workspace"),' 'repo.try_find_reference("refs/heads/gitbutler/workspac"),' \
+  absorb_guards gitbutler_markers
+m AB67 'jj and GitButler together are reported as unsupported' src/absorb.rs \
+  '"ambiguous-backend",' '"unsupported-backend",' \
+  absorb_guards jj_and_gitbutler_together_are_ambiguous
+m AB68 'a promisor remote is not recognised' src/absorb.rs \
+  's.header().subsection_name().is_some() && s.body().value("promisor").is_some()' 'false' \
+  absorb_readonly partial_clone_is_refused_and_nothing_is_fetched
+m AB69 'a failed read in a partial clone is a plain git failure' src/absorb.rs \
+  '        if self.partial {
+            Fail {
+                code: "partial-clone-unsupported",' '        if false {
+            Fail {
+                code: "partial-clone-unsupported",' \
+  absorb_readonly partial_clone_is_refused_and_nothing_is_fetched
+m AB70 'the offsets of the hunks before a hunk are not removed' src/absorb.rs \
+  'let isolated = h.shifted(-preceding, 0);' 'let isolated = h.shifted(0, 0);' \
+  absorb_targets second_hunk_insertion_uses_isolated_coordinates
+m AB71 'the offsets of the hunks before a hunk are not summed' src/absorb.rs \
+  'preceding += h.offset();' 'preceding += 0;' \
+  absorb_targets second_hunk_insertion_uses_isolated_coordinates
+m AB72 'a file added by a commit is not its basis' src/absorb.rs \
+  '            if d.added {
+                return Ok(Some((i, cur, "file-added")));' '            if false {
+                return Ok(Some((i, cur, "file-added")));' \
+  absorb_targets file_added_by_a_commit_is_its_target_for_any_hunk
+m AB73 'the verdict ignores the commits the lines come from' src/absorb.rs \
+  'decide(ok, e.origins.len(), self.opts.ambiguous_newest)' 'decide(ok, 0, self.opts.ambiguous_newest)' \
+  absorb_targets hunk_over_two_commits_is_ambiguous
+m AB74 'blame is asked for one line too many' src/absorb.rs \
+  'let last = first + hunk.rem.len() as u32 - 1;' 'let last = first + hunk.rem.len() as u32;' \
+  absorb_readonly blame_is_asked_for_removed_lines_only_and_at_the_head_commit
+m AB75 'blame is asked at another commit than HEAD' src/absorb.rs \
+  'Hex40::parse(&self.head.to_string())' 'Hex40::parse(&"0".repeat(40))' \
+  absorb_readonly blame_is_asked_for_removed_lines_only_and_at_the_head_commit
+m AB76 'blame is asked for a pure insertion too' src/absorb.rs \
+  '        if !h.rem.is_empty() {
+            e.origins' '        if true {
+            e.origins' \
+  absorb_readonly blame_is_asked_for_removed_lines_only_and_at_the_head_commit
+m AB77 'a failing blame is reported as a git failure' src/absorb.rs \
+  '            code: "blame-failed",' '            code: "git-failed",' \
+  absorb_readonly a_failing_blame_is_an_error_and_never_a_plan
+m AB78 'a line of a commit that was blamed before counts twice' src/absorb.rs \
+  'Some((_, n)) => *n += 1,' 'Some((_, n)) => *n += 2,' \
+  absorb_targets origins_count_the_lines_of_each_commit
+m AB79 'the origins are listed in reverse' src/absorb.rs \
+  '        Ok(counts)
+    }' '        counts.reverse();
+        Ok(counts)
+    }' \
+  absorb_targets origins_come_in_the_order_of_the_first_line_of_each_commit
+m AB80 'the lines of a subject are joined without a space' src/absorb.rs \
+  '            out.push(b'\'' '\'');' '            out.push(b'\''-'\'');' \
+  absorb_output the_subject_is_the_first_paragraph_on_one_line
+m AB81 'a subject that is not unique does not use the full SHA' src/absorb.rs \
+  'if counts[r.subject.as_slice()] == 1 {' 'if true {' \
+  absorb_targets a_subject_that_is_not_unique_in_the_stack_uses_the_full_sha
+m AB82 'the hunks of one commit get a fixup each' src/absorb.rs \
+  '.find(|(i, _)| *i == t)' '.find(|(i, _)| *i == usize::MAX)' \
+  absorb_targets two_hunks_of_one_commit_share_a_fixup
+m AB83 'the oldest target does not decide the rewrite' src/absorb.rs \
+  'fixups.iter().map(|(i, _)| *i).max()' 'fixups.iter().map(|(i, _)| *i).min()' \
+  absorb_targets two_hunks_go_to_two_commits_and_keep_order
+m AB84 'the rewritten commits are listed newest first' src/absorb.rs \
+  '                .iter()
+                .rev()
+                .map(|r| r.id.to_string())' '                .iter()
+                .map(|r| r.id.to_string())' \
+  absorb_targets rewrite_counts_the_target_and_its_descendants
+m AB85 'the text names no fixup' src/absorb.rs \
+  '"{} <- {}"' '"{} {}"' \
+  absorb_output text_output_agrees_with_json
+m AB86 'the text of a skipped hunk is another one' src/absorb.rs \
+  '"{} {} {range} skipped: {}"' '"{} {} {range} skip: {}"' \
+  absorb_output text_output_agrees_with_json
+m AB87 'the text does not say that nothing was written' src/absorb.rs \
+  '; nothing was written"' '; done"' \
+  absorb_output text_output_agrees_with_json
+m AB88 'the branch name is not masked' src/absorb.rs \
+  'let ref_name = sanitize_bytes(&self.ref_name);' 'let ref_name = String::from_utf8_lossy(&self.ref_name).into_owned();' \
+  absorb_stack branch_name_and_ref_are_masked
+m AB89 'the path of a hunk is not masked' src/absorb.rs \
+  '"path": sanitize_bytes(&e.path),' '"path": String::from_utf8_lossy(&e.path),' \
+  absorb_output control_and_bidi_characters_are_masked
+m AB90 'the plan claims an index refresh' src/absorb.rs \
+  '"index_refresh": false,' '"index_refresh": true,' \
+  absorb_output json_document_has_the_keys_of_the_model
+m AB91 'the blame vector does not forget the ignore-revs file' src/git_runner.rs \
+  '"--ignore-revs-file=",' '"--ignore-revs",' \
+  git_runner_blame the_vector_is_fixed_and_the_path_comes_after_the_separator
+m AB92 'blame may run a textconv program' src/git_runner.rs \
+  '"--no-textconv",
+                    "--ignore-revs-file=",' '"--textconv",
+                    "--ignore-revs-file=",' \
+  git_runner_blame the_vector_is_fixed_and_the_path_comes_after_the_separator
+m AB93 'blame takes the path as a pathspec pattern' src/git_runner.rs \
+  '&["--literal-pathspecs", "-c", "core.attributesFile=/dev/null"]' '&["-c", "core.attributesFile=/dev/null"]' \
+  git_runner_blame the_vector_is_fixed_and_the_path_comes_after_the_separator
+m AB94 'blame may fetch missing objects' src/git_runner.rs \
+  'set("GIT_NO_LAZY_FETCH", "1".into());' 'let _ = 0;' \
+  git_runner_blame the_child_gets_no_lazy_fetch_and_the_other_ops_are_unchanged
+m AB95 'blame has the floor of the other reads' src/git_runner.rs \
+  'Op::BlameLines { .. } => Version(2, 46, 0),' 'Op::BlameLines { .. } => Version(2, 30, 0),' \
+  git_runner_ops the_floor_of_every_op_is_declared_and_enforced
+m AB96 'an empty blame range is not refused' src/git_runner.rs \
+  'Op::BlameLines { first, last, .. } if *first == 0 || last < first => {' 'Op::BlameLines { first, last, .. } if *first == 99 && last < first => {' \
+  git_runner_blame an_empty_or_reversed_range_is_refused_before_anything_runs
+m AB97 'a blame path may hold a line break' src/git_runner.rs \
+  '!s.contains(['\''\0'\'', '\''\n'\'', '\''\r'\''])' '!s.contains(['\''\0'\''])' \
+  git_runner_blame the_path_must_be_text_without_line_breaks
+m AB98 'the error of a refused run is not printed' src/cli.rs \
+  '        eprintln!("stw absorb: {}: {}", f.code, f.message);' '        let _ = (&f.code, &f.message);' \
+  absorb_guards the_error_document_is_written_for_json_only
+m AB99 'the error document is printed without --json' src/cli.rs \
+  '        if a.json {
+            print_json(&f.to_json());' '        if true {
+            print_json(&f.to_json());' \
+  absorb_guards the_error_document_is_written_for_json_only
 killed=0 bad=0
 for i in "${!IDS[@]}"; do
   id=${IDS[$i]}
