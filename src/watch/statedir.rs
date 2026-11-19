@@ -106,8 +106,14 @@ pub fn workspace_id(host: &str, source: IdSource<'_>) -> String {
 }
 
 /// `$XDG_STATE_HOME/stw/watch/<id>`, else `$HOME/.local/state/stw/watch/<id>`. An empty or missing value counts as unset.
-pub fn default_state_dir(_id: &str, _xdg_state_home: Option<&str>, _home: Option<&str>) -> PathBuf {
-    PathBuf::new()
+pub fn default_state_dir(id: &str, xdg_state_home: Option<&str>, home: Option<&str>) -> PathBuf {
+    let base = match xdg_state_home.filter(|x| !x.is_empty()) {
+        Some(x) => PathBuf::from(x),
+        None => PathBuf::from(home.unwrap_or(""))
+            .join(".local")
+            .join("state"),
+    };
+    base.join("stw").join("watch").join(id)
 }
 
 /// The age below which a heartbeat counts as alive: `max(3 x interval, 180)` seconds.
