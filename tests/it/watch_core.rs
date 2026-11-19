@@ -1643,6 +1643,8 @@ fn a_truncated_last_line_is_reported_ignored_and_cut_off_by_the_next_append() {
         b"garbage without a newline",
         b"\x00\x00\x00",
         b"{",
+        // longer than the line written over it: only a cut removes all of it
+        &[b'x'; 1000],
     ] {
         let mut f = std::fs::OpenOptions::new()
             .append(true)
@@ -1661,8 +1663,9 @@ fn a_truncated_last_line_is_reported_ignored_and_cut_off_by_the_next_append() {
         assert_eq!(j.junk_bytes(), 0);
         // every line of the file validates again and nothing of the junk is left
         let mut n = 0;
-        scan(&path, &mut |_| n += 1).unwrap();
+        let end = scan(&path, &mut |_| n += 1).unwrap();
         assert_eq!(n, 3);
+        assert_eq!(end.size, end.good, "no byte of the junk is left: {tail:?}");
         // restore two events for the next round
         std::fs::OpenOptions::new()
             .write(true)
