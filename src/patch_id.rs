@@ -21,6 +21,7 @@ use gix::objs::tree::EntryKind;
 use gix::ObjectId;
 
 use crate::error::Result;
+use crate::patch_rename;
 
 const CONTEXT: u32 = 3;
 
@@ -492,7 +493,7 @@ fn tree_diff_inner(
     if log {
         m.log = Some(Vec::new());
     }
-    for pair in files.iter().flat_map(Pair::of) {
+    for pair in patch_rename::pair_renames(repo, files)? {
         for line in render_pair(repo, &pair)? {
             m.feed(line)?;
         }

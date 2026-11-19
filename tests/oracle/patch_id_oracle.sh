@@ -1,5 +1,5 @@
 #!/bin/bash
-# Oracle check of the in-process patch ID against `git patch-id --stable`.
+# Oracle check of the in-process patch ID against `git patch-id --stable` on `git diff-tree -p -M` (renames as git diff).
 # The git binary is used ONLY here, as the reference. Usage:
 #   patch_id_oracle.sh STW_BINARY ROOT [PER_REPO_COUNT]
 # Samples non-merge commits (first PER_REPO_COUNT per repo, default 30, spread over the history with
@@ -18,13 +18,13 @@ for r in "${repos[@]}"; do
   stride=$(( n / COUNT )); [ "$stride" -ge 1 ] || stride=1
   commits=$(git -C "$r" rev-list --no-merges HEAD | awk -v s="$stride" -v c="$COUNT" 'NR % s == 1 || s == 1 { if (++k <= c) print }')
   for c in $commits; do
-    want=$(git -C "$r" -c core.fsmonitor=false diff-tree -p --no-renames --no-color -r --root "$c" | git patch-id --stable | awk '{print $1}')
+    want=$(git -C "$r" -c core.fsmonitor=false diff-tree -p -M --no-color -r --root "$c" | git patch-id --stable | awk '{print $1}')
     got=$("$STW" dev patch-id "$r" "$c" | awk '{print ($1=="none")?"":$1}')
     total=$((total+1))
     if [ "$want" = "$got" ]; then same=$((same+1)); echo "same $(basename "$r") $c ${want:-empty}"; else
       diff=$((diff+1))
-      # classify: binary (git hashes abbreviated oids, not comparable), empty (no diff), text (hunk placement differs)
-      patch=$(git -C "$r" diff-tree -p --no-renames --root --no-commit-id "$c")
+      # classify: binary (abbreviated blob ids, depend on the repository), empty (no diff), text (hunk placement or a tie between equal renames)
+      patch=$(git -C "$r" diff-tree -p -M --root --no-commit-id "$c")
       if [ -z "$patch" ]; then cls=empty; elif printf '%s\n' "$patch" | grep -q '^Binary files\|^GIT binary'; then cls=binary; else cls=text; fi
       echo "DIFF($cls) $(basename "$r") $c git=${want:-empty} stw=$got"
     fi

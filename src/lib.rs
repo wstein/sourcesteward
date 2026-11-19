@@ -13,6 +13,7 @@ pub mod lint_pr_cmd;
 pub mod oplog;
 pub mod output;
 pub mod patch_id;
+pub mod patch_rename;
 pub mod prove;
 pub mod ready_check;
 pub mod replay;
