@@ -348,8 +348,9 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. }
-            | Op::UpdateBranchCas { .. }
-            | Op::BlameLines { .. } => Version(2, 30, 0),
+            | Op::UpdateBranchCas { .. } => Version(2, 30, 0),
+            // `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch missing objects of a partial clone
+            Op::BlameLines { .. } => Version(2, 46, 0),
         }
     }
 
@@ -489,7 +490,27 @@ impl Op {
                 a
             }
             Op::PatchIdStable => v(&["patch-id", "--stable"]),
-            Op::BlameLines { .. } => v(&["blame"]),
+            Op::BlameLines {
+                rev,
+                path,
+                first,
+                last,
+            } => {
+                // `--ignore-revs-file=` (empty) forgets `blame.ignoreRevsFile` and the default file: the commit that last
+                // changed a line is what the plan needs, not the commit a project would rather blame
+                let mut a = v(&[
+                    "blame",
+                    "--porcelain",
+                    "--no-textconv",
+                    "--ignore-revs-file=",
+                    "-L",
+                ]);
+                a.push(format!("{first},{last}"));
+                a.push(rev.as_str().to_string());
+                a.push("--".to_string());
+                a.push(path.as_str().to_string());
+                a
+            }
             Op::CheckAttrGitmodules { cached } => {
                 let mut a = v(&["check-attr"]);
                 if *cached {
@@ -528,6 +549,9 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. } => &[],
+            Op::BlameLines { .. } => {
+                &["--literal-pathspecs", "-c", "core.attributesFile=/dev/null"]
+            }
             Op::DiffRange { .. } => &[
                 "-c",
                 "diff.ignoreSubmodules=none",
@@ -1049,6 +1073,10 @@ impl Runner {
         }
         if matches!(op, Op::DiffRange { .. }) {
             set("GIT_NO_REPLACE_OBJECTS", "1".into());
+        }
+        if matches!(op, Op::BlameLines { .. }) {
+            // a partial clone must not fetch a missing object: the call fails instead
+            set("GIT_NO_LAZY_FETCH", "1".into());
         }
         if matches!(op, Op::RangeDiff { .. }) {
             // no `.gitattributes` of the worktree, no replace refs: nothing may hide or swap a commit
