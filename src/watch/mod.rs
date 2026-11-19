@@ -10,6 +10,14 @@
 //! After a crash the start replays the journal lines past `applied_seq` into the state and prints the lines past
 //! `printed_seq` again (at-least-once output).
 use std::fmt;
+use std::path::{Path, PathBuf};
+
+use event::Event;
+use journal::Journal;
+use lock::DirLock;
+use state::State;
+#[allow(unused_imports)]
+use statedir::{ensure_state_dir, load_state, save_state, write_heartbeat};
 
 pub mod apply;
 pub mod event;
@@ -78,6 +86,124 @@ impl WatchError {
                 crate::error::Error::usage(self.to_string())
             }
             _ => crate::error::Error::repository(self.to_string()),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The session of a state directory: lock, journal and state, the start with replay and the commit of a cycle.
+
+/// The durable steps of the commit order, reported to `Output::after` so a test can stop the process there (a crash).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Step {
+    /// The n-th event of the cycle is in the journal (fsynced).
+    Append(usize),
+    /// The n-th event of the cycle was printed.
+    Print(usize),
+    /// `state.json` of the cycle was written.
+    State,
+    /// `state.json` was written after the replay at start.
+    ReplayState,
+    /// The n-th line was printed again at start.
+    ReplayPrint(usize),
+}
+
+/// Where events are printed (stdout) and the hook after every durable step. An error from either stops the session as a
+/// crash would: it is unusable until the directory is opened again.
+pub trait Output {
+    fn print(&mut self, ev: &Event) -> Result<(), WatchError>;
+    fn after(&mut self, _step: Step) -> Result<(), WatchError> {
+        Ok(())
+    }
+}
+
+/// What the start found and did.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct OpenReport {
+    /// The state was missing or unusable and was rebuilt from the journal; the first cycle is a silent baseline.
+    pub lost: bool,
+    /// Journal lines applied to the state (those past `applied_seq`).
+    pub replayed: u64,
+    /// Journal lines printed again (those past `printed_seq`).
+    pub reprinted: u64,
+    /// Bytes of a truncated write at the end of the journal (cut off by the next append).
+    pub truncated_tail_bytes: u64,
+}
+
+/// An open state directory: the lock, the journal and the accepted state.
+pub struct Core {
+    pub dir: PathBuf,
+    pub state: State,
+    /// The next cycle is a silent baseline (forced by the caller, or the state was rebuilt from the journal).
+    pub baseline: bool,
+    journal: Journal,
+    lock: Option<DirLock>,
+    broken: bool,
+}
+
+impl Core {
+    /// Opens `dir` (created with mode 0700 when new, refused inside a Git work tree), takes the lock, replays the journal
+    /// into the state and prints again the events that may not have reached the output (at-least-once). Nothing is polled.
+    ///
+    /// `baseline` forces the first cycle to be a silent baseline and repairs a state that is corrupt or behind the journal;
+    /// without it those are `WatchError::CorruptState`.
+    pub fn open(
+        dir: &Path,
+        baseline: bool,
+        out: &mut dyn Output,
+    ) -> Result<(Core, OpenReport), WatchError> {
+        let lock = lock::acquire_with(dir, 1, std::time::Duration::ZERO)?;
+        Core::start(dir, baseline, lock, out)
+    }
+
+    fn start(
+        dir: &Path,
+        baseline: bool,
+        lock: DirLock,
+        out: &mut dyn Output,
+    ) -> Result<(Core, OpenReport), WatchError> {
+        let _ = (baseline, out);
+        Ok((
+            Core {
+                dir: dir.to_path_buf(),
+                state: State::new(),
+                baseline,
+                journal: Journal::open(dir)?,
+                lock: Some(lock),
+                broken: false,
+            },
+            OpenReport::default(),
+        ))
+    }
+
+    /// `seq` of the last journalled event.
+    pub fn tail(&self) -> u64 {
+        self.journal.tail()
+    }
+
+    /// Commits the events of one cycle in the order of the spec: each is appended to the journal and fsynced, then applied to
+    /// the state (idempotent: a cycle that applied them while computing changes nothing), then printed, then `state.json` is
+    /// written with `applied_seq` = `printed_seq` = the last seq. Returns the events as journalled (with their `seq`). After
+    /// an error the session is unusable: open the directory again, as after a crash.
+    pub fn commit(
+        &mut self,
+        events: &[Event],
+        out: &mut dyn Output,
+    ) -> Result<Vec<Event>, WatchError> {
+        let _ = (out, self.broken, &self.dir);
+        Ok(events.to_vec())
+    }
+
+    /// Writes the heartbeat (`RFC3339 pid mode`); the caller does it after every completed cycle, also after partial failures.
+    pub fn heartbeat(&self, now_secs: i64, mode: &str) -> Result<(), WatchError> {
+        let _ = (now_secs, mode);
+        Ok(())
+    }
+
+    /// Releases the lock and the journal.
+    pub fn close(mut self) {
+        if let Some(l) = self.lock.take() {
+            l.release();
         }
     }
 }

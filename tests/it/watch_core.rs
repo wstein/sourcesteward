@@ -1991,3 +1991,338 @@ fn a_missing_directory_is_not_fresh_and_not_an_error_while_a_corrupt_file_or_a_r
         Err(WatchError::CorruptState(_))
     ));
 }
+
+// ---------------------------------------------------------------------------------------------------------------------
+// The session: start with replay, commit order, crash points.
+use stw::watch::{Core, Output, Step};
+
+/// Records what is printed (by seq) and the durable steps, and "crashes" (returns an error) after the chosen step.
+#[derive(Default)]
+struct Rec {
+    printed: Vec<u64>,
+    steps: Vec<Step>,
+    crash_after: Option<Step>,
+}
+
+impl Output for Rec {
+    fn print(&mut self, ev: &Event) -> Result<(), WatchError> {
+        self.printed.push(ev.seq);
+        Ok(())
+    }
+    fn after(&mut self, step: Step) -> Result<(), WatchError> {
+        self.steps.push(step);
+        if self.crash_after == Some(step) {
+            return Err(WatchError::Io("crash".into()));
+        }
+        Ok(())
+    }
+}
+
+fn open(dir: &Path, baseline: bool) -> (Core, stw::watch::OpenReport, Rec) {
+    let mut rec = Rec::default();
+    let (c, r) = Core::open(dir, baseline, &mut rec).unwrap();
+    (c, r, rec)
+}
+
+fn new_pr_event(n: u64) -> Event {
+    let id = stw::watch::event::event_id(Some("o/r"), Some(n), Kind::NewPr, "g0");
+    Event::new(
+        id,
+        "2026-10-22T09:00:00Z".into(),
+        Some("o/r".into()),
+        Some(n),
+        Details::NewPr(stw::watch::event::NewPr {
+            head: format!("{n:040}"),
+            base: "main".into(),
+            ..Default::default()
+        }),
+    )
+}
+
+#[test]
+fn a_cycle_commits_journal_then_apply_then_print_then_state() {
+    let t = tmp();
+    let (mut core, report, _) = open(&t.path().join("d"), false);
+    assert_eq!(report, stw::watch::OpenReport::default());
+    let mut rec = Rec::default();
+    let written = core
+        .commit(&[new_pr_event(1), new_pr_event(2)], &mut rec)
+        .unwrap();
+    assert_eq!(written.iter().map(|e| e.seq).collect::<Vec<_>>(), [1, 2]);
+    assert_eq!(
+        rec.steps,
+        [
+            Step::Append(1),
+            Step::Append(2),
+            Step::Print(1),
+            Step::Print(2),
+            Step::State
+        ],
+        "all appends before the first print, the state last"
+    );
+    assert_eq!(rec.printed, [1, 2]);
+    assert_eq!(
+        (core.state.applied_seq, core.state.printed_seq, core.tail()),
+        (2, 2, 2)
+    );
+    assert!(core.state.repo["o/r"].prs.contains_key(&2), "applied");
+    let on_disk = load_state(&t.path().join("d")).unwrap().unwrap();
+    assert_eq!(on_disk, core.state);
+    // an empty cycle still writes the state and prints nothing
+    let mut rec = Rec::default();
+    core.commit(&[], &mut rec).unwrap();
+    assert_eq!(
+        (rec.steps.clone(), rec.printed.clone()),
+        (vec![Step::State], vec![])
+    );
+}
+
+#[test]
+fn an_event_that_the_cycle_applied_already_is_not_applied_twice() {
+    let t = tmp();
+    let (mut core, _, _) = open(&t.path().join("d"), false);
+    let e = new_pr_event(1);
+    core.state.apply(&e);
+    let before = core.state.clone();
+    core.commit(&[e], &mut Rec::default()).unwrap();
+    let mut after = core.state.clone();
+    after.applied_seq = 0;
+    after.printed_seq = 0;
+    assert_eq!(after, before);
+}
+
+#[test]
+fn a_second_open_of_the_same_directory_is_locked_out_until_the_first_is_closed() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (core, _, _) = open(&dir, false);
+    let err = Core::open(&dir, false, &mut Rec::default()).err().unwrap();
+    assert!(matches!(err, WatchError::Locked(Some(_))), "{err}");
+    core.close();
+    open(&dir, false);
+}
+
+/// Dies after `step` of one commit of `n` events and returns the directory, as a restart finds it.
+fn crashed(t: &tempfile::TempDir, n: u64, step: Step) -> std::path::PathBuf {
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    core.commit(&[new_pr_event(100)], &mut Rec::default())
+        .unwrap(); // seq 1 is complete
+    let events: Vec<Event> = (1..=n).map(new_pr_event).collect();
+    let mut rec = Rec {
+        crash_after: Some(step),
+        ..Rec::default()
+    };
+    assert!(core.commit(&events, &mut rec).is_err());
+    assert!(
+        core.commit(&events, &mut Rec::default()).is_err(),
+        "a failed session stays unusable"
+    );
+    drop(core);
+    dir
+}
+
+#[test]
+fn a_crash_after_the_append_replays_and_prints_the_event_once_more_and_never_journals_it_twice() {
+    // `crashed` journals seq 1 (PR 100) and then dies after `step` of a commit of PR 1 and PR 2 (seq 2 and 3).
+    for (step, tail, printed) in [
+        (Step::Append(1), 2u64, vec![2u64]),
+        (Step::Append(2), 3, vec![2, 3]),
+        (Step::Print(1), 3, vec![2, 3]),
+        (Step::Print(2), 3, vec![2, 3]),
+        (Step::State, 3, vec![]),
+    ] {
+        let t = tmp();
+        let dir = crashed(&t, 2, step);
+        let (core, report, rec) = open(&dir, false);
+        assert_eq!(
+            core.tail(),
+            tail,
+            "{step:?}: every event is in the journal exactly once"
+        );
+        assert_eq!(
+            rec.printed, printed,
+            "{step:?}: the lines past printed_seq are printed again"
+        );
+        assert_eq!(
+            (report.replayed, report.reprinted as usize),
+            (
+                if step == Step::State { 0 } else { tail - 1 },
+                printed.len()
+            ),
+            "{step:?}"
+        );
+        assert_eq!(
+            (core.state.applied_seq, core.state.printed_seq),
+            (tail, tail),
+            "{step:?}"
+        );
+        let known: Vec<u64> = core.state.repo["o/r"].prs.keys().copied().collect();
+        assert_eq!(
+            known,
+            if tail == 3 {
+                vec![1, 2, 100]
+            } else {
+                vec![1, 100]
+            },
+            "{step:?}: the events are applied"
+        );
+    }
+}
+
+#[test]
+fn the_state_of_a_restart_equals_the_state_of_a_run_without_a_crash() {
+    let events: Vec<Event> = (1..=3).map(new_pr_event).collect();
+    let clean = {
+        let t = tmp();
+        let (mut core, _, _) = open(&t.path().join("d"), false);
+        core.commit(&events, &mut Rec::default()).unwrap();
+        core.state.clone()
+    };
+    for step in [Step::Append(3), Step::Print(1), Step::Print(3), Step::State] {
+        let t = tmp();
+        let dir = t.path().join("d");
+        let (mut core, _, _) = open(&dir, false);
+        let mut rec = Rec {
+            crash_after: Some(step),
+            ..Rec::default()
+        };
+        assert!(core.commit(&events, &mut rec).is_err());
+        drop(core);
+        let (core, _, _) = open(&dir, false);
+        assert_eq!(core.state, clean, "{step:?}");
+    }
+}
+
+#[test]
+fn a_crash_during_the_replay_is_repeated_safely() {
+    let t = tmp();
+    let dir = crashed(&t, 2, Step::Print(1));
+    let mut rec = Rec {
+        crash_after: Some(Step::ReplayPrint(1)),
+        ..Rec::default()
+    };
+    assert!(Core::open(&dir, false, &mut rec).is_err());
+    assert_eq!(rec.steps, [Step::ReplayState, Step::ReplayPrint(1)]);
+    let (core, _, rec) = open(&dir, false);
+    assert_eq!(
+        rec.printed,
+        [2, 3],
+        "the lines are printed again until a start finishes the replay"
+    );
+    assert_eq!(core.state.printed_seq, 3);
+    let (_, report, rec) = {
+        core.close();
+        open(&dir, false)
+    };
+    assert_eq!(
+        (report.replayed, report.reprinted, rec.printed.len()),
+        (0, 0, 0),
+        "a finished replay is not repeated"
+    );
+}
+
+#[test]
+fn a_lost_state_is_rebuilt_from_the_journal_silently_and_forces_a_baseline() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    core.state.repos = Some(vec!["o/r".into()]);
+    core.commit(&[new_pr_event(1), new_pr_event(2)], &mut Rec::default())
+        .unwrap();
+    core.close();
+    std::fs::remove_file(dir.join(STATE_NAME)).unwrap();
+    let (core, report, rec) = open(&dir, false);
+    assert_eq!(
+        (report.lost, report.replayed, report.reprinted),
+        (true, 2, 0)
+    );
+    assert!(rec.printed.is_empty(), "no reprint");
+    assert!(core.baseline);
+    assert_eq!((core.state.applied_seq, core.state.printed_seq), (2, 2));
+    assert_eq!(
+        core.state.repos, None,
+        "the set is learned again by the first cycle"
+    );
+    assert_eq!(core.state.repo["o/r"].prs.len(), 2, "the counters are back");
+    assert!(core.state.skipped.is_empty());
+}
+
+#[test]
+fn a_corrupt_state_is_an_error_unless_the_baseline_is_forced() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    core.commit(&[new_pr_event(1)], &mut Rec::default())
+        .unwrap();
+    core.close();
+    std::fs::write(dir.join(STATE_NAME), "{broken").unwrap();
+    let err = Core::open(&dir, false, &mut Rec::default()).err().unwrap();
+    assert!(matches!(err, WatchError::CorruptState(_)), "{err}");
+    assert!(
+        std::fs::read_to_string(dir.join(STATE_NAME))
+            .unwrap()
+            .starts_with("{broken"),
+        "not replaced silently"
+    );
+    let (core, report, _) = open(&dir, true);
+    assert!(report.lost && core.baseline);
+    assert!(load_state(&dir).unwrap().is_some(), "repaired");
+}
+
+#[test]
+fn a_state_ahead_of_the_journal_is_an_error_unless_the_baseline_is_forced() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    core.commit(&[new_pr_event(1), new_pr_event(2)], &mut Rec::default())
+        .unwrap();
+    core.close();
+    // the journal loses its last line (a restored backup of one file)
+    let j = std::fs::read_to_string(dir.join(JOURNAL_NAME)).unwrap();
+    std::fs::write(
+        dir.join(JOURNAL_NAME),
+        format!("{}\n", j.lines().next().unwrap()),
+    )
+    .unwrap();
+    let err = Core::open(&dir, false, &mut Rec::default()).err().unwrap();
+    assert!(matches!(err, WatchError::CorruptState(_)), "{err}");
+    let (core, report, _) = open(&dir, true);
+    assert!(report.lost);
+    assert_eq!(
+        (core.tail(), core.state.applied_seq, core.state.printed_seq),
+        (1, 1, 1)
+    );
+}
+
+#[test]
+fn a_truncated_journal_tail_is_reported_by_the_start_and_cut_by_the_next_commit() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (mut core, _, _) = open(&dir, false);
+    core.commit(&[new_pr_event(1)], &mut Rec::default())
+        .unwrap();
+    core.close();
+    let mut f = std::fs::OpenOptions::new()
+        .append(true)
+        .open(dir.join(JOURNAL_NAME))
+        .unwrap();
+    f.write_all(b"{\"schema_version\":1,\"se").unwrap();
+    drop(f);
+    let (mut core, report, _) = open(&dir, false);
+    assert_eq!(report.truncated_tail_bytes, 22);
+    core.commit(&[new_pr_event(2)], &mut Rec::default())
+        .unwrap();
+    assert_eq!(core.tail(), 2);
+    scan(&dir.join(JOURNAL_NAME), &mut |_| {}).unwrap();
+}
+
+#[test]
+fn the_heartbeat_names_the_process_and_the_mode() {
+    let t = tmp();
+    let dir = t.path().join("d");
+    let (core, _, _) = open(&dir, false);
+    core.heartbeat(1_792_003_723, "once").unwrap();
+    let hb = read_heartbeat(&dir, 1_792_003_723).unwrap().unwrap();
+    assert_eq!((hb.pid, hb.mode.as_str()), (std::process::id(), "once"));
+}
