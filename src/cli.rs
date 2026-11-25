@@ -106,21 +106,45 @@ enum Command {
 
 #[derive(Args)]
 struct WatchArgs {
-    /// OWNER/NAME, repeatable. Required with --once and --stream.
+    /// OWNER/NAME, repeatable. With neither this nor --workspace, `.stw/watch.toml` is used when it exists.
     #[arg(long = "repo")]
     repo: Vec<String>,
+    /// Watch every GitHub repository of the workspace that contains the current directory.
+    #[arg(long)]
+    workspace: bool,
+    /// Read this watch.toml instead of `.stw/watch.toml`.
+    #[arg(long, value_name = "PATH")]
+    config: Option<std::path::PathBuf>,
+    /// Do not report pull requests by this author. Repeatable. Overrides watch.toml when set.
+    #[arg(long = "ignore-author")]
+    ignore_author: Vec<String>,
+    /// Do not report pull requests with this label. Repeatable. Overrides watch.toml when set.
+    #[arg(long = "ignore-label")]
+    ignore_label: Vec<String>,
+    /// Most open pull requests read per repository, 1 to 2000. [default: 2000]
+    #[arg(long = "max-open-prs")]
+    max_open_prs: Option<u32>,
+    /// Cycles between refreshes of pull request detail. [default: 10]
+    #[arg(long = "detail-every")]
+    detail_every: Option<u64>,
     /// Poll once, record transitions, and exit. The open list is not changed on a failed read.
-    #[arg(long, conflicts_with_all = ["status", "stream"])]
+    #[arg(long, conflicts_with_all = ["status", "stream", "until_event"])]
     once: bool,
-    /// Poll until SIGINT, SIGTERM, or --max-idle. Same open-list events as --once.
-    #[arg(long, conflicts_with = "status")]
+    /// Poll until SIGINT, SIGTERM, or --max-idle.
+    #[arg(long, conflicts_with_all = ["status", "until_event"])]
     stream: bool,
+    /// Poll until one of these event kinds is printed, or --timeout. Comma-separated or repeatable.
+    #[arg(long = "until-event", value_delimiter = ',')]
+    until_event: Vec<String>,
     /// Polling interval, at least 10s. Only with --stream. [default: 60s]
     #[arg(long, value_name = "DURATION")]
     interval: Option<String>,
     /// With --stream, exit 0 after this long without an event. 0 is off. [default: 0]
     #[arg(long, value_name = "DURATION")]
     max_idle: Option<String>,
+    /// With --until-event, exit 4 after this long without a matching event. [default: 590s]
+    #[arg(long, value_name = "DURATION")]
+    timeout: Option<String>,
     /// Read the heartbeat and the accepted state. No network and no lock.
     #[arg(long)]
     status: bool,
@@ -2195,39 +2219,157 @@ fn run(command: Command) -> Result<u8> {
     }
 }
 
+fn workspace_slugs() -> Result<Vec<String>> {
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let root = crate::repo::default_root(&cwd).ok_or_else(|| {
+        Error::usage("no workspace root: run inside the workspace or set STW_ROOT")
+    })?;
+    let repos = crate::repo::list_repos_checked(&root)?;
+    let mut slugs = Vec::new();
+    for repo in repos {
+        let git = crate::repo::open_isolated(&repo.path)?;
+        if let Some(slug) = crate::repo::slug(&git) {
+            slugs.push(slug);
+        }
+    }
+    if slugs.is_empty() {
+        return Err(Error::usage(
+            "the workspace has no GitHub repository to watch",
+        ));
+    }
+    Ok(slugs)
+}
+
+fn load_watch_file(a: &WatchArgs) -> Result<Option<crate::watch::watch_toml::WatchFile>> {
+    let path = if let Some(path) = &a.config {
+        path.clone()
+    } else if !a.repo.is_empty() || a.workspace {
+        return Ok(None);
+    } else {
+        let mut dir = std::env::current_dir().unwrap_or_default();
+        loop {
+            let candidate = dir.join(".stw").join("watch.toml");
+            if candidate.is_file() {
+                let meta = std::fs::symlink_metadata(&candidate).map_err(|e| {
+                    Error::usage(format!("cannot read {}: {e}", candidate.display()))
+                })?;
+                if meta.file_type().is_symlink() {
+                    return Err(Error::usage(format!(
+                        "{} is a symlink",
+                        candidate.display()
+                    )));
+                }
+                break candidate;
+            }
+            if !dir.pop() {
+                return Ok(None);
+            }
+        }
+    };
+    let text = std::fs::read_to_string(&path)
+        .map_err(|e| Error::usage(format!("cannot read {}: {e}", path.display())))?;
+    crate::watch::watch_toml::parse_watch_toml(&text)
+        .map(Some)
+        .map_err(Error::usage)
+}
+
 fn run_watch(a: WatchArgs) -> Result<u8> {
     use crate::watch::command::{self, watch_error_exit, StreamLimits};
+    use crate::watch::event::Kind;
     use crate::watch_reader::host::HostObserver;
     use crate::watch_reader::http::WatchHttp;
-    let modes = [a.once, a.stream, a.status]
+    let until = !a.until_event.is_empty();
+    let modes = [a.once, a.stream, until, a.status]
         .into_iter()
         .filter(|on| *on)
         .count();
     if modes != 1 {
         return Err(Error::usage(
-            "pass exactly one of --once, --stream and --status",
+            "pass exactly one of --once, --stream, --until-event and --status",
         ));
     }
     if a.status && a.baseline {
         return Err(Error::usage("--baseline is not valid with --status"));
     }
-    if a.interval.is_some() && !a.stream {
-        return Err(Error::usage("--interval is only valid with --stream"));
+    if a.interval.is_some() && !(a.stream || until) {
+        return Err(Error::usage(
+            "--interval is only valid with --stream or --until-event",
+        ));
     }
     if a.max_idle.is_some() && !a.stream {
         return Err(Error::usage("--max-idle is only valid with --stream"));
     }
+    if a.timeout.is_some() && !until {
+        return Err(Error::usage("--timeout is only valid with --until-event"));
+    }
+    for kind in &a.until_event {
+        if Kind::parse(kind).is_none() {
+            return Err(Error::usage(format!(
+                "--until-event: {kind:?} is not an event kind"
+            )));
+        }
+    }
+    let file = load_watch_file(&a)?;
+    let repos = if !a.repo.is_empty() {
+        a.repo.clone()
+    } else if a.workspace {
+        workspace_slugs()?
+    } else if let Some(file) = &file {
+        if file.repos.is_empty() {
+            return Err(Error::usage("watch.toml names no repository"));
+        }
+        file.repos.clone()
+    } else {
+        return Err(Error::usage(
+            "name a repository with --repo, --workspace, or .stw/watch.toml",
+        ));
+    };
+    let interval = match a.interval.as_deref() {
+        Some(text) => command::parse_duration_secs(text)
+            .map_err(Error::usage)
+            .and_then(|secs| {
+                if secs < command::MIN_INTERVAL_SECS {
+                    Err(Error::usage(format!(
+                        "--interval {text} is below the minimum of {}s",
+                        command::MIN_INTERVAL_SECS
+                    )))
+                } else {
+                    Ok(secs)
+                }
+            })?,
+        None => file
+            .as_ref()
+            .and_then(|f| f.interval_secs)
+            .unwrap_or(command::DEFAULT_INTERVAL_SECS),
+    };
+    let max_open = match a.max_open_prs {
+        Some(n) if (1..=2000).contains(&n) => u64::from(n),
+        Some(_) => return Err(Error::usage("--max-open-prs must be from 1 to 2000")),
+        None => file.as_ref().and_then(|f| f.max_open_prs).unwrap_or(0),
+    };
+    let detail_every = match a.detail_every {
+        Some(0) => return Err(Error::usage("--detail-every must be at least 1")),
+        Some(n) => n,
+        None => file.as_ref().and_then(|f| f.detail_every).unwrap_or(10),
+    };
+    let ignore_authors = if a.ignore_author.is_empty() {
+        file.as_ref()
+            .map(|f| f.ignore_authors.clone())
+            .unwrap_or_default()
+    } else {
+        a.ignore_author.clone()
+    };
+    let ignore_labels = if a.ignore_label.is_empty() {
+        file.as_ref()
+            .map(|f| f.ignore_labels.clone())
+            .unwrap_or_default()
+    } else {
+        a.ignore_label.clone()
+    };
     let dir = match &a.state_dir {
         Some(dir) if dir.is_absolute() => dir.clone(),
         Some(_) => return Err(Error::usage("the state directory must be an absolute path")),
-        None => {
-            if a.repo.is_empty() {
-                return Err(Error::usage(
-                    "--repo is required when --state-dir is omitted",
-                ));
-            }
-            command::state_dir_for_repos(&a.repo)
-        }
+        None => command::state_dir_for_repos(&repos),
     };
     let now = crate::tidy::now_secs();
     let code = if a.status {
@@ -2240,33 +2382,37 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             "https://api.github.com".to_string(),
             "api.github.com".to_string(),
         );
-        let mut source =
-            HostObserver::new(http, Box::new(crate::tidy::now_secs), 0, vec![], vec![]);
-        if a.stream {
-            let interval = match a.interval.as_deref() {
-                Some(text) => command::parse_duration_secs(text)
-                    .map_err(Error::usage)
-                    .and_then(|secs| {
-                        if secs < command::MIN_INTERVAL_SECS {
-                            Err(Error::usage(format!(
-                                "--interval {text} is below the minimum of {}s",
-                                command::MIN_INTERVAL_SECS
-                            )))
-                        } else {
-                            Ok(secs)
-                        }
-                    })?,
-                None => command::DEFAULT_INTERVAL_SECS,
-            };
+        let mut source = HostObserver::new(
+            http,
+            Box::new(crate::tidy::now_secs),
+            usize::try_from(max_open).unwrap_or(0),
+            ignore_authors,
+            ignore_labels,
+        );
+        if a.stream || until {
             let max_idle = match a.max_idle.as_deref() {
                 Some(text) => command::parse_duration_secs(text).map_err(Error::usage)?,
                 None => 0,
+            };
+            let timeout_secs = if until {
+                match a.timeout.as_deref() {
+                    Some(text) => {
+                        let secs = command::parse_duration_secs(text).map_err(Error::usage)?;
+                        if secs == 0 {
+                            return Err(Error::usage("--timeout must be a duration above 0"));
+                        }
+                        secs
+                    }
+                    None => 590,
+                }
+            } else {
+                0
             };
             let mut pace = command::LivePace::install()
                 .map_err(|err| Error::new(crate::error::Kind::Repository, err.to_string()))?;
             command::run_stream(
                 &dir,
-                &a.repo,
+                &repos,
                 &mut source,
                 &mut std::io::stdout(),
                 StreamLimits {
@@ -2274,15 +2420,19 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
                     api_base: "https://api.github.com".to_string(),
                     interval_secs: interval,
                     max_idle_secs: max_idle,
+                    detail_every,
+                    until: a.until_event.clone(),
+                    timeout_secs,
                 },
                 &mut pace,
             )
         } else {
             command::run_once(
                 &dir,
-                &a.repo,
+                &repos,
                 a.baseline,
                 now,
+                detail_every,
                 &mut source,
                 &mut std::io::stdout(),
             )

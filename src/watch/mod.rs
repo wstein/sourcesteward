@@ -31,6 +31,7 @@ pub mod lock;
 pub mod reader;
 pub mod state;
 pub mod statedir;
+pub mod watch_toml;
 
 /// What can go wrong in the core. The command (W4) maps the variants to exit codes (`Locked` is exit 3, the usage
 /// variants 2, the rest 1); `into_error` gives the generic error with the matching kind for the rest of `stw`.

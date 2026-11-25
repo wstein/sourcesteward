@@ -283,6 +283,7 @@ fn baseline_replaces_the_open_list_without_events() {
         &repo,
         false,
         1_700_000_000,
+        10,
         &mut Listed::head(&"a".repeat(40)),
         &mut out,
     )
@@ -294,6 +295,7 @@ fn baseline_replaces_the_open_list_without_events() {
         &repo,
         false,
         1_700_000_060,
+        10,
         &mut Listed::head(&"b".repeat(40)),
         &mut out,
     )
@@ -307,6 +309,7 @@ fn baseline_replaces_the_open_list_without_events() {
         &repo,
         true,
         1_700_000_120,
+        10,
         &mut Listed::head(&"c".repeat(40)),
         &mut out,
     )
@@ -318,6 +321,7 @@ fn baseline_replaces_the_open_list_without_events() {
         &repo,
         false,
         1_700_000_180,
+        10,
         &mut Listed::head(&"d".repeat(40)),
         &mut out,
     )
@@ -343,6 +347,9 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
         api_base: "https://api.github.com".into(),
         interval_secs: 60,
         max_idle_secs: idle,
+        detail_every: 10,
+        until: Vec::new(),
+        timeout_secs: 0,
     };
     let (_dir, path) = state_path();
     let mut pace = Clock {
@@ -433,11 +440,70 @@ fn a_low_rate_limit_doubles_the_stream_interval() {
             api_base: String::new(),
             interval_secs: 60,
             max_idle_secs: 0,
+            detail_every: 10,
+            until: Vec::new(),
+            timeout_secs: 0,
         },
         &mut pace,
     )
     .unwrap();
     assert_eq!(pace.sleeps, vec![120]);
+}
+
+#[test]
+fn until_event_exits_when_the_kind_is_printed() {
+    let mut src = Listed::head(&"a".repeat(40));
+    src.next_head = Some("b".repeat(40));
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let code = stw::watch::command::run_stream(
+        &path,
+        &["o/r".to_string()],
+        &mut src,
+        &mut Vec::new(),
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: String::new(),
+            interval_secs: 60,
+            max_idle_secs: 0,
+            detail_every: 10,
+            until: vec!["head-changed".into()],
+            timeout_secs: 590,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(src.hits.get(), 2);
+    assert_eq!(pace.sleeps, vec![60]);
+}
+
+#[test]
+fn watch_toml_names_repos_interval_and_ignores() {
+    let file = stw::watch::watch_toml::parse_watch_toml(
+        r#"
+schema_version = 1
+repos = ["o/r", "o/s"]
+interval = "90s"
+max_open_prs = 50
+detail_every = 4
+[ignore]
+authors = ["bot"]
+labels = ["wip"]
+"#,
+    )
+    .unwrap();
+    assert_eq!(file.repos, vec!["o/r", "o/s"]);
+    assert_eq!(file.interval_secs, Some(90));
+    assert_eq!(file.max_open_prs, Some(50));
+    assert_eq!(file.detail_every, Some(4));
+    assert_eq!(file.ignore_authors, vec!["bot"]);
+    assert_eq!(file.ignore_labels, vec!["wip"]);
+    assert!(stw::watch::watch_toml::parse_watch_toml("repos = [\"o/r\"]").is_err());
 }
 
 #[test]
@@ -476,6 +542,9 @@ fn a_rate_limited_read_holds_the_repository() {
             api_base: "https://api.github.com".into(),
             interval_secs: 10,
             max_idle_secs: 0,
+            detail_every: 10,
+            until: Vec::new(),
+            timeout_secs: 0,
         },
         &mut pace,
     )
@@ -511,6 +580,9 @@ fn a_slow_429_holds_from_the_response_not_from_the_request_start() {
             api_base: "https://api.github.com".to_string(),
             interval_secs: 10,
             max_idle_secs: 0,
+            detail_every: 10,
+            until: Vec::new(),
+            timeout_secs: 0,
         },
         &mut pace,
     )
@@ -556,6 +628,9 @@ fn a_primary_limit_waits_until_the_reset_header() {
             api_base: "https://api.github.com".to_string(),
             interval_secs: 10,
             max_idle_secs: 0,
+            detail_every: 10,
+            until: Vec::new(),
+            timeout_secs: 0,
         },
         &mut pace,
     )
@@ -667,6 +742,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
         &["o/r".to_string()],
         false,
         1_700_000_000,
+        10,
         &mut src,
         &mut Vec::new(),
     )
@@ -677,6 +753,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
         &["o/r".to_string()],
         false,
         1_700_000_060,
+        10,
         &mut again,
         &mut Vec::new(),
     )

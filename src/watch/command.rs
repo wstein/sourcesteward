@@ -22,6 +22,8 @@ pub const EXIT_FAILED: u8 = 1;
 pub const EXIT_USAGE: u8 = 2;
 pub const EXIT_LOCKED: u8 = 3;
 pub const EXIT_STALE: u8 = 5;
+/// `--until-event` reached its timeout.
+pub const EXIT_TIMEOUT: u8 = 4;
 /// Go's cap when a low rate limit slows the stream.
 const SLOW_CAP_SECS: u64 = 600;
 
@@ -114,6 +116,12 @@ pub struct StreamLimits {
     pub api_base: String,
     pub interval_secs: u64,
     pub max_idle_secs: u64,
+    /// Cycles between detail refreshes. The observer default is 10.
+    pub detail_every: u64,
+    /// Event kinds that end `--until-event` with exit 0.
+    pub until: Vec<String>,
+    /// Exit 4 when this many seconds pass with no matching event. 0 is off.
+    pub timeout_secs: u64,
 }
 
 /// A Go duration (`60s`, `1m30s`, `0`) as whole seconds. A missing unit is an error.
@@ -160,6 +168,7 @@ pub fn run_once(
     repos: &[String],
     baseline: bool,
     now_secs: i64,
+    detail_every: u64,
     source: &mut dyn WatchSource,
     out: &mut dyn Write,
 ) -> Result<u8, WatchError> {
@@ -168,7 +177,7 @@ pub fn run_once(
     }
     let mut lines = Lines { out };
     let (mut core, _) = Core::open(dir, baseline, &mut lines)?;
-    let polls = poll_ready(repos, source, &core.state, now_secs);
+    let polls = poll_ready(repos, source, &core.state, now_secs, detail_every);
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
     let events = cycle::advance_seen(&mut core.state, &polls, now_secs);
@@ -205,13 +214,21 @@ pub fn run_stream(
     let (mut core, _) = Core::open(dir, limits.baseline, &mut lines)?;
     let mut force = limits.baseline || core.baseline;
     let mut last_event = pace.now_secs();
+    let started = last_event;
     loop {
         let now = pace.now_secs();
+        if limits.timeout_secs > 0 {
+            let elapsed = u64::try_from(now.saturating_sub(started)).unwrap_or(u64::MAX);
+            if elapsed >= limits.timeout_secs {
+                core.close();
+                return Ok(EXIT_TIMEOUT);
+            }
+        }
         if idle_elapsed(limits.max_idle_secs, now, last_event) {
             core.close();
             return Ok(0);
         }
-        let polls = poll_ready(repos, source, &core.state, now);
+        let polls = poll_ready(repos, source, &core.state, now, limits.detail_every);
         // The hold starts when the response arrives. A slow read must not spend
         // `Retry-After` on time that already passed inside the request.
         let arrived = pace.now_secs();
@@ -228,6 +245,14 @@ pub fn run_stream(
         }
         if !events.is_empty() {
             last_event = arrived;
+        }
+        if !limits.until.is_empty()
+            && events
+                .iter()
+                .any(|ev| limits.until.iter().any(|kind| kind == ev.kind().as_str()))
+        {
+            core.close();
+            return Ok(0);
         }
         let slow = source.after_cycle();
         let wait = stream_wait(
@@ -277,16 +302,20 @@ fn poll_ready(
     source: &mut dyn WatchSource,
     state: &super::state::State,
     now: i64,
+    detail_every: u64,
 ) -> Vec<Seen> {
     let mut out = Vec::new();
     for repo in repos {
         if retry_holds(state, repo, now) {
             continue;
         }
-        let hints = hints_of(state, repo);
+        let hints = hints_of(state, repo, detail_every);
         let saved = saved_cond(state, repo);
         let result = source.observe_repo(repo, &hints, saved.as_ref());
-        let run_wide = matches!(&result, Err(ObserveFailure::Error(err)) if err.run_wide);
+        let run_wide = matches!(
+            &result,
+            Err(ObserveFailure::Error(err)) if err.run_wide
+        );
         out.push(Seen {
             repo: repo.clone(),
             result,
@@ -298,17 +327,17 @@ fn poll_ready(
     out
 }
 
-fn hints_of(state: &super::state::State, repo: &str) -> Hints {
+fn hints_of(state: &super::state::State, repo: &str, detail_every: u64) -> Hints {
     let Some(rs) = state.repo.get(repo) else {
         return Hints {
             cycle: state.cycle,
-            detail_every: 10,
+            detail_every,
             known: Vec::new(),
         };
     };
     Hints {
         cycle: state.cycle,
-        detail_every: 10,
+        detail_every,
         known: rs
             .prs
             .values()
