@@ -338,6 +338,7 @@ impl Client {
     /// A client for an explicit API base (no trailing slash): tests and GitHub Enterprise.
     pub fn with_base(token: String, source: TokenSource, base: String) -> Client {
         let agent: ureq::Agent = ureq::Agent::config_builder()
+            .tls_config(crate::http_tls::config())
             .timeout_global(Some(Duration::from_secs(30)))
             .http_status_as_error(false)
             .user_agent(concat!("stw/", env!("CARGO_PKG_VERSION")))

@@ -884,6 +884,7 @@ impl WatchHttp {
     /// server). `api_host` is the host a refused redirect may name the repository on.
     pub fn new(token: String, base: String, api_host: String) -> WatchHttp {
         let agent: ureq::Agent = ureq::Agent::config_builder()
+            .tls_config(crate::http_tls::config())
             .max_redirects(0)
             .http_status_as_error(false)
             .user_agent(concat!("stw/", env!("CARGO_PKG_VERSION")))

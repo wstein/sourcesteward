@@ -981,7 +981,8 @@ Token order: `GH_TOKEN`, `GITHUB_TOKEN`, `~/.config/gh/hosts.yml` (`oauth_token`
 creates). The token is never printed or logged. Without a token everything works except pull request data
 (and the notes say so) and fetching private repositories (the error says to set `GH_TOKEN` or `GITHUB_TOKEN`).
 Only `github.com` remotes are used for REST; the fetch offers the token to `github.com` over https only, as user
-`x-access-token`. The check class of a head needs `Checks: Read` (`ready-check`, and `status` first; a classic token has it with the scope `repo`; `Checks` is not offered for fine-grained tokens, which get 403 for check runs of a private
+`x-access-token`. HTTPS from `ureq` uses the platform trust store (on Linux, the system CA bundle). Certificate
+verification stays on. The Mozilla roots bundled with ureq are not used. The check class of a head needs `Checks: Read` (`ready-check`, and `status` first; a classic token has it with the scope `repo`; `Checks` is not offered for fine-grained tokens, which get 403 for check runs of a private
 repository), or `Actions: Read`, which `status` (not `ready-check`) tries when GitHub answers 403 for check runs (see "CI of the default branch in `stw status`"). Both ways also read `/statuses`, which needs `Commit statuses: Read`. `STW_GITHUB_API_URL` points the REST calls at another base URL (tests, GitHub Enterprise).
 
 ## stw add
@@ -1763,7 +1764,7 @@ the heartbeat file. Not run: the observer-session, http-reader and run-loop scen
 cycle (W3), no state directory or journal (W1) and no command (W4). Every request is a GET; there is no write path (a test scans
 the sources for write calls). The token comes from the client (`WatchHttp::from_client`), goes only into the `Authorization`
 header and never into an output, an error text, an observation or the store (`token_never_in_output`). No `git` or `gh`
-process, no new crate: the transport is `ureq` as in `src/github.rs`.
+process, no new crate: the transport is `ureq` as in `src/github.rs`, with the same platform trust store.
 
 - `http.rs`: the pure rules (endpoint allowlist, branch segment encoding and guard, Link header, `X-RateLimit-*`, Retry-After,
   `assess_rate_limit`, `rate_limited_until`, `split_remote`, `parse_remote`, `valid_host`) and `WatchHttp`, the reader:
@@ -1842,7 +1843,7 @@ Deviations from Go (W2 part of the list of the plan, section 4):
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1639 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1640 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)

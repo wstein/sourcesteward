@@ -249,6 +249,7 @@ pub struct UreqGet {
 impl UreqGet {
     pub fn new(token: String) -> Self {
         let agent = ureq::Agent::config_builder()
+            .tls_config(crate::http_tls::config())
             .timeout_global(Some(std::time::Duration::from_secs(30)))
             .http_status_as_error(false)
             .build()

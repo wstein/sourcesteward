@@ -425,6 +425,9 @@ m N3 'signals.rs may start a process' src/signals.rs \
   'extern "C" fn handle_watch_stop(_: libc::c_int) {' 'fn spawn() { let _ = std::process::Command::new("git"); }
 extern "C" fn handle_watch_stop(_: libc::c_int) {' \
   no_binaries only_the_runner_spawns_a_process
+m TLS1 'https falls back to the bundled mozilla roots' src/http_tls.rs \
+  'RootCerts::PlatformVerifier' 'RootCerts::WebPki' \
+  lib http_tls::tests::the_client_trusts_the_platform_store_and_still_verifies
 m N2 'a process is started in the apply module' src/tidy_apply.rs \
   'pub fn new_run_id()' 'fn spawn() { let _ = std::process::Command::new("git"); }
 pub fn new_run_id()' \

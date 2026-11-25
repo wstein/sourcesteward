@@ -26,7 +26,7 @@ gix = { version = "=0.90.0", default-features = false, features = [
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order", "raw_value"] }
 # Blocking, no async runtime; GitHub needs five GET endpoints only.
-ureq = { version = "3", features = ["json"] }
+ureq = { version = "3", features = ["json", "platform-verifier"] }
 base64 = "0.22"
 # kill(2) on the process group of a timed-out git (std has no group kill); already in the lock file via gix/ureq.
 libc = "0.2"
