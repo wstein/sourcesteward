@@ -1,8 +1,7 @@
 //! One poll cycle (W3) on top of the W1 core. A successful first read of a repository is a silent
-//! baseline. Later reads emit `new-pr`, `head-changed`, and `closed`. A transient or fatal read
-//! leaves the accepted list in place and records `watch-error`; the next success records
-//! `watch-recovered`. Checks, mergeability, and restack stay for a later cycle: this one compares
-//! the open list only.
+//! baseline. Later reads emit `new-pr`, `head-changed`, and `closed`, and the observation's checks,
+//! mergeability, and class-1 restack. A transient or fatal read leaves the accepted list in place
+//! and records `watch-error`; the next success records `watch-recovered`.
 
 use super::event::{
     event_id, format_utc, key_checks, key_error, key_generation, key_head, key_mergeable,
@@ -346,11 +345,31 @@ fn restack_events(
                         String::new()
                     },
                     branch: child.head_ref.clone(),
-                    argv: None,
+                    argv: restack_argv(gone, child),
                 }),
             )
         })
         .collect()
+}
+
+/// D-20261119-03. Null when the merge commit is unknown or the child is a fork.
+fn restack_argv(gone: &GoneObs, child: &PrObs) -> Option<Vec<String>> {
+    let onto = gone.merge_commit.clone()?;
+    if child.fork {
+        return None;
+    }
+    Some(vec![
+        "git".into(),
+        "-c".into(),
+        "rebase.updateRefs=false".into(),
+        "-c".into(),
+        "rerere.enabled=false".into(),
+        "rebase".into(),
+        "--onto".into(),
+        onto,
+        gone.head.clone(),
+        child.head_ref.clone(),
+    ])
 }
 
 /// What the reader returned for one repository. Each repository appears once.

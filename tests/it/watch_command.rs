@@ -1,7 +1,7 @@
 //! W2 and W3 before the command is trusted: a transient read keeps the accepted list, and a
 //! restart reprints an event that was journalled and not yet printed.
 use stw::watch::cycle::{self, Poll};
-use stw::watch::event::Kind;
+use stw::watch::event::{Details, Kind};
 use stw::watch::reader::{self, HttpGet, HttpResponse, OpenPr, ReadFailure};
 use stw::watch::state::State;
 use stw::watch::{Core, Output, Step, WatchError};
@@ -733,6 +733,28 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
     assert!(kinds.contains(&Kind::RestackNeeded), "{kinds:?}");
     assert!(kinds.contains(&Kind::ChecksGreen), "{kinds:?}");
     assert!(kinds.contains(&Kind::MergeableChanged), "{kinds:?}");
+    let restack = events
+        .iter()
+        .find(|e| e.kind() == Kind::RestackNeeded)
+        .unwrap();
+    match &restack.details {
+        Details::RestackNeeded(r) => assert_eq!(
+            r.argv,
+            Some(vec![
+                "git".into(),
+                "-c".into(),
+                "rebase.updateRefs=false".into(),
+                "-c".into(),
+                "rerere.enabled=false".into(),
+                "rebase".into(),
+                "--onto".into(),
+                "c".repeat(40),
+                head.clone(),
+                "child".into(),
+            ])
+        ),
+        other => panic!("{other:?}"),
+    }
 
     let (_dir, path) = state_path();
     let mut src = Listed::head(&head);
@@ -762,4 +784,74 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
         again.saw_cond.get(),
         "the validator store is handed back on the next start"
     );
+}
+
+#[test]
+fn restack_argv_is_null_without_a_merge_commit_and_on_a_fork() {
+    use stw::watch::cycle::{self, Seen};
+    use stw::watch_reader::obs::{GoneObs, MethodHint, PrObs, RepoObservation};
+
+    fn argv_of(fork: bool, merge: Option<&str>) -> Option<Vec<String>> {
+        let head = "a".repeat(40);
+        let mut state = State::new();
+        cycle::advance_seen(
+            &mut state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    prs: vec![PrObs {
+                        number: 7,
+                        head_ref: "topic".into(),
+                        head: head.clone(),
+                        base: "main".into(),
+                        ..PrObs::default()
+                    }],
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_000,
+        );
+        let events = cycle::advance_seen(
+            &mut state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    prs: vec![PrObs {
+                        number: 8,
+                        head_ref: "child".into(),
+                        head: "b".repeat(40),
+                        base: "topic".into(),
+                        fork,
+                        ..PrObs::default()
+                    }],
+                    gone: [(
+                        7,
+                        GoneObs {
+                            merged: true,
+                            merge_commit: merge.map(str::to_string),
+                            merged_at: String::new(),
+                            base: "main".into(),
+                            head,
+                            head_ref: "topic".into(),
+                            method_hint: MethodHint::Merge,
+                        },
+                    )]
+                    .into_iter()
+                    .collect(),
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_060,
+        );
+        events
+            .into_iter()
+            .find_map(|e| match e.details {
+                Details::RestackNeeded(r) => Some(r.argv),
+                _ => None,
+            })
+            .expect("a class-1 child")
+    }
+
+    assert_eq!(argv_of(false, None), None);
+    assert_eq!(argv_of(true, Some(&"c".repeat(40))), None);
 }
