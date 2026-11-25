@@ -66,6 +66,17 @@ fn fail<T>(code: &'static str, message: impl Into<String>) -> Result<T, Fail> {
 
 pub struct Plan {
     doc: Value,
+    pub(crate) absorbed: Vec<AbsorbedHunk>,
+    pub(crate) head: ObjectId,
+    pub(crate) reference: Vec<u8>,
+    pub(crate) rewrite_commits: Vec<ObjectId>,
+}
+
+pub(crate) struct AbsorbedHunk {
+    pub path: Vec<u8>,
+    pub target: ObjectId,
+    pub staged: Hunk,
+    pub historical: Hunk,
 }
 
 impl Plan {
@@ -212,6 +223,7 @@ struct Entry {
     target: Option<usize>,
     basis: Option<&'static str>,
     absorbed: bool,
+    apply: Option<(Hunk, Hunk)>,
     reason: Option<&'static str>,
     origins: Vec<(ObjectId, usize)>,
 }
@@ -241,11 +253,24 @@ struct Planner<'a> {
 /// The plan of the staged changes of the repository at `dir` (its work tree root). `start` is the directory the command
 /// runs in (the search for a `.jj` directory starts there and ends at `dir`).
 pub fn plan(dir: &Path, start: &Path, runner: &Runner, opts: &Options) -> Result<Plan, Fail> {
+    plan_in(open_repository(dir, start)?, dir, runner, opts)
+}
+
+pub(crate) fn open_repository(dir: &Path, start: &Path) -> Result<gix::Repository, Fail> {
     let repo = repo::open(dir).map_err(|e| Fail {
         code: "git-failed",
         message: format!("cannot open the repository: {e}"),
     })?;
     detect_backend(&repo, dir, start)?;
+    Ok(repo)
+}
+
+pub(crate) fn plan_in(
+    repo: gix::Repository,
+    dir: &Path,
+    runner: &Runner,
+    opts: &Options,
+) -> Result<Plan, Fail> {
     let partial = is_partial(&repo);
     let mut p = Planner {
         repo,
@@ -814,6 +839,7 @@ impl Planner<'_> {
             target: None,
             basis: None,
             absorbed: false,
+            apply: None,
             reason: None,
             origins: Vec::new(),
         };
@@ -834,7 +860,10 @@ impl Planner<'_> {
                 e.basis = Some(basis);
                 let ok = self.consistent(i, path, &commuted)?;
                 match decide(ok, e.origins.len(), self.opts.ambiguous_newest) {
-                    Ok(()) => e.absorbed = true,
+                    Ok(()) => {
+                        e.absorbed = true;
+                        e.apply = Some((isolated.clone(), commuted));
+                    }
                     Err(why) => e.reason = Some(why),
                 }
             }
@@ -967,12 +996,8 @@ impl Planner<'_> {
                 None => fixups.push((t, vec![id])),
             }
         }
-        let rewritten: Vec<String> = match fixups.iter().map(|(i, _)| *i).max() {
-            Some(oldest) => self.stack[..=oldest]
-                .iter()
-                .rev()
-                .map(|r| r.id.to_string())
-                .collect(),
+        let rewritten: Vec<ObjectId> = match fixups.iter().map(|(i, _)| *i).max() {
+            Some(oldest) => self.stack[..=oldest].iter().rev().map(|r| r.id).collect(),
             None => Vec::new(),
         };
         let target = |i: usize| {
@@ -1034,7 +1059,7 @@ impl Planner<'_> {
             "files_skipped": self.files_skipped.iter()
                 .map(|(p, why)| json!({"path": sanitize_bytes(p), "reason": why})).collect::<Vec<_>>(),
             "fixups": fixups_json,
-            "rewrite": {"count": rewritten.len(), "commits": rewritten, "ref": ref_name, "new_shas": null},
+            "rewrite": {"count": rewritten.len(), "commits": rewritten.iter().map(ToString::to_string).collect::<Vec<_>>(), "ref": ref_name, "new_shas": null},
             "summary": {"hunks": self.entries.len(), "absorbed": absorbed,
                 "skipped": self.entries.len() - absorbed, "fixups": fixups.len(), "rewritten": rewritten.len()},
             "effects": {"writes": [], "index_refresh": false, "network": false, "hooks": false, "prompts": false},
@@ -1046,7 +1071,26 @@ impl Planner<'_> {
         if let Value::Object(m) = &mut doc {
             m.insert("plan_sum".into(), Value::String(sum));
         }
-        Plan { doc }
+        let absorbed = self
+            .entries
+            .iter()
+            .filter_map(|entry| {
+                let (staged, historical) = entry.apply.as_ref()?;
+                Some(AbsorbedHunk {
+                    path: entry.path.clone(),
+                    target: self.stack[entry.target?].id,
+                    staged: staged.clone(),
+                    historical: historical.clone(),
+                })
+            })
+            .collect();
+        Plan {
+            doc,
+            absorbed,
+            head: self.head,
+            reference: self.ref_name.clone(),
+            rewrite_commits: rewritten,
+        }
     }
 }
 
