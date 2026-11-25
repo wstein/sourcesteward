@@ -5657,7 +5657,7 @@ m WR21 'the page bound is one page more' src/watch_reader/http.rs \
   watch_reader http_reader_scenarios_are_replayed
 m WR22 'a body over 1 MiB is read whole' src/watch_reader/http.rs \
   'if body.len() > MAX_BODY {' 'if body.len() > MAX_BODY + 1 {' \
-  watch_reader http_reader_scenarios_are_replayed
+  watch_reader a_chunked_body_is_cut_at_one_mib_without_a_declared_length
 m WR23 'the declared length is not checked' src/watch_reader/http.rs \
   'declared.is_some_and(|n| n > MAX_BODY as u64)' 'false' \
   watch_reader http_reader_scenarios_are_replayed
@@ -5801,7 +5801,7 @@ m WR64 'a missing base branch fails the repository' src/watch_reader/host.rs \
   'Err(e) if e.code == Code::Forbidden && e.status == 404 => continue,' '' \
   watch_reader a_missing_base_branch_is_no_failure
 m WR65 'an older status of a context counts too' src/watch_reader/host.rs \
-  'if seen.insert(context.clone()) {' 'if true {' \
+  'if seen.insert(context.clone()) {' 'if seen.insert(context.clone()) || true {' \
   watch_reader check_runs_and_statuses_follow_pages_and_keep_the_newest_status_of_a_context
 m WR66 'check run pages stop after the first' src/watch_reader/host.rs \
   'if arr.is_empty() || runs.len() as u64 >= total {' 'if true {' \
@@ -5854,7 +5854,7 @@ m WR80 'the store accepts unknown fields' src/watch_reader/cond_store.rs \
   watch_reader cond_store_refuses_what_does_not_fit_the_layout
 m WR81 'the store does not know the size 12' src/watch_reader/cond_store.rs \
   'Some(12) => 12,' '' \
-  watch_reader cond_store_layout_is_documented_and_deterministic
+  watch_reader cond_store_round_trips_the_halved_page_size
 m WR82 'the page bound of the store is not applied' src/watch_reader/cond_store.rs \
   'if pages_v.len() > limit {' 'if false {' \
   watch_reader cond_store_refuses_what_does_not_fit_the_layout
