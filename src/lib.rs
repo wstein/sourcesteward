@@ -23,6 +23,7 @@ pub mod repo;
 pub mod restack_plan;
 pub mod review;
 pub mod sha256;
+pub mod signals;
 pub mod status;
 pub mod status_all;
 pub mod status_ci;

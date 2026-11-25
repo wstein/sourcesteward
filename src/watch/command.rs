@@ -55,7 +55,7 @@ pub struct LivePace;
 impl LivePace {
     /// Arms SIGINT and SIGTERM through the git runner, the only file that may name libc.
     pub fn install() -> Result<LivePace, WatchError> {
-        crate::git_runner::arm_watch_stop().map_err(WatchError::Io)?;
+        crate::signals::arm_watch_stop().map_err(WatchError::Io)?;
         Ok(LivePace)
     }
 }
@@ -68,13 +68,13 @@ impl Pace for LivePace {
     fn wait(&mut self, seconds: u64) -> bool {
         let end = Instant::now() + Duration::from_secs(seconds);
         while Instant::now() < end {
-            if crate::git_runner::watch_stopped() {
+            if crate::signals::watch_stopped() {
                 return false;
             }
             let left = end.saturating_duration_since(Instant::now());
             std::thread::sleep(left.min(Duration::from_millis(200)));
         }
-        !crate::git_runner::watch_stopped()
+        !crate::signals::watch_stopped()
     }
 }
 

@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 
 /// The one module that may start a process.
 const RUNNER: &str = "git_runner.rs";
+/// Signals may name libc (D-20261119-04). They may not start a process.
+const SIGNALS: &str = "signals.rs";
 
 fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
     for e in std::fs::read_dir(dir).unwrap() {
@@ -229,15 +231,26 @@ fn only_the_runner_spawns_a_process() {
         );
     }
     let mut runner_spawns = false;
+    let mut saw_signals = false;
     for f in files {
         let is_runner = f.file_name().is_some_and(|n| n == RUNNER);
+        let is_signals = f.file_name().is_some_and(|n| n == SIGNALS);
         let text = std::fs::read_to_string(&f).unwrap();
         if is_runner {
             runner_spawns = spawn_marker(&text).is_some();
+        } else if is_signals {
+            saw_signals = true;
+            if let Some(m) = spawn_marker(&text) {
+                // `extern "C"` is the signal handler. Every other spawn marker is still refused.
+                if m != "extern \"\"" {
+                    panic!("{}: may start a process ({m})", f.display());
+                }
+            }
         } else if let Some(why) = file_violation(&text) {
             panic!("{}: {why}; only {RUNNER} may", f.display());
         }
     }
+    assert!(saw_signals, "{SIGNALS} is not scanned");
     // the check stays live: the runner is the place that really starts git
     assert!(
         runner_spawns,
