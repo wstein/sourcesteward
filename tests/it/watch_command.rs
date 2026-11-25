@@ -700,6 +700,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(first),
         }],
         1_700_000_000,
+        0,
     );
     assert!(
         events.is_empty(),
@@ -756,6 +757,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(second),
         }],
         1_700_000_060,
+        0,
     );
     let kinds: Vec<_> = events.iter().map(|e| e.kind()).collect();
     assert!(kinds.contains(&Kind::Merged), "{kinds:?}");
@@ -797,6 +799,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(child_observation(Some(false), "dirty")),
         }],
         1_700_000_120,
+        0,
     );
     let kinds: Vec<_> = again.iter().map(|e| e.kind()).collect();
     assert_eq!(kinds, vec![Kind::ChecksGreen]);
@@ -809,6 +812,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(child_observation(Some(true), "clean")),
         }],
         1_700_000_180,
+        0,
     );
     assert!(first_change.is_empty(), "{first_change:?}");
     assert!(state.repo["o/r"].prs[&8].detail_due);
@@ -821,6 +825,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(child_observation(Some(true), "clean")),
         }],
         1_700_000_240,
+        0,
     );
     assert_eq!(
         confirmed.iter().map(|e| e.kind()).collect::<Vec<_>>(),
@@ -835,6 +840,7 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
             result: Ok(child_observation(None, "unknown")),
         }],
         1_700_000_300,
+        0,
     );
     assert!(quiet.is_empty(), "{quiet:?}");
     assert_eq!(state.repo["o/r"].prs[&8].mergeable, Some(true));
@@ -893,6 +899,7 @@ fn restack_argv_is_null_without_a_merge_commit_and_on_a_fork() {
                 }),
             }],
             1_700_000_000,
+            0,
         );
         let events = cycle::advance_seen(
             &mut state,
@@ -925,6 +932,7 @@ fn restack_argv_is_null_without_a_merge_commit_and_on_a_fork() {
                 }),
             }],
             1_700_000_060,
+            0,
         );
         events
             .into_iter()
@@ -986,6 +994,7 @@ fn a_red_class_is_announced_on_the_second_sighting_with_twenty_names() {
             result: Ok(bare),
         }],
         1_700_000_000,
+        0,
     );
     assert!(first.is_empty(), "the baseline is silent: {first:?}");
     let second = cycle::advance_seen(
@@ -995,6 +1004,7 @@ fn a_red_class_is_announced_on_the_second_sighting_with_twenty_names() {
             result: Ok(obs.clone()),
         }],
         1_700_000_060,
+        0,
     );
     assert!(
         second.is_empty(),
@@ -1011,6 +1021,7 @@ fn a_red_class_is_announced_on_the_second_sighting_with_twenty_names() {
             result: Ok(obs),
         }],
         1_700_000_120,
+        0,
     );
     match &third[0].details {
         Details::ChecksRed(r) => {
@@ -1021,4 +1032,61 @@ fn a_red_class_is_announced_on_the_second_sighting_with_twenty_names() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn a_pending_class_times_out_once_per_period() {
+    use stw::watch::cycle::{self, Seen};
+    use stw::watch_reader::obs::{CheckRun, ChecksObs, PrObs, RepoObservation};
+
+    let obs = RepoObservation {
+        prs: vec![PrObs {
+            number: 1,
+            head: "b".repeat(40),
+            head_ref: "topic".into(),
+            base: "main".into(),
+            checks: Some(ChecksObs {
+                runs: vec![CheckRun {
+                    name: "ci".into(),
+                    status: "in_progress".into(),
+                    ..CheckRun::default()
+                }],
+                ..ChecksObs::default()
+            }),
+            ..PrObs::default()
+        }],
+        ..RepoObservation::default()
+    };
+    let start = 1_700_000_000;
+    let mut state = State::new();
+    let see = |state: &mut State, at: i64, limit: u64| {
+        cycle::advance_seen(
+            state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(obs.clone()),
+            }],
+            at,
+            limit,
+        )
+    };
+    assert!(see(&mut state, start, 600).is_empty());
+    assert!(see(&mut state, start + 600, 600).is_empty());
+    let fired = see(&mut state, start + 601, 600);
+    match &fired[..] {
+        [ev] => match &ev.details {
+            Details::ChecksPendingTimeout(d) => {
+                assert_eq!(d.pending, vec!["ci".to_string()]);
+                assert_eq!(d.head, "b".repeat(40));
+                assert_eq!(d.since, stw::watch::event::format_utc(start));
+            }
+            other => panic!("{other:?}"),
+        },
+        other => panic!("{other:?}"),
+    }
+    assert!(see(&mut state, start + 900, 600).is_empty());
+
+    let mut quiet = State::new();
+    assert!(see(&mut quiet, start, 0).is_empty());
+    assert!(see(&mut quiet, start + 10_000, 0).is_empty());
 }

@@ -5,9 +5,9 @@
 
 use super::event::{
     event_id, format_utc, key_checks, key_error, key_generation, key_head, key_mergeable,
-    key_merged, key_recovered_error, key_restack, ChecksGreen, ChecksRed, Closed, Details, Event,
-    HeadChanged, MergeableChanged, Merged, NewPr, RestackNeeded, WatchError, WatchRecovered,
-    REASON_CHILD_OF_MERGED,
+    key_merged, key_recovered_error, key_restack, key_timeout, ChecksGreen, ChecksRed, Closed,
+    Details, Event, HeadChanged, MergeableChanged, Merged, NewPr, PendingTimeout, RestackNeeded,
+    WatchError, WatchRecovered, REASON_CHILD_OF_MERGED,
 };
 use super::reader::{OpenPr, ReadFailure};
 use super::state::{Class, MergeCandidate, PrState, State};
@@ -25,7 +25,12 @@ pub struct Seen {
 
 /// Turns observations into open-list events plus checks, merge, and restack events.
 /// A successful read stores its validator store on the repository for the next start.
-pub fn advance_seen(state: &mut State, seen: &[Seen], now_secs: i64) -> Vec<Event> {
+pub fn advance_seen(
+    state: &mut State,
+    seen: &[Seen],
+    now_secs: i64,
+    pending_timeout_secs: u64,
+) -> Vec<Event> {
     let now = format_utc(now_secs);
     let mut events = Vec::new();
     for item in seen {
@@ -83,6 +88,11 @@ pub fn advance_seen(state: &mut State, seen: &[Seen], now_secs: i64) -> Vec<Even
                 state.apply(ev);
             }
             events.extend(volatile);
+            let timed = note_timeout(state, &item.repo, obs, &now, now_secs, pending_timeout_secs);
+            for ev in &timed {
+                state.apply(ev);
+            }
+            events.extend(timed);
             if let Some(rs) = state.repo.get_mut(&item.repo) {
                 rs.last_ok = now.clone();
             }
@@ -110,6 +120,12 @@ fn install_observed(state: &mut State, repo: &str, obs: &RepoObservation, now: &
     for pr in &obs.prs {
         let mut stored = pr_state(&open_of(pr));
         stored.class = class_of(pr.checks.as_ref());
+        if stored.class == Class::Pending {
+            stored.pending_since = now.to_string();
+            if let Some(checks) = &pr.checks {
+                stored.pending_names = pending_names(checks);
+            }
+        }
         if let Some(detail) = &pr.detail {
             stored.mergeable = detail.mergeable;
             stored.mergeable_state = detail.state.clone();
@@ -314,6 +330,54 @@ fn note_checks(stored: &mut PrState, repo: &str, pr: &PrObs, now: &str) -> Optio
         }
         Class::Unobserved => None,
     }
+}
+
+fn note_timeout(
+    state: &mut State,
+    repo: &str,
+    obs: &RepoObservation,
+    now: &str,
+    now_secs: i64,
+    limit: u64,
+) -> Vec<Event> {
+    if limit == 0 {
+        return Vec::new();
+    }
+    let mut out = Vec::new();
+    for pr in &obs.prs {
+        let Some(stored) = state
+            .repo
+            .get_mut(repo)
+            .and_then(|rs| rs.prs.get_mut(&pr.number))
+        else {
+            continue;
+        };
+        if stored.class != Class::Pending || stored.timeout_fired || stored.pending_since.is_empty()
+        {
+            continue;
+        }
+        let since = crate::github::parse_utc(&stored.pending_since).unwrap_or(0);
+        if now_secs.saturating_sub(since) <= i64::try_from(limit).unwrap_or(i64::MAX) {
+            continue;
+        }
+        out.push(Event::new(
+            event_id(
+                Some(repo),
+                Some(pr.number),
+                super::event::Kind::ChecksPendingTimeout,
+                &key_timeout(&stored.head, stored.epochs.checks),
+            ),
+            now.to_string(),
+            Some(repo.to_string()),
+            Some(pr.number),
+            Details::ChecksPendingTimeout(PendingTimeout {
+                head: stored.head.clone(),
+                pending: stored.pending_names.clone(),
+                since: stored.pending_since.clone(),
+            }),
+        ));
+    }
+    out
 }
 
 fn top_names(mut names: Vec<String>) -> (u64, Vec<String>) {

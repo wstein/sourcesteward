@@ -26,6 +26,8 @@ pub const EXIT_STALE: u8 = 5;
 pub const EXIT_TIMEOUT: u8 = 4;
 /// Go's cap when a low rate limit slows the stream.
 const SLOW_CAP_SECS: u64 = 600;
+/// Go `DefaultPendingTimeout`. Zero disables `checks-pending-timeout`.
+const PENDING_TIMEOUT_SECS: u64 = 45 * 60;
 
 /// Smallest `--interval`. Matches the Go watcher.
 pub const MIN_INTERVAL_SECS: u64 = 10;
@@ -180,7 +182,7 @@ pub fn run_once(
     let polls = poll_ready(repos, source, &core.state, now_secs, detail_every);
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
-    let events = cycle::advance_seen(&mut core.state, &polls, now_secs);
+    let events = cycle::advance_seen(&mut core.state, &polls, now_secs, PENDING_TIMEOUT_SECS);
     let committed = core.commit(&events, &mut lines);
     if let Err(err) = committed {
         core.close();
@@ -234,7 +236,7 @@ pub fn run_stream(
         let arrived = pace.now_secs();
         prepare_cycle(&mut core, repos, force, limits.interval_secs);
         force = false;
-        let events = cycle::advance_seen(&mut core.state, &polls, arrived);
+        let events = cycle::advance_seen(&mut core.state, &polls, arrived, PENDING_TIMEOUT_SECS);
         if let Err(err) = core.commit(&events, &mut lines) {
             core.close();
             return Err(err);
