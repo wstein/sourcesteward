@@ -243,7 +243,8 @@ fn checkpoint(
     report: &mut Value,
 ) -> Result<()> {
     let previous = task_checkpoint(repo, &args.task)?;
-    let base = parse_id(&repo.head_id()?.to_string())?;
+    let base_id = repo.head_id()?.detach();
+    let base = parse_id(&base_id.to_string())?;
     report["base"] = json!(base.as_str());
     report["checkpoint"] = json!(previous.as_ref().map(Hex40::as_str));
     report["published"] = json!(false);
@@ -324,7 +325,7 @@ fn checkpoint(
     record.index = saved_index.as_str().into();
     let parents = std::iter::once(saved_index).chain(previous).collect();
     let candidate = commit_tree(root, worktree_tree, parents, &serde_json::to_vec(&record)?)?;
-    if fs::read(&index_path)? != original || repo.head_id()?.to_string() != base.as_str() {
+    if fs::read(&index_path)? != original || repo.head_id()?.detach() != base_id {
         return Err(Error::repository(
             "source HEAD or index changed during capture; retry the checkpoint",
         ));

@@ -221,3 +221,33 @@ fn refused_and_incomplete_operations_are_non_destructive() {
         id
     );
 }
+
+#[test]
+fn a_linked_worktree_can_checkpoint_and_handoff_again() {
+    let fx = fixture();
+    let first = save(&fx.path);
+    let source = fx.path.with_file_name("linked-source");
+    run(&fx.path, &["resume", &first, source.to_str().unwrap()], 0);
+    fs::write(source.join("mixed"), "linked edit\n").unwrap();
+    let next = save(&source);
+    assert_ne!(first, next);
+    assert_eq!(
+        run(&fx.path, &["inspect", "--task", "demo"], 0)["checkpoint"],
+        next
+    );
+    let destination = fx.path.with_file_name("linked-destination");
+    run(
+        &source,
+        &["resume", &next, destination.to_str().unwrap()],
+        0,
+    );
+    assert_eq!(git(&destination, &["show", ":mixed"]), "index\n");
+    assert_eq!(
+        fs::read_to_string(destination.join("mixed")).unwrap(),
+        "linked edit\n"
+    );
+    assert_eq!(
+        fs::read_to_string(fx.path.join("mixed")).unwrap(),
+        "worktree\n"
+    );
+}
