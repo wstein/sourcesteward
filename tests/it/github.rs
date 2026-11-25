@@ -195,6 +195,7 @@ fn json_field_names_are_the_documented_ones() {
             "worktree_list",
             "oplog_hooks",
             "pull_requests",
+            "open_issues",
             "error"
         ])
     );
@@ -228,6 +229,12 @@ fn json_field_names_are_the_documented_ones() {
             "merge_state"
         ])
     );
+
+    assert_eq!(
+        keys(&repo["open_issues"]),
+        doc(&["id", "coverage", "error", "issues"])
+    );
+    assert_eq!(repo["open_issues"]["coverage"], "incomplete");
 
     let td: Value =
         serde_json::from_slice(&stw(&api.url, &["tidy", "plan", "--root", &r, "--json"]).stdout)

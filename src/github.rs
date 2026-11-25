@@ -1,4 +1,4 @@
-//! GitHub access over the REST API (ureq, blocking). No `gh` binary. Tokens come from `auth`.
+//! GitHub access over REST and GraphQL (ureq, blocking). No `gh` binary. Tokens come from `auth`.
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -12,7 +12,7 @@ pub mod lint_reads;
 pub mod reads;
 
 const API: &str = "https://api.github.com";
-/// Environment variable that points the REST calls elsewhere (GitHub Enterprise, tests); no trailing slash.
+/// Environment variable that points GitHub API calls elsewhere (GitHub Enterprise, tests); no trailing slash.
 pub const API_URL_ENV: &str = "STW_GITHUB_API_URL";
 
 /// Why a read did not happen or was cut: the overall deadline of `--timeout` passed.
@@ -223,6 +223,10 @@ pub struct Stats {
 
 /// `pulls`, `issues` or `ci-main` and the repository of a REST path `/repos/OWNER/NAME/<source>...`.
 fn classify(path: &str) -> (String, &'static str) {
+    if path == "/graphql" {
+        // A batch can include several repositories.
+        return (String::new(), "issues");
+    }
     let mut seg = path.trim_start_matches('/').split('/');
     if seg.next() != Some("repos") {
         return (String::new(), "other");
@@ -476,30 +480,66 @@ impl Client {
         }
     }
 
-    /// POST one GraphQL document to `{base}/graphql`. The token stays in the header.
+    /// POST one GraphQL issue-list query to the configured API base.
     pub fn graphql(&self, body: &Value) -> Result<Value> {
-        let url = format!("{}/graphql", self.base.trim_end_matches('/'));
+        if self.rate_limited() {
+            return Err(Error::github(
+                "GitHub GraphQL rate limit reached; retry later",
+            ));
+        }
+        let url = match self.base.strip_suffix("/api/v3") {
+            Some(host) => format!("{host}/api/graphql"),
+            None => format!("{}/graphql", self.base),
+        };
         let timeout = self.time_left().map_err(Error::github)?;
-        let mut resp = self
+        let started = Instant::now();
+        let sent = self
             .agent
             .post(&url)
             .config()
+            .max_redirects(0)
             .timeout_global(Some(timeout))
             .build()
             .header("Authorization", &format!("Bearer {}", self.token))
             .header("Accept", "application/json")
             .header("Content-Type", "application/json")
             .send_json(body)
-            .map_err(|e| Error::github(format!("GitHub GraphQL unreachable: {e}")))?;
+            .map_err(|e| match self.deadline_passed() {
+                Some(total) => Error::github(deadline_message(total)),
+                None => Error::github(format!("GitHub GraphQL unreachable: {e}")),
+            });
+        let rate = sent
+            .as_ref()
+            .ok()
+            .and_then(|response| rate_from(response.headers()));
+        self.record("/graphql", started.elapsed(), rate);
+        let mut resp = sent?;
+        if is_rate_limit(&mut resp) {
+            self.note_rate_limit();
+        }
         if resp.status().as_u16() != 200 {
             return Err(Error::github(format!(
                 "GitHub GraphQL HTTP {}",
                 resp.status().as_u16()
             )));
         }
-        resp.body_mut()
+        let payload = resp
+            .body_mut()
+            .with_config()
+            .limit(8 << 20)
             .read_json::<Value>()
-            .map_err(|e| Error::github(format!("GitHub GraphQL sent unreadable JSON: {e}")))
+            .map_err(|e| Error::github(format!("GitHub GraphQL sent unreadable JSON: {e}")))?;
+        if payload["errors"].as_array().is_some_and(|errors| {
+            errors.iter().any(|error| {
+                error["type"].as_str() == Some("RATE_LIMITED")
+                    || error["message"]
+                        .as_str()
+                        .is_some_and(|message| mentions_rate_limit(&message.to_ascii_lowercase()))
+            })
+        }) {
+            self.note_rate_limit();
+        }
+        Ok(payload)
     }
 
     fn get(&self, url: &str) -> Result<Value> {

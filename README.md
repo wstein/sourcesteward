@@ -442,6 +442,20 @@ lower bound at a full page), `Needs action (N)` (repositories with an attention 
 (why GitHub was not read, failed reads per repository; text from outside is shown with escapes; the JSON `notices` has the same list, see "Output for agents"), the `agent-rules` block, then the summary line. A failed GitHub read is
 a notice: exit 0. Exit 1 stays for a repository that cannot be read locally. Under a repository of a GitHub origin a line `main CI green (main@163ada585103, via check runs)` says what the CI of the head of the default branch is (`none`, `pending`, `green`, `red`; `via Actions runs` when check runs were denied), or `main CI not read (cause)`; a red head is the attention reason `main-red` (see "CI of the default branch in `stw status`"). Under a repository one more line says when the op log hooks are not installed (a hint only; see "`stw oplog hooks status | install | uninstall | print`").
 
+### Open issues
+
+Online status lists open issues for the selected GitHub repositories under their
+repository cards. It uses the GraphQL issue, label, and assignee connections.
+The REST counts remain a separate summary. If pagination or an API read fails,
+the card retains the issues and metadata already read and marks the list
+incomplete. An empty result is shown only after a successful read.
+
+Each repository's JSON `open_issues` is null when the list was skipped. Otherwise
+it contains `id` (the GitHub repository node ID or null), `coverage`
+(`complete` or `incomplete`), `error` (the first failure or null), and
+`issues`. Each issue has
+`number`, `title`, `url`, `updated_at`, `labels`, and `assignees`.
+
 ## Status flags
 
 Ports of the flags of the Go `stw status` (`legacy/sourcesteward/internal/cli/status.go`). Without a flag nothing changes, and

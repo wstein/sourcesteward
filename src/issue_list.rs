@@ -4,7 +4,11 @@
 //! Repositories share one GraphQL query per page. A further page is fetched per repository
 //! and for labels or assignees. A failed repository stays `incomplete`; issues already read
 //! for the others stay. An empty list is only a successful read.
+use std::collections::HashSet;
+
 use serde_json::{json, Value};
+
+use crate::github::reads::escape_untrusted;
 
 pub const PAGE: usize = 20;
 pub const BATCH: usize = 8;
@@ -37,56 +41,107 @@ pub struct Listed {
     pub issues: Vec<Issue>,
 }
 
-fn clean(text: &str) -> String {
-    text.chars()
-        .map(|c| {
-            let n = c as u32;
-            if n < 32 || n == 127 {
-                '?'
-            } else {
-                c
+impl Listed {
+    fn incomplete(&mut self, reason: impl Into<String>) {
+        self.coverage = "incomplete";
+        if self.error.is_none() {
+            self.error = Some(reason.into());
+        }
+    }
+}
+
+fn checked_nodes<'a>(block: &'a Value, listed: &mut Listed, kind: &str) -> &'a [Value] {
+    match block["nodes"].as_array() {
+        Some(nodes) => nodes,
+        None => {
+            listed.incomplete(format!("{kind} response has no node list"));
+            &[]
+        }
+    }
+}
+
+fn next_cursor(block: &Value, listed: &mut Listed, kind: &str) -> Option<String> {
+    match block["pageInfo"]["hasNextPage"].as_bool() {
+        Some(true) => match block["pageInfo"]["endCursor"]
+            .as_str()
+            .filter(|c| !c.is_empty())
+        {
+            Some(cursor) => Some(cursor.to_owned()),
+            None => {
+                listed.incomplete(format!("{kind} response has no next-page cursor"));
+                None
             }
-        })
-        .collect()
+        },
+        Some(false) => None,
+        None => {
+            listed.incomplete(format!("{kind} response has no pagination information"));
+            None
+        }
+    }
 }
 
-fn names_of(block: &Value, field: &str) -> (Vec<String>, Option<String>) {
-    let names = block["nodes"]
-        .as_array()
-        .map(|items| {
-            items
-                .iter()
-                .filter_map(|item| item[field].as_str().map(clean))
-                .collect()
-        })
-        .unwrap_or_default();
-    let cursor = block["pageInfo"]["hasNextPage"]
-        .as_bool()
-        .unwrap_or(false)
-        .then(|| {
-            block["pageInfo"]["endCursor"]
-                .as_str()
-                .unwrap_or("")
-                .to_string()
-        });
-    (names, cursor)
+fn metadata_page(
+    block: &Value,
+    field: &str,
+    kind: &str,
+    listed: &mut Listed,
+) -> (Vec<String>, Option<String>) {
+    let mut names = Vec::new();
+    for item in checked_nodes(block, listed, kind) {
+        if let Some(value) = item[field].as_str() {
+            names.push(value.to_owned());
+        } else {
+            listed.incomplete(format!("{kind} response has an invalid node"));
+        }
+    }
+    (names, next_cursor(block, listed, kind))
 }
 
-fn parse_issue(node: &Value) -> Pending {
-    let (labels, label_cursor) = names_of(&node["labels"], "name");
-    let (assignees, assignee_cursor) = names_of(&node["assignees"], "login");
-    Pending {
+fn parse_issue(node: &Value, listed: &mut Listed) -> Option<Pending> {
+    let mandatory = || {
+        Some((
+            node["number"].as_i64().filter(|n| *n > 0)?,
+            node["title"].as_str()?,
+            node["url"].as_str().filter(|s| !s.is_empty())?,
+            node["updatedAt"].as_str().filter(|s| !s.is_empty())?,
+        ))
+    };
+    let Some((number, title, url, updated_at)) = mandatory() else {
+        listed.incomplete("issues response has an invalid issue");
+        return None;
+    };
+    let (labels, label_cursor) = metadata_page(&node["labels"], "name", "labels", listed);
+    let (assignees, assignee_cursor) =
+        metadata_page(&node["assignees"], "login", "assignees", listed);
+    Some(Pending {
         label_cursor,
         assignee_cursor,
-        id: node["id"].as_str().map(str::to_string),
+        id: node["id"]
+            .as_str()
+            .filter(|s| !s.is_empty())
+            .map(str::to_owned),
         issue: Issue {
-            number: node["number"].as_i64().unwrap_or(0),
-            title: clean(node["title"].as_str().unwrap_or("")),
-            url: node["url"].as_str().unwrap_or("").to_string(),
-            updated_at: node["updatedAt"].as_str().unwrap_or("").to_string(),
+            number,
+            title: title.to_owned(),
+            url: url.to_owned(),
+            updated_at: updated_at.to_owned(),
             labels,
             assignees,
         },
+    })
+}
+
+fn unseen_cursor(
+    cursor: String,
+    seen: &mut HashSet<String>,
+    listed: &mut Listed,
+    kind: &str,
+) -> Option<String> {
+    if seen.insert(cursor.clone()) {
+        Some(cursor)
+    } else {
+        listed.incomplete(format!("{kind} response repeated a pagination cursor"));
+        None
     }
 }
 
@@ -169,6 +224,7 @@ where
         })
         .collect();
     let mut cursors: Vec<Option<String>> = slugs.iter().map(|_| None).collect();
+    let mut seen = vec![HashSet::new(); slugs.len()];
     let mut need: Vec<usize> = (0..slugs.len()).collect();
     while !need.is_empty() {
         let mut nxt = Vec::new();
@@ -180,48 +236,39 @@ where
                 Ok(v) => v,
                 Err(e) => {
                     for &i in chunk {
-                        results[i].coverage = "incomplete";
-                        results[i].error = Some(e.to_string());
+                        results[i].incomplete(e.to_string());
                     }
                     continue;
                 }
             };
             let failed = errors_by_alias(&payload);
             let data = &payload["data"];
-            if message_for(&failed, "*").is_some() && data.is_null() {
-                let msg = message_for(&failed, "*").unwrap_or("graphql error");
-                for &i in chunk {
-                    results[i].coverage = "incomplete";
-                    results[i].error = Some(msg.to_string());
-                }
-                continue;
-            }
             for (n, &i) in chunk.iter().enumerate() {
                 let alias = format!("r{n}");
+                let listed = &mut results[i];
+                if let Some(message) = message_for(&failed, &alias) {
+                    listed.incomplete(message);
+                }
                 let node = &data[&alias];
-                if message_for(&failed, &alias).is_some() || node.is_null() {
-                    results[i].coverage = "incomplete";
-                    results[i].error = Some(
-                        message_for(&failed, &alias)
-                            .unwrap_or("no repository data")
-                            .to_string(),
-                    );
+                let Some(id) = node["id"].as_str().filter(|s| !s.is_empty()) else {
+                    listed.incomplete("no repository data");
+                    continue;
+                };
+                if listed.id.as_deref().is_some_and(|previous| previous != id) {
+                    listed.incomplete("repository changed during pagination");
                     continue;
                 }
-                results[i].id = node["id"].as_str().map(str::to_string);
-                for item in node["issues"]["nodes"].as_array().into_iter().flatten() {
-                    if !item.is_null() {
-                        let pending = parse_issue(item);
-                        follow_side(&mut post, &mut results[i], pending, page);
+                listed.id = Some(id.to_owned());
+                let block = &node["issues"];
+                for item in checked_nodes(block, listed, "issues") {
+                    if let Some(pending) = parse_issue(item, listed) {
+                        follow_side(&mut post, listed, pending, page);
                     }
                 }
-                if node["issues"]["pageInfo"]["hasNextPage"]
-                    .as_bool()
-                    .unwrap_or(false)
+                if let Some(cursor) = next_cursor(block, listed, "issues")
+                    .and_then(|cursor| unseen_cursor(cursor, &mut seen[i], listed, "issues"))
                 {
-                    cursors[i] = node["issues"]["pageInfo"]["endCursor"]
-                        .as_str()
-                        .map(str::to_string);
+                    cursors[i] = Some(cursor);
                     nxt.push(i);
                 }
             }
@@ -239,48 +286,53 @@ fn follow_side<E>(
 ) where
     E: std::fmt::Display,
 {
-    for (kind, cursor) in [
-        ("labels", &mut pending.label_cursor),
-        ("assignees", &mut pending.assignee_cursor),
+    for (kind, field, mut cursor, values) in [
+        (
+            "labels",
+            "name",
+            pending.label_cursor.take(),
+            &mut pending.issue.labels,
+        ),
+        (
+            "assignees",
+            "login",
+            pending.assignee_cursor.take(),
+            &mut pending.issue.assignees,
+        ),
     ] {
-        while cursor.is_some() {
-            let Some(id) = pending.id.clone() else {
-                listed.coverage = "incomplete";
-                listed.error = Some(format!("issue has no id for a further {kind} page"));
+        let mut seen = HashSet::new();
+        while let Some(next) = cursor.and_then(|c| unseen_cursor(c, &mut seen, listed, kind)) {
+            let Some(id) = &pending.id else {
+                listed.incomplete(format!("issue has no id for a further {kind} page"));
                 break;
             };
-            let variables = json!({"id": id, "c": cursor.clone()});
+            let variables = json!({"id": id, "c": next});
             let payload =
                 match post(&json!({"query": meta_query(kind, page), "variables": variables})) {
                     Ok(v) => v,
                     Err(e) => {
-                        listed.coverage = "incomplete";
-                        listed.error = Some(e.to_string());
+                        listed.incomplete(e.to_string());
                         break;
                     }
                 };
-            let failed = errors_by_alias(&payload);
+            if let Some(error) = message_for(&errors_by_alias(&payload), "node") {
+                listed.incomplete(error);
+            }
             let block = &payload["data"]["node"][kind];
-            if !failed.is_empty() || block.is_null() {
-                listed.coverage = "incomplete";
-                listed.error = Some(
-                    failed
-                        .first()
-                        .map(|(_, m)| m.clone())
-                        .unwrap_or_else(|| format!("further {kind} page failed")),
-                );
-                break;
-            }
-            let (names, next) = names_of(block, if kind == "labels" { "name" } else { "login" });
-            if kind == "labels" {
-                pending.issue.labels.extend(names);
-            } else {
-                pending.issue.assignees.extend(names);
-            }
-            *cursor = next;
+            let (names, next) = metadata_page(block, field, kind, listed);
+            values.extend(names);
+            cursor = next;
         }
     }
     listed.issues.push(pending.issue);
+}
+
+fn for_terminal(value: &str) -> String {
+    let (mut visible, truncated) = escape_untrusted(value, 512);
+    if truncated {
+        visible.push_str("…");
+    }
+    visible
 }
 
 pub fn text_lines(listed: &Listed) -> Vec<String> {
@@ -292,7 +344,7 @@ pub fn text_lines(listed: &Listed) -> Vec<String> {
     if listed.coverage != "complete" && listed.issues.is_empty() {
         lines.push(format!(
             "    open issues: incomplete ({})",
-            listed.error.as_deref().unwrap_or("not read")
+            for_terminal(listed.error.as_deref().unwrap_or("not read"))
         ));
         return lines;
     }
@@ -301,22 +353,33 @@ pub fn text_lines(listed: &Listed) -> Vec<String> {
         let labels = if issue.labels.is_empty() {
             "-".into()
         } else {
-            issue.labels.join(", ")
+            issue
+                .labels
+                .iter()
+                .map(|label| for_terminal(label))
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         let assignees = if issue.assignees.is_empty() {
             "-".into()
         } else {
-            issue.assignees.join(", ")
+            issue
+                .assignees
+                .iter()
+                .map(|login| for_terminal(login))
+                .collect::<Vec<_>>()
+                .join(", ")
         };
         lines.push(format!(
             "      #{} {}  labels: {labels}  assignees: {assignees}",
-            issue.number, issue.title
+            issue.number,
+            for_terminal(&issue.title)
         ));
     }
     if listed.coverage != "complete" {
         lines.push(format!(
             "      incomplete: {}",
-            listed.error.as_deref().unwrap_or("not read")
+            for_terminal(listed.error.as_deref().unwrap_or("not read"))
         ));
     }
     lines
