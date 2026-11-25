@@ -421,6 +421,10 @@ m WC11 'the signal handler hides a process import' tests/it/no_binaries.rs \
 m WC7 'pending timeout fires when the limit is exactly reached' src/watch/cycle.rs \
   'now_secs.saturating_sub(since) <=' 'now_secs.saturating_sub(since) <' \
   watch_command a_pending_class_times_out_once_per_period
+m N3 'signals.rs may start a process' src/signals.rs \
+  'extern "C" fn handle_watch_stop(_: libc::c_int) {' 'fn spawn() { let _ = std::process::Command::new("git"); }
+extern "C" fn handle_watch_stop(_: libc::c_int) {' \
+  no_binaries only_the_runner_spawns_a_process
 m N2 'a process is started in the apply module' src/tidy_apply.rs \
   'pub fn new_run_id()' 'fn spawn() { let _ = std::process::Command::new("git"); }
 pub fn new_run_id()' \

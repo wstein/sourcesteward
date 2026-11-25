@@ -1842,7 +1842,7 @@ Deviations from Go (W2 part of the list of the plan, section 4):
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1638 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1639 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
