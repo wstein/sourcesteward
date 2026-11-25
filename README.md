@@ -6,7 +6,7 @@ Everyday git and GitHub workflows for agents and people, in one binary. Written 
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
 nowhere else): today for the fetch of `sync` with ssh and local-path remotes and for `sync restore` (`git reset --keep`,
-`git update-ref`), and for workspace checkpoint and resume. The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
+`git update-ref`), and for workspace checkpoint, retirement preview, and resume. The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
 (and the repository's own config cannot block them). `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
@@ -35,6 +35,7 @@ stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw workspace checkpoint --task NAME [--include PATH]... [--plan] [--repo DIR] [--json]
 stw workspace inspect    --task NAME [--repo DIR] [--json]
+stw workspace retirement-plan --task NAME [--repo DIR] [--json]
 stw workspace resume     CHECKPOINT DESTINATION [--repo DIR] [--json]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
@@ -81,6 +82,18 @@ reachable through the task history. Source branch, index, and files are left as
 they were. If the command stops around publication, `workspace inspect` reports
 the checkpoint currently selected by the task ref.
 
+`workspace retirement-plan --task NAME --json` compares the current HEAD,
+index, and worktree with the task's published checkpoint. It reports staged
+differences, worktree differences (including uncaptured untracked files), ignored
+files, local-only commits, and active Git operations. On Unix it also reports
+executable-bit changes even if the repository disables Git's file-mode checks.
+Local-only commits are counted against all local remote-tracking refs, without
+fetching. If none exist, every commit reachable from HEAD is local-only.
+The preview returns successfully with `ready: false` if any of these checks finds
+a blocker or if HEAD moved from the checkpoint base. It writes only a temporary
+index. Keep the worktree idle during inspection and rerun the preview if its
+state changes.
+
 `workspace resume CHECKPOINT DESTINATION` creates a fresh detached linked worktree
 at the recorded base. It restores the index and worktree separately, so selected
 untracked files remain untracked. Choose a fresh destination with an existing
@@ -90,7 +103,8 @@ parent. A failed or interrupted restore leaves a sibling
 This initial implementation uses the local Git runner (Git 2.46 or newer and a
 configured Git identity for checkpoint commits). It supports SHA-1 repositories
 with full worktrees and a regular index. Sparse checkouts, submodules, Git
-operations in progress, worktree attributes, and special index flags are refused.
+operations in progress during capture or resume, worktree attributes, and
+special index flags are refused.
 Keep the source idle during capture. HEAD or index changes detected before
 publication cause a refusal. Checkpoints survive loss of a worktree while their
 Git objects remain available. Recovery after VM loss needs independent storage.

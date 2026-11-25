@@ -347,6 +347,9 @@ pub enum WorkspaceOp {
         parents: Vec<Hex40>,
     },
     ReadCommit(Hex40),
+    IndexChanges(Hex40),
+    WorktreeChanges(PathBuf),
+    LocalCommits(Hex40),
     Publish {
         task: String,
         new: Hex40,
@@ -399,6 +402,34 @@ impl WorkspaceOp {
                 args
             }
             Self::ReadCommit(id) => v(&["cat-file", "commit", id.as_str()]),
+            Self::IndexChanges(index) => v(&[
+                "diff",
+                "--cached",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                index.as_str(),
+                "--",
+            ]),
+            Self::WorktreeChanges(_) => {
+                let mut args = Vec::new();
+                if cfg!(unix) {
+                    args.extend(v(&["-c", "core.filemode=true"]));
+                }
+                args.extend(v(&[
+                    "diff",
+                    "--no-ext-diff",
+                    "--no-textconv",
+                    "--no-renames",
+                    "--name-only",
+                    "-z",
+                    "--",
+                ]));
+                args
+            }
+            Self::LocalCommits(head) => v(&["rev-list", head.as_str(), "--not", "--remotes"]),
             Self::Publish {
                 task,
                 new,
@@ -432,6 +463,7 @@ impl WorkspaceOp {
         match self {
             Self::LoadIndex { index, .. } => index.as_deref(),
             Self::WriteTree(index)
+            | Self::WorktreeChanges(index)
             | Self::Capture { index, .. }
             | Self::Materialize { index, .. } => Some(index),
             _ => None,

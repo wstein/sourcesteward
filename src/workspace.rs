@@ -20,7 +20,9 @@ pub(crate) enum WorkspaceCommand {
     /// Save the index and working tree under a local task ref
     Checkpoint(CheckpointArgs),
     /// Show the published checkpoint of a task
-    Inspect(InspectArgs),
+    Inspect(TaskArgs),
+    /// Preview whether a checkpoint covers the worktree before retirement
+    RetirementPlan(TaskArgs),
     /// Restore a checkpoint into a new linked worktree
     Resume(ResumeArgs),
 }
@@ -46,7 +48,7 @@ pub(crate) struct CheckpointArgs {
 }
 
 #[derive(Args)]
-pub(crate) struct InspectArgs {
+pub(crate) struct TaskArgs {
     #[arg(long)]
     task: String,
     #[command(flatten)]
@@ -97,6 +99,7 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
     let (name, opts) = match &command {
         WorkspaceCommand::Checkpoint(a) => ("checkpoint", &a.output),
         WorkspaceCommand::Inspect(a) => ("inspect", &a.output),
+        WorkspaceCommand::RetirementPlan(a) => ("retirement-plan", &a.output),
         WorkspaceCommand::Resume(a) => ("resume", &a.output),
     };
     let mut report =
@@ -112,6 +115,7 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
         match &command {
             WorkspaceCommand::Checkpoint(a) => checkpoint(&repo, &root, a, &mut report),
             WorkspaceCommand::Inspect(a) => inspect(&repo, &root, a, &mut report),
+            WorkspaceCommand::RetirementPlan(a) => retirement_plan(&repo, &root, a, &mut report),
             WorkspaceCommand::Resume(a) => resume(&repo, &root, a, &mut report),
         }
     })();
@@ -170,8 +174,11 @@ fn task_checkpoint(repo: &gix::Repository, task: &str) -> Result<Option<Hex40>> 
 }
 
 fn paths(root: &Path, ignored: bool) -> Result<BTreeSet<String>> {
-    let bytes = git(root, Git::Untracked { ignored })?;
-    bytes
+    git_paths(root, Git::Untracked { ignored })
+}
+
+fn git_paths(root: &Path, op: Git) -> Result<BTreeSet<String>> {
+    git(root, op)?
         .split(|b| *b == 0)
         .filter(|p| !p.is_empty())
         .map(|p| Ok(std::str::from_utf8(p)?.to_owned()))
@@ -182,6 +189,10 @@ fn workspace_config(repo: &gix::Repository) -> Result<()> {
     if repo.state().is_some() {
         return Err(Error::repository("a Git operation is in progress"));
     }
+    full_workspace_config(repo)
+}
+
+fn full_workspace_config(repo: &gix::Repository) -> Result<()> {
     let config = repo.config_snapshot();
     if config.boolean("core.sparseCheckout").unwrap_or(false) {
         return Err(Error::repository(
@@ -205,6 +216,22 @@ fn workspace_config(repo: &gix::Repository) -> Result<()> {
             Err(e) => return Err(e.into()),
         }
     }
+    Ok(())
+}
+
+fn check_index_flags(repo: &gix::Repository) -> Result<()> {
+    use gix::index::entry::Flags;
+    let index_state = repo.index_or_empty()?;
+    if index_state.entries().iter().any(|entry| {
+        entry
+            .flags
+            .intersects(Flags::INTENT_TO_ADD | Flags::ASSUME_VALID | Flags::SKIP_WORKTREE)
+    }) {
+        return Err(Error::repository(
+            "intent-to-add and hidden index entries are outside workspace checkpoint support",
+        ));
+    }
+
     Ok(())
 }
 
@@ -268,17 +295,7 @@ fn checkpoint(
     report["published"] = json!(false);
     workspace_config(repo)?;
 
-    use gix::index::entry::Flags;
-    let index_state = repo.index_or_empty()?;
-    if index_state.entries().iter().any(|entry| {
-        entry
-            .flags
-            .intersects(Flags::INTENT_TO_ADD | Flags::ASSUME_VALID | Flags::SKIP_WORKTREE)
-    }) {
-        return Err(Error::repository(
-            "intent-to-add and hidden index entries are outside workspace checkpoint support",
-        ));
-    }
+    check_index_flags(repo)?;
 
     let index_path = repo.index_path();
     let original = fs::read(&index_path)?;
@@ -434,18 +451,88 @@ fn describe(id: Hex40, record: &Record, report: &mut Value) {
     report["omitted"] = json!(record.omitted);
 }
 
-fn inspect(
-    repo: &gix::Repository,
-    root: &Path,
-    args: &InspectArgs,
-    report: &mut Value,
-) -> Result<()> {
+fn inspect(repo: &gix::Repository, root: &Path, args: &TaskArgs, report: &mut Value) -> Result<()> {
     let id = task_checkpoint(repo, &args.task)?
         .ok_or_else(|| Error::repository("task has no published checkpoint"))?;
     describe(id, &record(root, id)?, report);
     report["published"] = json!(true);
     report["next"] = json!("resume");
     Ok(())
+}
+
+fn retirement_plan(
+    repo: &gix::Repository,
+    root: &Path,
+    args: &TaskArgs,
+    report: &mut Value,
+) -> Result<()> {
+    report["ready"] = json!(false);
+    let checkpoint = task_checkpoint(repo, &args.task)?
+        .ok_or_else(|| Error::repository("task has no published checkpoint"))?;
+    let record = record(root, checkpoint)?;
+    describe(checkpoint, &record, report);
+    // Unlike capture, preview must observe active operations and unmerged entries.
+    full_workspace_config(repo)?;
+    check_index_flags(repo)?;
+    let head = parse_id(&repo.head_id()?.detach().to_string())?;
+    let index_commit = parse_id(&record.index)?;
+    check_entries(root, &git(root, Git::IndexEntries)?, false)?;
+    check_entries(root, &git(root, Git::TreeEntries(checkpoint))?, false)?;
+    let index_changes = git_paths(root, Git::IndexChanges(index_commit))?;
+
+    let temp = tempfile::tempdir()?;
+    let index = temp.path().join("checkpoint-index");
+    git(
+        root,
+        Git::LoadIndex {
+            tree: checkpoint,
+            index: Some(index.clone()),
+        },
+    )?;
+    let mut worktree_changes = git_paths(root, Git::WorktreeChanges(index))?;
+    // Read untracked paths relative to the real index. The temporary index already
+    // compares everything the checkpoint includes, even if untracked in the source.
+    worktree_changes.extend(paths(root, false)?.difference(&record.included).cloned());
+    let ignored = paths(root, true)?;
+    let local_commits = String::from_utf8(git(root, Git::LocalCommits(head))?)?;
+    let local_commits = local_commits.lines().collect::<Vec<_>>();
+    let operations = operations_in_progress(repo.git_dir())?;
+
+    report["head"] = json!(head.as_str());
+    report["index_changes"] = json!(index_changes);
+    report["worktree_changes"] = json!(worktree_changes);
+    report["ignored"] = json!(ignored);
+    report["local_commits"] = json!(local_commits);
+    report["operations"] = json!(operations);
+    report["ready"] = json!(
+        head.as_str() == record.base
+            && index_changes.is_empty()
+            && worktree_changes.is_empty()
+            && ignored.is_empty()
+            && local_commits.is_empty()
+            && operations.is_empty()
+    );
+    Ok(())
+}
+
+fn operations_in_progress(git_dir: &Path) -> Result<Vec<&'static str>> {
+    let mut operations = Vec::new();
+    for (marker, label) in [
+        ("rebase-merge", "rebase"),
+        ("rebase-apply", "rebase-or-am"),
+        ("MERGE_HEAD", "merge"),
+        ("CHERRY_PICK_HEAD", "cherry-pick"),
+        ("REVERT_HEAD", "revert"),
+        ("BISECT_START", "bisect"),
+        ("sequencer", "sequencer"),
+    ] {
+        match fs::symlink_metadata(git_dir.join(marker)) {
+            Ok(_) => operations.push(label),
+            Err(error) if error.kind() == ErrorKind::NotFound => (),
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(operations)
 }
 
 fn resume(

@@ -383,3 +383,125 @@ fn capture_rereads_content_when_the_index_stat_cache_matches() {
     assert_eq!(git(&dest, &["show", ":mixed"]), "index\n");
     assert_eq!(fs::read_to_string(dest.join("mixed")).unwrap(), "later\n");
 }
+
+#[test]
+fn retirement_plan_compares_both_layers_and_reports_uncaptured_paths() {
+    let fx = fixture();
+    let root = &fx.path;
+    fs::remove_file(root.join("ignored")).unwrap();
+    let checkpoint = save(root);
+    let base = git(root, &["rev-parse", "HEAD"]);
+    let preview = || run(root, &["retirement-plan", "--task", "demo"], 0);
+
+    let without_remote = preview();
+    assert_eq!(
+        without_remote["local_commits"],
+        serde_json::json!([base.trim()])
+    );
+    assert_eq!(
+        without_remote["worktree_changes"],
+        serde_json::json!(["omitted"])
+    );
+    assert_eq!(without_remote["ready"], false);
+
+    git(
+        root,
+        &["update-ref", "refs/remotes/upstream/main", base.trim()],
+    );
+    fs::remove_file(root.join("omitted")).unwrap();
+    let ready = preview();
+    assert_eq!(ready["checkpoint"], checkpoint);
+    assert_eq!(ready["head"], base.trim());
+    assert_eq!(ready["base"], base.trim());
+    assert_eq!(ready["ready"], true, "{ready}");
+    for field in [
+        "index_changes",
+        "worktree_changes",
+        "local_commits",
+        "ignored",
+        "operations",
+    ] {
+        assert_eq!(ready[field], serde_json::json!([]), "{field}");
+    }
+
+    git(root, &["config", "core.fileMode", "false"]);
+    fs::set_permissions(root.join("staged-new"), fs::Permissions::from_mode(0o755)).unwrap();
+    let mode_change = preview();
+    assert_eq!(
+        mode_change["worktree_changes"],
+        serde_json::json!(["staged-new"])
+    );
+    assert_eq!(mode_change["ready"], false);
+
+    fs::write(root.join("mixed"), "new staged\n").unwrap();
+    git(root, &["add", "mixed"]);
+    git(root, &["commit", "-m", "later local commit"]);
+    fs::remove_file(root.join("selected file")).unwrap();
+    fs::write(root.join("new\npath"), "new untracked\n").unwrap();
+    fs::write(root.join("ignored"), "local ignored\n").unwrap();
+
+    let index_before = fs::read(root.join(".git/index")).unwrap();
+    let refs_before = git(root, &["show-ref", "--head"]);
+    let objects_before = git(root, &["count-objects", "-v"]);
+    let blocked = preview();
+    assert_eq!(blocked["checkpoint"], checkpoint);
+    assert_eq!(blocked["ready"], false);
+    assert_eq!(blocked["index_changes"], serde_json::json!(["mixed"]));
+    assert_eq!(
+        blocked["worktree_changes"],
+        serde_json::json!(["mixed", "new\npath", "selected file", "staged-new"])
+    );
+    assert_eq!(blocked["ignored"], serde_json::json!(["ignored"]));
+    assert_eq!(
+        blocked["local_commits"],
+        serde_json::json!([blocked["head"]])
+    );
+    assert_eq!(fs::read(root.join(".git/index")).unwrap(), index_before);
+    assert_eq!(git(root, &["show-ref", "--head"]), refs_before);
+    assert_eq!(git(root, &["count-objects", "-v"]), objects_before);
+    assert_eq!(
+        fs::read_to_string(root.join("mixed")).unwrap(),
+        "new staged\n"
+    );
+}
+
+#[test]
+fn retirement_plan_reports_an_unmerged_index_and_ignored_captured_file() {
+    let fx = fixture();
+    let root = &fx.path;
+    save(root);
+    let base = git(root, &["rev-parse", "HEAD"]);
+    git(
+        root,
+        &["update-ref", "refs/remotes/origin/main", base.trim()],
+    );
+    fs::remove_file(root.join("omitted")).unwrap();
+    fs::remove_file(root.join("ignored")).unwrap();
+    fs::create_dir_all(root.join(".git/info")).unwrap();
+    fs::write(root.join(".git/info/exclude"), "/selected file\n").unwrap();
+    fs::write(root.join(".git/MERGE_HEAD"), &base).unwrap();
+    let blob = git(root, &["rev-parse", "HEAD:mixed"]);
+    let mut update = Command::new("git")
+        .current_dir(root)
+        .args(["update-index", "--index-info"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .unwrap();
+    use std::io::Write;
+    let zero = "0".repeat(40);
+    write!(
+        update.stdin.take().unwrap(),
+        "0 {zero}\tmixed\n100644 {} 2\tmixed\n",
+        blob.trim()
+    )
+    .unwrap();
+    assert!(update.wait().unwrap().success());
+    let before = fs::read(root.join(".git/index")).unwrap();
+
+    let report = run(root, &["retirement-plan", "--task", "demo"], 0);
+    assert_eq!(report["ready"], false);
+    assert_eq!(report["index_changes"], serde_json::json!(["mixed"]));
+    assert_eq!(report["ignored"], serde_json::json!(["selected file"]));
+    assert_eq!(report["operations"], serde_json::json!(["merge"]));
+    assert_eq!(fs::read(root.join(".git/index")).unwrap(), before);
+}
