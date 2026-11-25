@@ -15,7 +15,7 @@ would write such a path), https fetch uses no credential helper, and an empty `P
 every gix read. There is no `gh` and no `ssh` of stw's own. Later `push`,
 `range-diff` and conflict resolution in a worktree use the same runner. Each step that ran through it carries `"via": "git"`
 in the JSON output; without a usable `git` (missing, older than the step needs, unknown option) the step reports
-`unsupported` (exit 1, typed). See `chartroom/notes/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
+`unsupported` (exit 1, typed). See `chartroom/zettel/stw runs git only for push, fetch over ssh, range-diff and resolve.md`.
 
 jj (Jujutsu) is not supported (owner decision 2026-11-11). Git is the standard; functions that jj offers (undo/oplog,
 conflict resolution) are added to stw instead of maintaining a second repository model. jj is an officially unsupported
