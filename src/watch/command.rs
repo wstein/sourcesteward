@@ -1,9 +1,8 @@
 //! `stw watch` (W4): one poll (`--once`), a resident poll (`--stream`), or a read of the
 //! heartbeat (`--status`). `--stream` holds the lock and repeats the open-list cycle until
-//! SIGINT, SIGTERM, or `--max-idle`. Checks, mergeability, restack, and `--until-event` are
-//! not this command. Exit 0 when a poll recorded its outcome or a stream ended on a signal or
+//! SIGINT, SIGTERM, or `--max-idle`. `--until-event` stops on a selected event or timeout. Exit 0 when a poll recorded its outcome or a stream ended on a signal or
 //! idle, 1 when every repository read failed (`--once`) or the state could not be used, 2 for
-//! usage, 3 when another watcher holds the lock, 5 when `--status` finds no fresh heartbeat.
+//! usage, 3 when another watcher holds the lock, 4 on event timeout, and 5 when `--status` finds no fresh heartbeat.
 
 use std::io::Write;
 use std::path::Path;
@@ -34,13 +33,25 @@ pub const MIN_INTERVAL_SECS: u64 = 10;
 /// `--stream` interval when the flag is omitted.
 pub const DEFAULT_INTERVAL_SECS: u64 = 60;
 
-struct Lines<W> {
+pub struct Lines<W> {
     out: W,
+    human: bool,
+}
+
+impl<W: Write> Lines<W> {
+    pub fn new(out: W, human: bool) -> Self {
+        Self { out, human }
+    }
 }
 
 impl<W: Write> Output for Lines<W> {
     fn print(&mut self, ev: &Event) -> Result<(), WatchError> {
-        writeln!(self.out, "{}", ev.to_line()).map_err(|e| WatchError::Io(e.to_string()))
+        let line = if self.human {
+            super::human::render(ev)
+        } else {
+            ev.to_line()
+        };
+        writeln!(self.out, "{line}").map_err(|e| WatchError::Io(e.to_string()))
     }
 }
 
@@ -174,17 +185,36 @@ pub fn run_once(
     source: &mut dyn WatchSource,
     out: &mut dyn Write,
 ) -> Result<u8, WatchError> {
+    run_once_output(
+        dir,
+        repos,
+        baseline,
+        now_secs,
+        detail_every,
+        source,
+        &mut Lines::new(out, false),
+    )
+}
+
+pub fn run_once_output(
+    dir: &Path,
+    repos: &[String],
+    baseline: bool,
+    now_secs: i64,
+    detail_every: u64,
+    source: &mut dyn WatchSource,
+    out: &mut dyn Output,
+) -> Result<u8, WatchError> {
     if repos.is_empty() {
         return Err(WatchError::StateDirUsage);
     }
-    let mut lines = Lines { out };
-    let (mut core, _) = Core::open(dir, baseline, &mut lines)?;
+    let (mut core, _) = Core::open(dir, baseline, out)?;
     let polls = poll_ready(repos, source, &core.state, now_secs, detail_every);
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
     let succeeded = polls.iter().filter(|p| p.result.is_ok()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
     let events = cycle::advance_seen(&mut core.state, &polls, now_secs, PENDING_TIMEOUT_SECS);
-    let committed = core.commit(&events, &mut lines);
+    let committed = core.commit(&events, out);
     if let Err(err) = committed {
         core.close();
         return Err(err);
@@ -211,11 +241,28 @@ pub fn run_stream(
     limits: StreamLimits,
     pace: &mut dyn Pace,
 ) -> Result<u8, WatchError> {
+    run_stream_output(
+        dir,
+        repos,
+        source,
+        &mut Lines::new(out, false),
+        limits,
+        pace,
+    )
+}
+
+pub fn run_stream_output(
+    dir: &Path,
+    repos: &[String],
+    source: &mut dyn WatchSource,
+    out: &mut dyn Output,
+    limits: StreamLimits,
+    pace: &mut dyn Pace,
+) -> Result<u8, WatchError> {
     if repos.is_empty() {
         return Err(WatchError::StateDirUsage);
     }
-    let mut lines = Lines { out };
-    let (mut core, _) = Core::open(dir, limits.baseline, &mut lines)?;
+    let (mut core, _) = Core::open(dir, limits.baseline, out)?;
     let mut force = limits.baseline || core.baseline;
     let mut last_event = pace.now_secs();
     let started = last_event;
@@ -239,7 +286,7 @@ pub fn run_stream(
         prepare_cycle(&mut core, repos, force, limits.interval_secs);
         force = false;
         let events = cycle::advance_seen(&mut core.state, &polls, arrived, PENDING_TIMEOUT_SECS);
-        if let Err(err) = core.commit(&events, &mut lines) {
+        if let Err(err) = core.commit(&events, out) {
             core.close();
             return Err(err);
         }

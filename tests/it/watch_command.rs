@@ -404,7 +404,10 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
         .lines()
         .map(|line| serde_json::from_str(line).unwrap())
         .collect();
-    let changes: Vec<_> = events.iter().filter(|ev| ev["kind"] == "head-changed").collect();
+    let changes: Vec<_> = events
+        .iter()
+        .filter(|ev| ev["kind"] == "head-changed")
+        .collect();
     assert_eq!(changes.len(), 1, "{events:?}");
     assert_eq!(changes[0]["details"]["old"], "a".repeat(40));
     assert_eq!(changes[0]["details"]["new"], "b".repeat(40));
@@ -428,6 +431,51 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
     .unwrap();
     assert_eq!(once.hits.get(), 1);
     assert_eq!(pace.sleeps, vec![10]);
+}
+
+#[test]
+fn human_stream_keeps_the_full_sha_in_the_json_journal() {
+    use stw::watch::command::{run_stream_output, Lines, StreamLimits};
+    let (_dir, path) = state_path();
+    let mut source = Listed::head(&"a".repeat(40));
+    source.next_head = Some("b".repeat(40));
+    let mut stdout = Vec::new();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let code = run_stream_output(
+        &path,
+        &["o/r".into()],
+        &mut source,
+        &mut Lines::new(&mut stdout, true),
+        StreamLimits {
+            baseline: false,
+            api_base: "https://api.github.com".into(),
+            interval_secs: 60,
+            max_idle_secs: 0,
+            detail_every: 10,
+            until: vec!["head-changed".into()],
+            timeout_secs: 120,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    let text = String::from_utf8(stdout).unwrap();
+    assert!(
+        text.contains("o/r#7 head-changed aaaaaaa -> bbbbbbb\n"),
+        "{text}"
+    );
+    let journal = std::fs::read_to_string(path.join("journal.jsonl")).unwrap();
+    let change = journal
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .find(|event| event["kind"] == "head-changed")
+        .unwrap();
+    assert_eq!(change["schema_version"], 1);
+    assert_eq!(change["details"]["new"], "b".repeat(40));
 }
 
 #[test]

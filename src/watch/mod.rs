@@ -26,6 +26,7 @@ pub mod apply;
 pub mod command;
 pub mod cycle;
 pub mod event;
+mod human;
 pub mod journal;
 pub mod lock;
 pub mod reader;

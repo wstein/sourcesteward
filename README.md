@@ -1652,14 +1652,26 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 
 ## Watch scenarios (port corpus)
 
-`tests/fixtures/watch/` holds 279 scenarios, the test corpus for the port of `stw watch` (the Go `stw watch` stays the
-reference for those scenarios). `stw watch --once`, `stw watch --stream`, and `stw watch --status` are in this crate:
-a bounded open-list reader and a cycle that emits `new-pr`, `head-changed`, `closed`, `watch-error`, and
-`watch-recovered`. `--stream` repeats that cycle until SIGINT, SIGTERM, or `--max-idle`, with `--interval` (minimum
-10s, default 60s). `--once` is one poll. `--status` reads the heartbeat and the accepted repository list. A restart
-reprints a journalled event that was not printed. Checks, mergeability, restack, and `--until-event` are not in this
-command, and the 279 scenarios are not all replayed by it. The Go state format stays unsupported. There is no poll
-jitter. `--stream` is not the default. The scenarios are generated from the Go tests of
+`tests/fixtures/watch/` holds 279 scenarios derived from the Go watcher.
+`stw watch` requires an explicit mode. `--once` polls once, `--stream`
+polls until SIGINT, SIGTERM or `--max-idle`, and `--until-event KIND`
+polls until a selected kind appears or the timeout expires. `--status`
+reads the heartbeat and accepted repository state without network or lock.
+The interval defaults to 60s and has a 10s minimum. The cycle emits PR,
+check, mergeability, restack and watcher health events. A restart reprints
+journalled events that may have missed stdout. The Go state format is
+unsupported. Polling has no jitter.
+
+Stdout defaults to schema-version-1 JSON Lines for event modes. `--human`
+prints one escaped, bounded line per event with short SHAs and keeps the
+Go `git rebase --onto` hint for actionable `restack-needed` events
+(D-20261119-03). Rust uses its shared terminal escaping routine. The
+journal always retains full SHAs in JSON Lines, including in human mode.
+`--status` returns a JSON report and refuses `--human`. Exit codes are
+0 for a successful poll or normal stop, 1 for failure, 2 for usage,
+3 for a held watcher lock, 4 for an event timeout, and 5 for a stale heartbeat.
+
+The scenarios are generated from the Go tests of
 `legacy/sourcesteward` and are independent of the Go file formats: each gives the inputs (observations per cycle, answers of a
 fake forge, flags of the command) and the expected semantic outputs (events with kind, repository, PR, details, order and
 step, a semantic view of the accepted state, exit codes). Event ids and journal sequence numbers are only additional
@@ -1755,7 +1767,7 @@ Deviations from the Go behavior (named one by one; D numbers are those of the po
    detail key").
 7. `id_counter` accepts digits only (Go's `Atoi` also took `+5`).
 8. `repos` is `null` instead of an empty slice for "not set yet", so an empty set is not mistaken for the first run.
-9. `restack-needed` keeps `argv` (D-20261119-03). The wired command fills it for class 1; `--human` is still later.
+9. `restack-needed` keeps `argv` (D-20261119-03). The wired command fills it for class 1. `--human` shows the rebase hint when its arguments can be displayed as plain shell tokens.
 10. Lock: an error other than "busy" (the file cannot be opened or locked) is `Io` at once, not `Locked` after five attempts.
 11. `lock::holder` reports "not held" when the probe fails with an error other than "busy"; Go reports "held".
 12. `journal.jsonl` is opened as it is: a symbolic link is followed (as Go); the state directory itself is checked (mode, work tree), its files are not.

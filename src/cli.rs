@@ -145,6 +145,9 @@ struct WatchArgs {
     /// With --until-event, exit 4 after this long without a matching event. [default: 590s]
     #[arg(long, value_name = "DURATION")]
     timeout: Option<String>,
+    /// Print one human-readable line per event instead of JSON Lines.
+    #[arg(long, conflicts_with = "status")]
+    human: bool,
     /// Read the heartbeat and the accepted state. No network and no lock.
     #[arg(long)]
     status: bool,
@@ -2446,6 +2449,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             ignore_authors,
             ignore_labels,
         );
+        let mut output = command::Lines::new(std::io::stdout(), a.human);
         if a.stream || until {
             let max_idle = match a.max_idle.as_deref() {
                 Some(text) => command::parse_duration_secs(text).map_err(Error::usage)?,
@@ -2467,11 +2471,11 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             };
             let mut pace = command::LivePace::install()
                 .map_err(|err| Error::new(crate::error::Kind::Repository, err.to_string()))?;
-            command::run_stream(
+            command::run_stream_output(
                 &dir,
                 &repos,
                 &mut source,
-                &mut std::io::stdout(),
+                &mut output,
                 StreamLimits {
                     baseline: a.baseline,
                     api_base: "https://api.github.com".to_string(),
@@ -2484,14 +2488,14 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
                 &mut pace,
             )
         } else {
-            command::run_once(
+            command::run_once_output(
                 &dir,
                 &repos,
                 a.baseline,
                 now,
                 detail_every,
                 &mut source,
-                &mut std::io::stdout(),
+                &mut output,
             )
         }
     };
