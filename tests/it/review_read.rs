@@ -8,6 +8,7 @@ const P: &str = "ffffffffffffffffffffffffffffffffffffffff";
 fn comment(id: u64, author: &str, raw: &str) -> Comment {
     let (body, body_truncated) = escape_untrusted(raw, 16 * 1024);
     Comment {
+        submitted_review: false,
         id,
         author: author.into(),
         author_type: "User".into(),
@@ -140,6 +141,7 @@ fn stamp(id: u64) -> String {
 
 fn rc(id: u64, body: String) -> ReviewComment {
     ReviewComment {
+        submitted_review: false,
         id,
         author: "owner".into(),
         created_at: stamp(id),

@@ -152,6 +152,7 @@ pub fn parse_body(body: &str, truncated: bool) -> Parsed {
 /// A pull request comment with a raw (unescaped) body.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ReviewComment {
+    pub submitted_review: bool,
     pub id: u64,
     pub author: String,
     pub created_at: String,
@@ -198,6 +199,7 @@ impl ReviewComment {
     /// From a read comment (its body is escaped). None when the escape is malformed.
     pub fn from_comment(c: &Comment) -> Option<ReviewComment> {
         Some(ReviewComment {
+            submitted_review: c.submitted_review,
             id: c.id,
             author: c.author.clone(),
             created_at: c.created_at.clone(),
@@ -288,6 +290,7 @@ impl FindingKind {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Finding {
+    pub submitted_review: bool,
     pub kind: FindingKind,
     pub comment_id: u64,
     pub author: String,
@@ -297,6 +300,7 @@ pub struct Finding {
 /// A comment that carries a line, with its provenance.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Evidence {
+    pub submitted_review: bool,
     pub comment_id: u64,
     pub author: String,
     pub created_at: String,
@@ -345,8 +349,14 @@ impl ReviewState {
                     json!({"from": from, "to": to, "patch_id": patch_id, "pr": pr_json(*pr)}),
                 ),
             };
-            json!({"comment_id": e.comment_id, "author": e.author, "created_at": e.created_at,
-                   "updated_at": e.updated_at, "edited": e.edited, "kind": kind, "line": fields})
+            let mut doc = json!({"author": e.author, "created_at": e.created_at,
+                   "updated_at": e.updated_at, "edited": e.edited, "kind": kind, "line": fields});
+            doc[if e.submitted_review {
+                "review_id"
+            } else {
+                "comment_id"
+            }] = json!(e.comment_id);
+            doc
         };
         json!({
             "version": 1,
@@ -355,8 +365,11 @@ impl ReviewState {
             "status": self.status.label(),
             "decisive": self.decisive.as_ref().map(ev),
             "chain": self.chain.iter().map(ev).collect::<Vec<_>>(),
-            "findings": self.findings.iter().map(|f| json!({
-                "kind": f.kind.label(), "comment_id": f.comment_id, "author": f.author, "detail": f.detail})).collect::<Vec<_>>(),
+            "findings": self.findings.iter().map(|f| {
+                let mut doc = json!({"kind": f.kind.label(), "author": f.author, "detail": f.detail});
+                doc[if f.submitted_review { "review_id" } else { "comment_id" }] = json!(f.comment_id);
+                doc
+            }).collect::<Vec<_>>(),
             "reasons": self.reasons,
         })
     }
@@ -558,13 +571,23 @@ pub fn evaluate(
     let mut variants: Vec<(String, u64, bool)> = Vec::new();
     let find = |kind, c: &ReviewComment, detail: String| Finding {
         kind,
+        submitted_review: c.submitted_review,
         comment_id: c.id,
         author: c.author.clone(),
         detail,
     };
+    let mut by_second: std::collections::HashMap<&str, Vec<(bool, Parsed)>> =
+        std::collections::HashMap::new();
     for c in comments {
         let is_trusted = is_trusted(&c.author, trusted);
-        match parse_body(&c.body, c.body_truncated) {
+        let parsed = parse_body(&c.body, c.body_truncated);
+        if is_trusted && parsed != Parsed::NotReview {
+            by_second
+                .entry(&c.created_at)
+                .or_default()
+                .push((c.submitted_review, parsed.clone()));
+        }
+        match parsed {
             Parsed::NotReview => {}
             Parsed::Variant(shown) => {
                 findings.push(find(FindingKind::UnparsedReviewVariant, c, shown));
@@ -588,6 +611,7 @@ pub fn evaluate(
                     }
                 }
                 let ev = Evidence {
+                    submitted_review: c.submitted_review,
                     comment_id: c.id,
                     author: c.author.clone(),
                     created_at: c.created_at.clone(),
@@ -656,6 +680,7 @@ pub fn evaluate(
                 Ok(root) => decisive = Some((pos, Some(root))),
                 Err(why) => findings.push(Finding {
                     kind: FindingKind::InvalidCarryChain,
+                    submitted_review: entry.ev.submitted_review,
                     comment_id: entry.ev.comment_id,
                     author: entry.ev.author.clone(),
                     detail: why.into(),
@@ -692,11 +717,48 @@ pub fn evaluate(
             }
         }
     }
+    // IDs are only comparable within their respective endpoint. A later direct
+    // verdict supersedes older ties. A carry chain can depend on earlier ties.
+    let dependencies = res.chain.iter().chain(res.decisive.iter());
+    for evidence in dependencies {
+        let target = match &evidence.line {
+            Line::Review { head, .. } | Line::Carried { to: head, .. } => head,
+        };
+        let relevant = |parsed: &Parsed| match parsed {
+            Parsed::Line(Line::Review { head, .. } | Line::Carried { to: head, .. }) => {
+                head == target
+            }
+            Parsed::Variant(_) => true,
+            Parsed::NotReview => false,
+        };
+        let ambiguous = by_second.iter().any(|(&stamp, entries)| {
+            stamp >= evidence.created_at.as_str()
+                && entries.iter().any(|(source, line)| {
+                    relevant(line)
+                        && entries
+                            .iter()
+                            .any(|(other, peer)| source != other && line != peer && relevant(peer))
+                })
+        });
+        if ambiguous {
+            return unknown(
+                scope,
+                head,
+                res.findings,
+                vec!["conflicting review evidence sources share a timestamp".into()],
+            );
+        }
+    }
     // Lines about other heads that took no part in the decision.
     for e in strict.iter().filter(|e| !e.foreign) {
-        if !e.names_head(head) && !res.chain.iter().any(|c| c.comment_id == e.ev.comment_id) {
+        if !e.names_head(head)
+            && !res.chain.iter().any(|c| {
+                (c.submitted_review, c.comment_id) == (e.ev.submitted_review, e.ev.comment_id)
+            })
+        {
             res.findings.push(Finding {
                 kind: FindingKind::StaleHead,
+                submitted_review: e.ev.submitted_review,
                 comment_id: e.ev.comment_id,
                 author: e.ev.author.clone(),
                 detail: String::new(),
@@ -751,6 +813,7 @@ pub fn evaluate_read(
                     Some(r) => items.push(r),
                     None => bad.push(Finding {
                         kind: FindingKind::UnreadableBody,
+                        submitted_review: c.submitted_review,
                         comment_id: c.id,
                         author: c.author.clone(),
                         detail: "malformed escape in body".into(),

@@ -105,6 +105,7 @@ fn forge_with(
                     .collect(),
             )),
             "/repos/test/fixture/issues" => ok(json!([])),
+            p if p.ends_with("/reviews") => ok(json!([])),
             p if p.starts_with("/repos/test/fixture/pulls/") => ok(json!({"mergeable_state": merge_state})),
             p if p.starts_with("/repos/test/fixture/issues/") && p.ends_with("/comments") => {
                 let n: u64 = p
@@ -157,6 +158,65 @@ fn run_review(api: &FakeRoutes, extra: &[&str]) -> Output {
     let mut args = vec!["status", "--root", &r, "--review"];
     args.extend_from_slice(extra);
     stw(Some(&api.url), &args)
+}
+
+#[test]
+fn submitted_review_evidence_is_bound_and_combined_with_comments() {
+    for (mode, expected) in [
+        ("clear", "clear"),
+        ("mismatched", "no-review"),
+        ("dismissed", "no-review"),
+        ("findings", "findings"),
+        ("same-second", "unknown"),
+        ("superseded", "clear"),
+        ("denied", "unknown"),
+    ] {
+        let api = FakeRoutes::start(move |path, _| {
+            if let Some(body) = ci_docs(path) {
+                return (200, vec![], body);
+            }
+            let body = match path {
+                "/repos/test/fixture/pulls" => json!([
+                    {"number": 7, "title": "seven", "head": {"ref": "topic", "sha": HEAD}}
+                ]),
+                "/repos/test/fixture/pulls/7/reviews" => {
+                    if mode == "denied" {
+                        return (403, vec![], "{}".into());
+                    }
+                    json!([{
+                        "id": 31, "user": {"login": "boss", "type": "User"},
+                        "author_association": "OWNER",
+                        "state": if mode == "dismissed" { "DISMISSED" } else { "COMMENTED" },
+                        "commit_id": if mode == "mismatched" { PATCH } else { HEAD },
+                        "submitted_at": "2026-03-01T10:02:00Z",
+                        "body": review(if matches!(mode, "findings" | "same-second" | "superseded") { "FINDINGS" } else { "CLEAR" }, HEAD, PATCH, 7),
+                    }])
+                }
+                "/repos/test/fixture/issues/7/comments"
+                    if matches!(mode, "findings" | "denied" | "same-second" | "superseded") =>
+                {
+                    let clear = review("CLEAR", HEAD, PATCH, 7);
+                    match mode {
+                        "superseded" => json!([owner(2, &clear), owner(3, &clear)]),
+                        "same-second" => json!([owner(2, &clear)]),
+                        _ => json!([owner(1, &clear)]),
+                    }
+                }
+                "/repos/test/fixture/issues/7/comments" | "/repos/test/fixture/issues" => json!([]),
+                _ => json!({"mergeable_state": "clean"}),
+            };
+            (200, vec![], body.to_string())
+        });
+        let output = run_review(&api, &["--json"]);
+        assert_eq!(output.status.code(), Some(0), "{mode}: {}", err(&output));
+        let prs = prs_json(&output);
+        assert_eq!(by_number(&prs, 7)["review"], expected, "{mode}: {prs:?}");
+        if mode == "clear" {
+            let decisive = &by_number(&prs, 7)["review_state"]["decisive"];
+            assert_eq!(decisive["review_id"], 31);
+            assert!(decisive.get("comment_id").is_none());
+        }
+    }
 }
 
 #[test]
@@ -616,15 +676,15 @@ fn the_comment_reads_are_counted_in_the_stats_as_pulls_requests() {
             .unwrap()
     };
     let base = n(&[]);
-    assert_eq!(n(&["--review"]), base + 2, "one request per pull request");
+    assert_eq!(n(&["--review"]), base + 4, "two requests per pull request");
     let v = stw(
         Some(&api.url),
         &["status", "--root", &r, "--review", "--verbose"],
     );
     let t = out(&v);
     assert!(
-        t.contains("    pulls:      5 reqs"),
-        "list + 2 merge states + 2 comment reads: {t}"
+        t.contains("    pulls:      7 reqs"),
+        "list + 2 merge states + 4 evidence reads: {t}"
     );
 }
 
@@ -706,7 +766,7 @@ fn at_most_the_review_limit_of_pull_requests_is_read_and_the_rest_is_not_read() 
         })
         .collect();
     let list = read_reviews(vec![s], &client);
-    assert_eq!(api.hits().len(), REVIEW_LIMIT);
+    assert_eq!(api.hits().len(), 2 * REVIEW_LIMIT);
     let t = tally(&list[0].prs);
     assert_eq!((t.no_review, t.not_read), (REVIEW_LIMIT, 5));
     assert!(list[0].prs[REVIEW_LIMIT - 1].review.is_some());
@@ -778,6 +838,7 @@ fn forge_hints(prs: Vec<HintPr>, answers: Vec<(u64, Answer)>) -> FakeRoutes {
                     .collect(),
             )),
             "/repos/test/fixture/issues" => ok(json!([])),
+            p if p.ends_with("/reviews") => ok(json!([])),
             p if p.starts_with("/repos/test/fixture/pulls/") => {
                 ok(json!({"mergeable_state": "clean"}))
             }
@@ -923,7 +984,9 @@ fn hints_clear_not_ready_and_base_not_default_in_json_text_and_counts() {
                 || h.contains(&format!("/commits/{CI_SHA}/"))
                 || h.contains("/pulls/")
                 || h.contains("/comments?")
-                || h.contains("/issues?"),
+                || h.contains("/reviews?")
+                || h.contains("/issues?")
+                || h.starts_with("POST /graphql "),
             "{h}"
         );
     }
@@ -1035,6 +1098,7 @@ fn forge_rate(
                     (status, headers.clone(), body.clone())
                 }
             }
+            p if p.ends_with("/reviews") => ok(json!([])),
             p if p.starts_with("/repos/test/fixture/pulls/") => {
                 ok(json!({"mergeable_state": "clean"}))
             }
@@ -1113,10 +1177,9 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
         let label = |p: &Value| p["review"].as_str().unwrap().to_string();
         let no_review = prs.iter().filter(|p| label(p) == "no-review").count();
         let unknown: Vec<&Value> = prs.iter().filter(|p| label(p) == "unknown").collect();
-        assert_eq!(
-            no_review,
-            K - 1,
-            "the reads answered before the rate limit keep their state"
+        assert!(
+            no_review < K,
+            "only PRs with both lists read before the limit have a complete result"
         );
         assert_eq!(no_review + unknown.len(), N as usize, "never another state");
         let skipped = unknown
@@ -1168,22 +1231,22 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
             "{h}: {notices}"
         );
         assert!(
-            notices.contains(&format!(
-                "repo: review state not read for {} pull requests (#",
-                h - (K - 1)
-            )),
+            (h - (K - 1)..=h).any(|count| notices.contains(&format!(
+                "repo: review state not read for {count} pull requests (#"
+            ))),
             "{h}: {notices}"
         );
         assert!(
             !notices.contains(SKIP_TEXT),
             "the skipped reads are named once: {notices}"
         );
+        let text = flat(&t);
         assert!(
-            flat(&t).contains(&format!(
-                "\nreviews: {} no-review, {} ?\n",
-                K - 1,
-                N as usize - (K - 1)
-            )),
+            text.contains(&format!("\nreviews: {N} ?\n"))
+                || (1..K).any(|complete| text.contains(&format!(
+                    "\nreviews: {complete} no-review, {} ?\n",
+                    N as usize - complete
+                ))),
             "{t}"
         );
     }

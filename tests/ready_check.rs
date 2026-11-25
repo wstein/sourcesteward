@@ -217,6 +217,7 @@ mod collection {
         fn comments(&self, _: &str, _: u64) -> Result<Read<Comment>, String> {
             self.call("comments")?;
             Ok(observed(vec![Comment {
+                submitted_review: false,
                 id: 1,
                 author: "alice".into(),
                 author_type: "User".into(),
@@ -420,8 +421,10 @@ fn cli_ready_check_reads_only_expected_gets() {
             serde_json::json!({"check_runs":[{"id":1,"name":"ci","status":"completed","conclusion":"success"}]})
         } else if path.ends_with("/statuses") {
             serde_json::json!([])
+        } else if path.ends_with("/pulls/7/reviews") {
+            serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","state":"COMMENTED","commit_id":sha,"submitted_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])
         } else if path.ends_with("/issues/7/comments") {
-            serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])
+            serde_json::json!([])
         } else {
             return (404, vec![], "{}".into());
         };
@@ -444,7 +447,7 @@ fn cli_ready_check_reads_only_expected_gets() {
     let doc: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(doc["ready"], true);
     assert_eq!(doc["conditions"].as_array().unwrap().len(), 7);
-    assert_eq!(api.hits().len(), 5);
+    assert_eq!(api.hits().len(), 6);
 }
 
 #[test]
@@ -541,6 +544,8 @@ fn cli_with_checks(runs: serde_json::Value, statuses: Vec<serde_json::Value>) ->
                 .get(page)
                 .cloned()
                 .unwrap_or_else(|| serde_json::json!([]))
+        } else if path.ends_with("/pulls/7/reviews") {
+            serde_json::json!([])
         } else if path.ends_with("/issues/7/comments") {
             serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])
         } else {
@@ -652,6 +657,8 @@ fn cli_ready_check_stays_strict_a_403_on_check_runs_is_unknown_and_no_actions_ru
         } else if path.ends_with("/actions/runs") {
             serde_json::json!({"total_count":1,"workflow_runs":[{"id":1,"workflow_id":7,"name":"Test","event":"push","status":"completed","conclusion":"success","head_sha":sha,"created_at":"2026-11-17T17:32:44Z","run_attempt":1}]})
         } else if path.ends_with("/statuses") {
+            serde_json::json!([])
+        } else if path.ends_with("/pulls/7/reviews") {
             serde_json::json!([])
         } else if path.ends_with("/issues/7/comments") {
             serde_json::json!([{"id":1,"user":{"login":"alice","type":"User"},"author_association":"OWNER","created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z","body":format!("Review: CLEAR head={} patch-id={} pr=7",sha,"b".repeat(40))}])

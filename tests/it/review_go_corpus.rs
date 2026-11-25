@@ -48,6 +48,7 @@ fn at(min: i64) -> String {
 
 fn comment(id: u64, min: i64, author: &str, body: String) -> ReviewComment {
     ReviewComment {
+        submitted_review: false,
         id,
         author: author.into(),
         created_at: at(min),

@@ -1410,7 +1410,7 @@ struct StatusArgs {
     /// List the linked worktrees of each repository (the main checkout is not listed)
     #[arg(long)]
     worktrees: bool,
-    /// Also read the review state of the open pull requests from their comments (one comment read per pull
+    /// Also read review state from conversation comments and submitted reviews (two bounded lists per pull
     /// request, at most 200 per run; not with --offline)
     #[arg(long, conflicts_with = "offline")]
     review: bool,

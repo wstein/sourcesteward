@@ -114,6 +114,7 @@ impl<T> Read<T> {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Comment {
+    pub submitted_review: bool,
     pub id: u64,
     pub author: String,
     pub author_type: String,
@@ -252,6 +253,7 @@ fn parse_comment(v: &Value, b: &Budget) -> Option<Comment> {
     let (body, body_truncated) = escape_untrusted(v["body"].as_str().unwrap_or(""), b.max_text);
     let (author, author_type) = user(&v["user"]);
     Some(Comment {
+        submitted_review: false,
         id: v["id"].as_u64()?,
         author,
         author_type,

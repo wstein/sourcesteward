@@ -41,6 +41,7 @@ fn run(path: &Path) -> datatest_stable::Result<()> {
         .map(|c| {
             let created = c["created_at"].as_str().unwrap().to_string();
             ReviewComment {
+                submitted_review: false,
                 id: c["id"].as_u64().unwrap(),
                 author: c["author"].as_str().unwrap().to_string(),
                 updated_at: c["updated_at"].as_str().unwrap_or(&created).to_string(),

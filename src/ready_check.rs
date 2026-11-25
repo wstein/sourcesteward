@@ -87,11 +87,14 @@ pub fn evaluate(f: &Facts) -> Vec<Condition> {
         match f.review.as_str() {
             "clear" => (
                 Pass,
-                format!("CLEAR for head {} per comment", short(&f.head)),
+                format!("CLEAR for head {} per review evidence", short(&f.head)),
             ),
             "clear-carried" => (
                 Pass,
-                format!("CLEAR carried over to head {} per comment", short(&f.head)),
+                format!(
+                    "CLEAR carried over to head {} per review evidence",
+                    short(&f.head)
+                ),
             ),
             "findings" => (
                 Fail,
@@ -485,8 +488,7 @@ impl Source for Client {
             .map_err(|e| e.to_string())
     }
     fn comments(&self, r: &str, n: u64) -> Result<Read<Comment>, String> {
-        self.issue_comments(r, n, &Budget::default())
-            .map_err(|e| e.to_string())
+        Ok(crate::status_review::read_evidence(self, r, n))
     }
 }
 fn complete<T>(r: Result<Read<T>, String>) -> Result<Vec<T>, String> {

@@ -12,7 +12,7 @@
 //! Text from the forge (logins, the cut line of a variant) is escaped before it is printed or put into JSON.
 use serde_json::{json, Value};
 
-use crate::github::reads::{escape_untrusted, Budget, Comment, Read};
+use crate::github::reads::{escape_untrusted, Budget, Comment, Observed, Read};
 use crate::github::{Client, OpenPr};
 use crate::output::jopt;
 use crate::repo::{par_map, MAX_PARALLEL};
@@ -173,6 +173,64 @@ pub fn read_reviews(list: Vec<RepoStatus>, gh: &Client) -> Vec<RepoStatus> {
     list
 }
 
+/// Read both sources so a failed or truncated source cannot hide a later verdict.
+pub(crate) fn read_evidence(gh: &Client, slug: &str, number: u64) -> Read<Comment> {
+    let budget = Budget::default();
+    let mut comments = match gh.issue_comments(slug, number, &budget) {
+        Ok(Read::Observed(comments)) if comments.is_complete() => comments,
+        Ok(other) => return other,
+        Err(error) => return Read::Failed(error.to_string()),
+    };
+    if gh.rate_limited() {
+        return Read::Failed("GitHub reviews not read: rate limit reached".into());
+    }
+    let reviews = match gh.pr_reviews(slug, number, &budget) {
+        Ok(Read::Observed(reviews)) => reviews,
+        Ok(other) => return Read::Failed(format!("GitHub reviews not read: {}", other.state())),
+        Err(error) => return Read::Failed(error.to_string()),
+    };
+    comments
+        .items
+        .extend(reviews.items.into_iter().filter_map(|review| {
+            if !matches!(
+                review.state.as_str(),
+                "COMMENTED" | "APPROVED" | "CHANGES_REQUESTED"
+            ) {
+                return None;
+            }
+            let body = review::unescape(&review.body)?;
+            let parsed = review::parse_body(&body, review.body_truncated);
+            // GitHub binds a submission to its commit. Carry-over is attached to its destination.
+            let claimed = match &parsed {
+                review::Parsed::Line(review::Line::Review { head, .. }) => Some(head.as_str()),
+                review::Parsed::Line(review::Line::Carried { to, .. }) => Some(to.as_str()),
+                review::Parsed::Variant(_) => None,
+                review::Parsed::NotReview => return None,
+            };
+            let commit = review.commit_id.as_deref()?;
+            if claimed.is_some_and(|claimed| claimed != commit) {
+                return None;
+            }
+            let submitted_at = review.submitted_at.unwrap_or_default();
+            Some(Comment {
+                submitted_review: true,
+                id: review.id,
+                author: review.author,
+                author_type: review.author_type,
+                association: review.association,
+                created_at: submitted_at.clone(),
+                updated_at: submitted_at,
+                body: review.body,
+                body_truncated: review.body_truncated,
+            })
+        }));
+    Read::Observed(Observed {
+        items: comments.items,
+        pages: comments.pages + reviews.pages,
+        incomplete: reviews.incomplete,
+    })
+}
+
 fn read_one(gh: &Client, j: &Job) -> PrReview {
     // after a rate limit (any repository, any source) no further read starts; reads in flight end on their own
     if gh.rate_limited() {
@@ -185,11 +243,7 @@ fn read_one(gh: &Client, j: &Job) -> PrReview {
             &Read::Failed("the head of the pull request is not a full lower-case commit id".into()),
         );
     }
-    let read = match gh.issue_comments(&j.slug, j.number, &Budget::default()) {
-        Ok(r) => r,
-        Err(e) => Read::Failed(e.to_string()),
-    };
-    evaluate(j.number, &j.head, &read)
+    evaluate(j.number, &j.head, &read_evidence(gh, &j.slug, j.number))
 }
 
 /// The counts of the review states of the pull requests of one repository.
@@ -351,7 +405,12 @@ fn line_text(l: &Line) -> String {
 
 fn evidence_text(e: &Evidence) -> String {
     format!(
-        "comment {} of {} at {}{}: {}",
+        "{} {} of {} at {}{}: {}",
+        if e.submitted_review {
+            "GitHub review"
+        } else {
+            "comment"
+        },
         e.comment_id,
         esc_cut(&e.author, 100),
         esc_cut(&e.created_at, 40),
@@ -383,8 +442,13 @@ pub fn evidence_lines(r: &PrReview) -> Vec<String> {
             format!(": {}", esc_cut(&f.detail, 120))
         };
         v.push(format!(
-            "finding {}: comment {} of {}{detail}",
+            "finding {}: {} {} of {}{detail}",
             f.kind.label(),
+            if f.submitted_review {
+                "GitHub review"
+            } else {
+                "comment"
+            },
             f.comment_id,
             esc_cut(&f.author, 100)
         ));
