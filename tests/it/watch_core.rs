@@ -1368,10 +1368,30 @@ use stw::watch::statedir::{
 use stw::watch::WatchError;
 
 fn tmp() -> tempfile::TempDir {
-    tempfile::Builder::new()
-        .prefix("stw-watch-core-")
-        .tempdir()
-        .unwrap()
+    // Watch state must be outside every Git worktree, including a sandbox's
+    // .git marker at the root of its usual temporary directory.
+    let bases = [std::env::temp_dir(), "/dev/shm".into(), "/var/tmp".into()];
+    for base in bases {
+        let Ok(base) = base.canonicalize() else {
+            continue;
+        };
+        let valid = base.ancestors().all(|dir| {
+            dir.file_name().is_none_or(|name| name != ".stw")
+                && matches!(
+                    std::fs::symlink_metadata(dir.join(".git")),
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound
+                )
+        });
+        if valid {
+            if let Ok(scratch) = tempfile::Builder::new()
+                .prefix("stw-watch-core-")
+                .tempdir_in(base)
+            {
+                return scratch;
+            }
+        }
+    }
+    panic!("watch tests need a writable temporary directory outside .git and .stw");
 }
 
 fn mode(p: &Path) -> u32 {
