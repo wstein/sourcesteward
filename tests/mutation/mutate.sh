@@ -387,6 +387,27 @@ m RS6 'the restored branch has no fallback identity' src/repo/mod.rs \
 m M1 'default manifest directory is not under the data directory' src/tidy_apply.rs \
   'h.join("Library/Application Support/stw/manifests")' 'h.join("Library/stw")' \
   tidy_apply_cli the_manifest_goes_to_the_user_data_directory_by_default
+m WC1 'a slow stream does not double the interval' src/watch/command.rs \
+  '.saturating_mul(2)' '.saturating_mul(1)' \
+  watch_command a_low_rate_limit_doubles_the_stream_interval
+m WC2 'until-event never matches a kind' src/watch/command.rs \
+  'kind == ev.kind().as_str()' 'kind == "never"' \
+  watch_command until_event_exits_when_the_kind_is_printed
+m WC3 'watch.toml does not read ignore authors' src/watch/watch_toml.rs \
+  '("ignore", "authors")' '("ignore", "author")' \
+  watch_command watch_toml_names_repos_interval_and_ignores
+m WC4 'restack argv drops the updateRefs setting' src/watch/cycle.rs \
+  '"rebase.updateRefs=false".into(),' '"rebase.updateRefs=true".into(),' \
+  watch_command observations_emit_checks_merge_and_restack_and_the_store_survives
+m WC5 'a fork child still gets restack argv' src/watch/cycle.rs \
+  'if child.fork {' 'if false && child.fork {' \
+  watch_command restack_argv_is_null_without_a_merge_commit_and_on_a_fork
+m WC6 'failing names are not capped at 20' src/watch/cycle.rs \
+  'names.truncate(20);' 'names.truncate(21);' \
+  watch_command a_red_class_is_announced_on_the_second_sighting_with_twenty_names
+m WC7 'pending timeout fires when the limit is exactly reached' src/watch/cycle.rs \
+  'now_secs.saturating_sub(since) <=' 'now_secs.saturating_sub(since) <' \
+  watch_command a_pending_class_times_out_once_per_period
 m N2 'a process is started in the apply module' src/tidy_apply.rs \
   'pub fn new_run_id()' 'fn spawn() { let _ = std::process::Command::new("git"); }
 pub fn new_run_id()' \
