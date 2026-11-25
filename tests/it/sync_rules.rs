@@ -696,7 +696,14 @@ fn the_rules_submodule_is_only_touched_by_rules_apply() {
     let o = run(&["status", "--root", rs, "--offline"]);
     assert!(!String::from_utf8_lossy(&o.stdout).contains("  .agents"));
     // (2) --rules updates it once, with the preview
-    let o = run(&["sync", "--rules", "--root", rs]);
+    let o = run(&[
+        "sync",
+        "--rules",
+        "--root",
+        rs,
+        "--owner-identity",
+        "T <t@example.com>",
+    ]);
     let text = String::from_utf8_lossy(&o.stdout).into_owned();
     assert_eq!(o.status.code(), Some(0), "{text}");
     assert_eq!(tip(), o1);
@@ -736,7 +743,14 @@ fn plan_and_dry_run_with_rules_fetch_the_tracking_ref_and_move_nothing_online() 
         &["--plan"][..],
         &["--plan", "--dry-run"][..],
     ] {
-        let mut args = vec!["sync", "--rules", "--root", rs];
+        let mut args = vec![
+            "sync",
+            "--rules",
+            "--root",
+            rs,
+            "--owner-identity",
+            "T <t@example.com>",
+        ];
         args.extend_from_slice(flags);
         let text = String::from_utf8_lossy(&run(&args).stdout).into_owned();
         assert!(text.contains("dry run (--plan)"), "{flags:?}: {text}");
@@ -757,7 +771,15 @@ fn plan_and_dry_run_with_rules_fetch_the_tracking_ref_and_move_nothing_online() 
         .detach();
     assert_eq!(fetched, o2, "the plan fetched the tracking ref");
     // without the flag the same checkout is fetched and moved to origin's tip
-    let o = run(&["sync", "--rules", "--root", rs, "--json"]);
+    let o = run(&[
+        "sync",
+        "--rules",
+        "--root",
+        rs,
+        "--owner-identity",
+        "T <t@example.com>",
+        "--json",
+    ]);
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
     assert_eq!(v["agent_rules"]["fetch"], "ok", "{v}");
     assert_eq!(gix::open(&sub).unwrap().head_id().unwrap(), o2);

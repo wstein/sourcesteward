@@ -21,6 +21,7 @@ fn run(fx: &Fx, args: &[&str]) -> Run {
     let home = tempfile::tempdir().unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("PATH", "/nonexistent")
         .env("HOME", home.path())
         .current_dir(&fx.path)

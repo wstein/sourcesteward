@@ -1025,6 +1025,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 fn stw(api: &str, cwd: &std::path::Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN)

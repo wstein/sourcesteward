@@ -18,6 +18,7 @@ fn stw(cwd: &Path, home: &Path, args: &[&str]) -> Output {
     assert!(cwd.is_absolute() && home.is_absolute(), "unconfined");
     Command::new(env!("CARGO_BIN_EXE_stw"))
         .env_clear()
+        .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home)
         .current_dir(cwd)
