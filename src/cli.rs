@@ -697,19 +697,21 @@ fn run_prove(a: ProveArgs) -> Result<u8> {
 }
 
 const ABSORB_HELP: &str = "\
-New in stw (no Go counterpart); specification and limits: README.md, section `stw absorb plan`. Computes the PLAN of
-folding the staged changes into the unpushed commits that own the changed lines (the method of git-absorb: the newest
-commit of the stack whose changes do not commute with the hunk). It writes nothing: no add, commit, rebase, ref, file or
-index refresh, no network, no hook; a partial clone is refused (no lazy fetch). Git only: a jj or GitButler checkout is
-refused. The stack: the first-parent commits of HEAD that no remote-tracking branch (and, without --base, no other
-local branch) contains, by the author of `user.name` and `user.email`, up to a merge commit. A hunk that cannot be
-placed is skipped with its reason (no-candidate, ambiguous, conflict, outside-range, published, foreign). The only git
-program that runs is `git blame` for the removed lines (read-only, GIT_NO_LAZY_FETCH=1).
+New in stw (no Go counterpart); specification and limits: README.md, section `stw absorb plan`. Without --apply,
+computes the PLAN of folding the staged changes into the unpushed commits that own the changed lines (the method of
+git-absorb: the newest commit of the stack whose changes do not commute with the hunk) and writes nothing. --apply
+folds that plan, and only when --plan-sum is the plan's checksum: an op log backup ref is written first, then the
+fixup commits, then `git rebase --autosquash`. The way back is `stw oplog undo` (named in the output). Git only: a jj
+or GitButler checkout is refused. The stack: the first-parent commits of HEAD that no remote-tracking branch (and,
+without --base, no other local branch) contains, by the author of `user.name` and `user.email`, up to a merge commit.
+A hunk that cannot be placed is skipped with its reason (no-candidate, ambiguous, conflict, outside-range, published,
+foreign). The plan's only git program is `git blame` for the removed lines (read-only, GIT_NO_LAZY_FETCH=1).
 
 Exit codes:
-  0  a plan was produced (also when every hunk is skipped)
-  1  refused with a typed error code (nothing-staged, not-owned, published, unmerged-index, environment-override,
-     partial-clone-unsupported, blame-failed, unsupported-backend, ...); with --json the error is the document
+  0  a plan was produced (also when every hunk is skipped), or --apply folded the plan
+  1  refused with a typed error code (nothing-staged, plan-sum-mismatch, nothing-to-apply, not-owned, published,
+     unmerged-index, environment-override, partial-clone-unsupported, blame-failed, unsupported-backend, ...);
+     with --json the error is the document
   2  usage error";
 
 #[derive(Args)]
@@ -720,9 +722,15 @@ struct AbsorbArgs {
     /// Print the human list (the default)
     #[arg(long)]
     human: bool,
-    /// The plan is the only mode of this version; accepted so that a later `--apply --plan-sum SUM` reads the same way
+    /// The plan is the default; accepted so that `--apply --plan-sum SUM` reads the same way
     #[arg(long)]
     plan: bool,
+    /// Fold the staged changes of the plan. Requires `--plan-sum`. Writes a backup ref first.
+    #[arg(long)]
+    apply: bool,
+    /// SHA-256 `plan_sum` of the plan this fold must match
+    #[arg(long, value_name = "SUM", requires = "apply")]
+    plan_sum: Option<String>,
     /// The stack is REV..HEAD (REV an ancestor of HEAD); the stack limit does not apply [default: the commits no remote-tracking branch contains]
     #[arg(long, value_name = "REV")]
     base: Option<String>,
@@ -761,6 +769,27 @@ fn run_absorb(a: AbsorbArgs) -> Result<u8> {
     let dir = std::fs::canonicalize(&r.path).unwrap_or(r.path);
     let cwd = std::env::current_dir().unwrap_or_default();
     let cwd = std::fs::canonicalize(&cwd).unwrap_or(cwd);
+    if a.apply {
+        let Some(sum) = a.plan_sum.as_deref() else {
+            return refused(absorb::Fail {
+                code: "plan-sum-required",
+                message:
+                    "--apply requires --plan-sum of the plan just printed; nothing was written"
+                        .into(),
+            });
+        };
+        return match crate::absorb_apply::apply(&dir, &cwd, git_runner::shared(), &opts, sum) {
+            Ok(done) => {
+                if a.json {
+                    print_json(&done.to_json());
+                } else {
+                    print!("{}", done.render_human());
+                }
+                Ok(exit::OK)
+            }
+            Err(f) => refused(f),
+        };
+    }
     match absorb::plan(&dir, &cwd, git_runner::shared(), &opts) {
         Ok(plan) => {
             if a.json {

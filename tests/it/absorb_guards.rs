@@ -68,7 +68,6 @@ fn usage_errors_exit_2() {
     fx.base10(false);
     for args in [
         vec!["--nope"],
-        vec!["--apply"],
         vec!["--max-stack", "0"],
         vec!["--max-stack", "x"],
         vec!["--base"],

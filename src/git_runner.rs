@@ -318,6 +318,12 @@ pub enum Op {
         upstream: RemoteRef,
         autostash: bool,
     },
+    /// `git rebase --autosquash` of the checked-out branch onto `onto` (`None`: `--root`).
+    /// `stw absorb --apply` after the fixup commits are on the branch. `GIT_SEQUENCE_EDITOR=true`
+    /// accepts the autosquash todo. No hooks (`core.hooksPath=/dev/null`, as every runner call).
+    AbsorbAutosquash {
+        onto: Option<Hex40>,
+    },
     /// `git blame --porcelain -L first,last <rev> -- <path>`: which commits last changed the lines `first` to `last` of
     /// `path` at `rev` (`stw absorb`, the evidence for a removed hunk). Read-only, no network: `GIT_NO_LAZY_FETCH=1`
     /// keeps a partial clone from fetching a missing object (the call then fails).
@@ -517,7 +523,7 @@ impl Op {
             // `git diff` and `git patch-id --stable` (2.0) with options that exist since 2.30 or are ignored
             Op::DiffRange { .. } | Op::PatchIdStable => Version(2, 30, 0),
             // `--no-update-refs` and `rebase.updateRefs` exist since 2.38
-            Op::SyncRebase { .. } => Version(2, 38, 0),
+            Op::SyncRebase { .. } | Op::AbsorbAutosquash { .. } => Version(2, 38, 0),
             Op::SubmoduleSync { .. }
             | Op::SubmoduleUpdate { .. }
             | Op::CheckAttrGitmodules { .. }
@@ -656,6 +662,19 @@ impl Op {
                 a.push(stash_flag(*autostash).to_string());
                 a.push("--fork-point".to_string());
                 a.push(upstream.as_str().to_string());
+                a
+            }
+            Op::AbsorbAutosquash { onto } => {
+                let mut a = v(&[
+                    "rebase",
+                    "--autosquash",
+                    "--no-update-refs",
+                    "--no-rebase-merges",
+                ]);
+                match onto {
+                    Some(id) => a.push(id.as_str().to_string()),
+                    None => a.push("--root".to_string()),
+                }
                 a
             }
             Op::RangeDiff {
@@ -1283,6 +1302,18 @@ impl Runner {
         if matches!(op, Op::BlameLines { .. } | Op::Workspace(_)) {
             // a partial clone must not fetch a missing object: the call fails instead
             set("GIT_NO_LAZY_FETCH", "1".into());
+        }
+        if matches!(op, Op::AbsorbAutosquash { .. }) {
+            // accept the todo list autosquash already rewrote; do not open an editor
+            set("GIT_SEQUENCE_EDITOR", "true".into());
+            // the rebase writes commits, so it needs the caller's Git identity files. The other
+            // operations do not, and their environment stays without these variables.
+            for key in ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"] {
+                if let Some((_, value)) = self.env.iter().find(|(name, _)| name == OsStr::new(key))
+                {
+                    set(key, value.clone());
+                }
+            }
         }
         if matches!(op, Op::RangeDiff { .. }) {
             // no `.gitattributes` of the worktree, no replace refs: nothing may hide or swap a commit

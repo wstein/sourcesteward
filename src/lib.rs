@@ -1,5 +1,6 @@
 //! stw: everyday git and GitHub workflows for agents, on gitoxide, without `git` or `gh` binaries.
 pub mod absorb;
+pub mod absorb_apply;
 pub mod absorb_commute;
 pub mod add;
 pub mod auth;

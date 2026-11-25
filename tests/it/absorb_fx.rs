@@ -289,6 +289,20 @@ impl Fx {
         self.stw_in(&self.r, args, &[])
     }
 
+    /// `stw` with the given arguments (not prefixed with `absorb`).
+    pub fn stw(&self, args: &[&str]) -> Out {
+        let o = self
+            .base_command(Path::new(env!("CARGO_BIN_EXE_stw")), &self.r)
+            .args(args)
+            .output()
+            .unwrap();
+        Out {
+            rc: o.status.code().unwrap_or(-1),
+            out: String::from_utf8_lossy(&o.stdout).into_owned(),
+            err: String::from_utf8_lossy(&o.stderr).into_owned(),
+        }
+    }
+
     pub fn run_env(&self, args: &[&str], env: &[(&str, &str)]) -> Out {
         self.stw_in(&self.r, args, env)
     }

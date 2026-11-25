@@ -42,7 +42,7 @@ stw workspace resume     CHECKPOINT DESTINATION [--repo DIR] [--json]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
-stw absorb    [--plan] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
+stw absorb    [--plan] [--apply --plan-sum SUM] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
 stw ready-check NUMBER [--repo OWNER/NAME] [--human | --json]
 stw lint pr   PR [PATH | --repo OWNER/NAME] [--owner-identity "Name <email>"]... [--human | --json]
 stw lint review FILE [--base REV --head REV] [--pr N|none] [--checkout PATH] [--human | --json]
@@ -59,7 +59,7 @@ stw lint pr-text FILE [--ready] [--human | --json]
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
-| `absorb` | new, no Go counterpart: the PLAN of folding the staged changes into the unpushed commits that own the changed lines (which commit takes each hunk, the `fixup!` commits, how many commits get new SHAs), see "`stw absorb plan`". Nothing is folded yet: `--apply` does not exist | nothing (no ref, no file, no object, no index refresh) |
+| `absorb` | new, no Go counterpart: the PLAN of folding the staged changes into the unpushed commits that own the changed lines, see "`stw absorb plan`". `--apply --plan-sum SUM` folds that plan after an op log backup; `stw oplog undo` is the way back | without `--apply`: nothing. With it: fixup objects, `refs/stw/backup/<run>/1`, the branch, the op log |
 | `ready-check` | the seven read-only conditions for a pull request | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
 | `lint review`, `lint pr-text` | new, no Go counterpart: the text of a review comment or of a PR text from a file against the same rules (and the patch-id of `BASE...HEAD` against a local repository), see "Text files: `lint review`, `lint pr-text`" | nothing |
@@ -1243,19 +1243,23 @@ resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]
 **Purpose.** After review feedback or a late fix, the staged hunks belong back into the commits that introduced the lines.
 `stw absorb` computes the PLAN of that: for every staged hunk the commit that owns it (or why none does), the `fixup!`
 commits that would fold the hunks in (one per target commit, hunks named) and how many commits would get new SHAs. It folds
-nothing: no add, commit, rebase, ref, file, object or index refresh, no network, no hook, no editor. `--apply` (the
-fold, with this plan's checksum, an op log snapshot first and `stw oplog undo` as the way back) is a later step and does not
-exist: the flag is an unknown flag (exit 2). New behavior without a Go counterpart; the specification, the 64 counter-proofs
+nothing: no add, commit, rebase, ref, file, object or index refresh, no network, no hook, no editor. `--apply --plan-sum SUM`
+folds that plan: the checksum is recomputed and a mismatch writes nothing (exit 1, `plan-sum-mismatch`). A match copies
+HEAD to `refs/stw/backup/<run>/1` and appends that update to the op log before any fixup object, writes one fixup commit
+per target with gix, then runs `git rebase --autosquash` (`GIT_SEQUENCE_EDITOR=true`, hooks off, as every runner call).
+The output names `stw oplog undo <ref> --to <old> --expect <new> --keep --yes`. `--apply` without `--plan-sum` is
+`plan-sum-required` (exit 1), not an unknown flag. New behavior without a Go counterpart; the specification, the 64 counter-proofs
 of the Python spike and the comparison with git-absorb are in `spikes/stw/absorb/README.md` (continuation of Spec 018,
 "Fix up"); decisions D-20261119-07 to D-20261119-11 and D-20261119-12 to D-20261119-20 (`dayboard/DECISIONS.md`): git-absorb is parked (-12); the later apply is native in Rust, fixups written with gix, rewrite by `git rebase --autosquash` with `GIT_SEQUENCE_EDITOR=true`, an op log snapshot first, git-absorb is never called, the BSD-3 notice stays (-13); no flag is the read-only plan, writing only with `--apply` and the plan checksum (Q1, -14); nothing staged is exit 1 `nothing-staged` (Q2, -15); an ambiguous hunk is skipped, `--ambiguous-newest` takes the newest (Q4, -16); one fixup per target commit (Q8, -17); a partial clone with missing objects is `partial-clone-unsupported`, no lazy fetch (Q11, -18); Q3, Q5, Q6, Q7, Q9, Q10, Q12 and Q13 follow the recommendations of the spike README (-19); order: live acceptance of the spike first, this read-only port in parallel, the apply only after the owner accepted the spike and the answers (-20).
 
 ```
-stw absorb [--plan] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
+stw absorb [--plan] [--apply --plan-sum SUM] [--base REV] [--max-stack N] [--ambiguous-newest] [--human | --json] [--root PATH] [--repo NAME]
 ```
 
 | Flag | Meaning |
 | --- | --- |
-| (none), `--plan`, `--human` | the plan as text, one line per fact (the default); `--plan` is accepted so that a later `--apply --plan-sum SUM` reads the same way |
+| (none), `--plan`, `--human` | the plan as text, one line per fact (the default); `--plan` is accepted next to `--apply` |
+| `--apply --plan-sum SUM` | fold the plan whose `plan_sum` is SUM. A mismatch writes nothing. The output names the backup ref and `stw oplog undo` |
 | `--json` | the plan as one JSON document (not with `--human`) |
 | `--base REV` | the stack is `REV..HEAD`; REV must be an ancestor of HEAD; the stack limit does not apply |
 | `--max-stack N` | at most N commits in the stack, default 10 (the default of git-absorb; its `absorb.maxStack` is not read) |
@@ -1299,7 +1303,7 @@ command. The same state gives the same bytes (no time, no random, `LC_ALL=C` for
 
 **Exit codes and error codes.** 0: a plan was produced, also when every hunk is skipped. 1: a refusal with a typed code (on stderr
 as `stw absorb: <code>: <message>`; with `--json` also the document `{"schema_version":1,"command":"absorb","error":{"code","message"}}`
-on stdout). 2: usage error (unknown flag, `--apply`, `--max-stack 0`, no repository).
+on stdout). 2: usage error (unknown flag, `--plan-sum` without `--apply`, `--max-stack 0`, no repository). `--apply` without `--plan-sum` is exit 1 `plan-sum-required`.
 
 | Code | Meaning |
 | --- | --- |

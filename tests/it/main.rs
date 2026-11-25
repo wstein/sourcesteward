@@ -5,6 +5,7 @@
 #[path = "../common/mod.rs"]
 mod common;
 
+mod absorb_apply;
 mod absorb_fx;
 mod absorb_guards;
 mod absorb_oracle;
