@@ -90,3 +90,5 @@ mod tidy_squash_plan;
 mod watch_core;
 mod watch_scenarios;
 mod worktrees;
+
+mod workspace;

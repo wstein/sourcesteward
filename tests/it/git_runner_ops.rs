@@ -331,6 +331,10 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
             Version(2, 30, 0),
         ),
         (Op::PatchIdStable, Version(2, 30, 0)),
+        (
+            Op::Workspace(stw::git_runner::WorkspaceOp::IndexEntries),
+            Version(2, 46, 0),
+        ),
         // `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch missing objects of a partial clone
         (
             Op::BlameLines {
@@ -352,7 +356,8 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
     ];
     // no wildcard: a new `Op` does not compile until it is listed above
     let listed = |op: &Op| match op {
-        Op::FetchOrigin
+        Op::Workspace(_)
+        | Op::FetchOrigin
         | Op::FetchOriginPrune { .. }
         | Op::FetchOriginNoPruneTags
         | Op::FetchPullHead { .. }

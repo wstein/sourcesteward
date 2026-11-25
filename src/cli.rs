@@ -84,6 +84,11 @@ enum Command {
         #[command(subcommand)]
         command: OplogCommand,
     },
+    /// Save and resume a local task checkpoint
+    Workspace {
+        #[command(subcommand)]
+        command: crate::workspace::WorkspaceCommand,
+    },
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Lint {
@@ -1897,6 +1902,7 @@ fn git_command_label(command: &Command) -> &'static str {
         Command::Status(a) if a.fetch => "status --fetch",
         Command::Status(_) => "status",
         Command::Add(_) => "add",
+        Command::Workspace { .. } => "workspace",
         Command::Sync(SyncArgs {
             sub: Some(SyncCommand::Restore(_)),
             ..
@@ -1996,6 +2002,7 @@ fn run(command: Command) -> Result<u8> {
             Ok(exit::OK)
         }
         Command::Add(a) => run_add(a),
+        Command::Workspace { command } => crate::workspace::run(command),
         Command::Sync(SyncArgs {
             sub: Some(SyncCommand::Restore(r)),
             common,

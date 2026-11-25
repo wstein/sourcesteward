@@ -12,6 +12,7 @@ name = "stw"
 path = "src/main.rs"
 
 [dependencies]
+tempfile = "3"
 # derive only; no color, no env/unicode/wrap_help extras (binary size)
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
 # Pinned exactly: gix has no API stability promise before 1.0.
@@ -43,7 +44,6 @@ lto = "thin"
 strip = true
 
 [dev-dependencies]
-tempfile = "3"
 # Exact pins; dev-only; normal graph unchanged.
 proptest = "=1.12.0"
 insta = { version = "=1.49.0", features = ["filters"] }

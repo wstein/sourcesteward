@@ -6,7 +6,7 @@ Everyday git and GitHub workflows for agents and people, in one binary. Written 
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
 nowhere else): today for the fetch of `sync` with ssh and local-path remotes and for `sync restore` (`git reset --keep`,
-`git update-ref`). The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
+`git update-ref`), and for workspace checkpoint and resume. The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
 (and the repository's own config cannot block them). `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
@@ -33,6 +33,9 @@ stw sync      [--plan | --dry-run] [--prune | --no-prune] [--submodules] [--json
               [--rules] [--rules-path PATH]
 stw sync restore [PATH] [--run ID] [--json] [--root PATH]
 stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
+stw workspace checkpoint --task NAME [--include PATH]... [--plan] [--repo DIR] [--json]
+stw workspace inspect    --task NAME [--repo DIR] [--json]
+stw workspace resume     CHECKPOINT DESTINATION [--repo DIR] [--json]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
 stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json] [--root PATH] [--repo NAME]
@@ -65,6 +68,32 @@ nothing changed) when a tracked local change overlaps a file the update touches,
 or when a merge, rebase or similar operation is running; a diverged branch is reported (`skip`) and left alone. Local
 changes elsewhere are kept. `--rebase` and `--merge` (exclusive) handle a diverged branch with the installed `git`,
 `--autostash` and `--no-autostash` (exclusive) choose the stash, see "`sync --rebase` and `--merge`".
+
+### Workspace checkpoints
+
+Use `stw workspace checkpoint --task NAME --plan --json` to inspect the selection,
+then omit `--plan` to save it. Use `--include PATH` for each explicitly selected
+non-ignored untracked file. Paths are relative to the worktree root. The
+checkpoint records the source base, staged index contents, and working-tree
+contents separately. Git publishes it under `refs/stw/tasks/NAME` only if the
+ref still matches the value observed at the start. Earlier checkpoints remain
+reachable through the task history. Source branch, index, and files are left as
+they were. If the command stops around publication, `workspace inspect` reports
+the checkpoint currently selected by the task ref.
+
+`workspace resume CHECKPOINT DESTINATION` creates a fresh detached linked worktree
+at the recorded base. It restores the index and worktree separately, so selected
+untracked files remain untracked. Choose a fresh destination with an existing
+parent. A failed or interrupted restore leaves a sibling
+`DESTINATION.stw-handoff-incomplete` marker. Use a fresh destination to retry.
+
+This initial implementation uses the local Git runner (Git 2.46 or newer and a
+configured Git identity for checkpoint commits). It supports SHA-1 repositories
+with full worktrees and a regular index. Sparse checkouts, submodules, Git
+operations in progress, worktree attributes, and special index flags are refused.
+Keep the source idle during capture. HEAD or index changes detected before
+publication cause a refusal. Checkpoints survive loss of a worktree while their
+Git objects remain available. Recovery after VM loss needs independent storage.
 
 ### `sync --rebase` and `--merge`
 
@@ -1023,6 +1052,7 @@ version text that cannot be read, is refused (fail closed, `git_error: version`,
 | `lint review` with `--base` and `--head` | 2.30 | `git diff` and `git patch-id --stable`, the fail-closed value; without those two flags no Git call | `tests/it/lint_files.rs` |
 | `status --fetch`, `sync` (default), `sync --prune`, `--no-prune` | 2.30 | `fetch --prune --no-prune-tags` (2.17); 2.30 is the fail-closed value, formally 2.17 | 2.17.0 |
 | `sync --submodules`, `sync restore`, `add` | 2.36 | `-c core.fsmonitor=false` is a boolean only since 2.36 (before, the value names a hook command); these ops read the index | 2.36.0 (config/core) |
+| `workspace` | 2.46 | `GIT_NO_LAZY_FETCH` prevents local checkpoint and resume from fetching missing objects | 2.46.0 |
 | `absorb` | 2.46 | `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch the missing objects of a partial clone; the one call is `git blame` | 2.46.0 (backends.md of the Go repository) |
 | `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
 

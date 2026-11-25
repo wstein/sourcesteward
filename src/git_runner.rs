@@ -215,28 +215,37 @@ const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 /// `add::RepoName`), never free text.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Op {
+    Workspace(WorkspaceOp),
     /// `git fetch origin` for an ssh or local-path remote (no tags, no submodules).
     FetchOrigin,
     /// `FetchOrigin` with an explicit prune choice (`stw sync --prune` / `--no-prune`): `prune: true` adds `--prune`
     /// and `--no-prune-tags` (a tag is never pruned, whatever `fetch.pruneTags` says), `prune: false` adds
     /// `--no-prune` (it wins over `fetch.prune`). The caller has checked that every configured fetch refspec writes
     /// below `refs/remotes/origin/`. Same transports as `FetchOrigin`.
-    FetchOriginPrune { prune: bool },
+    FetchOriginPrune {
+        prune: bool,
+    },
     /// `FetchOrigin` for `stw sync --plan` without a prune flag: `fetch.prune` decides as for a run, but
     /// `--no-prune-tags` keeps `fetch.pruneTags` / `remote.origin.pruneTags` from deleting a local tag (a plan
     /// must not delete one). Same transports as `FetchOrigin`.
     FetchOriginNoPruneTags,
     /// `git submodule sync -- <path>` in the superproject: rewrites the submodule's `remote.origin.url` and the
     /// superproject's `submodule.<name>.url` from `.gitmodules`. Local, no network (`stw sync --submodules`).
-    SubmoduleSync { path: crate::add::SubPath },
+    SubmoduleSync {
+        path: crate::add::SubPath,
+    },
     /// `git submodule update --no-fetch --checkout -- <path>` in the superproject: the initialized submodule goes to
     /// the commit the superproject records. No fetch, no init, no clone, no recursion; `--checkout` wins over a
     /// configured `submodule.<name>.update`. The submodule's own config is checked like the superproject's, and
     /// refused when it names a `filter.*` driver (a checkout would start it).
-    SubmoduleUpdate { path: crate::add::SubPath },
+    SubmoduleUpdate {
+        path: crate::add::SubPath,
+    },
     /// `git check-attr filter diff merge -- .gitmodules` (`cached`: from the index only): what git itself would
     /// apply to `.gitmodules` when `stw add` commits it. Prints one `path: attribute: value` line per attribute.
-    CheckAttrGitmodules { cached: bool },
+    CheckAttrGitmodules {
+        cached: bool,
+    },
     /// `git reset --hard HEAD` in a fresh clone that was fetched without a work tree (`stw add`). Runs
     /// with `core.attributesFile=/dev/null`; the caller has verified that no attribute file of the tree
     /// sets a filter.
@@ -247,7 +256,9 @@ pub enum Op {
         path: crate::add::SubPath,
     },
     /// `git submodule absorbgitdirs -- <path>`: the clone's git dir moves to `.git/modules/<path>`.
-    AbsorbGitDirs { path: crate::add::SubPath },
+    AbsorbGitDirs {
+        path: crate::add::SubPath,
+    },
     /// The one commit of `stw add`: `commit -m "add <name> submodule" -- .gitmodules <path>`.
     CommitSubmodule {
         name: crate::add::RepoName,
@@ -263,13 +274,18 @@ pub enum Op {
     /// `git diff BASE...HEAD`: the text `stw lint review` feeds to `PatchIdStable`. Local, read-only. Pins what
     /// reshapes a diff (renames on, context 3, no prefix options, no external diff, no textconv); `.gitattributes`
     /// and the replace refs are as `git diff` of the user sees them, except that replace refs are off.
-    DiffRange { base: Hex40, head: Hex40 },
+    DiffRange {
+        base: Hex40,
+        head: Hex40,
+    },
     /// `git patch-id --stable`, reading the diff on stdin (`Runner::run_with_stdin`): the first field of the first
     /// output line is the patch-id of the diff.
     PatchIdStable,
     /// Fetch `+refs/pull/<pr>/head` of `origin` into `refs/stw/carry-over/pr-<pr>`: objects and that private
     /// ref only (no tags, no FETCH_HEAD, no configured refmap). For an ssh or local-path remote, as `FetchOrigin`.
-    FetchPullHead { pr: u64 },
+    FetchPullHead {
+        pr: u64,
+    },
     /// `git update-ref --no-deref refs/heads/<name> <new> <expected>`: move a branch that is checked out nowhere, only
     /// while it still points at `expected` (compare and swap; `stw sync restore`). Never forced.
     UpdateBranchCas {
@@ -281,13 +297,18 @@ pub enum Op {
     /// `git reset --keep <target> --`: move the checked-out branch and its worktree to `target`; refuses when a local
     /// change would be lost (`stw sync restore`, after the caller found the tracked tree clean). The repository's own
     /// config must not name a `filter.*` driver (the checkout would start it).
-    ResetKeep { target: Hex40 },
+    ResetKeep {
+        target: Hex40,
+    },
     /// `git merge --no-edit --ff --no-verify-signatures [--autostash|--no-autostash] <target>`: merge the fetched upstream tip into the
     /// checked-out branch of a diverged branch (`stw sync --merge`). `target` is the commit the checks ran on, never a
     /// ref name. The explicit stash flag wins over `merge.autoStash`. Needs the same config guards as `ResetKeep`
     /// (a checkout runs filters) plus no `merge.<name>.driver`. No hook runs (`core.hooksPath=/dev/null`), no editor.
     /// `--no-verify-signatures` keeps `merge.verifySignatures` from starting the configured `gpg.program`.
-    SyncMerge { target: Hex40, autostash: bool },
+    SyncMerge {
+        target: Hex40,
+        autostash: bool,
+    },
     /// `git rebase --no-update-refs --no-rebase-merges [--autostash|--no-autostash] --fork-point <upstream>`: rebase the local commits of
     /// the checked-out branch onto its upstream (`stw sync --rebase`). The explicit stash flag wins over
     /// `rebase.autoStash`; `--no-update-refs` keeps other branches of a stack where they are; `--no-rebase-merges` wins
@@ -306,6 +327,119 @@ pub enum Op {
         first: u32,
         last: u32,
     },
+}
+
+/// Local Git plumbing for workspace checkpoints. Alternate indexes are owned by STW.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum WorkspaceOp {
+    IndexEntries,
+    Untracked {
+        ignored: bool,
+    },
+    TreeEntries(Hex40),
+    WriteTree(PathBuf),
+    Capture {
+        index: PathBuf,
+        paths: Vec<String>,
+    },
+    CommitTree {
+        tree: Hex40,
+        parents: Vec<Hex40>,
+    },
+    ReadCommit(Hex40),
+    Publish {
+        task: String,
+        new: Hex40,
+        expected: Option<Hex40>,
+    },
+    AddWorktree {
+        path: String,
+        base: Hex40,
+    },
+    Materialize {
+        index: PathBuf,
+        checkpoint: Hex40,
+    },
+    RestoreIndex(Hex40),
+}
+
+impl WorkspaceOp {
+    fn args(&self) -> Vec<String> {
+        let v = |words: &[&str]| {
+            words
+                .iter()
+                .map(|word| (*word).to_owned())
+                .collect::<Vec<_>>()
+        };
+        match self {
+            Self::IndexEntries => v(&["ls-files", "--stage", "-z"]),
+            Self::Untracked { ignored } => {
+                let mut args = v(&["ls-files", "--others", "--exclude-standard", "-z"]);
+                if *ignored {
+                    args.push("--ignored".into());
+                }
+                args
+            }
+            Self::TreeEntries(id) => v(&["ls-tree", "-r", "-z", id.as_str()]),
+            Self::WriteTree(_) => v(&["write-tree"]),
+            Self::Capture { paths, .. } if paths.is_empty() => v(&["add", "-u", "--", "."]),
+            Self::Capture { paths, .. } => {
+                let mut args = v(&["add", "--"]);
+                args.extend(paths.iter().cloned());
+                args
+            }
+            Self::CommitTree { tree, parents } => {
+                let mut args = v(&["commit-tree", tree.as_str(), "-F", "-"]);
+                for parent in parents {
+                    args.extend(v(&["-p", parent.as_str()]));
+                }
+                args
+            }
+            Self::ReadCommit(id) => v(&["cat-file", "commit", id.as_str()]),
+            Self::Publish {
+                task,
+                new,
+                expected,
+            } => v(&[
+                "update-ref",
+                "--no-deref",
+                &format!("refs/stw/tasks/{task}"),
+                new.as_str(),
+                expected
+                    .as_ref()
+                    .map_or("0000000000000000000000000000000000000000", Hex40::as_str),
+            ]),
+            Self::AddWorktree { path, base } => v(&[
+                "worktree",
+                "add",
+                "--detach",
+                "--no-checkout",
+                "--",
+                path,
+                base.as_str(),
+            ]),
+            Self::Materialize { checkpoint, .. } => {
+                v(&["read-tree", "--reset", "-u", checkpoint.as_str()])
+            }
+            Self::RestoreIndex(id) => v(&["read-tree", id.as_str()]),
+        }
+    }
+
+    fn index(&self) -> Option<&Path> {
+        match self {
+            Self::WriteTree(index)
+            | Self::Capture { index, .. }
+            | Self::Materialize { index, .. } => Some(index),
+            _ => None,
+        }
+    }
+}
+
+pub(crate) fn valid_task_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes.next().is_some_and(|b| b.is_ascii_alphanumeric())
+        && bytes.all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+        && name.len() <= 100
 }
 
 fn stash_flag(autostash: bool) -> &'static str {
@@ -350,13 +484,16 @@ impl Op {
             | Op::FetchPullHead { .. }
             | Op::UpdateBranchCas { .. } => Version(2, 30, 0),
             // `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch missing objects of a partial clone
-            Op::BlameLines { .. } => Version(2, 46, 0),
+            Op::BlameLines { .. } | Op::Workspace(_) => Version(2, 46, 0),
         }
     }
 
     /// A variable part out of range (a pull request number of 0).
     fn validate(&self) -> std::result::Result<(), GitError> {
         match self {
+            Op::Workspace(WorkspaceOp::Publish { task, .. }) if !valid_task_name(task) => {
+                Err(GitError::Argument("invalid workspace task name".into()))
+            }
             Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
                 "a pull request number starts at 1".into(),
             )),
@@ -372,6 +509,7 @@ impl Op {
     fn args(&self) -> Vec<String> {
         let v = |a: &[&str]| a.iter().map(|s| (*s).to_string()).collect::<Vec<String>>();
         match self {
+            Op::Workspace(op) => op.args(),
             Op::FetchOrigin => v(&[
                 "fetch",
                 "--quiet",
@@ -549,6 +687,19 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. } => &[],
+            Op::Workspace(_) => &[
+                "--literal-pathspecs",
+                "-c",
+                "core.attributesFile=/dev/null",
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "core.autocrlf=false",
+                "-c",
+                "core.splitIndex=false",
+                "-c",
+                "core.symlinks=true",
+            ],
             Op::BlameLines { .. } => {
                 &["--literal-pathspecs", "-c", "core.attributesFile=/dev/null"]
             }
@@ -1074,7 +1225,13 @@ impl Runner {
         if matches!(op, Op::DiffRange { .. }) {
             set("GIT_NO_REPLACE_OBJECTS", "1".into());
         }
-        if matches!(op, Op::BlameLines { .. }) {
+        if let Op::Workspace(workspace) = op {
+            set("GIT_NO_REPLACE_OBJECTS", "1".into());
+            if let Some(index) = workspace.index() {
+                set("GIT_INDEX_FILE", index.as_os_str().to_owned());
+            }
+        }
+        if matches!(op, Op::BlameLines { .. } | Op::Workspace(_)) {
             // a partial clone must not fetch a missing object: the call fails instead
             set("GIT_NO_LAZY_FETCH", "1".into());
         }
@@ -1133,7 +1290,7 @@ impl Runner {
         refuse_local_command_config(repo, &op)?;
         if matches!(
             op,
-            Op::ResetKeep { .. } | Op::SyncMerge { .. } | Op::SyncRebase { .. }
+            Op::ResetKeep { .. } | Op::SyncMerge { .. } | Op::SyncRebase { .. } | Op::Workspace(_)
         ) {
             // the checkout of a reset, merge or rebase runs the clean/smudge filters of the repository
             refuse_config(repo, &|section, sub_name, key| {
