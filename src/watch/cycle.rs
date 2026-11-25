@@ -10,7 +10,7 @@ use super::event::{
     REASON_CHILD_OF_MERGED,
 };
 use super::reader::{OpenPr, ReadFailure};
-use super::state::{Class, PrState, State};
+use super::state::{Class, MergeCandidate, PrState, State};
 use crate::watch_reader::cond_store::CondStore;
 use crate::watch_reader::obs::{
     checks_class, ChecksObs, GoneObs, ObserveFailure, PrObs, RepoObservation, CLASS_GREEN,
@@ -49,7 +49,9 @@ pub fn advance_seen(state: &mut State, seen: &[Seen], now_secs: i64) -> Vec<Even
                         code: err.code.as_str().to_string(),
                     }
                 };
-                events.push(error_event(state, &item.repo, &now, &failure));
+                let ev = error_event(state, &item.repo, &now, &failure);
+                state.apply(&ev);
+                events.push(ev);
                 continue;
             }
             Ok(obs) => obs,
@@ -57,7 +59,9 @@ pub fn advance_seen(state: &mut State, seen: &[Seen], now_secs: i64) -> Vec<Even
         if state.health_mut(&item.repo).error_open {
             let episode = state.health_mut(&item.repo).episode;
             let after = state.health_mut(&item.repo).failures;
-            events.push(recovered_event(&item.repo, &now, episode, after));
+            let ev = recovered_event(&item.repo, &now, episode, after);
+            state.apply(&ev);
+            events.push(ev);
         }
         let baselined = state
             .repo
@@ -67,15 +71,23 @@ pub fn advance_seen(state: &mut State, seen: &[Seen], now_secs: i64) -> Vec<Even
         if !baselined {
             install_observed(state, &item.repo, obs, &now);
         } else {
-            events.extend(events_from_observation(state, &item.repo, obs, &now));
+            let structural = events_from_observation(state, &item.repo, obs, &now);
+            for ev in &structural {
+                state.apply(ev);
+            }
+            events.extend(structural);
+            // Candidates are bookkeeping, not events. They are stored after the structural
+            // events have been applied, so a head change has already reset the old class.
+            let volatile = note_volatile(state, &item.repo, obs, &now);
+            for ev in &volatile {
+                state.apply(ev);
+            }
+            events.extend(volatile);
             if let Some(rs) = state.repo.get_mut(&item.repo) {
                 rs.last_ok = now.clone();
             }
         }
         remember_cond(state, &item.repo, obs.cond.as_ref());
-    }
-    for ev in &events {
-        state.apply(ev);
     }
     events
 }
@@ -136,12 +148,6 @@ fn events_from_observation(
             None => replaced.push(ev),
         }
     }
-    for pr in &obs.prs {
-        replaced.extend(check_events(state, repo, pr, now));
-        if let Some(ev) = mergeable_event(state, repo, pr, now) {
-            replaced.push(ev);
-        }
-    }
     replaced
 }
 
@@ -168,44 +174,105 @@ fn class_of(checks: Option<&ChecksObs>) -> Class {
     }
 }
 
-fn previous<'a>(state: &'a State, repo: &str, number: u64) -> Option<&'a PrState> {
-    state.repo.get(repo)?.prs.get(&number)
+/// A class or a mergeability value is announced only on the second consecutive sighting.
+/// The first sighting is stored on the PR. A null mergeability keeps the accepted value.
+fn note_volatile(state: &mut State, repo: &str, obs: &RepoObservation, now: &str) -> Vec<Event> {
+    let mut out = Vec::new();
+    for pr in &obs.prs {
+        let Some(stored) = state
+            .repo
+            .get_mut(repo)
+            .and_then(|rs| rs.prs.get_mut(&pr.number))
+        else {
+            continue;
+        };
+        out.extend(note_mergeable(stored, repo, pr, now));
+        out.extend(note_checks(stored, repo, pr, now));
+    }
+    out
 }
 
-fn check_events(state: &State, repo: &str, pr: &PrObs, now: &str) -> Vec<Event> {
-    let Some(checks) = &pr.checks else {
-        return Vec::new();
+fn note_mergeable(stored: &mut PrState, repo: &str, pr: &PrObs, now: &str) -> Option<Event> {
+    let detail = pr.detail.as_ref()?;
+    stored.detail_due = false;
+    let Some(mergeable) = detail.mergeable else {
+        if stored.mergeable_candidate.is_some() {
+            stored.detail_due = true;
+        }
+        return None;
     };
-    let observed = class_of(Some(checks));
-    let prev = previous(state, repo, pr.number);
-    let head_changed = prev.map(|p| p.head != pr.head).unwrap_or(true);
-    let accepted = if head_changed {
-        Class::Unobserved
-    } else {
-        prev.map(|p| p.class).unwrap_or(Class::Unobserved)
-    };
-    if observed == accepted
-        || matches!(
-            observed,
-            Class::Unobserved | Class::NoChecks | Class::Pending
-        )
-    {
-        return Vec::new();
+    let behind = detail.state == "behind";
+    if stored.mergeable.is_none() {
+        stored.mergeable = Some(mergeable);
+        stored.mergeable_state = detail.state.clone();
+        stored.conflicting = detail.state == "dirty";
+        stored.behind = behind;
+        stored.mergeable_candidate = None;
+        return None;
     }
-    let epoch = prev.map(|p| p.epochs.checks).unwrap_or(0).saturating_add(1);
-    let id = event_id(
-        Some(repo),
+    if stored.mergeable == Some(mergeable) && stored.behind == behind {
+        stored.mergeable_state = detail.state.clone();
+        stored.conflicting = detail.state == "dirty";
+        stored.mergeable_candidate = None;
+        return None;
+    }
+    let same_candidate = stored
+        .mergeable_candidate
+        .as_ref()
+        .is_some_and(|c| c.mergeable == mergeable && c.behind == behind);
+    if !same_candidate {
+        stored.mergeable_candidate = Some(MergeCandidate {
+            mergeable,
+            behind,
+            state: detail.state.clone(),
+        });
+        stored.detail_due = true;
+        return None;
+    }
+    let epoch = stored.epochs.mergeable.saturating_add(1);
+    Some(Event::new(
+        event_id(
+            Some(repo),
+            Some(pr.number),
+            super::event::Kind::MergeableChanged,
+            &key_mergeable(&pr.head, epoch),
+        ),
+        now.to_string(),
+        Some(repo.to_string()),
         Some(pr.number),
-        if observed == Class::Green {
-            super::event::Kind::ChecksGreen
-        } else {
-            super::event::Kind::ChecksRed
-        },
-        &key_checks(&pr.head, epoch),
-    );
-    let ev = if observed == Class::Green {
-        Event::new(
-            id,
+        Details::MergeableChanged(MergeableChanged {
+            mergeable: Some(mergeable),
+            state: detail.state.clone(),
+            conflicting: detail.state == "dirty",
+            behind,
+            base: pr.base.clone(),
+        }),
+    ))
+}
+
+fn note_checks(stored: &mut PrState, repo: &str, pr: &PrObs, now: &str) -> Option<Event> {
+    let checks = pr.checks.as_ref()?;
+    let observed = class_of(Some(checks));
+    if observed == stored.class {
+        stored.class_candidate = None;
+        if observed == Class::Pending {
+            stored.pending_names = pending_names(checks);
+        }
+        return None;
+    }
+    if stored.class_candidate.as_ref() != Some(&observed) {
+        stored.class_candidate = Some(observed);
+        return None;
+    }
+    let epoch = stored.epochs.checks.saturating_add(1);
+    match observed {
+        Class::Green => Some(Event::new(
+            event_id(
+                Some(repo),
+                Some(pr.number),
+                super::event::Kind::ChecksGreen,
+                &key_checks(&pr.head, epoch),
+            ),
             now.to_string(),
             Some(repo.to_string()),
             Some(pr.number),
@@ -215,28 +282,48 @@ fn check_events(state: &State, repo: &str, pr: &PrObs, now: &str) -> Vec<Event> 
                 base: pr.base.clone(),
                 total: (checks.runs.len() + checks.statuses.len()) as u64,
             }),
-        )
-    } else {
-        let failing = failing_names(checks);
-        Event::new(
-            id,
-            now.to_string(),
-            Some(repo.to_string()),
-            Some(pr.number),
-            Details::ChecksRed(ChecksRed {
-                head: pr.head.clone(),
-                failing_total: failing.len() as u64,
-                failing,
-                shape: String::new(),
-                base: pr.base.clone(),
-                draft: pr.draft,
-            }),
-        )
-    };
-    vec![ev]
+        )),
+        Class::Red => {
+            let (failing_total, failing) = failing_names(checks);
+            Some(Event::new(
+                event_id(
+                    Some(repo),
+                    Some(pr.number),
+                    super::event::Kind::ChecksRed,
+                    &key_checks(&pr.head, epoch),
+                ),
+                now.to_string(),
+                Some(repo.to_string()),
+                Some(pr.number),
+                Details::ChecksRed(ChecksRed {
+                    head: pr.head.clone(),
+                    failing_total,
+                    failing,
+                    shape: String::new(),
+                    base: pr.base.clone(),
+                    draft: pr.draft,
+                }),
+            ))
+        }
+        Class::Pending | Class::NoChecks => {
+            stored.accept_class(observed, epoch, now);
+            if observed == Class::Pending {
+                stored.pending_names = pending_names(checks);
+            }
+            None
+        }
+        Class::Unobserved => None,
+    }
 }
 
-fn failing_names(checks: &ChecksObs) -> Vec<String> {
+fn top_names(mut names: Vec<String>) -> (u64, Vec<String>) {
+    let total = names.len() as u64;
+    names.sort();
+    names.truncate(20);
+    (total, names)
+}
+
+fn failing_names(checks: &ChecksObs) -> (u64, Vec<String>) {
     let mut names = Vec::new();
     for run in &checks.runs {
         if run.status == "completed"
@@ -253,41 +340,22 @@ fn failing_names(checks: &ChecksObs) -> Vec<String> {
             names.push(status.context.clone());
         }
     }
-    names
+    top_names(names)
 }
 
-fn mergeable_event(state: &State, repo: &str, pr: &PrObs, now: &str) -> Option<Event> {
-    let detail = pr.detail.as_ref()?;
-    let prev = previous(state, repo, pr.number);
-    let head_changed = prev.map(|p| p.head != pr.head).unwrap_or(true);
-    let same = prev.is_some_and(|p| {
-        !head_changed && p.mergeable == detail.mergeable && p.mergeable_state == detail.state
-    });
-    if same {
-        return None;
+fn pending_names(checks: &ChecksObs) -> Vec<String> {
+    let mut names = Vec::new();
+    for run in &checks.runs {
+        if run.status != "completed" {
+            names.push(run.name.clone());
+        }
     }
-    let epoch = prev
-        .map(|p| p.epochs.mergeable)
-        .unwrap_or(0)
-        .saturating_add(1);
-    Some(Event::new(
-        event_id(
-            Some(repo),
-            Some(pr.number),
-            super::event::Kind::MergeableChanged,
-            &key_mergeable(&pr.head, epoch),
-        ),
-        now.to_string(),
-        Some(repo.to_string()),
-        Some(pr.number),
-        Details::MergeableChanged(MergeableChanged {
-            mergeable: detail.mergeable,
-            state: detail.state.clone(),
-            conflicting: detail.state == "dirty",
-            behind: detail.state == "behind",
-            base: pr.base.clone(),
-        }),
-    ))
+    for status in &checks.statuses {
+        if status.state == "pending" {
+            names.push(status.context.clone());
+        }
+    }
+    top_names(names).1
 }
 
 fn merged_event(repo: &str, number: u64, gone: &GoneObs, now: &str) -> Event {

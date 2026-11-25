@@ -649,6 +649,35 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
         CheckRun, ChecksObs, DetailObs, GoneObs, MethodHint, PrObs, RepoObservation,
     };
 
+    fn child_observation(mergeable: Option<bool>, merge_state: &str) -> RepoObservation {
+        RepoObservation {
+            prs: vec![PrObs {
+                number: 8,
+                title: "child".into(),
+                author: "ada".into(),
+                head_ref: "child".into(),
+                head: "b".repeat(40),
+                base: "topic".into(),
+                checks: Some(ChecksObs {
+                    runs: vec![CheckRun {
+                        name: "ci".into(),
+                        status: "completed".into(),
+                        conclusion: "success".into(),
+                        ..CheckRun::default()
+                    }],
+                    ..ChecksObs::default()
+                }),
+                detail: Some(DetailObs {
+                    mergeable,
+                    state: merge_state.into(),
+                }),
+                ..PrObs::default()
+            }],
+            cond: Some(stw::watch_reader::cond_store::CondStore::default()),
+            ..RepoObservation::default()
+        }
+    }
+
     let head = "a".repeat(40);
     let mut state = State::new();
     let first = RepoObservation {
@@ -731,8 +760,13 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
     let kinds: Vec<_> = events.iter().map(|e| e.kind()).collect();
     assert!(kinds.contains(&Kind::Merged), "{kinds:?}");
     assert!(kinds.contains(&Kind::RestackNeeded), "{kinds:?}");
-    assert!(kinds.contains(&Kind::ChecksGreen), "{kinds:?}");
-    assert!(kinds.contains(&Kind::MergeableChanged), "{kinds:?}");
+    assert!(!kinds.contains(&Kind::ChecksGreen), "{kinds:?}");
+    assert!(!kinds.contains(&Kind::MergeableChanged), "{kinds:?}");
+    assert_eq!(
+        state.repo["o/r"].prs[&8].class_candidate,
+        Some(stw::watch::state::Class::Green)
+    );
+    assert_eq!(state.repo["o/r"].prs[&8].mergeable, Some(false));
     let restack = events
         .iter()
         .find(|e| e.kind() == Kind::RestackNeeded)
@@ -755,6 +789,55 @@ fn observations_emit_checks_merge_and_restack_and_the_store_survives() {
         ),
         other => panic!("{other:?}"),
     }
+
+    let again = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(child_observation(Some(false), "dirty")),
+        }],
+        1_700_000_120,
+    );
+    let kinds: Vec<_> = again.iter().map(|e| e.kind()).collect();
+    assert_eq!(kinds, vec![Kind::ChecksGreen]);
+    assert!(state.repo["o/r"].prs[&8].class_candidate.is_none());
+
+    let first_change = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(child_observation(Some(true), "clean")),
+        }],
+        1_700_000_180,
+    );
+    assert!(first_change.is_empty(), "{first_change:?}");
+    assert!(state.repo["o/r"].prs[&8].detail_due);
+    assert_eq!(state.repo["o/r"].prs[&8].mergeable, Some(false));
+
+    let confirmed = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(child_observation(Some(true), "clean")),
+        }],
+        1_700_000_240,
+    );
+    assert_eq!(
+        confirmed.iter().map(|e| e.kind()).collect::<Vec<_>>(),
+        vec![Kind::MergeableChanged]
+    );
+    assert_eq!(state.repo["o/r"].prs[&8].mergeable, Some(true));
+
+    let quiet = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(child_observation(None, "unknown")),
+        }],
+        1_700_000_300,
+    );
+    assert!(quiet.is_empty(), "{quiet:?}");
+    assert_eq!(state.repo["o/r"].prs[&8].mergeable, Some(true));
 
     let (_dir, path) = state_path();
     let mut src = Listed::head(&head);
@@ -854,4 +937,88 @@ fn restack_argv_is_null_without_a_merge_commit_and_on_a_fork() {
 
     assert_eq!(argv_of(false, None), None);
     assert_eq!(argv_of(true, Some(&"c".repeat(40))), None);
+}
+
+#[test]
+fn a_red_class_is_announced_on_the_second_sighting_with_twenty_names() {
+    use stw::watch::cycle::{self, Seen};
+    use stw::watch_reader::obs::{CheckRun, ChecksObs, PrObs, RepoObservation};
+
+    let mut runs = Vec::new();
+    for n in 0..21 {
+        runs.push(CheckRun {
+            name: format!("job-{n:02}"),
+            status: "completed".into(),
+            conclusion: "failure".into(),
+            ..CheckRun::default()
+        });
+    }
+    runs.swap(0, 20);
+    let obs = RepoObservation {
+        prs: vec![PrObs {
+            number: 1,
+            head: "b".repeat(40),
+            head_ref: "topic".into(),
+            base: "main".into(),
+            checks: Some(ChecksObs {
+                runs,
+                ..ChecksObs::default()
+            }),
+            ..PrObs::default()
+        }],
+        ..RepoObservation::default()
+    };
+    let mut state = State::new();
+    let bare = RepoObservation {
+        prs: vec![PrObs {
+            number: 1,
+            head: "b".repeat(40),
+            head_ref: "topic".into(),
+            base: "main".into(),
+            ..PrObs::default()
+        }],
+        ..RepoObservation::default()
+    };
+    let first = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(bare),
+        }],
+        1_700_000_000,
+    );
+    assert!(first.is_empty(), "the baseline is silent: {first:?}");
+    let second = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(obs.clone()),
+        }],
+        1_700_000_060,
+    );
+    assert!(
+        second.is_empty(),
+        "the first sighting is a candidate: {second:?}"
+    );
+    assert_eq!(
+        state.repo["o/r"].prs[&1].class_candidate,
+        Some(stw::watch::state::Class::Red)
+    );
+    let third = cycle::advance_seen(
+        &mut state,
+        &[Seen {
+            repo: "o/r".into(),
+            result: Ok(obs),
+        }],
+        1_700_000_120,
+    );
+    match &third[0].details {
+        Details::ChecksRed(r) => {
+            assert_eq!(r.failing_total, 21);
+            assert_eq!(r.failing.len(), 20);
+            assert_eq!(r.failing[0], "job-00");
+            assert_eq!(r.failing[19], "job-19");
+        }
+        other => panic!("{other:?}"),
+    }
 }

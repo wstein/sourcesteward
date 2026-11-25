@@ -327,6 +327,16 @@ fn poll_ready(
     out
 }
 
+fn class_name(class: &super::state::Class) -> String {
+    match class {
+        super::state::Class::Unobserved => String::new(),
+        super::state::Class::NoChecks => "none".into(),
+        super::state::Class::Pending => "pending".into(),
+        super::state::Class::Green => "green".into(),
+        super::state::Class::Red => "red".into(),
+    }
+}
+
 fn hints_of(state: &super::state::State, repo: &str, detail_every: u64) -> Hints {
     let Some(rs) = state.repo.get(repo) else {
         return Hints {
@@ -344,14 +354,12 @@ fn hints_of(state: &super::state::State, repo: &str, detail_every: u64) -> Hints
             .map(|p| KnownPr {
                 number: p.number,
                 head: p.head.clone(),
-                class: match p.class {
-                    super::state::Class::Unobserved => String::new(),
-                    super::state::Class::NoChecks => "none".into(),
-                    super::state::Class::Pending => "pending".into(),
-                    super::state::Class::Green => "green".into(),
-                    super::state::Class::Red => "red".into(),
-                },
-                class_candidate: String::new(),
+                class: class_name(&p.class),
+                class_candidate: p
+                    .class_candidate
+                    .as_ref()
+                    .map(class_name)
+                    .unwrap_or_default(),
                 detail_due: p.detail_due,
             })
             .collect(),
@@ -415,4 +423,26 @@ pub fn watch_error_exit(err: WatchError) -> u8 {
         WatchError::StateDirUsage | WatchError::InsideWorkTree(_) => EXIT_USAGE,
         _ => EXIT_FAILED,
     }
+}
+
+#[test]
+fn a_stored_class_candidate_reaches_the_hints() {
+    use super::state::{Class, PrState, RepoState, State};
+
+    let mut state = State::new();
+    let pr = PrState {
+        number: 1,
+        class: Class::Green,
+        class_candidate: Some(Class::Red),
+        detail_due: true,
+        ..PrState::default()
+    };
+    let mut rs = RepoState::new("2026-11-25T00:00:00Z");
+    rs.prs.insert(1, pr);
+    state.repo.insert("o/r".into(), rs);
+    let hints = hints_of(&state, "o/r", 10);
+    assert_eq!(hints.known.len(), 1);
+    assert_eq!(hints.known[0].class, "green");
+    assert_eq!(hints.known[0].class_candidate, "red");
+    assert!(hints.known[0].detail_due);
 }
