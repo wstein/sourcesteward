@@ -1733,10 +1733,14 @@ Deviations from the Go behavior (named one by one; D numbers are those of the po
    detail key").
 7. `id_counter` accepts digits only (Go's `Atoi` also took `+5`).
 8. `repos` is `null` instead of an empty slice for "not set yet", so an empty set is not mistaken for the first run.
-9. `restack-needed` keeps `argv` (D-20261119-03); the choice of `argv` and `--human` are W3/W4.
+9. `restack-needed` keeps `argv` (D-20261119-03). The wired command fills it for class 1; `--human` is still later.
 10. Lock: an error other than "busy" (the file cannot be opened or locked) is `Io` at once, not `Locked` after five attempts.
 11. `lock::holder` reports "not held" when the probe fails with an error other than "busy"; Go reports "held".
 12. `journal.jsonl` is opened as it is: a symbolic link is followed (as Go); the state directory itself is checked (mode, work tree), its files are not.
+13. A red check keeps `shape` empty. Go classifies the failing set; this cycle does not.
+14. `restack-needed` is class 1 only: the child base equals the merged head ref. The contains class (same base, the child commits include the old parent) is absent, and a class-1 child is not checked against the commit list.
+15. The 194 `watch-cycles` scenarios are not replayed by this cycle. The checks, mergeability, timeout, and class-1 restack above are covered by hand-written tests in `tests/it/watch_command.rs`.
+16. `checks-pending-timeout` is fixed at 45 minutes inside the command. There is no flag. Zero would disable it; the command never passes zero.
 
 What the corpus drives in W1 (`tests/it/watch_core.rs`): vectors `event_id`, `id_counter`, `event_json` (22 cases), `workspace_id` (which inputs share an
 id; the Go id values are format-dependent), `default_state_dir`, `status_freshness_seconds`, `merged_due_head_fork`: 8 of the 33 vectors
@@ -1838,7 +1842,7 @@ Deviations from Go (W2 part of the list of the plan, section 4):
 cargo build --release          # target/release/stw
 cargo test                     # unit and fixture tests, no network
 cargo test --test it -- --ignored network   # clones a public repo, rewinds it, fetches and fast-forwards
-bash tests/mutation/mutate.sh SCRATCH    # 1627 mutations, each must fail the named test
+bash tests/mutation/mutate.sh SCRATCH    # 1634 mutations, each must fail the named test
 bash tests/oracle/shim_proof.sh stw ROOT SCRATCH   # fake git/gh/ssh first on PATH: 0 calls
 bash tests/oracle/tidy_oracle.sh OUTDIR   # oracle of tidy plan against real repositories and GitHub (network; see Oracle of tidy plan)
 bash tests/oracle/watch_scenarios.sh GO_SRC OUTDIR   # exports the watch scenarios from the Go sources (see Watch scenarios)
