@@ -2246,3 +2246,45 @@ fn the_class_of_a_changed_head_is_read_again_and_unchanged_heads_stay_quiet() {
         .unwrap();
     assert!(obs2.prs[0].checks.is_some() && obs2.prs[0].detail.is_some());
 }
+
+/// A server that answers every request with a chunked 200 (no `Content-Length`) of `size` bytes of `x`.
+fn chunked_server(size: usize) -> String {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let base = format!("http://{}", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut s) = stream else { continue };
+            let mut buf = Vec::new();
+            let mut chunk = [0u8; 1024];
+            while !buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                match s.read(&mut chunk) {
+                    Ok(0) | Err(_) => break,
+                    Ok(n) => buf.extend_from_slice(&chunk[..n]),
+                }
+            }
+            let head = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
+            let _ = s.write_all(head.as_bytes());
+            let _ = s.write_all(format!("{size:x}\r\n").as_bytes());
+            let _ = s.write_all(&vec![b'x'; size]);
+            let _ = s.write_all(b"\r\n0\r\n\r\n");
+        }
+    });
+    base
+}
+
+#[test]
+fn a_chunked_body_is_cut_at_one_mib_without_a_declared_length() {
+    let max = stw::watch_reader::http::MAX_BODY;
+    let reader = WatchHttp::new(
+        TOKEN.into(),
+        chunked_server(max + 1),
+        "api.github.com".into(),
+    );
+    let e = reader.pull_detail("a/b", 1, "").unwrap_err();
+    assert_eq!(e.code, Code::Malformed, "{e}");
+    let e = reader.pull_list_page("a/b", 25, 1, "").unwrap_err();
+    assert_eq!(e.code, Code::PageTooLarge, "{e}");
+    // exactly one MiB is still an answer
+    let ok = WatchHttp::new(TOKEN.into(), chunked_server(max), "api.github.com".into());
+    assert_eq!(ok.pull_detail("a/b", 1, "").unwrap().body.len(), max);
+}
