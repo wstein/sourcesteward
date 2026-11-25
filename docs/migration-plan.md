@@ -44,25 +44,26 @@ command in `src/cli.rs`. Decisions are recommendations unless recorded in Chartr
 
 | Capability | Go evidence under `legacy/sourcesteward/` | Rust evidence under `projects/sourcesteward/` | Decision |
 | --- | --- | --- | --- |
-| CLI help/version | `internal/cli/root.go:182` command registration | `src/cli.rs` clap `Command`, `--version` | Keep flags; do not copy a version subcommand just for parity. |
-| Git/jj identity and ref inventory | `internal/inspection/{git,jj,inventory}.go` | `src/status.rs`, `src/repo/` (Git only) | Keep Git identity in status; jj is not supported (decision 8); defer the inventory query language. |
-| Workspace repository fanout | `internal/inspection/repos*.go` | `src/repo/`, workspace selection in `src/cli.rs` | Keep shared iteration instead of another `repos` command. |
-| Local status, worktrees, gitlinks | `internal/statuscmd/`, `internal/inspection/pins*.go` | `src/status.rs`, `src/repo/worktrees.rs` | Keep; expand only for demonstrated workflow needs. The status flags `--long --fetch --worktrees --icons --timeout --stats --verbose` are ported (see the `status` row of the port inventory). Done 2026-11-12: the repositories of a workspace are the gitlinks of the index as in Go (README "Submodules: the gitlinks of the index", mutations GL1 to GL9); nested submodules walked depth-first and the root found up to 16 levels up (mutations NS1 to NS16). |
+| CLI help/version | `internal/cli/root.go:182` command registration | `src/cli.rs` clap `Command`, `--version` | Keep `stw --version`. Drop the Go `version` subcommand and its JSON output ([#33](https://github.com/wstein/whr-anchorage/issues/33)). |
+| Git/jj identity and ref inventory | `internal/inspection/{git,jj,inventory}.go` | `src/status.rs`, `src/repo/` (Git only) | Drop Go `inspect` and `inventory`. Checkout-free inspection remains in [#28](https://github.com/wstein/whr-anchorage/issues/28). Worktree facts belong in `stw status --worktrees --json` ([#33](https://github.com/wstein/whr-anchorage/issues/33)). |
+| Workspace repository fanout | `internal/inspection/repos*.go` | `src/repo/`, workspace selection in `src/cli.rs` | Drop Go `repos`. The repository overview belongs in `stw status --json` ([#33](https://github.com/wstein/whr-anchorage/issues/33)). |
+| Local status, worktrees, gitlinks | `internal/statuscmd/`, `internal/inspection/pins*.go` | `src/status.rs`, `src/repo/worktrees.rs` | Keep local status and report submodule pin drift in `stw status`. Drop Go `pins` ([#33](https://github.com/wstein/whr-anchorage/issues/33)). Expand worktree fields when a concrete workflow needs them. The status flags `--long --fetch --worktrees --icons --timeout --stats --verbose` are ported (see the `status` row of the port inventory). Done 2026-11-12: the repositories of a workspace are the gitlinks of the index as in Go (README "Submodules: the gitlinks of the index", mutations GL1 to GL9); nested submodules walked depth-first and the root found up to 16 levels up (mutations NS1 to NS16). |
 | PR status/review state | `internal/reviewstate/parse.go`, `internal/prviews/` | `src/github.rs:154`, `src/status.rs:318`; `status --review` uses it (src/status_review.rs) | Port strict parser and verifiable comment author and head binding (M3). |
 | Sync and rules update | `internal/stwsync/` | `src/sync/`, `src/cli.rs` SyncArgs | Keep ff-only; no automatic stash, reset, merge, or rebase. |
 | Tidy plan/apply/restore | `internal/tidywizard/` | `src/tidy.rs`, `src/tidy_apply.rs:495,908` | Keep manifest-first and fresh-state checks; do not copy wizard/authorization ceremony. |
 | Tidy recovery retention/history | recovery and journals in `internal/tidywizard/` | `src/tidy_apply.rs:90,936`; JSONL stores OIDs, no retention refs | Add a backup ref per new mutation (M5, slimmed 2026-11-10, see Cutover section); object IDs alone do not survive GC. `tidy history` (done 2026-11-11) lists the manifests; `sync` journals with recovery refs (done 2026-11-11). |
-| Isolated workspace creation/retirement | `internal/inspection/jj_workspace.go`, `internal/workspace/` | worktree inspection/removal, no creation command | jj workspaces: not supported (decision 8). Defer general workspace wizard; add owned resolve worktree lifecycle in M12. |
+| Isolated workspace creation/retirement | `internal/inspection/jj_workspace.go`, `internal/workspace/` | `src/workspace.rs`: native worktree entry, checkpoint/resume and retirement preview | Retire the Go wizard ([#36](https://github.com/wstein/whr-anchorage/issues/36)). Safe ref recovery remains in [#29](https://github.com/wstein/whr-anchorage/issues/29). M12 still covers owned conflict-resolution worktrees. |
 | Stack/conflict plan | `internal/restack/replay.go`, `internal/conflicts/` | present: `stw restack plan` (`src/restack_plan.rs`, engine `src/replay.rs`) | Port (single branch) plus whole-stack preview (new), see the `restack plan` row of the port inventory. `restack apply` and undo (M6) stay open. |
 | Review carry-over | `internal/carryover/`, especially `git.go` guards | absent | Port proof semantics, not permissive grammar (M4). |
 | Ready check | `internal/readycheck/` | absent | Port read-only gates with exact-head evidence and pending guard (M4/M12). |
 | PR lint | `internal/lintpr/`, `internal/lintprcmd/` | absent | Port current rules and hostile-text handling (M8). |
-| PR queue, stack, debt ledger | `internal/pulls/`, `internal/prviews/` | open PR reads only in `src/github.rs` | Add read-only queue view after parser/stack contracts (M9). |
+| PR queue, stack, debt ledger | `internal/pulls/`, `internal/prviews/` | GitHub reads, `stw status --review`, `stw ready-check` | Evaluate a multi-PR triage case before choosing a separate read-only queue ([#34](https://github.com/wstein/whr-anchorage/issues/34)). |
 | Push/workflow policy | `internal/stackpublish/` (core) | shell scripts `scripts/stw-push`, `scripts/stw-workflow`; no Rust commands | Port accepted script behavior per repo policy (M10). |
-| Land stack | `internal/land/shapes.json` has empty shapes | absent | Design explicitly; do not imply Go has a complete usable apply path (M11). |
-| Watch/issues/metrics/verify landed | `internal/watch/`, `internal/issues/`; other scope varies | absent | Defer; helpers can wait with background loops meanwhile (M13). |
-| Release build/verify/dispatch | `internal/release/` | absent | Defer release tooling; dispatch/publication stays owner-controlled. |
-| GitHub access | `internal/hosting/` | `src/auth.rs`, `src/github.rs` REST GETs | Extend internal reads; no need for equivalent hosting CLI wrappers. |
+| Land stack | `internal/land/shapes.json` has empty shapes | absent | Drop Go `land`. Use Git and `gh` for PR workflows. Reopen automation only for a named workflow under the review and publication rules ([#37](https://github.com/wstein/whr-anchorage/issues/37)). |
+| Watch, metrics, verify landed | `internal/watch/`; other scope varies | absent | Defer; helpers can wait with background loops meanwhile (M13). |
+| Open issues | `internal/issues/` | `stw status` has counts | Retire standalone Go `issues`. Full open-issue lists belong in default text and JSON status. Counts remain a summary ([#35](https://github.com/wstein/whr-anchorage/issues/35)). |
+| Release build/verify/dispatch | `internal/release/` | absent | Drop the hidden Go release commands. The owner owns releases ([#37](https://github.com/wstein/whr-anchorage/issues/37)). |
+| GitHub access | `internal/hosting/` | `src/auth.rs`, `src/github.rs` REST GETs | Drop Go hosting wrappers. Use GitHub and `gh` for direct queries and keep product reads internal ([#33](https://github.com/wstein/whr-anchorage/issues/33)). |
 | JSON contracts/exit codes | `schemas/v1/`, `internal/cli/root.go` | schema 2 in README; exits 0/1/2 | Add fixtures for consumed contracts; define findings exit for new commands before adoption. |
 | Untrusted text and bounded reads | `internal/untrusted/`, bounded runners | `src/github.rs` HTTP timeout; output boundary needs audit | Add escaping, pagination, output/time limits where new reads need them. |
 | Brand/site/gh-jj wrappers | `site/`, optional extension in `internal/cli/root.go` | absent | Do not port as migration prerequisites. |
@@ -123,20 +124,20 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M6 | Conflict-free local restack apply. Needs M1/M2/M5. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
 | M7 | rerere C in explicit resolution. Needs accepted C spike and M0; integrate M12 worktree flow. | Shared cache reuse in two worktrees, exact reused count, failure/no-match fallback; no persistent Git config writes. Preview cache prediction remains optional and UNKNOWN until measured. | 3 / 2 / 3 |
 | M8 | PR lint. Needs M3. | Per-rule positive/negative fixtures for identity, attribution, session links, text limits, malformed review claims; escape hostile titles/comments; runtime error distinct from findings. | 4 / 2 / 2 |
-| M9 | PR/stack queue and debt view. Needs M2/M3/M4. | Count units not PRs; stale drafts, rewritten heads, bottom-up order, ledger parse failures, queue/nit rules against current dotagents; pagination and stale data reported. Read-only. | 4 / 4 / 3 |
+| M9 | Possible PR/stack queue and debt view. First run the triage comparison in [#34](https://github.com/wstein/whr-anchorage/issues/34). If justified, use M2/M3/M4. | Count units not PRs; stale drafts, rewritten heads, bottom-up order, ledger parse failures, queue/nit rules against current dotagents; pagination and stale data reported. Read-only with versioned JSON. | 4 / 4 / 3 |
 | M10 | Rust push/workflow from accepted scripts. Needs M0/M4/M5, repository policy and local CLEAR evidence contract. | Existing `scripts/test-stw-push` behaviors translated after script acceptance; ff-only default branch, submodules first, no tags/force, exact-head CLEAR; partial remote effects reported and never described as undoable. Pending guard from M12 before deferred flow enabled. | 4 / 3 / 5 |
-| M11 | Owner-invoked land stack. Needs M2/M4/M5/M6/M10 and explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
+| M11 | Historical owner-invoked land candidate. Shelved by [#37](https://github.com/wstein/whr-anchorage/issues/37). If a named workflow later warrants reopening it, reassess M2/M4/M5/M6/M10 and seek explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
 | M12 | Deferred conflicts D and owned resolve worktrees. Needs M1/M2/M5/M6/M7/M0 and accepted D spike. | Real conflicted branches stay at old tips; pending metadata/ref transaction; parent-first resolve; abort preserves pending; stale CAS; binary/delete conflicts; undo; push/land/ready refuse pending state. | 4 / 5 / 5 |
-| M13 | Demand-driven follow-ups: watch/issues, verify landed, metrics, repo profiles, Dayboard integration, release tooling, merge-noop proof. | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
+| M13 | Demand-driven follow-ups: watch, verify landed, metrics, repo profiles, Dayboard integration, merge-noop proof. Status issue lists are tracked separately in [#35](https://github.com/wstein/whr-anchorage/issues/35). | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
 
 Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a separate workstream,
 **accepted A → M1 → M2 → M5 (slim) → M6** for local stacks. M8 is independent after M3.
-M7/M12 can follow local restack; M10/M11 follow proven recovery and publication policy.
+M7/M12 can follow local restack. M10 follows proven recovery and publication policy. M11 stays shelved.
 M7 does not require publication; M6 does not push. M12 publication guards must land before pending state can
 be created in a product used with push/ready commands. These are dependency tracks, not permission to start agents.
 M0 starts directly in `projects/sourcesteward` without a spike (owner decision: infrastructure, the Git boundary is
 already recorded in Chartroom). Scripts-first stays for new behavior without a Go counterpart; ports of Go behavior
-(M3, M4, M8, M9 and the single-branch part of M1/M2) go directly to product.
+(M3, M4, M8 and the single-branch part of M1/M2) go directly to product. M9 awaits the triage decision.
 
 ## Decisions, tradeoffs, and open evidence
 
@@ -158,10 +159,10 @@ already recorded in Chartroom). Scripts-first stays for new behavior without a G
 4. **Recommend controlled binary transition.** `dayboard/LOGBOOK.md` records Go release v0.2.0 remains installed until M3+M4.
    Do not replace that channel with Rust while removing working review gates. Current installed binary/version and
    packaging channel are UNKNOWN in this assessment; owner chooses release/repository/channel and accepts live.
-5. **Deferred: local CLEAR evidence.** The workspace has no PRs. A review note, local receipt, or external report could
-   carry exact-head evidence, but notes are editable claims too. Owner deferred the decision until before M10. Define
-   author trust, head binding, and evidence storage by then; do not introduce a Git note namespace as an already
-   approved decision.
+5. **Open: local CLEAR evidence.** Anchorage uses local review for fast-forward integration.
+   A review note, local receipt, or external report could carry exact-head evidence. Author
+   trust, head binding, and evidence storage are still open in
+   [#9](https://github.com/wstein/whr-anchorage/issues/9).
 6. **Recorded decision: replay attribution.** New commits carry the configured Git identity as author and committer.
    Commits rewritten by restack, rebase, or cherry-pick keep their original author; the committer is the configured
    identity, as `git rebase` does. A dotagents rule change for this is in progress.
@@ -191,10 +192,9 @@ then product"). This section is the working plan; it does not replace the milest
 
 Source: `legacy/sourcesteward/internal/cli/root.go:182` (registration) and `stw --help` of a binary built from the gitlink
 `b9ec1f2` (hidden commands read from the sources, marked h). 33 leaf commands; `help` is a custom help command (`root.go:183`) and is not counted.
-Rust today: `src/cli.rs` has `status`, `tidy plan|apply|restore|history`, `sync` (with `sync restore`) and the hidden `dev patch-id`; everything else
-is **absent** as a command. Test counts are `grep -c '^func Test'` per Go package, not runs.
+The Rust column records the corresponding command or workflow where present. Go test counts come from source.
 
-| Go command | Rust today | M | Proposal | Test source in Go |
+| Go command | Rust today | M | Disposition | Test source in Go |
 | --- | --- | --- | --- | --- |
 | `status` | present. Flags `--long`, `--fetch`, `--worktrees`, `--icons`, `--timeout`, `--stats`, `--verbose`, `--review`: **port (done)**, deviations below | M4 | **port**: core command. Deviation: Go refuses jj-owned paths (`status-unsupported-backend`); Rust has no jj detection (decision 8). Deviation: Go exits 1 when a remote read failed (`statuscmd/run.go` `Failure`); Rust prints a notice and exits 0, exit 1 only for a repository that cannot be read locally. Deviation: Rust text has the blocks `Counts`, `Needs action (N)`, `Repositories (N)`, `Notices (N)` and JSON `counts`/`totals` (additive, schema 2); open issues are read for the counts, one page of 100 (README "Status text"). Flags (README "Status flags"), deviation by deviation: `--long` has no compact counterpart (the Rust default text already prints the detail lines) and explains each reason from the facts instead of printing Go's `run:`/`hint:` commands; Go's priority levels, links and sources release drafts/tags do not exist in Rust; the source `ci-main` (default branch CI) is ported since 2026-11-17 (owner decision) with a fallback to Actions runs on a 403 for check runs, README "CI of the default branch in `stw status`" (deviations 1 to 10: no `behind_origin`, no shape classification, a red head is the reason `main-red`, notice `ci-not-read` per repository, exit 0). `--icons` covers the two repository markers only (no priority glyphs); the terminal default applies to every run, Go keeps ascii in its local layout unless the flag is given. `--fetch` uses the fetch of `sync` (runner for ssh/local paths, gix for https, `--no-prune`, no tags, no submodules), writes FETCH_HEAD, refuses a fetch refspec outside `refs/remotes/origin/` (addition), does not fetch the agent-rules checkout, passes `--no-prune-tags` (Go does not, so `pruneTags` makes Go's fetch create tags), works with `--offline`; the parallel bound is 16 as in Go (shared helper, also `sync`/`tidy`). Correction candidate (not changed, `sync` keeps Go behavior): `sync` without a prune flag has the same `pruneTags` gap. `--timeout` cuts the GitHub reads (pulls, issues, ci-main) only, request cap 30 s (Go 15 s), notices per repository, exit 0. `--stats`/`--verbose`: sources pulls/issues/ci-main/other (the comment reads of `--review` count as `pulls`, as in Go), `cached 304s` always 0, no `viewer` line. `--worktrees`: stale registrations are listed (`missing`, `prunable`) but not counted in `Worktrees` (Go counts them in `linked`), no `N linked worktrees (...)` summary line or per-state counts, sorted by path, JSON `repos[].worktree_list` instead of Go's `worktrees.list`. Was `status --worktrees` covered before? No (resolved, was UNKNOWN): only the number in `Worktrees` and, in `tidy plan`, the worktree of a kept branch and the stale registrations; the list with dirty/locked/prunable/missing is new. `--review` (port, done; README "Review state in `stw status --review`"): one comment read per open pull request, M3 state for the exact head, at most 200 pull requests per run and 16 reads at a time, a failed or cut read is `?` plus a notice, exit 0. Deviations from Go, one by one: (1) the M3 states (`no-review`, `unverified-author`, `unknown`) instead of `none`, `clear-stale`, `unparsed`; (2) the M3 grammar (D1 to D8), a line for another pull request is the finding `wrong-pr`; (3) no commit-date read of the head (Go ignores comments older than the head commit; Rust binds the verdict to the head id, but an old comment edited later counts at its `created_at`, flagged `edited`); (4) carry-over chains of M3 (16 links, declared patch-ids, `FINDINGS` of a chain head ends it) instead of 8 links; (5) trust per login derived from OWNER, MEMBER or COLLABORATOR associations, no `ignored` count or `foreign-review-ignored` hint; (6) a long thread is read up to 500 comments and then `unknown` (Go: first page plus last five pages, `truncated`); (7) hints: `clear-not-ready` and `base-not-default` are ported (data of the pull request list, no extra read; default branch from `base.repo.default_branch`, no `base-not-default` without a known base and default branch); `no-final-review`, `truncated-review-unknown`, `foreign-review-ignored` (covered by the states) and `ready-mergeable` (needs readycheck groups) are deliberately not ported, `parent-merged-retarget` (extra read of closed pull requests per repository with stacks) is a follow-up candidate; no per-group counts; (8) the state of every pull request in text and JSON (`review`, `review_state`, `pull_requests.review`, `options.review`), not only counts; (9) limit 200 per run in repository order, no `--limit`, 16 parallel reads instead of 4 repositories, stop after a rate limit (429, or 403 with exhausted limit, `Retry-After` or "rate limit"/"abuse detection" in the first 4096 bytes of the body, as Go) for the comment reads of the whole run: not started reads are `?` plus one notice `rate limit reached, N reads skipped`, exit 0; Go stops all sources of the run, Rust only the comment reads; (10) exit 0 for a failed review read (Go: 1). JSON additive in schema 2: `notices` (code, source, repos, message, count; the same list as the text block `Notices (N)`, README "Output for agents"; Go has code, source, repos, message), `options`, `stats`, `repos[].fetch`, `fetch_error`, `worktree_list`, `ci_main` (new: the CI of the default branch), `options.review`, `pull_requests.review` (with `hints{clear_not_ready,base_not_default}`), `open[].review_state`, `open[].hints`, `open[].base`, `open[].default_branch`. | `internal/statuscmd` (40), `statusremote` (109), `cli/status_*_test.go`; goldens pin Go text and schema v1, reuse inputs not goldens |
 | `sync` | present: acts by default like Go (owner decision 2026-11-11, "standard wie Go: ausführen"); `--plan`/`--dry-run` preview | - | **port** (done): fast-forward of every repository. Deviation: `--apply` is a hidden, ignored alias (no Go flag), a usage error together with `--plan`/`--dry-run`; the Rust plan fetches `origin` like Go's (owner decision 2026-11-13), deviations in README "Deviations from Go in these flags", 14. Deviation: Go refuses jj-owned paths (`sync-unsupported-backend`); Rust has no jj detection (decision 8). | `internal/stwsync` (162), `cli/sync_test.go` |
@@ -214,37 +214,38 @@ is **absent** as a command. Test counts are `grep -c '^func Test'` per Go packag
 | `ready-check` | present (`src/ready_check.rs`) | M4 | **port**: pure `Evaluate` over seven conditions (open, review, checks, base, blocker, conflict, rebaseable). Review condition comes from the Rust M3 state. | `internal/readycheck/{check,run,command}_test.go` |
 | `lint pr` | present (`src/lint_pr.rs`, `src/lint_pr_cmd.rs`) | M8 | **port** (done): PR text rules; deviations in "Slice 3". | `internal/lintpr` (15), `lintprcmd` (17), `cli/lint_test.go` |
 | `lint review`, `lint pr-text` (new) | present (`src/lint_files.rs`) | M8 | **new, no Go counterpart**: the text of a review comment or a PR text from a file, read-only, no network. Shares the functions and rule IDs of `lint pr` (`line_count`, session pattern, `review::parse_strict`); adds `text-line-endings`, `review-patch-id`, `review-head`, `pr-generated-line`. Named behavior: exit 3 for an error finding, as `lint pr`; `lint pr-text` has a Draft/Ready switch (`--ready`: `Blocker: None.`); the `#n` cross-repository check is not part of it. README "Text files". | tests: `tests/it/lint_files.rs` (23 cases); Go has none |
-| `pulls` | absent | M9 | **port** as read-only queue after M2/M3/M4; Rust has open-PR reads only. | `internal/pulls` (85), `pullscmd` (65), `prviews` (17), `cli/pulls_test.go` |
+| `pulls` | no separate queue. GitHub reads, `stw status --review` and `stw ready-check` exist | M9 | **defer** a separate queue until the multi-PR triage case records a recurring gap ([#34](https://github.com/wstein/whr-anchorage/issues/34)). | `internal/pulls` (85), `pullscmd` (65), `prviews` (17), `cli/pulls_test.go` |
 | `restack plan` (h) | present: `stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json]` | M1/M2 | **port (done) plus whole-stack preview (new)** (owner go, 2026-11-11; no spike for the port part; the whole-stack part and the auto-detection are new behavior without a Go counterpart; owner accepted the plan live on 2026-11-11). Read-only: no ref, file or object on disk, no network, no `git` process (gix only; the in-memory engine of M1). Port: the single-branch prediction `BRANCH --old-parent REV --onto BASIS` (replay, predicted conflicts with paths and kinds, empty commits, merge or root commit refused, old parent no ancestor refused, unrelated histories refused). New: the chain `A B C` replayed level by level, a level above a conflict is `inherited-conflict` (not computed; the spike continued with conflict-marker commits), the chain derived from the local branch topology when no branch is named (starting at the checked-out branch; two candidates, a fork, two names at one commit, a detached head, no common history: refused with the explicit spelling as suggestion), `--onto` default `origin/HEAD` else usage. Fail closed: a level that would be clean is `unknown` with the reason when the replay differs from git (`merge.renames`, `diff.renames`, `merge.renameLimit`, `diff.renameLimit` (pinned 7000, the merge default of git, measured), `diff.algorithm` not at the pinned value, a `merge` attribute in a tree, in the range or in `info/attributes` of the common dir, a commit that changes a submodule); the local default branch is never a level. Limits against a real `git rebase` (directory renames approximated, rename detection pinned, binary files, submodules, merge drivers, rerere unknown, skip by patch-id, dirty work tree not looked at): README "Stack preview". Deviations from Go, one by one (README "Deviations from the Go `restack plan`"): visible, other form and flags (short branch names, `--onto` any revision, old parent optional); not ported: range pairing (needs git range-diff), cherry classification, own-diff equality, identities and the outcome table, overlap, affected refs/worktrees/hooks, lease-push and resync texts, `--expect-head`, `--remote`, `PATH`, attribute and repository hazard refusals (replaced by `unknown`), refusal of a dirty target, operation in progress and bare repository, jj/GitButler refusal, exit status 3 and the byte bound; the gix engine instead of `git merge-tree` (paths of four conflict kinds differ, `src/replay.rs`); exit 0 only for `plan: clean`; own output and JSON (`restack-plan`, schema 2). The oracle is real `git rebase` in disposable repositories (`tests/it/restack_plan.rs`). Go cases that map: `go_*` in that file (clean replay against a real rebase, predicted conflict stops the replay and names the paths, conflict kinds, empty commits, old parent must be an ancestor, unrelated histories, merge commit refused, options validated, nothing written); the others of the 54 + 24 Go tests belong to the evidence that is not ported. | `internal/restack` (54), `conflicts` (24), `cli/testdata/restack-plan-*.json` |
-| `land` | absent | M11 | **defer**: `internal/land/shapes.json` lists no measured shape, so the Go apply path cannot run today (`cli/land.go` help). | `internal/land` (42), `landcmd` (25); v0.2.1 fixtures as in M11 |
+| `land` | Git and `gh` for PR workflows | M11 (historical) | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | `internal/land` (42), `landcmd` (25) |
 | `watch` | absent | M13 | **defer**: helpers wait with background loops meanwhile. | `internal/watch` (89), `watchcmd` (50) |
-| `issues` | absent | M13 | **defer**. | `internal/issues` (39), `issuescmd` (28) |
-| `workspace plan` | absent | M12 | **defer**: general workspace wizard deferred (matrix); owned resolve worktrees come with M12. | `internal/workspace` (965, `testdata/`), `internal/acceptance` |
-| `workspace apply` | absent | M12 | **defer**, as `workspace plan`. | same |
-| `workspace handoff` | absent | M12 | **defer**, as `workspace plan`. | same |
-| `workspace retire-plan` | absent | M12 | **defer**, as `workspace plan`. | same |
-| `release check` (h) | absent | M13 | **defer**: hidden in Go until its docs item (`cli/release.go:29`); publication stays with the owner. | `internal/release` (356), `cli/release_*_test.go`, `releaseworkflow` |
-| `release plan` (h) | absent | M13 | **defer**, as `release check`. | same |
-| `release verify` (h) | absent | M13 | **defer**, as `release check`. | same |
-| `release record` (h) | absent | M13 | **defer**, as `release check`. | same |
-| `release build` (h) | absent | M13 | **defer**, as `release check`. | same |
-| `release dispatch` (h) | absent | M13 | **defer**, as `release check`. | same |
-| `hosting repo` | no command; reads in `src/github.rs`, `src/github/reads.rs` | M4/M9 | **drop** as command (matrix: no hosting CLI wrappers); the reads stay internal. | `cli/testdata/hosting-repo.json`, `internal/hosting` (327) |
-| `hosting pr` | as above | M4/M9 | **drop** as command. | `cli/testdata/hosting-pr.json` |
-| `hosting prs` | as above | M4/M9 | **drop** as command. | `internal/hosting/testdata` |
-| `hosting ci` | as above; `check_runs`, `commit_statuses` exist | M4 | **drop** as command; ready-check needs the reads. | `cli/testdata/hosting-ci.json` |
-| `inspect` | absent | - | **drop**: Git identity is in `status` (matrix). | `internal/inspection` (529) |
-| `inventory` | absent | - | **drop**: worktree facts are in `src/repo/worktrees.rs` (matrix: no inventory query language). | `internal/inspection` |
-| `repos` | absent | - | **drop**: shared workspace iteration instead (matrix). | `internal/fanout`, `cli/repos_test.go` |
-| `pins` (h) | no command; `gitlink_state` in `src/status.rs:176` | - | **drop**: hidden in Go until its spec item (`cli/pins.go:39`), gitlinks are in `status`. | `cli/pins_test.go`, `cli/testdata/pins-*.json` |
-| `version` | `--version` | - | **drop** (matrix: no version subcommand). | `cmd/stw/main_test.go` |
+| `issues` | counts in `stw status`, full lists pending | - | **drop** the standalone command. Add full lists to default `stw status` and `stw status --json` ([#35](https://github.com/wstein/whr-anchorage/issues/35)). | `internal/issues` (39), `issuescmd` (28) |
+| `workspace plan` | `workspace worktree-plan` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | `internal/workspace` (965, `testdata/`), `internal/acceptance` |
+| `workspace apply` | `workspace worktree-apply` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | same |
+| `workspace handoff` | `workspace checkpoint` and `workspace resume` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | same |
+| `workspace retire-plan` | `workspace retirement-plan` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | same |
+| `release check` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | `internal/release` (356), `cli/release_*_test.go`, `releaseworkflow` |
+| `release plan` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | same |
+| `release verify` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | same |
+| `release record` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | same |
+| `release build` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | same |
+| `release dispatch` (h) | owner release workflow | - | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | same |
+| `hosting repo` | GitHub and `gh` for direct queries | - | **drop** the wrapper ([#33](https://github.com/wstein/whr-anchorage/issues/33)). Product GitHub reads remain internal. | `cli/testdata/hosting-repo.json`, `internal/hosting` (327) |
+| `hosting pr` | GitHub and `gh` for direct queries | - | **drop** the wrapper ([#33](https://github.com/wstein/whr-anchorage/issues/33)). Product GitHub reads remain internal. | `cli/testdata/hosting-pr.json` |
+| `hosting prs` | GitHub and `gh` for direct queries | - | **drop** the wrapper ([#33](https://github.com/wstein/whr-anchorage/issues/33)). Product GitHub reads remain internal. | `internal/hosting/testdata` |
+| `hosting ci` | GitHub and `gh` for direct queries | - | **drop** the wrapper ([#33](https://github.com/wstein/whr-anchorage/issues/33)). Product GitHub reads remain internal. | `cli/testdata/hosting-ci.json` |
+| `inspect` | checkout-free PR inspection tracked in [#28](https://github.com/wstein/whr-anchorage/issues/28) | - | **drop** the Go command ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `internal/inspection` (529) |
+| `inventory` | `stw status --worktrees --json` | - | **drop**. Add missing worktree fields for concrete workflows ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `internal/inspection` |
+| `repos` | `stw status --json` | - | **drop**. Use the status repository overview ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `internal/fanout`, `cli/repos_test.go` |
+| `pins` (h) | submodule pin drift in `stw status` | - | **drop** ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `cli/pins_test.go`, `cli/testdata/pins-*.json` |
+| `version` | `stw --version` | - | **drop** the subcommand and its JSON output ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `cmd/stw/main_test.go` |
 
-Also in the Go repository: `cmd/gh-jj` (gh extension wrapper) and `cmd/stw-docs`: **drop** (matrix: no brand/site/gh-jj
-wrappers). Owner confirmed 2026-11-11 for `cmd/gh-jj` only (jj is not supported); `cmd/stw-docs` stays a proposal.
-Tally: 34 items = the 33 commands plus the mode `sync restore` (commands without a Go counterpart, such as `prove`, are not counted). Rows marked (flag) are proposals inside their command and
-are not counted. Port 12 (7 of them present in Rust: status, sync, `sync restore`, tidy plan, apply, restore, `tidy history`;
-the owner decisions of 2026-11-11 turned `tidy history` and `sync restore` from "owner decides" into ports), drop 9, defer 13,
-owner decides 0.
+Also in the Go repository: `cmd/gh-jj` was dropped by the owner on 2026-11-11.
+The owner retired `cmd/stw-docs` in [#33](https://github.com/wstein/whr-anchorage/issues/33). A Rust command reference generated
+from the CLI definitions is pending in [#39](https://github.com/wstein/whr-anchorage/issues/39).
+
+Tally: 34 items = the 33 Go leaf commands plus the `sync restore` mode. Flag rows, the two
+extra Go binaries, and commands without a Go counterpart are outside this count.
+Current dispositions: 11 port, 21 drop, 2 defer (`pulls` and `watch`).
 
 Test corpus: the Go fixtures are mostly Go code (repository builders such as `internal/carryover/fixture_test.go`), few
 data files (`cli/testdata`, `internal/hosting/testdata`). "Shared corpus" therefore means: per Go test, one named Rust
@@ -255,12 +256,51 @@ case with the same scenario, or a named deviation. Where the Rust rules are stri
 - PR lint and queue rules (M8, M9): not compared with the current dotagents rules; UNKNOWN until each rule is checked.
 - Golden outputs of `status` pin Go text and schema v1; Rust has schema 2.
 
+### Owner decisions on the remaining interfaces (2026-11-25)
+
+The inventory records the decisions under [#32](https://github.com/wstein/whr-anchorage/issues/32). Follow-up work is tracked separately.
+
+- **Command reference.** Select the output format and publication location before
+  implementation. Generate from the Rust CLI definitions and verify reproducible
+  output covering public commands, subcommands and flags. [#39](https://github.com/wstein/whr-anchorage/issues/39)
+- **PR triage.** Compare existing GitHub reads, `stw status --review` and
+  `stw ready-check` on a concrete multi-PR case. Record which PR needs attention
+  next and why, and document any recurring gap. A separate read-only queue needs
+  a demonstrated gap and a versioned JSON contract. [#34](https://github.com/wstein/whr-anchorage/issues/34)
+- **Open issues in status.** By default, terminal and JSON status will list all
+  open issues for the main repository and its GitHub gitlink repositories, with
+  counts retained as a summary. Batch repositories in GitHub GraphQL and fetch
+  further pages per repository and for any paginated issue metadata the output
+  promises. Group terminal output by repository and show each issue's number,
+  title, labels and assignees. JSON also carries the repository identifier,
+  issue URL and last update time. Preserve successful results on partial
+  failure, identify the affected repository and mark coverage incomplete. An
+  empty list requires a successful read. The local spike must demonstrate a
+  second page and partial failure before live acceptance and the Rust port. [#35](https://github.com/wstein/whr-anchorage/issues/35)
+- **Workspace entry and handoff.** Native `workspace worktree-plan` and
+  `workspace worktree-apply` shipped in [`356a989`](https://github.com/wstein/whr-anchorage/commit/356a989a2a23d14fb1183e025bc1d8447447dd90).
+  Rust also has `workspace checkpoint`, `workspace resume` and
+  `workspace retirement-plan`. Revisit a guided entry point if a concrete
+  usability problem warrants it. The ref-recovery check for changes since the
+  preview remains pending in [#29](https://github.com/wstein/whr-anchorage/issues/29). [#36](https://github.com/wstein/whr-anchorage/issues/36)
+- **Publication.** In repositories that use PRs, agents can push their own topic
+  branches, open drafts, append commits, and rebase or rewrite branches they
+  own or have explicitly taken over. Use `--force-with-lease=<ref>:<observed SHA>`
+  for a rewrite and stop to inspect if the remote head has moved. An independent
+  agent reviews the exact PR head. A changed head requires current CLEAR under
+  that repository's rules. The user normally merges PRs and owns releases.
+  Anchorage retains independent CLEAR and fast-forward to main under its own
+  rules. Revisit publication automation only for a named Rust review workflow
+  with exact-head evidence and fast-forward rules. Track the evidence decision
+  in [#9](https://github.com/wstein/whr-anchorage/issues/9). [#37](https://github.com/wstein/whr-anchorage/issues/37)
+
 ### Cutover criteria
 
-A Go command counts as **replaced** when (a) its Rust equivalent passes the test cases derived from Go (deviations
-named) and an independent review of the exact head is CLEAR, or (b) the owner decided `drop` for it explicitly.
-`defer` is not an end state: before archiving, the owner turns each deferred command into a port (a) or a `drop` (b).
-Archive `legacy/sourcesteward` only when all 34 items, every flag row and the two extra binaries are replaced. Then:
+A Go item meets the cutover criteria through an accepted Rust port or an explicit
+owner decision to drop it. A port passes the tests derived from Go, documents its
+deviations, and receives independent CLEAR on the exact head. Before archiving,
+the owner resolves each deferred command as a port or a drop. The criteria
+cover all 34 inventory items, every flag row, and the two extra binaries. Then:
 1. Owner: archive the repository `wstein/sourcesteward` (GitHub setting).
 2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
 3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`); changes to
@@ -280,16 +320,13 @@ Owner decisions of 2026-11-10 (chosen by selection):
 - **Ports without spike** apply as soon as AGENTS.md with that rule is on `main` (commit `docs(agents)` of this branch).
 - **Go pages job:** the job `pages` on `main` of `wstein/sourcesteward` is red (Pages not set up). Decided: do nothing,
   the legacy repository is archived. Noise until the archive.
-- **The 13 `defer` commands stay open** (the two flag rows `--prune`/`--no-prune` and `--submodules` are ported, owner go 2026-11-11). Before the archive the owner turns each into a port or a `drop`; agents do not
-  decide this.
+- At this stage the 13 deferred commands still needed a disposition, and the
+  owner had confirmed the jj-related drops. The 2026-11-25 decisions above
+  update the command dispositions. Any unrelated drop proposal still requires
+  explicit owner approval. The inventory gives the current tally.
 - M3 is in the product as a library (`src/review.rs`); M4 wires it into commands (`status --review`, `review carry-over`).
-- Still deferred: M7, M11, M12, M13.
-- **Open: the `drop` proposals.** Criterion (b) needs an explicit owner decision per `drop`: 9 command rows, the (flag) rows
-  marked drop and the two extra binaries. Until then they are proposals. Confirmed by the owner (2026-11-11, jj is not
-  supported): `tidy` with jj (bookmarks, owned-workspace/task retirement), `cmd/gh-jj`. Deviation, not a drop: Go `status`,
-  `sync` (and `sync restore`, watch, tidy via the same check) refuse jj-owned paths; Rust has no jj detection
-  (decision 8). All other `drop` rows (hosting, inspect, inventory, repos, pins, version, `cmd/stw-docs`, the sync flags,
-  site/docs) are not yet confirmed individually.
+- M7, M11, M12 and M13 were deferred at this stage; see the milestone table and
+  the later owner decisions for the current scope.
 
 ### Next slice
 
@@ -383,7 +420,7 @@ from Go:
 - Rules table: the anchors cite `claude/CLAUDE.md` and `claude/skills/agent-workflow/SKILL.md` of agent-rules. The test
   `rules_table_anchors_in_agent_rules` runs only with `AGENT_RULES_DIR` (as in Go). The current `.agents` checkout of this workspace has
   no `claude/` directory, so the anchors are UNKNOWN against the current dotagents layout (see the "PR lint" line in "Test corpus").
-Then M9 (`pulls`).
+The next M9 decision is the multi-PR triage evaluation in [#34](https://github.com/wstein/whr-anchorage/issues/34).
 
 ## Op log readers (2026-11-12)
 
