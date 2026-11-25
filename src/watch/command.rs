@@ -7,14 +7,16 @@
 
 use std::io::Write;
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
-use super::cycle::{self, Poll};
+use super::cycle::{self, Seen};
 use super::event::Event;
-use super::reader::{self, HttpGet};
 use super::statedir::{self, IdSource};
 use super::{Core, Output, WatchError};
+use crate::watch_reader::cond_store::CondStore;
+use crate::watch_reader::host::{HostObserver, WatchRead};
+use crate::watch_reader::obs::{Hints, KnownPr, ObserveFailure, RepoObservation};
 
 pub const EXIT_FAILED: u8 = 1;
 pub const EXIT_USAGE: u8 = 2;
@@ -25,8 +27,6 @@ pub const EXIT_STALE: u8 = 5;
 pub const MIN_INTERVAL_SECS: u64 = 10;
 /// `--stream` interval when the flag is omitted.
 pub const DEFAULT_INTERVAL_SECS: u64 = 60;
-
-static STREAM_STOP: AtomicBool = AtomicBool::new(false);
 
 struct Lines<W> {
     out: W,
@@ -49,10 +49,9 @@ pub trait Pace {
 pub struct LivePace;
 
 impl LivePace {
-    /// Arms SIGINT and SIGTERM, then clears a stop left by an earlier stream in this process.
+    /// Arms SIGINT and SIGTERM through the git runner, the only file that may name libc.
     pub fn install() -> Result<LivePace, WatchError> {
-        arm_stop()?;
-        STREAM_STOP.store(false, Ordering::SeqCst);
+        crate::git_runner::arm_watch_stop().map_err(WatchError::Io)?;
         Ok(LivePace)
     }
 }
@@ -65,42 +64,42 @@ impl Pace for LivePace {
     fn wait(&mut self, seconds: u64) -> bool {
         let end = Instant::now() + Duration::from_secs(seconds);
         while Instant::now() < end {
-            if STREAM_STOP.load(Ordering::Relaxed) {
+            if crate::git_runner::watch_stopped() {
                 return false;
             }
             let left = end.saturating_duration_since(Instant::now());
             std::thread::sleep(left.min(Duration::from_millis(200)));
         }
-        !STREAM_STOP.load(Ordering::Relaxed)
+        !crate::git_runner::watch_stopped()
     }
 }
 
-extern "C" fn handle_stop(_: libc::c_int) {
-    STREAM_STOP.store(true, Ordering::Relaxed);
+/// One repository observation. `HostObserver` is the production source.
+pub trait WatchSource {
+    fn observe_repo(
+        &mut self,
+        repo: &str,
+        hints: &Hints,
+        cond: Option<&CondStore>,
+    ) -> Result<RepoObservation, ObserveFailure>;
 }
 
-fn arm_stop() -> Result<(), WatchError> {
-    unsafe {
-        let mut action: libc::sigaction = std::mem::zeroed();
-        action.sa_sigaction = handle_stop as *const () as libc::sighandler_t;
-        action.sa_flags = libc::SA_RESTART;
-        if libc::sigemptyset(&mut action.sa_mask) != 0 {
-            return Err(WatchError::Io("cannot clear the signal mask".to_string()));
-        }
-        for sig in [libc::SIGINT, libc::SIGTERM] {
-            if libc::sigaction(sig, &action, std::ptr::null_mut()) != 0 {
-                return Err(WatchError::Io(
-                    "cannot install the stop handler".to_string(),
-                ));
-            }
-        }
+impl<R: WatchRead> WatchSource for HostObserver<R> {
+    fn observe_repo(
+        &mut self,
+        repo: &str,
+        hints: &Hints,
+        cond: Option<&CondStore>,
+    ) -> Result<RepoObservation, ObserveFailure> {
+        self.observe(repo, hints, cond, &AtomicBool::new(false))
     }
-    Ok(())
 }
 
 /// `--interval` and `--max-idle`. `max_idle_secs` of 0 is off.
 pub struct StreamLimits {
     pub baseline: bool,
+    /// Kept for callers that still name the API host. The reader carries its own base.
+    #[allow(dead_code)]
     pub api_base: String,
     pub interval_secs: u64,
     pub max_idle_secs: u64,
@@ -150,8 +149,7 @@ pub fn run_once(
     repos: &[String],
     baseline: bool,
     now_secs: i64,
-    http: &dyn HttpGet,
-    api_base: &str,
+    source: &mut dyn WatchSource,
     out: &mut dyn Write,
 ) -> Result<u8, WatchError> {
     if repos.is_empty() {
@@ -159,10 +157,10 @@ pub fn run_once(
     }
     let mut lines = Lines { out };
     let (mut core, _) = Core::open(dir, baseline, &mut lines)?;
-    let polls = poll_all(repos, http, api_base);
+    let polls = poll_ready(repos, source, &core.state, now_secs);
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
-    let events = cycle::advance(&mut core.state, &polls, now_secs);
+    let events = cycle::advance_seen(&mut core.state, &polls, now_secs);
     let committed = core.commit(&events, &mut lines);
     if let Err(err) = committed {
         core.close();
@@ -184,7 +182,7 @@ pub fn run_once(
 pub fn run_stream(
     dir: &Path,
     repos: &[String],
-    http: &dyn HttpGet,
+    source: &mut dyn WatchSource,
     out: &mut dyn Write,
     limits: StreamLimits,
     pace: &mut dyn Pace,
@@ -202,13 +200,13 @@ pub fn run_stream(
             core.close();
             return Ok(0);
         }
-        let polls = poll_ready(repos, http, &limits.api_base, &core.state, now);
+        let polls = poll_ready(repos, source, &core.state, now);
         // The hold starts when the response arrives. A slow read must not spend
         // `Retry-After` on time that already passed inside the request.
         let arrived = pace.now_secs();
         prepare_cycle(&mut core, repos, force, limits.interval_secs);
         force = false;
-        let events = cycle::advance(&mut core.state, &polls, arrived);
+        let events = cycle::advance_seen(&mut core.state, &polls, arrived);
         if let Err(err) = core.commit(&events, &mut lines) {
             core.close();
             return Err(err);
@@ -255,17 +253,59 @@ fn stream_wait(interval_secs: u64, max_idle_secs: u64, now: i64, last_event: i64
 /// sets that deadline; polling them early would ignore `Retry-After`.
 fn poll_ready(
     repos: &[String],
-    http: &dyn HttpGet,
-    api_base: &str,
+    source: &mut dyn WatchSource,
     state: &super::state::State,
     now: i64,
-) -> Vec<Poll> {
-    let due: Vec<String> = repos
-        .iter()
-        .filter(|repo| !retry_holds(state, repo, now))
-        .cloned()
-        .collect();
-    poll_all(&due, http, api_base)
+) -> Vec<Seen> {
+    let mut out = Vec::new();
+    for repo in repos {
+        if retry_holds(state, repo, now) {
+            continue;
+        }
+        let hints = hints_of(state, repo);
+        let saved = saved_cond(state, repo);
+        out.push(Seen {
+            repo: repo.clone(),
+            result: source.observe_repo(repo, &hints, saved.as_ref()),
+        });
+    }
+    out
+}
+
+fn hints_of(state: &super::state::State, repo: &str) -> Hints {
+    let Some(rs) = state.repo.get(repo) else {
+        return Hints {
+            cycle: state.cycle,
+            detail_every: 10,
+            known: Vec::new(),
+        };
+    };
+    Hints {
+        cycle: state.cycle,
+        detail_every: 10,
+        known: rs
+            .prs
+            .values()
+            .map(|p| KnownPr {
+                number: p.number,
+                head: p.head.clone(),
+                class: match p.class {
+                    super::state::Class::Unobserved => String::new(),
+                    super::state::Class::NoChecks => "none".into(),
+                    super::state::Class::Pending => "pending".into(),
+                    super::state::Class::Green => "green".into(),
+                    super::state::Class::Red => "red".into(),
+                },
+                class_candidate: String::new(),
+                detail_due: p.detail_due,
+            })
+            .collect(),
+    }
+}
+
+fn saved_cond(state: &super::state::State, repo: &str) -> Option<CondStore> {
+    let value = state.repo.get(repo)?.conditional.as_ref()?;
+    CondStore::from_json(value).ok()
 }
 
 fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
@@ -274,16 +314,6 @@ fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
         .get(repo)
         .and_then(|h| crate::github::parse_utc(&h.next_try))
         .is_some_and(|until| now < until)
-}
-
-fn poll_all(repos: &[String], http: &dyn HttpGet, api_base: &str) -> Vec<Poll> {
-    repos
-        .iter()
-        .map(|repo| Poll {
-            repo: repo.clone(),
-            result: reader::read_open_pulls(http, api_base, repo),
-        })
-        .collect()
 }
 
 /// Records the watched set for `--status` and, when `force` is set, makes the next successful

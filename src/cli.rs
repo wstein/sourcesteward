@@ -2197,7 +2197,8 @@ fn run(command: Command) -> Result<u8> {
 
 fn run_watch(a: WatchArgs) -> Result<u8> {
     use crate::watch::command::{self, watch_error_exit, StreamLimits};
-    use crate::watch::reader::UreqGet;
+    use crate::watch_reader::host::HostObserver;
+    use crate::watch_reader::http::WatchHttp;
     let modes = [a.once, a.stream, a.status]
         .into_iter()
         .filter(|on| *on)
@@ -2234,7 +2235,13 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
     } else {
         let (token, _) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
             .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
-        let http = UreqGet::new(token);
+        let http = WatchHttp::new(
+            token,
+            "https://api.github.com".to_string(),
+            "api.github.com".to_string(),
+        );
+        let mut source =
+            HostObserver::new(http, Box::new(crate::tidy::now_secs), 0, vec![], vec![]);
         if a.stream {
             let interval = match a.interval.as_deref() {
                 Some(text) => command::parse_duration_secs(text)
@@ -2260,7 +2267,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             command::run_stream(
                 &dir,
                 &a.repo,
-                &http,
+                &mut source,
                 &mut std::io::stdout(),
                 StreamLimits {
                     baseline: a.baseline,
@@ -2276,8 +2283,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
                 &a.repo,
                 a.baseline,
                 now,
-                &http,
-                "https://api.github.com",
+                &mut source,
                 &mut std::io::stdout(),
             )
         }
