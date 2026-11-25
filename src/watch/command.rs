@@ -203,21 +203,29 @@ pub fn run_stream(
             return Ok(0);
         }
         let polls = poll_ready(repos, http, &limits.api_base, &core.state, now);
+        // The hold starts when the response arrives. A slow read must not spend
+        // `Retry-After` on time that already passed inside the request.
+        let arrived = pace.now_secs();
         prepare_cycle(&mut core, repos, force, limits.interval_secs);
         force = false;
-        let events = cycle::advance(&mut core.state, &polls, now);
+        let events = cycle::advance(&mut core.state, &polls, arrived);
         if let Err(err) = core.commit(&events, &mut lines) {
             core.close();
             return Err(err);
         }
-        if let Err(err) = core.heartbeat(now, "stream") {
+        if let Err(err) = core.heartbeat(arrived, "stream") {
             core.close();
             return Err(err);
         }
         if !events.is_empty() {
-            last_event = now;
+            last_event = arrived;
         }
-        let wait = stream_wait(limits.interval_secs, limits.max_idle_secs, now, last_event);
+        let wait = stream_wait(
+            limits.interval_secs,
+            limits.max_idle_secs,
+            arrived,
+            last_event,
+        );
         if wait == 0 || !pace.wait(wait) {
             core.close();
             return Ok(0);

@@ -86,6 +86,13 @@ fn error_event(state: &State, repo: &str, now: &str, failure: &ReadFailure) -> E
     let episode = health.map(|h| h.episode).unwrap_or(0).saturating_add(1);
     let retry = match failure {
         ReadFailure::Transient {
+            retry_until: Some(until),
+            ..
+        } => {
+            let at = crate::github::parse_utc(now).unwrap_or(0);
+            u64::try_from(until.saturating_sub(at)).unwrap_or(0)
+        }
+        ReadFailure::Transient {
             retry_in_seconds, ..
         } => *retry_in_seconds,
         ReadFailure::Fatal { .. } => 0,

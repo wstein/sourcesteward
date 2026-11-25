@@ -25,8 +25,13 @@ pub struct OpenPr {
 /// Why a read did not return a complete open list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReadFailure {
-    /// Try again later. The accepted list stays.
-    Transient { code: String, retry_in_seconds: u64 },
+    /// Try again later. The accepted list stays. `retry_until` is an absolute Unix
+    /// second (the rate-limit reset). It wins over `retry_in_seconds`.
+    Transient {
+        code: String,
+        retry_in_seconds: u64,
+        retry_until: Option<i64>,
+    },
     /// The repository cannot be read with this token. The accepted list stays.
     Fatal { code: String },
 }
@@ -46,6 +51,8 @@ pub struct HttpResponse {
     pub retry_after_seconds: Option<u64>,
     /// `X-RateLimit-Remaining` was `0`. A 403 with this set is a rate limit, not a refusal.
     pub remaining_zero: bool,
+    /// `X-RateLimit-Reset`, Unix seconds. Used when the budget is zero and `Retry-After` is absent.
+    pub rate_reset: Option<i64>,
 }
 
 /// The only network seam. Tests supply it; the command uses `ureq`.
@@ -90,6 +97,7 @@ pub fn read_open_pulls(
                 return Err(ReadFailure::Transient {
                     code: "truncated".into(),
                     retry_in_seconds: 60,
+                    retry_until: None,
                 });
             }
             continue;
@@ -98,6 +106,7 @@ pub fn read_open_pulls(
             resp.status,
             resp.retry_after_seconds,
             resp.remaining_zero,
+            resp.rate_reset,
             &resp.body,
         ));
     }
@@ -111,24 +120,28 @@ pub fn classify_status(
     status: u16,
     retry_after_seconds: Option<u64>,
     remaining_zero: bool,
+    rate_reset: Option<i64>,
     body: &[u8],
 ) -> ReadFailure {
     let limited = remaining_zero
         || retry_after_seconds.is_some()
         || crate::github::mentions_rate_limit(&body_head(body));
-    let retry = retry_after_seconds.unwrap_or(60);
+    let (retry, until) = retry_plan(retry_after_seconds, remaining_zero, rate_reset);
     match status {
         429 => ReadFailure::Transient {
             code: "rate-limited".into(),
             retry_in_seconds: retry,
+            retry_until: until,
         },
         500..=599 => ReadFailure::Transient {
             code: "http-5xx".into(),
             retry_in_seconds: retry,
+            retry_until: until,
         },
         403 if limited => ReadFailure::Transient {
             code: "rate-limited".into(),
             retry_in_seconds: retry,
+            retry_until: until,
         },
         401 | 403 => ReadFailure::Fatal {
             code: "forbidden".into(),
@@ -194,6 +207,24 @@ pub fn parse_pulls(body: &[u8]) -> Option<Vec<OpenPr>> {
     Some(out)
 }
 
+/// `Retry-After` is a duration. A primary limit with no such header waits until
+/// `X-RateLimit-Reset`. Anything else waits 60s.
+fn retry_plan(
+    retry_after_seconds: Option<u64>,
+    remaining_zero: bool,
+    rate_reset: Option<i64>,
+) -> (u64, Option<i64>) {
+    if let Some(after) = retry_after_seconds {
+        return (after, None);
+    }
+    if remaining_zero {
+        if let Some(reset) = rate_reset {
+            return (0, Some(reset));
+        }
+    }
+    (60, None)
+}
+
 fn body_head(body: &[u8]) -> String {
     let end = body.len().min(4096);
     String::from_utf8_lossy(&body[..end]).to_ascii_lowercase()
@@ -237,6 +268,7 @@ impl HttpGet for UreqGet {
             .map_err(|_| ReadFailure::Transient {
                 code: "network".into(),
                 retry_in_seconds: 60,
+                retry_until: None,
             })?;
         let status = resp.status().as_u16();
         let headers = resp.headers();
@@ -248,6 +280,10 @@ impl HttpGet for UreqGet {
             .get("x-ratelimit-remaining")
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.trim() == "0");
+        let rate_reset = headers
+            .get("x-ratelimit-reset")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().parse().ok());
         let body = resp
             .body_mut()
             .with_config()
@@ -256,12 +292,14 @@ impl HttpGet for UreqGet {
             .map_err(|_| ReadFailure::Transient {
                 code: "network".into(),
                 retry_in_seconds: 60,
+                retry_until: None,
             })?;
         Ok(HttpResponse {
             status,
             body,
             retry_after_seconds,
             remaining_zero,
+            rate_reset,
         })
     }
 }

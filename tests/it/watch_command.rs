@@ -31,6 +31,7 @@ impl HttpGet for OneGet {
             body: self.body.clone(),
             retry_after_seconds: None,
             remaining_zero: false,
+            rate_reset: None,
         })
     }
 }
@@ -38,7 +39,7 @@ impl HttpGet for OneGet {
 #[test]
 fn a_truncated_or_failed_status_does_not_replace_the_open_list() {
     assert!(matches!(
-        reader::classify_status(503, None, false, b""),
+        reader::classify_status(503, None, false, None, b""),
         ReadFailure::Transient { code, .. } if code == "http-5xx"
     ));
     let body = br#"[{"number":7,"title":"T","draft":false,"user":{"login":"ada"},"base":{"ref":"main","repo":{"full_name":"o/r"}},"head":{"ref":"topic","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"o/r"}}}]"#;
@@ -63,6 +64,7 @@ fn a_truncated_or_failed_status_does_not_replace_the_open_list() {
         result: Err(ReadFailure::Transient {
             code: "http-5xx".into(),
             retry_in_seconds: 30,
+            retry_until: None,
         }),
     };
     let events = cycle::advance(&mut state, &[failed], 1_700_000_060);
@@ -160,6 +162,7 @@ impl HttpGet for FixedGet {
             body: self.0.clone(),
             retry_after_seconds: None,
             remaining_zero: false,
+            rate_reset: None,
         })
     }
 }
@@ -182,6 +185,7 @@ impl HttpGet for CountingGet {
             body: body(&head),
             retry_after_seconds: None,
             remaining_zero: false,
+            rate_reset: None,
         })
     }
 }
@@ -423,6 +427,7 @@ impl HttpGet for RateGet {
                 body: br#"{"message":"You have exceeded a secondary rate limit"}"#.to_vec(),
                 retry_after_seconds: Some(120),
                 remaining_zero: false,
+                rate_reset: None,
             })
         } else {
             Ok(HttpResponse {
@@ -430,6 +435,7 @@ impl HttpGet for RateGet {
                 body: body(&"a".repeat(40)),
                 retry_after_seconds: None,
                 remaining_zero: false,
+                rate_reset: None,
             })
         }
     }
@@ -441,23 +447,25 @@ fn a_rate_limited_403_holds_the_repository_until_retry_after() {
         403,
         Some(120),
         false,
+        None,
         br#"{"message":"You have exceeded a secondary rate limit"}"#,
     );
     assert!(matches!(
         limited,
-        ReadFailure::Transient { code, retry_in_seconds: 120 } if code == "rate-limited"
+        ReadFailure::Transient { code, retry_in_seconds: 120, .. } if code == "rate-limited"
     ));
     let plain = reader::classify_status(
         403,
         None,
         false,
+        None,
         br#"{"message":"Resource not accessible"}"#,
     );
     assert!(matches!(plain, ReadFailure::Fatal { code } if code == "forbidden"));
-    let exhausted = reader::classify_status(403, None, true, b"{}");
+    let exhausted = reader::classify_status(403, None, true, None, b"{}");
     assert!(matches!(
         exhausted,
-        ReadFailure::Transient { code, retry_in_seconds: 60 } if code == "rate-limited"
+        ReadFailure::Transient { code, retry_in_seconds: 60, retry_until: None, .. } if code == "rate-limited"
     ));
 
     let api = "https://api.github.com";
@@ -492,5 +500,144 @@ fn a_rate_limited_403_holds_the_repository_until_retry_after() {
         2,
         "a 120s retry skips the polls inside the window: {:?}",
         pace.sleeps
+    );
+}
+
+struct Moving {
+    now: std::rc::Rc<std::cell::Cell<i64>>,
+    sleeps: Vec<u64>,
+    stop_at: Option<usize>,
+}
+
+impl stw::watch::command::Pace for Moving {
+    fn now_secs(&mut self) -> i64 {
+        self.now.get()
+    }
+
+    fn wait(&mut self, seconds: u64) -> bool {
+        self.sleeps.push(seconds);
+        self.now.set(
+            self.now
+                .get()
+                .saturating_add(i64::try_from(seconds).unwrap_or(0)),
+        );
+        !matches!(self.stop_at, Some(n) if self.sleeps.len() == n)
+    }
+}
+
+struct SlowLimit {
+    now: std::rc::Rc<std::cell::Cell<i64>>,
+    starts: std::cell::RefCell<Vec<i64>>,
+    delay: i64,
+    retry_after: Option<u64>,
+    reset: Option<i64>,
+}
+
+impl HttpGet for SlowLimit {
+    fn get(&self, _url: &str) -> Result<HttpResponse, ReadFailure> {
+        let started = self.now.get();
+        self.starts.borrow_mut().push(started);
+        self.now.set(started.saturating_add(self.delay));
+        if self.starts.borrow().len() == 1 {
+            Ok(HttpResponse {
+                status: 429,
+                body: b"{}".to_vec(),
+                retry_after_seconds: self.retry_after,
+                remaining_zero: self.reset.is_some(),
+                rate_reset: self.reset,
+            })
+        } else {
+            Ok(HttpResponse {
+                status: 200,
+                body: body(&"a".repeat(40)),
+                retry_after_seconds: None,
+                remaining_zero: false,
+                rate_reset: None,
+            })
+        }
+    }
+}
+
+#[test]
+fn a_slow_429_holds_from_the_response_not_from_the_request_start() {
+    let now = std::rc::Rc::new(std::cell::Cell::new(1_700_000_000));
+    let http = SlowLimit {
+        now: std::rc::Rc::clone(&now),
+        starts: std::cell::RefCell::new(Vec::new()),
+        delay: 20,
+        retry_after: Some(30),
+        reset: None,
+    };
+    let (_dir, path) = state_path();
+    let mut pace = Moving {
+        now: std::rc::Rc::clone(&now),
+        sleeps: Vec::new(),
+        stop_at: Some(4),
+    };
+    let code = stw::watch::command::run_stream(
+        &path,
+        &["o/r".to_string()],
+        &http,
+        &mut Vec::new(),
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: "https://api.github.com".to_string(),
+            interval_secs: 10,
+            max_idle_secs: 0,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    let starts = http.starts.borrow().clone();
+    assert_eq!(code, 0);
+    assert_eq!(starts.len(), 2, "{starts:?}");
+    assert!(
+        starts[1] >= starts[0] + 50,
+        "Retry-After starts when the 429 arrives: {starts:?}"
+    );
+}
+
+#[test]
+fn a_primary_limit_waits_until_the_reset_header() {
+    let start = 1_700_000_000_i64;
+    let reset = start + 300;
+    let limited = reader::classify_status(403, None, true, Some(reset), b"{}");
+    assert!(matches!(
+        limited,
+        ReadFailure::Transient { retry_until: Some(at), .. } if at == reset
+    ));
+    let now = std::rc::Rc::new(std::cell::Cell::new(start));
+    let http = SlowLimit {
+        now: std::rc::Rc::clone(&now),
+        starts: std::cell::RefCell::new(Vec::new()),
+        delay: 0,
+        retry_after: None,
+        reset: Some(reset),
+    };
+    let (_dir, path) = state_path();
+    let mut pace = Moving {
+        now,
+        sleeps: Vec::new(),
+        stop_at: Some(7),
+    };
+    stw::watch::command::run_stream(
+        &path,
+        &["o/r".to_string()],
+        &http,
+        &mut Vec::new(),
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: "https://api.github.com".to_string(),
+            interval_secs: 10,
+            max_idle_secs: 0,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(
+        http.starts.borrow().len(),
+        1,
+        "a reset 300s out must outlast the 60s fallback: {:?}",
+        http.starts.borrow()
     );
 }
