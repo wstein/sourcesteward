@@ -75,6 +75,67 @@ fn save(repo: &Path) -> String {
     doc["checkpoint"].as_str().unwrap().to_owned()
 }
 
+fn apply(repo: &Path, plan: &Path, include: &str, exit: i32) -> Value {
+    run(
+        repo,
+        &[
+            "checkpoint",
+            "--task",
+            "demo",
+            "--include",
+            include,
+            "--apply-plan",
+            plan.to_str().unwrap(),
+        ],
+        exit,
+    )
+}
+
+#[test]
+fn a_saved_plan_refuses_changed_selection_base_or_ref_before_writing_objects() {
+    for changed in ["selection", "base", "ref"] {
+        let fx = fixture();
+        let previous = save(&fx.path);
+        let report = run(
+            &fx.path,
+            &[
+                "checkpoint",
+                "--task",
+                "demo",
+                "--include",
+                "selected file",
+                "--plan",
+            ],
+            0,
+        );
+        let path = fx.path.with_file_name("plan.json");
+        fs::write(&path, serde_json::to_vec(&report["plan"]).unwrap()).unwrap();
+
+        let mut include = "selected file";
+        let mut expected = previous;
+        match changed {
+            "selection" => include = "omitted",
+            "base" => {
+                git(&fx.path, &["commit", "-m", "change base"]);
+            }
+            "ref" => {
+                fs::write(fx.path.join("mixed"), "winner\n").unwrap();
+                let winner = save(&fx.path);
+                assert_ne!(winner, expected);
+                expected = winner;
+            }
+            _ => unreachable!(),
+        }
+        let objects_before = git(&fx.path, &["count-objects", "-v"]);
+        let refused = apply(&fx.path, &path, include, 1);
+        assert_eq!(refused["published"], false, "{changed}");
+        assert_eq!(refused["checkpoint"], expected, "{changed}");
+        assert_eq!(git(&fx.path, &["count-objects", "-v"]), objects_before);
+        let inspect = run(&fx.path, &["inspect", "--task", "demo"], 0);
+        assert_eq!(inspect["checkpoint"], expected, "{changed}");
+    }
+}
+
 #[test]
 fn plan_and_resume_preserve_the_selected_workspace_state() {
     let fx = fixture();
@@ -98,7 +159,11 @@ fn plan_and_resume_preserve_the_selected_workspace_state() {
     assert_eq!(git(&fx.path, &["count-objects", "-v"]), objects_before);
     assert!(!fx.path.join(".git/refs/stw/tasks/demo").exists());
 
-    let id = save(&fx.path);
+    let path = fx.path.with_file_name("plan.json");
+    fs::write(&path, serde_json::to_vec(&plan["plan"]).unwrap()).unwrap();
+    let applied = apply(&fx.path, &path, "selected file", 0);
+    assert_eq!(applied["published"], true);
+    let id = applied["checkpoint"].as_str().unwrap().to_owned();
     assert_eq!(fs::read(index_path).unwrap(), before);
     assert_eq!(
         fs::read_to_string(fx.path.join("mixed")).unwrap(),
@@ -195,6 +260,51 @@ exec "$STW_REAL_GIT" "$@"
         run(&fx.path, &["resume", current, dest.to_str().unwrap()], 0);
         assert_eq!(fs::read_to_string(dest.join("mixed")).unwrap(), expected);
     }
+    let winner = run(&fx.path, &["inspect", "--task", "demo"], 0)["checkpoint"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    let task_ref = "refs/stw/tasks/demo";
+    git(&fx.path, &["update-ref", task_ref, &original, &winner]);
+    let plan = run(&fx.path, &["checkpoint", "--task", "demo", "--plan"], 0);
+    let plan_file = fx.path.with_file_name("race-plan.json");
+    fs::write(&plan_file, serde_json::to_vec(&plan["plan"]).unwrap()).unwrap();
+    // Simulate another writer at the boundary after plan validation and capture.
+    fs::write(
+        &script,
+        format!(
+            r#"#!/bin/sh
+for arg do
+    if [ "$arg" = update-ref ]; then
+        "{real}" update-ref "{task_ref}" "{winner}" "{original}" || exit
+        break
+    fi
+done
+exec "{real}" "$@"
+"#,
+            real = real.display()
+        ),
+    )
+    .unwrap();
+    let refused = document(
+        command(
+            &fx.path,
+            &[
+                "checkpoint",
+                "--task",
+                "demo",
+                "--apply-plan",
+                plan_file.to_str().unwrap(),
+            ],
+        )
+        .env("PATH", path)
+        .output()
+        .unwrap(),
+        1,
+    );
+    assert_eq!(refused["published"], false);
+    assert_eq!(refused["checkpoint"], winner);
+    assert_eq!(git(&fx.path, &["rev-parse", task_ref]).trim(), winner);
 }
 
 #[test]

@@ -12,6 +12,7 @@ use crate::error::{exit, Error, Result};
 use crate::git_runner::{self, Hex40, Op, WorkspaceOp as Git};
 
 const FORMAT: &str = "stw-workspace-v1";
+const PLAN_FORMAT: &str = "stw-workspace-plan-v1";
 const TASK_REFS: &str = "refs/stw/tasks/";
 
 #[derive(Subcommand)]
@@ -31,9 +32,15 @@ pub(crate) struct CheckpointArgs {
     /// Include this exact non-ignored untracked file, relative to the worktree root
     #[arg(long)]
     include: Vec<String>,
-    /// Report the selection without writing Git objects or refs
+    /// Report the selection without writing Git objects or refs.
+    ///
+    /// With --json, save the "plan" object to a file outside the source worktree.
+    /// Apply it with --apply-plan FILE and the same task and --include paths.
     #[arg(long)]
     plan: bool,
+    /// Read the saved JSON plan object and verify it before capturing current contents
+    #[arg(long, conflicts_with = "plan", value_name = "FILE")]
+    apply_plan: Option<PathBuf>,
     #[command(flatten)]
     output: OutputArgs,
 }
@@ -64,6 +71,17 @@ struct OutputArgs {
     /// Emit one versioned JSON document
     #[arg(long)]
     json: bool,
+}
+
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct CheckpointPlan {
+    format: String,
+    task: String,
+    base: String,
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    observed_checkpoint: Option<String>,
+    included: BTreeSet<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -295,9 +313,28 @@ fn checkpoint(
     };
     report["included"] = json!(record.included);
     report["omitted"] = json!(record.omitted);
-    if args.plan {
-        report["next"] = json!("checkpoint");
-        return Ok(());
+    if args.plan || args.apply_plan.is_some() {
+        let current = CheckpointPlan {
+            format: PLAN_FORMAT.into(),
+            task: args.task.clone(),
+            base: record.base.clone(),
+            observed_checkpoint: previous.as_ref().map(|id| id.as_str().to_owned()),
+            included: record.included.clone(),
+        };
+        if args.plan {
+            report["plan"] = json!(current);
+            report["next"] = json!("checkpoint");
+            return Ok(());
+        }
+        if let Some(path) = &args.apply_plan {
+            let saved: CheckpointPlan = serde_json::from_slice(&fs::read(path)?)
+                .map_err(|error| Error::usage(format!("invalid saved checkpoint plan: {error}")))?;
+            if saved != current {
+                return Err(Error::repository(
+                    "saved checkpoint plan no longer matches task, base, ref, or selection",
+                ));
+            }
+        }
     }
 
     let temp = tempfile::tempdir()?;
