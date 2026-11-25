@@ -6,7 +6,7 @@ Everyday git and GitHub workflows for agents and people, in one binary. Written 
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
 nowhere else): today for the fetch of `sync` with ssh and local-path remotes and for `sync restore` (`git reset --keep`,
-`git update-ref`), and for workspace checkpoint, retirement preview, and resume. The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
+`git update-ref`), and for workspace checkpoint, retirement preview, worktree entry, and resume. The recovery refs and the journal of a `sync` run are written through gix, so a run needs no `git` for them
 (and the repository's own config cannot block them). `status`, `tidy` and `sync` start no
 program for any repository content: gix reads only, filter drivers (`filter.<name>.clean/smudge/process`) are dropped
 from the in-memory configuration (a file with a `filter=` attribute is then compared unconverted, so a content-rewriting
@@ -36,6 +36,8 @@ stw add       OWNER/REPO [PATH] [--dry-run] [--json] [--root PATH]
 stw workspace checkpoint --task NAME [--include PATH]... [--plan] [--repo DIR] [--json]
 stw workspace inspect    --task NAME [--repo DIR] [--json]
 stw workspace retirement-plan --task NAME [--repo DIR] [--json]
+stw workspace worktree-plan REV DESTINATION [--repo DIR] [--json]
+stw workspace worktree-apply PLAN [--repo DIR] [--json]
 stw workspace resume     CHECKPOINT DESTINATION [--repo DIR] [--json]
 stw review carry-over [--pr N|none] [--fetch] [--checkout PATH] [--json] OLD_BASE OLD_HEAD NEW_BASE NEW_HEAD
 stw prove     ALT NEU [--base BASIS] [--old-parent REV] [--pr N|none] [--json] [--root PATH] [--repo NAME]
@@ -71,6 +73,20 @@ changes elsewhere are kept. `--rebase` and `--merge` (exclusive) handle a diverg
 `--autostash` and `--no-autostash` (exclusive) choose the stash, see "`sync --rebase` and `--merge`".
 
 ### Workspace checkpoints
+
+Use `stw workspace worktree-plan REV DESTINATION --json` to resolve a local
+revision to a commit, without creating a worktree. Save the result's `plan`
+object outside the source worktree, then run
+`stw workspace worktree-apply PLAN --json` in the same repository. Apply checks
+that the plan identifies the Git common directory, that the pinned SHA-1
+commit is available locally, and that the canonical destination is still
+vacant. The destination's parent must already exist.
+
+Apply checks out the saved commit in a native linked worktree with detached
+HEAD, even if the original revision name now resolves elsewhere. It leaves
+the source checkout, its index, and existing refs in place. If Git reports a
+checkout error, inspect the reported destination and `git worktree list` for
+partial state before retrying.
 
 Use `stw workspace checkpoint --task NAME --plan --json` to inspect the selection,
 then omit `--plan` to save it. Use `--include PATH` for each explicitly selected

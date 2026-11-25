@@ -505,3 +505,134 @@ fn retirement_plan_reports_an_unmerged_index_and_ignored_captured_file() {
     assert_eq!(report["operations"], serde_json::json!(["merge"]));
     assert_eq!(fs::read(root.join(".git/index")).unwrap(), before);
 }
+
+#[test]
+fn worktree_plan_leaves_source_intact_and_apply_checks_out_the_saved_commit() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("new workspace");
+    let source_index = root.join(".git/index");
+    let base = fx.repo().head_id().unwrap().detach();
+    let base_text = base.to_string();
+    git(root, &["branch", "named-base"]);
+    let snapshot = || {
+        [
+            git(root, &["show-ref"]),
+            git(root, &["worktree", "list", "--porcelain"]),
+            git(root, &["count-objects", "-v"]),
+        ]
+    };
+    let before = snapshot();
+    let index_before = fs::read(&source_index).unwrap();
+    let report = run(
+        root,
+        &["worktree-plan", "named-base", target.to_str().unwrap()],
+        0,
+    );
+    let plan = &report["plan"];
+    assert_eq!(plan["base"], base_text);
+    assert_eq!(plan["destination"], target.to_str().unwrap());
+    assert!(!target.exists());
+    assert_eq!(snapshot(), before);
+    assert_eq!(fs::read(&source_index).unwrap(), index_before);
+
+    let moved = fx.commit(
+        Some(base),
+        &[("mixed", Some("later commit\n"))],
+        "Move branch",
+    );
+    git(root, &["branch", "-f", "named-base", &moved.to_string()]);
+    let refs_before = git(root, &["show-ref", "--head"]);
+    let plan_path = root.with_file_name("plan.json");
+    fs::write(&plan_path, serde_json::to_vec(plan).unwrap()).unwrap();
+    let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
+    assert_eq!(report["base"], base_text);
+    assert_eq!(report["created"], true);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]).trim(), base_text);
+    assert_eq!(
+        git(&target, &["status", "--porcelain", "--branch"]),
+        "## HEAD (no branch)\n"
+    );
+    assert_eq!(fs::read_to_string(target.join("mixed")).unwrap(), "head\n");
+    assert!(git(root, &["worktree", "list", "--porcelain"]).contains("detached\n"));
+    assert_eq!(git(root, &["show-ref", "--head"]), refs_before);
+    assert_eq!(fs::read(&source_index).unwrap(), index_before);
+    assert_eq!(
+        fs::read_to_string(root.join("mixed")).unwrap(),
+        "worktree\n"
+    );
+}
+
+#[test]
+fn worktree_apply_refuses_invalid_plans_and_occupied_destinations() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("new workspace");
+    let report = run(
+        root,
+        &["worktree-plan", "HEAD", target.to_str().unwrap()],
+        0,
+    );
+    let plan_path = root.with_file_name("plan.json");
+    let apply = |plan: &Value, exit: i32| {
+        fs::write(&plan_path, serde_json::to_vec(plan).unwrap()).unwrap();
+        run(root, &["worktree-apply", plan_path.to_str().unwrap()], exit)
+    };
+    let plan = report["plan"].clone();
+    let before = git(root, &["worktree", "list", "--porcelain"]);
+    let refs = git(root, &["show-ref"]);
+    for (key, value, exit, blocker) in [
+        ("base", "HEAD".to_owned(), 2, "full lowercase SHA-1"),
+        (
+            "base",
+            "f".repeat(40),
+            1,
+            "pinned base is not a local commit",
+        ),
+        (
+            "common_dir",
+            root.to_str().unwrap().to_owned(),
+            1,
+            "different Git repository",
+        ),
+        (
+            "destination",
+            format!("{}/../new workspace", root.display()),
+            2,
+            "not canonical",
+        ),
+    ] {
+        let mut invalid = plan.clone();
+        invalid[key] = Value::String(value);
+        let report = apply(&invalid, exit);
+        assert_eq!(report["created"], false);
+        assert!(
+            report["blocker"].as_str().unwrap().contains(blocker),
+            "{report}"
+        );
+        assert!(!target.exists());
+    }
+    let base = fx.repo().head_id().unwrap().detach();
+    let with_attributes = fx.commit(
+        Some(base),
+        &[(".gitattributes", Some("* text\n"))],
+        "Attributes",
+    );
+    let mut unsupported = plan.clone();
+    unsupported["base"] = Value::String(with_attributes.to_string());
+    let report = apply(&unsupported, 1);
+    assert!(
+        report["blocker"].as_str().unwrap().contains("attributes"),
+        "{report}"
+    );
+    assert!(!target.exists());
+    fs::create_dir(&target).unwrap();
+    let occupied = apply(&plan, 1);
+    assert!(
+        occupied["blocker"].as_str().unwrap().contains("occupied"),
+        "{occupied}"
+    );
+    assert_eq!(target.read_dir().unwrap().count(), 0);
+    assert_eq!(git(root, &["worktree", "list", "--porcelain"]), before);
+    assert_eq!(git(root, &["show-ref"]), refs);
+}

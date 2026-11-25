@@ -13,6 +13,7 @@ use crate::git_runner::{self, Hex40, Op, WorkspaceOp as Git};
 
 const FORMAT: &str = "stw-workspace-v1";
 const PLAN_FORMAT: &str = "stw-workspace-plan-v1";
+const WORKTREE_PLAN_FORMAT: &str = "stw-worktree-plan-v1";
 const TASK_REFS: &str = "refs/stw/tasks/";
 
 #[derive(Subcommand)]
@@ -23,6 +24,10 @@ pub(crate) enum WorkspaceCommand {
     Inspect(TaskArgs),
     /// Preview whether a checkpoint covers the worktree before retirement
     RetirementPlan(TaskArgs),
+    /// Plan a detached linked worktree at a local revision
+    WorktreePlan(WorktreePlanArgs),
+    /// Create a detached linked worktree from a saved plan
+    WorktreeApply(WorktreeApplyArgs),
     /// Restore a checkpoint into a new linked worktree
     Resume(ResumeArgs),
 }
@@ -51,6 +56,24 @@ pub(crate) struct CheckpointArgs {
 pub(crate) struct TaskArgs {
     #[arg(long)]
     task: String,
+    #[command(flatten)]
+    output: OutputArgs,
+}
+
+#[derive(Args)]
+pub(crate) struct WorktreePlanArgs {
+    /// Local revision to resolve to a commit
+    revision: String,
+    /// Path of the new linked worktree
+    destination: PathBuf,
+    #[command(flatten)]
+    output: OutputArgs,
+}
+
+#[derive(Args)]
+pub(crate) struct WorktreeApplyArgs {
+    /// File containing the JSON plan object
+    plan: PathBuf,
     #[command(flatten)]
     output: OutputArgs,
 }
@@ -87,6 +110,15 @@ struct CheckpointPlan {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct WorktreePlan {
+    format: String,
+    base: String,
+    destination: String,
+    common_dir: String,
+}
+
+#[derive(Deserialize, Serialize)]
 struct Record {
     format: String,
     base: String,
@@ -100,6 +132,8 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
         WorkspaceCommand::Checkpoint(a) => ("checkpoint", &a.output),
         WorkspaceCommand::Inspect(a) => ("inspect", &a.output),
         WorkspaceCommand::RetirementPlan(a) => ("retirement-plan", &a.output),
+        WorkspaceCommand::WorktreePlan(a) => ("worktree-plan", &a.output),
+        WorkspaceCommand::WorktreeApply(a) => ("worktree-apply", &a.output),
         WorkspaceCommand::Resume(a) => ("resume", &a.output),
     };
     let mut report =
@@ -116,6 +150,8 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
             WorkspaceCommand::Checkpoint(a) => checkpoint(&repo, &root, a, &mut report),
             WorkspaceCommand::Inspect(a) => inspect(&repo, &root, a, &mut report),
             WorkspaceCommand::RetirementPlan(a) => retirement_plan(&repo, &root, a, &mut report),
+            WorkspaceCommand::WorktreePlan(a) => worktree_plan(&repo, &root, a, &mut report),
+            WorkspaceCommand::WorktreeApply(a) => worktree_apply(&repo, &root, a, &mut report),
             WorkspaceCommand::Resume(a) => resume(&repo, &root, a, &mut report),
         }
     })();
@@ -535,6 +571,121 @@ fn operations_in_progress(git_dir: &Path) -> Result<Vec<&'static str>> {
     Ok(operations)
 }
 
+fn canonical_destination(repo: &gix::Repository, path: &Path) -> Result<PathBuf> {
+    let absolute = std::path::absolute(path)?;
+    let name = absolute
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| Error::usage("destination must have a UTF-8 file name"))?;
+    let parent = absolute
+        .parent()
+        .ok_or_else(|| Error::usage("destination must have a parent"))?
+        .canonicalize()?;
+    let destination = parent.join(name);
+    for directory in [repo.common_dir(), repo.git_dir()] {
+        if destination.starts_with(directory.canonicalize()?) {
+            return Err(Error::usage(
+                "destination must be outside Git administrative directories",
+            ));
+        }
+    }
+    if !parent.is_dir() {
+        return Err(Error::usage("destination parent must be a directory"));
+    }
+    Ok(destination)
+}
+
+fn require_vacant(destination: &Path) -> Result<()> {
+    match destination.symlink_metadata() {
+        Ok(_) => Err(Error::repository("destination is occupied")),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn worktree_plan(
+    repo: &gix::Repository,
+    root: &Path,
+    args: &WorktreePlanArgs,
+    report: &mut Value,
+) -> Result<()> {
+    let base = output_id(git(root, Git::ResolveCommit(args.revision.clone()))?)?;
+    full_workspace_config(repo)?;
+    check_entries(root, &git(root, Git::TreeEntries(base))?, false)?;
+    let destination = canonical_destination(repo, &args.destination)?;
+    require_vacant(&destination)?;
+    let common_dir = repo.common_dir().canonicalize()?;
+    let plan = WorktreePlan {
+        format: WORKTREE_PLAN_FORMAT.into(),
+        base: base.as_str().into(),
+        destination: destination
+            .to_str()
+            .ok_or_else(|| Error::usage("destination must be UTF-8"))?
+            .into(),
+        common_dir: common_dir
+            .to_str()
+            .ok_or_else(|| Error::usage("Git common directory must be UTF-8"))?
+            .into(),
+    };
+    report["plan"] = json!(plan);
+    report["next"] = json!("worktree-apply");
+    Ok(())
+}
+
+fn worktree_apply(
+    repo: &gix::Repository,
+    root: &Path,
+    args: &WorktreeApplyArgs,
+    report: &mut Value,
+) -> Result<()> {
+    report["created"] = json!(false);
+    let plan: WorktreePlan = serde_json::from_slice(&fs::read(&args.plan)?)
+        .map_err(|error| Error::usage(format!("invalid saved worktree plan: {error}")))?;
+    if plan.format != WORKTREE_PLAN_FORMAT {
+        return Err(Error::usage("invalid saved worktree plan format"));
+    }
+    if repo.common_dir().canonicalize()?.to_str() != Some(plan.common_dir.as_str()) {
+        return Err(Error::repository(
+            "saved worktree plan belongs to a different Git repository",
+        ));
+    }
+    let base = parse_id(&plan.base)?;
+    let resolved = git(root, Git::ResolveCommit(plan.base)).map_err(|error| {
+        Error::repository(format!("pinned base is not a local commit: {error}"))
+    })?;
+    if output_id(resolved)? != base {
+        return Err(Error::repository("pinned base is not a local commit"));
+    }
+    full_workspace_config(repo)?;
+    check_entries(root, &git(root, Git::TreeEntries(base))?, false)?;
+    let destination = canonical_destination(repo, Path::new(&plan.destination))?;
+    if destination.to_str() != Some(plan.destination.as_str()) {
+        return Err(Error::usage("saved worktree destination is not canonical"));
+    }
+    require_vacant(&destination)?;
+    report["base"] = json!(base.as_str());
+    report["destination"] = json!(plan.destination);
+    // Git accepts an empty directory. Claim it before invoking Git so a competing
+    // creator cannot claim the path between validation and worktree add.
+    if let Err(error) = fs::create_dir(&destination) {
+        if error.kind() == ErrorKind::AlreadyExists {
+            return Err(Error::repository("destination is occupied"));
+        }
+        return Err(error.into());
+    }
+    git(
+        root,
+        Git::AddWorktree {
+            path: plan.destination,
+            base,
+            checkout: true,
+        },
+    )?;
+    report["created"] = json!(true);
+    report["next"] = json!("continue-work");
+    Ok(())
+}
+
 fn resume(
     repo: &gix::Repository,
     root: &Path,
@@ -551,38 +702,22 @@ fn resume(
     for tree in [base, index, id] {
         check_entries(root, &git(root, Git::TreeEntries(tree))?, false)?;
     }
-    let destination = std::path::absolute(&args.destination)?;
+    let destination = canonical_destination(repo, &args.destination)?;
     let name = destination
         .file_name()
-        .and_then(|n| n.to_str())
+        .and_then(|name| name.to_str())
         .ok_or_else(|| Error::usage("destination must have a UTF-8 file name"))?;
-    let parent = destination
-        .parent()
-        .ok_or_else(|| Error::usage("destination must have a parent"))?
-        .canonicalize()?;
-    if [repo.common_dir(), repo.git_dir()]
-        .iter()
-        .filter_map(|dir| dir.canonicalize().ok())
-        .any(|dir| parent.starts_with(dir))
-    {
-        return Err(Error::usage(
-            "destination must be outside Git administrative directories",
-        ));
-    }
-    let destination = parent.join(name);
     let path = destination
         .to_str()
         .ok_or_else(|| Error::usage("destination must be UTF-8"))?;
-    let marker = parent.join(format!("{name}.stw-handoff-incomplete"));
+    let marker = destination.with_file_name(format!("{name}.stw-handoff-incomplete"));
     report["destination"] = json!(path);
     report["marker"] = json!(marker);
     if marker.symlink_metadata().is_ok() {
         report["incomplete"] = json!(true);
         return Err(Error::repository("a previous resume is incomplete"));
     }
-    if destination.symlink_metadata().is_ok() {
-        return Err(Error::repository("destination is occupied"));
-    }
+    require_vacant(&destination)?;
     let pending = OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -602,6 +737,7 @@ fn resume(
         Git::AddWorktree {
             path: path.into(),
             base,
+            checkout: false,
         },
     )?;
     let temp = tempfile::tempdir()?;

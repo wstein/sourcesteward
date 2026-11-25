@@ -347,6 +347,7 @@ pub enum WorkspaceOp {
         parents: Vec<Hex40>,
     },
     ReadCommit(Hex40),
+    ResolveCommit(String),
     IndexChanges(Hex40),
     WorktreeChanges(PathBuf),
     LocalCommits(Hex40),
@@ -358,6 +359,7 @@ pub enum WorkspaceOp {
     AddWorktree {
         path: String,
         base: Hex40,
+        checkout: bool,
     },
     Materialize {
         index: PathBuf,
@@ -402,6 +404,12 @@ impl WorkspaceOp {
                 args
             }
             Self::ReadCommit(id) => v(&["cat-file", "commit", id.as_str()]),
+            Self::ResolveCommit(revision) => v(&[
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                &format!("{revision}^{{commit}}"),
+            ]),
             Self::IndexChanges(index) => v(&[
                 "diff",
                 "--cached",
@@ -443,15 +451,20 @@ impl WorkspaceOp {
                     .as_ref()
                     .map_or("0000000000000000000000000000000000000000", Hex40::as_str),
             ]),
-            Self::AddWorktree { path, base } => v(&[
-                "worktree",
-                "add",
-                "--detach",
-                "--no-checkout",
-                "--",
+            Self::AddWorktree {
                 path,
-                base.as_str(),
-            ]),
+                base,
+                checkout,
+            } => {
+                let mut args = v(&["worktree", "add", "--detach"]);
+                if *checkout {
+                    args.push("--no-guess-remote".into());
+                } else {
+                    args.push("--no-checkout".into());
+                }
+                args.extend(v(&["--", path, base.as_str()]));
+                args
+            }
             Self::Materialize { checkpoint, .. } => {
                 v(&["read-tree", "--reset", "-u", checkpoint.as_str()])
             }
