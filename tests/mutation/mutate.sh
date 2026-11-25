@@ -405,6 +405,19 @@ m WC5 'a fork child still gets restack argv' src/watch/cycle.rs \
 m WC6 'failing names are not capped at 20' src/watch/cycle.rs \
   'names.truncate(20);' 'names.truncate(21);' \
   watch_command a_red_class_is_announced_on_the_second_sighting_with_twenty_names
+m WC8 'status with a state directory still requires a repository' src/cli.rs \
+  'a.state_dir.as_ref().filter(|dir| dir.is_absolute())' 'a.state_dir.as_ref().filter(|dir| false && dir.is_absolute())' \
+  watch_command status_with_an_absolute_state_dir_does_not_need_a_repository
+m WC9 'an early run-wide failure counts as success' src/watch/command.rs \
+  'let stopped_early = polls.len() < repos.len() && failed > 0 && succeeded == 0;' 'let stopped_early = false;' \
+  watch_command a_run_wide_failure_on_the_first_repository_is_not_success
+m WC10 'the stream sleep ignores the remaining timeout' src/watch/command.rs \
+  'wait = wait.min(left);' 'let _ = left;' \
+  watch_command until_event_sleeps_only_until_the_timeout
+m WC11 'the signal handler hides a process import' tests/it/no_binaries.rs \
+  'let signal_handler = code.contains' 'if code.contains("extern") { return Some("early".into()); }
+    let signal_handler = code.contains' \
+  no_binaries the_signal_handler_does_not_hide_a_process_import
 m WC7 'pending timeout fires when the limit is exactly reached' src/watch/cycle.rs \
   'now_secs.saturating_sub(since) <=' 'now_secs.saturating_sub(since) <' \
   watch_command a_pending_class_times_out_once_per_period

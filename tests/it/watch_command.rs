@@ -1090,3 +1090,80 @@ fn a_pending_class_times_out_once_per_period() {
     assert!(see(&mut quiet, start, 0).is_empty());
     assert!(see(&mut quiet, start + 10_000, 0).is_empty());
 }
+
+#[test]
+fn status_with_an_absolute_state_dir_does_not_need_a_repository() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .args([
+            "watch",
+            "--status",
+            "--state-dir",
+            dir.path().to_str().unwrap(),
+        ])
+        .output()
+        .unwrap();
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        !err.contains("name a repository"),
+        "status on an explicit directory asked for a repository: {err}"
+    );
+    assert_ne!(out.status.code(), Some(2), "{err}");
+}
+
+#[test]
+fn a_run_wide_failure_on_the_first_repository_is_not_success() {
+    use stw::watch_reader::http::Code;
+    use stw::watch_reader::obs::ObserveError;
+
+    let mut src = Listed::head(&"a".repeat(40));
+    src.error_first = Some(ObserveError {
+        code: Code::RateLimited,
+        message: "rate limit reached".into(),
+        run_wide: true,
+        retry_in: 30,
+    });
+    let (_dir, path) = state_path();
+    let code = stw::watch::command::run_once(
+        &path,
+        &["o/r".to_string(), "o/s".to_string()],
+        false,
+        1_700_000_000,
+        10,
+        &mut src,
+        &mut Vec::new(),
+    )
+    .unwrap();
+    assert_eq!(code, stw::watch::command::EXIT_FAILED);
+    assert_eq!(src.hits.get(), 1, "the second repository is not polled");
+}
+
+#[test]
+fn until_event_sleeps_only_until_the_timeout() {
+    let mut src = Listed::head(&"a".repeat(40));
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let code = stw::watch::command::run_stream(
+        &path,
+        &["o/r".to_string()],
+        &mut src,
+        &mut Vec::new(),
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: String::new(),
+            interval_secs: 60,
+            max_idle_secs: 0,
+            detail_every: 10,
+            until: vec!["head-changed".into()],
+            timeout_secs: 5,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, stw::watch::command::EXIT_TIMEOUT);
+    assert_eq!(pace.sleeps, vec![5]);
+}

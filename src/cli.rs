@@ -2309,6 +2309,18 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             )));
         }
     }
+    if a.status {
+        if let Some(dir) = a.state_dir.as_ref().filter(|dir| dir.is_absolute()) {
+            let now = crate::tidy::now_secs();
+            return match command::run_status(dir, now, &mut std::io::stdout()) {
+                Ok(code) => Ok(code),
+                Err(err) => {
+                    eprintln!("stw watch: {err}");
+                    Ok(watch_error_exit(err))
+                }
+            };
+        }
+    }
     let file = load_watch_file(&a)?;
     let repos = if !a.repo.is_empty() {
         a.repo.clone()

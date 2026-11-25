@@ -181,6 +181,7 @@ pub fn run_once(
     let (mut core, _) = Core::open(dir, baseline, &mut lines)?;
     let polls = poll_ready(repos, source, &core.state, now_secs, detail_every);
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
+    let succeeded = polls.iter().filter(|p| p.result.is_ok()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
     let events = cycle::advance_seen(&mut core.state, &polls, now_secs, PENDING_TIMEOUT_SECS);
     let committed = core.commit(&events, &mut lines);
@@ -191,7 +192,8 @@ pub fn run_once(
     let beat = core.heartbeat(now_secs, "once");
     core.close();
     beat?;
-    if failed == repos.len() {
+    let stopped_early = polls.len() < repos.len() && failed > 0 && succeeded == 0;
+    if failed == repos.len() || stopped_early {
         Ok(EXIT_FAILED)
     } else {
         Ok(0)
@@ -257,12 +259,21 @@ pub fn run_stream(
             return Ok(0);
         }
         let slow = source.after_cycle();
-        let wait = stream_wait(
+        let mut wait = stream_wait(
             slowed_interval(limits.interval_secs, slow),
             limits.max_idle_secs,
             arrived,
             last_event,
         );
+        if limits.timeout_secs > 0 {
+            let elapsed = u64::try_from(arrived.saturating_sub(started)).unwrap_or(u64::MAX);
+            let left = limits.timeout_secs.saturating_sub(elapsed);
+            if left == 0 {
+                core.close();
+                return Ok(EXIT_TIMEOUT);
+            }
+            wait = wait.min(left);
+        }
         if wait == 0 || !pace.wait(wait) {
             core.close();
             return Ok(0);

@@ -153,12 +153,13 @@ pub fn spawn_marker(text: &str) -> Option<String> {
         "std::*",
         "std::{*",
         "core::*",
-        "extern \"\"",
     ] {
         if code.contains(m) {
             return Some(m.to_string());
         }
     }
+    // `extern "C"` is the signal handler. It must not hide a later process import.
+    let signal_handler = code.contains("extern \"\"");
     // statements starting with `use`, to find `process` inside brace lists
     let mut use_ranges: Vec<(usize, usize)> = vec![];
     let mut from = 0;
@@ -194,6 +195,9 @@ pub fn spawn_marker(text: &str) -> Option<String> {
         {
             return Some("process".to_string());
         }
+    }
+    if signal_handler {
+        return Some("extern \"\"".to_string());
     }
     None
 }
@@ -256,6 +260,12 @@ fn only_the_runner_spawns_a_process() {
         runner_spawns,
         "{RUNNER} no longer starts a process; is the scan still meaningful?"
     );
+}
+
+#[test]
+fn the_signal_handler_does_not_hide_a_process_import() {
+    let text = "extern \"C\" fn stop(_: libc::c_int) {}\nuse std::process::Child;\n";
+    assert_eq!(spawn_marker(text).as_deref(), Some("process"));
 }
 
 #[test]
