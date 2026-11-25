@@ -781,10 +781,7 @@ fn reasons_are_escaped_once_and_only_in_the_output() {
     );
 }
 
-#[test]
-fn a_run_that_moved_the_superproject_to_a_raised_gitlink_and_the_submodule_is_restored_in_both() {
-    // upstream raises the gitlink to the new commit of the submodule: the run moves both, and the submodule then sits on the
-    // gitlink of the superproject. The restore moves the submodule back first or last: either way it is no local change
+fn setup_with_raised_gitlink() -> J {
     let j = setup();
     j.w.git(
         &j.ws_up,
@@ -799,6 +796,26 @@ fn a_run_that_moved_the_superproject_to_a_raised_gitlink_and_the_submodule_is_re
         &j.ws_up,
         &["push", "-q", j.ws_origin.to_str().unwrap(), "HEAD:main"],
     );
+    j
+}
+
+#[test]
+fn advancing_the_submodule_first_leaves_a_gitlink_change_that_sync_refuses_to_overwrite() {
+    let j = setup_with_raised_gitlink();
+    let (code, v, err) = j.w.stw(&j.ws, &["--repo", "sub"]);
+    assert_eq!(code, 0, "{v} {err}");
+    assert_eq!(j.tip(&j.sub), j.sub_new);
+
+    let (code, v, err) = j.w.stw(&j.ws, &["--repo", "ws"]);
+    assert_eq!(code, 1, "{v} {err}");
+    let root = repo(&v, "ws");
+    assert_eq!(root["error"], "local changes would be overwritten: sub");
+    assert_eq!(j.tip(&j.ws), j.ws_old);
+}
+
+#[test]
+fn a_run_that_moved_the_superproject_to_a_raised_gitlink_and_the_submodule_is_restored_in_both() {
+    let j = setup_with_raised_gitlink();
     let id = run(&j);
     assert_eq!(j.tip(&j.sub), j.sub_new);
     assert_eq!(j.w.git(&j.ws, &["status", "--porcelain"]), "", "{id}");

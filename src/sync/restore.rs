@@ -145,20 +145,24 @@ pub fn restore(repos: &[RepoRef], run: Option<&str>) -> Restored {
         }
     };
     // None: the repository has no record of the run
-    let found: Vec<Option<Vec<RestoreRec>>> = repo::par_map(&sources, repo::MAX_PARALLEL, |s| {
-        if !s.ids.as_ref().is_ok_and(|ids| ids.contains(&id)) {
-            return None;
-        }
-        match journal::load(&s.dir, &id) {
-            Ok(None) => None,
-            Err(e) => Some(vec![rec_for(
-                s.r,
-                FAILED,
-                format!("the journal record cannot be used: {e}"),
-            )]),
-            Ok(Some(rec)) => Some(restore_record(s, &id, rec)),
-        }
-    });
+    let found: Vec<Option<Vec<RestoreRec>>> = super::parent_first(
+        &sources,
+        |s| &s.r.path,
+        |s| {
+            if !s.ids.as_ref().is_ok_and(|ids| ids.contains(&id)) {
+                return None;
+            }
+            match journal::load(&s.dir, &id) {
+                Ok(None) => None,
+                Err(e) => Some(vec![rec_for(
+                    s.r,
+                    FAILED,
+                    format!("the journal record cannot be used: {e}"),
+                )]),
+                Ok(Some(rec)) => Some(restore_record(s, &id, rec)),
+            }
+        },
+    );
     let any = found.iter().any(Option::is_some);
     out.repos.extend(found.into_iter().flatten().flatten());
     if !any && out.repos.is_empty() {

@@ -12,7 +12,8 @@
 //! Every branch a run moves is journaled first (`journal.rs`): a recovery ref `refs/stw/recovery/sync/<run id>/<n>` holds
 //! the old tip and a record `<git common dir>/stw/sync/<run id>.json` names it; `stw sync restore` moves the branches
 //! back (`restore.rs`). `--plan` / `--dry-run` write neither.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::Path;
 
 use serde_json::{json, Value};
 
@@ -183,6 +184,45 @@ pub struct Opts {
     pub autostash: Option<bool>,
     /// The ID of this run, shared by all repositories (a run). None: a repository that is changed gets an ID of its own.
     pub run_id: Option<RunId>,
+}
+
+/// Mutate parents before their descendants, since a child checkout changes the
+/// gitlink status seen by its parent. Independent repositories at each level
+/// still run in parallel, and results retain the caller's repository order.
+fn parent_first<I: Sync, T: Send>(
+    items: &[I],
+    path: impl Fn(&I) -> &Path,
+    f: impl Fn(&I) -> T + Sync,
+) -> Vec<T> {
+    let paths: BTreeSet<_> = items.iter().map(&path).collect();
+    let mut levels = BTreeMap::<usize, Vec<_>>::new();
+    for (index, item) in items.iter().enumerate() {
+        let level = path(item)
+            .ancestors()
+            .skip(1)
+            .filter(|ancestor| paths.contains(ancestor))
+            .count();
+        levels.entry(level).or_default().push((index, item));
+    }
+    let mut results = Vec::with_capacity(items.len());
+    for level in levels.into_values() {
+        results.extend(repo::par_map(
+            &level,
+            repo::MAX_PARALLEL,
+            |&(index, item)| (index, f(item)),
+        ));
+    }
+    results.sort_unstable_by_key(|(index, _)| *index);
+    results.into_iter().map(|(_, value)| value).collect()
+}
+
+pub fn sync_repos(repos: &[RepoRef], gh: Option<&Client>, opts: &Opts) -> Vec<SyncRec> {
+    let sync = |r: &RepoRef| sync_repo(r, gh, opts);
+    if opts.apply {
+        parent_first(repos, |r| &r.path, sync)
+    } else {
+        repo::for_each(repos, sync)
+    }
 }
 
 pub fn sync_repo(r: &RepoRef, gh: Option<&Client>, o: &Opts) -> SyncRec {
