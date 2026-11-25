@@ -11,6 +11,7 @@ pub mod error;
 pub mod git_runner;
 pub mod github;
 pub(crate) mod http_tls;
+mod inspect;
 pub mod issue_list;
 pub mod lint_files;
 pub mod lint_pr;

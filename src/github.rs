@@ -551,6 +551,11 @@ impl Client {
         })
     }
 
+    pub(crate) fn inspection_get(&self, slug: &str, endpoint: &str) -> Result<Value> {
+        Self::check_slug(slug)?;
+        self.get(&format!("{}/repos/{slug}/{endpoint}", self.base))
+    }
+
     /// Open PRs, newest first (limit 100 like the prototype), with merge state from the per-PR endpoint.
     pub fn open_prs(&self, slug: &str) -> Result<Vec<OpenPr>> {
         let api = &self.base;

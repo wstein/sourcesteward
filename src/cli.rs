@@ -89,6 +89,11 @@ enum Command {
         #[command(subcommand)]
         command: crate::workspace::WorkspaceCommand,
     },
+    /// Inspect published PR changes or compare local revisions without checking them out
+    Inspect {
+        #[command(subcommand)]
+        source: InspectSource,
+    },
     /// Watch open pull requests and print transitions (read-only)
     Watch(WatchArgs),
     /// Check work products against the working rules (read-only)
@@ -101,6 +106,22 @@ enum Command {
     Dev {
         #[command(subcommand)]
         command: DevCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum InspectSource {
+    /// Compare a GitHub pull request using its pinned base and head
+    Github {
+        repo: String,
+        #[arg(value_parser = clap::value_parser!(u64).range(1..))]
+        pr: u64,
+    },
+    /// Compare local commits using their merge base
+    Git {
+        repo: PathBuf,
+        base: String,
+        head: String,
     },
 }
 
@@ -2025,6 +2046,7 @@ fn git_command_label(command: &Command) -> &'static str {
         | Command::Restack { .. }
         | Command::Oplog { .. }
         | Command::Lint { .. }
+        | Command::Inspect { .. }
         | Command::Watch(_)
         | Command::Dev { .. } => "this step",
     }
@@ -2106,6 +2128,16 @@ fn run(command: Command) -> Result<u8> {
         }
         Command::Add(a) => run_add(a),
         Command::Workspace { command } => crate::workspace::run(command),
+        Command::Inspect { source } => {
+            let report = match source {
+                InspectSource::Github { repo, pr } => crate::inspect::published(&repo, pr),
+                InspectSource::Git { repo, base, head } => {
+                    crate::inspect::local(&repo, &base, &head)
+                }
+            };
+            print_json(&serde_json::to_value(&report).expect("inspection report uses JSON values"));
+            Ok(failed(!report.complete()))
+        }
         Command::Watch(a) => run_watch(a),
         Command::Sync(SyncArgs {
             sub: Some(SyncCommand::Restore(r)),

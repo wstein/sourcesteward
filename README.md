@@ -1651,6 +1651,26 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 
 The hint in `stw status` (new behavior without a Go counterpart; the owner accepts it live, recipe `scratch/abnahme-rezepte/rezept-stw-status-hook-hint.md`): under each repository that was read, one line when at least one of the two hooks is not ours, nothing when both are ours and nothing blocks them. `op log hooks: not installed (post-rewrite, reference-transaction); install with: stw oplog hooks install` names the hooks that are missing. Where `install` would refuse (`core.hooksPath` set, a hook that is not ours, a hooks directory that is a symbolic link) the line is `op log hooks: not active, install is refused here (<reason>); see: stw oplog hooks status`, without the install command. A set `core.hooksPath` or a linked hooks directory counts as blocked even when both files are ours, because git does not run them there. Only a hint: status installs nothing and writes nothing, starts no program, the exit code does not change, and a repository that could not be read has no line. It is the one place where stw prints a command (owner decision 2026-11-13); the JSON has the state only. JSON (additive, `schema_version` stays 2; also in `status PATH`, whose one-line text has no hint line): per repository `oplog_hooks`, null for a repository that could not be read, else `{state, reason, missing}`: `state` `installed`, `missing` or `blocked`; `reason` null, `hooks-path`, `foreign-hook` or `hooks-dir-symlink`; `missing` the names of the hooks that are not ours. There is no switch to hide the hint (no other status hint has one). Mutations `HH1` to `HH11`.
 
+## Checkout-free comparison
+
+`stw inspect github OWNER/REPO PR` reads a published pull request from GitHub
+without opening a local repository. `stw inspect git REPO BASE HEAD` resolves
+local commits and compares their trees from the merge base. The local command
+uses Git objects and needs neither GitHub credentials nor a checkout of either
+revision. Both modes return one JSON document with `schema_version: 1`, the
+requested revisions, resolved SHAs, comparison base, changed paths and both
+sides of detected renames. They perform no writes.
+
+Each changed path lists tracked ancestor `AGENTS.md` paths. The previous side
+of a rename uses the comparison base. Test suggestions are inferred from
+changed Rust test paths and tracked manifests. They include the evidence
+paths and are suggestions to verify before running.
+
+Exit 0 means the comparison was read completely. Exit 1 means the report is
+incomplete, with available evidence and a reason in `incomplete`. A GitHub
+file or tree limit, a changed PR during the read, or unreadable local context
+can produce a partial result. Exit 2 is reserved for CLI usage errors.
+
 ## Watch scenarios (port corpus)
 
 `tests/fixtures/watch/` holds 279 scenarios derived from the Go watcher.
