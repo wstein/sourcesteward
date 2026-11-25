@@ -1879,6 +1879,22 @@ fn run_status(a: StatusArgs) -> Result<u8> {
         cl.arm_deadline(a.timeout);
     }
     list = repo::for_each_mut(list, |s| status::read_remote(s, ws.github.client()));
+    if let Some(cl) = ws.github.client() {
+        let slugs: Vec<String> = list.iter().filter_map(|s| s.slug.clone()).collect();
+        let listed = crate::issue_list::read(
+            &slugs,
+            crate::issue_list::PAGE,
+            crate::issue_list::BATCH,
+            |body| cl.graphql(body),
+        );
+        for s in &mut list {
+            if let Some(slug) = &s.slug {
+                if let Some(row) = listed.iter().find(|r| &r.name == slug) {
+                    s.issue_list = Some(row.clone());
+                }
+            }
+        }
+    }
     if let (true, Some(cl)) = (a.review, ws.github.client()) {
         list = status_review::read_reviews(list, cl);
     }

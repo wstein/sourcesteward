@@ -32,6 +32,7 @@ mod github_rules;
 mod gitlinks;
 mod hostile_repo;
 mod identity;
+mod issue_list;
 mod lint_files;
 mod lint_pr;
 mod lint_pr_cmd;

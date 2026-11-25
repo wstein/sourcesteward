@@ -375,6 +375,8 @@ pub struct RepoStatus {
     pub review_read: bool,
     pub issues: Option<IssueCounts>,
     pub issue_error: Option<String>,
+    /// Full open-issue list from GraphQL. None when it was not asked (no token, no GitHub origin).
+    pub issue_list: Option<crate::issue_list::Listed>,
     /// The CI of the head of the default branch (`ci-main`); None when it was not read or could not be.
     pub ci_main: Option<CiMain>,
     /// Why `ci_main` could not be read (cut to 200 characters, not yet escaped).
@@ -441,6 +443,7 @@ fn blank(name: String, path: String) -> RepoStatus {
         review_read: false,
         issues: None,
         issue_error: None,
+        issue_list: None,
         ci_main: None,
         ci_error: None,
         branches_local: None,
@@ -964,6 +967,7 @@ pub fn to_json(
                 "ci_main": ci_main_json(s),
                 "pull_requests": {"read": s.pr_read, "error": jopt(s.pr_error.as_deref()), "open": prs,
                                   "review": if s.review_read { status_review::tally(&s.prs).json() } else { Value::Null }},
+                "open_issues": s.issue_list.as_ref().map(crate::issue_list::json_of).unwrap_or(Value::Null),
                 "error": jopt(s.error.as_deref()),
             })
         })
@@ -1431,6 +1435,12 @@ pub fn render_human(notices: &[Notice], list: &[RepoStatus], rules: &str, view: 
                 out += &status_review::tally(&s.prs)
                     .text()
                     .map_or(String::new(), |t| format!("    {t}\n"));
+            }
+        }
+        if let Some(list) = &s.issue_list {
+            for line in crate::issue_list::text_lines(list) {
+                out += &line;
+                out.push('\n');
             }
         }
     }

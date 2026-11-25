@@ -476,6 +476,32 @@ impl Client {
         }
     }
 
+    /// POST one GraphQL document to `{base}/graphql`. The token stays in the header.
+    pub fn graphql(&self, body: &Value) -> Result<Value> {
+        let url = format!("{}/graphql", self.base.trim_end_matches('/'));
+        let timeout = self.time_left().map_err(Error::github)?;
+        let mut resp = self
+            .agent
+            .post(&url)
+            .config()
+            .timeout_global(Some(timeout))
+            .build()
+            .header("Authorization", &format!("Bearer {}", self.token))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .send_json(body)
+            .map_err(|e| Error::github(format!("GitHub GraphQL unreachable: {e}")))?;
+        if resp.status().as_u16() != 200 {
+            return Err(Error::github(format!(
+                "GitHub GraphQL HTTP {}",
+                resp.status().as_u16()
+            )));
+        }
+        resp.body_mut()
+            .read_json::<Value>()
+            .map_err(|e| Error::github(format!("GitHub GraphQL sent unreadable JSON: {e}")))
+    }
+
     fn get(&self, url: &str) -> Result<Value> {
         self.get_optional(url)?.ok_or_else(|| {
             Error::github(format!(
