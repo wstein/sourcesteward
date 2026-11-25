@@ -68,7 +68,7 @@ impl Fx {
         let cfg = s.join("gitconfig");
         std::fs::write(
             &cfg,
-            "[user]\n\tname = Test\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n",
+            "[user]\n\tname = Test\n\temail = t@example.invalid\n[init]\n\tdefaultBranch = main\n[commit]\n\tgpgsign = false\n[tag]\n\tgpgsign = false\n[maintenance]\n\tauto = false\n",
         )
         .unwrap();
         let r = s.join("work/r");

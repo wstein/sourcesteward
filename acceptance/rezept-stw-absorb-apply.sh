@@ -9,6 +9,7 @@ cd "$temp/repo"
 git config user.name 'Acceptance Fixture'
 git config user.email acceptance@example.invalid
 git config commit.gpgsign false
+git config maintenance.auto false
 awk 'BEGIN {for(i=1;i<=20;i++) print "line " i}' > a.txt
 git add a.txt
 git commit -qm base

@@ -12,6 +12,7 @@ fn git(repo: &Path, args: &[&str]) -> String {
     let result = Command::new("git")
         .current_dir(repo)
         .env("GIT_OPTIONAL_LOCKS", "0")
+        .args(["-c", "maintenance.auto=false"])
         .args(args)
         .output()
         .unwrap();

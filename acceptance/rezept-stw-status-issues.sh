@@ -9,7 +9,7 @@ export GIT_AUTHOR_NAME='Acceptance Fixture' GIT_COMMITTER_NAME='Acceptance Fixtu
 export GIT_AUTHOR_EMAIL=acceptance@example.invalid GIT_COMMITTER_EMAIL=acceptance@example.invalid
 make_repo() {
     git init -qb main "$1"
-    git -C "$1" -c commit.gpgsign=false commit --allow-empty -qm fixture
+    git -C "$1" -c maintenance.auto=false -c commit.gpgsign=false commit --allow-empty -qm fixture
     git -C "$1" remote add origin "https://github.com/$2.git"
 }
 add_submodule() {
@@ -23,7 +23,7 @@ make_repo "$temp/sheets" wstein/sheetmill
 add_submodule docs wstein/chartscribe
 add_submodule sheets wstein/sheetmill
 git -C "$temp/root" add .gitmodules
-git -C "$temp/root" -c commit.gpgsign=false commit -qm 'register gitlinks'
+git -C "$temp/root" -c maintenance.auto=false -c commit.gpgsign=false commit -qm 'register gitlinks'
 cd "$temp/root"
 "$stw" status --json > "$temp/full.json"
 "$stw" status > "$temp/full.txt"
