@@ -360,7 +360,10 @@ pub enum WorkspaceOp {
         index: PathBuf,
         checkpoint: Hex40,
     },
-    RestoreIndex(Hex40),
+    LoadIndex {
+        tree: Hex40,
+        index: Option<PathBuf>,
+    },
 }
 
 impl WorkspaceOp {
@@ -421,12 +424,13 @@ impl WorkspaceOp {
             Self::Materialize { checkpoint, .. } => {
                 v(&["read-tree", "--reset", "-u", checkpoint.as_str()])
             }
-            Self::RestoreIndex(id) => v(&["read-tree", id.as_str()]),
+            Self::LoadIndex { tree, .. } => v(&["read-tree", tree.as_str()]),
         }
     }
 
     fn index(&self) -> Option<&Path> {
         match self {
+            Self::LoadIndex { index, .. } => index.as_deref(),
             Self::WriteTree(index)
             | Self::Capture { index, .. }
             | Self::Materialize { index, .. } => Some(index),

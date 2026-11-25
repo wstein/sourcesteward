@@ -301,9 +301,19 @@ fn checkpoint(
     }
 
     let temp = tempfile::tempdir()?;
-    let index = temp.path().join("index");
-    fs::write(&index, &original)?;
-    let index_tree = output_id(git(root, Git::WriteTree(index.clone()))?)?;
+    let staged = temp.path().join("staged");
+    fs::write(&staged, &original)?;
+    let index_tree = output_id(git(root, Git::WriteTree(staged))?)?;
+    // A copy would retain stat cache entries. Load a fresh index so Git rereads
+    // working-tree content even after an equal-size edit with a matching mtime.
+    let index = temp.path().join("capture");
+    git(
+        root,
+        Git::LoadIndex {
+            tree: index_tree,
+            index: Some(index.clone()),
+        },
+    )?;
     git(
         root,
         Git::Capture {
@@ -478,7 +488,13 @@ fn resume(
             checkpoint: id,
         },
     )?;
-    git(&destination, Git::RestoreIndex(index))?;
+    git(
+        &destination,
+        Git::LoadIndex {
+            tree: index,
+            index: None,
+        },
+    )?;
     fs::remove_file(&marker)?;
     report["restored"] = json!(true);
     report["incomplete"] = json!(false);

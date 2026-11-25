@@ -251,3 +251,25 @@ fn a_linked_worktree_can_checkpoint_and_handoff_again() {
         "worktree\n"
     );
 }
+
+#[test]
+fn capture_rereads_content_when_the_index_stat_cache_matches() {
+    let fx = fixture();
+    // With ctime ignored, preserve the size and staged mtime exactly. A copied
+    // index can then make Git believe the new content is already staged.
+    git(&fx.path, &["config", "--local", "core.trustctime", "false"]);
+    let mixed = fx.path.join("mixed");
+    fs::write(&mixed, "index\n").unwrap();
+    let old = std::time::SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    let file = fs::File::options().write(true).open(&mixed).unwrap();
+    let times = fs::FileTimes::new().set_modified(old);
+    file.set_times(times).unwrap();
+    git(&fx.path, &["add", "--", "mixed"]);
+    fs::write(&mixed, "later\n").unwrap();
+    file.set_times(times).unwrap();
+    let id = save(&fx.path);
+    let dest = fx.path.with_file_name("same-stat-resume");
+    run(&fx.path, &["resume", &id, dest.to_str().unwrap()], 0);
+    assert_eq!(git(&dest, &["show", ":mixed"]), "index\n");
+    assert_eq!(fs::read_to_string(dest.join("mixed")).unwrap(), "later\n");
+}
