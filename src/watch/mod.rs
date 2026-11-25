@@ -22,9 +22,12 @@ use state::State;
 use statedir::{ensure_state_dir, load_state, save_state, write_heartbeat};
 
 pub mod apply;
+pub mod command;
+pub mod cycle;
 pub mod event;
 pub mod journal;
 pub mod lock;
+pub mod reader;
 pub mod state;
 pub mod statedir;
 

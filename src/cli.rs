@@ -89,6 +89,8 @@ enum Command {
         #[command(subcommand)]
         command: crate::workspace::WorkspaceCommand,
     },
+    /// Watch open pull requests and print transitions (read-only)
+    Watch(WatchArgs),
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Lint {
@@ -100,6 +102,25 @@ enum Command {
         #[command(subcommand)]
         command: DevCommand,
     },
+}
+
+#[derive(Args)]
+struct WatchArgs {
+    /// OWNER/NAME, repeatable. Required with --once.
+    #[arg(long = "repo")]
+    repo: Vec<String>,
+    /// Poll once, record transitions, and exit. The open list is not changed on a failed read.
+    #[arg(long, conflicts_with = "status")]
+    once: bool,
+    /// Read the heartbeat and the accepted state. No network and no lock.
+    #[arg(long)]
+    status: bool,
+    /// Force the next successful read to be a silent baseline, and repair a corrupt state.
+    #[arg(long)]
+    baseline: bool,
+    /// Absolute state directory. The default is under the XDG state home and is not a Go watch directory.
+    #[arg(long)]
+    state_dir: Option<std::path::PathBuf>,
 }
 
 #[derive(Args)]
@@ -1923,6 +1944,7 @@ fn git_command_label(command: &Command) -> &'static str {
         | Command::Restack { .. }
         | Command::Oplog { .. }
         | Command::Lint { .. }
+        | Command::Watch(_)
         | Command::Dev { .. } => "this step",
     }
 }
@@ -2003,6 +2025,7 @@ fn run(command: Command) -> Result<u8> {
         }
         Command::Add(a) => run_add(a),
         Command::Workspace { command } => crate::workspace::run(command),
+        Command::Watch(a) => run_watch(a),
         Command::Sync(SyncArgs {
             sub: Some(SyncCommand::Restore(r)),
             common,
@@ -2159,6 +2182,50 @@ fn run(command: Command) -> Result<u8> {
         } => {
             dev::patch_ids(&repo, &revs)?;
             Ok(exit::OK)
+        }
+    }
+}
+
+fn run_watch(a: WatchArgs) -> Result<u8> {
+    use crate::watch::command::{self, watch_error_exit};
+    use crate::watch::reader::UreqGet;
+    if a.once == a.status {
+        return Err(Error::usage("pass exactly one of --once and --status"));
+    }
+    let dir = match &a.state_dir {
+        Some(dir) if dir.is_absolute() => dir.clone(),
+        Some(_) => return Err(Error::usage("the state directory must be an absolute path")),
+        None => {
+            if a.repo.is_empty() {
+                return Err(Error::usage(
+                    "--repo is required when --state-dir is omitted",
+                ));
+            }
+            command::state_dir_for_repos(&a.repo)
+        }
+    };
+    let now = crate::tidy::now_secs();
+    let code = if a.status {
+        command::run_status(&dir, now, &mut std::io::stdout())
+    } else {
+        let (token, _) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
+            .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
+        let http = UreqGet::new(token);
+        command::run_once(
+            &dir,
+            &a.repo,
+            a.baseline,
+            now,
+            &http,
+            "https://api.github.com",
+            &mut std::io::stdout(),
+        )
+    };
+    match code {
+        Ok(code) => Ok(code),
+        Err(err) => {
+            eprintln!("stw watch: {err}");
+            Ok(watch_error_exit(err))
         }
     }
 }
