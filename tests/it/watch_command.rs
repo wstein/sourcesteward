@@ -16,6 +16,7 @@ struct Listed {
     starts: std::cell::RefCell<Vec<i64>>,
     cond: Option<stw::watch_reader::cond_store::CondStore>,
     saw_cond: std::cell::Cell<bool>,
+    slow: bool,
 }
 
 impl Listed {
@@ -30,6 +31,7 @@ impl Listed {
             starts: std::cell::RefCell::new(Vec::new()),
             cond: None,
             saw_cond: std::cell::Cell::new(false),
+            slow: false,
         }
     }
 
@@ -78,6 +80,10 @@ impl stw::watch::command::WatchSource for Listed {
             }
         }
         Ok(self.observation())
+    }
+
+    fn after_cycle(&mut self) -> bool {
+        self.slow
     }
 }
 
@@ -405,6 +411,33 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
     .unwrap();
     assert_eq!(once.hits.get(), 1);
     assert_eq!(pace.sleeps, vec![10]);
+}
+
+#[test]
+fn a_low_rate_limit_doubles_the_stream_interval() {
+    let mut src = Listed::head(&"a".repeat(40));
+    src.slow = true;
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: Some(1),
+    };
+    stw::watch::command::run_stream(
+        &path,
+        &["o/r".to_string()],
+        &mut src,
+        &mut Vec::new(),
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: String::new(),
+            interval_secs: 60,
+            max_idle_secs: 0,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(pace.sleeps, vec![120]);
 }
 
 #[test]

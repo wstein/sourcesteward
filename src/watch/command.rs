@@ -22,6 +22,8 @@ pub const EXIT_FAILED: u8 = 1;
 pub const EXIT_USAGE: u8 = 2;
 pub const EXIT_LOCKED: u8 = 3;
 pub const EXIT_STALE: u8 = 5;
+/// Go's cap when a low rate limit slows the stream.
+const SLOW_CAP_SECS: u64 = 600;
 
 /// Smallest `--interval`. Matches the Go watcher.
 pub const MIN_INTERVAL_SECS: u64 = 10;
@@ -82,6 +84,11 @@ pub trait WatchSource {
         hints: &Hints,
         cond: Option<&CondStore>,
     ) -> Result<RepoObservation, ObserveFailure>;
+
+    /// The reader's rate-limit policy after a cycle. `true` means the next wait uses a doubled interval.
+    fn after_cycle(&mut self) -> bool {
+        false
+    }
 }
 
 impl<R: WatchRead> WatchSource for HostObserver<R> {
@@ -92,6 +99,10 @@ impl<R: WatchRead> WatchSource for HostObserver<R> {
         cond: Option<&CondStore>,
     ) -> Result<RepoObservation, ObserveFailure> {
         self.observe(repo, hints, cond, &AtomicBool::new(false))
+    }
+
+    fn after_cycle(&mut self) -> bool {
+        HostObserver::after_cycle(self)
     }
 }
 
@@ -218,8 +229,9 @@ pub fn run_stream(
         if !events.is_empty() {
             last_event = arrived;
         }
+        let slow = source.after_cycle();
         let wait = stream_wait(
-            limits.interval_secs,
+            slowed_interval(limits.interval_secs, slow),
             limits.max_idle_secs,
             arrived,
             last_event,
@@ -229,6 +241,15 @@ pub fn run_stream(
             return Ok(0);
         }
     }
+}
+
+fn slowed_interval(interval_secs: u64, slow: bool) -> u64 {
+    if !slow {
+        return interval_secs;
+    }
+    interval_secs
+        .saturating_mul(2)
+        .min(interval_secs.max(SLOW_CAP_SECS))
 }
 
 fn idle_elapsed(max_idle_secs: u64, now: i64, last_event: i64) -> bool {
@@ -264,10 +285,15 @@ fn poll_ready(
         }
         let hints = hints_of(state, repo);
         let saved = saved_cond(state, repo);
+        let result = source.observe_repo(repo, &hints, saved.as_ref());
+        let run_wide = matches!(&result, Err(ObserveFailure::Error(err)) if err.run_wide);
         out.push(Seen {
             repo: repo.clone(),
-            result: source.observe_repo(repo, &hints, saved.as_ref()),
+            result,
         });
+        if run_wide {
+            break;
+        }
     }
     out
 }
