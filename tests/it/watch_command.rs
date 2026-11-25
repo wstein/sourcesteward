@@ -397,7 +397,17 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
     let mut out = Vec::new();
     stw::watch::command::run_stream(&path, &repo, &mut changed, &mut out, limits(100), &mut pace)
         .unwrap();
-    assert!(String::from_utf8(out).unwrap().contains("head-changed"));
+    let journal = std::fs::read(path.join("journal.jsonl")).unwrap();
+    assert_eq!(out, journal, "stream output must match the durable journal");
+    let events: Vec<serde_json::Value> = String::from_utf8(out)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let changes: Vec<_> = events.iter().filter(|ev| ev["kind"] == "head-changed").collect();
+    assert_eq!(changes.len(), 1, "{events:?}");
+    assert_eq!(changes[0]["details"]["old"], "a".repeat(40));
+    assert_eq!(changes[0]["details"]["new"], "b".repeat(40));
     assert_eq!(pace.sleeps.iter().sum::<u64>(), 160);
 
     let (_dir, path) = state_path();
