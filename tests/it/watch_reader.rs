@@ -2288,3 +2288,10 @@ fn a_chunked_body_is_cut_at_one_mib_without_a_declared_length() {
     let ok = WatchHttp::new(TOKEN.into(), chunked_server(max), "api.github.com".into());
     assert_eq!(ok.pull_detail("a/b", 1, "").unwrap().body.len(), max);
 }
+
+#[test]
+fn cond_store_round_trips_the_halved_page_size() {
+    let mut c = sample_store();
+    c.list.per_page = 12;
+    assert_eq!(CondStore::from_json(&c.to_json()).unwrap(), c);
+}
