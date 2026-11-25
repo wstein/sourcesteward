@@ -28,6 +28,8 @@ fn setup() -> D {
     w.git(&w.base, &["clone", "-q", "--bare", "seed", "origin.git"]);
     let ws = w.p("ws");
     w.git(&w.base, &["clone", "-q", "origin.git", "ws"]);
+    // Keep asynchronous Git maintenance out of the byte-for-byte snapshots.
+    w.git(&ws, &["config", "maintenance.auto", "false"]);
     let new = w.commit(&seed, "b.txt", "b\n");
     w.git(
         &seed,
