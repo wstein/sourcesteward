@@ -1,21 +1,34 @@
 # Cloud integration test baseline
 
-On November 25, 2026, the locked integration suite failed the same 28 tests
-on base `64d6848` and on workspace checkpoint head `461ea28`. The latter
-passed five additional Workspace tests. The other test targets passed in both
-runs. Keep the failures visible while fixing the fixtures and investigating
-the remaining failures.
+On November 25, 2026, `cargo test --locked --offline -j 2` passed on the
+sourcesteward tree of `b1591b2`. Git was 2.47.3 and rustc was 1.99.1.
+The worktree also held two later commits that do not touch
+`projects/sourcesteward`.
 
-| Count | Group | Next step |
-| --- | --- | --- |
-| 20 | `watch_core` state-directory fixtures | Run these fixtures outside the cloud sandbox's `/tmp/.git` marker. The focused rerun using a fresh directory under `/dev/shm` gave 81 passes, zero failures, and one ignored test. Make the fixture root explicit and keep the product check that rejects state inside a worktree. |
-| 6 | Git identity cases in `lint_pr_cmd`, `oplog_undo`, `prove`, and `sync_rules` | Give the fixtures an explicit Git config boundary or a deterministically configured fixture identity, depending on what each test is proving. The cloud machine has a system Git identity, and some child processes clear inherited environment variables and still read it. Verify both the missing-identity and configured-identity cases. |
-| 2 | `sync_default` repository snapshots | Diagnose which path disappears or changes during the full-tree read in `tests/it/sync_default.rs`. Repeat the fixture on the baseline and record the exact path and writer before deciding whether the test fixture or STW needs changing. |
+| Target | Result |
+| --- | --- |
+| `src/lib.rs` | 45 passed |
+| `src/main.rs` | 0 passed |
+| `tests/it` | 1674 passed, 0 failed, 7 ignored |
+| `ready_check` | 26 passed |
+| `review_states` | 99 passed |
+| `slug_cases` | 10 passed |
+| `snapshots_cli` | 3 passed |
+| `snapshots_symlink` | 1 passed |
+| doc-tests | 0 passed |
 
-A separate intermittent submodule-ordering failure in `sync_restore` reproduced
-with the unmodified baseline executable. It was absent from the final
-28-failure comparison. Track it separately from the two snapshot failures.
+The previous baseline, on `64d6848` and `461ea28`, had 28 integration
+failures. They are closed on this head:
 
-Fix the watch fixture first, then the identity fixtures. Keep the two snapshot
-failures and the intermittent submodule case as investigation work. Re-run the
-locked suite after each group and keep regressions visible.
+| Group | Closed by |
+| --- | --- |
+| 20 `watch_core` state-directory fixtures | `3e9aa9d` runs those fixtures outside a Git worktree |
+| 6 Git identity cases in `lint_pr_cmd`, `oplog_undo`, `prove`, and `sync_rules` | `a5c79fc` gives the fixtures an explicit identity boundary |
+| 2 `sync_default` repository snapshots | `27e26dc` sets `maintenance.auto` to false on the fixture clone. The path that changed was not recorded |
+
+`87ee1d7` updates superprojects before nested submodules. The `sync_restore`
+case passed in this run. The ordering now has a deterministic test. One clean
+run does not by itself prove an older intermittent failure cannot return.
+
+The 7 ignored integration tests are unchanged. Re-run the locked suite when
+the sourcesteward tree moves.
