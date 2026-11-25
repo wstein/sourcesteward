@@ -917,6 +917,28 @@ fn cond_store_bounds_the_number_of_validators() {
 }
 
 #[test]
+fn cond_store_bounds_the_number_of_tips() {
+    use stw::watch_reader::cond_store::MAX_TIPS;
+
+    assert_eq!(MAX_TIPS, 5_000);
+    let mut v = sample_store().to_json();
+    let tips = |n: usize| {
+        let mut m = serde_json::Map::new();
+        for i in 1..=n {
+            m.insert(
+                format!("b{i}"),
+                serde_json::json!({"etag": "\"t\"", "sha": SHA_A}),
+            );
+        }
+        Value::Object(m)
+    };
+    v["tips"] = tips(MAX_TIPS);
+    assert!(CondStore::from_json(&v).is_ok());
+    v["tips"] = tips(MAX_TIPS + 1);
+    assert!(CondStore::from_json(&v).is_err());
+}
+
+#[test]
 fn cond_store_prune_keeps_only_open_prs_heads_and_bases() {
     let mut c = sample_store();
     c.validators.insert(detail_key(99), "\"old\"".into());
@@ -1805,6 +1827,36 @@ fn token_never_in_output() {
 }
 
 #[test]
+fn token_stays_out_of_refused_reads() {
+    for status in [401, 403, 404, 429, 301] {
+        let routes = vec![serde_json::json!({
+            "uri": "repos/o/r/pulls/9",
+            "status": status,
+            "echo_authorization_header": true,
+            "headers": {"location": "https://api.github.com/repos/other/name"},
+        })];
+        let forge = Forge::start(&routes);
+        let reader = WatchHttp::new(
+            TOKEN.to_string(),
+            forge.base.clone(),
+            "api.github.com".into(),
+        );
+        let err = reader.pull_detail("o/r", 9, "").unwrap_err();
+        for t in [err.to_string(), format!("{err:?}")] {
+            assert!(!t.contains(TOKEN), "status {status}: {t}");
+            assert!(!t.contains("Bearer"), "status {status}: {t}");
+        }
+        assert!(
+            forge
+                .take_log()
+                .iter()
+                .any(|r| r.authorization == format!("Bearer {TOKEN}")),
+            "status {status} never reached the server"
+        );
+    }
+}
+
+#[test]
 fn the_reader_has_no_write_path() {
     let dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("src/watch_reader");
     for e in std::fs::read_dir(dir).unwrap() {
@@ -1895,6 +1947,71 @@ fn a_token_without_checks_falls_back_to_actions_runs() {
         )
         .unwrap();
     assert!(o.take_diagnostics().is_empty());
+}
+
+#[test]
+fn two_heads_announce_the_actions_fallback_once() {
+    let a = sha('1');
+    let b = sha('2');
+    let detail = r#"{"mergeable":true,"mergeable_state":"clean","head":{"repo":{"full_name":"o/r"}},"base":{"repo":{"full_name":"o/r"}}}"#;
+    let list = serde_json::json!([
+        {"number": 1, "title": "PR 1", "user": {"login": "alice"}, "labels": [], "draft": false,
+         "head": {"sha": &a, "ref": "feat/1"}, "base": {"ref": "main", "sha": sha('a')}},
+        {"number": 2, "title": "PR 2", "user": {"login": "alice"}, "labels": [], "draft": false,
+         "head": {"sha": &b, "ref": "feat/2"}, "base": {"ref": "main", "sha": sha('a')}}
+    ]);
+    let empty_runs = r#"{"total_count":0,"workflow_runs":[]}"#;
+    let routes = vec![
+        serde_json::json!({"uri": "repos/o/r/pulls?state=open&per_page=25&page=1", "status": 0,
+            "body": list.to_string(), "etag": "\"l1\""}),
+        route(
+            "repos/o/r/branches/main",
+            200,
+            &format!("{{\"commit\":{{\"sha\":\"{}\"}}}}", sha('a')),
+            "\"b1\"",
+        ),
+        route("repos/o/r/pulls/1", 200, detail, "\"d1\""),
+        route("repos/o/r/pulls/2", 200, detail, "\"d2\""),
+        route(
+            &format!("repos/o/r/commits/{a}/statuses?per_page=100&page=1"),
+            200,
+            "[]",
+            "",
+        ),
+        route(
+            &format!("repos/o/r/commits/{b}/statuses?per_page=100&page=1"),
+            200,
+            "[]",
+            "",
+        ),
+        runs_403(&a),
+        runs_403(&b),
+        route(
+            &format!("repos/o/r/actions/runs?head_sha={a}&per_page=100&page=1"),
+            200,
+            empty_runs,
+            "",
+        ),
+        route(
+            &format!("repos/o/r/actions/runs?head_sha={b}&per_page=100&page=1"),
+            200,
+            empty_runs,
+            "",
+        ),
+    ];
+    let forge = Forge::start(&routes);
+    let mut o = observer_over(&forge);
+    let cancel = AtomicBool::new(false);
+    let obs = o.observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    assert_eq!(obs.prs.len(), 2);
+    assert!(obs.prs.iter().all(|p| p
+        .checks
+        .as_ref()
+        .is_some_and(|c| { c.via == stw::watch_reader::obs::ChecksVia::ActionsRuns })));
+    assert_eq!(
+        o.take_diagnostics(),
+        vec!["watch: o/r: checks via actions-runs (the token cannot read check runs)".to_string()]
+    );
 }
 
 #[test]
