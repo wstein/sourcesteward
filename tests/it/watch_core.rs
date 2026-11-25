@@ -1367,7 +1367,7 @@ use stw::watch::statedir::{
 };
 use stw::watch::WatchError;
 
-fn tmp() -> tempfile::TempDir {
+pub(crate) fn tmp() -> tempfile::TempDir {
     // Watch state must be outside every Git worktree, including a sandbox's
     // .git marker at the root of its usual temporary directory.
     let bases = [std::env::temp_dir(), "/dev/shm".into(), "/var/tmp".into()];

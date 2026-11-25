@@ -30,6 +30,7 @@ impl HttpGet for OneGet {
             status: self.status,
             body: self.body.clone(),
             retry_after_seconds: None,
+            remaining_zero: false,
         })
     }
 }
@@ -37,7 +38,7 @@ impl HttpGet for OneGet {
 #[test]
 fn a_truncated_or_failed_status_does_not_replace_the_open_list() {
     assert!(matches!(
-        reader::classify_status(503, None),
+        reader::classify_status(503, None, false, b""),
         ReadFailure::Transient { code, .. } if code == "http-5xx"
     ));
     let body = br#"[{"number":7,"title":"T","draft":false,"user":{"login":"ada"},"base":{"ref":"main","repo":{"full_name":"o/r"}},"head":{"ref":"topic","sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","repo":{"full_name":"o/r"}}}]"#;
@@ -98,8 +99,7 @@ impl Output for StopAfterAppend {
 
 #[test]
 fn a_restart_reprints_the_event_journalled_before_the_crash() {
-    let dir = tempfile::tempdir().unwrap();
-    let path = std::fs::canonicalize(dir.path()).unwrap().join("state");
+    let (_dir, path) = state_path();
     assert!(path.is_absolute());
 
     let mut state = State::new();
@@ -159,6 +159,7 @@ impl HttpGet for FixedGet {
             status: 200,
             body: self.0.clone(),
             retry_after_seconds: None,
+            remaining_zero: false,
         })
     }
 }
@@ -180,12 +181,13 @@ impl HttpGet for CountingGet {
             status: 200,
             body: body(&head),
             retry_after_seconds: None,
+            remaining_zero: false,
         })
     }
 }
 
 fn state_path() -> (tempfile::TempDir, std::path::PathBuf) {
-    let dir = tempfile::tempdir().unwrap();
+    let dir = crate::watch_core::tmp();
     let path = std::fs::canonicalize(dir.path()).unwrap().join("state");
     (dir, path)
 }
@@ -361,6 +363,39 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
     let text = String::from_utf8(out).unwrap();
     assert!(text.contains("head-changed"), "{text}");
     assert_eq!(pace.sleeps.iter().sum::<u64>(), 160, "{:?}", pace.sleeps);
+
+    let (_dir, path) = state_path();
+    let http = CountingGet {
+        hits: std::cell::Cell::new(0),
+    };
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let mut out = Vec::new();
+    let code = stw::watch::command::run_stream(
+        &path,
+        &repo,
+        &http,
+        &mut out,
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: api.to_string(),
+            interval_secs: 60,
+            max_idle_secs: 10,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(
+        http.hits.get(),
+        1,
+        "the idle deadline ends the stream before another GET"
+    );
+    assert!(out.is_empty(), "{}", String::from_utf8_lossy(&out));
+    assert_eq!(pace.sleeps, vec![10]);
 }
 
 #[test]
@@ -372,4 +407,90 @@ fn duration_flags_reject_a_missing_unit_and_a_short_interval() {
     assert_eq!(stw::watch::command::parse_duration_secs("0").unwrap(), 0);
     assert!(stw::watch::command::parse_duration_secs("60").is_err());
     assert!(stw::watch::command::parse_duration_secs("1ms").is_err());
+}
+
+struct RateGet {
+    hits: std::cell::Cell<usize>,
+}
+
+impl HttpGet for RateGet {
+    fn get(&self, _url: &str) -> Result<HttpResponse, ReadFailure> {
+        let n = self.hits.get();
+        self.hits.set(n + 1);
+        if n == 0 {
+            Ok(HttpResponse {
+                status: 403,
+                body: br#"{"message":"You have exceeded a secondary rate limit"}"#.to_vec(),
+                retry_after_seconds: Some(120),
+                remaining_zero: false,
+            })
+        } else {
+            Ok(HttpResponse {
+                status: 200,
+                body: body(&"a".repeat(40)),
+                retry_after_seconds: None,
+                remaining_zero: false,
+            })
+        }
+    }
+}
+
+#[test]
+fn a_rate_limited_403_holds_the_repository_until_retry_after() {
+    let limited = reader::classify_status(
+        403,
+        Some(120),
+        false,
+        br#"{"message":"You have exceeded a secondary rate limit"}"#,
+    );
+    assert!(matches!(
+        limited,
+        ReadFailure::Transient { code, retry_in_seconds: 120 } if code == "rate-limited"
+    ));
+    let plain = reader::classify_status(
+        403,
+        None,
+        false,
+        br#"{"message":"Resource not accessible"}"#,
+    );
+    assert!(matches!(plain, ReadFailure::Fatal { code } if code == "forbidden"));
+    let exhausted = reader::classify_status(403, None, true, b"{}");
+    assert!(matches!(
+        exhausted,
+        ReadFailure::Transient { code, retry_in_seconds: 60 } if code == "rate-limited"
+    ));
+
+    let api = "https://api.github.com";
+    let repo = vec!["o/r".to_string()];
+    let (_dir, path) = state_path();
+    let http = RateGet {
+        hits: std::cell::Cell::new(0),
+    };
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: Some(13),
+    };
+    let mut out = Vec::new();
+    let code = stw::watch::command::run_stream(
+        &path,
+        &repo,
+        &http,
+        &mut out,
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: api.to_string(),
+            interval_secs: 10,
+            max_idle_secs: 0,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(
+        http.hits.get(),
+        2,
+        "a 120s retry skips the polls inside the window: {:?}",
+        pace.sleeps
+    );
 }

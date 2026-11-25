@@ -44,6 +44,8 @@ pub struct HttpResponse {
     pub status: u16,
     pub body: Vec<u8>,
     pub retry_after_seconds: Option<u64>,
+    /// `X-RateLimit-Remaining` was `0`. A 403 with this set is a rate limit, not a refusal.
+    pub remaining_zero: bool,
 }
 
 /// The only network seam. Tests supply it; the command uses `ureq`.
@@ -92,20 +94,41 @@ pub fn read_open_pulls(
             }
             continue;
         }
-        return Err(classify_status(resp.status, resp.retry_after_seconds));
+        return Err(classify_status(
+            resp.status,
+            resp.retry_after_seconds,
+            resp.remaining_zero,
+            &resp.body,
+        ));
     }
     Ok(all)
 }
 
-pub fn classify_status(status: u16, retry_after_seconds: Option<u64>) -> ReadFailure {
+/// Classifies a non-success status. A 403 is a rate limit when `Retry-After` is set, the
+/// remaining budget is zero, or the first 4096 bytes of the body mention a rate limit. Any
+/// other 403 is a permission failure.
+pub fn classify_status(
+    status: u16,
+    retry_after_seconds: Option<u64>,
+    remaining_zero: bool,
+    body: &[u8],
+) -> ReadFailure {
+    let limited = remaining_zero
+        || retry_after_seconds.is_some()
+        || crate::github::mentions_rate_limit(&body_head(body));
+    let retry = retry_after_seconds.unwrap_or(60);
     match status {
-        429 | 500..=599 => ReadFailure::Transient {
-            code: if status == 429 {
-                "rate-limited".into()
-            } else {
-                "http-5xx".into()
-            },
-            retry_in_seconds: retry_after_seconds.unwrap_or(60),
+        429 => ReadFailure::Transient {
+            code: "rate-limited".into(),
+            retry_in_seconds: retry,
+        },
+        500..=599 => ReadFailure::Transient {
+            code: "http-5xx".into(),
+            retry_in_seconds: retry,
+        },
+        403 if limited => ReadFailure::Transient {
+            code: "rate-limited".into(),
+            retry_in_seconds: retry,
         },
         401 | 403 => ReadFailure::Fatal {
             code: "forbidden".into(),
@@ -171,6 +194,11 @@ pub fn parse_pulls(body: &[u8]) -> Option<Vec<OpenPr>> {
     Some(out)
 }
 
+fn body_head(body: &[u8]) -> String {
+    let end = body.len().min(4096);
+    String::from_utf8_lossy(&body[..end]).to_ascii_lowercase()
+}
+
 fn valid_repo(repo: &str) -> bool {
     let mut parts = repo.split('/');
     match (parts.next(), parts.next(), parts.next()) {
@@ -211,11 +239,15 @@ impl HttpGet for UreqGet {
                 retry_in_seconds: 60,
             })?;
         let status = resp.status().as_u16();
-        let retry_after_seconds = resp
-            .headers()
+        let headers = resp.headers();
+        let retry_after_seconds = headers
             .get("retry-after")
             .and_then(|v| v.to_str().ok())
             .and_then(|v| v.parse().ok());
+        let remaining_zero = headers
+            .get("x-ratelimit-remaining")
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.trim() == "0");
         let body = resp
             .body_mut()
             .with_config()
@@ -229,6 +261,7 @@ impl HttpGet for UreqGet {
             status,
             body,
             retry_after_seconds,
+            remaining_zero,
         })
     }
 }

@@ -197,8 +197,12 @@ pub fn run_stream(
     let mut force = limits.baseline || core.baseline;
     let mut last_event = pace.now_secs();
     loop {
-        let polls = poll_all(repos, http, &limits.api_base);
         let now = pace.now_secs();
+        if idle_elapsed(limits.max_idle_secs, now, last_event) {
+            core.close();
+            return Ok(0);
+        }
+        let polls = poll_ready(repos, http, &limits.api_base, &core.state, now);
         prepare_cycle(&mut core, repos, force, limits.interval_secs);
         force = false;
         let events = cycle::advance(&mut core.state, &polls, now);
@@ -213,21 +217,55 @@ pub fn run_stream(
         if !events.is_empty() {
             last_event = now;
         }
-        let idle_for = pace.now_secs().saturating_sub(last_event);
-        let idle_for = u64::try_from(idle_for).unwrap_or(u64::MAX);
-        let mut wait = limits.interval_secs;
-        if limits.max_idle_secs > 0 {
-            if idle_for >= limits.max_idle_secs {
-                core.close();
-                return Ok(0);
-            }
-            wait = wait.min(limits.max_idle_secs - idle_for);
-        }
-        if !pace.wait(wait) {
+        let wait = stream_wait(limits.interval_secs, limits.max_idle_secs, now, last_event);
+        if wait == 0 || !pace.wait(wait) {
             core.close();
             return Ok(0);
         }
     }
+}
+
+fn idle_elapsed(max_idle_secs: u64, now: i64, last_event: i64) -> bool {
+    if max_idle_secs == 0 {
+        return false;
+    }
+    let idle_for = u64::try_from(now.saturating_sub(last_event)).unwrap_or(u64::MAX);
+    idle_for >= max_idle_secs
+}
+
+/// The sleep until the next poll. Zero means `--max-idle` has already won, so the caller
+/// exits without another request.
+fn stream_wait(interval_secs: u64, max_idle_secs: u64, now: i64, last_event: i64) -> u64 {
+    if max_idle_secs == 0 {
+        return interval_secs;
+    }
+    let idle_for = u64::try_from(now.saturating_sub(last_event)).unwrap_or(u64::MAX);
+    max_idle_secs.saturating_sub(idle_for).min(interval_secs)
+}
+
+/// Repositories whose `next_try` is still ahead of `now` are left out. A rate-limit answer
+/// sets that deadline; polling them early would ignore `Retry-After`.
+fn poll_ready(
+    repos: &[String],
+    http: &dyn HttpGet,
+    api_base: &str,
+    state: &super::state::State,
+    now: i64,
+) -> Vec<Poll> {
+    let due: Vec<String> = repos
+        .iter()
+        .filter(|repo| !retry_holds(state, repo, now))
+        .cloned()
+        .collect();
+    poll_all(&due, http, api_base)
+}
+
+fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
+    state
+        .health
+        .get(repo)
+        .and_then(|h| crate::github::parse_utc(&h.next_try))
+        .is_some_and(|until| now < until)
 }
 
 fn poll_all(repos: &[String], http: &dyn HttpGet, api_base: &str) -> Vec<Poll> {
