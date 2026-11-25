@@ -1,13 +1,13 @@
-//! `stw absorb --apply`: fold the staged changes the plan named, and only those.
+//! `stw absorb --apply`: fold the staged changes the plan named.
 //!
-//! The plan is computed again and refused unless `--plan-sum` is its checksum. Before the first
-//! fixup object, the branch tip is copied to `refs/stw/backup/<run>/1` and that update is written
-//! to the op log. The way back is `stw oplog undo` of the branch to that tip.
-//!
-//! Fixup commits are written with gix (one per target, oldest first). The branch is then rewritten
-//! with `git rebase --autosquash` through the runner (`GIT_SEQUENCE_EDITOR=true`, no hooks). A
-//! failed rebase leaves the backup ref.
+//! The plan is computed again and refused unless `--plan-sum` is its checksum. The rewritten
+//! commits are built in memory. Before the branch ref moves, the tip tree must be the old HEAD
+//! tree plus exactly the absorbed hunks, and the index must already be what it should be
+//! afterwards (absorbed hunks no longer staged, the others still staged). The work tree is not
+//! written. The branch tip is copied to `refs/stw/backup/<run>/1` first. The way back is
+//! `stw oplog undo`.
 // SPDX-License-Identifier: EUPL-1.2 AND BSD-3-Clause
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use gix::bstr::ByteSlice;
@@ -18,11 +18,12 @@ use gix::ObjectId;
 use serde_json::{json, Value};
 
 use crate::absorb::{self, Fail, Options};
-use crate::git_runner::{Hex40, Op, Runner};
+use crate::git_runner::Runner;
 use crate::oplog::undo::{
     create_backup_with, take_run_with, BACKUP_PREFIX, COUNTER_REF, COUNTER_TRIES,
 };
 use crate::oplog::write::{log_ref_update, RefUpdate};
+use crate::replay::{self, Status};
 
 /// What a successful fold wrote.
 pub struct Applied {
@@ -32,6 +33,7 @@ pub struct Applied {
     pub reference: String,
     pub backup_ref: String,
     pub plan_sum: String,
+    pub keep: bool,
 }
 
 impl Applied {
@@ -46,7 +48,7 @@ impl Applied {
             "ref": self.reference,
             "backup_ref": self.backup_ref,
             "plan_sum": self.plan_sum,
-            "way_back": way_back(&self.reference, &self.old_head, &self.new_head),
+            "way_back": way_back(&self.reference, &self.old_head, &self.new_head, self.keep),
         })
     }
 
@@ -58,13 +60,14 @@ impl Applied {
             self.branch,
             self.backup_ref,
             &self.old_head[..7],
-            way_back(&self.reference, &self.old_head, &self.new_head),
+            way_back(&self.reference, &self.old_head, &self.new_head, self.keep),
         )
     }
 }
 
-fn way_back(reference: &str, old_head: &str, new_head: &str) -> String {
-    format!("stw oplog undo {reference} --to {old_head} --expect {new_head} --keep --yes")
+fn way_back(reference: &str, old_head: &str, new_head: &str, keep: bool) -> String {
+    let keep = if keep { " --keep" } else { "" };
+    format!("stw oplog undo {reference} --to {old_head} --expect {new_head}{keep} --yes")
 }
 
 fn fail(code: &'static str, message: impl Into<String>) -> Fail {
@@ -74,8 +77,8 @@ fn fail(code: &'static str, message: impl Into<String>) -> Fail {
     }
 }
 
-/// Fold the plan's absorbed hunks. A checksum mismatch or an index that is not exactly those
-/// hunks writes nothing, including no backup ref.
+/// Fold the plan's absorbed hunks. A checksum mismatch writes nothing. The branch ref moves only
+/// after the in-memory tree check and the index check.
 pub fn apply(
     dir: &std::path::Path,
     start: &std::path::Path,
@@ -102,7 +105,7 @@ pub fn apply(
             "the plan checksum does not match this index; nothing was written",
         ));
     }
-    let mut ready = ready(doc)?;
+    let ready = ready(doc)?;
     let repo = gix::open(dir).map_err(|e| {
         fail(
             "git-failed",
@@ -111,21 +114,19 @@ pub fn apply(
     })?;
     let old_head = ObjectId::from_hex(ready.old_head.as_bytes())
         .map_err(|e| fail("git-failed", e.to_string()))?;
-    worktree_matches(&repo, &ready)?;
-
+    let expected = expected_tree(&repo, old_head, &ready)?;
+    let tip = rewritten_tip(&repo, &ready)?;
+    let tip_tree = tree_of(&repo, tip)?;
+    if tip_tree != expected {
+        return Err(fail(
+            "tree-mismatch",
+            "the rewritten tree is not the old HEAD plus exactly the absorbed hunks; the branch was not moved",
+        ));
+    }
+    index_matches(&repo, old_head, expected, &ready)?;
+    let files = worktree_bytes(&repo, &ready)?;
+    let keep = worktree_matches_index(&repo, &files);
     let backup_ref = snapshot(&repo, old_head)?;
-    let tip = match fixups(&repo, old_head, &mut ready) {
-        Ok(id) => id,
-        Err(e) => {
-            return Err(fail(
-                e.code,
-                format!(
-                    "{}; the backup {backup_ref} stays and holds {}",
-                    e.message, ready.old_head
-                ),
-            ))
-        }
-    };
     if let Err(e) = move_branch(&repo, &ready.reference, old_head, tip) {
         return Err(fail(
             "apply-failed",
@@ -143,50 +144,24 @@ pub fn apply(
             new: Some(tip),
         },
     );
-    let onto = match &ready.onto {
-        Some(sha) => Some(Hex40::parse(sha).ok_or_else(|| {
-            fail(
-                "apply-failed",
-                format!("the rebase base is not 40 hex; the backup {backup_ref} stays"),
-            )
-        })?),
-        None => None,
-    };
-    if let Err(e) = runner.run(dir, Op::AbsorbAutosquash { onto }) {
+    if let Err(path) = same_bytes(&repo, &files) {
+        let _ = move_branch(&repo, &ready.reference, tip, old_head);
         return Err(fail(
-            "apply-failed",
+            "worktree-changed",
             format!(
-                "the rebase did not finish ({e}). The backup {backup_ref} stays and holds {}. Way back: {}",
-                ready.old_head,
-                way_back(&ready.reference, &ready.old_head, &tip.to_string())
-            ),
-        ));
-    }
-    let mut head_ref = repo.find_reference(&ready.reference).map_err(|e| {
-        fail(
-            "apply-failed",
-            format!("the branch could not be read after the rebase: {e}"),
-        )
-    })?;
-    let new_head = head_ref
-        .peel_to_id()
-        .map_err(|e| fail("apply-failed", e.to_string()))?;
-    if new_head == old_head {
-        return Err(fail(
-            "apply-failed",
-            format!(
-                "the rebase left the branch on {}; the backup {backup_ref} stays",
+                "{path} changed while apply ran; the branch was moved back to {}",
                 ready.old_head
             ),
         ));
     }
     Ok(Applied {
         old_head: ready.old_head,
-        new_head: new_head.to_string(),
+        new_head: tip.to_string(),
         branch: ready.branch,
         reference: ready.reference,
         backup_ref,
         plan_sum: given_sum.to_string(),
+        keep,
     })
 }
 
@@ -194,26 +169,19 @@ struct Ready {
     old_head: String,
     branch: String,
     reference: String,
-    /// Parent of the oldest rewritten commit. `None` rebases `--root`.
-    onto: Option<String>,
-    /// Oldest target first: the target sha, then the index paths of its hunks.
+    /// Oldest rewritten commit first, including descendants.
+    commits: Vec<String>,
+    /// Target sha, then the index paths of its absorbed hunks.
     fixups: Vec<(String, Vec<String>)>,
 }
 
 fn ready(doc: &Value) -> Result<Ready, Fail> {
-    let skipped = doc["files_skipped"]
-        .as_array()
-        .map(|a| a.len())
-        .unwrap_or(0);
     let hunks = doc["hunks"].as_array().cloned().unwrap_or_default();
-    if hunks.is_empty() || hunks.iter().any(|h| h["assignment"] != "absorbed") || skipped > 0 {
-        return Err(fail(
-            "nothing-to-apply",
-            "the plan does not absorb every staged change; nothing was written",
-        ));
-    }
     let mut by_target: Vec<(String, Vec<String>)> = Vec::new();
     for hunk in &hunks {
+        if hunk["assignment"] != "absorbed" {
+            continue;
+        }
         let path = hunk["path"].as_str().unwrap_or("").to_string();
         let sha = hunk["target"]["sha"].as_str().unwrap_or("").to_string();
         if path.is_empty() || sha.len() != 40 {
@@ -228,75 +196,305 @@ fn ready(doc: &Value) -> Result<Ready, Fail> {
             None => by_target.push((sha, vec![path])),
         }
     }
-    let commits = doc["rewrite"]["commits"]
+    if by_target.is_empty() {
+        return Err(fail(
+            "nothing-to-apply",
+            "the plan absorbs nothing; nothing was written",
+        ));
+    }
+    let commits: Vec<String> = doc["rewrite"]["commits"]
         .as_array()
         .cloned()
-        .unwrap_or_default();
-    by_target.sort_by_key(|(sha, _)| {
-        commits
-            .iter()
-            .position(|c| c.as_str() == Some(sha))
-            .unwrap_or(usize::MAX)
-    });
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|c| c.as_str().map(str::to_string))
+        .collect();
+    by_target.sort_by_key(|(sha, _)| commits.iter().position(|c| c == sha).unwrap_or(usize::MAX));
     let reference = doc["rewrite"]["ref"].as_str().unwrap_or("").to_string();
     let branch = doc["branch"].as_str().unwrap_or("").to_string();
     let old_head = doc["head"].as_str().unwrap_or("").to_string();
-    if !reference.starts_with("refs/heads/") || old_head.len() != 40 || by_target.is_empty() {
+    if !reference.starts_with("refs/heads/") || old_head.len() != 40 || commits.is_empty() {
         return Err(fail(
             "apply-failed",
             "the plan has no local branch; nothing was written",
         ));
     }
-    let onto = commits.first().and_then(|c| c.as_str()).map(str::to_string);
     Ok(Ready {
         old_head,
         branch,
         reference,
-        onto,
+        commits,
         fixups: by_target,
     })
 }
 
-fn worktree_matches(repo: &gix::Repository, ready: &Ready) -> Result<(), Fail> {
+fn absorbed_paths(ready: &Ready) -> BTreeSet<&str> {
+    ready
+        .fixups
+        .iter()
+        .flat_map(|(_, paths)| paths.iter().map(String::as_str))
+        .collect()
+}
+
+fn tree_of(repo: &gix::Repository, id: ObjectId) -> Result<ObjectId, Fail> {
+    repo.find_commit(id)
+        .and_then(|c| c.tree_id().map(|t| t.detach()))
+        .map_err(|e| fail("git-failed", e.to_string()))
+}
+
+fn blob_at(repo: &gix::Repository, tree: ObjectId, path: &str) -> Result<Option<ObjectId>, Fail> {
+    let tree = repo
+        .find_tree(tree)
+        .map_err(|e| fail("git-failed", e.to_string()))?;
+    match tree
+        .lookup_entry_by_path(path)
+        .map_err(|e| fail("git-failed", e.to_string()))?
+    {
+        Some(entry) if !entry.mode().is_tree() => Ok(Some(entry.object_id())),
+        _ => Ok(None),
+    }
+}
+
+/// Old HEAD tree with each absorbed path replaced by the blob staged in the index.
+fn expected_tree(repo: &gix::Repository, head: ObjectId, ready: &Ready) -> Result<ObjectId, Fail> {
+    let paths: Vec<&str> = absorbed_paths(ready).into_iter().collect();
+    upsert(repo, tree_of(repo, head)?, &paths)
+}
+
+fn upsert(repo: &gix::Repository, tree: ObjectId, paths: &[&str]) -> Result<ObjectId, Fail> {
     let index = repo
         .index_or_empty()
         .map_err(|e| fail("git-failed", e.to_string()))?;
+    let mut editor = repo
+        .edit_tree(tree)
+        .map_err(|e| fail("git-failed", e.to_string()))?;
+    for path in paths {
+        let entry = index
+            .entry_by_path(path.as_bytes().as_bstr())
+            .ok_or_else(|| fail("apply-failed", format!("the index has no {path}")))?;
+        let kind = if entry.mode.bits() == 0o100755 {
+            EntryKind::BlobExecutable
+        } else {
+            EntryKind::Blob
+        };
+        let id = entry.id;
+        editor
+            .upsert(*path, kind, id)
+            .map_err(|e| fail("apply-failed", e.to_string()))?;
+    }
+    editor
+        .write()
+        .map(|id| id.detach())
+        .map_err(|e| fail("git-failed", e.to_string()))
+}
+
+/// Replay the rewritten commits. A target commit also receives its absorbed index blobs.
+/// Objects are written; the branch ref is not.
+fn rewritten_tip(repo: &gix::Repository, ready: &Ready) -> Result<ObjectId, Fail> {
+    let committer = replay::configured_committer(repo, gix::date::Time::now_utc())
+        .map_err(|e| fail("apply-failed", format!("the rewrite has no committer: {e}")))?;
+    let mut parent: Option<ObjectId> = None;
+    let mut tip = None;
+    for (i, sha) in ready.commits.iter().enumerate() {
+        let id =
+            ObjectId::from_hex(sha.as_bytes()).map_err(|e| fail("git-failed", e.to_string()))?;
+        if i == 0 {
+            let commit = repo
+                .find_commit(id)
+                .map_err(|e| fail("git-failed", e.to_string()))?;
+            parent = commit.parent_ids().next().map(|p| p.detach());
+        }
+        let paths = ready
+            .fixups
+            .iter()
+            .find(|(target, _)| target == sha)
+            .map(|(_, paths)| paths.as_slice());
+        let new_id = match parent {
+            None => {
+                let mut tree = tree_of(repo, id)?;
+                if let Some(paths) = paths {
+                    let borrowed: Vec<&str> = paths.iter().map(String::as_str).collect();
+                    tree = upsert(repo, tree, &borrowed)?;
+                }
+                write_like(repo, id, tree, Vec::new(), &committer)?
+            }
+            Some(onto) => {
+                let step = replay::replay_commit(repo, id, onto, &committer).map_err(|e| {
+                    fail(
+                        "apply-failed",
+                        format!("replaying {sha} failed ({e}); the branch was not moved"),
+                    )
+                })?;
+                if step.status == Status::Conflicted {
+                    return Err(fail(
+                        "apply-failed",
+                        format!("replaying {sha} conflicted; the branch was not moved"),
+                    ));
+                }
+                let replayed = step.new.unwrap_or(onto);
+                if let Some(paths) = paths {
+                    let borrowed: Vec<&str> = paths.iter().map(String::as_str).collect();
+                    let tree = upsert(repo, tree_of(repo, replayed)?, &borrowed)?;
+                    write_like(repo, id, tree, vec![onto], &committer)?
+                } else {
+                    replayed
+                }
+            }
+        };
+        parent = Some(new_id);
+        tip = Some(new_id);
+    }
+    tip.ok_or_else(|| {
+        fail(
+            "nothing-to-apply",
+            "the plan rewrites no commit; nothing was written",
+        )
+    })
+}
+
+fn write_like(
+    repo: &gix::Repository,
+    original: ObjectId,
+    tree: ObjectId,
+    parents: Vec<ObjectId>,
+    committer: &gix::actor::Signature,
+) -> Result<ObjectId, Fail> {
+    let commit = repo
+        .find_commit(original)
+        .map_err(|e| fail("git-failed", e.to_string()))?;
+    let decoded = commit
+        .decode()
+        .map_err(|e| fail("git-failed", e.to_string()))?;
+    let author = decoded
+        .author()
+        .map_err(|e| fail("git-failed", e.to_string()))?
+        .into();
+    let written = gix::objs::Commit {
+        tree,
+        parents: parents.into(),
+        author,
+        committer: committer.clone(),
+        encoding: decoded.encoding.map(ToOwned::to_owned),
+        message: decoded.message.to_owned(),
+        extra_headers: vec![],
+    };
+    repo.write_object(&written)
+        .map(|id| id.detach())
+        .map_err(|e| fail("git-failed", e.to_string()))
+}
+
+/// Absorbed paths match the expected tree (they will not stay staged). Every other staged path
+/// still differs from that tree.
+fn index_matches(
+    repo: &gix::Repository,
+    old_head: ObjectId,
+    expected: ObjectId,
+    ready: &Ready,
+) -> Result<(), Fail> {
+    let old_tree = tree_of(repo, old_head)?;
+    let index = repo
+        .index_or_empty()
+        .map_err(|e| fail("git-failed", e.to_string()))?;
+    let absorbed = absorbed_paths(ready);
+    let mut staged_left = false;
+    for entry in index.entries() {
+        let path = entry.path(&index);
+        let Ok(path) = std::str::from_utf8(path) else {
+            continue;
+        };
+        let old = blob_at(repo, old_tree, path)?;
+        let next = blob_at(repo, expected, path)?;
+        let staged = old != Some(entry.id);
+        if absorbed.contains(path) {
+            if next != Some(entry.id) {
+                return Err(fail(
+                    "index-mismatch",
+                    format!("{path} would not match the absorbed tree; the branch was not moved"),
+                ));
+            }
+        } else if staged {
+            staged_left = true;
+            if next == Some(entry.id) {
+                return Err(fail(
+                    "index-mismatch",
+                    format!(
+                        "{path} is staged and was not absorbed, but the new tree would include it; the branch was not moved"
+                    ),
+                ));
+            }
+        } else if next != Some(entry.id) {
+            return Err(fail(
+                "index-mismatch",
+                format!("{path} is not a staged change, but the new tree differs; the branch was not moved"),
+            ));
+        }
+    }
+    if absorbed.len() == staged_count(repo, old_tree, &index)? && staged_left {
+        return Err(fail(
+            "index-mismatch",
+            "every staged path was absorbed, but one would stay staged; the branch was not moved",
+        ));
+    }
+    Ok(())
+}
+
+fn staged_count(
+    repo: &gix::Repository,
+    old_tree: ObjectId,
+    index: &gix::index::File,
+) -> Result<usize, Fail> {
+    let mut n = 0;
+    for entry in index.entries() {
+        let path = entry.path(index);
+        let Ok(path) = std::str::from_utf8(path) else {
+            continue;
+        };
+        if blob_at(repo, old_tree, path)? != Some(entry.id) {
+            n += 1;
+        }
+    }
+    Ok(n)
+}
+
+fn worktree_bytes(repo: &gix::Repository, ready: &Ready) -> Result<Vec<(String, Vec<u8>)>, Fail> {
     let work = repo.workdir().ok_or_else(|| {
         fail(
             "apply-failed",
             "the repository has no work tree; nothing was written",
         )
     })?;
-    for (_, paths) in &ready.fixups {
-        for path in paths {
-            let Some(entry) = index.entry_by_path(path.as_bytes().as_bstr()) else {
-                return Err(fail(
-                    "apply-failed",
-                    format!("the index has no {path}; nothing was written"),
-                ));
-            };
-            let blob = repo
-                .find_object(entry.id)
-                .map_err(|e| fail("git-failed", e.to_string()))?;
-            let on_disk = std::fs::read(work.join(path)).map_err(|_| {
-                fail(
-                    "dirty-work-tree",
-                    format!(
-                        "{path} in the work tree does not match the index; nothing was written"
-                    ),
-                )
-            })?;
-            if on_disk.as_slice() != blob.data.as_slice() {
-                return Err(fail(
-                    "dirty-work-tree",
-                    format!(
-                        "{path} in the work tree does not match the index; nothing was written"
-                    ),
-                ));
-            }
+    let mut out = Vec::new();
+    for path in absorbed_paths(ready) {
+        let bytes = std::fs::read(work.join(path)).unwrap_or_default();
+        out.push((path.to_string(), bytes));
+    }
+    Ok(out)
+}
+
+fn same_bytes(repo: &gix::Repository, files: &[(String, Vec<u8>)]) -> Result<(), String> {
+    let work = repo.workdir().ok_or_else(|| "no work tree".to_string())?;
+    for (path, before) in files {
+        let now = std::fs::read(work.join(path)).unwrap_or_default();
+        if now != *before {
+            return Err(path.clone());
         }
     }
     Ok(())
+}
+
+fn worktree_matches_index(repo: &gix::Repository, files: &[(String, Vec<u8>)]) -> bool {
+    let Ok(index) = repo.index_or_empty() else {
+        return false;
+    };
+    files.iter().all(|(path, bytes)| {
+        let Some(entry) = index.entry_by_path(path.as_bytes().as_bstr()) else {
+            return false;
+        };
+        let Ok(blob) = repo.find_object(entry.id) else {
+            return false;
+        };
+        blob.data.as_slice() == bytes.as_slice()
+    })
 }
 
 fn snapshot(repo: &gix::Repository, head: ObjectId) -> Result<String, Fail> {
@@ -332,118 +530,6 @@ fn snapshot(repo: &gix::Repository, head: ObjectId) -> Result<String, Fail> {
     Ok(backup_ref)
 }
 
-fn fixups(repo: &gix::Repository, head: ObjectId, ready: &mut Ready) -> Result<ObjectId, Fail> {
-    let oldest = ready.onto.clone().ok_or_else(|| {
-        fail(
-            "nothing-to-apply",
-            "the plan rewrites no commit; nothing of the branch was changed",
-        )
-    })?;
-    let oldest_id =
-        ObjectId::from_hex(oldest.as_bytes()).map_err(|e| fail("git-failed", e.to_string()))?;
-    let oldest_commit = repo
-        .find_commit(oldest_id)
-        .map_err(|e| fail("git-failed", e.to_string()))?;
-    let parents: Vec<ObjectId> = oldest_commit.parent_ids().map(|id| id.detach()).collect();
-    ready.onto = parents.first().map(ToString::to_string);
-    let (name, email) = identity(repo)?;
-    let index = repo
-        .index_or_empty()
-        .map_err(|e| fail("git-failed", e.to_string()))?;
-    let mut tip = head;
-    let mut tree = repo
-        .find_commit(head)
-        .and_then(|c| c.tree_id().map(|id| id.detach()))
-        .map_err(|e| fail("git-failed", e.to_string()))?;
-    for (sha, paths) in &ready.fixups {
-        let subject = subject_of(repo, sha)?;
-        let mut editor = repo
-            .edit_tree(tree)
-            .map_err(|e| fail("git-failed", e.to_string()))?;
-        for path in paths {
-            let entry = index
-                .entry_by_path(path.as_bytes().as_bstr())
-                .ok_or_else(|| fail("apply-failed", format!("the index has no {path}")))?;
-            let kind = if entry.mode.bits() == 0o100755 {
-                EntryKind::BlobExecutable
-            } else {
-                EntryKind::Blob
-            };
-            let id = entry.id;
-            editor
-                .upsert(path.as_str(), kind, id)
-                .map_err(|e| fail("apply-failed", e.to_string()))?;
-        }
-        tree = editor
-            .write()
-            .map_err(|e| fail("git-failed", e.to_string()))?
-            .detach();
-        let signature = gix::actor::Signature {
-            name: name.clone().into(),
-            email: email.clone().into(),
-            time: gix::date::Time::now_utc(),
-        };
-        let commit = gix::objs::Commit {
-            tree,
-            parents: vec![tip].into(),
-            author: signature.clone(),
-            committer: signature,
-            encoding: None,
-            message: format!("fixup! {subject}\n").into(),
-            extra_headers: vec![],
-        };
-        tip = repo
-            .write_object(&commit)
-            .map_err(|e| fail("git-failed", e.to_string()))?
-            .detach();
-    }
-    Ok(tip)
-}
-
-fn subject_of(repo: &gix::Repository, sha: &str) -> Result<String, Fail> {
-    let id = ObjectId::from_hex(sha.as_bytes()).map_err(|e| fail("git-failed", e.to_string()))?;
-    let commit = repo
-        .find_commit(id)
-        .map_err(|e| fail("git-failed", e.to_string()))?;
-    let message = commit
-        .message_raw()
-        .map_err(|e| fail("git-failed", e.to_string()))?;
-    let line = message
-        .to_str()
-        .unwrap_or("")
-        .lines()
-        .next()
-        .unwrap_or("")
-        .to_string();
-    if line.is_empty() {
-        return Err(fail("apply-failed", "a target commit has an empty subject"));
-    }
-    Ok(line)
-}
-
-fn identity(repo: &gix::Repository) -> Result<(String, String), Fail> {
-    let snap = repo.config_snapshot();
-    let one = |key: &'static str| {
-        snap.string(key)
-            .filter(|v| !v.is_empty())
-            .map(|v| v.to_string())
-            .ok_or_else(|| fail(key, format!("{key} is not set in the Git configuration")))
-    };
-    let name = one("user.name").map_err(|_| {
-        fail(
-            "no-identity",
-            "user.name is not set in the Git configuration",
-        )
-    })?;
-    let email = one("user.email").map_err(|_| {
-        fail(
-            "no-identity",
-            "user.email is not set in the Git configuration",
-        )
-    })?;
-    Ok((name, email))
-}
-
 fn move_branch(
     repo: &gix::Repository,
     name: &str,
@@ -468,10 +554,9 @@ fn move_branch(
     };
     let lock = gix::lock::acquire::Fail::AfterDurationWithBackoff(Duration::from_millis(500));
     let committer = repo.committer().transpose().map_err(|e| e.to_string())?;
-    let result = store
+    store
         .transaction()
         .prepare(vec![edit], lock, lock)
         .map_err(|e| e.to_string())
-        .and_then(|t| t.commit(committer).map(|_| ()).map_err(|e| e.to_string()));
-    result
+        .and_then(|t| t.commit(committer).map(|_| ()).map_err(|e| e.to_string()))
 }

@@ -83,3 +83,51 @@ fn apply_snapshots_the_oplog_and_undo_restores_the_branch() {
     assert_eq!(fx.g(&["rev-parse", "HEAD"]), before);
     assert_eq!(fs::read_to_string(fx.r.join("a.txt")).unwrap(), original);
 }
+
+#[test]
+fn apply_keeps_an_unstaged_worktree_and_clears_the_index() {
+    let fx = Fx::new();
+    fx.commit1("a.txt", "A\n", "feat: one");
+    fx.stage1("a.txt", "B\n");
+    fx.write("a.txt", "C\n");
+    let before = fs::read(fx.r.join("a.txt")).unwrap();
+    let plan = fx.plan(&[]);
+    let sum = plan["plan_sum"].as_str().unwrap().to_string();
+    let o = fx.run(&["--json", "--apply", "--plan-sum", &sum]);
+    assert_eq!(o.rc, 0, "stdout {}\nstderr {}", o.out, o.err);
+    let doc: serde_json::Value = serde_json::from_str(&o.out).unwrap();
+    assert_eq!(
+        fx.g(&["rev-parse", "HEAD:a.txt"]),
+        fx.g(&["rev-parse", ":a.txt"])
+    );
+    assert_eq!(fx.g(&["show", "HEAD:a.txt"]), "B");
+    assert!(fx.g(&["diff", "--cached", "--name-only"]).is_empty());
+    assert_eq!(fs::read(fx.r.join("a.txt")).unwrap(), before);
+    assert_eq!(fs::read_to_string(fx.r.join("a.txt")).unwrap(), "C\n");
+    assert!(!doc["way_back"].as_str().unwrap().contains("--keep"));
+}
+
+#[test]
+fn a_file_that_was_not_absorbed_stays_staged() {
+    let fx = Fx::new();
+    fx.commit1("a.txt", "A\n", "feat: one");
+    fx.stage(&[("a.txt", Some("B\n")), ("b.txt", Some("new\n"))]);
+    let plan = fx.plan(&[]);
+    assert!(
+        plan["files_skipped"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["path"] == "b.txt"),
+        "{}",
+        plan
+    );
+    let sum = plan["plan_sum"].as_str().unwrap().to_string();
+    let o = fx.run(&["--json", "--apply", "--plan-sum", &sum]);
+    assert_eq!(o.rc, 0, "stdout {}\nstderr {}", o.out, o.err);
+    assert_eq!(fx.g(&["show", "HEAD:a.txt"]), "B");
+    let cached = fx.g(&["diff", "--cached", "--name-only"]);
+    assert!(cached.contains("b.txt"), "{cached}");
+    assert!(!cached.contains("a.txt"), "{cached}");
+    assert_eq!(fs::read_to_string(fx.r.join("b.txt")).unwrap(), "new\n");
+}

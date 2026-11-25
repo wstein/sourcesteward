@@ -1244,10 +1244,13 @@ resolve), `input[]` and `checks[]` (each `{id,state,via,reasons[],detail,items[]
 `stw absorb` computes the PLAN of that: for every staged hunk the commit that owns it (or why none does), the `fixup!`
 commits that would fold the hunks in (one per target commit, hunks named) and how many commits would get new SHAs. It folds
 nothing: no add, commit, rebase, ref, file, object or index refresh, no network, no hook, no editor. `--apply --plan-sum SUM`
-folds that plan: the checksum is recomputed and a mismatch writes nothing (exit 1, `plan-sum-mismatch`). A match copies
-HEAD to `refs/stw/backup/<run>/1` and appends that update to the op log before any fixup object, writes one fixup commit
-per target with gix, then runs `git rebase --autosquash` (`GIT_SEQUENCE_EDITOR=true`, hooks off, as every runner call).
-The output names `stw oplog undo <ref> --to <old> --expect <new> --keep --yes`. `--apply` without `--plan-sum` is
+folds that plan: the checksum is recomputed and a mismatch writes nothing (exit 1, `plan-sum-mismatch`). A match rewrites the commits in memory. Before the branch ref moves, the new tip tree must equal the
+old HEAD tree plus exactly the absorbed hunks, and the index must already be the index of that tree
+(absorbed paths no longer staged, every other staged path still staged). Apply does not write the
+work tree, so an unstaged edit stays byte for byte. Then HEAD is copied to `refs/stw/backup/<run>/1`
+and that update is appended to the op log, and the branch ref moves. The output names
+`stw oplog undo <ref> --to <old> --expect <new> [--keep] --yes` (`--keep` only when the work tree
+matched the index). `--apply` without `--plan-sum` is
 `plan-sum-required` (exit 1), not an unknown flag. New behavior without a Go counterpart; the specification, the 64 counter-proofs
 of the Python spike and the comparison with git-absorb are in `spikes/stw/absorb/README.md` (continuation of Spec 018,
 "Fix up"); decisions D-20261119-07 to D-20261119-11 and D-20261119-12 to D-20261119-20 (`dayboard/DECISIONS.md`): git-absorb is parked (-12); the later apply is native in Rust, fixups written with gix, rewrite by `git rebase --autosquash` with `GIT_SEQUENCE_EDITOR=true`, an op log snapshot first, git-absorb is never called, the BSD-3 notice stays (-13); no flag is the read-only plan, writing only with `--apply` and the plan checksum (Q1, -14); nothing staged is exit 1 `nothing-staged` (Q2, -15); an ambiguous hunk is skipped, `--ambiguous-newest` takes the newest (Q4, -16); one fixup per target commit (Q8, -17); a partial clone with missing objects is `partial-clone-unsupported`, no lazy fetch (Q11, -18); Q3, Q5, Q6, Q7, Q9, Q10, Q12 and Q13 follow the recommendations of the spike README (-19); order: live acceptance of the spike first, this read-only port in parallel, the apply only after the owner accepted the spike and the answers (-20).

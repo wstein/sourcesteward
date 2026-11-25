@@ -353,7 +353,6 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
             },
             Version(2, 38, 0),
         ),
-        (Op::AbsorbAutosquash { onto: None }, Version(2, 38, 0)),
     ];
     // no wildcard: a new `Op` does not compile until it is listed above
     let listed = |op: &Op| match op {
@@ -376,7 +375,6 @@ fn the_floor_of_every_op_is_declared_and_enforced() {
         | Op::CommitSubmodule { .. }
         | Op::SyncMerge { .. }
         | Op::SyncRebase { .. }
-        | Op::AbsorbAutosquash { .. }
         | Op::ResetKeep { .. } => (),
     };
     for (op, floor) in ops {
