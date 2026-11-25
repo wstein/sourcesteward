@@ -1631,10 +1631,13 @@ The hint in `stw status` (new behavior without a Go counterpart; the owner accep
 ## Watch scenarios (port corpus)
 
 `tests/fixtures/watch/` holds 279 scenarios, the test corpus for the port of `stw watch` (the Go `stw watch` stays the
-reference for those scenarios). `stw watch --once` and `stw watch --status` are in this crate: a bounded open-list
-reader, a cycle that emits `new-pr`, `head-changed`, `closed`, `watch-error`, and `watch-recovered`, and a restart
-that reprints a journalled event. Checks, mergeability, restack, and the continuous stream are not in this command
-yet, and the 279 scenarios are not all replayed by it. The Go state format stays unsupported. The scenarios are generated from the Go tests of
+reference for those scenarios). `stw watch --once`, `stw watch --stream`, and `stw watch --status` are in this crate:
+a bounded open-list reader and a cycle that emits `new-pr`, `head-changed`, `closed`, `watch-error`, and
+`watch-recovered`. `--stream` repeats that cycle until SIGINT, SIGTERM, or `--max-idle`, with `--interval` (minimum
+10s, default 60s). `--once` is one poll. `--status` reads the heartbeat and the accepted repository list. A restart
+reprints a journalled event that was not printed. Checks, mergeability, restack, and `--until-event` are not in this
+command, and the 279 scenarios are not all replayed by it. The Go state format stays unsupported. There is no poll
+jitter. `--stream` is not the default. The scenarios are generated from the Go tests of
 `legacy/sourcesteward` and are independent of the Go file formats: each gives the inputs (observations per cycle, answers of a
 fake forge, flags of the command) and the expected semantic outputs (events with kind, repository, PR, details, order and
 step, a semantic view of the accepted state, exit codes). Event ids and journal sequence numbers are only additional

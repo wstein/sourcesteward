@@ -89,7 +89,7 @@ impl Output for StopAfterAppend {
     }
 
     fn after(&mut self, step: Step) -> Result<(), WatchError> {
-        if step == Step::Print(1) {
+        if step == Step::Append(1) {
             return Err(WatchError::Io("killed after the journal append".into()));
         }
         Ok(())
@@ -137,4 +137,239 @@ fn a_restart_reprints_the_event_journalled_before_the_crash() {
         "{:?}",
         again.lines
     );
+    assert!(
+        out.lines.is_empty(),
+        "the crash is before print: {out:?}",
+        out = out.lines
+    );
+}
+
+fn body(head: &str) -> Vec<u8> {
+    format!(
+        r#"[{{"number":7,"title":"T","draft":false,"user":{{"login":"ada"}},"base":{{"ref":"main","repo":{{"full_name":"o/r"}}}},"head":{{"ref":"topic","sha":"{head}","repo":{{"full_name":"o/r"}}}}}}]"#
+    )
+    .into_bytes()
+}
+
+struct FixedGet(Vec<u8>);
+
+impl HttpGet for FixedGet {
+    fn get(&self, _url: &str) -> Result<HttpResponse, ReadFailure> {
+        Ok(HttpResponse {
+            status: 200,
+            body: self.0.clone(),
+            retry_after_seconds: None,
+        })
+    }
+}
+
+struct CountingGet {
+    hits: std::cell::Cell<usize>,
+}
+
+impl HttpGet for CountingGet {
+    fn get(&self, _url: &str) -> Result<HttpResponse, ReadFailure> {
+        let n = self.hits.get();
+        self.hits.set(n + 1);
+        let head = if n == 0 {
+            "a".repeat(40)
+        } else {
+            "b".repeat(40)
+        };
+        Ok(HttpResponse {
+            status: 200,
+            body: body(&head),
+            retry_after_seconds: None,
+        })
+    }
+}
+
+fn state_path() -> (tempfile::TempDir, std::path::PathBuf) {
+    let dir = tempfile::tempdir().unwrap();
+    let path = std::fs::canonicalize(dir.path()).unwrap().join("state");
+    (dir, path)
+}
+
+#[test]
+fn baseline_replaces_the_open_list_without_events() {
+    let (_dir, path) = state_path();
+    let api = "https://api.github.com";
+    let repo = vec!["o/r".to_string()];
+    let mut out = Vec::new();
+    stw::watch::command::run_once(
+        &path,
+        &repo,
+        false,
+        1_700_000_000,
+        &FixedGet(body(&"a".repeat(40))),
+        api,
+        &mut out,
+    )
+    .unwrap();
+    assert!(out.is_empty(), "{}", String::from_utf8_lossy(&out));
+
+    out.clear();
+    stw::watch::command::run_once(
+        &path,
+        &repo,
+        false,
+        1_700_000_060,
+        &FixedGet(body(&"b".repeat(40))),
+        api,
+        &mut out,
+    )
+    .unwrap();
+    let changed = String::from_utf8(out.clone()).unwrap();
+    assert!(changed.contains("head-changed"), "{changed}");
+
+    out.clear();
+    stw::watch::command::run_once(
+        &path,
+        &repo,
+        true,
+        1_700_000_120,
+        &FixedGet(body(&"c".repeat(40))),
+        api,
+        &mut out,
+    )
+    .unwrap();
+    assert!(
+        out.is_empty(),
+        "a forced baseline is silent: {}",
+        String::from_utf8_lossy(&out)
+    );
+
+    out.clear();
+    stw::watch::command::run_once(
+        &path,
+        &repo,
+        false,
+        1_700_000_180,
+        &FixedGet(body(&"d".repeat(40))),
+        api,
+        &mut out,
+    )
+    .unwrap();
+    let next = String::from_utf8(out).unwrap();
+    assert!(next.contains(&"c".repeat(40)), "{next}");
+    assert!(next.contains("head-changed"), "{next}");
+
+    let mut status = Vec::new();
+    stw::watch::command::run_status(&path, 1_700_000_180, &mut status).unwrap();
+    let text = String::from_utf8(status).unwrap();
+    assert!(text.contains("\"repo\":\"o/r\""), "{text}");
+}
+
+struct Clock {
+    now: i64,
+    sleeps: Vec<u64>,
+    stop_at: Option<usize>,
+}
+
+impl stw::watch::command::Pace for Clock {
+    fn now_secs(&mut self) -> i64 {
+        self.now
+    }
+
+    fn wait(&mut self, seconds: u64) -> bool {
+        self.sleeps.push(seconds);
+        self.now += i64::try_from(seconds).unwrap_or(i64::MAX);
+        !matches!(self.stop_at, Some(n) if self.sleeps.len() == n)
+    }
+}
+
+#[test]
+fn a_stream_stops_on_interrupt_and_on_max_idle() {
+    let api = "https://api.github.com";
+    let repo = vec!["o/r".to_string()];
+    let limits = stw::watch::command::StreamLimits {
+        baseline: false,
+        api_base: api.to_string(),
+        interval_secs: 60,
+        max_idle_secs: 0,
+    };
+
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: Some(1),
+    };
+    let mut out = Vec::new();
+    let code = stw::watch::command::run_stream(
+        &path,
+        &repo,
+        &FixedGet(body(&"a".repeat(40))),
+        &mut out,
+        limits,
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(pace.sleeps, vec![60]);
+    assert!(out.is_empty(), "{}", String::from_utf8_lossy(&out));
+
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let mut out = Vec::new();
+    let code = stw::watch::command::run_stream(
+        &path,
+        &repo,
+        &FixedGet(body(&"a".repeat(40))),
+        &mut out,
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: api.to_string(),
+            interval_secs: 60,
+            max_idle_secs: 150,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(pace.sleeps.iter().sum::<u64>(), 150, "{:?}", pace.sleeps);
+    assert!(out.is_empty(), "{}", String::from_utf8_lossy(&out));
+
+    let (_dir, path) = state_path();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let mut out = Vec::new();
+    let code = stw::watch::command::run_stream(
+        &path,
+        &repo,
+        &CountingGet {
+            hits: std::cell::Cell::new(0),
+        },
+        &mut out,
+        stw::watch::command::StreamLimits {
+            baseline: false,
+            api_base: api.to_string(),
+            interval_secs: 60,
+            max_idle_secs: 100,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    let text = String::from_utf8(out).unwrap();
+    assert!(text.contains("head-changed"), "{text}");
+    assert_eq!(pace.sleeps.iter().sum::<u64>(), 160, "{:?}", pace.sleeps);
+}
+
+#[test]
+fn duration_flags_reject_a_missing_unit_and_a_short_interval() {
+    assert_eq!(
+        stw::watch::command::parse_duration_secs("1m30s").unwrap(),
+        90
+    );
+    assert_eq!(stw::watch::command::parse_duration_secs("0").unwrap(), 0);
+    assert!(stw::watch::command::parse_duration_secs("60").is_err());
+    assert!(stw::watch::command::parse_duration_secs("1ms").is_err());
 }

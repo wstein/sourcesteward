@@ -1,5 +1,6 @@
 //! `stw watch`, the core (port package W1): events, accepted state, the transitions `apply`, the journal, the lock and
-//! the state directory. Pure logic and files; no network, no clock (times are parameters), no cycle (W3), no command (W4).
+//! the state directory. Pure logic and files; no network and no clock (times are parameters). The reader is `reader`,
+//! the open-list cycle is `cycle`, and the command (`--once`, `--stream`, `--status`) is `command`.
 //!
 //! The formats are the Rust formats of the port (owner decision D-20261119-05): not compatible with the Go watcher, which
 //! is why the state directory id uses its own hash prefix and a Go directory is never opened by mistake. README section

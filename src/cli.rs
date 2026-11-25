@@ -106,12 +106,21 @@ enum Command {
 
 #[derive(Args)]
 struct WatchArgs {
-    /// OWNER/NAME, repeatable. Required with --once.
+    /// OWNER/NAME, repeatable. Required with --once and --stream.
     #[arg(long = "repo")]
     repo: Vec<String>,
     /// Poll once, record transitions, and exit. The open list is not changed on a failed read.
-    #[arg(long, conflicts_with = "status")]
+    #[arg(long, conflicts_with_all = ["status", "stream"])]
     once: bool,
+    /// Poll until SIGINT, SIGTERM, or --max-idle. Same open-list events as --once.
+    #[arg(long, conflicts_with = "status")]
+    stream: bool,
+    /// Polling interval, at least 10s. Only with --stream. [default: 60s]
+    #[arg(long, value_name = "DURATION")]
+    interval: Option<String>,
+    /// With --stream, exit 0 after this long without an event. 0 is off. [default: 0]
+    #[arg(long, value_name = "DURATION")]
+    max_idle: Option<String>,
     /// Read the heartbeat and the accepted state. No network and no lock.
     #[arg(long)]
     status: bool,
@@ -2187,10 +2196,25 @@ fn run(command: Command) -> Result<u8> {
 }
 
 fn run_watch(a: WatchArgs) -> Result<u8> {
-    use crate::watch::command::{self, watch_error_exit};
+    use crate::watch::command::{self, watch_error_exit, StreamLimits};
     use crate::watch::reader::UreqGet;
-    if a.once == a.status {
-        return Err(Error::usage("pass exactly one of --once and --status"));
+    let modes = [a.once, a.stream, a.status]
+        .into_iter()
+        .filter(|on| *on)
+        .count();
+    if modes != 1 {
+        return Err(Error::usage(
+            "pass exactly one of --once, --stream and --status",
+        ));
+    }
+    if a.status && a.baseline {
+        return Err(Error::usage("--baseline is not valid with --status"));
+    }
+    if a.interval.is_some() && !a.stream {
+        return Err(Error::usage("--interval is only valid with --stream"));
+    }
+    if a.max_idle.is_some() && !a.stream {
+        return Err(Error::usage("--max-idle is only valid with --stream"));
     }
     let dir = match &a.state_dir {
         Some(dir) if dir.is_absolute() => dir.clone(),
@@ -2211,15 +2235,52 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         let (token, _) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
             .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
         let http = UreqGet::new(token);
-        command::run_once(
-            &dir,
-            &a.repo,
-            a.baseline,
-            now,
-            &http,
-            "https://api.github.com",
-            &mut std::io::stdout(),
-        )
+        if a.stream {
+            let interval = match a.interval.as_deref() {
+                Some(text) => command::parse_duration_secs(text)
+                    .map_err(Error::usage)
+                    .and_then(|secs| {
+                        if secs < command::MIN_INTERVAL_SECS {
+                            Err(Error::usage(format!(
+                                "--interval {text} is below the minimum of {}s",
+                                command::MIN_INTERVAL_SECS
+                            )))
+                        } else {
+                            Ok(secs)
+                        }
+                    })?,
+                None => command::DEFAULT_INTERVAL_SECS,
+            };
+            let max_idle = match a.max_idle.as_deref() {
+                Some(text) => command::parse_duration_secs(text).map_err(Error::usage)?,
+                None => 0,
+            };
+            let mut pace = command::LivePace::install()
+                .map_err(|err| Error::new(crate::error::Kind::Repository, err.to_string()))?;
+            command::run_stream(
+                &dir,
+                &a.repo,
+                &http,
+                &mut std::io::stdout(),
+                StreamLimits {
+                    baseline: a.baseline,
+                    api_base: "https://api.github.com".to_string(),
+                    interval_secs: interval,
+                    max_idle_secs: max_idle,
+                },
+                &mut pace,
+            )
+        } else {
+            command::run_once(
+                &dir,
+                &a.repo,
+                a.baseline,
+                now,
+                &http,
+                "https://api.github.com",
+                &mut std::io::stdout(),
+            )
+        }
     };
     match code {
         Ok(code) => Ok(code),
