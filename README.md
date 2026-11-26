@@ -1659,7 +1659,9 @@ JSON outside the worktree and apply it with
 `stw workspace commit-apply PLAN --message MESSAGE --json`. Use
 `--repo PATH` when running outside the worktree. Apply rechecks the branch,
 index, and selected contents, keeps unrelated staged changes, and leaves
-worktree bytes alone. It handles existing regular files. The ref and index
+worktree bytes alone. It handles existing regular files. The worktree source
+commits raw file bytes using the index mode, without applying Git's content
+filters. The ref and index
 are separate updates with guarded rollback on an index publication error.
 An interruption between the updates can leave the new ref with the old
 index. Inspect the branch and index before retrying after such an interruption.

@@ -118,7 +118,14 @@ fn reopens_the_actual_replay_stages_and_reports_stale_inputs() {
         .output()
         .unwrap();
     assert_eq!(refused.status.code(), Some(1));
-    assert!(String::from_utf8_lossy(&refused.stderr).contains("saved blob content does not match"));
+    let doc: Value = serde_json::from_slice(&refused.stdout).unwrap();
+    assert_eq!(doc["schema_version"], 1);
+    assert_eq!(doc["outcome"], "refused");
+    assert!(doc["blocker"]
+        .as_str()
+        .unwrap()
+        .contains("saved blob content does not match"));
+    assert!(refused.stderr.is_empty());
 }
 
 #[test]
