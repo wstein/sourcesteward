@@ -49,3 +49,4 @@ Propose a change as a [GitHub issue](https://github.com/wstein/sourcesteward/iss
 | Date | Change | Reason |
 | --- | --- | --- |
 | 2026-11-26 | Roadmap created. | Plan the work after the cutover to Rust (0.5.0) and the 0.6.0 release. |
+| 2026-11-26 | Issue #2 moved from 0.6.x to 0.9. | It covers deferred conflict resolution, which the roadmap places in 0.9. Issue #10 is listed under 0.9 as well. |
