@@ -19,6 +19,14 @@ cargo test --locked
 cargo run --locked --quiet --bin stw -- dev command-reference > docs/command-reference.md
 ```
 
+## Propose new behavior
+
+Behavior without a Go counterpart starts as a spike: a script or a test
+recipe in the pull request or under `spikes/<tool>/`. The owner accepts it
+live. Product code follows after that. A port of Go behavior needs no spike
+and names each deviation from the Go behavior. See the [roadmap](ROADMAP.md)
+for the order of the milestones.
+
 ## Open a pull request
 
 Push your topic branch and open a pull request against `main`. Describe the
