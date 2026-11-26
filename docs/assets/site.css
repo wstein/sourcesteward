@@ -85,3 +85,9 @@
   }
   .docs-index-mobile summary { cursor: pointer; }
 }
+
+.header nav .github-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
