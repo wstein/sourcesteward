@@ -1560,7 +1560,7 @@ Options:
           OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin
 
       --workspace
-          Watch every GitHub repository of the workspace that contains the current directory
+          Watch all GitHub repositories in the workspace, or the current standalone Git repository
 
       --config <PATH>
           Read this watch.toml instead of `.stw/watch.toml`

@@ -153,6 +153,9 @@ Use `--repo OWNER/NAME` or `--repo https://github.com/OWNER/NAME` to watch
 a specific repository. Both forms select the same watcher state. Without
 `--repo` or `--workspace`, Watch uses `.stw/watch.toml` if present. With no
 config file, it watches the GitHub `origin` of the current Git repository.
+`--workspace` watches the workspace root and its configured submodules.
+If workspace discovery and `STW_ROOT` yield no root, it watches the
+current standalone Git repository.
 
 `stw watch` requires an explicit mode. `--once` polls once, `--stream`
 polls until SIGINT, SIGTERM or `--max-idle`, and `--until-event KIND`

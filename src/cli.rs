@@ -130,7 +130,7 @@ struct WatchArgs {
     /// OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin.
     #[arg(long = "repo")]
     repo: Vec<String>,
-    /// Watch every GitHub repository of the workspace that contains the current directory.
+    /// Watch all GitHub repositories in the workspace, or the current standalone Git repository.
     #[arg(long)]
     workspace: bool,
     /// Read this watch.toml instead of `.stw/watch.toml`.
@@ -2403,9 +2403,11 @@ fn run(command: Command) -> Result<u8> {
 
 fn workspace_slugs() -> Result<Vec<String>> {
     let cwd = std::env::current_dir().unwrap_or_default();
-    let root = crate::repo::default_root(&cwd).ok_or_else(|| {
-        Error::usage("no workspace root: run inside the workspace or set STW_ROOT")
-    })?;
+    let root = crate::repo::default_root(&cwd)
+        .or_else(|| crate::repo::top_level(&cwd))
+        .ok_or_else(|| {
+            Error::usage("no workspace root: run inside the workspace or set STW_ROOT")
+        })?;
     let repos = crate::repo::list_repos_checked(&root)?;
     let mut slugs = Vec::new();
     for repo in repos {

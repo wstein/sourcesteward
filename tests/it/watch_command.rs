@@ -1182,7 +1182,7 @@ fn github_repo_url_and_slug_select_the_same_watch_state() {
 }
 
 #[test]
-fn watch_defaults_to_the_current_repository_origin() {
+fn watch_selects_the_origin_of_a_standalone_checkout() {
     let fixture = super::common::Fx::new();
     let subdir = fixture.path.join("nested");
     std::fs::create_dir(&subdir).unwrap();
@@ -1191,6 +1191,7 @@ fn watch_defaults_to_the_current_repository_origin() {
         std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
             .current_dir(&subdir)
             .env("XDG_STATE_HOME", dir.path())
+            .env_remove("STW_ROOT")
             .args(["watch", "--status"])
             .args(args)
             .output()
@@ -1198,14 +1199,16 @@ fn watch_defaults_to_the_current_repository_origin() {
     };
     let explicit = status(&["--repo", "test/fixture"]);
     assert_eq!(explicit.status.code(), Some(5));
-    let implicit = status(&[]);
-    assert_eq!(
-        implicit.status.code(),
-        explicit.status.code(),
-        "{}",
-        String::from_utf8_lossy(&implicit.stderr)
-    );
-    assert_eq!(implicit.stdout, explicit.stdout);
+    for args in [&[][..], &["--workspace"][..]] {
+        let selected = status(args);
+        assert_eq!(
+            selected.status.code(),
+            explicit.status.code(),
+            "{args:?}: {}",
+            String::from_utf8_lossy(&selected.stderr)
+        );
+        assert_eq!(selected.stdout, explicit.stdout);
+    }
 }
 
 #[test]
