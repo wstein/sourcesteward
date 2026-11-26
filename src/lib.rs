@@ -6,6 +6,7 @@ pub mod add;
 pub mod auth;
 pub mod carryover;
 pub mod cli;
+pub(crate) mod conflict_report;
 pub mod dev;
 pub mod error;
 pub mod git_runner;

@@ -20,6 +20,7 @@ mod auth;
 mod carryover;
 mod carryover_cli;
 mod cli;
+mod conflict_report;
 mod credentials;
 mod discover_cli;
 mod git_runner;

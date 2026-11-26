@@ -1651,6 +1651,27 @@ Without `--yes` the plan is printed, nothing is written, exit 1.
 
 The hint in `stw status` (new behavior without a Go counterpart; the owner accepts it live, recipe `scratch/abnahme-rezepte/rezept-stw-status-hook-hint.md`): under each repository that was read, one line when at least one of the two hooks is not ours, nothing when both are ours and nothing blocks them. `op log hooks: not installed (post-rewrite, reference-transaction); install with: stw oplog hooks install` names the hooks that are missing. Where `install` would refuse (`core.hooksPath` set, a hook that is not ours, a hooks directory that is a symbolic link) the line is `op log hooks: not active, install is refused here (<reason>); see: stw oplog hooks status`, without the install command. A set `core.hooksPath` or a linked hooks directory counts as blocked even when both files are ours, because git does not run them there. Only a hint: status installs nothing and writes nothing, starts no program, the exit code does not change, and a repository that could not be read has no line. It is the one place where stw prints a command (owner decision 2026-11-13); the JSON has the state only. JSON (additive, `schema_version` stays 2; also in `status PATH`, whose one-line text has no hint line): per repository `oplog_hooks`, null for a repository that could not be read, else `{state, reason, missing}`: `state` `installed`, `missing` or `blocked`; `reason` null, `hooks-path`, `foreign-hook` or `hooks-dir-symlink`; `missing` the names of the hooks that are not ours. There is no switch to hide the hint (no other status hint has one). Mutations `HH1` to `HH11`.
 
+## Prepare a review handoff
+
+Use `stw workspace commit-plan --source index|worktree PATH... --json`
+to preview which version of each selected file enters the commit. Save the
+JSON outside the worktree and apply it with
+`stw workspace commit-apply PLAN --message MESSAGE --json`. Use
+`--repo PATH` when running outside the worktree. Apply rechecks the branch,
+index, and selected contents, keeps unrelated staged changes, and leaves
+worktree bytes alone. It handles existing regular files. The ref and index
+are separate updates with guarded rollback on an index publication error.
+An interruption between the updates can leave the new ref with the old
+index. Inspect the branch and index before retrying after such an interruption.
+
+Use `stw restack conflict-report --repo REPO --store DIR --onto REV BRANCH...`
+to save a conflicting restack plan and its available blob versions. The
+store must be outside the source repository. A second agent can run
+`stw restack show-conflict --repo REPO --store DIR ID` to get the versioned
+JSON, including the conflict and any blocked descendants. Exit 1 signals
+that a pinned revision moved. The original versions remain available for
+diagnosis.
+
 ## Checkout-free comparison
 
 `stw inspect github OWNER/REPO PR` reads a published pull request from GitHub

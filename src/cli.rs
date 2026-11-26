@@ -279,6 +279,32 @@ enum RestackCommand {
     /// Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
     #[command(after_help = RESTACK_PLAN_HELP)]
     Plan(RestackPlanArgs),
+    /// Persist a conflicting plan and its available blob versions as versioned JSON
+    ConflictReport {
+        /// Repository or worktree path
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        /// Existing report directory outside the repository
+        #[arg(long)]
+        store: PathBuf,
+        /// Target revision
+        #[arg(long)]
+        onto: String,
+        /// Ordered stack of local branches
+        #[arg(required = true)]
+        branches: Vec<String>,
+    },
+    /// Reopen a stored conflict report and check its input revisions
+    ShowConflict {
+        /// Repository or worktree path
+        #[arg(long, default_value = ".")]
+        repo: PathBuf,
+        /// Existing report directory outside the repository
+        #[arg(long)]
+        store: PathBuf,
+        /// Report ID returned by conflict-report
+        id: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2052,6 +2078,25 @@ fn git_command_label(command: &Command) -> &'static str {
     }
 }
 
+fn print_conflict_result(command: &str, result: Result<Value>) -> Result<u8> {
+    let (doc, code) = match result {
+        Ok(doc) => {
+            let stale = doc["stale"].as_array().is_some_and(|pins| !pins.is_empty());
+            (doc, if stale { exit::FAILED } else { exit::OK })
+        }
+        Err(error) => (
+            json!({"schema_version": 1, "command": command, "outcome": "refused", "blocker": error.to_string()}),
+            if error.kind() == Kind::Usage {
+                exit::USAGE
+            } else {
+                exit::FAILED
+            },
+        ),
+    };
+    print_json(&doc);
+    Ok(code)
+}
+
 fn run(command: Command) -> Result<u8> {
     git_runner::shared().set_command(git_command_label(&command));
     let failed = |any: bool| if any { exit::FAILED } else { exit::OK };
@@ -2274,6 +2319,24 @@ fn run(command: Command) -> Result<u8> {
         Command::Restack {
             command: RestackCommand::Plan(a),
         } => run_restack_plan(a),
+        Command::Restack {
+            command:
+                RestackCommand::ConflictReport {
+                    repo,
+                    store,
+                    onto,
+                    branches,
+                },
+        } => print_conflict_result(
+            "restack conflict-report",
+            crate::conflict_report::create(&repo, &store, &onto, &branches),
+        ),
+        Command::Restack {
+            command: RestackCommand::ShowConflict { repo, store, id },
+        } => print_conflict_result(
+            "restack show-conflict",
+            crate::conflict_report::reopen(&repo, &store, &id),
+        ),
         Command::Oplog { command } => match command {
             OplogCommand::Timeline(a) => run_oplog_timeline(a),
             OplogCommand::Evolog(a) => run_oplog_evolog(a),

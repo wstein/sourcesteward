@@ -230,7 +230,7 @@ fn lossy(b: &BStr) -> String {
     b.to_str_lossy().into_owned()
 }
 
-fn resolve(repo: &gix::Repository, rev: &str) -> Result<ObjectId, String> {
+pub(crate) fn resolve(repo: &gix::Repository, rev: &str) -> Result<ObjectId, String> {
     let id = repo.rev_parse_single(rev).map_err(|e| e.to_string())?;
     Ok(id
         .object()
@@ -649,6 +649,25 @@ fn input_refusal(
 /// Plan in the repository at `dir` (the root of a repository or worktree). `Err` is a usage problem (a name that
 /// resolves to nothing, no base); `Ok` is the plan, including a refusal.
 pub fn plan(dir: &Path, req: &Request) -> Result<Plan, crate::error::Error> {
+    plan_inner(dir, req, None)
+}
+
+type ConflictRecorder<'a> =
+    dyn FnMut(&gix::Repository, &str, &replay::Step) -> crate::error::Result<()> + 'a;
+
+pub(crate) fn plan_recording_conflict(
+    dir: &Path,
+    req: &Request,
+    record: &mut ConflictRecorder<'_>,
+) -> crate::error::Result<Plan> {
+    plan_inner(dir, req, Some(record))
+}
+
+fn plan_inner(
+    dir: &Path,
+    req: &Request,
+    mut record: Option<&mut ConflictRecorder<'_>>,
+) -> crate::error::Result<Plan> {
     use crate::error::Error;
     let repo = repo::open(dir)?;
     let usage = |m: String| Error::usage(m);
@@ -828,25 +847,32 @@ pub fn plan(dir: &Path, req: &Request) -> Result<Plan, crate::error::Error> {
             block = Block::Other;
             continue;
         }
-        let (steps, tip_after) =
-            match replay::replay_range_in(&mem, new_tip, l.old_base, l.tip, &committer) {
-                Ok(x) => x,
-                Err(
-                    e @ (replay::ReplayError::MergeCommit(_) | replay::ReplayError::RootCommit(_)),
-                ) => {
-                    l.state = LevelState::Refused;
-                    l.reasons.push(esc(&e.to_string()));
-                    block = Block::Other;
-                    continue;
-                }
-                Err(e) => {
-                    l.state = LevelState::Unknown;
-                    l.reasons.push(esc(&e.to_string()));
-                    block = Block::Other;
-                    continue;
-                }
-            };
+        let replay = if record.is_some() {
+            replay::replay_range_with_stages(&mem, new_tip, l.old_base, l.tip, &committer)
+        } else {
+            replay::replay_range_in(&mem, new_tip, l.old_base, l.tip, &committer)
+        };
+        let (steps, tip_after) = match replay {
+            Ok(x) => x,
+            Err(e @ (replay::ReplayError::MergeCommit(_) | replay::ReplayError::RootCommit(_))) => {
+                l.state = LevelState::Refused;
+                l.reasons.push(esc(&e.to_string()));
+                block = Block::Other;
+                continue;
+            }
+            Err(e) => {
+                l.state = LevelState::Unknown;
+                l.reasons.push(esc(&e.to_string()));
+                block = Block::Other;
+                continue;
+            }
+        };
         for s in &steps {
+            if s.status == replay::Status::Conflicted {
+                if let Some(record) = &mut record {
+                    record(&mem, &l.branch, s)?;
+                }
+            }
             let status = match s.status {
                 replay::Status::Clean => "clean",
                 replay::Status::Unchanged => "unchanged",

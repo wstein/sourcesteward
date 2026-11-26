@@ -93,6 +93,14 @@ pub struct Step {
     pub status: Status,
     /// Set for `Conflicted` only.
     pub conflicts: Vec<Conflict>,
+    /// Actual unmerged index stages, captured only for a handoff report.
+    pub(crate) conflict_stages: Vec<(BString, [Option<ConflictStage>; 3])>,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct ConflictStage {
+    pub id: ObjectId,
+    pub mode: u32,
 }
 
 /// Result of `replay_range`.
@@ -225,11 +233,32 @@ pub fn replay_range_in(
     tip: ObjectId,
     committer: &Signature,
 ) -> Result<(Vec<Step>, ObjectId), ReplayError> {
+    replay_range_impl(mem, onto, old_base, tip, committer, false)
+}
+
+pub(crate) fn replay_range_with_stages(
+    mem: &gix::Repository,
+    onto: ObjectId,
+    old_base: ObjectId,
+    tip: ObjectId,
+    committer: &Signature,
+) -> Result<(Vec<Step>, ObjectId), ReplayError> {
+    replay_range_impl(mem, onto, old_base, tip, committer, true)
+}
+
+fn replay_range_impl(
+    mem: &gix::Repository,
+    onto: ObjectId,
+    old_base: ObjectId,
+    tip: ObjectId,
+    committer: &Signature,
+    capture_stages: bool,
+) -> Result<(Vec<Step>, ObjectId), ReplayError> {
     let chain = chain(mem, old_base, tip)?;
     let mut steps = Vec::with_capacity(chain.len());
     let mut new_tip = onto;
     for c in chain {
-        let step = replay_commit(mem, c, new_tip, committer)?;
+        let step = replay_commit_impl(mem, c, new_tip, committer, capture_stages)?;
         let stop = step.status == Status::Conflicted;
         if let Some(n) = step.new {
             new_tip = n;
@@ -283,6 +312,16 @@ pub fn replay_commit(
     new_parent: ObjectId,
     committer: &Signature,
 ) -> Result<Step, ReplayError> {
+    replay_commit_impl(repo, commit, new_parent, committer, false)
+}
+
+fn replay_commit_impl(
+    repo: &gix::Repository,
+    commit: ObjectId,
+    new_parent: ObjectId,
+    committer: &Signature,
+    capture_stages: bool,
+) -> Result<Step, ReplayError> {
     let c = repo.find_commit(commit).map_err(git_err)?;
     let parents: Vec<ObjectId> = c.parent_ids().map(|p| p.detach()).collect();
     let old_parent = match parents.as_slice() {
@@ -305,6 +344,7 @@ pub fn replay_commit(
         new,
         status,
         conflicts: vec![],
+        conflict_stages: vec![],
     };
     if own_tree == base_tree {
         let new = write_commit(
@@ -338,22 +378,67 @@ pub fn replay_commit(
             }
         }
         conflicts.sort_by(|a, b| a.path.cmp(&b.path));
+        let mut stages = std::collections::BTreeMap::<BString, [Option<ConflictStage>; 3]>::new();
+        if capture_stages {
+            // The merged tree and its temporary index exist only in the replay sandbox.
+            let tree = outcome.tree.write().map_err(git_err)?.detach();
+            let mut index = repo.index_from_tree(&tree).map_err(git_err)?;
+            outcome.index_changed_after_applying_conflicts(
+                &mut index,
+                how,
+                gix::merge::plumbing::tree::apply_index_entries::RemovalMode::Prune,
+            );
+            for entry in index.entries() {
+                let stage = entry.stage_raw() as usize;
+                if stage != 0 {
+                    stages.entry(entry.path(&index).to_owned()).or_default()[stage - 1] =
+                        Some(ConflictStage {
+                            id: entry.id,
+                            mode: entry.mode.bits(),
+                        });
+                }
+            }
+        }
         return Ok(Step {
             old: commit,
             new: None,
             status: Status::Conflicted,
             conflicts,
+            conflict_stages: stages.into_iter().collect(),
         });
     }
     // gix has no directory renames: a file the commit adds to a directory that onto renamed would bring the old
     // directory back. Git reports a conflict there, so does the engine.
     let conflicts = directory_rename_conflicts(repo, base_tree, own_tree, new_tree)?;
     if !conflicts.is_empty() {
+        let mut conflict_stages = Vec::new();
+        if capture_stages {
+            let trees =
+                [base_tree, new_tree, own_tree].map(|id| repo.find_tree(id).map_err(git_err));
+            let [base, current, incoming] = trees;
+            let trees = [base?, current?, incoming?];
+            for conflict in &conflicts {
+                let mut stages = [None; 3];
+                for (stage, tree) in stages.iter_mut().zip(&trees) {
+                    let path = conflict.path.as_slice().split(|byte| *byte == b'/');
+                    if let Some(entry) = tree.lookup_entry(path).map_err(git_err)? {
+                        if !entry.mode().is_tree() {
+                            *stage = Some(ConflictStage {
+                                id: entry.object_id(),
+                                mode: u32::from(entry.mode().value()),
+                            });
+                        }
+                    }
+                }
+                conflict_stages.push((conflict.path.clone(), stages));
+            }
+        }
         return Ok(Step {
             old: commit,
             new: None,
             status: Status::Conflicted,
             conflicts,
+            conflict_stages,
         });
     }
     let merged = outcome.tree.write().map_err(git_err)?.detach();
