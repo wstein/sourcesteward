@@ -14,7 +14,7 @@ Last reviewed: 2026-11-26.
 ## Principles
 
 1. **Read first.** A command that writes has a plan preview, compare-and-swap on every ref it moves, a backup ref under `refs/stw/backup/<run>/<k>` and an entry in the operation log.
-2. **One undo.** `stw oplog undo` is the undo. A new writing command records its changes in the log. There is no separate undo per command.
+2. **Recovery through the operation log.** New writing commands should record recoverable changes for `stw oplog undo`. Existing `stw tidy restore` and `stw sync restore` remain available.
 3. **No daemon and no writing to GitHub.** `stw` runs once per task and prints versioned JSON on request. See [what `stw` does not do](docs/what-stw-does-not-do.md).
 4. **New behavior is proved before it ships.** Behavior without a Go counterpart goes through a spike, live acceptance by the owner, product code, and an independent review of the exact head. Ports of Go behavior name each deviation.
 5. **JSON schemas are versioned.** Changes are additive. A breaking change raises `schema_version`.
