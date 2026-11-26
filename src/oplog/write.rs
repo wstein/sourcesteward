@@ -163,6 +163,10 @@ const LOCK_BUDGET: Duration = Duration::from_millis(300);
 /// Take the exclusive lock of `f`, retrying with a short backoff until `budget` is used up. `false` when the lock stayed
 /// held or the file system has none: the caller goes on without it, stw never waits for a log (spec 2, Q16).
 fn lock_within(f: &File, budget: Duration) -> bool {
+    lock_with_wait(f, budget, std::thread::sleep)
+}
+
+fn lock_with_wait(f: &File, budget: Duration, mut wait: impl FnMut(Duration)) -> bool {
     let end = Instant::now() + budget;
     let mut pause = Duration::from_millis(2);
     loop {
@@ -175,7 +179,7 @@ fn lock_within(f: &File, budget: Duration) -> bool {
         if left.is_zero() {
             return false;
         }
-        std::thread::sleep(pause.min(left));
+        wait(pause.min(left));
         pause = (pause * 2).min(Duration::from_millis(50));
     }
 }
@@ -487,21 +491,19 @@ mod tests {
         std::fs::write(&log, "").unwrap();
         let holder = File::open(&log).unwrap();
         holder.lock().unwrap();
-        let rel = std::thread::spawn(move || {
-            std::thread::sleep(Duration::from_millis(20));
-            drop(holder);
-        });
+        let mut holder = Some(holder);
         let mine = File::open(&log).unwrap();
-        let start = Instant::now();
-        // a long budget: the call returns when the lock is free, not at the end of the budget
-        assert!(lock_within(&mine, Duration::from_secs(5)));
-        let took = start.elapsed();
-        rel.join().unwrap();
-        assert!(took >= Duration::from_millis(15), "did not wait: {took:?}");
-        // the first pauses are 2, 4, 8, 16 ms: the lock is seen within about 30 ms, far below 150 ms
+        let mut pauses = [2, 4, 8, 16].into_iter();
+        assert!(lock_with_wait(&mine, Duration::from_secs(5), |pause| {
+            let expected = pauses.next().expect("unexpected additional pause");
+            assert_eq!(pause, Duration::from_millis(expected));
+            if expected == 16 {
+                drop(holder.take());
+            }
+        }));
         assert!(
-            took < Duration::from_millis(150),
-            "waited too long: {took:?}"
+            pauses.next().is_none(),
+            "the lock was released on the last retry"
         );
         // the lock is held now: a second open file description does not get it
         let other = File::open(&log).unwrap();

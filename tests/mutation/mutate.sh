@@ -2776,7 +2776,7 @@ m OW40 'oplog write: the lock budget is 30 s' src/oplog/write.rs \
   'Duration::from_millis(300);' 'Duration::from_millis(30000);' \
   lib oplog::write::tests::a_lock_that_stays_held_does_not_stop_the_append
 m OW41 'oplog write: the lock wait sleeps over the whole rest of the budget' src/oplog/write.rs \
-  '        std::thread::sleep(pause.min(left));' '        std::thread::sleep(left);' \
+  '        wait(pause.min(left));' '        wait(left);' \
   lib oplog::write::tests::lock_within_takes_a_lock_that_is_released_soon_and_holds_it
 m OW42 'oplog write: the first pause of the lock wait is 200 ms' src/oplog/write.rs \
   '    let mut pause = Duration::from_millis(2);' '    let mut pause = Duration::from_millis(200);' \
