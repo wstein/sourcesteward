@@ -512,6 +512,3 @@ fn move_ref(
         .commit(repo.committer().transpose()?)?;
     Ok(())
 }
-
-#[cfg(test)]
-mod tests;

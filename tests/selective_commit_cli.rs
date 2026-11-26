@@ -1,5 +1,9 @@
-use super::*;
 use std::process::Command;
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+use stw::selective_commit::{apply, plan, Plan, Source};
 
 struct Fixture {
     temp: tempfile::TempDir,
@@ -16,6 +20,7 @@ impl Fixture {
         fixture.git(&["config", "user.name", "Example"]);
         fixture.git(&["config", "user.email", "test@example.test"]);
         fixture.git(&["config", "commit.gpgSign", "false"]);
+        fixture.git(&["config", "maintenance.auto", "false"]);
         fs::write(fixture.root().join("selected"), "original\n").unwrap();
         fs::write(fixture.root().join("other"), "other original\n").unwrap();
         fixture.git(&["add", "."]);
