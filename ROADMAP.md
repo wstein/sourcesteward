@@ -23,7 +23,7 @@ Last reviewed: 2026-11-26.
 
 | Milestone | Status | Theme | Content | Done when |
 | --- | --- | --- | --- | --- |
-| 0.6.0 | current | Release | Release 0.6.0 from the reviewed `main` head. | The tag is on the built and checked head. The installer is tested on a real archive on Linux and macOS. |
+| 0.6.0 | released | Release | [SourceSteward v0.6.0](https://github.com/wstein/sourcesteward/releases/tag/v0.6.0) | The tag points to the checked build commit. The Linux x86-64 and macOS ARM64 archives passed smoke tests. |
 | 0.6.x | next | Close acceptances | The open `needs-live-acceptance` issues ([#2](https://github.com/wstein/sourcesteward/issues/2), [#3](https://github.com/wstein/sourcesteward/issues/3), [#4](https://github.com/wstein/sourcesteward/issues/4), [#5](https://github.com/wstein/sourcesteward/issues/5), [#9](https://github.com/wstein/sourcesteward/issues/9)). Stable macOS tests. The ref-drift check on worktree apply. | Each label is removed or the open rest is named. |
 | 0.7 | planned | Stack | `stw restack apply`: conflict-free, compare-and-swap per ref, backup refs, `range-diff` of the result. Undo through the operation log. The stack input contract from [#9](https://github.com/wstein/sourcesteward/issues/9). | Accepted on a real stack, including abort and a moved ref. |
 | 0.8 | planned | Evidence | The local CLEAR receipt contract ([#8](https://github.com/wstein/sourcesteward/issues/8)): schema, binding to head and repository, reviewer trust. `stw prove` and `stw review carry-over` without GitHub. Then the push and workflow policy in Rust. | The decision on #8 is recorded. A receipt is verified across the host and the reviewer environment. |
