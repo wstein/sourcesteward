@@ -2,6 +2,11 @@ name: SourceSteward release build
 
 on:
   workflow_dispatch:
+    inputs:
+      stage_draft:
+        description: Attach the verified archives to the existing draft release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -34,11 +39,13 @@ jobs:
           [[ "$version" =~ ^stw\ ([0-9]+\.[0-9]+\.[0-9]+)$ ]]
           name="stw_v${BASH_REMATCH[1]}_${PLATFORM}.tar.gz"
           mkdir -p dist
-          tar -C target/release -czf "dist/$name" stw
+          tar -czf "dist/$name" -C target/release stw -C "$PWD" LICENSE LICENSE-git-absorb-BSD-3
           installed=$(mktemp -d)
           tar -xzf "dist/$name" -C "$installed"
           test "$("$installed/stw" --version)" = "$version"
           "$installed/stw" --help >/dev/null
+          cmp LICENSE "$installed/LICENSE"
+          cmp LICENSE-git-absorb-BSD-3 "$installed/LICENSE-git-absorb-BSD-3"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: stw-${{ matrix.platform }}
@@ -68,3 +75,46 @@ jobs:
           name: stw-release-candidate
           path: dist/
           if-no-files-found: error
+
+  stage-draft:
+    name: Stage release assets on GitHub
+    if: inputs.stage_draft && github.ref == 'refs/heads/main'
+    needs: assemble
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    concurrency:
+      group: stw-release-draft
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: stw-release-candidate
+          path: dist
+      - name: Upload to the existing draft
+        working-directory: dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          shopt -s nullglob
+          archives=(stw_*.tar.gz)
+          test "${#archives[@]}" -eq 4
+          sha256sum --check --strict SHA256SUMS
+          version=${archives[0]#stw_}
+          tag=${version%%_*}
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          for platform in darwin_arm64 darwin_x86_64 linux_arm64 linux_x86_64; do
+            test -f "stw_${tag}_${platform}.tar.gz"
+          done
+          repo="$GITHUB_REPOSITORY"
+          test "$(gh api "repos/$repo/branches/main" --jq .commit.sha)" = "$GITHUB_SHA"
+          gh api "repos/$repo/git/matching-refs/tags/$tag" |
+            jq -e --arg ref "refs/tags/$tag" 'all(.[]; .ref != $ref)'
+          draft=$(gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish,assets)
+          jq -e --arg sha "$GITHUB_SHA" \
+            '.isDraft and (.targetCommitish == $sha or (.assets | length == 0))' <<<"$draft"
+          gh release edit "$tag" --repo "$repo" --target "$GITHUB_SHA"
+          gh release upload "$tag" "${archives[@]}" SHA256SUMS --repo "$repo" --clobber
+          gh release view "$tag" --repo "$repo" --json isDraft,targetCommitish,assets |
+            jq -e --arg sha "$GITHUB_SHA" \
+              '.isDraft and .targetCommitish == $sha and (.assets | length == 5)'
