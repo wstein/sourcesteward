@@ -320,8 +320,6 @@ ARM64, plus `SHA256SUMS`. The owner published
 [Rust v0.5.0](https://github.com/wstein/sourcesteward/releases/tag/v0.5.0)
 and the Homebrew tap has switched. The macOS installation smoke-test evidence
 still needs to be recorded in [#12](https://github.com/wstein/sourcesteward/issues/12).
-The disposition of `pulls` remains open in
-[#15](https://github.com/wstein/sourcesteward/issues/15).
 
 ### Live acceptance evidence
 
