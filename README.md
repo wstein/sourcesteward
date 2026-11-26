@@ -13,6 +13,11 @@
 preparing work for review. It can report on a main repository and its
 checked-out submodules in one run.
 
+> **Experimental software.** SourceSteward is provided without warranty.
+> Commands such as `stw watch`, `stw status`, and `stw absorb` are read-only.
+> Apply commands such as `stw absorb --apply` can rewrite Git history.
+> Review the plan and try write operations on a disposable clone first.
+
 ## Motivation
 
 When work spans a repository and its submodules, changes and branches can
