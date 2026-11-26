@@ -3,6 +3,8 @@ name: SourceSteward CI
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -25,6 +27,7 @@ jobs:
           persist-credentials: false
       - name: Report tool versions
         run: |
+          git log -1 --format="Tested commit %H"
           git --version
           rustc --version
       - name: Run locked tests
