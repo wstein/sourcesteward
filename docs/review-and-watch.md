@@ -204,6 +204,8 @@ A PR retarget emits `base-changed` even when the head SHA stays the same.
   a silent baseline. While the watcher runs, it also checks previously active
   runs by ID when they leave the active lists, so an older run can report a late
   failure. Scheduled and manually dispatched runs are covered.
+- PR check events use the exact head's GraphQL check rollup when available.
+  Incomplete or unavailable rollups fall back to the existing REST reads.
 - `--reviews` reads recent submitted reviews and their inline comments
   for tracked open PRs. It emits `review-state-changed` and
   `review-comment-added`. These reflect GitHub review activity.

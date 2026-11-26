@@ -2746,7 +2746,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         let issues = a.all || a.issues;
         let reviews = a.all || a.reviews;
         let discussions = a.all || a.discussions;
-        let graph_client = (issues || reviews || discussions).then(|| {
+        let graph_client = (a.all || a.prs || issues || reviews || discussions).then(|| {
             crate::github::Client::with_base(
                 token.clone(),
                 token_source,

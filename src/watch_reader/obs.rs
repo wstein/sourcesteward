@@ -118,6 +118,7 @@ pub struct StatusContext {
 pub enum ChecksVia {
     #[default]
     CheckRuns,
+    Graphql,
     /// The token cannot read check runs (403): the newest Actions run per workflow and event stands in, without any
     /// output text (new against Go, D11).
     ActionsRuns,
