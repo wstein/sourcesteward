@@ -14,7 +14,7 @@ use super::absorb_fx::*;
 
 fn spike() -> Option<PathBuf> {
     let p =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../spikes/stw/absorb/stw-absorb-plan");
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spikes/absorb/stw-absorb-plan");
     p.is_file().then_some(p)
 }
 

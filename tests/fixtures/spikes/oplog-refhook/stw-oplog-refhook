@@ -1,0 +1,538 @@
+#!/bin/bash
+# stw-oplog-refhook - op log step 3: the git hook `reference-transaction` (install/status/uninstall) and a read-only timeline
+# that merges the hook log with the reflog timeline of the sister spike and names the gaps.
+# Usage: stw-oplog-refhook install   [--repo PATH] [--yes]
+#        stw-oplog-refhook status    [--repo PATH]
+#        stw-oplog-refhook uninstall [--repo PATH] [--yes]
+#        stw-oplog-refhook timeline  [--repo PATH] [--json]
+#        stw-oplog-refhook print                       (prints the hook script, writes nothing)
+# --repo must be an absolute path (default: the current directory). Exit codes: 0 ok, 1 refused or nothing executed, 2 usage error.
+# Writes only: `install --yes` (one file <git-common-dir>/hooks/reference-transaction, only if none exists and core.hooksPath is not set;
+# plus the log directory <git-common-dir>/stw/oplog) and `uninstall --yes` (that file, only if it carries the header line below).
+# Never writes git config, never sets or changes core.hooksPath. status and timeline are read-only.
+# Environment: STW_OPLOG_REFLOG=path of stw-oplog-reflog (default: ../oplog-reflog/stw-oplog-reflog next to this file).
+# SPDX-License-Identifier: EUPL-1.2
+# Bash 3.2 compatible. Needs git >= 2.31 (`rev-parse --path-format`), awk. The shell code of install/status/uninstall is a copy of the
+# sister spike stw-oplog-hook (it is a script with no importable part; the sister is not changed): a nit, see the README.
+# shellcheck disable=SC2016,SC2018,SC2019,SC2046
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_NAMESPACE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+export GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 LC_ALL=C
+HEADER='# stw-oplog-refhook v1'
+HOOKNAME=reference-transaction
+TAB=$'\t'
+HERE=$(cd "$(dirname "$0")" && pwd)
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+die() { echo "stw-oplog-refhook: $*" >&2; exit 2; }
+# clean STRING : control characters (ASCII and C1 U+0080-U+009F as UTF-8) replaced by ?, invalid UTF-8 dropped
+clean() { printf '%s' "$1" | tr '[:cntrl:]' '?' | scrub_utf8 | awk "$AWKLIB"'{ print c1($0) }'; }
+scrub_utf8() { if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi; }
+AWKLIB='
+function c1(s,  re) { re=sprintf("%c[%c-%c]", 194, 128, 159); gsub(re, "?", s); return s }
+function jesc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/[[:cntrl:]]/, "?", s); return c1(s) }
+function fmt(e,  z,era,doe,yoe,y,doy,mp,d,m,s) {
+  z=int(e/86400); s=e-z*86400; z+=719468; era=int(z/146097); doe=z-era*146097
+  yoe=int((doe-int(doe/1460)+int(doe/36524)-int(doe/146096))/365); y=yoe+era*400
+  doy=doe-(365*yoe+int(yoe/4)-int(yoe/100)); mp=int((5*doy+2)/153); d=doy-int((153*mp+2)/5)+1
+  m=(mp<10)?mp+3:mp-9; if (m<=2) y++
+  return sprintf("%04d-%02d-%02d %02d:%02d:%02d", y, m, d, int(s/3600), int((s%3600)/60), s%60)
+}
+function iso2epoch(t,  y,m,d,era,yoe,doy,doe) {
+  if (t !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z$/) return -1
+  y=substr(t,1,4)+0; m=substr(t,6,2)+0; d=substr(t,9,2)+0
+  if (m<=2) y--
+  era=int(y/400); yoe=y-era*400; doy=int((153*(m+(m>2?-3:9))+2)/5)+d-1
+  doe=yoe*365+int(yoe/4)-int(yoe/100)+doy
+  return (era*146097+doe-719468)*86400+substr(t,12,2)*3600+substr(t,15,2)*60+substr(t,18,2)
+}
+'
+
+# ---- the hook ------------------------------------------------------------------------------------------------------
+# One copy of the script; install writes exactly this text, `print` shows it.
+hook_text() {
+  cat <<'HOOKEOF'
+#!/bin/sh
+# stw-oplog-refhook v1
+# git hook reference-transaction (stw spike). git calls it up to three times per ref transaction: prepared, committed or aborted.
+# Danger: in the phase `prepared` an exit code other than 0 aborts the ref transaction. This script therefore always exits 0,
+# does nothing in `aborted`, and in `prepared` only the one thing described below.
+# committed: appends one TAB-separated line per changed ref to <git-common-dir>/stw/oplog/refs.log:
+#   UTC-time  old  new  refname  ref-transaction  main|worktrees-id
+# old/new: 40 or 64 hex digits, or ref:<target> for a symbolic ref. refname and target are percent-encoded: every byte outside
+# [A-Za-z0-9._/+@:-] becomes %XX (upper case hex, so % itself is %25); a name longer than 200 bytes is cut at 200 bytes and ends in
+# %00 plus 8 hex digits (djb2 hash of the whole name, so cut names stay distinct).
+# Only HEAD and refs/* are logged; refs/remotes/* only with `remotes=on` in <git-common-dir>/stw/oplog/config or
+# STW_OPLOG_REMOTES=on. Not logged: pseudo refs (ORIG_HEAD, AUTO_MERGE, ...), old = new, HEAD lines that repeat a branch line,
+# the pruning of loose refs that `git pack-refs` does (the same value is in packed-refs). The packing itself is logged as 0 -> value
+# with a `pre-same` marker before it; the reader hides both.
+# git reports old = 0 whenever the caller gave no expected old value (git tag -d, git branch -D, git branch -f, update-ref without
+# an old value, ...), also for refs that exist. In `prepared` the hook therefore looks up the current value of every ref reported with
+# old = 0 and writes a marker line (context `pre-old`, old = the current value) when the ref exists and differs from the new value, or
+# `pre-same` when it equals the new value (packing by pack-refs/gc, update to the same value); the reader joins the marker to the
+# committed line (pre-same: the line is no change and is hidden). Per-worktree refs (refs/bisect, refs/worktree, refs/rewritten) get no marker.
+# A transaction without such a line (commit, ordinary updates with an old value) does no work in `prepared`.
+# A write error is recorded as a "gap" line in stw/oplog/errors.log, or, if that fails too, in <git-common-dir>/stw-oplog-gaps.
+# Only regular files are appended to (a FIFO or device as log counts as a write error). The hook changes no ref.
+# Remove with: stw-oplog-refhook uninstall --yes
+PATH="${PATH:-/usr/bin:/bin}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+LC_ALL=C; export LC_ALL
+GIT_OPTIONAL_LOCKS=0; export GIT_OPTIONAL_LOCKS
+umask 077
+phase=${1:-}
+case $phase in prepared|committed) ;; *) exit 0 ;; esac
+Z40=0000000000000000000000000000000000000000
+Z64=0000000000000000000000000000000000000000000000000000000000000000
+app() { { [ ! -e "$2" ] || [ -f "$2" ]; } && printf '%s\n' "$1" 2>/dev/null >> "$2"; }
+first=
+if [ "$phase" = prepared ]; then
+  while read -r old new ref _rest || [ -n "$old$new$ref" ]; do
+    case $old in "$Z40"|"$Z64") ;; *) continue ;; esac
+    case $ref in refs/*) first="$old $new $ref"; break ;; esac
+  done
+  [ -n "$first" ] || exit 0
+fi
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || now=unknown
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+if [ -z "$common" ] || [ ! -d "$common" ]; then cat >/dev/null 2>&1; exit 0; fi
+wt=-
+if [ "$phase" = committed ]; then
+  wt=main
+  gitdir=
+  [ -z "${GIT_DIR:-}" ] || gitdir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
+  if [ -n "$gitdir" ] && [ "$gitdir" != "$common" ]; then
+    wt=${gitdir#"$common"/worktrees/}
+    case $wt in */*) wt=other ;; esac
+    case $wt in *[!A-Za-z0-9._-]*) wt=$(printf '%s' "$wt" | tr -c 'A-Za-z0-9._-' '?') ;; esac
+    [ ${#wt} -le 40 ] || wt=$(printf '%s' "$wt" | cut -c1-40)
+  fi
+fi
+remotes=off
+case ${STW_OPLOG_REMOTES:-} in 1|on|yes|true) remotes=on ;; esac
+dir="$common/stw/oplog"
+log="$dir/refs.log"
+if [ -f "$dir/config" ]; then
+  cfg=$(head -c 1024 "$dir/config" 2>/dev/null)
+  while IFS='=' read -r k v || [ -n "$k" ]; do
+    case $k in remotes) case $v in 1|on|yes|true) remotes=on ;; esac ;; esac
+  done <<EOF
+$cfg
+EOF
+fi
+[ -d "$dir" ] || mkdir -p "$dir" 2>/dev/null
+failed=0 bad=0
+if [ "$phase" = prepared ]; then
+  out=$({ printf '%s\n' "$first"; cat; } | STW_COMMON=$common STW_REMOTES=$remotes STW_NOW=$now awk '
+BEGIN { for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i }
+function enc(s,  i, c, o, cut, h) {
+  cut = 0
+  if (length(s) > 200) {
+    h = 5381; for (i = 1; i <= length(s); i++) h = (h * 33 + ord[substr(s, i, 1)]) % 4294967296
+    cut = sprintf("%%00%08x", h); s = substr(s, 1, 200)
+  }
+  for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); o = o ((c ~ "[A-Za-z0-9._/+@:-]") ? c : sprintf("%%%02X", ord[c])) }
+  return o (cut ? cut : "")
+}
+BEGIN { cm = ENVIRON["STW_COMMON"] "/"; pk = cm "packed-refs" }
+{ if (NF != 3 || $1 !~ /^0+$/ || $3 !~ /^refs\// || $3 ~ /^refs\/(bisect|worktree|rewritten)\//) next
+  nw = $2; ref = $3
+  if (ref ~ /^refs\/remotes\// && ENVIRON["STW_REMOTES"] != "on") next
+  cur = ""; f = cm ref
+  if ((getline v < f) > 0) { if (v ~ /^[0-9a-f]+$/ && (length(v) == 40 || length(v) == 64)) cur = v; else if (v ~ /^ref:/) cur = "-" }
+  close(f)
+  if (cur == "") {
+    if (!loaded) { loaded = 1; while ((getline l < pk) > 0) if (l ~ /^[0-9a-f]+ refs\//) { split(l, a, " "); pd[a[2]] = a[1] }; close(pk) }
+    if (ref in pd) cur = pd[ref]
+  }
+  if (cur != "" && cur != "-") { z = cur; gsub(/./, "0", z); printf "%s\t%s\t%s\t%s\t%s\t-\n", ENVIRON["STW_NOW"], cur, z, enc(ref), (cur == nw ? "pre-same" : "pre-old") }
+}' 2>/dev/null) || failed=$((failed+1))
+else
+  out=$(STW_PACKED="$common/packed-refs" STW_REMOTES=$remotes STW_NOW=$now STW_WT=$wt awk '
+BEGIN { for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i }
+function isoid(s) { return (s ~ /^[0-9a-f]+$/ && (length(s) == 40 || length(s) == 64)) }
+function iszero(s) { return (s ~ /^0+$/) }
+function val(s) { return (isoid(s) || s ~ /^ref:[^ ]+$/) }
+function enc(s,  i, c, o, cut, h) {
+  cut = 0
+  if (length(s) > 200) {
+    h = 5381; for (i = 1; i <= length(s); i++) h = (h * 33 + ord[substr(s, i, 1)]) % 4294967296
+    cut = sprintf("%%00%08x", h); s = substr(s, 1, 200)
+  }
+  for (i = 1; i <= length(s); i++) { c = substr(s, i, 1); o = o ((c ~ "[A-Za-z0-9._/+@:-]") ? c : sprintf("%%%02X", ord[c])) }
+  return o (cut ? cut : "")
+}
+function encv(s) { return (s ~ /^ref:/) ? "ref:" enc(substr(s, 5)) : s }
+function loadpk(  pk, l, a) {
+  if (loaded) return
+  loaded = 1; pk = ENVIRON["STW_PACKED"]
+  if (pk != "") { while ((getline l < pk) > 0) if (l ~ /^[0-9a-f]+ refs\//) { split(l, a, " "); pd[a[2]] = a[1] }; close(pk) }
+}
+{ if (NF != 3 || !val($1) || !val($2)) { bad++; next }
+  n++; o[n] = $1; w[n] = $2; r[n] = $3
+  if ($3 ~ /^refs\/heads\// && isoid($2)) hn[$2] = 1 }
+END {
+  for (i = 1; i <= n; i++) {
+    if (r[i] != "HEAD" && r[i] !~ /^refs\//) continue
+    if (r[i] ~ /^refs\/remotes\// && ENVIRON["STW_REMOTES"] != "on") continue
+    if (o[i] == w[i] && !iszero(o[i])) continue
+    if (r[i] == "HEAD" && iszero(o[i]) && isoid(w[i]) && (w[i] in hn)) continue
+    if (isoid(o[i]) && !iszero(o[i]) && iszero(w[i])) { loadpk(); if (r[i] in pd) continue }
+    printf "%s\t%s\t%s\t%s\tref-transaction\t%s\n", ENVIRON["STW_NOW"], encv(o[i]), encv(w[i]), enc(r[i]), ENVIRON["STW_WT"]
+  }
+  if (bad > 0) printf "#bad\t%d\n", bad
+}' 2>/dev/null) || failed=$((failed+1))
+fi
+if [ -n "$out" ]; then
+  while IFS= read -r line; do
+    case $line in "#bad"*) n=${line#"#bad"}; n=${n#?}; case $n in ''|*[!0-9]*) n=1 ;; esac; bad=$((bad+n)); continue ;; esac
+    app "$line" "$log" || failed=$((failed+1))
+  done <<EOF
+$out
+EOF
+fi
+if [ "$failed" -gt 0 ] || [ "$bad" -gt 0 ]; then
+  g=$(printf '%s\tgap\t%s\tfailed=%s\tbad=%s\t%s' "$now" "$phase" "$failed" "$bad" "$wt")
+  app "$g" "$dir/errors.log" || app "$g" "$common/stw-oplog-gaps"
+fi
+exit 0
+HOOKEOF
+}
+
+# ---- argument parsing ----------------------------------------------------------------------------------------------
+[ $# -ge 1 ] || usage
+CMD=$1; shift
+REPO=$PWD YES=0 JSON=0
+while [ $# -gt 0 ]; do
+  case $1 in
+    --repo)  [ $# -ge 2 ] || usage; REPO=$2; shift 2 ;;
+    --yes)   YES=1; shift ;;
+    --json)  JSON=1; shift ;;
+    *)       usage ;;
+  esac
+done
+case $CMD in
+  print) hook_text; exit 0 ;;
+  install|status|uninstall|timeline) ;;
+  *) usage ;;
+esac
+[ "$CMD" = timeline ] || [ "$JSON" = 0 ] || usage
+case $REPO in /*) ;; *) die "--repo must be an absolute path, not empty: '$(clean "$REPO")'" ;; esac
+[ -d "$REPO" ] || die "not a directory: $(clean "$REPO")"
+GIT=${STW_OPLOG_REFHOOK_GIT:-git}
+G() { "$GIT" -C "$REPO" "$@"; }
+COMMON=$(G rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "not a git repository: $(clean "$REPO")"
+case $COMMON in /?*) ;; *) die "git common dir is not absolute: '$(clean "$COMMON")'" ;; esac
+[ -d "$COMMON" ] || die "git common dir missing: $(clean "$COMMON")"
+HOOKS=$COMMON/hooks
+HOOK=$HOOKS/$HOOKNAME
+OPDIR=$COMMON/stw/oplog
+RLOG=$OPDIR/refs.log
+ELOG=$OPDIR/errors.log
+EVENTS=$OPDIR/events-refhook.log
+GAPF=$COMMON/stw-oplog-gaps
+CONF=$OPDIR/config
+PP() { clean "$1"; }   # a path for display
+
+# hooksPath: sets HP (value, empty if unset) and HPORIGIN
+hookspath() {
+  HP='' HPORIGIN=''
+  local o
+  if o=$(G config --show-origin --get core.hooksPath 2>/dev/null); then
+    HPORIGIN=${o%%"$TAB"*}; HP=${o#*"$TAB"}
+    [ -n "$HP" ] || HP='(empty)'
+  fi
+}
+is_ours() { [ -f "$1" ] && [ ! -L "$1" ] && [ "$(sed -n 2p "$1" 2>/dev/null)" = "$HEADER" ]; }
+event() { # event WORD : append to events-refhook.log (own directory only); failure is ignored
+  ( umask 077; mkdir -p "$OPDIR" && printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$EVENTS" ) 2>/dev/null
+}
+
+# ---- install -------------------------------------------------------------------------------------------------------
+cmd_install() {
+  hookspath
+  echo "install  repo=$(PP "$REPO")  common-dir=$(PP "$COMMON")"
+  if [ -n "$HP" ]; then
+    echo "refused  core.hooksPath is set ($(clean "$HP"), from $(clean "$HPORIGIN")). Nothing was installed or written."
+    echo "         The hook would belong in: $(clean "$HP")/$HOOKNAME (a relative value is relative to the directory where git runs hooks)."
+    echo "         The owner decides: install by hand (stw-oplog-refhook print > <dir>/$HOOKNAME; chmod +x), or unset core.hooksPath, or"
+    echo "         call the hook from an existing hook there. This tool never changes core.hooksPath."
+    return 1
+  fi
+  if [ -L "$HOOKS" ]; then
+    echo "refused  $(PP "$HOOKS") is a symbolic link (the directory may be shared with other repositories). Nothing was written; the owner decides."
+    return 1
+  fi
+  if [ -e "$HOOK" ] || [ -L "$HOOK" ]; then
+    if is_ours "$HOOK"; then echo "ok       already installed: $(PP "$HOOK") ($HEADER). Nothing to do."; return 0; fi
+    echo "refused  $(PP "$HOOK") exists and is not from this tool. Not overwritten, nothing was written."
+    echo "         Chain proposal (not executed, nothing is written even with --yes): save the script with"
+    echo "           stw-oplog-refhook print > /path/to/stw-reference-transaction.sh; chmod +x /path/to/stw-reference-transaction.sh"
+    echo "         and add to the existing hook (stdin can be read once: keep a copy; the phase is the first argument):"
+    printf '%s\n' '           in=$(cat); printf "%s\n" "$in" | /path/to/stw-reference-transaction.sh "$@" || :; <existing logic reading "$in">'
+    echo "         The existing hook decides whether a ref transaction may go on (its exit code in the phase prepared aborts it); this script never makes git fail (exit 0)."
+    return 1
+  fi
+  echo "plan     write $(PP "$HOOK") ($HEADER); logs go to $(PP "$OPDIR")"
+  echo "         this hook runs on every ref change in this repository (commit, fetch, tag, branch, rebase, ...)"
+  if [ "$YES" != 1 ]; then echo "not executed: --yes is missing"; return 1; fi
+  local tmp
+  ( mkdir -p "$HOOKS" ) || { echo "refused  cannot create $(PP "$HOOKS")"; return 1; }
+  tmp=$(mktemp "$HOOKS/.$HOOKNAME.stw-new.XXXXXX") || { echo "refused  cannot create a temporary file in $(PP "$HOOKS")"; return 1; }
+  ( hook_text > "$tmp" ) || { rm -f "$tmp"; echo "refused  cannot write $(PP "$tmp")"; return 1; }
+  chmod 755 "$tmp" || { rm -f "$tmp"; echo "refused  chmod failed"; return 1; }
+  # ln does not replace an existing file: a hook that appeared since the check wins
+  if ln "$tmp" "$HOOK" 2>/dev/null; then rm -f "$tmp"; else rm -f "$tmp"; echo "refused  $(PP "$HOOK") appeared or cannot be linked; nothing installed"; return 1; fi
+  ( umask 077; mkdir -p "$OPDIR" ) 2>/dev/null || echo "note     cannot create $(PP "$OPDIR") now; the hook retries on every run"
+  event install
+  echo "Result: installed $(PP "$HOOK")"
+  echo "Remove with: stw-oplog-refhook uninstall --repo $(printf '%q' "$REPO") --yes"
+  return 0
+}
+
+# ---- uninstall -----------------------------------------------------------------------------------------------------
+cmd_uninstall() {
+  echo "uninstall  repo=$(PP "$REPO")  common-dir=$(PP "$COMMON")"
+  if [ -L "$HOOKS" ]; then
+    echo "refused  $(PP "$HOOKS") is a symbolic link (the directory may be shared with other repositories). Nothing was removed; the owner decides."
+    return 1
+  fi
+  if [ ! -e "$HOOK" ] && [ ! -L "$HOOK" ]; then echo "nothing  no $(PP "$HOOK")"; return 0; fi
+  if ! is_ours "$HOOK"; then
+    echo "refused  $(PP "$HOOK") does not carry the line '$HEADER' (or is a link): not ours, not touched."
+    return 1
+  fi
+  if [ "$YES" != 1 ]; then echo "plan     remove $(PP "$HOOK")"; echo "not executed: --yes is missing"; return 1; fi
+  rm -f "$HOOK" || { echo "refused  cannot remove $(PP "$HOOK")"; return 1; }
+  event uninstall
+  echo "Result: removed $(PP "$HOOK"). Logs stay in $(PP "$OPDIR") (not deleted)."
+  return 0
+}
+
+# ---- status --------------------------------------------------------------------------------------------------------
+cmd_status() {
+  hookspath
+  echo "status  repo=$(PP "$REPO")"
+  echo "common-dir   $(PP "$COMMON")"
+  if [ -n "$HP" ]; then echo "hooksPath    set: $(clean "$HP") (from $(clean "$HPORIGIN")); install would be refused"; else echo "hooksPath    not set"; fi
+  local eff; eff=$(G rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
+  echo "hooks dir    $(clean "${eff:-?}")$([ -L "$HOOKS" ] && echo ' (common hooks dir is a symbolic link)')"
+  local h list=''
+  if [ -d "${eff:-$HOOKS}" ]; then
+    for h in "${eff:-$HOOKS}"/*; do
+      [ -f "$h" ] || continue
+      case ${h##*/} in *.sample) continue ;; esac
+      [ -x "$h" ] || continue
+      list="$list $(clean "${h##*/}")"
+    done
+  fi
+  echo "hooks        ${list:-(none executable)}"
+  if [ -e "$HOOK" ] || [ -L "$HOOK" ]; then
+    if is_ours "$HOOK"; then echo "$HOOKNAME ours ($HEADER)$([ -x "$HOOK" ] || echo ', NOT executable: git ignores it')"; else echo "$HOOKNAME exists, not ours (never touched)"; fi
+  else echo "$HOOKNAME absent in $(PP "$HOOKS")"; fi
+  local cnt=0
+  cnt=$(G worktree list --porcelain 2>/dev/null | grep -c '^worktree ')
+  if [ "${cnt:-0}" -gt 1 ]; then
+    echo "worktrees    $cnt (the main one and $((cnt-1)) linked): all use $(PP "$HOOKS") and write $(PP "$OPDIR") (common dir)"
+  else echo "worktrees    1 (no linked worktrees)"; fi
+  local m subs=0 sh
+  for m in "$COMMON"/modules/*; do
+    [ -d "$m" ] || continue
+    subs=$((subs+1)); sh=''
+    for h in "$m"/hooks/*; do [ -f "$h" ] && [ -x "$h" ] && case ${h##*/} in *.sample) ;; *) sh="$sh $(clean "${h##*/}")" ;; esac; done
+    echo "submodule    $(clean "${m##*/}"): own hooks dir, hooks:${sh:- (none)}; a hook of this repository does not apply there (hint only)"
+  done
+  [ "$subs" = 0 ] && echo "submodules   none under $(PP "$COMMON")/modules"
+  local lines=0 el=0 pre=0
+  [ -f "$RLOG" ] && lines=$(wc -l < "$RLOG" | tr -d ' ')
+  [ -f "$RLOG" ] && pre=$(awk -F'\t' '$5 ~ /^pre-/' "$RLOG" | wc -l | tr -d ' ')
+  [ -f "$ELOG" ] && el=$(wc -l < "$ELOG" | tr -d ' ')
+  echo "log          $(PP "$RLOG"): $lines lines ($pre pre-old markers); errors.log: $el gap lines$([ -f "$GAPF" ] && echo "; $(PP "$GAPF") exists: $(wc -l < "$GAPF" | tr -d ' ') gap lines")"
+  local rem=off
+  if [ -f "$CONF" ] && grep -q '^remotes=\(on\|yes\|1\|true\)$' "$CONF" 2>/dev/null; then rem=on; fi
+  echo "remotes      refs/remotes/** logged: $rem (default off; set remotes=on in $(PP "$CONF") or STW_OPLOG_REMOTES=on)"
+  [ -f "$EVENTS" ] && echo "events       $(tr '\t' ' ' < "$EVENTS" | tail -n 3 | tr '\n' ';')"
+  return 0
+}
+
+# ---- timeline --------------------------------------------------------------------------------------------------------
+REFLOG=${STW_OPLOG_REFLOG:-$HERE/../oplog-reflog/stw-oplog-reflog}
+
+# reflog rows through the sister's `timeline --json`: "epoch<TAB>ord<TAB>ref<TAB>old<TAB>new<TAB>reflog<TAB>text" and
+# "gap<TAB>kind<TAB>ref<TAB>text" lines. Strings in that JSON are escaped (every quote inside a string is \"), so entries can be cut at `},{"time":"`.
+reflog_rows() {
+  if [ ! -x "$REFLOG" ]; then printf 'state\tmissing: %s\n' "$REFLOG"; return 0; fi
+  local js
+  js=$("$REFLOG" timeline --repo "$REPO" --all --json 2>/dev/null) || { printf 'state\tfailed: %s timeline exited non-zero\n' "$REFLOG"; return 0; }
+  printf 'state\tok: %s\n' "$REFLOG"
+  printf '%s\n' "$js" | awk '
+    function jget(o, k,  re, v) { re = "\"" k "\":\"([^\"\\\\]|\\\\.)*\""; if (match(o, re)) { v = substr(o, RSTART + length(k) + 4, RLENGTH - length(k) - 5); gsub(/\\"/, "\"", v); gsub(/\\\\/, "\\", v); return v } return "" }
+    function jnum(o, k) { if (match(o, "\"" k "\":[0-9]+")) return substr(o, RSTART + length(k) + 3, RLENGTH - length(k) - 3) + 0; return 0 }
+    { s = s $0 }
+    END {
+      e = index(s, "\"entries\":["); g = index(s, "],\"gaps\":[")
+      if (!e || !g) { print "#error"; exit }
+      ent = substr(s, e + 11, g - e - 11); gp = substr(s, g + 10)
+      k = 0
+      while (match(ent, /\{"time":"/)) {
+        rest = substr(ent, RSTART + 1)
+        if (match(rest, /\},\{"time":"/)) { o = substr(rest, 1, RSTART); ent = substr(rest, RSTART + 2) } else { o = rest; ent = "" }
+        k++
+        printf "%d\t%d\t%s\t%s\t%s\treflog\t%s\n", jnum(o, "epoch"), k, jget(o, "ref"), jget(o, "old"), jget(o, "new"), jget(o, "message")
+      }
+      while (match(gp, /\{"kind":"/)) {
+        rest = substr(gp, RSTART + 1)
+        if (match(rest, /\},\{"kind":"/)) { o = substr(rest, 1, RSTART); gp = substr(rest, RSTART + 2) } else { o = rest; gp = "" }
+        printf "gap\t%s\t%s\t%s\n", jget(o, "kind"), jget(o, "ref"), jget(o, "text")
+      }
+    }' | tr -d '\r'
+}
+
+# hook rows: "epoch<TAB>ord<TAB>ref<TAB>old<TAB>new<TAB>hook<TAB>text<TAB>kind" (kind: create|update|delete|symref|delete-unknown) after joining pre-old markers
+hook_rows() {
+  [ -f "$RLOG" ] || return 0
+  awk -F'\t' "$AWKLIB"'
+    function iszero(s) { return (s ~ /^0+$/) }
+    BEGIN { for (i = 1; i < 256; i++) hx[sprintf("%02X", i)] = sprintf("%c", i); hx["00"] = "[cut]" }
+    function dec(s,  o, i, h) { o = ""; while ((i = index(s, "%")) > 0) { h = substr(s, i + 1, 2); if (h ~ /^[0-9A-F][0-9A-F]$/) { o = o substr(s, 1, i - 1) hx[h]; s = substr(s, i + 3) } else { o = o substr(s, 1, i); s = substr(s, i + 1) } } return o s }
+    function disp(s) { s = dec(s); gsub(/[[:cntrl:]]/, "?", s); return s }
+    NF >= 5 {
+      ep = iso2epoch($1); if (ep < 0) ep = 0
+      if ($5 == "pre-old") { pre[$4] = $2; delete same[$4]; next }
+      if ($5 == "pre-same") { same[$4] = $2; delete pre[$4]; next }
+      if ($5 != "ref-transaction") next
+      o = $2; w = $3; r = $4; wt = (NF >= 6 ? $6 : "main"); k = ""; note = ""
+      if (iszero(o) && (r in same) && same[r] == w) { delete same[r]; next }
+      delete same[r]
+      if (iszero(w) && !(w ~ /^ref:/) && (r in gone)) next
+      if (w ~ /^ref:/ || o ~ /^ref:/) { k = "symref"; note = " " disp(r) " -> " disp(substr(w, 5)) }
+      else if (iszero(o) && (r in pre)) { o = pre[r]; k = (iszero(w) ? "delete" : "update"); note = " (old value from the prepared marker)" }
+      else if (iszero(o) && iszero(w)) { k = "delete-unknown"; note = " (old value unknown: no prepared marker)" }
+      else if (iszero(o)) k = "create"
+      else if (iszero(w)) k = "delete"
+      else k = "update"
+      delete pre[r]
+      if (iszero(w)) gone[r] = 1; else delete gone[r]
+      txt = "ref-transaction: " k (k == "delete" || k == "delete-unknown" || k == "symref" || k == "update" ? note : "")
+      if (wt != "main") txt = txt " [git-dir of the hook: " wt "]"
+      n++
+      printf "%d\t%d\t%s\t%s\t%s\thook\t%s\t%s\n", ep, 5000000 + NR, disp(r), (o ~ /^ref:/ ? "ref:" disp(substr(o, 5)) : o), (w ~ /^ref:/ ? "ref:" disp(substr(w, 5)) : w), txt, k
+    }' "$RLOG" | tr -d '\r'
+}
+
+cmd_timeline() {
+  local rrows grows ev
+  rrows=$(reflog_rows); grows=$(hook_rows | scrub_utf8 | awk "$AWKLIB"'{ print c1($0) }')
+  RFSTATE=$(printf '%s\n' "$rrows" | sed -n 's/^state\t//p' | head -n 1)
+  if printf '%s\n' "$rrows" | grep -q '^#error'; then RFSTATE="unreadable output of $REFLOG"; rrows=''; fi
+  ev=''; [ -f "$EVENTS" ] && ev=$(cat "$EVENTS")
+  local rem=off
+  if [ -f "$CONF" ] && grep -q '^remotes=\(on\|yes\|1\|true\)$' "$CONF" 2>/dev/null; then rem=on; fi
+  local capgaps=0 gapl=0
+  [ -f "$ELOG" ] && capgaps=$(wc -l < "$ELOG" | tr -d ' ')
+  [ -f "$GAPF" ] && gapl=$(wc -l < "$GAPF" | tr -d ' ')
+  local lastcap=''; [ "$capgaps" -gt 0 ] && lastcap=$(tail -n 1 "$ELOG" | cut -f1)
+  local rf_rows rf_gaps
+  rf_rows=$(printf '%s\n' "$rrows" | grep -v '^gap	' | grep -v '^state	' | grep -v '^#error' | grep -v '^$')
+  rf_gaps=$(printf '%s\n' "$rrows" | grep '^gap	')
+  # merge + coverage in one awk: input blocks tagged by a first column: E events, R reflog rows, H hook rows
+  local merged
+  merged=$( { printf '%s\n' "$ev" | awk -F'\t' 'NF >= 2 { print "E\t" $1 "\t" $2 }'
+              printf '%s\n' "$rf_rows" | awk -F'\t' 'NF >= 7 { print "R\t" $0 }'
+              printf '%s\n' "$grows" | awk -F'\t' 'NF >= 8 { print "H\t" $0 }'; } | awk -F'\t' -v REM="$rem" "$AWKLIB"'
+    function iszero(s) { return (s ~ /^0+$/) }
+    function trunc(s) { return substr(s, 1, 7) }
+    function key(s) { gsub("[\200-\377]", "", s); gsub("[^A-Za-z0-9._/+@:-]", "~", s); return s }
+    $1 == "E" { ne++; et[ne] = iso2epoch($2); ew[ne] = $3; next }
+    $1 == "R" { nr++; rep[nr]=$2; rord[nr]=$3; rref[nr]=$4; rold[nr]=$5; rnew[nr]=$6; rtxt[nr]=$8; hasr[key($4) SUBSEP $6] = 1; next }
+    $1 == "H" { if ($9 == "delete" || $9 == "delete-unknown") hasdel[key($4)] = 1; hnewany[$6] = 1; nh++; hep[nh]=$2; hord[nh]=$3; href[nh]=$4; hold[nh]=$5; hnew[nh]=$6; htxt[nh]=$8; hkind[nh]=$9; hash[key($4) SUBSEP $6] = 1; next }
+    function state(t,  i, s, seen) { s = ""; for (i = 1; i <= ne; i++) if (et[i] >= 0 && et[i] <= t) { s = ew[i]; seen = 1 }; if (!seen) return "pre-install"; return (s == "install" ? "covered" : "hook-absent") }
+    END {
+      for (i = 1; i <= nr; i++) if (match(rtxt[i], /^Branch: renamed refs\/heads\/[^ ]+ to /)) renamed[key(rref[i])] = 1
+      if (ne == 0) st0 = "unknown-window"
+      for (i = 1; i <= nr; i++) {
+        st = (ne == 0 ? "unknown-window" : state(rep[i]))
+        tag = ""
+        if (rref[i] != "HEAD" && !(rref[i] ~ /^refs\/remotes\// && REM != "on")) {
+          if (st == "covered" && !((key(rref[i]) SUBSEP rnew[i]) in hash)) { tag = "uncovered"; if (match(rtxt[i], /^Branch: renamed refs\/heads\/[^ ]+ to /)) { src = substr(rtxt[i], 17, RLENGTH - 20); if (key(src) in hasdel) tag = "rename (old name deleted in hook log)" }
+            else if ((key(rref[i]) in renamed) && (rnew[i] in hnewany)) tag = "moved reflog of a renamed branch" }
+          else if (st == "hook-absent") tag = "hook-absent"
+          else if (st == "pre-install") tag = "pre-install"
+          else if (st == "unknown-window") tag = "unknown-window"
+        }
+        printf "ROW\t%d\t%d\t%s\t%s\t%s\treflog\t%s\t%s\n", rep[i], rord[i], rref[i], rold[i], rnew[i], rtxt[i], tag
+      }
+      for (i = 1; i <= nh; i++) {
+        tag = ""
+        k = hkind[i]
+        if (href[i] ~ /^refs\/tags\//) tag = "closes gap: tags"
+        else if (k == "delete" || k == "delete-unknown") tag = (href[i] ~ /^refs\/heads\// ? "closes gap: deleted branch" : (href[i] == "refs/stash" ? "closes gap: stash drop" : "closes gap: deleted ref"))
+        else if (href[i] != "HEAD" && !((key(href[i]) SUBSEP hnew[i]) in hasr)) tag = "hook only (no reflog entry now)"
+        printf "ROW\t%d\t%d\t%s\t%s\t%s\thook\t%s\t%s\n", hep[i], hord[i], href[i], hold[i], hnew[i], htxt[i], tag
+      }
+    }' )
+  local rows
+  rows=$(printf '%s\n' "$merged" | grep '^ROW	' | cut -f2- | scrub_utf8 | awk "$AWKLIB"'{ print c1($0) }' | LC_ALL=C sort -t "$TAB" -k1,1n -k2,2n)
+  local nunc npre nabs nunk
+  nunc=$(printf '%s\n' "$rows" | awk -F'\t' '$8=="uncovered"' | wc -l | tr -d ' ')
+  npre=$(printf '%s\n' "$rows" | awk -F'\t' '$8=="pre-install"' | wc -l | tr -d ' ')
+  nabs=$(printf '%s\n' "$rows" | awk -F'\t' '$8=="hook-absent"' | wc -l | tr -d ' ')
+  nunk=$(printf '%s\n' "$rows" | awk -F'\t' '$8=="unknown-window"' | wc -l | tr -d ' ')
+  local nhook nreflog
+  nhook=$(printf '%s\n' "$rows" | awk -F'\t' '$6=="hook"' | wc -l | tr -d ' ')
+  nreflog=$(printf '%s\n' "$rows" | awk -F'\t' '$6=="reflog"' | wc -l | tr -d ' ')
+  # sister gaps annotated with what the hook does about them
+  local sg
+  sg=$(printf '%s\n' "$rf_gaps" | awk -F'\t' '
+    NF >= 4 {
+      k = $2; h = "n/a"
+      if (k == "tags") h = "closed while the hook runs: tag create/move/delete are in refs.log (not before install, not under -c core.hooksPath, not for gix)"
+      else if (k == "deleted-branch" || k == "ref-missing") h = "closed for deletions after install (old value in refs.log); this one: not recoverable from the hook if it happened before install"
+      else if (k == "no-reflog") h = "closed from install on (the hook records the change without a reflog)"
+      else if (k == "config") h = "closed while the hook runs for refs changed through git (logAllRefUpdates=false does not matter to the hook; no trace under -c core.hooksPath or for gix)"
+      else if (k == "empty-reflog" || k == "truncated" || k == "expiring") h = "open: the hook has no history from before install; refs.log is not expired"
+      else if (k == "backend") h = "UNKNOWN (reftable not run)"
+      else if (k == "note") h = "n/a"
+      printf "%s\t%s\t%s\t%s\n", k, $3, $4, h
+    }')
+  if [ "$JSON" = 1 ]; then timeline_json; return 0; fi
+  printf 'stw-oplog-refhook timeline  git-dir=%s  (read-only; sources: reflog via stw-oplog-reflog, hook = refs.log)\n' "$(PP "$COMMON")"
+  printf '%s\n' "reflog source: $(clean "$RFSTATE")"
+  printf '%s\n' "hook log: $(PP "$RLOG")$([ -f "$RLOG" ] || echo ' (does not exist: hook never ran or is not installed)')"
+  printf 'Origin hook = recorded by the reference-transaction hook; reflog = reflog file of git. HEAD lines of a hook are only symbolic switches and detached moves.\n\n'
+  printf '%-19s  %-30s  %-17s  %-7s  %s\n' time ref 'old->new' origin text
+  printf '%s\n' "$rows" | awk -F'\t' "$AWKLIB"'
+    function sh(v) { return (v ~ /^ref:/ ? "ref:.." : substr(v, 1, 7)) }
+    NF >= 7 { t = $7; if ($8 != "") t = t "  <" $8 ">"
+      printf "%-19s  %-30s  %-17s  %-7s  %s\n", fmt($1), $3, sh($4) "->" sh($5), $6, (t == "" ? "(no text)" : t); n++ }
+    END { if (n == 0) print "(no entries)"; print ""; print n+0 " entries" }'
+  printf '\nGaps (Luecken):\n'
+  [ "$capgaps" -gt 0 ] && echo "  capture-gap    hook: $capgaps gap line(s) in $(PP "$ELOG"): the hook failed to write; changes around $(clean "$lastcap") may be missing"
+  [ "$gapl" -gt 0 ] && echo "  capture-gap    hook: $gapl gap line(s) in $(PP "$GAPF") (the log directory itself was not writable)"
+  printf '%s\n' "$rows" | awk -F'\t' "$AWKLIB"'
+    $8 == "uncovered"      { printf "  uncovered      %s  %s  %s->%s  \"%s\": reflog has it, the hook recorded no line for this ref and value\n", fmt($1), $3, substr($4,1,7), substr($5,1,7), $7 }
+    $8 == "hook-absent"    { printf "  uncovered      %s  %s  %s->%s  \"%s\": while the hook was uninstalled\n", fmt($1), $3, substr($4,1,7), substr($5,1,7), $7 }
+    $8 == "unknown-window" { printf "  uncovered      %s  %s  %s->%s  \"%s\": no install record, so no hook entry could be expected (window unknown)\n", fmt($1), $3, substr($4,1,7), substr($5,1,7), $7 }'
+  [ "$npre" -gt 0 ] && echo "  pre-install    $npre reflog entr(ies) before the hook was installed: not in refs.log, not a capture gap"
+  echo "  coverage       compared $nreflog reflog entries (refs other than HEAD$([ "$rem" = on ] || echo ', remote-tracking refs excluded: remotes=off')) with $nhook hook lines by (ref, new value)"
+  echo "  sister gaps    (kind, ref: what the hook does about it)"
+  printf '%s\n' "$sg" | awk -F'\t' 'NF >= 4 { printf "    %-14s %-24s %s\n", $1, $2, $4 }'
+  echo "  still open     refs written by tools that run no git hooks (gix: stw sync recovery refs, libgit2, IDEs); history before install; a clone (hooks are not cloned);"
+  echo "                 repositories where core.hooksPath points elsewhere; the old value of a delete if the prepared marker could not be written; pushes and remote changes"
+  echo "  note           same (ref, new value) twice in the reflog (reset back and forth) counts as covered once the hook saw it once"
+}
+
+timeline_json() {
+  printf '{"schema_version":1,"repo":"%s","reflog_source":"%s","entries":[' "$(printf '%s' "$COMMON" | awk "$AWKLIB"'{ print jesc($0) }')" "$(printf '%s' "$RFSTATE" | awk "$AWKLIB"'{ print jesc($0) }')"
+  printf '%s\n' "$rows" | awk -F'\t' "$AWKLIB"'
+    NF >= 7 { printf "%s{\"time\":\"%s\",\"epoch\":%d,\"ref\":\"%s\",\"old\":\"%s\",\"new\":\"%s\",\"origin\":\"%s\",\"text\":\"%s\",\"flag\":\"%s\"}", (n++ ? "," : ""), fmt($1), $1, jesc($3), jesc($4), jesc($5), $6, jesc($7), jesc($8) }'
+  printf '],"gaps":{"capture_errors_log":%s,"capture_gaps_file":%s,"uncovered":%s,"hook_absent":%s,"unknown_window":%s,"pre_install":%s,"hook_entries":%s,"reflog_entries":%s,"sister":[' \
+    "$capgaps" "$gapl" "$nunc" "$nabs" "$nunk" "$npre" "$nhook" "$nreflog"
+  printf '%s\n' "$sg" | awk -F'\t' "$AWKLIB"'NF >= 4 { printf "%s{\"kind\":\"%s\",\"ref\":\"%s\",\"hook\":\"%s\"}", (c++ ? "," : ""), jesc($1), jesc($2), jesc($4) }'
+  printf ']}}\n'
+}
+
+case $CMD in
+  install) cmd_install; exit $? ;;
+  uninstall) cmd_uninstall; exit $? ;;
+  status) cmd_status; exit $? ;;
+  timeline) cmd_timeline; exit $? ;;
+esac

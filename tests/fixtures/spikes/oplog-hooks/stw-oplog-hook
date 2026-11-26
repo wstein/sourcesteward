@@ -1,0 +1,361 @@
+#!/bin/bash
+# stw-oplog-hook - evolog from the git hook `post-rewrite`: install/status/uninstall of the hook, read-only evolog of a commit.
+# Usage: stw-oplog-hook install   [--repo PATH] [--yes]
+#        stw-oplog-hook status    [--repo PATH]
+#        stw-oplog-hook uninstall [--repo PATH] [--yes]
+#        stw-oplog-hook evolog COMMIT|BRANCH [--repo PATH] [--limit N] [--json]
+#        stw-oplog-hook print                      (prints the hook script, writes nothing)
+# --repo must be an absolute path (default: the current directory). Exit codes: 0 ok, 1 refused or nothing executed, 2 usage error.
+# Writes only: `install --yes` (one file <git-common-dir>/hooks/post-rewrite, only if none exists and core.hooksPath is not set;
+# plus the log directory <git-common-dir>/stw/oplog) and `uninstall --yes` (that file, only if it carries the header line below).
+# Never writes git config, never sets or changes core.hooksPath. evolog and status are read-only.
+# SPDX-License-Identifier: EUPL-1.2
+# Bash 3.2 compatible. Needs git >= 2.31 (`rev-parse --path-format`), awk. Reflog access through `git reflog show` only.
+# shellcheck disable=SC2016,SC2018,SC2019,SC2046
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_COMMON_DIR GIT_NAMESPACE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+export GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 LC_ALL=C
+HEADER='# stw-oplog-hook v1'
+TAB=$'\t'
+
+usage() { sed -n '2,8p' "$0" | sed 's/^# \{0,1\}//' >&2; exit 2; }
+die() { echo "stw-oplog-hook: $*" >&2; exit 2; }
+clean() { printf '%s' "$1" | tr '[:cntrl:]' '?' | scrub_utf8 | awk "$AWKLIB"'{ print c1($0) }'; }
+scrub_utf8() { if command -v iconv >/dev/null 2>&1; then iconv -c -f UTF-8 -t UTF-8 2>/dev/null; else cat; fi; }
+AWKLIB='
+function c1(s,  re) { re=sprintf("%c[%c-%c]", 194, 128, 159); gsub(re, "?", s); return s }
+function jesc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/[[:cntrl:]]/, "?", s); return c1(s) }
+function iso(e,  z,era,doe,yoe,y,doy,mp,d,m,s) {
+  z=int(e/86400); s=e-z*86400; z+=719468; era=int(z/146097); doe=z-era*146097
+  yoe=int((doe-int(doe/1460)+int(doe/36524)-int(doe/146096))/365); y=yoe+era*400
+  doy=doe-(365*yoe+int(yoe/4)-int(yoe/100)); mp=int((5*doy+2)/153); d=doy-int((153*mp+2)/5)+1
+  m=(mp<10)?mp+3:mp-9; if (m<=2) y++
+  return sprintf("%04d-%02d-%02dT%02d:%02d:%02dZ", y, m, d, int(s/3600), int((s%3600)/60), s%60)
+}
+'
+
+# ---- the hook ------------------------------------------------------------------------------------------------------
+# One copy of the script; install writes exactly this text, `print` shows it.
+hook_text() {
+  cat <<'HOOKEOF'
+#!/bin/sh
+# stw-oplog-hook v1
+# git hook post-rewrite (stw spike). Appends one TAB-separated line per rewritten commit to
+#   <git-common-dir>/stw/oplog/rewrites.log:   UTC-time  amend|rebase|other  old-sha  new-sha  extra  branch-or-detached
+# Only SHAs and fixed words are written (extra and branch are reduced to [A-Za-z0-9._/+@-], everything else becomes ?).
+# Never fails a git operation: always exit 0. A write failure is recorded as a "gap" line in stw/oplog/errors.log, or, if that
+# fails too, in <git-common-dir>/stw-oplog-gaps. Remove with: stw-oplog-hook uninstall --yes
+PATH="${PATH:-/usr/bin:/bin}:/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin"
+LC_ALL=C; export LC_ALL
+kind=${1:-}
+case $kind in amend|rebase) ;; *) kind=other ;; esac
+now=$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null) || now=unknown
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+gitdir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null)
+failed=0 bad=0
+if [ -z "$common" ] || [ ! -d "$common" ]; then cat >/dev/null 2>&1; exit 0; fi
+ctx=detached
+if [ -n "$gitdir" ] && [ -r "$gitdir/HEAD" ]; then
+  read -r head < "$gitdir/HEAD" 2>/dev/null
+  case $head in "ref: refs/heads/"*) ctx=$(printf '%s' "${head#ref: refs/heads/}" | tr -c 'A-Za-z0-9._/+@-' '?' | cut -c1-80) ;; esac
+fi
+dir="$common/stw/oplog"
+log="$dir/rewrites.log"
+(umask 077; mkdir -p "$dir") 2>/dev/null
+while read -r old new extra || [ -n "$old$new$extra" ]; do
+  [ -n "$old$new" ] || continue
+  case $old in ''|*[!0-9a-f]*) bad=$((bad+1)); continue ;; esac
+  case $new in ''|*[!0-9a-f]*) bad=$((bad+1)); continue ;; esac
+  case ${#old}:${#new} in 40:40|64:64) ;; *) bad=$((bad+1)); continue ;; esac
+  case $extra in *[!A-Za-z0-9._/+@-]*) extra='?' ;; esac
+  [ ${#extra} -le 40 ] || extra='?'
+  if ! { (umask 077; printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$now" "$kind" "$old" "$new" "$extra" "$ctx" >> "$log"); } 2>/dev/null; then failed=$((failed+1)); fi
+done
+if [ "$failed" -gt 0 ] || [ "$bad" -gt 0 ]; then
+  g=$(printf '%s\tgap\t%s\tfailed=%s\tbad=%s\t%s\n' "$now" "$kind" "$failed" "$bad" "$ctx")
+  { (umask 077; printf '%s\n' "$g" >> "$dir/errors.log"); } 2>/dev/null ||
+    { (umask 077; printf '%s\n' "$g" >> "$common/stw-oplog-gaps"); } 2>/dev/null
+fi
+exit 0
+HOOKEOF
+}
+
+# ---- argument parsing ----------------------------------------------------------------------------------------------
+[ $# -ge 1 ] || usage
+CMD=$1; shift
+REPO=$PWD YES=0 JSON=0 LIMIT=200 ARG=''
+while [ $# -gt 0 ]; do
+  case $1 in
+    --repo)  [ $# -ge 2 ] || usage; REPO=$2; shift 2 ;;
+    --yes)   YES=1; shift ;;
+    --json)  JSON=1; shift ;;
+    --limit) [ $# -ge 2 ] || usage; LIMIT=$2; shift 2 ;;
+    -*)      usage ;;
+    *)       [ -z "$ARG" ] || usage; ARG=$1; shift ;;
+  esac
+done
+case $LIMIT in ''|*[!0-9]*|0) die "--limit needs a positive number" ;; esac
+case $CMD in
+  print) hook_text; exit 0 ;;
+  install|status|uninstall|evolog) ;;
+  *) usage ;;
+esac
+[ "$CMD" = evolog ] && { [ -n "$ARG" ] || usage; }
+[ "$CMD" != evolog ] && [ -n "$ARG" ] && usage
+case $REPO in /*) ;; *) die "--repo must be an absolute path, not empty: '$REPO'" ;; esac
+[ -d "$REPO" ] || die "not a directory: $REPO"
+GIT=${STW_OPLOG_HOOK_GIT:-git}
+G() { "$GIT" -C "$REPO" "$@"; }
+COMMON=$(G rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || die "not a git repository: $REPO"
+case $COMMON in /?*) ;; *) die "git common dir is not absolute: '$COMMON'" ;; esac
+[ -d "$COMMON" ] || die "git common dir missing: $COMMON"
+HOOKS=$COMMON/hooks
+HOOK=$HOOKS/post-rewrite
+OPDIR=$COMMON/stw/oplog
+RLOG=$OPDIR/rewrites.log
+ELOG=$OPDIR/errors.log
+EVENTS=$OPDIR/events.log
+GAPF=$COMMON/stw-oplog-gaps
+
+# hooksPath: sets HP (value, empty if unset) and HPORIGIN
+hookspath() {
+  HP='' HPORIGIN=''
+  local o
+  if o=$(G config --show-origin --get core.hooksPath 2>/dev/null); then
+    HPORIGIN=${o%%"$TAB"*}; HP=${o#*"$TAB"}
+    [ -n "$HP" ] || HP='(empty)'
+  fi
+}
+is_ours() { [ -f "$1" ] && [ ! -L "$1" ] && [ "$(sed -n 2p "$1" 2>/dev/null)" = "$HEADER" ]; }
+event() { # event WORD : append to events.log (own directory only); failure is ignored
+  ( umask 077; mkdir -p "$OPDIR" && printf '%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$1" >> "$EVENTS" ) 2>/dev/null
+}
+
+# ---- install -------------------------------------------------------------------------------------------------------
+cmd_install() {
+  hookspath
+  echo "install  repo=$REPO  common-dir=$COMMON"
+  if [ -n "$HP" ]; then
+    echo "refused  core.hooksPath is set ($(clean "$HP"), from $(clean "$HPORIGIN")). Nothing was installed or written."
+    echo "         The hook would belong in: $(clean "$HP")/post-rewrite (a relative value is relative to the directory where git runs hooks)."
+    echo "         The owner decides: install by hand (stw-oplog-hook print > <dir>/post-rewrite; chmod +x), or unset core.hooksPath, or"
+    echo "         call the hook from an existing hook there. This tool never changes core.hooksPath."
+    return 1
+  fi
+  if [ -L "$HOOKS" ]; then
+    echo "refused  $HOOKS is a symbolic link (the directory may be shared with other repositories). Nothing was written; the owner decides."
+    return 1
+  fi
+  if [ -e "$HOOK" ] || [ -L "$HOOK" ]; then
+    if is_ours "$HOOK"; then echo "ok       already installed: $HOOK ($HEADER). Nothing to do."; return 0; fi
+    echo "refused  $HOOK exists and is not from this tool. Not overwritten, nothing was written."
+    echo "         Chain proposal (not executed, nothing is written even with --yes): save the script with"
+    echo "           stw-oplog-hook print > /path/to/stw-post-rewrite.sh; chmod +x /path/to/stw-post-rewrite.sh"
+    echo "         and add to the existing hook (stdin can be read once: keep a copy):"
+    printf '%s\n' '           in=$(cat); printf "%s\n" "$in" | /path/to/stw-post-rewrite.sh "$@"; <existing logic reading "$in">'
+    echo "         The owner decides; the hook never makes git fail (exit 0)."
+    return 1
+  fi
+  echo "plan     write $HOOK ($HEADER); logs go to $OPDIR"
+  if [ "$YES" != 1 ]; then echo "not executed: --yes is missing"; return 1; fi
+  local tmp
+  ( mkdir -p "$HOOKS" ) || { echo "refused  cannot create $HOOKS"; return 1; }
+  tmp=$(mktemp "$HOOKS/.post-rewrite.stw-new.XXXXXX") || { echo "refused  cannot create a temporary file in $HOOKS"; return 1; }
+  ( hook_text > "$tmp" ) || { rm -f "$tmp"; echo "refused  cannot write $tmp"; return 1; }
+  chmod 755 "$tmp" || { rm -f "$tmp"; echo "refused  chmod failed"; return 1; }
+  # ln does not replace an existing file: a hook that appeared since the check wins
+  if ln "$tmp" "$HOOK" 2>/dev/null; then rm -f "$tmp"; else rm -f "$tmp"; echo "refused  $HOOK appeared or cannot be linked; nothing installed"; return 1; fi
+  ( umask 077; mkdir -p "$OPDIR" ) 2>/dev/null || echo "note     cannot create $OPDIR now; the hook retries on every run"
+  event install
+  echo "Result: installed $HOOK"
+  echo "Remove with: stw-oplog-hook uninstall --repo $(printf '%q' "$REPO") --yes"
+  return 0
+}
+
+# ---- uninstall -----------------------------------------------------------------------------------------------------
+cmd_uninstall() {
+  echo "uninstall  repo=$REPO  common-dir=$COMMON"
+  if [ -L "$HOOKS" ]; then
+    echo "refused  $HOOKS is a symbolic link (the directory may be shared with other repositories). Nothing was removed; the owner decides."
+    return 1
+  fi
+  if [ ! -e "$HOOK" ] && [ ! -L "$HOOK" ]; then echo "nothing  no $HOOK"; return 0; fi
+  if ! is_ours "$HOOK"; then
+    echo "refused  $HOOK does not carry the line '$HEADER' (or is a link): not ours, not touched."
+    return 1
+  fi
+  if [ "$YES" != 1 ]; then echo "plan     remove $HOOK"; echo "not executed: --yes is missing"; return 1; fi
+  rm -f "$HOOK" || { echo "refused  cannot remove $HOOK"; return 1; }
+  event uninstall
+  echo "Result: removed $HOOK. Logs stay in $OPDIR (not deleted)."
+  return 0
+}
+
+# ---- status --------------------------------------------------------------------------------------------------------
+cmd_status() {
+  hookspath
+  echo "status  repo=$REPO"
+  echo "common-dir   $COMMON"
+  if [ -n "$HP" ]; then echo "hooksPath    set: $(clean "$HP") (from $(clean "$HPORIGIN")); install would be refused"; else echo "hooksPath    not set"; fi
+  local eff; eff=$(G rev-parse --path-format=absolute --git-path hooks 2>/dev/null)
+  echo "hooks dir    $(clean "${eff:-?}")$([ -L "$HOOKS" ] && echo ' (common hooks dir is a symbolic link)')"
+  local h n=0 list=''
+  if [ -d "${eff:-$HOOKS}" ]; then
+    for h in "${eff:-$HOOKS}"/*; do
+      [ -f "$h" ] || continue
+      case ${h##*/} in *.sample) continue ;; esac
+      [ -x "$h" ] || continue
+      list="$list $(clean "${h##*/}")"; n=$((n+1))
+    done
+  fi
+  echo "hooks        ${list:-(none executable)}"
+  if [ -e "$HOOK" ] || [ -L "$HOOK" ]; then
+    if is_ours "$HOOK"; then echo "post-rewrite ours ($HEADER)$([ -x "$HOOK" ] || echo ', NOT executable: git ignores it')"; else echo "post-rewrite exists, not ours (never touched)"; fi
+  else echo "post-rewrite absent in $HOOKS"; fi
+  local cnt=0
+  cnt=$(G worktree list --porcelain 2>/dev/null | grep -c '^worktree ')
+  if [ "${cnt:-0}" -gt 1 ]; then
+    echo "worktrees    $cnt (the main one and $((cnt-1)) linked): all use $HOOKS and write $OPDIR (common dir)"
+  else echo "worktrees    1 (no linked worktrees)"; fi
+  local m subs=0
+  for m in "$COMMON"/modules/*; do
+    [ -d "$m" ] || continue
+    subs=$((subs+1))
+    local sh=''
+    for h in "$m"/hooks/*; do [ -f "$h" ] && [ -x "$h" ] && case ${h##*/} in *.sample) ;; *) sh="$sh $(clean "${h##*/}")" ;; esac; done
+    echo "submodule    $(clean "${m##*/}"): own hooks dir, hooks:${sh:- (none)}; a hook of this repository does not apply there (hint only)"
+  done
+  [ "$subs" = 0 ] && echo "submodules   none under $COMMON/modules"
+  local lines=0 el=0
+  [ -f "$RLOG" ] && lines=$(wc -l < "$RLOG" | tr -d ' ')
+  [ -f "$ELOG" ] && el=$(wc -l < "$ELOG" | tr -d ' ')
+  echo "log          $RLOG: $lines lines; errors.log: $el gap lines$([ -f "$GAPF" ] && echo "; $GAPF exists: $(wc -l < "$GAPF" | tr -d ' ') gap lines")"
+  [ -f "$EVENTS" ] && echo "events       $(tr '\t' ' ' < "$EVENTS" | tail -n 3 | tr '\n' ';')"
+  return 0
+}
+
+# ---- evolog --------------------------------------------------------------------------------------------------------
+# chain over the recorded pairs: TSV lines "depth sha kind time flags" (kind/time: the rewrite that turned this commit into its child)
+CHAIN_AWK='
+BEGIN { FS="\t" }
+NF>=4 && $3!=$4 && !(($3 SUBSEP $4) in seen) { seen[$3,$4]=1; p=++np[$4]; pred[$4,p]=$3; pt[$3,$4]=$1; pk[$3,$4]=$2; sc[$3]++ }
+NF>=4 && $3==$4 { selfs++ }
+function walk(sha, depth, ckind, ctime,  i, fl, q) {
+  fl=""
+  if (sha in onpath) { printf "%d\t%s\t%s\t%s\tcycle\n", depth, sha, ckind, ctime; return }
+  if (sha in done) { printf "%d\t%s\t%s\t%s\tseen-above\n", depth, sha, ckind, ctime; return }
+  if (cnt >= LIMIT) { printf "%d\t%s\t%s\t%s\tlimit\n", depth, sha, ckind, ctime; return }
+  cnt++; done[sha]=1; onpath[sha]=1
+  if (np[sha] > 1) fl=fl (fl==""?"":",") "merge=" np[sha]
+  if (sc[sha] > 1) fl=fl (fl==""?"":",") "split=" sc[sha]
+  printf "%d\t%s\t%s\t%s\t%s\n", depth, sha, ckind, ctime, fl
+  for (i=1; i<=np[sha]; i++) { q=pred[sha,i]; walk(q, depth+1, pk[q,sha], pt[q,sha]) }
+  delete onpath[sha]
+}
+END { walk(TIP, 0, "-", "-"); print "#pairs\t" length(seen) "\t" selfs+0 }
+'
+
+cmd_evolog() {
+  local tip label='' sym
+  if tip=$(G rev-parse --verify -q "$ARG^{commit}" 2>/dev/null); then :
+  else
+    case $ARG in
+      *[!0-9a-f]*|'') die "cannot resolve '$(clean "$ARG")' to a commit" ;;
+      *) [ ${#ARG} = 40 ] || [ ${#ARG} = 64 ] || die "cannot resolve '$(clean "$ARG")' to a commit"; tip=$ARG ;;
+    esac
+  fi
+  # the ref whose reflog is compared: a branch name, or HEAD when it is a branch
+  if G show-ref --verify -q "refs/heads/$ARG" >/dev/null 2>&1; then label=refs/heads/$ARG
+  elif case $ARG in refs/heads/*) G show-ref --verify -q "$ARG" >/dev/null 2>&1 ;; *) false ;; esac; then label=$ARG
+  elif [ "$ARG" = HEAD ] && sym=$(G symbolic-ref -q HEAD 2>/dev/null); then label=$sym; fi
+  local pairs=0 chain rows
+  if [ -f "$RLOG" ]; then
+    chain=$(awk -v TIP="$tip" -v LIMIT="$LIMIT" "$CHAIN_AWK" "$RLOG")
+  else
+    chain=$(awk -v TIP="$tip" -v LIMIT="$LIMIT" "$CHAIN_AWK" /dev/null)
+  fi
+  pairs=$(printf '%s\n' "$chain" | sed -n 's/^#pairs\t\([0-9]*\)\t.*/\1/p')
+  rows=$(printf '%s\n' "$chain" | grep -v '^#pairs')
+  # reflog comparison: rewrite entries of the branch whose new value has no hook pair
+  local unc='' pre=0 absent=0 unk=0 ncov=0
+  if [ -n "$label" ]; then
+    local newset=' '
+    [ -f "$RLOG" ] && newset=$(awk -F'\t' 'NF>=4 { print $4 }' "$RLOG")
+    local ev=''; [ -f "$EVENTS" ] && ev=$(cat "$EVENTS")
+    local sha when gs ts state
+    while IFS=$TAB read -r sha when gs; do
+      case $gs in "commit (amend)"*|*rebase*"(finish)"*) ;; *) continue ;; esac
+      ncov=$((ncov+1))
+      if printf '%s\n' "$newset" | grep -qx "$sha"; then continue; fi
+      ts=$(printf '%s\n' "$when" | sed -n 's/.*@{\([0-9][0-9]*\)}$/\1/p')
+      ts=$(awk -v e="${ts:-0}" "$AWKLIB"'BEGIN { print iso(e) }')
+      if [ -z "$ev" ]; then state=unknown-window
+      else state=$(printf '%s\n' "$ev" | awk -F'\t' -v t="$ts" '$1<=t { s=$2; seen=1 } END { if (!seen) print "pre-install"; else print (s=="install" ? "uncovered" : "hook-absent") }'); fi
+      case $state in
+        pre-install) pre=$((pre+1)) ;;
+        hook-absent) absent=$((absent+1)); unc="$unc$state$TAB$ts$TAB$sha$TAB$(clean "$gs")"$'\n' ;;
+        unknown-window) unk=$((unk+1)); unc="$unc$state$TAB$ts$TAB$sha$TAB$(clean "$gs")"$'\n' ;;
+        *) unc="$unc$state$TAB$ts$TAB$sha$TAB$(clean "$gs")"$'\n' ;;
+      esac
+    done < <(G reflog show --date=unix --format="%H%x09%gd%x09%gs" "$label" 2>/dev/null)
+  fi
+  local capgaps=0 gapl=0
+  [ -f "$ELOG" ] && capgaps=$(wc -l < "$ELOG" | tr -d ' ')
+  [ -f "$GAPF" ] && gapl=$(wc -l < "$GAPF" | tr -d ' ')
+  local nodes
+  nodes=$(printf '%s\n' "$rows" | grep -c .)
+  if [ "$JSON" = 1 ]; then evolog_json; return 0; fi
+  echo "evolog  $(clean "${label:-$ARG}")  tip=$tip"
+  echo "source  hook  $RLOG ($pairs pairs recorded$([ -f "$RLOG" ] || echo '; file does not exist: hook never ran or is not installed'))"
+  local d sh k t fl subj ind i
+  while IFS=$TAB read -r d sh k t fl; do
+    [ -n "$sh" ] || continue
+    if G cat-file -e "$sh^{commit}" 2>/dev/null; then subj=$(clean "$(G log -1 --format=%s "$sh" 2>/dev/null)"); else subj='object gone'; fi
+    ind=''; i=0; while [ $i -lt "$d" ]; do ind="$ind  "; i=$((i+1)); done
+    if [ "$d" = 0 ]; then printf '%s%s  %s' "$ind" "${sh:0:7}" "$subj"
+    else printf '%s<- %s  %s  (%s at %s)' "$ind" "${sh:0:7}" "$subj" "$k" "$t"; fi
+    [ -n "$fl" ] && printf '  [%s]' "$(echo "$fl" | sed 's/seen-above/seen above/; s/merge=\([0-9]*\)/merge: \1 predecessors (fixup\/squash)/; s/split=\([0-9]*\)/split: rewritten into \1 different commits/; s/cycle/cycle: chain stops/; s/limit/limit reached: chain stops/')"
+    echo
+  done <<EOF
+$rows
+EOF
+  [ "$nodes" -le 1 ] && echo "(no recorded predecessor: the commit was never rewritten by a recorded amend/rebase, or the rewrite was not seen)"
+  echo "Gaps"
+  [ "$capgaps" -gt 0 ] && echo "  capture-gap     $capgaps gap line(s) in $ELOG: the hook failed to write; rewrites around $(tail -n 1 "$ELOG" | cut -f1) may be missing"
+  [ "$gapl" -gt 0 ] && echo "  capture-gap     $gapl gap line(s) in $GAPF (the log directory itself was not writable)"
+  if [ -n "$unc" ]; then
+    printf '%s' "$unc" | while IFS=$TAB read -r state ts sha gs; do
+      case $state in
+        uncovered) echo "  uncovered-rewrite  $ts  ${sha:0:7}  \"$gs\": reflog shows it, the hook recorded no pair" ;;
+        hook-absent) echo "  uncovered-rewrite  $ts  ${sha:0:7}  \"$gs\": while the hook was uninstalled" ;;
+        *) echo "  uncovered-rewrite  $ts  ${sha:0:7}  \"$gs\": no install record, so no hook entry could be expected (window unknown)" ;;
+      esac
+    done
+  fi
+  [ "$pre" -gt 0 ] && echo "  pre-install     $pre rewrite(s) in the reflog before the hook was installed: not in the evolog, not a capture gap"
+  if [ -z "$label" ]; then echo "  coverage        not compared with a reflog ('$(clean "$ARG")' is not a branch): pass a branch name"
+  else echo "  coverage        compared $ncov rewrite entries of the reflog of $(clean "$label") with the hook log"; fi
+  echo "  note            a rewrite that kept the tip (e.g. a rebase that dropped the last commit) can show as uncovered; the hook does not see tags, branch deletion, reset, cherry-pick, merge, stash, or rewrites by tools that run no hooks (gix)"
+  return 0
+}
+
+evolog_json() {
+  local d sh k t fl subj first=1
+  printf '{"schema_version":1,"source":"hook","tip":"%s","ref":"%s","pairs":%s,"nodes":[' "$tip" "$(printf '%s' "${label:-}" | awk "$AWKLIB"'{ print jesc($0) }')" "${pairs:-0}"
+  while IFS=$TAB read -r d sh k t fl; do
+    [ -n "$sh" ] || continue
+    if G cat-file -e "$sh^{commit}" 2>/dev/null; then subj=$(clean "$(G log -1 --format=%s "$sh" 2>/dev/null)"); else subj='object gone'; fi
+    [ $first = 1 ] || printf ','; first=0
+    printf '{"depth":%s,"commit":"%s","subject":"%s","rewritten_by":"%s","time":"%s","flags":"%s"}' "$d" "$sh" "$(printf '%s' "$subj" | awk "$AWKLIB"'{ print jesc($0) }')" "$k" "$t" "$fl"
+  done <<EOF
+$rows
+EOF
+  printf '],"gaps":{"capture_errors_log":%s,"capture_gaps_file":%s,"uncovered_rewrites":%s,"hook_absent":%s,"unknown_window":%s,"pre_install":%s,"compared_with_reflog":"%s"}}\n' \
+    "$capgaps" "$gapl" "$(printf '%s' "$unc" | grep -c '^uncovered')" "$absent" "$unk" "$pre" "$(printf '%s' "$label" | awk "$AWKLIB"'{ print jesc($0) }')"
+}
+
+case $CMD in
+  install) cmd_install; exit $? ;;
+  uninstall) cmd_uninstall; exit $? ;;
+  status) cmd_status; exit $? ;;
+  evolog) cmd_evolog; exit $? ;;
+esac

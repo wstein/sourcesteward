@@ -1,0 +1,569 @@
+#!/usr/bin/env -S python3 -I
+# SPDX-License-Identifier: EUPL-1.2 AND BSD-3-Clause
+"""stw-absorb-plan: spike for `stw absorb`. Computes the PLAN only: which unpushed commit owns each staged hunk. It writes nothing
+(no add, commit, rebase, update-index, gc; not even the index refresh of `git status`). See README.md in this directory.
+
+The commutation test (Hunk.anchors, commute, commute_diff_before, uniform) is a translation of the algorithm of git-absorb 0.9.0
+(src/commute.rs, src/owned.rs; stack and target rules from src/stack.rs and src/lib.rs), BSD 3-Clause License,
+Copyright (c) 2018, Stephen Jung. The full license text is in LICENSE-git-absorb-BSD-3 next to this file; it must stay with every
+redistribution of the translated parts, in source and in binary form (documentation or other materials)."""
+import argparse, hashlib, json, os, re, subprocess, sys
+
+sys.dont_write_bytecode = True
+TIMEOUT = 30
+OVERRIDES = ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY")
+PARTIAL = []  # set to [True] when the repository is a partial clone: a failing read then means missing objects (no lazy fetch is allowed)
+GIT = ["git", "--no-pager", "--no-optional-locks", "-c", "core.fsmonitor=false", "--literal-pathspecs"]
+DIFF = ["-U0", "--no-color", "--no-ext-diff", "--no-textconv", "--no-renames", "--ignore-submodules=all", "--diff-algorithm=myers",
+        "--no-indent-heuristic", "--inter-hunk-context=0", "--no-relative", "--src-prefix=a/", "--dst-prefix=b/"]
+
+
+class Fail(Exception):
+    def __init__(self, code, message, status=1):
+        Exception.__init__(self, message)
+        self.code, self.message, self.status = code, message, status
+
+
+BIDI = set("\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069\u200e\u200f\u061c\u200b\u2060\ufeff\u2028\u2029")
+
+
+def sanitize(s):
+    """Control characters (C0, DEL, C1), bidi controls, zero-width characters, line and paragraph separators and lone surrogates become '?'."""
+    return "".join("?" if ord(ch) < 0x20 or 0x7F <= ord(ch) < 0xA0 or ch in BIDI or 0xD800 <= ord(ch) < 0xE000 else ch for ch in s)
+
+
+# --- commutation (port of git-absorb) --------------------------------------------------------------------------------------
+class Hunk:
+    """One zero-context hunk. add_start/rem_start are the numbers of the header (`@@ -rem_start,len +add_start,len @@`), lines keep their newline."""
+
+    def __init__(self, add_start, add, rem_start, rem):
+        self.add_start, self.add, self.rem_start, self.rem = add_start, list(add), rem_start, list(rem)
+
+    def anchors(self):
+        """The last unchanged line before and the first one after the hunk, on the removed side and then on the added side."""
+        r, a = len(self.rem), len(self.add)
+        if r == 0 and a == 0:
+            return (0, 1, 0, 1)
+        if a == 0:
+            return (self.rem_start - 1, self.rem_start + r, self.rem_start - 1, self.rem_start)
+        if r == 0:
+            return (self.add_start - 1, self.add_start, self.add_start - 1, self.add_start + a)
+        return (self.rem_start - 1, self.rem_start + r, self.add_start - 1, self.add_start + a)
+
+    def offset(self):
+        return len(self.add) - len(self.rem)
+
+    def shifted(self, add=0, rem=0):
+        return Hunk(self.add_start + add, self.add, self.rem_start + rem, self.rem)
+
+    def header(self):
+        return "-%d,%d +%d,%d" % (self.rem_start, len(self.rem), self.add_start, len(self.add))
+
+
+def uniform(items):
+    return all(x == items[0] for x in items)
+
+
+def commute(first, second):
+    """`second` as it would be if it had been applied before `first`; None when the two overlap and cannot be interleaved."""
+    f_up, f_low = first.anchors()[2], first.anchors()[3]
+    s_up, s_low = second.anchors()[0], second.anchors()[1]
+    if f_low <= s_up:
+        off = -first.offset()
+        return second.shifted(off, off)
+    if s_low <= f_up:
+        return second
+    if (not first.add and not second.add and uniform(first.rem + second.rem)) or \
+            (not first.rem and not second.rem and uniform(first.add + second.add)):
+        return second
+    return None
+
+
+def commute_diff_before(after, before):
+    """`after` moved before all the hunks of one commit's patch (last hunk first); None when one of them does not commute."""
+    cur = after
+    for h in reversed(before):
+        cur = commute(h, cur)
+        if cur is None:
+            return None
+    return cur
+
+
+# --- git -------------------------------------------------------------------------------------------------------------------
+def child_env():
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_EXTERNAL_DIFF", "GIT_DIFF_OPTS", "GIT_PAGER", "PAGER")}
+    env.update(GIT_OPTIONAL_LOCKS="0", GIT_NO_LAZY_FETCH="1", LC_ALL="C", GIT_TERMINAL_PROMPT="0")
+    env.pop("LANGUAGE", None)
+    return env
+
+
+def git(repo, *args, ok=(0,)):
+    """Runs one reading git command, returns stdout bytes. Exit codes outside `ok` raise Fail."""
+    try:
+        r = subprocess.run(GIT + ["-C", repo] + list(args), env=child_env(), capture_output=True, timeout=TIMEOUT, stdin=subprocess.DEVNULL)
+    except subprocess.TimeoutExpired:
+        raise Fail("timeout", "git %s did not finish in %d s" % (args[0], TIMEOUT))
+    if r.returncode not in ok:
+        if PARTIAL:
+            raise Fail("partial-clone-unsupported", "git %s failed in a partial clone (objects may be missing; no lazy fetch is allowed): %s" % (args[0], r.stderr.decode(errors="replace").strip().splitlines()[:1]))
+        raise Fail("git-failed", "git %s failed: %s" % (args[0], r.stderr.decode(errors="replace").strip().splitlines()[0:1] and r.stderr.decode(errors="replace").strip().splitlines()[0]))
+    return r.stdout
+
+
+def git_rc(repo, *args):
+    """Exit code of one reading git command (for yes/no questions such as `merge-base --is-ancestor`)."""
+    try:
+        return subprocess.run(GIT + ["-C", repo] + list(args), env=child_env(), capture_output=True, timeout=TIMEOUT,
+                              stdin=subprocess.DEVNULL).returncode
+    except subprocess.TimeoutExpired:
+        raise Fail("timeout", "git %s did not finish in %d s" % (args[0], TIMEOUT))
+
+
+def text(b):
+    return b.decode("utf-8", "surrogateescape")
+
+
+# --- patches ---------------------------------------------------------------------------------------------------------------
+ESC = {b"a": 7, b"b": 8, b"t": 9, b"n": 10, b"v": 11, b"f": 12, b"r": 13, b'"': 34, b"\\": 92}
+
+
+def unquote(q):
+    out, i = bytearray(), 0
+    while i < len(q):
+        c = q[i:i + 1]
+        if c == b"\\" and i + 1 < len(q):
+            n = q[i + 1:i + 2]
+            if n in ESC:
+                out.append(ESC[n])
+                i += 2
+            elif re.match(rb"[0-7]{3}", q[i + 1:i + 4]):
+                out.append(int(q[i + 1:i + 4], 8))
+                i += 4
+            else:
+                out += c
+                i += 1
+        else:
+            out += c
+            i += 1
+    return bytes(out)
+
+
+def header_path(rest):
+    """The path of `diff --git a/P b/P` (no renames, so both names are equal)."""
+    if rest.startswith(b'"'):
+        m = re.findall(rb'"((?:[^"\\]|\\.)*)"', rest)
+        if m:
+            return unquote(m[-1])[2:]
+    n = (len(rest) - 5) // 2
+    return rest[2:2 + n]
+
+
+class FileDiff:
+    def __init__(self, path):
+        self.path, self.added, self.binary, self.hunks = path, False, False, []
+
+
+def parse_patch(data):
+    """-> {path: FileDiff} from `git diff -p -U0` output (paths as str)."""
+    files, cur, body, last = {}, None, False, None
+    for line in data.split(b"\n"):
+        if line.startswith(b"diff --git "):
+            path = text(header_path(line[len(b"diff --git "):]))
+            cur = files.get(path) or FileDiff(path)
+            files[path] = cur
+            body = False
+        elif cur is None:
+            continue
+        elif line.startswith(b"@@ "):
+            m = re.match(rb"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", line)
+            if not m:
+                raise Fail("git-failed", "unreadable hunk header")
+            cur.hunks.append(Hunk(int(m.group(3)), [], int(m.group(1)), []))
+            body, last = True, None
+        elif not body:
+            if line.startswith(b"new file mode"):
+                cur.added = True
+            elif line.startswith(b"Binary files ") or line.startswith(b"GIT binary patch"):
+                cur.binary = True
+        elif line.startswith(b"+"):
+            last = cur.hunks[-1].add
+            last.append(line[1:] + b"\n")
+        elif line.startswith(b"-"):
+            last = cur.hunks[-1].rem
+            last.append(line[1:] + b"\n")
+        elif line.startswith(b"\\") and last:
+            last[-1] = last[-1][:-1]
+    return files
+
+
+# --- the plan --------------------------------------------------------------------------------------------------------------
+def parse_raw(data):
+    """`diff-index --raw -z` -> [(status, old mode, new mode, path)]."""
+    toks = data.split(b"\0")
+    out, i = [], 0
+    while i < len(toks) and toks[i].startswith(b":"):
+        meta = toks[i][1:].split(b" ")
+        out.append((text(meta[4][:1]), text(meta[0]), text(meta[1]), text(toks[i + 1])))
+        i += 2
+    return out
+
+
+def commit_records(repo, revs):
+    """git log of the first-parent chain -> [{sha, parents, name, email, subject}] newest first."""
+    out = git(repo, "log", "-z", "--first-parent", "--no-show-signature", "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%s", *revs)
+    recs = []
+    for r in out.split(b"\0"):
+        if r:
+            f = text(r).split("\x1f", 4)
+            recs.append({"sha": f[0], "parents": f[1].split(), "name": f[2], "email": f[3], "subject": f[4]})
+    return recs
+
+
+def split_lines(blob):
+    ls = blob.split(b"\n")
+    last = ls.pop()
+    out = [x + b"\n" for x in ls]
+    if last:
+        out.append(last)
+    return out
+
+
+def lines_match(blob, hunk):
+    """Consistency check of a commuted hunk: its removed lines are where it says in the blob (a pure insertion: the position exists)."""
+    ls = split_lines(blob)
+    if hunk.rem:
+        start = hunk.rem_start - 1
+        return start >= 0 and start + len(hunk.rem) <= len(ls) and ls[start:start + len(hunk.rem)] == hunk.rem
+    return 0 <= hunk.add_start - 1 <= len(ls)
+
+
+class Plan:
+    def __init__(self, repo, args):
+        self.repo, self.args = repo, args
+        self.diffs, self.records = {}, {}
+
+    def detect_backend(self):
+        """Backend metadata is read before anything else (backends.md rules 1, 2, 6). Git is the only supported backend."""
+        for var in OVERRIDES:
+            if os.environ.get(var):
+                raise Fail("environment-override", "%s is set: the repository would not be the one at --repo; unset it" % var)
+        repo = os.path.realpath(self.repo)
+        if not os.path.isdir(repo):
+            raise Fail("usage", "%s is not a directory" % self.repo, 2)
+        try:
+            r = subprocess.run(GIT + ["-C", repo, "rev-parse", "--show-toplevel", "--git-dir", "--git-common-dir"], env=child_env(), capture_output=True,
+                               timeout=TIMEOUT, stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            raise Fail("timeout", "git rev-parse did not finish in %d s" % TIMEOUT)
+        if r.returncode != 0:
+            raise Fail("usage", "%s is not a Git work tree" % self.repo, 2)
+        top, gitdir, common = [os.path.realpath(os.path.join(repo, text(x))) for x in r.stdout.splitlines()[:3]]
+        jj, d = False, repo
+        while True:
+            marker = os.path.join(d, ".jj")
+            if os.path.lexists(marker):
+                if os.path.islink(marker) or not os.path.isdir(marker):
+                    raise Fail("invalid-metadata", "%s is not a directory" % marker)
+                jj = True
+                break
+            if d == top or os.path.dirname(d) == d:
+                break
+            d = os.path.dirname(d)
+        butler = any(os.path.lexists(os.path.join(g, "gitbutler")) for g in (gitdir, common))
+        if not butler:
+            refs = git(top, "for-each-ref", "--count=1", "--format=%(refname)", "refs/gitbutler/", "refs/heads/gitbutler/workspace")
+            butler = bool(refs.strip())
+        if jj and butler:
+            raise Fail("ambiguous-backend", "jj and GitButler metadata are both present; ownership is ambiguous and nothing was read")
+        if jj:
+            raise Fail("unsupported-backend", "jj workspace (.jj found): stw absorb supports Git only and never falls back to Git writes")
+        if butler:
+            raise Fail("unsupported-backend", "GitButler-managed repository: stw absorb supports Git only and never falls back to Git writes")
+        self.repo = top
+        if git(top, "config", "--get-regexp", r"^remote\..*\.promisor$|^extensions\.partialclone$", ok=(0, 1)).strip():
+            PARTIAL.append(True)
+
+    def run(self):
+        repo, args = self.repo, self.args
+        self.detect_backend()
+        repo = self.repo
+        if git_rc(repo, "rev-parse", "--verify", "-q", "HEAD^{commit}") != 0:
+            raise Fail("no-commits", "the repository has no commit yet")
+        self.head = text(git(repo, "rev-parse", "--verify", "HEAD^{commit}")).strip()
+        ref = git(repo, "symbolic-ref", "-q", "HEAD", ok=(0, 1)).strip()
+        if not ref:
+            raise Fail("detached-head", "HEAD is not on a branch")
+        self.ref = text(ref)
+        self.branch = self.ref[len("refs/heads/"):] if self.ref.startswith("refs/heads/") else self.ref
+        ident = []
+        for key in ("user.name", "user.email"):
+            v = git(repo, "config", "--get", key, ok=(0, 1)).decode("utf-8", "surrogateescape").rstrip("\n")
+            if not v:
+                raise Fail("no-identity", "%s is not set in the Git configuration" % key)
+            ident.append(v)
+        self.ident = tuple(ident)
+        self.base = None
+        if args.base:
+            try:
+                self.base = text(git(repo, "rev-parse", "--verify", "--end-of-options", args.base + "^{commit}")).strip()
+            except Fail:
+                raise Fail("bad-base", "--base %s is not a commit" % args.base)
+            if git_rc(repo, "merge-base", "--is-ancestor", self.base, self.head) != 0:
+                raise Fail("bad-base", "--base %s is not an ancestor of HEAD" % args.base)
+        raw = parse_raw(git(repo, "diff-index", "--cached", "-z", "--raw", "--no-renames", "--ignore-submodules=none", "HEAD"))
+        if any(e[0] == "U" for e in raw):
+            raise Fail("unmerged-index", "the index has unmerged paths (a merge is in progress)")
+        if not raw:
+            raise Fail("nothing-staged", "nothing is staged: the index equals HEAD")
+        self.stack, self.stack_end = self.walk()
+        patch = parse_patch(git(repo, "diff-index", "--cached", "-p", *DIFF, "HEAD"))
+        self.hunks, self.files_skipped = [], []
+        for status, om, nm, path in sorted(raw, key=lambda e: e[3].encode("utf-8", "surrogateescape")):
+            reason = None
+            if om == "160000" or nm == "160000":
+                reason = "submodule"
+            elif status == "A":
+                reason = "added"
+            elif status == "D":
+                reason = "deleted"
+            elif status == "T":
+                reason = "typechange"
+            elif status != "M":
+                reason = "other"
+            elif om == "120000" or nm == "120000":
+                reason = "symlink"
+            else:
+                fd = patch.get(path)
+                if fd is None or (not fd.hunks and not fd.binary):
+                    reason = "mode-only"
+                elif fd.binary:
+                    reason = "binary"
+            if reason:
+                self.files_skipped.append({"path": sanitize(path), "reason": reason})
+                continue
+            self.file_hunks(path, patch[path].hunks)
+        return self.document()
+
+    def foreign(self, rec):
+        return (rec["name"], rec["email"]) != self.ident
+
+    def published(self, sha):
+        return bool(git(self.repo, "for-each-ref", "--count=1", "--contains", sha, "--format=%(refname)", "refs/remotes/").strip())
+
+    def walk(self):
+        """The stack: first-parent commits of HEAD that no remote-tracking ref (and, without --base, no other local branch) contains,
+        newest first, up to the first merge commit, foreign commit or the limit (the stack rules of git-absorb)."""
+        repo, args = self.repo, self.args
+        revs = ["HEAD", "--not"]
+        if args.base:
+            revs.append(self.base)
+        revs.append("--remotes")
+        if not args.base:
+            revs += ["--exclude=" + self.branch, "--branches"]
+        limit = [] if args.base else ["-n", str(args.max_stack + 1)]
+        recs = commit_records(repo, limit + revs)
+        if not recs:
+            if self.published(self.head):
+                raise Fail("published", "HEAD is contained in a remote-tracking branch: nothing to rewrite")
+            return [], ("base" if args.base else "branch")
+        if len(recs[0]["parents"]) <= 1 and self.foreign(recs[0]):
+            raise Fail("not-owned", "HEAD is by another author (%s <%s>)" % (sanitize(recs[0]["name"]), sanitize(recs[0]["email"])))
+        stack = []
+        for r in recs:
+            if len(r["parents"]) > 1:
+                return stack, "merge"
+            if self.foreign(r):
+                return stack, "foreign"
+            if not args.base and len(stack) == args.max_stack:
+                return stack, "limit"
+            stack.append(r)
+        if not stack[-1]["parents"]:
+            return stack, "root"
+        nxt = stack[-1]["parents"][0]
+        if self.published(nxt):
+            return stack, "published"
+        rec = commit_records(repo, ["-n", "1", nxt])[0]
+        if len(rec["parents"]) > 1:
+            return stack, "merge"
+        if self.foreign(rec):
+            return stack, "foreign"
+        return stack, "base" if args.base else "branch"
+
+    def diff_of(self, i):
+        c = self.stack[i]["sha"]
+        if c not in self.diffs:
+            parents = self.stack[i]["parents"]
+            tree = [parents[0], c] if parents else ["--root", c]
+            self.diffs[c] = parse_patch(git(self.repo, "diff-tree", "-r", "-p", "--no-commit-id", *DIFF, *tree))
+        return self.diffs[c]
+
+    def file_hunks(self, path, hunks):
+        preceding = 0
+        for h in hunks:
+            isolated = h.shifted(add=-preceding)
+            preceding += h.offset()
+            entry = {"id": "h%d" % (len(self.hunks) + 1), "path": sanitize(path), "old": {"start": h.rem_start, "count": len(h.rem)},
+                     "new": {"start": h.add_start, "count": len(h.add)}, "assignment": "skipped", "target": None, "basis": None,
+                     "reason": None, "origins": []}
+            found = self.locate(path, isolated)
+            origins = self.blame(path, h) if h.rem else []
+            entry["origins"] = [{"sha": sha, "subject": sanitize(self.record(sha)["subject"]), "lines": n} for sha, n in origins]
+            if found is None:
+                entry["reason"] = self.outside_reason([sha for sha, _ in origins])
+            else:
+                i, commuted, basis = found
+                c = self.stack[i]
+                entry.update(target={"sha": c["sha"], "subject": sanitize(c["subject"])}, basis=basis)
+                if not self.consistent(c["sha"], path, commuted):
+                    entry["reason"] = "conflict"
+                elif len(origins) >= 2 and not self.args.ambiguous_newest:
+                    entry["reason"] = "ambiguous"
+                else:
+                    entry.update(assignment="absorbed")
+                    entry["_i"] = i
+            entry["_raw"] = path
+            self.hunks.append(entry)
+
+    def record(self, sha):
+        if sha not in self.records:
+            self.records[sha] = commit_records(self.repo, ["--no-walk", sha])[0]
+        return self.records[sha]
+
+    def blame(self, path, hunk):
+        """[(commit, number of lines)] of the removed lines in HEAD, in order of first appearance (evidence, not the decision)."""
+        a = hunk.rem_start
+        try:
+            out = git(self.repo, "blame", "--porcelain", "--no-textconv", "--ignore-revs-file=", "-L", "%d,%d" % (a, a + len(hunk.rem) - 1), "HEAD", "--", path)
+        except Fail as e:
+            if e.code != "git-failed":
+                raise
+            raise Fail("blame-failed", "no evidence for the lines removed in %s: %s" % (sanitize(path), e.message))
+        counts = {}
+        for line in out.split(b"\n"):
+            m = re.match(rb"^([0-9a-f]{40}) \d+ \d+( \d+)?$", line)
+            if m:
+                counts[text(m.group(1))] = counts.get(text(m.group(1)), 0) + 1
+        return list(counts.items())
+
+    def outside_reason(self, shas):
+        """A hunk that commutes with the whole stack: no-candidate, or why the lines it removes cannot be reached."""
+        outside = [s for s in shas if s not in {c["sha"] for c in self.stack}]
+        if not outside:
+            return "no-candidate"
+        if any(self.published(s) for s in outside):
+            return "published"
+        if any(self.foreign(self.record(s)) for s in outside):
+            return "foreign"
+        return "outside-range"
+
+    def consistent(self, sha, path, hunk):
+        try:
+            return lines_match(git(self.repo, "cat-file", "blob", "%s:%s" % (sha, path)), hunk)
+        except Fail as e:
+            if e.code != "git-failed":
+                raise
+            return False
+
+    def locate(self, path, hunk):
+        cur = hunk
+        for i in range(len(self.stack)):
+            d = self.diff_of(i).get(path)
+            if d is None:
+                continue
+            if d.added:
+                return i, cur, "file-added"
+            nxt = commute_diff_before(cur, d.hunks)
+            if nxt is None:
+                return i, cur, "overlaps-lines"
+            cur = nxt
+        return None
+
+    def document(self):
+        stack = self.stack
+        counts = {}
+        for c in stack:
+            counts[c["subject"]] = counts.get(c["subject"], 0) + 1
+        fixups, by_target = [], {}
+        for h in self.hunks:
+            if h["assignment"] != "absorbed":
+                continue
+            sha = h["target"]["sha"]
+            if sha not in by_target:
+                c = stack[h["_i"]]
+                subj = "fixup! " + (sanitize(c["subject"]) if counts[c["subject"]] == 1 else sha)
+                by_target[sha] = {"target": sha, "subject": subj, "hunks": []}
+                fixups.append(by_target[sha])
+            by_target[sha]["hunks"].append(h["id"])
+        idx = [h["_i"] for h in self.hunks if h["assignment"] == "absorbed"]
+        rewritten = [c["sha"] for c in reversed(stack[:max(idx) + 1])] if idx else []
+        raw_paths = [h.pop("_raw") for h in self.hunks]
+        for h in self.hunks:
+            h.pop("_i", None)
+        absorbed = len(idx)
+        doc = {"schema_version": 1, "command": "absorb", "mode": "plan", "head": self.head, "branch": sanitize(self.branch),
+               "index_digest": hashlib.sha256(git(self.repo, "ls-files", "-s", "-z")).hexdigest(),
+               "base": self.args.base, "max_stack": self.args.max_stack,
+               "stack": [{"sha": c["sha"], "subject": sanitize(c["subject"])} for c in stack], "stack_end": self.stack_end,
+               "hunks": self.hunks, "files_skipped": self.files_skipped, "fixups": fixups,
+               "rewrite": {"count": len(rewritten), "commits": rewritten, "ref": sanitize(self.ref), "new_shas": None},
+               "summary": {"hunks": len(self.hunks), "absorbed": absorbed, "skipped": len(self.hunks) - absorbed,
+                           "fixups": len(fixups), "rewritten": len(rewritten)},
+               "effects": {"writes": [], "index_refresh": False, "network": False, "hooks": False, "prompts": False}}
+        key = {"options": {"base": self.args.base, "max_stack": self.args.max_stack, "ambiguous_newest": self.args.ambiguous_newest},
+               "raw_paths": raw_paths, "plan": doc}
+        doc["plan_sum"] = hashlib.sha256(json.dumps(key, sort_keys=True, separators=(",", ":")).encode("utf-8", "surrogateescape")).hexdigest()
+        return doc
+
+
+def render(doc):
+    out = ["absorb plan (read-only): head %s on %s, stack %d commit(s), ends at %s" % (doc["head"][:7], doc["branch"], len(doc["stack"]), doc["stack_end"])]
+    for h in doc["hunks"]:
+        rng = "-%d,%d +%d,%d" % (h["old"]["start"], h["old"]["count"], h["new"]["start"], h["new"]["count"])
+        if h["assignment"] == "absorbed":
+            out.append("%s %s %s -> %s %s (%s)" % (h["id"], h["path"], rng, h["target"]["sha"][:7], h["target"]["subject"], h["basis"]))
+        else:
+            out.append("%s %s %s skipped: %s" % (h["id"], h["path"], rng, h["reason"]))
+    for f in doc["files_skipped"]:
+        out.append("file %s skipped: %s" % (f["path"], f["reason"]))
+    for f in doc["fixups"]:
+        out.append("%s <- %s" % (f["subject"], ", ".join(f["hunks"])))
+    rw = doc["rewrite"]
+    out.append("rewrite: %d commit(s) get new SHAs%s; nothing was written" % (rw["count"], " (oldest %s)" % rw["commits"][0][:7] if rw["commits"] else ""))
+    return "\n".join(out) + "\n"
+
+
+def emit(data, stream=None):
+    (stream or sys.stdout).buffer.write(data.encode("utf-8", "replace"))
+    (stream or sys.stdout).flush()
+
+
+class Parser(argparse.ArgumentParser):
+    def error(self, message):
+        sys.stderr.write("stw-absorb-plan: %s\n" % message)
+        sys.exit(2)
+
+
+def main(argv):
+    ap = Parser(prog="stw-absorb-plan", allow_abbrev=False, add_help=True)
+    ap.add_argument("--plan", action="store_true")
+    ap.add_argument("--json", action="store_true")
+    ap.add_argument("--base")
+    ap.add_argument("--max-stack", type=int, default=10)
+    ap.add_argument("--ambiguous-newest", action="store_true")
+    ap.add_argument("--repo", default=".")
+    args = ap.parse_args(argv)
+    if args.max_stack < 1:
+        ap.error("--max-stack must be at least 1")
+    try:
+        doc = Plan(args.repo, args).run()
+    except Fail as e:
+        sys.stderr.write("stw-absorb-plan: %s: %s\n" % (e.code, e.message))
+        if args.json and e.status != 2:
+            emit(json.dumps({"schema_version": 1, "command": "absorb", "error": {"code": e.code, "message": e.message}}, ensure_ascii=False) + "\n")
+        return e.status
+    emit(json.dumps(doc, ensure_ascii=False) + "\n" if args.json else render(doc))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

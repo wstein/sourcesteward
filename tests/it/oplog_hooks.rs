@@ -278,7 +278,7 @@ fn install_yes_writes_both_hooks_executable_with_their_header_and_an_install_eve
 #[test]
 fn the_installed_text_is_the_text_of_the_spikes() {
     // the spikes are the tested scripts; the product embeds the same bytes (skipped where the spikes are not checked out)
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../spikes/stw");
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spikes");
     let spikes = [
         (POST, root.join("oplog-hooks/stw-oplog-hook")),
         (REF, root.join("oplog-refhook/stw-oplog-refhook")),
