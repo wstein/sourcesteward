@@ -120,6 +120,10 @@ pub enum Step {
 /// crash would: it is unusable until the directory is opened again.
 pub trait Output {
     fn print(&mut self, ev: &Event) -> Result<(), WatchError>;
+    /// Optional best-effort diagnostics, separate from the durable event stream.
+    fn diagnostics(&mut self, _level: u8) -> Option<&mut dyn std::io::Write> {
+        None
+    }
     fn after(&mut self, _step: Step) -> Result<(), WatchError> {
         Ok(())
     }

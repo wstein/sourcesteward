@@ -1556,6 +1556,9 @@ Watch open pull requests and print transitions (read-only)
 Usage: stw watch [OPTIONS]
 
 Options:
+  -v, --verbose...
+          Print polling diagnostics to stderr. Repeat for repository and PR decisions
+
       --repo <REPO>
           OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin
 

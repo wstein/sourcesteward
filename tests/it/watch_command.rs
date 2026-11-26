@@ -534,6 +534,59 @@ fn human_stream_keeps_the_full_sha_in_the_json_journal() {
 }
 
 #[test]
+fn verbose_stream_reports_polls_without_changing_event_output() {
+    use stw::watch::command::{run_stream_output, Lines, StreamLimits};
+
+    let mut expected = None;
+    for level in 0..=2 {
+        let (_dir, path) = state_path();
+        let log = tempfile::NamedTempFile::new().unwrap();
+        let mut src = Listed::head(&"a".repeat(40));
+        src.next_head = Some("b".repeat(40));
+        src.slow = true;
+        let mut pace = Clock {
+            now: 1_700_000_000,
+            sleeps: Vec::new(),
+            stop_at: Some(2),
+        };
+        let mut events = Vec::new();
+        let mut output =
+            Lines::new(&mut events, false).with_diagnostics(level, log.reopen().unwrap());
+        run_stream_output(
+            &path,
+            &["o/r".into()],
+            &mut src,
+            &mut output,
+            StreamLimits {
+                baseline: false,
+                api_base: String::new(),
+                interval_secs: 10,
+                max_idle_secs: 0,
+                detail_every: 10,
+                until: Vec::new(),
+                timeout_secs: 0,
+            },
+            &mut pace,
+        )
+        .unwrap();
+        drop(output);
+
+        let diagnostics = std::fs::read_to_string(log.path()).unwrap();
+        if level == 0 {
+            assert!(diagnostics.is_empty());
+            assert!(String::from_utf8_lossy(&events).contains("head-changed"));
+            expected = Some(events);
+        } else {
+            assert_eq!(Some(&events), expected.as_ref());
+            assert_eq!(diagnostics.matches("poll completed").count(), 2);
+            assert!(diagnostics.contains("silent baseline"));
+            assert!(diagnostics.contains("next poll in 20s (low rate limit)"));
+            assert_eq!(diagnostics.contains("o/r#7 head changed"), level == 2);
+        }
+    }
+}
+
+#[test]
 fn a_low_rate_limit_doubles_the_stream_interval() {
     let mut src = Listed::head(&"a".repeat(40));
     src.slow = true;

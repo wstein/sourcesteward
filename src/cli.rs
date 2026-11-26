@@ -127,6 +127,9 @@ enum InspectSource {
 
 #[derive(Args)]
 struct WatchArgs {
+    /// Print polling diagnostics to stderr. Repeat for repository and PR decisions.
+    #[arg(short = 'v', long, action = clap::ArgAction::Count, conflicts_with = "status")]
+    verbose: u8,
     /// OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin.
     #[arg(long = "repo")]
     repo: Vec<String>,
@@ -2610,7 +2613,8 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             ignore_authors,
             ignore_labels,
         );
-        let mut output = command::Lines::new(std::io::stdout(), a.human);
+        let mut output = command::Lines::new(std::io::stdout(), a.human)
+            .with_diagnostics(a.verbose, std::io::stderr());
         if a.stream || until {
             let max_idle = match a.max_idle.as_deref() {
                 Some(text) => command::parse_duration_secs(text).map_err(Error::usage)?,

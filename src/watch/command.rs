@@ -36,15 +36,34 @@ pub const DEFAULT_INTERVAL_SECS: u64 = 60;
 pub struct Lines<W> {
     out: W,
     human: bool,
+    diagnostics: Option<(u8, Box<dyn Write + Send + Sync>)>,
 }
 
 impl<W: Write> Lines<W> {
     pub fn new(out: W, human: bool) -> Self {
-        Self { out, human }
+        Self {
+            out,
+            human,
+            diagnostics: None,
+        }
+    }
+
+    pub fn with_diagnostics(
+        mut self,
+        level: u8,
+        writer: impl Write + Send + Sync + 'static,
+    ) -> Self {
+        self.diagnostics = Some((level, Box::new(writer)));
+        self
     }
 }
 
 impl<W: Write> Output for Lines<W> {
+    fn diagnostics(&mut self, level: u8) -> Option<&mut dyn Write> {
+        let (verbosity, writer) = self.diagnostics.as_mut()?;
+        (*verbosity >= level).then_some(writer.as_mut())
+    }
+
     fn print(&mut self, ev: &Event) -> Result<(), WatchError> {
         let line = if self.human {
             super::human::render(ev)
@@ -53,6 +72,94 @@ impl<W: Write> Output for Lines<W> {
         };
         writeln!(self.out, "{line}").map_err(|e| WatchError::Io(e.to_string()))
     }
+}
+
+fn diagnostic(out: &mut dyn Output, level: u8, message: std::fmt::Arguments<'_>) {
+    if let Some(writer) = out.diagnostics(level) {
+        let _ = writeln!(writer, "stw watch: {message}");
+    }
+}
+
+fn poll_report(
+    out: &mut dyn Output,
+    polls: &[Seen],
+    state: &super::state::State,
+    events: &[Event],
+    duration: Duration,
+) {
+    if out.diagnostics(1).is_none() {
+        return;
+    }
+    let mut observed = 0;
+    let mut open = 0;
+    for poll in polls {
+        match &poll.result {
+            Ok(obs) => {
+                observed += 1;
+                open += obs.prs.len();
+                diagnostic(
+                    out,
+                    2,
+                    format_args!("{} observed {} open PR(s)", poll.repo, obs.prs.len()),
+                );
+                if out.diagnostics(2).is_some() {
+                    for pr in &obs.prs {
+                        if let Some(candidate) = state
+                            .repo
+                            .get(&poll.repo)
+                            .and_then(|repo| repo.prs.get(&pr.number))
+                            .and_then(|stored| stored.class_candidate.as_ref())
+                        {
+                            diagnostic(
+                                out,
+                                2,
+                                format_args!(
+                                    "{}#{} checks {} awaiting confirmation",
+                                    poll.repo,
+                                    pr.number,
+                                    class_name(candidate)
+                                ),
+                            );
+                        }
+                    }
+                }
+            }
+            Err(ObserveFailure::Error(err)) => {
+                diagnostic(
+                    out,
+                    1,
+                    format_args!(
+                        "{} read failed ({}) retry hint {}s",
+                        poll.repo,
+                        err.code.as_str(),
+                        err.retry_in
+                    ),
+                );
+                if let Some(health) = state
+                    .health
+                    .get(&poll.repo)
+                    .filter(|health| !health.next_try.is_empty())
+                {
+                    diagnostic(
+                        out,
+                        1,
+                        format_args!("{} backoff until {}", poll.repo, health.next_try),
+                    );
+                }
+            }
+            Err(ObserveFailure::Canceled) => {
+                diagnostic(out, 2, format_args!("{} read canceled", poll.repo))
+            }
+        }
+    }
+    for event in events {
+        diagnostic(
+            out,
+            2,
+            format_args!("emitted {} ({:?})", event.kind().as_str(), event.id),
+        );
+    }
+    diagnostic(out, 1, format_args!("poll completed in {}ms, {} of {} repository reads succeeded, {} open PR(s), {} event(s)", duration.as_millis(), observed, polls.len(), open, events.len()));
 }
 
 /// Clock and wait of a stream. A test supplies one that jumps the clock. `wait` returns false
@@ -209,7 +316,21 @@ pub fn run_once_output(
         return Err(WatchError::StateDirUsage);
     }
     let (mut core, _) = Core::open(dir, baseline, out)?;
-    let polls = poll_ready(repos, source, &core.state, now_secs, detail_every);
+    diagnostic(
+        out,
+        1,
+        format_args!("once repositories={repos:?} state={dir:?}"),
+    );
+    let poll_started = Instant::now();
+    let polls = poll_ready(
+        repos,
+        source,
+        &core.state,
+        now_secs,
+        detail_every,
+        baseline || core.baseline,
+        out,
+    );
     let failed = polls.iter().filter(|p| p.result.is_err()).count();
     let succeeded = polls.iter().filter(|p| p.result.is_ok()).count();
     prepare_cycle(&mut core, repos, baseline, 0);
@@ -219,6 +340,7 @@ pub fn run_once_output(
         core.close();
         return Err(err);
     }
+    poll_report(out, &polls, &core.state, &events, poll_started.elapsed());
     let beat = core.heartbeat(now_secs, "once");
     core.close();
     beat?;
@@ -263,6 +385,14 @@ pub fn run_stream_output(
         return Err(WatchError::StateDirUsage);
     }
     let (mut core, _) = Core::open(dir, limits.baseline, out)?;
+    diagnostic(
+        out,
+        1,
+        format_args!(
+            "stream repositories={repos:?} state={dir:?} interval={}s",
+            limits.interval_secs
+        ),
+    );
     let mut force = limits.baseline || core.baseline;
     let mut last_event = pace.now_secs();
     let started = last_event;
@@ -279,7 +409,21 @@ pub fn run_stream_output(
             core.close();
             return Ok(0);
         }
-        let polls = poll_ready(repos, source, &core.state, now, limits.detail_every);
+        diagnostic(
+            out,
+            1,
+            format_args!("poll started at {}", super::event::format_utc(now)),
+        );
+        let poll_started = Instant::now();
+        let polls = poll_ready(
+            repos,
+            source,
+            &core.state,
+            now,
+            limits.detail_every,
+            force,
+            out,
+        );
         // The hold starts when the response arrives. A slow read must not spend
         // `Retry-After` on time that already passed inside the request.
         let arrived = pace.now_secs();
@@ -294,6 +438,7 @@ pub fn run_stream_output(
             core.close();
             return Err(err);
         }
+        poll_report(out, &polls, &core.state, &events, poll_started.elapsed());
         if !events.is_empty() {
             last_event = arrived;
         }
@@ -320,6 +465,10 @@ pub fn run_stream_output(
                 return Ok(EXIT_TIMEOUT);
             }
             wait = wait.min(left);
+        }
+        if wait > 0 {
+            let reason = if slow { " (low rate limit)" } else { "" };
+            diagnostic(out, 1, format_args!("next poll in {wait}s{reason}"));
         }
         if wait == 0 || !pace.wait(wait) {
             core.close();
@@ -363,15 +512,54 @@ fn poll_ready(
     state: &super::state::State,
     now: i64,
     detail_every: u64,
+    baseline: bool,
+    diagnostics: &mut dyn Output,
 ) -> Vec<Seen> {
     let mut out = Vec::new();
     for repo in repos {
         if retry_holds(state, repo, now) {
+            diagnostic(
+                diagnostics,
+                1,
+                format_args!(
+                    "{repo} skipped, backoff until {}",
+                    state.health[repo].next_try
+                ),
+            );
             continue;
         }
         let hints = hints_of(state, repo, detail_every);
         let saved = saved_cond(state, repo);
+        diagnostic(diagnostics, 2, format_args!("{repo} reading GitHub"));
         let result = source.observe_repo(repo, &hints, saved.as_ref());
+        if let Ok(obs) = &result {
+            let previous = state.repo.get(repo);
+            if baseline || !previous.is_some_and(|repo| repo.baselined) {
+                diagnostic(diagnostics, 1, format_args!("{repo} silent baseline"));
+            } else if diagnostics.diagnostics(2).is_some() {
+                for pr in &obs.prs {
+                    if let Some(old) = previous.and_then(|repo| repo.prs.get(&pr.number)) {
+                        let head = if old.head == pr.head {
+                            "unchanged"
+                        } else {
+                            "changed"
+                        };
+                        let readiness = if old.draft == pr.draft {
+                            "unchanged"
+                        } else if pr.draft {
+                            "ready -> draft"
+                        } else {
+                            "draft -> ready"
+                        };
+                        diagnostic(
+                            diagnostics,
+                            2,
+                            format_args!("{repo}#{} head {head}, readiness {readiness}", pr.number),
+                        );
+                    }
+                }
+            }
+        }
         let run_wide = matches!(
             &result,
             Err(ObserveFailure::Error(err)) if err.run_wide
@@ -381,6 +569,11 @@ fn poll_ready(
             result,
         });
         if run_wide {
+            diagnostic(
+                diagnostics,
+                1,
+                format_args!("remaining reads stopped after a run-wide error"),
+            );
             break;
         }
     }

@@ -170,6 +170,12 @@ check, mergeability, restack and watcher health events. A restart reprints
 journalled events that may have missed stdout. The Go state format is
 unsupported. Polling has no jitter.
 
+Use `stw watch --stream --interval 10s -v` to see the watched repositories,
+state directory, each poll's outcome and the next wait on stderr. Use
+`-vv` to also see repository reads, PR head and readiness comparisons,
+checks awaiting confirmation and emitted event IDs. Event output and
+the journal keep their usual format.
+
 Stdout defaults to schema-version-1 JSON Lines for event modes. `--human`
 prints one escaped, bounded line per event with short SHAs and keeps the
 Go `git rebase --onto` hint for actionable `restack-needed` events
