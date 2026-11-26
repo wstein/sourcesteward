@@ -219,7 +219,7 @@ fn note_workflows(
     };
     let snapshot = state.workflows.entry(repo.to_owned()).or_default();
     for run in runs.iter().rev() {
-        if !snapshot.seen.insert((run.run_id, run.attempt)) || !snapshot.baselined {
+        if !snapshot.seen.insert((run.run_id, run.attempt)) || !snapshot.failure_baselined {
             continue;
         }
         let reported_by_pr_checks = obs.prs.iter().any(|pr| {
@@ -246,7 +246,7 @@ fn note_workflows(
             Details::WorkflowCompleted(run.clone()),
         ));
     }
-    snapshot.baselined = true;
+    snapshot.failure_baselined = true;
     while snapshot.seen.len() > 1_000 {
         snapshot.seen.pop_first();
     }

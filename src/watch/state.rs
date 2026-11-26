@@ -287,7 +287,9 @@ pub(super) struct IssueState {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub(super) struct WorkflowState {
-    pub baselined: bool,
+    // Rebaseline the filtered query when opening state from the unfiltered watcher.
+    #[serde(default)]
+    pub failure_baselined: bool,
     pub seen: std::collections::BTreeSet<(u64, u64)>,
 }
 

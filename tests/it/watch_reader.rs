@@ -2598,7 +2598,11 @@ fn workflow_poll_detects_fast_and_late_failures_once() {
     ]);
     let mut observer = observer_over(&forge).with_prs(false).with_workflows(true);
     let cancel = AtomicBool::new(false);
-    let mut state = State::new();
+    let mut legacy_state = serde_json::to_value(State::new()).unwrap();
+    legacy_state["workflows"] = serde_json::json!({
+        "o/r": {"baselined":true,"seen":[[9,1]]}
+    });
+    let mut state: State = serde_json::from_value(legacy_state).unwrap();
     let mut poll = || {
         let observation = observer.observe("o/r", &Hints::default(), None, &cancel).unwrap();
         let active = observation.active_workflows;

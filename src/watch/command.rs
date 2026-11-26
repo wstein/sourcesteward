@@ -736,7 +736,7 @@ fn prepare_cycle(core: &mut Core, repos: &[String], force: bool, interval_secs: 
             activity.baselined = false;
         }
         for workflows in core.state.workflows.values_mut() {
-            workflows.baselined = false;
+            workflows.failure_baselined = false;
         }
         for issues in core.state.issues.values_mut() {
             issues.baselined = false;
