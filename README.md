@@ -10,8 +10,9 @@
 
 `stw` is a Rust CLI for working on Git changes before, during, and after
 review. It helps you put a late fix into the right commit, find conflicts
-before rebasing a branch stack, and hand off work without losing the
-difference between staged and unstaged changes.
+before rebasing a branch stack, see how refs and commits changed, and
+hand off work without losing the difference between staged and unstaged
+changes.
 
 > **Experimental software, provided without warranty.** Preview commands
 > such as `stw absorb` and `stw restack plan` leave the repository untouched.
@@ -64,6 +65,21 @@ with `stw restack show-conflict` and use that evidence to prepare a resolution.
 When the rebase is complete, `stw prove` can check that the rewritten history
 contains the same changes on the new base.
 
+### Trace a rewrite and preview an undo
+
+```sh
+stw oplog timeline
+stw oplog evolog HEAD
+stw oplog undo-plan topic
+```
+
+The operation log combines Git reflogs and recorded ref updates into a
+timeline. `evolog` follows recorded rewrites across amends and rebases.
+Optional repository hooks capture future Git operations and make those
+records available to the next person or agent. `undo-plan` checks whether
+one local branch can return to an older reflog value. Applying the undo
+checks the branch's expected current SHA and saves a backup ref.
+
 ### Save a handoff or review only the selected changes
 
 ```sh
@@ -87,9 +103,20 @@ stw tidy plan --root . --offline
 `status` reports local changes, branches, upstream divergence and submodule
 pin drift. With GitHub access it can also list issues and review evidence.
 `tidy plan` explains which branches qualify for cleanup and why.
-`stw sync --plan` previews upstream updates, and `stw oplog` shows and can
-help undo ref movements. Use `stw watch --stream --all` when you want a live
-stream of GitHub activity.
+`stw sync --plan` previews upstream updates. `stw add` registers an
+existing GitHub repository as a submodule of the workspace.
+
+### Check a pull request before handoff
+
+```sh
+stw ready-check 42 --repo OWNER/REPO
+```
+
+`ready-check` reports the review, checks, base and merge conditions for the
+current PR head. `stw review carry-over` checks whether prior review evidence
+still applies after a rewrite, and `stw lint pr` checks the PR against the
+working rules. Use `stw watch --stream --all` for a live stream of GitHub
+activity.
 
 ## Guides
 
