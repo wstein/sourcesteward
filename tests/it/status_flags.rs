@@ -959,7 +959,7 @@ fn verbose_text_lists_the_sources_per_repository_before_the_stats_line() {
         lines[4]
     );
     assert!(
-        lines[6].starts_with("    other:      1 req (0 cached 304s, 1 consumed) in "),
+        lines[6].starts_with("  other:      1 req (0 cached 304s, 1 consumed) in "),
         "{}",
         lines[6]
     );
