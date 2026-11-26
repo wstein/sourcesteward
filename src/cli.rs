@@ -27,11 +27,16 @@ Exit codes:
 
 --json prints one JSON object with \"schema_version\" (see README.md).";
 
+const ROOT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.";
+
 #[derive(Parser)]
 #[command(
     name = "stw",
     version,
     about = "SourceSteward: where am I, what can go, what is behind, across every repository of a workspace",
+    before_help = ROOT_HELP,
     after_help = EXIT_CODES,
     subcommand_required = true,
     arg_required_else_help = true
@@ -94,7 +99,8 @@ enum Command {
         #[command(subcommand)]
         source: InspectSource,
     },
-    /// Watch open pull requests and print transitions (read-only)
+    /// Watch GitHub activity and print transitions (read-only)
+    #[command(after_help = WATCH_HELP)]
     Watch(WatchArgs),
     /// Check work products against the working rules (read-only)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
@@ -125,8 +131,33 @@ enum InspectSource {
     },
 }
 
+const WATCH_HELP: &str = "Event kinds emitted by the watcher:
+  PRs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
+  PR checks: checks-green, checks-red, checks-pending-timeout
+  Mergeability: mergeable-changed, restack-needed
+  Health: watch-error, watch-recovered
+  --workflows: workflow-completed
+  --issues: issue-changed
+  --reviews: review-state-changed, review-comment-added
+  --discussions: discussion-changed
+  --wiki: wiki-changed
+
+See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md";
+
 #[derive(Args)]
 struct WatchArgs {
+    /// Watch GitHub wiki Git head updates.
+    #[arg(long, conflicts_with = "status")]
+    wiki: bool,
+    /// Watch submitted PR reviews and inline review comments.
+    #[arg(long, conflicts_with = "status")]
+    reviews: bool,
+    /// Watch new and updated GitHub discussions.
+    #[arg(long, conflicts_with = "status")]
+    discussions: bool,
+    /// Emit workflow-completed for Actions runs outside open PR head checks.
+    #[arg(long, conflicts_with = "status")]
+    workflows: bool,
     /// Watch open issues and emit issue-changed for opens, updates and closures.
     #[arg(long, conflicts_with = "status")]
     issues: bool,
@@ -2604,7 +2635,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
     } else {
         let (token, token_source) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
             .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
-        let issue_client = a.issues.then(|| {
+        let graph_client = (a.issues || a.reviews || a.discussions).then(|| {
             crate::github::Client::with_base(
                 token.clone(),
                 token_source,
@@ -2623,8 +2654,9 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             ignore_authors,
             ignore_labels,
         );
-        if let Some(client) = issue_client {
-            source = source.with_issues(client);
+        source = source.with_workflows(a.workflows).with_wiki(a.wiki);
+        if let Some(client) = graph_client {
+            source = source.with_graph_sources(client, a.issues, a.reviews, a.discussions);
         }
         let mut output = command::Lines::new(std::io::stdout(), a.human)
             .with_diagnostics(a.verbose, std::io::stderr());

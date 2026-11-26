@@ -431,6 +431,9 @@ pub fn read_endpoint_allowed(endpoint: &str) -> bool {
             .or_else(|| more.strip_prefix("/statuses?per_page=100&page="));
         return page.is_some_and(check_page);
     }
+    if tail == "actions/runs?per_page=100" {
+        return true;
+    }
     if let Some(q) = tail.strip_prefix("actions/runs?head_sha=") {
         let (sha, more) = q.split_at(q.len().min(40));
         return valid_sha(sha)
@@ -879,6 +882,36 @@ fn content_pages(pages: &[PullPage]) -> usize {
     n
 }
 
+fn wiki_head_packet(mut data: &[u8]) -> Option<String> {
+    while !data.is_empty() {
+        let length = usize::from_str_radix(std::str::from_utf8(data.get(..4)?).ok()?, 16).ok()?;
+        if length == 0 {
+            data = data.get(4..)?;
+            continue;
+        }
+        let packet = data.get(4..length)?;
+        data = data.get(length..)?;
+        let text = std::str::from_utf8(packet).ok()?;
+        let reference = text.split('\0').next()?.trim_end_matches('\n');
+        if let Some(head) = reference.strip_suffix(" HEAD").filter(|sha| valid_sha(sha)) {
+            return Some(head.to_owned());
+        }
+    }
+    None
+}
+
+#[test]
+fn wiki_head_is_read_from_the_advertised_head_packet() {
+    let sha = "a".repeat(40);
+    let line = format!("{sha} HEAD\0symref=HEAD:refs/heads/main\n");
+    let advertisement = format!(
+        "001e# service=git-upload-pack\n0000{:04x}{line}0000",
+        line.len() + 4
+    );
+    assert_eq!(wiki_head_packet(advertisement.as_bytes()), Some(sha));
+    assert_eq!(wiki_head_packet(b"fff0short"), None);
+}
+
 impl WatchHttp {
     /// A reader for the API at `base` (no trailing slash; `https://api.github.com`, a GitHub Enterprise URL, or a test
     /// server). `api_host` is the host a refused redirect may name the repository on.
@@ -1222,6 +1255,50 @@ impl WatchHttp {
         etag: &str,
     ) -> Result<WatchResponse, WatchError> {
         self.checks(repo, sha, "statuses", page, etag)
+    }
+
+    /// Read the GitHub wiki's advertised HEAD through Git smart HTTP.
+    pub fn wiki_head(&self, repo: &str) -> Result<String, WatchError> {
+        use base64::Engine;
+
+        if self.base != "https://api.github.com" || !valid_repo(repo) {
+            return Err(malformed("wiki requires a github.com repository"));
+        }
+        let url = format!("https://github.com/{repo}.wiki.git/info/refs?service=git-upload-pack");
+        let auth = base64::engine::general_purpose::STANDARD
+            .encode(format!("x-access-token:{}", self.token));
+        let mut response = self
+            .agent
+            .get(&url)
+            .config()
+            .timeout_global(Some(self.timeout))
+            .build()
+            .header("Authorization", &format!("Basic {auth}"))
+            .header("Accept", "application/x-git-upload-pack-advertisement")
+            .call()
+            .map_err(|err| self.request_failure(&err))?;
+        if response.status().as_u16() != 200 {
+            return Err(self.status_failure(&mut response, RateInfo::default()));
+        }
+        let mut body = Vec::new();
+        response
+            .body_mut()
+            .as_reader()
+            .take(1 << 20)
+            .read_to_end(&mut body)
+            .map_err(|_| WatchError::new(Code::Network, "wiki advertisement could not be read"))?;
+        wiki_head_packet(&body).ok_or_else(|| malformed("wiki HEAD is not advertised"))
+    }
+
+    /// One recent repository-wide page of workflow runs.
+    pub fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::Actions,
+            &format!("{base}/actions/runs?per_page=100"),
+            "",
+            false,
+        )
     }
 
     /// `actions/runs?head_sha=SHA` page 1 to 10: the fallback for a token that cannot read check runs.

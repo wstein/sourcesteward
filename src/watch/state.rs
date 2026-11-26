@@ -162,6 +162,12 @@ pub struct Health {
 pub struct State {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) issues: BTreeMap<String, IssueState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) workflows: BTreeMap<String, WorkflowState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) source_errors: BTreeMap<String, u64>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) activity: BTreeMap<String, ActivityState>,
     pub format: String,
     pub schema_version: u32,
     pub applied_seq: u64,
@@ -189,6 +195,9 @@ impl State {
     pub fn new() -> State {
         State {
             issues: BTreeMap::new(),
+            workflows: BTreeMap::new(),
+            source_errors: BTreeMap::new(),
+            activity: BTreeMap::new(),
             format: STATE_FORMAT.to_string(),
             schema_version: STATE_SCHEMA_VERSION,
             applied_seq: 0,
@@ -271,4 +280,17 @@ pub(super) struct IssueState {
     pub baselined: bool,
     pub epoch: u64,
     pub open: BTreeMap<i64, crate::issue_list::Issue>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct WorkflowState {
+    pub baselined: bool,
+    pub seen: std::collections::BTreeSet<(u64, u64)>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct ActivityState {
+    pub baselined: bool,
+    pub epoch: u64,
+    pub versions: BTreeMap<String, String>,
 }

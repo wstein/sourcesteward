@@ -340,6 +340,8 @@ fn issue_changes_require_complete_snapshots_and_replay() {
         title: title.into(),
         url: format!("https://github.com/o/r/issues/{number}"),
         updated_at: "2026-11-26T17:00:00Z".into(),
+        comment_count: Some(0),
+        latest_comment: None,
         labels: Vec::new(),
         assignees: Vec::new(),
     };
@@ -371,7 +373,10 @@ fn issue_changes_require_complete_snapshots_and_replay() {
     )
     .is_empty());
     let mut replay = state.clone();
-    assert!(poll(&mut state, "incomplete", vec![]).is_empty());
+    assert_eq!(
+        poll(&mut state, "incomplete", vec![])[0].kind(),
+        Kind::WatchError
+    );
     let events = poll(
         &mut state,
         "complete",
@@ -403,6 +408,161 @@ fn issue_changes_require_complete_snapshots_and_replay() {
         vec![issue(7, "edited"), issue(9, "new")]
     )
     .is_empty());
+    let mut edited = issue(7, "edited");
+    edited.comment_count = Some(1);
+    let events = poll(&mut replay, "complete", vec![edited, issue(9, "new")]);
+    assert!(
+        matches!(&events[0].details, Details::IssueChanged(change) if change.change == IssueChange::CommentAdded)
+    );
+}
+
+#[test]
+fn repository_workflow_completions_skip_pr_checks_and_remember_attempts() {
+    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::event::WorkflowCompleted;
+    use stw::watch_reader::obs::{PrObs, RepoObservation};
+
+    let run = |id, attempt, trigger: &str, head: &str| WorkflowCompleted {
+        run_id: id,
+        attempt,
+        name: "CI".into(),
+        conclusion: "failure".into(),
+        branch: "main".into(),
+        head: head.into(),
+        trigger: trigger.into(),
+        url: "https://github.com/o/r/actions".into(),
+    };
+    let poll = |state: &mut State, runs| {
+        advance_seen(
+            state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    workflows: Some(Ok(runs)),
+                    prs: vec![PrObs {
+                        number: 7,
+                        head: "pr-head".into(),
+                        ..PrObs::default()
+                    }],
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_000,
+            10,
+        )
+    };
+    let mut state = State::new();
+    assert!(poll(&mut state, vec![run(1, 1, "push", "main-head")]).is_empty());
+    let runs = vec![
+        run(3, 1, "pull_request", "pr-head"),
+        run(2, 1, "workflow_dispatch", "pr-head"),
+        run(1, 2, "push", "main-head"),
+    ];
+    let events = poll(&mut state, runs.clone());
+    assert_eq!(events.len(), 2);
+    assert!(events
+        .iter()
+        .all(|event| event.kind() == Kind::WorkflowCompleted));
+    assert_eq!(events[0].id, "o/r#-:workflow-completed:1:2");
+    assert!(poll(&mut state, runs).is_empty());
+}
+
+#[test]
+fn optional_activity_has_a_silent_baseline_and_source_errors_do_not_close_prs() {
+    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::event::{Activity, ActivityKind, Event};
+    use stw::watch_reader::obs::{ActivityScope, PrObs, RepoObservation};
+
+    let record = |kind, id: &str, version: &str| Activity {
+        kind,
+        id: id.into(),
+        version: version.into(),
+        number: 7,
+        summary: String::new(),
+        url: String::new(),
+    };
+    let poll = |state: &mut State, activity| {
+        advance_seen(
+            state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    prs: vec![PrObs {
+                        number: 7,
+                        head: "pr-head".into(),
+                        ..PrObs::default()
+                    }],
+                    activity,
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_000,
+            10,
+        )
+    };
+
+    let snapshot = |review, wiki, add_comment| {
+        let mut reviews = vec![record(ActivityKind::Review, "review", review)];
+        if add_comment {
+            reviews.push(record(ActivityKind::ReviewComment, "comment", "now"));
+        }
+        vec![
+            (ActivityScope::Reviews(7), Ok(reviews)),
+            (
+                ActivityScope::Wiki,
+                Ok(vec![record(ActivityKind::Wiki, "HEAD", wiki)]),
+            ),
+        ]
+    };
+    let mut state = State::new();
+    assert!(poll(&mut state, snapshot("APPROVED", "a", false)).is_empty());
+    let mut replay = state.clone();
+    let events = poll(
+        &mut state,
+        vec![(ActivityScope::Wiki, Err("wiki-forbidden".into()))],
+    );
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind(), Kind::WatchError);
+    assert!(state.repo["o/r"].prs.contains_key(&7));
+    assert!(!state.health.contains_key("o/r") || !state.health["o/r"].error_open);
+
+    let events = poll(&mut state, snapshot("DISMISSED", "b", true));
+    assert_eq!(
+        events.iter().map(Event::kind).collect::<Vec<_>>(),
+        [
+            Kind::ReviewStateChanged,
+            Kind::ReviewCommentAdded,
+            Kind::WikiChanged
+        ]
+    );
+    for event in events {
+        replay.apply(&Event::from_line(&event.to_line()).unwrap());
+    }
+    assert!(poll(&mut replay, snapshot("DISMISSED", "b", true)).is_empty());
+}
+
+#[test]
+fn retargeting_without_a_push_emits_base_changed() {
+    let mut state = State::new();
+    let mut pull = pr(7, "same-head");
+    let poll = |state: &mut State, pull| {
+        cycle::advance(
+            state,
+            &[Poll {
+                repo: "o/r".into(),
+                result: Ok(vec![pull]),
+            }],
+            1_700_000_000,
+        )
+    };
+    assert!(poll(&mut state, pull.clone()).is_empty());
+    pull.base = "release".into();
+    let events = poll(&mut state, pull.clone());
+    assert_eq!(events.len(), 1);
+    assert!(
+        matches!(&events[0].details, Details::BaseChanged(d) if d.old == "main" && d.new == "release")
+    );
+    assert!(poll(&mut state, pull).is_empty());
 }
 
 #[test]

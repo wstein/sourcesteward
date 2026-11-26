@@ -14,6 +14,44 @@ impl State {
     /// counters of its ids still matter.
     pub fn apply(&mut self, ev: &Event) {
         match &ev.details {
+            Details::ReviewStateChanged(d)
+            | Details::ReviewCommentAdded(d)
+            | Details::DiscussionChanged(d)
+            | Details::WikiChanged(d) => {
+                if let Some(repo) = &ev.repo {
+                    let key = match d.record.kind {
+                        super::event::ActivityKind::Discussion => format!("{repo}:discussions"),
+                        super::event::ActivityKind::Wiki => format!("{repo}:wiki"),
+                        _ => format!("{repo}:reviews:{}", d.record.number),
+                    };
+                    let tracked = self.activity.entry(key).or_default();
+                    tracked.epoch = tracked.epoch.max(d.epoch);
+                    tracked
+                        .versions
+                        .insert(d.record.id.clone(), d.record.version.clone());
+                }
+                return;
+            }
+            Details::WorkflowCompleted(d) => {
+                if let Some(repo) = &ev.repo {
+                    self.workflows
+                        .entry(repo.clone())
+                        .or_default()
+                        .seen
+                        .insert((d.run_id, d.attempt));
+                }
+                return;
+            }
+            Details::WatchError(d) if ev.id.contains(":watch-error:source:") => {
+                if let Some(repo) = &ev.repo {
+                    let count = self
+                        .source_errors
+                        .entry(format!("{repo}:{}", d.code))
+                        .or_default();
+                    *count = (*count).max(d.failures);
+                }
+                return;
+            }
             Details::IssueChanged(d) => {
                 if let Some(repo) = &ev.repo {
                     let tracked = self.issues.entry(repo.clone()).or_default();

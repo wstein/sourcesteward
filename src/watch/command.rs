@@ -666,6 +666,12 @@ fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
 /// read a silent replacement of the open list.
 fn prepare_cycle(core: &mut Core, repos: &[String], force: bool, interval_secs: u64) {
     if force || core.baseline {
+        for activity in core.state.activity.values_mut() {
+            activity.baselined = false;
+        }
+        for workflows in core.state.workflows.values_mut() {
+            workflows.baselined = false;
+        }
         for issues in core.state.issues.values_mut() {
             issues.baselined = false;
         }

@@ -57,6 +57,12 @@ pub trait WatchRead {
     ) -> Result<WatchResponse, WatchError>;
     fn rate_limit(&self) -> Result<RateInfo, WatchError>;
     /// The Actions runs of a head, the stand-in when the token cannot read check runs. The default is "refused".
+    fn wiki_head(&self, _repo: &str) -> Result<String, WatchError> {
+        Err(WatchError::new(Code::Forbidden, "wiki read unavailable"))
+    }
+    fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+        Err(WatchError::new(Code::Forbidden, "Actions read unavailable"))
+    }
     fn actions_runs(&self, _repo: &str, _sha: &str) -> Result<Vec<WorkflowRun>, WatchError> {
         let mut e = WatchError::new(Code::Forbidden, "access was refused");
         e.status = 403;
@@ -116,6 +122,12 @@ impl WatchRead for WatchHttp {
     }
     fn rate_limit(&self) -> Result<RateInfo, WatchError> {
         WatchHttp::rate_limit(self)
+    }
+    fn wiki_head(&self, repo: &str) -> Result<String, WatchError> {
+        WatchHttp::wiki_head(self, repo)
+    }
+    fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        WatchHttp::recent_workflows(self, repo)
     }
     fn actions_runs(&self, repo: &str, sha: &str) -> Result<Vec<WorkflowRun>, WatchError> {
         let bad = || WatchError::new(Code::Malformed, "actions runs response is not usable");
@@ -347,8 +359,18 @@ fn run_of(v: &Value) -> Option<CheckRun> {
 /// A watcher over one reader. Not shared between threads: it keeps the class of the last check read of each PR, a
 /// rate-limit hold and the diagnostics of its cycles.
 pub struct HostObserver<R: WatchRead> {
-    issue_client: Option<crate::github::Client>,
+    graph: Option<crate::github::Client>,
+    issues: bool,
+    reviews: bool,
+    discussions: bool,
+    activity_refused: BTreeSet<(String, &'static str)>,
     issue_retry_at: i64,
+    workflows: bool,
+    wiki: bool,
+    wiki_retry_at: i64,
+    workflows_refused: BTreeSet<String>,
+    workflows_retry_at: i64,
+    issues_refused: BTreeSet<String>,
     r: R,
     now: Box<dyn Fn() -> i64 + Send>,
     max_open: usize,
@@ -373,8 +395,18 @@ impl<R: WatchRead> HostObserver<R> {
         ignore_labels: Vec<String>,
     ) -> HostObserver<R> {
         HostObserver {
-            issue_client: None,
+            graph: None,
+            issues: false,
+            reviews: false,
+            discussions: false,
+            activity_refused: BTreeSet::new(),
             issue_retry_at: 0,
+            workflows: false,
+            wiki: false,
+            wiki_retry_at: 0,
+            workflows_refused: BTreeSet::new(),
+            workflows_retry_at: 0,
+            issues_refused: BTreeSet::new(),
             r,
             now,
             max_open: if max_open < 1 {
@@ -391,8 +423,27 @@ impl<R: WatchRead> HostObserver<R> {
         }
     }
 
-    pub fn with_issues(mut self, client: crate::github::Client) -> Self {
-        self.issue_client = Some(client);
+    pub fn with_wiki(mut self, enabled: bool) -> Self {
+        self.wiki = enabled;
+        self
+    }
+
+    pub fn with_workflows(mut self, enabled: bool) -> Self {
+        self.workflows = enabled;
+        self
+    }
+
+    pub fn with_graph_sources(
+        mut self,
+        client: crate::github::Client,
+        issues: bool,
+        reviews: bool,
+        discussions: bool,
+    ) -> Self {
+        self.graph = Some(client);
+        self.issues = issues;
+        self.reviews = reviews;
+        self.discussions = discussions;
         self
     }
 
@@ -563,8 +614,35 @@ impl<R: WatchRead> HostObserver<R> {
         let bases: Vec<&str> = items.iter().map(|i| i.base_ref.as_str()).collect();
         cond.prune(&items);
         let issues = self.read_issues(repo);
+        let workflows = self.read_workflows(repo);
+        let mut activity = Vec::new();
+        if self.reviews {
+            let batches = prs.len().div_ceil(20).max(1);
+            let batch = hints.cycle as usize % batches;
+            for pr in prs.iter().skip(batch * 20).take(20) {
+                let query = format!("query($o:String!, $n:String!) {{repository(owner:$o,name:$n) {{pullRequest(number:{}) {{reviews(last:20) {{nodes {{id state submittedAt url comments(last:20) {{nodes {{id url createdAt}}}}}}}}}}}}}}", pr.number);
+                let scope = super::obs::ActivityScope::Reviews(pr.number);
+                if let Some(result) = self.read_activity(repo, "reviews", &query, |root| {
+                    parse_reviews(root, pr.number)
+                }) {
+                    activity.push((scope, result));
+                }
+            }
+        }
+        if self.discussions {
+            let query = "query($o:String!, $n:String!) {repository(owner:$o,name:$n) {hasDiscussionsEnabled discussions(first:50,orderBy:{field:UPDATED_AT,direction:DESC}) {nodes {id number title url updatedAt closed comments {totalCount}}}}}";
+            if let Some(result) = self.read_activity(repo, "discussions", query, parse_discussions)
+            {
+                activity.push((super::obs::ActivityScope::Discussions, result));
+            }
+        }
+        if let Some(result) = self.read_wiki(repo) {
+            activity.push((super::obs::ActivityScope::Wiki, result));
+        }
         Ok(RepoObservation {
             issues,
+            workflows,
+            activity,
             default_branch: guess_default_branch(&bases).to_string(),
             prs,
             gone,
@@ -572,9 +650,155 @@ impl<R: WatchRead> HostObserver<R> {
         })
     }
 
+    fn read_workflows(
+        &mut self,
+        repo: &str,
+    ) -> Option<Result<Vec<crate::watch::event::WorkflowCompleted>, String>> {
+        if !self.workflows
+            || self.workflows_refused.contains(repo)
+            || (self.now)() < self.workflows_retry_at
+        {
+            return None;
+        }
+        let res = match self.r.recent_workflows(repo) {
+            Ok(res) => res,
+            Err(e) => {
+                if matches!(e.status, 401 | 403 | 404) && e.code != Code::RateLimited {
+                    self.workflows_refused.insert(repo.into());
+                }
+                if e.code == Code::RateLimited {
+                    self.workflows_retry_at = e.rate_limited_until((self.now)());
+                }
+                return Some(Err(format!("workflows-{}", e.code.as_str())));
+            }
+        };
+        let parse = || -> Option<Vec<crate::watch::event::WorkflowCompleted>> {
+            let payload: Value = serde_json::from_slice(&res.body).ok()?;
+            let rows = payload["workflow_runs"].as_array()?;
+            let mut runs = Vec::new();
+            for row in rows {
+                if row["status"].as_str()? != "completed" {
+                    continue;
+                }
+                let text = |key: &str| row[key].as_str().map(str::to_owned);
+                let id = row["id"].as_u64().filter(|id| *id > 0)?;
+                runs.push(crate::watch::event::WorkflowCompleted {
+                    run_id: id,
+                    attempt: row["run_attempt"].as_u64().filter(|attempt| *attempt > 0)?,
+                    conclusion: text("conclusion")?,
+                    name: text("name")?,
+                    branch: text("head_branch").unwrap_or_default(),
+                    head: text("head_sha")?,
+                    trigger: text("event")?,
+                    url: format!("https://github.com/{repo}/actions/runs/{id}"),
+                });
+            }
+            Some(runs)
+        };
+        Some(parse().ok_or_else(|| "workflows-malformed-response".into()))
+    }
+
+    fn read_wiki(
+        &mut self,
+        repo: &str,
+    ) -> Option<Result<Vec<crate::watch::event::Activity>, String>> {
+        use crate::watch::event::{Activity, ActivityKind};
+        let key = (repo.to_owned(), "wiki");
+        if !self.wiki || self.activity_refused.contains(&key) || (self.now)() < self.wiki_retry_at {
+            return None;
+        }
+        match self.r.wiki_head(repo) {
+            Ok(head) => Some(Ok(vec![Activity {
+                kind: ActivityKind::Wiki,
+                id: "HEAD".into(),
+                summary: head.clone(),
+                version: head,
+                number: 0,
+                url: format!("https://github.com/{repo}/wiki"),
+            }])),
+            Err(e) => {
+                if matches!(e.status, 401 | 403 | 404) && e.code != Code::RateLimited {
+                    self.activity_refused.insert(key);
+                }
+                if e.code == Code::RateLimited {
+                    self.wiki_retry_at = e.rate_limited_until((self.now)());
+                }
+                Some(Err(format!("wiki-{}", e.code.as_str())))
+            }
+        }
+    }
+
+    fn read_activity(
+        &mut self,
+        repo: &str,
+        source: &'static str,
+        query: &str,
+        parse: impl FnOnce(&Value) -> Option<Vec<crate::watch::event::Activity>>,
+    ) -> Option<Result<Vec<crate::watch::event::Activity>, String>> {
+        let client = self.graph.as_ref()?;
+        let key = (repo.to_owned(), source);
+        if self.activity_refused.contains(&key) || (self.now)() < self.issue_retry_at {
+            return None;
+        }
+        let (owner, name) = repo.split_once('/')?;
+        let request = serde_json::json!({"query": query, "variables": {"o": owner, "n": name}});
+        client.reset_poll_rate_limit();
+        client.arm_deadline(std::time::Duration::from_secs(10));
+        let response = client.graphql(&request);
+        if client.rate_limited() {
+            self.hold_graph_reads();
+            return Some(Err(format!("{source}-rate-limited")));
+        }
+        let refusal = match &response {
+            Err(e) => graph_refusal(&e.to_string()),
+            Ok(v) => v["errors"].as_array().is_some_and(|errors| {
+                errors.iter().any(|err| {
+                    err["type"].as_str() == Some("FORBIDDEN")
+                        || err["message"].as_str().is_some_and(graph_refusal)
+                })
+            }),
+        };
+        if refusal {
+            self.activity_refused.insert(key);
+            return Some(Err(format!("{source}-read-refused")));
+        }
+        if source == "discussions"
+            && response.as_ref().ok().is_some_and(|v| {
+                v["data"]["repository"]["hasDiscussionsEnabled"].as_bool() == Some(false)
+            })
+        {
+            self.activity_refused.insert(key);
+            return Some(Err("discussions-disabled".into()));
+        }
+        let result = response.ok().and_then(|v| {
+            if v["errors"]
+                .as_array()
+                .is_some_and(|errors| !errors.is_empty())
+            {
+                return None;
+            }
+            parse(&v["data"]["repository"])
+        });
+        Some(result.ok_or_else(|| format!("{source}-read-incomplete")))
+    }
+
+    fn hold_graph_reads(&mut self) {
+        let now = (self.now)();
+        let reset = self
+            .graph
+            .as_ref()
+            .and_then(|client| client.stats().rate)
+            .filter(|rate| rate.remaining == 0)
+            .and_then(|rate| i64::try_from(rate.reset).ok());
+        self.issue_retry_at = reset.unwrap_or_default().max(now.saturating_add(60));
+    }
+
     fn read_issues(&mut self, repo: &str) -> Option<crate::issue_list::Listed> {
-        let client = self.issue_client.as_ref()?;
-        if (self.now)() < self.issue_retry_at {
+        if !self.issues {
+            return None;
+        }
+        let client = self.graph.as_ref()?;
+        if self.issues_refused.contains(repo) || (self.now)() < self.issue_retry_at {
             return None;
         }
         client.reset_poll_rate_limit();
@@ -585,14 +809,12 @@ impl<R: WatchRead> HostObserver<R> {
             })
             .pop()?;
         if client.rate_limited() {
-            let now = (self.now)();
-            let retry_at = client
-                .stats()
-                .rate
-                .filter(|rate| rate.remaining == 0)
-                .and_then(|rate| i64::try_from(rate.reset).ok());
-            self.issue_retry_at = retry_at.unwrap_or_default().max(now.saturating_add(60));
+            self.hold_graph_reads();
             listed.coverage = "incomplete";
+        } else if listed.coverage != "complete"
+            && listed.error.as_deref().is_some_and(graph_refusal)
+        {
+            self.issues_refused.insert(repo.into());
         }
         Some(listed)
     }
@@ -938,4 +1160,70 @@ impl<R: WatchRead> HostObserver<R> {
             same: false,
         })
     }
+}
+
+fn graph_refusal(error: &str) -> bool {
+    let lower = error.to_ascii_lowercase();
+    [
+        "http 401",
+        "http 403",
+        "http 404",
+        "forbidden",
+        "not accessible",
+        "permission",
+    ]
+    .iter()
+    .any(|reason| lower.contains(reason))
+}
+
+fn parse_reviews(root: &Value, number: u64) -> Option<Vec<crate::watch::event::Activity>> {
+    use crate::watch::event::{Activity, ActivityKind};
+    let mut changes = Vec::new();
+    for row in root["pullRequest"]["reviews"]["nodes"].as_array()? {
+        let Some(submitted) = row["submittedAt"].as_str() else {
+            continue;
+        };
+        changes.push(Activity {
+            kind: ActivityKind::Review,
+            id: row["id"].as_str()?.into(),
+            version: row["state"].as_str()?.into(),
+            number,
+            url: row["url"].as_str()?.into(),
+            summary: format!("{} at {submitted}", row["state"].as_str()?),
+        });
+        for comment in row["comments"]["nodes"].as_array()? {
+            changes.push(Activity {
+                kind: ActivityKind::ReviewComment,
+                id: comment["id"].as_str()?.into(),
+                version: comment["createdAt"].as_str()?.into(),
+                number,
+                url: comment["url"].as_str()?.into(),
+                summary: String::new(),
+            });
+        }
+    }
+    Some(changes)
+}
+
+fn parse_discussions(root: &Value) -> Option<Vec<crate::watch::event::Activity>> {
+    use crate::watch::event::{Activity, ActivityKind};
+    root["discussions"]["nodes"]
+        .as_array()?
+        .iter()
+        .map(|row| {
+            Some(Activity {
+                kind: ActivityKind::Discussion,
+                id: row["id"].as_str()?.into(),
+                version: format!(
+                    "{}:{}:{}",
+                    row["comments"]["totalCount"].as_u64()?,
+                    row["closed"].as_bool()?,
+                    row["updatedAt"].as_str()?
+                ),
+                number: row["number"].as_u64()?,
+                url: row["url"].as_str()?.into(),
+                summary: row["title"].as_str()?.into(),
+            })
+        })
+        .collect()
 }

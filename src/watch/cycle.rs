@@ -97,10 +97,187 @@ pub fn advance_seen(
                 rs.last_ok = now.clone();
             }
         }
+        if obs
+            .issues
+            .as_ref()
+            .is_some_and(|issues| issues.coverage != "complete")
+        {
+            note_source_error(
+                state,
+                &item.repo,
+                "issues-read-incomplete",
+                &now,
+                &mut events,
+            );
+        }
         note_issues(state, &item.repo, obs.issues.as_ref(), &now, &mut events);
+        note_workflows(state, &item.repo, obs, &now, &mut events);
+        note_activity(state, &item.repo, obs, &now, &mut events);
         remember_cond(state, &item.repo, obs.cond.as_ref());
     }
     events
+}
+
+fn note_source_error(
+    state: &mut State,
+    repo: &str,
+    code: &str,
+    now: &str,
+    events: &mut Vec<Event>,
+) {
+    let failures = state
+        .source_errors
+        .get(&format!("{repo}:{code}"))
+        .copied()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let event = Event::new(
+        event_id(
+            Some(repo),
+            None,
+            super::event::Kind::WatchError,
+            &format!("source:{code}:{failures}"),
+        ),
+        now.to_owned(),
+        Some(repo.to_owned()),
+        None,
+        Details::WatchError(WatchError {
+            code: code.to_owned(),
+            message: code.to_owned(),
+            failures,
+            retry_in_seconds: 0,
+            repo: Some(repo.to_owned()),
+        }),
+    );
+    state.apply(&event);
+    events.push(event);
+}
+
+fn note_workflows(
+    state: &mut State,
+    repo: &str,
+    obs: &RepoObservation,
+    now: &str,
+    events: &mut Vec<Event>,
+) {
+    use super::event::Kind;
+    let Some(result) = &obs.workflows else {
+        return;
+    };
+    let runs = match result {
+        Ok(runs) => runs,
+        Err(code) => return note_source_error(state, repo, code, now, events),
+    };
+    let snapshot = state.workflows.entry(repo.to_owned()).or_default();
+    for run in runs.iter().rev() {
+        if !snapshot.seen.insert((run.run_id, run.attempt)) || !snapshot.baselined {
+            continue;
+        }
+        let reported_by_pr_checks = obs.prs.iter().any(|pr| {
+            pr.head == run.head
+                && match run.trigger.as_str() {
+                    "pull_request" | "pull_request_target" => true,
+                    "push" => pr.head_ref == run.branch && !pr.fork,
+                    _ => false,
+                }
+        });
+        if reported_by_pr_checks {
+            continue;
+        }
+        events.push(Event::new(
+            event_id(
+                Some(repo),
+                None,
+                Kind::WorkflowCompleted,
+                &format!("{}:{}", run.run_id, run.attempt),
+            ),
+            now.to_owned(),
+            Some(repo.to_owned()),
+            None,
+            Details::WorkflowCompleted(run.clone()),
+        ));
+    }
+    snapshot.baselined = true;
+    while snapshot.seen.len() > 1_000 {
+        snapshot.seen.pop_first();
+    }
+}
+
+fn note_activity(
+    state: &mut State,
+    repo: &str,
+    obs: &RepoObservation,
+    now: &str,
+    events: &mut Vec<Event>,
+) {
+    use super::event::{ActivityChange, ActivityKind, IssueChange};
+    use crate::watch_reader::obs::ActivityScope;
+
+    for (scope, result) in &obs.activity {
+        let records = match result {
+            Ok(records) => records,
+            Err(code) => {
+                note_source_error(state, repo, code, now, events);
+                continue;
+            }
+        };
+        let key = match scope {
+            ActivityScope::Reviews(number) => format!("{repo}:reviews:{number}"),
+            ActivityScope::Discussions => format!("{repo}:discussions"),
+            ActivityScope::Wiki => format!("{repo}:wiki"),
+        };
+        let tracked = state.activity.entry(key).or_default();
+        let mut versions = std::collections::BTreeMap::new();
+        for record in records {
+            versions.insert(record.id.clone(), record.version.clone());
+            if !tracked.baselined || tracked.versions.get(&record.id) == Some(&record.version) {
+                continue;
+            }
+            tracked.epoch = tracked.epoch.saturating_add(1);
+            let discussion_change = (record.kind == ActivityKind::Discussion).then(|| {
+                let fields = |version: &str| -> Option<(u64, bool)> {
+                    let mut parts = version.splitn(3, ':');
+                    Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+                };
+                match tracked.versions.get(&record.id) {
+                    None => IssueChange::Opened,
+                    Some(old) => match fields(old).zip(fields(&record.version)) {
+                        Some(((_, false), (_, true))) => IssueChange::Closed,
+                        Some(((_, true), (_, false))) => IssueChange::Opened,
+                        Some(((old, _), (new, _))) if new > old => IssueChange::CommentAdded,
+                        _ => IssueChange::Updated,
+                    },
+                }
+            });
+            let change = ActivityChange {
+                record: record.clone(),
+                epoch: tracked.epoch,
+                discussion_change,
+            };
+            let (pr, details) = match record.kind {
+                ActivityKind::Review => (Some(record.number), Details::ReviewStateChanged(change)),
+                ActivityKind::ReviewComment => {
+                    (Some(record.number), Details::ReviewCommentAdded(change))
+                }
+                ActivityKind::Discussion => (None, Details::DiscussionChanged(change)),
+                ActivityKind::Wiki => (None, Details::WikiChanged(change)),
+            };
+            events.push(Event::new(
+                event_id(
+                    Some(repo),
+                    pr,
+                    details.kind(),
+                    &format!("a{}", tracked.epoch),
+                ),
+                now.to_owned(),
+                Some(repo.to_owned()),
+                pr,
+                details,
+            ));
+        }
+        tracked.baselined = true;
+        tracked.versions = versions;
+    }
 }
 
 fn note_issues(
@@ -134,6 +311,20 @@ fn note_issues(
         .iter()
         .filter_map(|(number, issue)| match tracked.open.get(number) {
             None => Some((IssueChange::Opened, issue)),
+            Some(old)
+                if old
+                    .comment_count
+                    .zip(issue.comment_count)
+                    .is_some_and(|(old, count)| count > old)
+                    || old
+                        .latest_comment
+                        .as_ref()
+                        .zip(issue.latest_comment.as_ref())
+                        .is_some_and(|(old, new)| old != new)
+                        && old.comment_count == issue.comment_count =>
+            {
+                Some((IssueChange::CommentAdded, issue))
+            }
             Some(old) if old != issue => Some((IssueChange::Updated, issue)),
             Some(_) => None,
         })
@@ -708,6 +899,25 @@ fn diff_events(state: &State, repo: &str, prs: &[OpenPr], now: &str) -> Vec<Even
             Some(prev) => {
                 if prev.head != pr.head {
                     events.push(head_event(repo, prev, pr, now));
+                }
+                if prev.base != pr.base {
+                    use super::event::{BaseChanged, Kind};
+                    let epoch = prev.epochs.base.saturating_add(1);
+                    events.push(Event::new(
+                        event_id(
+                            Some(repo),
+                            Some(pr.number),
+                            Kind::BaseChanged,
+                            &super::event::key_base(epoch),
+                        ),
+                        now.to_owned(),
+                        Some(repo.to_owned()),
+                        Some(pr.number),
+                        Details::BaseChanged(BaseChanged {
+                            old: prev.base.clone(),
+                            new: pr.base.clone(),
+                        }),
+                    ));
                 }
                 if prev.draft != pr.draft {
                     events.push(ready_event(repo, prev, pr, now));

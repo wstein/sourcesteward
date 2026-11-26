@@ -38,6 +38,11 @@ pub struct KnownPr {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RepoObservation {
     pub issues: Option<crate::issue_list::Listed>,
+    pub activity: Vec<(
+        ActivityScope,
+        Result<Vec<crate::watch::event::Activity>, String>,
+    )>,
+    pub workflows: Option<Result<Vec<crate::watch::event::WorkflowCompleted>, String>>,
     pub default_branch: String,
     /// The complete open list.
     pub prs: Vec<PrObs>,
@@ -45,6 +50,13 @@ pub struct RepoObservation {
     pub gone: BTreeMap<u64, GoneObs>,
     /// The replacement store of validators; the caller keeps it for the next cycle.
     pub cond: Option<CondStore>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActivityScope {
+    Reviews(u64),
+    Discussions,
+    Wiki,
 }
 
 /// One open PR. `detail` and `checks` are `None` when this cycle did not read them: the accepted values are kept.

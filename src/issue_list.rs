@@ -20,6 +20,10 @@ pub struct Issue {
     pub title: String,
     pub url: String,
     pub updated_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub comment_count: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest_comment: Option<String>,
     pub labels: Vec<String>,
     pub assignees: Vec<String>,
 }
@@ -126,6 +130,12 @@ fn parse_issue(node: &Value, listed: &mut Listed) -> Option<Pending> {
             title: title.to_owned(),
             url: url.to_owned(),
             updated_at: updated_at.to_owned(),
+            comment_count: node["comments"]["totalCount"].as_u64(),
+            latest_comment: node["comments"]["nodes"]
+                .as_array()
+                .and_then(|nodes| nodes.last())
+                .and_then(|comment| comment["id"].as_str())
+                .map(str::to_owned),
             labels,
             assignees,
         },
@@ -162,7 +172,7 @@ fn issue_query(repos: &[String], cursors: &[Option<String>], page: usize) -> (St
             .map(Value::String)
             .unwrap_or(Value::Null);
         fields.push(format!(
-            "r{i}: repository(owner: $o{i}, name: $n{i}) {{ id issues(first: {page}, after: $c{i}, states: [OPEN], orderBy: {{field: CREATED_AT, direction: ASC}}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ id number title url updatedAt labels(first: {page}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ name }} }} assignees(first: {page}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ login }} }} }} }} }}"
+            "r{i}: repository(owner: $o{i}, name: $n{i}) {{ id issues(first: {page}, after: $c{i}, states: [OPEN], orderBy: {{field: CREATED_AT, direction: ASC}}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ id number title url updatedAt comments(last: 1) {{ totalCount nodes {{ id }} }} labels(first: {page}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ name }} }} assignees(first: {page}) {{ pageInfo {{ hasNextPage endCursor }} nodes {{ login }} }} }} }} }}"
         ));
     }
     (

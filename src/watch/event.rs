@@ -17,7 +17,7 @@ pub const MAX_ERROR_MESSAGE: usize = 512;
 /// Longest text of any other free-text detail in bytes (after masking).
 pub const MAX_DETAIL_TEXT: usize = 2048;
 
-/// The closed v1 enum of event kinds. `review-state-changed` is reserved and never emitted, so it is not a kind.
+/// The closed v1 enum of event kinds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Kind {
     NewPr,
@@ -36,10 +36,15 @@ pub enum Kind {
     WatchRecovered,
     WatchStalled,
     IssueChanged,
+    WorkflowCompleted,
+    ReviewStateChanged,
+    ReviewCommentAdded,
+    DiscussionChanged,
+    WikiChanged,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 16] = [
+    pub const ALL: [Kind; 21] = [
         Kind::NewPr,
         Kind::HeadChanged,
         Kind::ChecksGreen,
@@ -56,6 +61,11 @@ impl Kind {
         Kind::WatchRecovered,
         Kind::WatchStalled,
         Kind::IssueChanged,
+        Kind::WorkflowCompleted,
+        Kind::ReviewStateChanged,
+        Kind::ReviewCommentAdded,
+        Kind::DiscussionChanged,
+        Kind::WikiChanged,
     ];
 
     /// The wire name (`new-pr`, `checks-pending-timeout`, ...).
@@ -77,10 +87,15 @@ impl Kind {
             Kind::WatchRecovered => "watch-recovered",
             Kind::WatchStalled => "watch-stalled",
             Kind::IssueChanged => "issue-changed",
+            Kind::WorkflowCompleted => "workflow-completed",
+            Kind::ReviewStateChanged => "review-state-changed",
+            Kind::ReviewCommentAdded => "review-comment-added",
+            Kind::DiscussionChanged => "discussion-changed",
+            Kind::WikiChanged => "wiki-changed",
         }
     }
 
-    /// The kind of a wire name; `None` for an unknown name (also for the reserved `review-state-changed`).
+    /// The kind of a wire name; `None` for an unknown name.
     pub fn parse(name: &str) -> Option<Kind> {
         Kind::ALL.into_iter().find(|k| k.as_str() == name)
     }
@@ -245,6 +260,7 @@ pub struct WatchStalled {
 pub enum IssueChange {
     Opened,
     Updated,
+    CommentAdded,
     Closed,
 }
 
@@ -254,6 +270,48 @@ pub struct IssueChanged {
     pub change: IssueChange,
     pub epoch: u64,
     pub issue: crate::issue_list::Issue,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkflowCompleted {
+    pub run_id: u64,
+    pub attempt: u64,
+    pub name: String,
+    pub conclusion: String,
+    pub branch: String,
+    pub head: String,
+    pub trigger: String,
+    pub url: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ActivityKind {
+    Review,
+    ReviewComment,
+    Discussion,
+    Wiki,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Activity {
+    pub kind: ActivityKind,
+    pub id: String,
+    pub version: String,
+    pub number: u64,
+    pub url: String,
+    pub summary: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ActivityChange {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discussion_change: Option<IssueChange>,
+    pub record: Activity,
+    pub epoch: u64,
 }
 
 /// The details of an event; the variant is the kind.
@@ -276,6 +334,11 @@ pub enum Details {
     WatchRecovered(WatchRecovered),
     WatchStalled(WatchStalled),
     IssueChanged(IssueChanged),
+    WorkflowCompleted(WorkflowCompleted),
+    ReviewStateChanged(ActivityChange),
+    ReviewCommentAdded(ActivityChange),
+    DiscussionChanged(ActivityChange),
+    WikiChanged(ActivityChange),
 }
 
 impl Details {
@@ -297,6 +360,11 @@ impl Details {
             Details::WatchRecovered(_) => Kind::WatchRecovered,
             Details::WatchStalled(_) => Kind::WatchStalled,
             Details::IssueChanged(_) => Kind::IssueChanged,
+            Details::WorkflowCompleted(_) => Kind::WorkflowCompleted,
+            Details::ReviewStateChanged(_) => Kind::ReviewStateChanged,
+            Details::ReviewCommentAdded(_) => Kind::ReviewCommentAdded,
+            Details::DiscussionChanged(_) => Kind::DiscussionChanged,
+            Details::WikiChanged(_) => Kind::WikiChanged,
         }
     }
 
@@ -323,6 +391,11 @@ impl Details {
             Kind::WatchRecovered => Details::WatchRecovered(d(json)?),
             Kind::WatchStalled => Details::WatchStalled(d(json)?),
             Kind::IssueChanged => Details::IssueChanged(d(json)?),
+            Kind::WorkflowCompleted => Details::WorkflowCompleted(d(json)?),
+            Kind::ReviewStateChanged => Details::ReviewStateChanged(d(json)?),
+            Kind::ReviewCommentAdded => Details::ReviewCommentAdded(d(json)?),
+            Kind::DiscussionChanged => Details::DiscussionChanged(d(json)?),
+            Kind::WikiChanged => Details::WikiChanged(d(json)?),
         })
     }
 }

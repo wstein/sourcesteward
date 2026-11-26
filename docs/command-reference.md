@@ -5,6 +5,10 @@ Generated from the Rust CLI by `stw dev command-reference`.
 ## `stw`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 SourceSteward: where am I, what can go, what is behind, across every repository of a workspace
 
 Usage: stw <COMMAND>
@@ -22,7 +26,7 @@ Commands:
   oplog        The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
   workspace    Save and resume a local task checkpoint
   inspect      Inspect published PR changes or compare local revisions without checking them out
-  watch        Watch open pull requests and print transitions (read-only)
+  watch        Watch GitHub activity and print transitions (read-only)
   lint         Check work products against the working rules (read-only)
   help         Print this message or the help of the given subcommand(s)
 
@@ -1551,11 +1555,23 @@ Options:
 ## `stw watch`
 
 ```text
-Watch open pull requests and print transitions (read-only)
+Watch GitHub activity and print transitions (read-only)
 
 Usage: stw watch [OPTIONS]
 
 Options:
+      --wiki
+          Watch GitHub wiki Git head updates
+
+      --reviews
+          Watch submitted PR reviews and inline review comments
+
+      --discussions
+          Watch new and updated GitHub discussions
+
+      --workflows
+          Emit workflow-completed for Actions runs outside open PR head checks
+
       --issues
           Watch open issues and emit issue-changed for opens, updates and closures
 
@@ -1615,6 +1631,19 @@ Options:
 
   -h, --help
           Print help
+
+Event kinds emitted by the watcher:
+  PRs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
+  PR checks: checks-green, checks-red, checks-pending-timeout
+  Mergeability: mergeable-changed, restack-needed
+  Health: watch-error, watch-recovered
+  --workflows: workflow-completed
+  --issues: issue-changed
+  --reviews: review-state-changed, review-comment-added
+  --discussions: discussion-changed
+  --wiki: wiki-changed
+
+See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md
 ```
 
 ## `stw lint`

@@ -173,11 +173,34 @@ unsupported. Polling has no jitter.
 Add `--issues` to watch GitHub issues alongside pull requests. The first
 complete open-issue snapshot per repository is silent. Later complete
 snapshots emit `issue-changed` with `details.change` set to `opened`,
-`updated`, or `closed`. A reopened issue reappears as `opened`. The
+`updated`, `comment-added`, or `closed`. A reopened issue reappears as `opened`. The
 `details.issue` object contains the issue number, title, URL, update time,
 labels and assignees. The event envelope has `pr: null`. An incomplete
-read keeps the last complete snapshot and prints a diagnostic to stderr.
+read keeps the last complete snapshot and emits `watch-error`.
 Issue tracking compares snapshots and does not replay actions between polls.
+
+A PR retarget emits `base-changed` even when the head SHA stays the same.
+
+- `--workflows` reads the latest 100 GitHub Actions runs and emits
+  `workflow-completed` once per completed run attempt, with its conclusion,
+  branch, SHA and URL. Checks associated with open PR heads continue to
+  use the existing PR check events. Scheduled and manually dispatched runs
+  are reported separately.
+- `--reviews` reads recent submitted reviews and their inline comments
+  for tracked open PRs. It emits `review-state-changed` and
+  `review-comment-added`. These reflect GitHub review activity.
+- `--discussions` reads the 50 most recently updated discussions and
+  emits `discussion-changed`. The `discussion_change` field distinguishes
+  openings, updates, closures and a rising comment count.
+- `--wiki` reads the GitHub wiki's advertised Git HEAD and emits
+  `wiki-changed` when that SHA changes. It reads no wiki page content.
+
+Each optional source starts with a silent baseline. An API refusal emits
+`watch-error` for that source. Known access refusals stop further reads
+of the affected source for that repository until the watcher restarts.
+GitHub does not expose a reliable per-endpoint token permission probe, so
+the first read establishes access. Rate-limit responses pause reads
+without discarding the last accepted state.
 
 Use `stw watch --stream --interval 10s -v` to see the watched repositories,
 state directory, each poll's outcome and the next wait on stderr. Use

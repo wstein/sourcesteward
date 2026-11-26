@@ -128,6 +128,24 @@ pub(super) fn render(event: &Event) -> String {
             d.retry_in_seconds
         ),
         Details::WatchRecovered(d) => format!("after {} failures", d.after_failures),
+        Details::ReviewStateChanged(d)
+        | Details::ReviewCommentAdded(d)
+        | Details::DiscussionChanged(d) => {
+            format!(
+                "#{} {} ({})",
+                d.record.number,
+                esc(&d.record.summary),
+                esc(&d.record.url)
+            )
+        }
+        Details::WikiChanged(d) => format!("{} ({})", esc(&d.record.summary), esc(&d.record.url)),
+        Details::WorkflowCompleted(d) => format!(
+            "{} {} on {} ({})",
+            esc(&d.name),
+            esc(&d.conclusion),
+            esc(&d.branch),
+            esc(&d.url)
+        ),
         Details::IssueChanged(d) => format!(
             "issue #{} {:?} {}",
             d.issue.number,

@@ -168,7 +168,7 @@ fn cases(name: &str) -> Vec<Value> {
 
 #[test]
 fn event_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
-    assert_eq!(Kind::ALL.len(), 16);
+    assert_eq!(Kind::ALL.len(), 21);
     let names: Vec<&str> = Kind::ALL.iter().map(|k| k.as_str()).collect();
     assert_eq!(
         names,
@@ -188,13 +188,21 @@ fn event_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
             "watch-error",
             "watch-recovered",
             "watch-stalled",
-            "issue-changed"
+            "issue-changed",
+            "workflow-completed",
+            "review-state-changed",
+            "review-comment-added",
+            "discussion-changed",
+            "wiki-changed"
         ]
     );
     for k in Kind::ALL {
         assert_eq!(Kind::parse(k.as_str()), Some(k));
     }
-    assert_eq!(Kind::parse("review-state-changed"), None);
+    assert_eq!(
+        Kind::parse("review-state-changed"),
+        Some(Kind::ReviewStateChanged)
+    );
     assert_eq!(Kind::parse(""), None);
 }
 
@@ -2565,6 +2573,11 @@ fn key_of(ev: &Event) -> String {
         }
         Details::WatchStalled(_) => key_stall(c('s')),
         Details::IssueChanged(d) => format!("{}:i{}", d.issue.number, d.epoch),
+        Details::WorkflowCompleted(d) => format!("{}:{}", d.run_id, d.attempt),
+        Details::ReviewStateChanged(d)
+        | Details::ReviewCommentAdded(d)
+        | Details::DiscussionChanged(d)
+        | Details::WikiChanged(d) => format!("a{}", d.epoch),
     }
 }
 
