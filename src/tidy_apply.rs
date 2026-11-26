@@ -973,7 +973,7 @@ fn restore_one(e: &ManifestEntry, run: &str) -> (&'static str, String) {
             ),
         );
     }
-    match repo.reference(
+    let result = match repo.reference(
         full.as_str(),
         sha,
         PreviousValue::MustNotExist,
@@ -991,7 +991,8 @@ fn restore_one(e: &ManifestEntry, run: &str) -> (&'static str, String) {
             ("restored", format!("created at {}", short(&e.sha)))
         }
         Err(err) => ("failed", err.to_string()),
-    }
+    };
+    result
 }
 
 pub fn restore_to_json(r: &RestoreRun) -> Value {

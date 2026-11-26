@@ -2,7 +2,7 @@
 name = "stw"
 version = "0.5.0"
 edition = "2021"
-rust-version = "1.89"
+rust-version = "1.95"
 description = "SourceSteward: everyday git and GitHub workflows for agents, on gitoxide, without git or gh binaries"
 license = "EUPL-1.2"
 publish = false
@@ -16,7 +16,7 @@ tempfile = "3"
 # derive only; no color, no env/unicode/wrap_help extras (binary size)
 clap = { version = "4", default-features = false, features = ["std", "derive", "help", "usage", "error-context", "suggestions"] }
 # Pinned exactly: gix has no API stability promise before 1.0.
-gix = { version = "=0.90.0", default-features = false, features = [
+gix = { version = "=0.91.0", default-features = false, features = [
     "sha1", "parallel", "blob-diff", "merge", "revision", "index", "status", "dirwalk",
     "worktree-mutation", "attributes", "excludes",
     "blocking-network-client", "blocking-http-transport-reqwest-rust-tls",
@@ -27,7 +27,7 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154", features = ["preserve_order", "raw_value"] }
 # Blocking, no async runtime; GitHub needs five GET endpoints only.
 ureq = { version = "3", features = ["json", "platform-verifier"] }
-base64 = "0.22"
+base64 = "0.23.1"
 # kill(2) on the process group of a timed-out git (std has no group kill); already in the lock file via gix/ureq.
 libc = "0.2"
 

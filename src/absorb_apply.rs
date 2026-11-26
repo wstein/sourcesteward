@@ -103,7 +103,7 @@ pub fn apply(
         &index_path,
         gix::lock::acquire::Fail::Immediately,
         None,
-        0,
+        Default::default(),
     )
     .map_err(|e| fail("index-lock", format!("could not lock the index: {e}")))?;
     let index_before = index_bytes(&index_path)?;

@@ -92,7 +92,7 @@ pub fn apply(root: &Path, saved: &Plan, message: &str) -> Result<Applied> {
         &index_path,
         gix::lock::acquire::Fail::Immediately,
         None,
-        0,
+        Default::default(),
     )
     .map_err(|e| Error::repository(format!("could not lock the index: {e}")))?;
     let paths: Vec<_> = saved

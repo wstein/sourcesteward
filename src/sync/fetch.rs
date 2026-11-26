@@ -310,7 +310,7 @@ pub fn offer_credentials(
         return Ok(None);
     }
     Ok(Some(Outcome {
-        identity: gix::sec::identity::Account {
+        credentials: gix::sec::identity::Credentials::UsernamePassword {
             username: user.to_string(),
             password: pass.to_string(),
             oauth_refresh_token: None,

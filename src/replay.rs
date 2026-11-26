@@ -367,11 +367,53 @@ fn replay_commit_impl(
         for conflict in outcome.conflicts.iter().filter(|c| c.is_unresolved(how)) {
             let (a, b) = conflict.changes_in_resolution();
             let kind = kind_of(conflict);
-            for path in [a.location(), b.location()] {
-                let entry = Conflict {
-                    path: path.to_owned(),
-                    kind,
-                };
+            let mut paths = vec![a.location().to_owned(), b.location().to_owned()];
+            if matches!(
+                conflict.resolution,
+                Err(ResolutionFailure::DirectoryRename { .. })
+            ) {
+                // gix also includes the renamed directory as context. Report the affected file.
+                let [a, b] = [a.location(), b.location()];
+                if below(a, b) {
+                    paths = vec![a.to_owned()];
+                } else if below(b, a) {
+                    paths = vec![b.to_owned()];
+                }
+            }
+            if kind == "file/directory" {
+                // gix 0.91 reports the blocked prefix. Include changed files beneath it,
+                // as in the existing replay diagnostics.
+                let base = repo.find_tree(base_tree).map_err(git_err)?;
+                let mut descendants = Vec::new();
+                for side in [new_tree, own_tree] {
+                    let side = repo.find_tree(side).map_err(git_err)?;
+                    let changes = repo
+                        .diff_tree_to_tree(
+                            &base,
+                            &side,
+                            gix::diff::Options::default().with_rewrites(None),
+                        )
+                        .map_err(git_err)?;
+                    for change in changes {
+                        use gix::diff::tree_with_rewrites::Change;
+                        if let Change::Addition {
+                            location,
+                            entry_mode,
+                            ..
+                        } = change
+                        {
+                            if !entry_mode.is_tree()
+                                && paths.iter().any(|prefix| below(&location, prefix))
+                            {
+                                descendants.push(location);
+                            }
+                        }
+                    }
+                }
+                paths.extend(descendants);
+            }
+            for path in paths {
+                let entry = Conflict { path, kind };
                 if !conflicts.contains(&entry) {
                     conflicts.push(entry);
                 }
@@ -380,14 +422,8 @@ fn replay_commit_impl(
         conflicts.sort_by(|a, b| a.path.cmp(&b.path));
         let mut stages = std::collections::BTreeMap::<BString, [Option<ConflictStage>; 3]>::new();
         if capture_stages {
-            // The merged tree and its temporary index exist only in the replay sandbox.
-            let tree = outcome.tree.write().map_err(git_err)?.detach();
-            let mut index = repo.index_from_tree(&tree).map_err(git_err)?;
-            outcome.index_changed_after_applying_conflicts(
-                &mut index,
-                how,
-                gix::merge::plumbing::tree::apply_index_entries::RemovalMode::Prune,
-            );
+            // The merge plan builds a temporary index without writing it to disk.
+            let index = outcome.index(how, None).map_err(git_err)?;
             for entry in index.entries() {
                 let stage = entry.stage_raw() as usize;
                 if stage != 0 {
@@ -407,8 +443,7 @@ fn replay_commit_impl(
             conflict_stages: stages.into_iter().collect(),
         });
     }
-    // gix has no directory renames: a file the commit adds to a directory that onto renamed would bring the old
-    // directory back. Git reports a conflict there, so does the engine.
+    // Keep the conservative directory-move check for additions the merge engine did not flag.
     let conflicts = directory_rename_conflicts(repo, base_tree, own_tree, new_tree)?;
     if !conflicts.is_empty() {
         let mut conflict_stages = Vec::new();
@@ -542,6 +577,10 @@ fn one_way(
     Ok(out)
 }
 
+fn below(path: &[u8], directory: &[u8]) -> bool {
+    path.starts_with(directory) && path.get(directory.len()) == Some(&b'/')
+}
+
 fn kind_of(c: &gix::merge::plumbing::tree::Conflict) -> &'static str {
     use gix::diff::tree_with_rewrites::Change;
     let failure = c.resolution.as_ref().err();
@@ -561,6 +600,14 @@ fn kind_of(c: &gix::merge::plumbing::tree::Conflict) -> &'static str {
             | ResolutionFailure::OursAddedTheirsAddedTypeMismatch { .. }
             | ResolutionFailure::OursModifiedTheirsRenamedTypeMismatch,
         ) => return "file/directory",
+        Some(ResolutionFailure::ModeConflict { .. }) => return "mode",
+        Some(
+            ResolutionFailure::DirectoryRename { .. }
+            | ResolutionFailure::DirectoryRenameSplit { .. }
+            | ResolutionFailure::DirectoryRenameBlocked { .. }
+            | ResolutionFailure::DirectoryRenameCollision { .. },
+        ) => return "directory-rename",
+        Some(ResolutionFailure::DistinctTypes { .. }) => return "file/directory",
         Some(ResolutionFailure::Unknown) => return "unknown",
         None => {}
     }

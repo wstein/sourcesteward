@@ -75,7 +75,7 @@ fn fetch_and_fast_forward_a_clone_that_was_rewound_one_commit() {
         opts,
     )
     .unwrap();
-    index.write(Default::default()).unwrap();
+    index.write(Default::default(), Default::default()).unwrap();
     drop(repo);
 
     // an offline plan changes nothing and knows only the rewound tracking ref

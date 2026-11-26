@@ -355,7 +355,7 @@ pub fn fast_forward_with(
         repo.index_path(),
         gix::lock::acquire::Fail::Immediately,
         None,
-        0,
+        Default::default(),
     )
     .map_err(|e| FfError::Other(format!("index lock {}: {e}", repo.index_path().display())))?;
     // 4b. the caller's record of the change, before the first write

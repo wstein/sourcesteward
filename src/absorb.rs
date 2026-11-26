@@ -455,6 +455,7 @@ impl Planner<'_> {
             return fail("detached-head", "HEAD is not on a branch");
         };
         self.ref_name = name.as_bstr().to_vec();
+        drop(head);
         self.head = self.rd("reading HEAD", self.repo.head_id())?.detach();
         self.ident = self.identity()?;
         if let Some(rev) = &self.opts.base {

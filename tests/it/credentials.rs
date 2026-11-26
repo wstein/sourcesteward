@@ -5,7 +5,14 @@ use stw::sync::fetch::offer_credentials;
 fn ask(url: &str) -> Option<(String, String)> {
     let answer = offer_credentials(Action::get_for_url(url), "x-access-token", "TOKEN-VALUE")
         .unwrap_or_else(|_| panic!("callback failed for {url}"));
-    answer.map(|o| (o.identity.username, o.identity.password))
+    answer.map(|o| match o.credentials {
+        gix::sec::identity::Credentials::UsernamePassword {
+            username, password, ..
+        } => (username, password),
+        gix::sec::identity::Credentials::Encoded { .. } => {
+            panic!("expected username/password credentials")
+        }
+    })
 }
 
 #[test]

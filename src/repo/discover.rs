@@ -32,7 +32,7 @@ fn discover_with(dir: &Path, ceilings: &[PathBuf], safe: &[String]) -> Option<gi
         match_ceiling_dir_or_error: false,
         ..Default::default()
     };
-    let repo = gix::ThreadSafeRepository::discover_opts(dir, options, Default::default())
+    let repo = gix::ThreadSafeRepository::discover_opts(dir, options, |open, _trust| open)
         .ok()?
         .to_thread_local();
     let tree = repo

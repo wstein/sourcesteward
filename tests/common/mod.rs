@@ -287,7 +287,7 @@ impl Fx {
             opts,
         )
         .unwrap();
-        index.write(Default::default()).unwrap();
+        index.write(Default::default(), Default::default()).unwrap();
     }
 
     /// Write a file. Writing `.gitmodules` also stages a gitlink for each `path =` it names (a fixture's
@@ -358,7 +358,7 @@ impl Fx {
         );
         index.sort_entries();
         index.remove_tree();
-        index.write(Default::default()).unwrap();
+        index.write(Default::default(), Default::default()).unwrap();
     }
 }
 
@@ -402,7 +402,7 @@ pub fn real_worktree_at(fx: &Fx, id: &str, branch: &str, wt: &Path) -> PathBuf {
         opts,
     )
     .unwrap();
-    index.write(Default::default()).unwrap();
+    index.write(Default::default(), Default::default()).unwrap();
     wt
 }
 
@@ -772,7 +772,7 @@ pub fn stage_gitlinks_in(dir: &Path, rels: &[&str], sort: bool) {
         index.sort_entries();
     }
     index.remove_tree();
-    index.write(Default::default()).unwrap();
+    index.write(Default::default(), Default::default()).unwrap();
 }
 
 /// The head of the default branch in the fixtures of `stw status` that serve the CI documents.
