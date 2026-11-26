@@ -1186,12 +1186,12 @@ impl WatchRead for FakeReader {
         Ok(response)
     }
 
-    fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+    fn recent_workflows(&self, _repo: &str) -> Result<Vec<WatchResponse>, WatchError> {
         self.note("workflows".into(), "")?;
-        Ok(Self::ok(
-            "",
-            r#"{"workflow_runs":[{"status":"queued"},{"status":"in_progress"}]}"#,
-        ))
+        Ok(vec![
+            Self::ok("", r#"{"workflow_runs":[{"status":"queued","id":1}]}"#),
+            Self::ok("", r#"{"workflow_runs":[{"status":"in_progress","id":2}]}"#),
+        ])
     }
 
     fn list_open_pulls(
@@ -1339,7 +1339,7 @@ impl WatchRead for Swap {
     fn branches_page(&self, repo: &str, page: u64) -> Result<WatchResponse, WatchError> {
         self.cur().branches_page(repo, page)
     }
-    fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+    fn recent_workflows(&self, repo: &str) -> Result<Vec<WatchResponse>, WatchError> {
         self.cur().recent_workflows(repo)
     }
     fn list_open_pulls(
@@ -2525,4 +2525,106 @@ fn cond_store_round_trips_the_halved_page_size() {
     let mut c = sample_store();
     c.list.per_page = 12;
     assert_eq!(CondStore::from_json(&c.to_json()).unwrap(), c);
+}
+
+#[test]
+fn recent_workflows_keep_a_bounded_window_across_large_pages() {
+    let mut routes: Vec<_> = (1..=4)
+        .map(|page| {
+            let body = serde_json::json!({
+                "workflow_runs": vec![serde_json::json!({"status":"queued","metadata":"x".repeat(12_000)}); 25]
+            });
+            serde_json::json!({
+                "uri": format!("repos/o/r/actions/runs?status=failure&per_page=25&page={page}"),
+                "status": 200,
+                "headers": {"Link": format!("<https://api.github.com/repos/o/r/actions/runs?status=failure&per_page=25&page={}>; rel=\"next\"", page+1)},
+                "body": body.to_string(),
+            })
+        })
+        .collect();
+    for status in ["queued", "in_progress"] {
+        routes.push(serde_json::json!({
+            "uri": format!("repos/o/r/actions/runs?status={status}&per_page=25&page=1"),
+            "status": 200,
+            "body": r#"{"workflow_runs":[]}"#,
+        }));
+    }
+    let forge = Forge::start(&routes);
+    let reader = WatchHttp::new(TOKEN.into(), forge.base.clone(), "api.github.com".into());
+    let pages = reader.recent_workflows("o/r").unwrap();
+    let bytes: usize = pages.iter().map(|page| page.body.len()).sum();
+    assert!(bytes > stw::watch_reader::http::MAX_BODY);
+    let runs: usize = pages
+        .iter()
+        .map(|page| {
+            let payload: Value = serde_json::from_slice(&page.body).unwrap();
+            payload["workflow_runs"].as_array().unwrap().len()
+        })
+        .sum();
+    assert_eq!(runs, 100);
+    let seen = forge.log.lock().unwrap();
+    assert_eq!(seen.len(), 6);
+    for (request, page) in seen.iter().skip(2).zip(1..=4) {
+        assert_eq!(
+            request.uri,
+            format!("repos/o/r/actions/runs?status=failure&per_page=25&page={page}")
+        );
+    }
+}
+
+#[test]
+fn workflow_poll_detects_fast_and_late_failures_once() {
+    use stw::watch::cycle::{Seen, advance_seen};
+    use stw::watch::event::Details;
+    use stw::watch::state::State;
+
+    let workflow_page = |status: &str, rows: Value| {
+        route(
+            &format!("repos/o/r/actions/runs?status={status}&per_page=25&page=1"),
+            200,
+            &serde_json::json!({"workflow_runs": rows}).to_string(),
+            "",
+        )
+    };
+    let failed = |id| serde_json::json!({
+        "id":id,"status":"completed","conclusion":"failure","name":"CI",
+        "head_sha":sha('b'),"head_branch":"main","event":"push","run_attempt":1
+    });
+    let forge = Forge::start(&[
+        workflow_page("queued", serde_json::json!([])),
+        workflow_page("in_progress", serde_json::json!([{"id":1,"status":"in_progress"}])),
+        workflow_page("failure", serde_json::json!([failed(2)])),
+    ]);
+    let mut observer = observer_over(&forge).with_prs(false).with_workflows(true);
+    let cancel = AtomicBool::new(false);
+    let mut state = State::new();
+    let mut poll = || {
+        let observation = observer.observe("o/r", &Hints::default(), None, &cancel).unwrap();
+        let active = observation.active_workflows;
+        let events = advance_seen(
+            &mut state,
+            &[Seen { repo:"o/r".into(), result:Ok(observation) }],
+            1_700_000_000,
+            10,
+        );
+        (active, events)
+    };
+    let (active, events) = poll();
+    assert_eq!(active, 1);
+    assert!(events.is_empty());
+    forge.set_routes(&[
+        workflow_page("in_progress", serde_json::json!([])),
+        workflow_page("failure", serde_json::json!([failed(3), failed(2)])),
+        route("repos/o/r/actions/runs/1", 200, &failed(1).to_string(), ""),
+    ]);
+    let (active, events) = poll();
+    assert_eq!(active, 0);
+    let ids: std::collections::BTreeSet<_> = events.iter().map(|event| match &event.details {
+        Details::WorkflowCompleted(run) => run.run_id,
+        other => panic!("unexpected event: {other:?}"),
+    }).collect();
+    assert_eq!(events.len(), 2);
+    assert_eq!(ids, [1, 3].into());
+    assert!(poll().1.is_empty());
+    assert_eq!(forge.take_log().iter().filter(|r| r.uri == "repos/o/r/actions/runs/1").count(), 1);
 }

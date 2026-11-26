@@ -69,7 +69,11 @@ pub trait WatchRead {
     fn wiki_head(&self, _repo: &str) -> Result<String, WatchError> {
         Err(WatchError::new(Code::Forbidden, "wiki read unavailable"))
     }
-    fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+    fn workflow_run(&self, _repo: &str, _id: u64) -> Result<WatchResponse, WatchError> {
+        Err(WatchError::new(Code::Forbidden, "Actions run unavailable"))
+    }
+
+    fn recent_workflows(&self, _repo: &str) -> Result<Vec<WatchResponse>, WatchError> {
         Err(WatchError::new(Code::Forbidden, "Actions read unavailable"))
     }
     fn actions_runs(&self, _repo: &str, _sha: &str) -> Result<Vec<WorkflowRun>, WatchError> {
@@ -141,7 +145,11 @@ impl WatchRead for WatchHttp {
     fn wiki_head(&self, repo: &str) -> Result<String, WatchError> {
         WatchHttp::wiki_head(self, repo)
     }
-    fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+    fn workflow_run(&self, repo: &str, id: u64) -> Result<WatchResponse, WatchError> {
+        WatchHttp::workflow_run(self, repo, id)
+    }
+
+    fn recent_workflows(&self, repo: &str) -> Result<Vec<WatchResponse>, WatchError> {
         WatchHttp::recent_workflows(self, repo)
     }
     fn actions_runs(&self, repo: &str, sha: &str) -> Result<Vec<WorkflowRun>, WatchError> {
@@ -392,6 +400,7 @@ pub struct HostObserver<R: WatchRead> {
     wiki_retry_at: i64,
     workflows_refused: BTreeSet<String>,
     workflows_retry_at: i64,
+    active_workflow_ids: BTreeMap<String, BTreeSet<u64>>,
     issues_refused: BTreeSet<String>,
     r: R,
     now: Box<dyn Fn() -> i64 + Send>,
@@ -435,6 +444,7 @@ impl<R: WatchRead> HostObserver<R> {
             wiki_retry_at: 0,
             workflows_refused: BTreeSet::new(),
             workflows_retry_at: 0,
+            active_workflow_ids: BTreeMap::new(),
             issues_refused: BTreeSet::new(),
             r,
             now,
@@ -855,7 +865,7 @@ impl<R: WatchRead> HostObserver<R> {
         {
             return None;
         }
-        let res = match self.r.recent_workflows(repo) {
+        let pages = match self.r.recent_workflows(repo) {
             Ok(res) => res,
             Err(e) => {
                 if matches!(e.status, 401 | 403 | 404) && e.code != Code::RateLimited {
@@ -867,38 +877,66 @@ impl<R: WatchRead> HostObserver<R> {
                 return Some(Err(format!("workflows-{}", e.code.as_str())));
             }
         };
-        let parse = || -> Option<(Vec<crate::watch::event::WorkflowCompleted>, usize)> {
-            let payload: Value = serde_json::from_slice(&res.body).ok()?;
-            let rows = payload["workflow_runs"].as_array()?;
+        let parse = || -> Option<(Vec<crate::watch::event::WorkflowCompleted>, BTreeSet<u64>)> {
             let mut runs = Vec::new();
-            let mut pending = 0;
-            for row in rows {
-                if row["status"].as_str()? != "completed" {
-                    pending += 1;
-                    continue;
+            let mut pending = BTreeSet::new();
+            for page in pages {
+                let payload: Value = serde_json::from_slice(&page.body).ok()?;
+                for row in payload["workflow_runs"].as_array()? {
+                    let status = row["status"].as_str()?;
+                    if matches!(status, "queued" | "in_progress") {
+                        pending.insert(row["id"].as_u64().filter(|id| *id > 0)?);
+                    } else if status == "completed" && row["conclusion"].as_str()? == "failure" {
+                        runs.push(failed_workflow(repo, row)?);
+                    }
                 }
-                let text = |key: &str| row[key].as_str().map(str::to_owned);
-                let id = row["id"].as_u64().filter(|id| *id > 0)?;
-                runs.push(crate::watch::event::WorkflowCompleted {
-                    run_id: id,
-                    attempt: row["run_attempt"].as_u64().filter(|attempt| *attempt > 0)?,
-                    conclusion: text("conclusion")?,
-                    name: text("name")?,
-                    branch: text("head_branch").unwrap_or_default(),
-                    head: text("head_sha")?,
-                    trigger: text("event")?,
-                    url: format!("https://github.com/{repo}/actions/runs/{id}"),
-                });
             }
             Some((runs, pending))
         };
-        Some(match parse() {
-            Some((runs, pending)) => {
-                *active = pending;
-                Ok(runs)
+        let Some((mut runs, mut pending)) = parse() else {
+            return Some(Err("workflows-malformed-response".into()));
+        };
+        if let Some(previous) = self.active_workflow_ids.get(repo) {
+            let failed_ids: BTreeSet<_> = runs.iter().map(|run| run.run_id).collect();
+            let missing: Vec<_> = previous.difference(&pending).copied().collect();
+            for id in missing {
+                if failed_ids.contains(&id) {
+                    continue;
+                }
+                let response = match self.r.workflow_run(repo, id) {
+                    Ok(response) => response,
+                    Err(error) if error.status == 404 => continue,
+                    Err(error) => {
+                        if error.code == Code::RateLimited {
+                            self.workflows_retry_at = error.rate_limited_until((self.now)());
+                        }
+                        return Some(Err(format!("workflows-{}", error.code.as_str())));
+                    }
+                };
+                let Ok(row) = serde_json::from_slice::<Value>(&response.body) else {
+                    return Some(Err("workflows-malformed-response".into()));
+                };
+                if row["id"].as_u64() != Some(id) {
+                    return Some(Err("workflows-malformed-response".into()));
+                }
+                match (row["status"].as_str(), row["conclusion"].as_str()) {
+                    (Some("completed"), Some("failure")) => {
+                        let Some(run) = failed_workflow(repo, &row) else {
+                            return Some(Err("workflows-malformed-response".into()));
+                        };
+                        runs.push(run);
+                    }
+                    (Some("completed"), Some(_)) => {}
+                    (Some(status), _) if status != "completed" => {
+                        pending.insert(id);
+                    }
+                    _ => return Some(Err("workflows-malformed-response".into())),
+                }
             }
-            None => Err("workflows-malformed-response".into()),
-        })
+        }
+        *active = pending.len();
+        self.active_workflow_ids.insert(repo.to_owned(), pending);
+        Some(Ok(runs))
     }
 
     fn read_wiki(
@@ -1363,6 +1401,21 @@ impl<R: WatchRead> HostObserver<R> {
             same: false,
         })
     }
+}
+
+fn failed_workflow(repo: &str, row: &Value) -> Option<crate::watch::event::WorkflowCompleted> {
+    let text = |key: &str| row[key].as_str().map(str::to_owned);
+    let id = row["id"].as_u64().filter(|id| *id > 0)?;
+    Some(crate::watch::event::WorkflowCompleted {
+        run_id: id,
+        attempt: row["run_attempt"].as_u64().filter(|attempt| *attempt > 0)?,
+        conclusion: text("conclusion")?,
+        name: text("name")?,
+        branch: text("head_branch").unwrap_or_default(),
+        head: text("head_sha")?,
+        trigger: text("event")?,
+        url: format!("https://github.com/{repo}/actions/runs/{id}"),
+    })
 }
 
 fn graph_refusal(error: &str) -> bool {

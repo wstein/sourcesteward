@@ -13,6 +13,8 @@ pub const MAX_CHECK_PAGES: u64 = 10;
 pub const MAX_COMMIT_PAGES: u64 = 3;
 /// A response body is read up to this size; more is an error.
 pub const MAX_BODY: usize = 1 << 20;
+const MAX_RECENT_WORKFLOW_PAGES: u64 = 4;
+const WORKFLOW_STATUSES: [&str; 3] = ["queued", "in_progress", "failure"];
 /// Seconds added to a reset or Retry-After time before the reader tries again.
 pub const RESET_SLACK_SECS: i64 = 5;
 /// Below this many remaining requests the reader waits for the reset.
@@ -439,8 +441,14 @@ pub fn read_endpoint_allowed(endpoint: &str) -> bool {
             .or_else(|| more.strip_prefix("/statuses?per_page=100&page="));
         return page.is_some_and(check_page);
     }
-    if tail == "actions/runs?per_page=100" {
-        return true;
+    if let Some(query) = tail.strip_prefix("actions/runs?status=") {
+        return query.split_once("&per_page=25&page=").is_some_and(|(status, page)| {
+            WORKFLOW_STATUSES.contains(&status)
+                && digits_from_one(page).is_some_and(|page| page <= MAX_RECENT_WORKFLOW_PAGES)
+        });
+    }
+    if let Some(id) = tail.strip_prefix("actions/runs/") {
+        return is_number_from_one(id);
     }
     if let Some(q) = tail.strip_prefix("actions/runs?head_sha=") {
         let (sha, more) = q.split_at(q.len().min(40));
@@ -1312,15 +1320,31 @@ impl WatchHttp {
         wiki_head_packet(&body).ok_or_else(|| malformed("wiki HEAD is not advertised"))
     }
 
-    /// One recent repository-wide page of workflow runs.
-    pub fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+    /// Read bounded pages of active and failed runs for the repository.
+    pub fn recent_workflows(&self, repo: &str) -> Result<Vec<WatchResponse>, WatchError> {
         let base = Self::repo_path(repo)?;
-        self.fetch(
-            Kind::Actions,
-            &format!("{base}/actions/runs?per_page=100"),
-            "",
-            false,
-        )
+        let mut pages = Vec::new();
+        for status in WORKFLOW_STATUSES {
+            for page in 1..=MAX_RECENT_WORKFLOW_PAGES {
+                let response = self.fetch(
+                    Kind::Actions,
+                    &format!("{base}/actions/runs?status={status}&per_page=25&page={page}"),
+                    "",
+                    true,
+                )?;
+                let more = has_next_rel(&response.link);
+                pages.push(response);
+                if !more {
+                    break;
+                }
+            }
+        }
+        Ok(pages)
+    }
+
+    pub fn workflow_run(&self, repo: &str, id: u64) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(Kind::Actions, &format!("{base}/actions/runs/{id}"), "", false)
     }
 
     /// `actions/runs?head_sha=SHA` page 1 to 10: the fallback for a token that cannot read check runs.

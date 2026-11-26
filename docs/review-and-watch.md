@@ -198,11 +198,12 @@ change. With PR monitoring enabled, a single push can also emit
 
 A PR retarget emits `base-changed` even when the head SHA stays the same.
 
-- `--workflows` reads the latest 100 GitHub Actions runs and emits
-  `workflow-completed` once per completed run attempt, with its conclusion,
-  branch, SHA and URL. Checks associated with open PR heads continue to
-  use the existing PR check events. Scheduled and manually dispatched runs
-  are reported separately.
+- `--workflows` reads bounded Actions REST pages filtered by `queued`,
+  `in_progress`, and `failure`. It emits `workflow-completed` once per failed run
+  attempt, with its conclusion, branch, SHA and URL. The first read establishes
+  a silent baseline. While the watcher runs, it also checks previously active
+  runs by ID when they leave the active lists, so an older run can report a late
+  failure. Scheduled and manually dispatched runs are covered.
 - `--reviews` reads recent submitted reviews and their inline comments
   for tracked open PRs. It emits `review-state-changed` and
   `review-comment-added`. These reflect GitHub review activity.
