@@ -62,6 +62,7 @@ def main():
         site = Path(temporary)
         shutil.copytree(ROOT / "site", site, dirs_exist_ok=True)
         shutil.copytree(ROOT / "docs/assets", site / "static/assets")
+        shutil.copyfile(ROOT / "scripts/install.sh", site / "static/install.sh")
         stage_markdown(site)
         if args.coverage:
             add_coverage_badge(site, args.coverage)
