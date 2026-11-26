@@ -1650,6 +1650,8 @@ Event kinds emitted by the watcher:
   --discussions: discussion-changed
   --wiki: wiki-changed
 
+With .stw/watch.toml, start configured repositories with stw watch --stream --all.
+
 See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md
 ```
 
