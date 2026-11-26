@@ -275,7 +275,19 @@ fn recovery_ref_moved_after_preview_is_refused_in_json() {
     assert_eq!(refusal["command"], "oplog undo");
     assert_eq!(refusal["executed"], false);
     assert_eq!(refusal["current"], newer.to_string());
-    assert!(refusal["checks"].to_string().contains("ref changed since"));
+    let execution_check = serde_json::json!({
+        "status": "refused",
+        "text": format!(
+            "ref changed since: --expect {observed} but the ref is at {newer}; nothing was changed"
+        ),
+    });
+    assert!(
+        refusal["checks"]
+            .as_array()
+            .unwrap()
+            .contains(&execution_check),
+        "{refusal}"
+    );
     assert_eq!(fx.tip("work"), newer);
     assert!(
         before == tree_snapshot(&fx.path),
