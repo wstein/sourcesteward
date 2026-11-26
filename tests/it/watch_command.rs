@@ -1557,6 +1557,35 @@ fn watch_selects_the_origin_of_a_standalone_checkout() {
 }
 
 #[test]
+fn polling_requires_an_explicit_source_selection_before_github_access() {
+    let dir = tempfile::tempdir().unwrap();
+    let state = dir.path().join("state");
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .args(["watch", "--stream", "--repo", "o/r", "--state-dir"])
+        .arg(&state)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(output.stdout.is_empty());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        error.contains("select --all or at least one category"),
+        "{error}"
+    );
+    for flag in [
+        "--prs",
+        "--workflows",
+        "--issues",
+        "--reviews",
+        "--discussions",
+        "--wiki",
+    ] {
+        assert!(error.contains(flag), "{error}");
+    }
+    assert!(!state.exists());
+}
+
+#[test]
 fn status_with_an_absolute_state_dir_does_not_need_a_repository() {
     let dir = tempfile::TempDir::new().unwrap();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))

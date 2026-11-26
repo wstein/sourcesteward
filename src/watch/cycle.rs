@@ -61,40 +61,46 @@ pub fn advance_seen(
             }
             Ok(obs) => obs,
         };
-        if state.health_mut(&item.repo).error_open {
-            let episode = state.health_mut(&item.repo).episode;
-            let after = state.health_mut(&item.repo).failures;
-            let ev = recovered_event(&item.repo, &now, episode, after);
-            state.apply(&ev);
-            events.push(ev);
+        if let Some(code) = &obs.pr_read_error {
+            note_source_error(state, &item.repo, code, &now, &mut events);
         }
-        let baselined = state
-            .repo
-            .get(&item.repo)
-            .map(|rs| rs.baselined)
-            .unwrap_or(false);
-        if !baselined {
-            install_observed(state, &item.repo, obs, &now);
-        } else {
-            let structural = events_from_observation(state, &item.repo, obs, &now);
-            for ev in &structural {
-                state.apply(ev);
+        if !obs.skip_pr_events {
+            if state.health_mut(&item.repo).error_open {
+                let episode = state.health_mut(&item.repo).episode;
+                let after = state.health_mut(&item.repo).failures;
+                let ev = recovered_event(&item.repo, &now, episode, after);
+                state.apply(&ev);
+                events.push(ev);
             }
-            events.extend(structural);
-            // Candidates are bookkeeping, not events. They are stored after the structural
-            // events have been applied, so a head change has already reset the old class.
-            let volatile = note_volatile(state, &item.repo, obs, &now);
-            for ev in &volatile {
-                state.apply(ev);
-            }
-            events.extend(volatile);
-            let timed = note_timeout(state, &item.repo, obs, &now, now_secs, pending_timeout_secs);
-            for ev in &timed {
-                state.apply(ev);
-            }
-            events.extend(timed);
-            if let Some(rs) = state.repo.get_mut(&item.repo) {
-                rs.last_ok = now.clone();
+            let baselined = state
+                .repo
+                .get(&item.repo)
+                .map(|rs| rs.baselined)
+                .unwrap_or(false);
+            if !baselined {
+                install_observed(state, &item.repo, obs, &now);
+            } else {
+                let structural = events_from_observation(state, &item.repo, obs, &now);
+                for ev in &structural {
+                    state.apply(ev);
+                }
+                events.extend(structural);
+                // Candidates are bookkeeping, not events. They are stored after the structural
+                // events have been applied, so a head change has already reset the old class.
+                let volatile = note_volatile(state, &item.repo, obs, &now);
+                for ev in &volatile {
+                    state.apply(ev);
+                }
+                events.extend(volatile);
+                let timed =
+                    note_timeout(state, &item.repo, obs, &now, now_secs, pending_timeout_secs);
+                for ev in &timed {
+                    state.apply(ev);
+                }
+                events.extend(timed);
+                if let Some(rs) = state.repo.get_mut(&item.repo) {
+                    rs.last_ok = now.clone();
+                }
             }
         }
         if obs
@@ -366,9 +372,11 @@ fn remember_cond(state: &mut State, repo: &str, cond: Option<&CondStore>) {
     let Some(store) = cond else {
         return;
     };
-    if let Some(rs) = state.repo.get_mut(repo) {
-        rs.conditional = Some(store.to_json());
-    }
+    let rs = state
+        .repo
+        .entry(repo.to_owned())
+        .or_insert_with(|| super::state::RepoState::new(""));
+    rs.conditional = Some(store.to_json());
 }
 
 fn install_observed(state: &mut State, repo: &str, obs: &RepoObservation, now: &str) {

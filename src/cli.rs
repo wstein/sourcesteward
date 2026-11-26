@@ -131,8 +131,10 @@ enum InspectSource {
     },
 }
 
-const WATCH_HELP: &str = "Event kinds emitted by the watcher:
-  PRs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
+const WATCH_HELP: &str =
+    "Select --all or one or more categories when polling. --status reads saved state.
+Event kinds emitted by the watcher:
+  --prs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
   PR checks: checks-green, checks-red, checks-pending-timeout
   Mergeability: mergeable-changed, restack-needed
   Health: watch-error, watch-recovered
@@ -146,6 +148,12 @@ See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md";
 
 #[derive(Args)]
 struct WatchArgs {
+    /// Watch all event categories.
+    #[arg(long, conflicts_with_all = ["status", "prs", "workflows", "issues", "reviews", "discussions", "wiki"])]
+    all: bool,
+    /// Watch pull requests, their checks, mergeability and restack events.
+    #[arg(long, conflicts_with = "status")]
+    prs: bool,
     /// Watch GitHub wiki Git head updates.
     #[arg(long, conflicts_with = "status")]
     wiki: bool,
@@ -2525,6 +2533,23 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             "pass exactly one of --once, --stream, --until-event and --status",
         ));
     }
+    if !a.status
+        && ![
+            a.all,
+            a.prs,
+            a.workflows,
+            a.issues,
+            a.reviews,
+            a.discussions,
+            a.wiki,
+        ]
+        .into_iter()
+        .any(|selected| selected)
+    {
+        return Err(Error::usage(
+            "stw watch: select --all or at least one category: --prs, --workflows, --issues, --reviews, --discussions, --wiki",
+        ));
+    }
     if a.status && a.baseline {
         return Err(Error::usage("--baseline is not valid with --status"));
     }
@@ -2633,9 +2658,26 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
     let code = if a.status {
         command::run_status(&dir, now, &mut std::io::stdout())
     } else {
+        if a.verbose > 0 {
+            let categories = [
+                (a.all || a.prs, "prs"),
+                (a.all || a.workflows, "workflows"),
+                (a.all || a.issues, "issues"),
+                (a.all || a.reviews, "reviews"),
+                (a.all || a.discussions, "discussions"),
+                (a.all || a.wiki, "wiki"),
+            ]
+            .into_iter()
+            .filter_map(|(enabled, name)| enabled.then_some(name))
+            .collect::<Vec<_>>();
+            eprintln!("stw watch: categories={}", categories.join(","));
+        }
         let (token, token_source) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
             .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
-        let graph_client = (a.issues || a.reviews || a.discussions).then(|| {
+        let issues = a.all || a.issues;
+        let reviews = a.all || a.reviews;
+        let discussions = a.all || a.discussions;
+        let graph_client = (issues || reviews || discussions).then(|| {
             crate::github::Client::with_base(
                 token.clone(),
                 token_source,
@@ -2654,9 +2696,12 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             ignore_authors,
             ignore_labels,
         );
-        source = source.with_workflows(a.workflows).with_wiki(a.wiki);
+        source = source
+            .with_prs(a.all || a.prs)
+            .with_workflows(a.all || a.workflows)
+            .with_wiki(a.all || a.wiki);
         if let Some(client) = graph_client {
-            source = source.with_graph_sources(client, a.issues, a.reviews, a.discussions);
+            source = source.with_graph_sources(client, issues, reviews, discussions);
         }
         let mut output = command::Lines::new(std::io::stdout(), a.human)
             .with_diagnostics(a.verbose, std::io::stderr());

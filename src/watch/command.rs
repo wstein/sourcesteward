@@ -122,34 +122,38 @@ fn poll_report(
     }
     let mut observed = 0;
     let mut open = 0;
+    let mut pr_poll = false;
     for poll in polls {
         match &poll.result {
             Ok(obs) => {
                 observed += 1;
-                open += obs.prs.len();
-                diagnostic(
-                    out,
-                    2,
-                    format_args!("{} observed {} open PR(s)", poll.repo, obs.prs.len()),
-                );
-                if out.diagnostics(2).is_some() {
-                    for pr in &obs.prs {
-                        if let Some(candidate) = state
-                            .repo
-                            .get(&poll.repo)
-                            .and_then(|repo| repo.prs.get(&pr.number))
-                            .and_then(|stored| stored.class_candidate.as_ref())
-                        {
-                            diagnostic(
-                                out,
-                                2,
-                                format_args!(
-                                    "{}#{} checks {} awaiting confirmation",
-                                    poll.repo,
-                                    pr.number,
-                                    class_name(candidate)
-                                ),
-                            );
+                if !obs.skip_pr_events {
+                    pr_poll = true;
+                    open += obs.prs.len();
+                    diagnostic(
+                        out,
+                        2,
+                        format_args!("{} observed {} open PR(s)", poll.repo, obs.prs.len()),
+                    );
+                    if out.diagnostics(2).is_some() {
+                        for pr in &obs.prs {
+                            if let Some(candidate) = state
+                                .repo
+                                .get(&poll.repo)
+                                .and_then(|repo| repo.prs.get(&pr.number))
+                                .and_then(|stored| stored.class_candidate.as_ref())
+                            {
+                                diagnostic(
+                                    out,
+                                    2,
+                                    format_args!(
+                                        "{}#{} checks {} awaiting confirmation",
+                                        poll.repo,
+                                        pr.number,
+                                        class_name(candidate)
+                                    ),
+                                );
+                            }
                         }
                     }
                 }
@@ -189,7 +193,12 @@ fn poll_report(
             format_args!("emitted {} ({:?})", event.kind().as_str(), event.id),
         );
     }
-    diagnostic(out, 1, format_args!("poll completed in {}ms, {} of {} repository reads succeeded, {} open PR(s), {} event(s)", duration.as_millis(), observed, polls.len(), open, events.len()));
+    let pull_summary = if pr_poll {
+        format!(", {open} open PR(s)")
+    } else {
+        String::new()
+    };
+    diagnostic(out, 1, format_args!("poll completed in {}ms, {} of {} repository reads succeeded{pull_summary}, {} event(s)", duration.as_millis(), observed, polls.len(), events.len()));
 }
 
 /// Clock and wait of a stream. A test supplies one that jumps the clock. `wait` returns false
@@ -562,7 +571,7 @@ fn poll_ready(
         let saved = saved_cond(state, repo);
         diagnostic(diagnostics, 2, format_args!("{repo} reading GitHub"));
         let result = source.observe_repo(repo, &hints, saved.as_ref());
-        if let Ok(obs) = &result {
+        if let Some(obs) = result.as_ref().ok().filter(|obs| !obs.skip_pr_events) {
             let previous = state.repo.get(repo);
             if baseline || !previous.is_some_and(|repo| repo.baselined) {
                 diagnostic(diagnostics, 1, format_args!("{repo} silent baseline"));

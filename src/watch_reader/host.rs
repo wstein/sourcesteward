@@ -360,6 +360,8 @@ fn run_of(v: &Value) -> Option<CheckRun> {
 /// rate-limit hold and the diagnostics of its cycles.
 pub struct HostObserver<R: WatchRead> {
     graph: Option<crate::github::Client>,
+    prs: bool,
+    pulls_refused: BTreeSet<String>,
     issues: bool,
     reviews: bool,
     discussions: bool,
@@ -396,6 +398,8 @@ impl<R: WatchRead> HostObserver<R> {
     ) -> HostObserver<R> {
         HostObserver {
             graph: None,
+            prs: true,
+            pulls_refused: BTreeSet::new(),
             issues: false,
             reviews: false,
             discussions: false,
@@ -421,6 +425,11 @@ impl<R: WatchRead> HostObserver<R> {
             warned: BTreeSet::new(),
             diags: Vec::new(),
         }
+    }
+
+    pub fn with_prs(mut self, enabled: bool) -> Self {
+        self.prs = enabled;
+        self
     }
 
     pub fn with_wiki(mut self, enabled: bool) -> Self {
@@ -517,12 +526,93 @@ impl<R: WatchRead> HostObserver<R> {
                 retry_in: wait,
             }));
         }
+        let optional = self.workflows || self.issues || self.discussions || self.wiki;
+        let mut observation = RepoObservation {
+            skip_pr_events: true,
+            ..RepoObservation::default()
+        };
+        if (self.prs || self.reviews) && !self.pulls_refused.contains(repo) {
+            match self.observe_pulls(repo, hints, cond, cancel) {
+                Ok(pulls) => observation = pulls,
+                Err(ObserveFailure::Error(err)) if optional && !err.run_wide => {
+                    observation.pr_read_error = Some(format!("prs-{}", err.code.as_str()));
+                }
+                Err(err) => return Err(err),
+            }
+        }
+        let issues = self.read_issues(repo);
+        let workflows = self.read_workflows(repo);
+        let prs = &observation.prs;
+        let mut activity = Vec::new();
+        if self.reviews {
+            let batches = prs.len().div_ceil(20).max(1);
+            let batch = hints.cycle as usize % batches;
+            for pr in prs.iter().skip(batch * 20).take(20) {
+                let query = format!("query($o:String!, $n:String!) {{repository(owner:$o,name:$n) {{pullRequest(number:{}) {{reviews(last:20) {{nodes {{id state submittedAt url comments(last:20) {{nodes {{id url createdAt}}}}}}}}}}}}}}", pr.number);
+                let scope = super::obs::ActivityScope::Reviews(pr.number);
+                if let Some(result) = self.read_activity(repo, "reviews", &query, |root| {
+                    parse_reviews(root, pr.number)
+                }) {
+                    activity.push((scope, result));
+                }
+            }
+        }
+        if self.discussions {
+            let query = "query($o:String!, $n:String!) {repository(owner:$o,name:$n) {hasDiscussionsEnabled discussions(first:50,orderBy:{field:UPDATED_AT,direction:DESC}) {nodes {id number title url updatedAt closed comments {totalCount}}}}}";
+            if let Some(result) = self.read_activity(repo, "discussions", query, parse_discussions)
+            {
+                activity.push((super::obs::ActivityScope::Discussions, result));
+            }
+        }
+        if let Some(result) = self.read_wiki(repo) {
+            activity.push((super::obs::ActivityScope::Wiki, result));
+        }
+        observation.issues = issues;
+        observation.workflows = workflows;
+        observation.activity = activity;
+        Ok(observation)
+    }
+
+    fn observe_pulls(
+        &mut self,
+        repo: &str,
+        hints: &Hints,
+        cond: Option<&CondStore>,
+        cancel: &AtomicBool,
+    ) -> Result<RepoObservation, ObserveFailure> {
         let mut cond = cond.cloned().unwrap_or_default();
         let list = match self.r.list_open_pulls(repo, &cond.list, self.max_open) {
             Ok(l) => l,
-            Err(e) => return Err(self.fail(e, cancel)),
+            Err(e) => {
+                if (self.workflows || self.issues || self.discussions || self.wiki)
+                    && matches!(e.status, 401 | 403 | 404)
+                    && e.code != Code::RateLimited
+                {
+                    self.pulls_refused.insert(repo.to_owned());
+                }
+                return Err(self.fail(e, cancel));
+            }
         };
         cond.list = list.state.clone();
+        if !self.prs {
+            let mut prs: Vec<_> = list
+                .items
+                .iter()
+                .filter(|it| !self.ignored(it))
+                .map(|it| PrObs {
+                    number: it.number,
+                    ..PrObs::default()
+                })
+                .collect();
+            prs.sort_by_key(|pr| pr.number);
+            cond.prune(&list.items);
+            return Ok(RepoObservation {
+                prs,
+                cond: Some(cond),
+                skip_pr_events: true,
+                ..RepoObservation::default()
+            });
+        }
         let known: BTreeMap<u64, &KnownPr> = hints.known.iter().map(|k| (k.number, k)).collect();
         let open: BTreeSet<u64> = list.items.iter().map(|i| i.number).collect();
         let mut gone = BTreeMap::new();
@@ -613,40 +703,12 @@ impl<R: WatchRead> HostObserver<R> {
         }
         let bases: Vec<&str> = items.iter().map(|i| i.base_ref.as_str()).collect();
         cond.prune(&items);
-        let issues = self.read_issues(repo);
-        let workflows = self.read_workflows(repo);
-        let mut activity = Vec::new();
-        if self.reviews {
-            let batches = prs.len().div_ceil(20).max(1);
-            let batch = hints.cycle as usize % batches;
-            for pr in prs.iter().skip(batch * 20).take(20) {
-                let query = format!("query($o:String!, $n:String!) {{repository(owner:$o,name:$n) {{pullRequest(number:{}) {{reviews(last:20) {{nodes {{id state submittedAt url comments(last:20) {{nodes {{id url createdAt}}}}}}}}}}}}}}", pr.number);
-                let scope = super::obs::ActivityScope::Reviews(pr.number);
-                if let Some(result) = self.read_activity(repo, "reviews", &query, |root| {
-                    parse_reviews(root, pr.number)
-                }) {
-                    activity.push((scope, result));
-                }
-            }
-        }
-        if self.discussions {
-            let query = "query($o:String!, $n:String!) {repository(owner:$o,name:$n) {hasDiscussionsEnabled discussions(first:50,orderBy:{field:UPDATED_AT,direction:DESC}) {nodes {id number title url updatedAt closed comments {totalCount}}}}}";
-            if let Some(result) = self.read_activity(repo, "discussions", query, parse_discussions)
-            {
-                activity.push((super::obs::ActivityScope::Discussions, result));
-            }
-        }
-        if let Some(result) = self.read_wiki(repo) {
-            activity.push((super::obs::ActivityScope::Wiki, result));
-        }
         Ok(RepoObservation {
-            issues,
-            workflows,
-            activity,
             default_branch: guess_default_branch(&bases).to_string(),
             prs,
             gone,
             cond: Some(cond),
+            ..RepoObservation::default()
         })
     }
 

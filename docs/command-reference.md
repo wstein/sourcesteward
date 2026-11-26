@@ -1560,6 +1560,12 @@ Watch GitHub activity and print transitions (read-only)
 Usage: stw watch [OPTIONS]
 
 Options:
+      --all
+          Watch all event categories
+
+      --prs
+          Watch pull requests, their checks, mergeability and restack events
+
       --wiki
           Watch GitHub wiki Git head updates
 
@@ -1632,8 +1638,9 @@ Options:
   -h, --help
           Print help
 
+Select --all or one or more categories when polling. --status reads saved state.
 Event kinds emitted by the watcher:
-  PRs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
+  --prs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
   PR checks: checks-green, checks-red, checks-pending-timeout
   Mergeability: mergeable-changed, restack-needed
   Health: watch-error, watch-recovered

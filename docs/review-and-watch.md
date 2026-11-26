@@ -179,6 +179,12 @@ labels and assignees. The event envelope has `pr: null`. An incomplete
 read keeps the last complete snapshot and emits `watch-error`.
 Issue tracking compares snapshots and does not replay actions between polls.
 
+Every polling invocation requires `--all` or one or more category flags.
+`--prs` enables PR lifecycle, checks, mergeability and restack. Review-only
+polling reads the open-PR list to locate reviews. Workflow-only polling
+covers all observed workflows because it does not read the PR list.
+`--status` reads the saved state without selecting categories.
+
 A PR retarget emits `base-changed` even when the head SHA stays the same.
 
 - `--workflows` reads the latest 100 GitHub Actions runs and emits
@@ -202,7 +208,7 @@ GitHub does not expose a reliable per-endpoint token permission probe, so
 the first read establishes access. Rate-limit responses pause reads
 without discarding the last accepted state.
 
-Use `stw watch --stream --interval 10s -v` to see the watched repositories,
+Use `stw watch --stream --all --interval 10s -v` to see the watched repositories,
 state directory, each poll's outcome and the next wait on stderr. Use
 `-vv` to also see repository reads, PR head and readiness comparisons,
 checks awaiting confirmation and emitted event IDs. Event output and

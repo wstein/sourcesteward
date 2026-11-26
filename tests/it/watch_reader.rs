@@ -1166,6 +1166,11 @@ impl FakeReader {
 }
 
 impl WatchRead for FakeReader {
+    fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+        self.note("workflows".into(), "")?;
+        Ok(Self::ok("", r#"{"workflow_runs":[]}"#))
+    }
+
     fn list_open_pulls(
         &self,
         _repo: &str,
@@ -1305,6 +1310,9 @@ impl Swap {
 }
 
 impl WatchRead for Swap {
+    fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().recent_workflows(repo)
+    }
     fn list_open_pulls(
         &self,
         r: &str,
@@ -1336,6 +1344,45 @@ impl WatchRead for Swap {
     }
     fn actions_runs(&self, r: &str, s: &str) -> Result<Vec<WorkflowRun>, WatchError> {
         self.cur().actions_runs(r, s)
+    }
+}
+
+#[test]
+fn workflows_only_skips_pr_reads_and_all_continues_after_pr_denial() {
+    for prs in [false, true] {
+        let mut reader = FakeReader::default();
+        let mut denied = WatchError::new(Code::Forbidden, "denied");
+        denied.status = 403;
+        reader.w.list_error = Some(denied);
+        let reader = Rc::new(reader);
+        let mut observer = HostObserver::new(
+            Swap(Rc::new(RefCell::new(reader.clone()))),
+            Box::new(|| 1_700_000_000),
+            20,
+            vec![],
+            vec![],
+        )
+        .with_prs(prs)
+        .with_workflows(true);
+
+        let cancel = std::sync::atomic::AtomicBool::new(false);
+        let first = observer
+            .observe("o/r", &Hints::default(), None, &cancel)
+            .unwrap();
+        assert!(first.skip_pr_events);
+        assert_eq!(first.pr_read_error.is_some(), prs);
+        assert_eq!(first.workflows, Some(Ok(vec![])));
+        let second = observer
+            .observe("o/r", &Hints::default(), None, &cancel)
+            .unwrap();
+        assert!(second.pr_read_error.is_none());
+        assert_eq!(second.workflows, Some(Ok(vec![])));
+        let expected = if prs {
+            vec!["list", "workflows", "workflows"]
+        } else {
+            vec!["workflows", "workflows"]
+        };
+        assert_eq!(*reader.calls.borrow(), expected);
     }
 }
 
