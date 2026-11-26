@@ -71,6 +71,7 @@ impl R {
             repo,
         };
         r.git(&["init", "-q", "-b", "main"]);
+        r.git(&["config", "maintenance.auto", "false"]);
         std::fs::write(r.repo.join("f"), "1\n").unwrap();
         r.git(&["add", "f"]);
         r.git(&["commit", "-q", "-m", "c1"]);

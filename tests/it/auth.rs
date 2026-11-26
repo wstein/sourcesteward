@@ -74,7 +74,9 @@ fn debug_output_never_contains_the_token() {
 #[cfg(target_os = "macos")]
 #[test]
 fn macos_keychain_item_in_gh_format_is_found() {
-    use security_framework::passwords::{delete_generic_password, set_generic_password};
+    use security_framework::passwords::{
+        delete_generic_password, get_generic_password, set_generic_password,
+    };
     let svc = format!("stw-test-{}", std::process::id());
     let secret = "keychain-test-token";
     use base64::Engine;
@@ -84,6 +86,11 @@ fn macos_keychain_item_in_gh_format_is_found() {
     );
     if set_generic_password(&svc, "tester", stored.as_bytes()).is_err() {
         eprintln!("keychain not writable in this session: test skipped");
+        return;
+    }
+    if get_generic_password(&svc, "tester").is_err() {
+        let _ = delete_generic_password(&svc, "tester");
+        eprintln!("keychain not readable in this session: test skipped");
         return;
     }
     let found = find_token(&env(&[], None, &svc));

@@ -699,13 +699,17 @@ fn git_available() -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-/// Runs real git in `dir` with the identity of the global configuration (nothing is overridden or written).
+/// Runs real Git with a fixed identity for the throwaway fixture.
 fn git(dir: &Path, args: &[&str]) -> String {
     assert!(dir.is_absolute(), "unconfined");
     let o = Command::new("git")
         .current_dir(dir)
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
+        .env("GIT_AUTHOR_NAME", "Lint Fixture")
+        .env("GIT_AUTHOR_EMAIL", "lint@example.invalid")
+        .env("GIT_COMMITTER_NAME", "Lint Fixture")
+        .env("GIT_COMMITTER_EMAIL", "lint@example.invalid")
         .args(args)
         .output()
         .unwrap();

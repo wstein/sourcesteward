@@ -195,6 +195,8 @@ fn control_and_bidi_characters_are_masked() {
     assert!(o.out.contains("a??b.txt"));
 }
 
+// The macOS runner filesystem rejects non-UTF-8 names.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn a_path_that_is_not_utf8_has_no_blame_and_is_refused_with_a_masked_message() {
     let fx = Fx::new();

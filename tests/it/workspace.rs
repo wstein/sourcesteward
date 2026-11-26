@@ -532,7 +532,8 @@ fn worktree_plan_leaves_source_intact_and_apply_checks_out_the_saved_commit() {
     );
     let plan = &report["plan"];
     assert_eq!(plan["base"], base_text);
-    assert_eq!(plan["destination"], target.to_str().unwrap());
+    let canonical_target = root.canonicalize().unwrap().with_file_name("new workspace");
+    assert_eq!(plan["destination"], canonical_target.to_str().unwrap());
     assert!(!target.exists());
     assert_eq!(snapshot(), before);
     assert_eq!(fs::read(&source_index).unwrap(), index_before);

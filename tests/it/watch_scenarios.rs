@@ -993,14 +993,14 @@ fn the_driver_refuses_a_directory_inside_a_git_tree_that_does_not_ignore_it() {
         "{err}"
     );
     assert!(!repo.join("fixtures").exists());
-    // an ignored directory passes the guard; the run then fails at the Go step (GO=/bin/false) and writes nothing
+    // an ignored directory passes the guard; the run then fails at the Go step (GO=/usr/bin/false) and writes nothing
     fs::write(repo.join(".gitignore"), "out/\n").unwrap();
     let tmp = tempfile::tempdir().unwrap();
     let (code, err) = run_driver(
         &[m.to_str().unwrap(), repo.join("out").to_str().unwrap()],
         &[
             ("TMPDIR", tmp.path().to_str().unwrap()),
-            ("GO", "/bin/false"),
+            ("GO", "/usr/bin/false"),
         ],
     );
     assert_eq!(code, 2, "{err}");
@@ -1024,7 +1024,7 @@ fn the_driver_replaces_only_the_json_of_an_earlier_export_and_refuses_other_dire
     let tmp = tempfile::tempdir().unwrap();
     let env = [
         ("TMPDIR", tmp.path().to_str().unwrap()),
-        ("GO", "/bin/false"),
+        ("GO", "/usr/bin/false"),
     ];
     let foreign = t.path().join("foreign");
     fs::create_dir_all(&foreign).unwrap();

@@ -1089,6 +1089,8 @@ fn restore_picks_the_newest_run_unless_told_and_can_filter_a_branch() {
 
 /// G1: two different non-UTF-8 paths with the same content used to get the same patch ID, so tidy took the
 /// unmerged branch for already merged ("equal-patches") and deleted it.
+// The macOS runner filesystem rejects non-UTF-8 names.
+#[cfg(not(target_os = "macos"))]
 #[test]
 fn a_branch_changing_a_different_non_utf8_path_is_kept() {
     let fx = Fx::new();
