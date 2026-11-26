@@ -1660,7 +1660,7 @@ Options:
           Watch new and updated GitHub discussions
 
       --workflows
-          Emit workflow-completed for Actions runs outside open PR head checks
+          Emit workflow-completed for failed Actions runs outside open PR head checks
 
       --issues
           Watch open issues and emit issue-changed for opens, updates and closures

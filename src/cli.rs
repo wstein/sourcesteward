@@ -169,7 +169,7 @@ struct WatchArgs {
     /// Watch new and updated GitHub discussions.
     #[arg(long, conflicts_with = "status")]
     discussions: bool,
-    /// Emit workflow-completed for Actions runs outside open PR head checks.
+    /// Emit workflow-completed for failed Actions runs outside open PR head checks.
     #[arg(long, conflicts_with = "status")]
     workflows: bool,
     /// Watch open issues and emit issue-changed for opens, updates and closures.
