@@ -1556,6 +1556,9 @@ Watch open pull requests and print transitions (read-only)
 Usage: stw watch [OPTIONS]
 
 Options:
+      --issues
+          Watch open issues and emit issue-changed for opens, updates and closures
+
   -v, --verbose...
           Print polling diagnostics to stderr. Repeat for repository and PR decisions
 

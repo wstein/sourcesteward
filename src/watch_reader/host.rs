@@ -347,6 +347,8 @@ fn run_of(v: &Value) -> Option<CheckRun> {
 /// A watcher over one reader. Not shared between threads: it keeps the class of the last check read of each PR, a
 /// rate-limit hold and the diagnostics of its cycles.
 pub struct HostObserver<R: WatchRead> {
+    issue_client: Option<crate::github::Client>,
+    issue_retry_at: i64,
     r: R,
     now: Box<dyn Fn() -> i64 + Send>,
     max_open: usize,
@@ -371,6 +373,8 @@ impl<R: WatchRead> HostObserver<R> {
         ignore_labels: Vec<String>,
     ) -> HostObserver<R> {
         HostObserver {
+            issue_client: None,
+            issue_retry_at: 0,
             r,
             now,
             max_open: if max_open < 1 {
@@ -385,6 +389,11 @@ impl<R: WatchRead> HostObserver<R> {
             warned: BTreeSet::new(),
             diags: Vec::new(),
         }
+    }
+
+    pub fn with_issues(mut self, client: crate::github::Client) -> Self {
+        self.issue_client = Some(client);
+        self
     }
 
     /// The one-line diagnostics since the last call (never an event, never a token).
@@ -553,12 +562,39 @@ impl<R: WatchRead> HostObserver<R> {
         }
         let bases: Vec<&str> = items.iter().map(|i| i.base_ref.as_str()).collect();
         cond.prune(&items);
+        let issues = self.read_issues(repo);
         Ok(RepoObservation {
+            issues,
             default_branch: guess_default_branch(&bases).to_string(),
             prs,
             gone,
             cond: Some(cond),
         })
+    }
+
+    fn read_issues(&mut self, repo: &str) -> Option<crate::issue_list::Listed> {
+        let client = self.issue_client.as_ref()?;
+        if (self.now)() < self.issue_retry_at {
+            return None;
+        }
+        client.reset_poll_rate_limit();
+        client.arm_deadline(std::time::Duration::from_secs(10));
+        let mut listed =
+            crate::issue_list::read(&[repo.to_owned()], crate::issue_list::PAGE, 1, |body| {
+                client.graphql(body)
+            })
+            .pop()?;
+        if client.rate_limited() {
+            let now = (self.now)();
+            let retry_at = client
+                .stats()
+                .rate
+                .filter(|rate| rate.remaining == 0)
+                .and_then(|rate| i64::try_from(rate.reset).ok());
+            self.issue_retry_at = retry_at.unwrap_or_default().max(now.saturating_add(60));
+            listed.coverage = "incomplete";
+        }
+        Some(listed)
     }
 
     /// Reads `branches/BASE` once per distinct base branch of the watched PRs and returns the bases whose tip moved.

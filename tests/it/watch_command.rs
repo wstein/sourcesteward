@@ -329,6 +329,83 @@ fn watch_reports_draft_and_ready_transitions_even_without_a_push() {
 }
 
 #[test]
+fn issue_changes_require_complete_snapshots_and_replay() {
+    use stw::issue_list::{Issue, Listed};
+    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::event::{Event, IssueChange};
+    use stw::watch_reader::obs::RepoObservation;
+
+    let issue = |number, title: &str| Issue {
+        number,
+        title: title.into(),
+        url: format!("https://github.com/o/r/issues/{number}"),
+        updated_at: "2026-11-26T17:00:00Z".into(),
+        labels: Vec::new(),
+        assignees: Vec::new(),
+    };
+    let poll = |state: &mut State, coverage, issues| {
+        advance_seen(
+            state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    issues: Some(Listed {
+                        name: "o/r".into(),
+                        id: None,
+                        coverage,
+                        error: None,
+                        issues,
+                    }),
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_000,
+            10,
+        )
+    };
+    let mut state = State::new();
+    assert!(poll(
+        &mut state,
+        "complete",
+        vec![issue(7, "original"), issue(8, "closing")]
+    )
+    .is_empty());
+    let mut replay = state.clone();
+    assert!(poll(&mut state, "incomplete", vec![]).is_empty());
+    let events = poll(
+        &mut state,
+        "complete",
+        vec![issue(7, "edited"), issue(9, "new")],
+    );
+    let changes: Vec<_> = events
+        .iter()
+        .map(|event| {
+            assert_eq!(event.pr, None);
+            let parsed = Event::from_line(&event.to_line()).unwrap();
+            replay.apply(&parsed);
+            let Details::IssueChanged(details) = parsed.details else {
+                panic!("expected issue change")
+            };
+            (details.issue.number, details.change)
+        })
+        .collect();
+    assert_eq!(
+        changes,
+        [
+            (7, IssueChange::Updated),
+            (9, IssueChange::Opened),
+            (8, IssueChange::Closed)
+        ]
+    );
+    assert!(poll(
+        &mut replay,
+        "complete",
+        vec![issue(7, "edited"), issue(9, "new")]
+    )
+    .is_empty());
+}
+
+#[test]
 fn baseline_replaces_the_open_list_without_events() {
     let (_dir, path) = state_path();
     let repo = ["o/r".to_string()];

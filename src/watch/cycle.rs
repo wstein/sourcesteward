@@ -97,9 +97,78 @@ pub fn advance_seen(
                 rs.last_ok = now.clone();
             }
         }
+        note_issues(state, &item.repo, obs.issues.as_ref(), &now, &mut events);
         remember_cond(state, &item.repo, obs.cond.as_ref());
     }
     events
+}
+
+fn note_issues(
+    state: &mut State,
+    repo: &str,
+    listed: Option<&crate::issue_list::Listed>,
+    now: &str,
+    events: &mut Vec<Event>,
+) {
+    use super::event::{IssueChange, IssueChanged, Kind};
+
+    let Some(listed) = listed.filter(|listed| listed.coverage == "complete") else {
+        return;
+    };
+    let mut open = std::collections::BTreeMap::new();
+    for mut issue in listed.issues.iter().cloned() {
+        issue.labels.sort();
+        issue.assignees.sort();
+        if open.insert(issue.number, issue).is_some() {
+            return;
+        }
+    }
+    let tracked = state.issues.entry(repo.to_owned()).or_default();
+    if !tracked.baselined {
+        tracked.open = open;
+        tracked.baselined = true;
+        return;
+    }
+    let mut epoch = tracked.epoch;
+    let changes = open
+        .iter()
+        .filter_map(|(number, issue)| match tracked.open.get(number) {
+            None => Some((IssueChange::Opened, issue)),
+            Some(old) if old != issue => Some((IssueChange::Updated, issue)),
+            Some(_) => None,
+        })
+        .chain(
+            tracked
+                .open
+                .iter()
+                .filter(|(number, _)| !open.contains_key(number))
+                .map(|(_, issue)| (IssueChange::Closed, issue)),
+        );
+    let transitions: Vec<_> = changes
+        .map(|(change, issue)| {
+            epoch = epoch.saturating_add(1);
+            Event::new(
+                event_id(
+                    Some(repo),
+                    None,
+                    Kind::IssueChanged,
+                    &format!("{}:i{epoch}", issue.number),
+                ),
+                now.to_owned(),
+                Some(repo.to_owned()),
+                None,
+                Details::IssueChanged(IssueChanged {
+                    change,
+                    epoch,
+                    issue: issue.clone(),
+                }),
+            )
+        })
+        .collect();
+    for event in transitions {
+        state.apply(&event);
+        events.push(event);
+    }
 }
 
 fn remember_cond(state: &mut State, repo: &str, cond: Option<&CondStore>) {

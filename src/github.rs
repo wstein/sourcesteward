@@ -366,6 +366,12 @@ impl Client {
         self.rate_limited.load(Ordering::SeqCst)
     }
 
+    /// Start a new polling window after the caller's rate-limit hold has elapsed.
+    pub(crate) fn reset_poll_rate_limit(&self) {
+        *self.stats.lock().unwrap() = Stats::default();
+        self.rate_limited.store(false, Ordering::SeqCst);
+    }
+
     fn note_rate_limit(&self) {
         self.rate_limited.store(true, Ordering::SeqCst);
     }

@@ -14,6 +14,18 @@ impl State {
     /// counters of its ids still matter.
     pub fn apply(&mut self, ev: &Event) {
         match &ev.details {
+            Details::IssueChanged(d) => {
+                if let Some(repo) = &ev.repo {
+                    let tracked = self.issues.entry(repo.clone()).or_default();
+                    tracked.epoch = tracked.epoch.max(d.epoch);
+                    if d.change == super::event::IssueChange::Closed {
+                        tracked.open.remove(&d.issue.number);
+                    } else {
+                        tracked.open.insert(d.issue.number, d.issue.clone());
+                    }
+                }
+                return;
+            }
             Details::ReposChanged(_) => return self.apply_repos(ev),
             Details::WatchError(_) | Details::WatchRecovered(_) | Details::WatchStalled(_) => {
                 return self.apply_health(ev)

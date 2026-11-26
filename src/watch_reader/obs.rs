@@ -37,6 +37,7 @@ pub struct KnownPr {
 /// One snapshot of a repository.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RepoObservation {
+    pub issues: Option<crate::issue_list::Listed>,
     pub default_branch: String,
     /// The complete open list.
     pub prs: Vec<PrObs>,

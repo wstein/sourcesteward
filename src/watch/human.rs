@@ -128,6 +128,12 @@ pub(super) fn render(event: &Event) -> String {
             d.retry_in_seconds
         ),
         Details::WatchRecovered(d) => format!("after {} failures", d.after_failures),
+        Details::IssueChanged(d) => format!(
+            "issue #{} {:?} {}",
+            d.issue.number,
+            d.change,
+            esc(&d.issue.title)
+        ),
         Details::WatchStalled(d) => format!("no success since {}", esc(&d.since)),
     };
     format!("{} {scope} {} {summary}", esc(time), event.kind().as_str())

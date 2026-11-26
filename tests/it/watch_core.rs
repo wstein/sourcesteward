@@ -167,8 +167,8 @@ fn cases(name: &str) -> Vec<Value> {
 }
 
 #[test]
-fn the_fifteen_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
-    assert_eq!(Kind::ALL.len(), 15);
+fn event_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
+    assert_eq!(Kind::ALL.len(), 16);
     let names: Vec<&str> = Kind::ALL.iter().map(|k| k.as_str()).collect();
     assert_eq!(
         names,
@@ -187,7 +187,8 @@ fn the_fifteen_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
             "repos-changed",
             "watch-error",
             "watch-recovered",
-            "watch-stalled"
+            "watch-stalled",
+            "issue-changed"
         ]
     );
     for k in Kind::ALL {
@@ -2563,6 +2564,7 @@ fn key_of(ev: &Event) -> String {
             }
         }
         Details::WatchStalled(_) => key_stall(c('s')),
+        Details::IssueChanged(d) => format!("{}:i{}", d.issue.number, d.epoch),
     }
 }
 

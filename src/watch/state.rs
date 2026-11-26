@@ -160,6 +160,8 @@ pub struct Health {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct State {
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) issues: BTreeMap<String, IssueState>,
     pub format: String,
     pub schema_version: u32,
     pub applied_seq: u64,
@@ -186,6 +188,7 @@ impl State {
     /// The empty state of a new directory.
     pub fn new() -> State {
         State {
+            issues: BTreeMap::new(),
             format: STATE_FORMAT.to_string(),
             schema_version: STATE_SCHEMA_VERSION,
             applied_seq: 0,
@@ -261,4 +264,11 @@ impl RepoState {
             self.closed.drain(..drop);
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct IssueState {
+    pub baselined: bool,
+    pub epoch: u64,
+    pub open: BTreeMap<i64, crate::issue_list::Issue>,
 }

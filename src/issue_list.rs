@@ -13,7 +13,8 @@ use crate::github::reads::escape_untrusted;
 pub const PAGE: usize = 20;
 pub const BATCH: usize = 8;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Issue {
     pub number: i64,
     pub title: String,

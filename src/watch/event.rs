@@ -35,10 +35,11 @@ pub enum Kind {
     WatchError,
     WatchRecovered,
     WatchStalled,
+    IssueChanged,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 15] = [
+    pub const ALL: [Kind; 16] = [
         Kind::NewPr,
         Kind::HeadChanged,
         Kind::ChecksGreen,
@@ -54,6 +55,7 @@ impl Kind {
         Kind::WatchError,
         Kind::WatchRecovered,
         Kind::WatchStalled,
+        Kind::IssueChanged,
     ];
 
     /// The wire name (`new-pr`, `checks-pending-timeout`, ...).
@@ -74,6 +76,7 @@ impl Kind {
             Kind::WatchError => "watch-error",
             Kind::WatchRecovered => "watch-recovered",
             Kind::WatchStalled => "watch-stalled",
+            Kind::IssueChanged => "issue-changed",
         }
     }
 
@@ -237,6 +240,22 @@ pub struct WatchStalled {
     pub repo: String,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum IssueChange {
+    Opened,
+    Updated,
+    Closed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct IssueChanged {
+    pub change: IssueChange,
+    pub epoch: u64,
+    pub issue: crate::issue_list::Issue,
+}
+
 /// The details of an event; the variant is the kind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
@@ -256,6 +275,7 @@ pub enum Details {
     WatchError(WatchError),
     WatchRecovered(WatchRecovered),
     WatchStalled(WatchStalled),
+    IssueChanged(IssueChanged),
 }
 
 impl Details {
@@ -276,6 +296,7 @@ impl Details {
             Details::WatchError(_) => Kind::WatchError,
             Details::WatchRecovered(_) => Kind::WatchRecovered,
             Details::WatchStalled(_) => Kind::WatchStalled,
+            Details::IssueChanged(_) => Kind::IssueChanged,
         }
     }
 
@@ -301,6 +322,7 @@ impl Details {
             Kind::WatchError => Details::WatchError(d(json)?),
             Kind::WatchRecovered => Details::WatchRecovered(d(json)?),
             Kind::WatchStalled => Details::WatchStalled(d(json)?),
+            Kind::IssueChanged => Details::IssueChanged(d(json)?),
         })
     }
 }

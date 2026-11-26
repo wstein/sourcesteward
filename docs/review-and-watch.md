@@ -170,6 +170,15 @@ check, mergeability, restack and watcher health events. A restart reprints
 journalled events that may have missed stdout. The Go state format is
 unsupported. Polling has no jitter.
 
+Add `--issues` to watch GitHub issues alongside pull requests. The first
+complete open-issue snapshot per repository is silent. Later complete
+snapshots emit `issue-changed` with `details.change` set to `opened`,
+`updated`, or `closed`. A reopened issue reappears as `opened`. The
+`details.issue` object contains the issue number, title, URL, update time,
+labels and assignees. The event envelope has `pr: null`. An incomplete
+read keeps the last complete snapshot and prints a diagnostic to stderr.
+Issue tracking compares snapshots and does not replay actions between polls.
+
 Use `stw watch --stream --interval 10s -v` to see the watched repositories,
 state directory, each poll's outcome and the next wait on stderr. Use
 `-vv` to also see repository reads, PR head and readiness comparisons,

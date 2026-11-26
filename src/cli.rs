@@ -127,6 +127,9 @@ enum InspectSource {
 
 #[derive(Args)]
 struct WatchArgs {
+    /// Watch open issues and emit issue-changed for opens, updates and closures.
+    #[arg(long, conflicts_with = "status")]
+    issues: bool,
     /// Print polling diagnostics to stderr. Repeat for repository and PR decisions.
     #[arg(short = 'v', long, action = clap::ArgAction::Count, conflicts_with = "status")]
     verbose: u8,
@@ -2599,8 +2602,15 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
     let code = if a.status {
         command::run_status(&dir, now, &mut std::io::stdout())
     } else {
-        let (token, _) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
+        let (token, token_source) = crate::auth::find_token(&crate::auth::AuthEnv::from_process())
             .ok_or_else(|| Error::usage("no GitHub token for stw watch"))?;
+        let issue_client = a.issues.then(|| {
+            crate::github::Client::with_base(
+                token.clone(),
+                token_source,
+                "https://api.github.com".into(),
+            )
+        });
         let http = WatchHttp::new(
             token,
             "https://api.github.com".to_string(),
@@ -2613,6 +2623,9 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             ignore_authors,
             ignore_labels,
         );
+        if let Some(client) = issue_client {
+            source = source.with_issues(client);
+        }
         let mut output = command::Lines::new(std::io::stdout(), a.human)
             .with_diagnostics(a.verbose, std::io::stderr());
         if a.stream || until {

@@ -87,6 +87,36 @@ fn poll_report(
     events: &[Event],
     duration: Duration,
 ) {
+    for poll in polls {
+        let Some(issues) = poll
+            .result
+            .as_ref()
+            .ok()
+            .and_then(|obs| obs.issues.as_ref())
+        else {
+            continue;
+        };
+        if issues.coverage == "complete" {
+            diagnostic(
+                out,
+                1,
+                format_args!(
+                    "{} observed {} open issue(s)",
+                    poll.repo,
+                    issues.issues.len()
+                ),
+            );
+        } else {
+            diagnostic(
+                out,
+                0,
+                format_args!(
+                    "{} issue list incomplete; retaining previous snapshot",
+                    poll.repo
+                ),
+            );
+        }
+    }
     if out.diagnostics(1).is_none() {
         return;
     }
@@ -636,6 +666,9 @@ fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
 /// read a silent replacement of the open list.
 fn prepare_cycle(core: &mut Core, repos: &[String], force: bool, interval_secs: u64) {
     if force || core.baseline {
+        for issues in core.state.issues.values_mut() {
+            issues.baselined = false;
+        }
         for rs in core.state.repo.values_mut() {
             rs.baselined = false;
             rs.restack_due.clear();
