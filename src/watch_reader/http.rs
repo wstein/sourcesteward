@@ -383,6 +383,8 @@ fn check_page(s: &str) -> bool {
 /// with an encoded segment, `commits/SHA`, its check runs and statuses (pages 1 to 10), `rate_limit`, and the
 /// Actions runs of a commit (the fallback for a token without the checks permission; new against Go). Only GET exists:
 /// there is no function to send anything else.
+pub(super) const MAX_BRANCH_PAGES: u64 = 100;
+
 pub fn read_endpoint_allowed(endpoint: &str) -> bool {
     if endpoint == "rate_limit" {
         return true;
@@ -390,6 +392,9 @@ pub fn read_endpoint_allowed(endpoint: &str) -> bool {
     let Some(rest) = endpoint.strip_prefix("repos/") else {
         return false;
     };
+    if rest.split('/').count() == 2 {
+        return valid_repo(rest);
+    }
     let mut it = rest.splitn(3, '/');
     let (Some(owner), Some(name), Some(tail)) = (it.next(), it.next(), it.next()) else {
         return false;
@@ -414,6 +419,9 @@ pub fn read_endpoint_allowed(endpoint: &str) -> bool {
                     .is_some_and(|p| digits_from_one(p).is_some_and(|p| p <= MAX_COMMIT_PAGES));
         }
         return is_number_from_one(q);
+    }
+    if let Some(page) = tail.strip_prefix("branches?per_page=100&page=") {
+        return digits_from_one(page).is_some_and(|page| page <= MAX_BRANCH_PAGES);
     }
     if let Some(seg) = tail.strip_prefix("branches/") {
         return !seg.is_empty() && !seg.contains(['/', '?', '#']) && branch_segment_valid(seg);
@@ -1201,6 +1209,20 @@ impl WatchHttp {
             Kind::Commits,
             &format!("{base}/pulls/{number}/commits?per_page=100&page={page}"),
             etag,
+            false,
+        )
+    }
+
+    pub fn repository_metadata(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        self.fetch(Kind::Branch, &Self::repo_path(repo)?, "", false)
+    }
+
+    pub fn branches_page(&self, repo: &str, page: u64) -> Result<WatchResponse, WatchError> {
+        let base = Self::repo_path(repo)?;
+        self.fetch(
+            Kind::Branch,
+            &format!("{base}/branches?per_page=100&page={page}"),
+            "",
             false,
         )
     }

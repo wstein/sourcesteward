@@ -37,6 +37,7 @@ pub struct KnownPr {
 /// One snapshot of a repository.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RepoObservation {
+    pub branches: Option<Result<BTreeMap<String, String>, String>>,
     /// The PR list was used only for reviews, withheld after refusal, or not selected.
     pub skip_pr_events: bool,
     pub pr_read_error: Option<String>,

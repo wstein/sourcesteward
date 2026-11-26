@@ -1166,6 +1166,26 @@ impl FakeReader {
 }
 
 impl WatchRead for FakeReader {
+    fn repository_metadata(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+        self.note("metadata".into(), "")?;
+        Ok(Self::ok("", r#"{"default_branch":"trunk"}"#))
+    }
+
+    fn branches_page(&self, _repo: &str, page: u64) -> Result<WatchResponse, WatchError> {
+        self.note(format!("branches/{page}"), "")?;
+        let name = if page == 1 { "trunk" } else { "release" };
+        let mut response = Self::ok(
+            "",
+            &serde_json::json!([{"name":name,"commit":{"sha":"a".repeat(40)}}]).to_string(),
+        );
+        if page == 1 {
+            response.link =
+                r#"<https://api.github.com/repos/o/r/branches?per_page=100&page=2>; rel="next""#
+                    .into();
+        }
+        Ok(response)
+    }
+
     fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
         self.note("workflows".into(), "")?;
         Ok(Self::ok(
@@ -1313,6 +1333,12 @@ impl Swap {
 }
 
 impl WatchRead for Swap {
+    fn repository_metadata(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        self.cur().repository_metadata(repo)
+    }
+    fn branches_page(&self, repo: &str, page: u64) -> Result<WatchResponse, WatchError> {
+        self.cur().branches_page(repo, page)
+    }
     fn recent_workflows(&self, repo: &str) -> Result<WatchResponse, WatchError> {
         self.cur().recent_workflows(repo)
     }
@@ -1388,6 +1414,43 @@ fn workflows_only_skips_pr_reads_and_all_continues_after_pr_denial() {
         };
         assert_eq!(*reader.calls.borrow(), expected);
     }
+}
+
+#[test]
+fn watch_branch_selection_uses_repository_default_and_paginates_only_when_requested() {
+    let mut reader = FakeReader::default();
+    reader.w.tips.insert("trunk".into(), "a".repeat(40));
+    reader.w.tips.insert("release".into(), "b".repeat(40));
+    let reader = Rc::new(reader);
+    let make = || {
+        HostObserver::new(
+            Swap(Rc::new(RefCell::new(reader.clone()))),
+            Box::new(|| 1_700_000_000),
+            20,
+            vec![],
+            vec![],
+        )
+        .with_prs(false)
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let result = make()
+        .with_branches(true, false, vec!["release".into(), "trunk".into()])
+        .observe("o/r", &Hints::default(), None, &cancel)
+        .unwrap();
+    assert_eq!(
+        result.branches.unwrap().unwrap().keys().collect::<Vec<_>>(),
+        ["release", "trunk"]
+    );
+    assert_eq!(
+        reader.calls.borrow_mut().drain(..).collect::<Vec<_>>(),
+        ["metadata", "branch/release", "branch/trunk"]
+    );
+    let result = make()
+        .with_branches(true, true, vec![])
+        .observe("o/r", &Hints::default(), None, &cancel)
+        .unwrap();
+    assert_eq!(result.branches.unwrap().unwrap().len(), 2);
+    assert_eq!(*reader.calls.borrow(), ["branches/1", "branches/2"]);
 }
 
 fn code_of(name: &str) -> Code {

@@ -185,6 +185,17 @@ polling reads the open-PR list to locate reviews. Workflow-only polling
 covers all observed workflows because it does not read the PR list.
 `--status` reads the saved state without selecting categories.
 
+`--all` also watches each repository's configured GitHub default branch.
+Add repeatable `--branch NAME` options to watch specific branches, alone
+or alongside `--all`. Use `--all-branches` to read the complete list (up to
+10,000 branches per repository). Branch polling also works without a PR.
+After the first successful snapshot, a changed tip emits
+`branch-head-changed` with the branch name and both commit SHAs. A first
+sighting or disappearance emits no branch event. Incomplete snapshots
+keep the previous heads. Multiple pushes between polls can appear as one
+change. With PR monitoring enabled, a single push can also emit
+`head-changed` for an open pull request.
+
 A PR retarget emits `base-changed` even when the head SHA stays the same.
 
 - `--workflows` reads the latest 100 GitHub Actions runs and emits

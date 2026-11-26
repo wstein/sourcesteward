@@ -118,6 +118,7 @@ pub fn advance_seen(
         }
         note_issues(state, &item.repo, obs.issues.as_ref(), &now, &mut events);
         note_workflows(state, &item.repo, obs, &now, &mut events);
+        note_branches(state, &item.repo, obs, &now, &mut events);
         note_activity(state, &item.repo, obs, &now, &mut events);
         remember_cond(state, &item.repo, obs.cond.as_ref());
     }
@@ -157,6 +158,48 @@ fn note_source_error(
     );
     state.apply(&event);
     events.push(event);
+}
+
+fn note_branches(
+    state: &mut State,
+    repo: &str,
+    obs: &RepoObservation,
+    now: &str,
+    events: &mut Vec<Event>,
+) {
+    use super::event::{BranchHeadChanged, Kind};
+    let Some(snapshot) = &obs.branches else {
+        return;
+    };
+    let heads = match snapshot {
+        Ok(heads) => heads,
+        Err(code) => return note_source_error(state, repo, code, now, events),
+    };
+    let tracked = state.branches.entry(repo.to_owned()).or_default();
+    for (branch, new) in heads {
+        let Some(old) = tracked.heads.get(branch).filter(|old| *old != new) else {
+            continue;
+        };
+        tracked.epoch = tracked.epoch.saturating_add(1);
+        events.push(Event::new(
+            event_id(
+                Some(repo),
+                None,
+                Kind::BranchHeadChanged,
+                &format!("b{}", tracked.epoch),
+            ),
+            now.to_owned(),
+            Some(repo.to_owned()),
+            None,
+            Details::BranchHeadChanged(BranchHeadChanged {
+                branch: branch.clone(),
+                old: old.clone(),
+                new: new.clone(),
+                epoch: tracked.epoch,
+            }),
+        ));
+    }
+    tracked.heads.clone_from(heads);
 }
 
 fn note_workflows(

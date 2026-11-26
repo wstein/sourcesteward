@@ -165,6 +165,8 @@ pub struct State {
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) workflows: BTreeMap<String, WorkflowState>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub(super) branches: BTreeMap<String, BranchState>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) source_errors: BTreeMap<String, u64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub(super) activity: BTreeMap<String, ActivityState>,
@@ -196,6 +198,7 @@ impl State {
         State {
             issues: BTreeMap::new(),
             workflows: BTreeMap::new(),
+            branches: BTreeMap::new(),
             source_errors: BTreeMap::new(),
             activity: BTreeMap::new(),
             format: STATE_FORMAT.to_string(),
@@ -293,4 +296,10 @@ pub(super) struct ActivityState {
     pub baselined: bool,
     pub epoch: u64,
     pub versions: BTreeMap<String, String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct BranchState {
+    pub epoch: u64,
+    pub heads: BTreeMap<String, String>,
 }

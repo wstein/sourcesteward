@@ -131,6 +131,7 @@ enum InspectSource {
 const WATCH_HELP: &str =
     "Select --all or one or more categories when polling. --status reads saved state.
 Event kinds emitted by the watcher:
+  --branch NAME / --all-branches: branch-head-changed
   --prs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
   PR checks: checks-green, checks-red, checks-pending-timeout
   Mergeability: mergeable-changed, restack-needed
@@ -147,9 +148,15 @@ See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md";
 
 #[derive(Args)]
 struct WatchArgs {
-    /// Watch all event categories.
+    /// Watch all event categories, including each repository’s default branch.
     #[arg(long, conflicts_with_all = ["status", "prs", "workflows", "issues", "reviews", "discussions", "wiki"])]
     all: bool,
+    /// Watch a named branch in each repository. Repeat to select more branches.
+    #[arg(long, value_name = "NAME", conflicts_with = "status")]
+    branch: Vec<String>,
+    /// Watch every branch in each repository.
+    #[arg(long, conflicts_with = "status")]
+    all_branches: bool,
     /// Watch pull requests, their checks, mergeability and restack events.
     #[arg(long, conflicts_with = "status")]
     prs: bool,
@@ -2566,13 +2573,20 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
             a.reviews,
             a.discussions,
             a.wiki,
+            a.all_branches,
+            !a.branch.is_empty(),
         ]
         .into_iter()
         .any(|selected| selected)
     {
         return Err(Error::usage(
-            "stw watch: select --all or at least one category: --prs, --workflows, --issues, --reviews, --discussions, --wiki",
+            "stw watch: select --all or at least one category: --prs, --workflows, --issues, --reviews, --discussions, --wiki, --branch NAME, --all-branches",
         ));
+    }
+    for name in &a.branch {
+        if crate::watch_reader::http::encode_branch_segment(name).is_none() {
+            return Err(Error::usage(format!("invalid --branch name {name:?}")));
+        }
     }
     if a.status && a.baseline {
         return Err(Error::usage("--baseline is not valid with --status"));
@@ -2690,6 +2704,7 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
                 (a.all || a.reviews, "reviews"),
                 (a.all || a.discussions, "discussions"),
                 (a.all || a.wiki, "wiki"),
+                (a.all || a.all_branches || !a.branch.is_empty(), "branches"),
             ]
             .into_iter()
             .filter_map(|(enabled, name)| enabled.then_some(name))
@@ -2723,7 +2738,8 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         source = source
             .with_prs(a.all || a.prs)
             .with_workflows(a.all || a.workflows)
-            .with_wiki(a.all || a.wiki);
+            .with_wiki(a.all || a.wiki)
+            .with_branches(a.all, a.all_branches, a.branch);
         if let Some(client) = graph_client {
             source = source.with_graph_sources(client, issues, reviews, discussions);
         }

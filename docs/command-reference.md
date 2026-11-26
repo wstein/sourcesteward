@@ -1639,7 +1639,13 @@ Usage: stw watch [OPTIONS]
 
 Options:
       --all
-          Watch all event categories
+          Watch all event categories, including each repository’s default branch
+
+      --branch <NAME>
+          Watch a named branch in each repository. Repeat to select more branches
+
+      --all-branches
+          Watch every branch in each repository
 
       --prs
           Watch pull requests, their checks, mergeability and restack events
@@ -1718,6 +1724,7 @@ Options:
 
 Select --all or one or more categories when polling. --status reads saved state.
 Event kinds emitted by the watcher:
+  --branch NAME / --all-branches: branch-head-changed
   --prs: new-pr, head-changed, ready-state-changed, base-changed, merged, closed
   PR checks: checks-green, checks-red, checks-pending-timeout
   Mergeability: mergeable-changed, restack-needed

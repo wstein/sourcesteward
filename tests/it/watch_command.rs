@@ -542,6 +542,44 @@ fn optional_activity_has_a_silent_baseline_and_source_errors_do_not_close_prs() 
 }
 
 #[test]
+fn branch_events_replay_and_incomplete_reads_keep_the_previous_heads() {
+    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::event::Event;
+    use stw::watch_reader::obs::RepoObservation;
+    let poll = |state: &mut State, branches| {
+        advance_seen(
+            state,
+            &[Seen {
+                repo: "o/r".into(),
+                result: Ok(RepoObservation {
+                    branches: Some(branches),
+                    skip_pr_events: true,
+                    ..RepoObservation::default()
+                }),
+            }],
+            1_700_000_000,
+            10,
+        )
+    };
+    let heads = |head: &str| Ok([("trunk".into(), head.into())].into());
+    let mut state = State::new();
+    assert!(poll(&mut state, heads("old")).is_empty());
+    let mut replay = state.clone();
+    let failure = poll(&mut state, Err("branches-malformed-response".into()));
+    assert_eq!(failure[0].kind(), Kind::WatchError);
+    let events = poll(&mut state, heads("new"));
+    assert_eq!(events.len(), 1);
+    let event = Event::from_line(&events[0].to_line()).unwrap();
+    assert!(
+        matches!(&event.details, Details::BranchHeadChanged(d) if d.branch == "trunk" && d.old == "old" && d.new == "new")
+    );
+    replay.apply(&event);
+    assert!(poll(&mut replay, heads("new")).is_empty());
+    let back = poll(&mut replay, heads("old"));
+    assert_ne!(back[0].id, event.id);
+}
+
+#[test]
 fn retargeting_without_a_push_emits_base_changed() {
     let mut state = State::new();
     let mut pull = pr(7, "same-head");

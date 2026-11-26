@@ -138,6 +138,9 @@ pub(super) fn render(event: &Event) -> String {
                 esc(&d.record.url)
             )
         }
+        Details::BranchHeadChanged(d) => {
+            format!("{} {} -> {}", esc(&d.branch), short(&d.old), short(&d.new))
+        }
         Details::WikiChanged(d) => format!("{} ({})", esc(&d.record.summary), esc(&d.record.url)),
         Details::WorkflowCompleted(d) => format!(
             "{} {} on {} ({})",

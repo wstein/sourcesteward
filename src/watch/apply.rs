@@ -14,6 +14,16 @@ impl State {
     /// counters of its ids still matter.
     pub fn apply(&mut self, ev: &Event) {
         match &ev.details {
+            Details::BranchHeadChanged(details) => {
+                if let Some(repo) = &ev.repo {
+                    let state = self.branches.entry(repo.clone()).or_default();
+                    state.epoch = state.epoch.max(details.epoch);
+                    state
+                        .heads
+                        .insert(details.branch.clone(), details.new.clone());
+                }
+                return;
+            }
             Details::ReviewStateChanged(d)
             | Details::ReviewCommentAdded(d)
             | Details::DiscussionChanged(d)

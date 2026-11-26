@@ -168,7 +168,7 @@ fn cases(name: &str) -> Vec<Value> {
 
 #[test]
 fn event_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
-    assert_eq!(Kind::ALL.len(), 21);
+    assert_eq!(Kind::ALL.len(), 22);
     let names: Vec<&str> = Kind::ALL.iter().map(|k| k.as_str()).collect();
     assert_eq!(
         names,
@@ -193,7 +193,8 @@ fn event_kinds_have_their_wire_names_and_the_reserved_kind_is_none() {
             "review-state-changed",
             "review-comment-added",
             "discussion-changed",
-            "wiki-changed"
+            "wiki-changed",
+            "branch-head-changed"
         ]
     );
     for k in Kind::ALL {
@@ -2578,6 +2579,7 @@ fn key_of(ev: &Event) -> String {
         | Details::ReviewCommentAdded(d)
         | Details::DiscussionChanged(d)
         | Details::WikiChanged(d) => format!("a{}", d.epoch),
+        Details::BranchHeadChanged(d) => format!("b{}", d.epoch),
     }
 }
 

@@ -32,6 +32,15 @@ pub trait WatchRead {
     ) -> Result<PullListResult, WatchError>;
     fn pull_detail(&self, repo: &str, number: u64, etag: &str)
         -> Result<WatchResponse, WatchError>;
+    fn repository_metadata(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
+        Err(WatchError::new(
+            Code::Forbidden,
+            "repository metadata unavailable",
+        ))
+    }
+    fn branches_page(&self, _repo: &str, _page: u64) -> Result<WatchResponse, WatchError> {
+        Err(WatchError::new(Code::Forbidden, "branches unavailable"))
+    }
     fn branch(&self, repo: &str, name: &str, etag: &str) -> Result<WatchResponse, WatchError>;
     fn commit(&self, repo: &str, sha: &str, etag: &str) -> Result<WatchResponse, WatchError>;
     fn pull_commits(
@@ -86,6 +95,12 @@ impl WatchRead for WatchHttp {
         etag: &str,
     ) -> Result<WatchResponse, WatchError> {
         WatchHttp::pull_detail(self, repo, number, etag)
+    }
+    fn repository_metadata(&self, repo: &str) -> Result<WatchResponse, WatchError> {
+        WatchHttp::repository_metadata(self, repo)
+    }
+    fn branches_page(&self, repo: &str, page: u64) -> Result<WatchResponse, WatchError> {
+        WatchHttp::branches_page(self, repo, page)
     }
     fn branch(&self, repo: &str, name: &str, etag: &str) -> Result<WatchResponse, WatchError> {
         WatchHttp::branch(self, repo, name, etag)
@@ -362,6 +377,11 @@ pub struct HostObserver<R: WatchRead> {
     graph: Option<crate::github::Client>,
     prs: bool,
     pulls_refused: BTreeSet<String>,
+    default_branch: bool,
+    all_branches: bool,
+    branch_names: BTreeSet<String>,
+    branches_refused: BTreeSet<String>,
+    branches_retry_at: i64,
     issues: bool,
     reviews: bool,
     discussions: bool,
@@ -400,6 +420,11 @@ impl<R: WatchRead> HostObserver<R> {
             graph: None,
             prs: true,
             pulls_refused: BTreeSet::new(),
+            default_branch: false,
+            all_branches: false,
+            branch_names: BTreeSet::new(),
+            branches_refused: BTreeSet::new(),
+            branches_retry_at: 0,
             issues: false,
             reviews: false,
             discussions: false,
@@ -425,6 +450,17 @@ impl<R: WatchRead> HostObserver<R> {
             warned: BTreeSet::new(),
             diags: Vec::new(),
         }
+    }
+
+    pub fn with_branches(mut self, default: bool, all: bool, names: Vec<String>) -> Self {
+        self.default_branch = default;
+        self.all_branches = all;
+        self.branch_names = names.into_iter().collect();
+        self
+    }
+
+    fn watching_branches(&self) -> bool {
+        self.default_branch || self.all_branches || !self.branch_names.is_empty()
     }
 
     pub fn with_prs(mut self, enabled: bool) -> Self {
@@ -526,7 +562,11 @@ impl<R: WatchRead> HostObserver<R> {
                 retry_in: wait,
             }));
         }
-        let optional = self.workflows || self.issues || self.discussions || self.wiki;
+        let optional = self.workflows
+            || self.issues
+            || self.discussions
+            || self.wiki
+            || self.watching_branches();
         let mut observation = RepoObservation {
             skip_pr_events: true,
             ..RepoObservation::default()
@@ -567,6 +607,7 @@ impl<R: WatchRead> HostObserver<R> {
         if let Some(result) = self.read_wiki(repo) {
             activity.push((super::obs::ActivityScope::Wiki, result));
         }
+        observation.branches = self.read_watched_branches(repo);
         observation.issues = issues;
         observation.workflows = workflows;
         observation.activity = activity;
@@ -584,7 +625,11 @@ impl<R: WatchRead> HostObserver<R> {
         let list = match self.r.list_open_pulls(repo, &cond.list, self.max_open) {
             Ok(l) => l,
             Err(e) => {
-                if (self.workflows || self.issues || self.discussions || self.wiki)
+                if (self.workflows
+                    || self.issues
+                    || self.discussions
+                    || self.wiki
+                    || self.watching_branches())
                     && matches!(e.status, 401 | 403 | 404)
                     && e.code != Code::RateLimited
                 {
@@ -710,6 +755,93 @@ impl<R: WatchRead> HostObserver<R> {
             cond: Some(cond),
             ..RepoObservation::default()
         })
+    }
+
+    fn read_watched_branches(
+        &mut self,
+        repo: &str,
+    ) -> Option<Result<BTreeMap<String, String>, String>> {
+        if !self.watching_branches()
+            || self.branches_refused.contains(repo)
+            || (self.now)() < self.branches_retry_at
+        {
+            return None;
+        }
+        Some(self.branch_snapshot(repo).map_err(|error| {
+            if error.code == Code::RateLimited {
+                self.branches_retry_at = error.rate_limited_until((self.now)());
+            } else if matches!(error.status, 401 | 403 | 404) {
+                self.branches_refused.insert(repo.to_owned());
+            }
+            format!("branches-{}", error.code.as_str())
+        }))
+    }
+
+    fn branch_snapshot(&self, repo: &str) -> Result<BTreeMap<String, String>, WatchError> {
+        use super::http::{has_next_rel, next_page_from_link, MAX_BRANCH_PAGES};
+
+        let bad = || WatchError::new(Code::Malformed, "incomplete branch snapshot");
+        let sha = |row: &Value| {
+            row["commit"]["sha"]
+                .as_str()
+                .filter(|sha| valid_sha(sha))
+                .map(str::to_owned)
+                .ok_or_else(bad)
+        };
+        let mut branches = BTreeMap::new();
+        if self.all_branches {
+            for page in 1..=MAX_BRANCH_PAGES {
+                let response = self.r.branches_page(repo, page)?;
+                let json = json_body(&response, "branches")?;
+                for row in json.as_array().ok_or_else(bad)? {
+                    let name = row["name"]
+                        .as_str()
+                        .filter(|name| !name.is_empty())
+                        .ok_or_else(bad)?;
+                    if branches.insert(name.to_owned(), sha(row)?).is_some() {
+                        return Err(bad());
+                    }
+                }
+                match next_page_from_link(&response.link) {
+                    None if !has_next_rel(&response.link) => return Ok(branches),
+                    Some(next) if next == page + 1 && next <= MAX_BRANCH_PAGES => {}
+                    _ => return Err(bad()),
+                }
+            }
+            return Err(bad());
+        }
+        let mut names = self.branch_names.clone();
+        if self.default_branch {
+            let metadata = self.r.repository_metadata(repo)?;
+            let json = json_body(&metadata, "repository metadata")?;
+            names.insert(
+                json["default_branch"]
+                    .as_str()
+                    .filter(|name| !name.is_empty())
+                    .ok_or_else(bad)?
+                    .to_owned(),
+            );
+        }
+        let mut repo_visible = self.default_branch;
+        for name in names {
+            match self.r.branch(repo, &name, "") {
+                Ok(response) => {
+                    let json = json_body(&response, "branch")?;
+                    branches.insert(name, sha(&json)?);
+                    repo_visible = true;
+                }
+                // Named branches may not exist in every repository. Confirm visibility
+                // before treating a masked repository-level denial as a missing branch.
+                Err(error) if error.status == 404 => {
+                    if !repo_visible {
+                        self.r.repository_metadata(repo)?;
+                        repo_visible = true;
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(branches)
     }
 
     fn read_workflows(

@@ -124,6 +124,9 @@ fn poll_report(
                 {
                     count("open issue(s)", issues.issues.len());
                 }
+                if let Some(Ok(branches)) = &obs.branches {
+                    count("watched branch(es)", branches.len());
+                }
                 if obs.workflows.as_ref().is_some_and(Result::is_ok) {
                     count("active workflow run(s)", obs.active_workflows);
                 }
@@ -703,6 +706,9 @@ fn retry_holds(state: &super::state::State, repo: &str, now: i64) -> bool {
 /// read a silent replacement of the open list.
 fn prepare_cycle(core: &mut Core, repos: &[String], force: bool, interval_secs: u64) {
     if force || core.baseline {
+        for branches in core.state.branches.values_mut() {
+            branches.heads.clear();
+        }
         for activity in core.state.activity.values_mut() {
             activity.baselined = false;
         }

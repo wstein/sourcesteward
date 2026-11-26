@@ -41,10 +41,11 @@ pub enum Kind {
     ReviewCommentAdded,
     DiscussionChanged,
     WikiChanged,
+    BranchHeadChanged,
 }
 
 impl Kind {
-    pub const ALL: [Kind; 21] = [
+    pub const ALL: [Kind; 22] = [
         Kind::NewPr,
         Kind::HeadChanged,
         Kind::ChecksGreen,
@@ -66,6 +67,7 @@ impl Kind {
         Kind::ReviewCommentAdded,
         Kind::DiscussionChanged,
         Kind::WikiChanged,
+        Kind::BranchHeadChanged,
     ];
 
     /// The wire name (`new-pr`, `checks-pending-timeout`, ...).
@@ -92,6 +94,7 @@ impl Kind {
             Kind::ReviewCommentAdded => "review-comment-added",
             Kind::DiscussionChanged => "discussion-changed",
             Kind::WikiChanged => "wiki-changed",
+            Kind::BranchHeadChanged => "branch-head-changed",
         }
     }
 
@@ -314,6 +317,15 @@ pub struct ActivityChange {
     pub epoch: u64,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BranchHeadChanged {
+    pub branch: String,
+    pub old: String,
+    pub new: String,
+    pub epoch: u64,
+}
+
 /// The details of an event; the variant is the kind.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(untagged)]
@@ -339,6 +351,7 @@ pub enum Details {
     ReviewCommentAdded(ActivityChange),
     DiscussionChanged(ActivityChange),
     WikiChanged(ActivityChange),
+    BranchHeadChanged(BranchHeadChanged),
 }
 
 impl Details {
@@ -365,6 +378,7 @@ impl Details {
             Details::ReviewCommentAdded(_) => Kind::ReviewCommentAdded,
             Details::DiscussionChanged(_) => Kind::DiscussionChanged,
             Details::WikiChanged(_) => Kind::WikiChanged,
+            Details::BranchHeadChanged(_) => Kind::BranchHeadChanged,
         }
     }
 
@@ -396,6 +410,7 @@ impl Details {
             Kind::ReviewCommentAdded => Details::ReviewCommentAdded(d(json)?),
             Kind::DiscussionChanged => Details::DiscussionChanged(d(json)?),
             Kind::WikiChanged => Details::WikiChanged(d(json)?),
+            Kind::BranchHeadChanged => Details::BranchHeadChanged(d(json)?),
         })
     }
 }
