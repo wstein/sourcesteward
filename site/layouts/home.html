@@ -30,38 +30,41 @@
     </ul>
   </section>
   <section class="wrap start" id="start">
-    <h2>Get started</h2>
+    <div class="start-intro">
+      <h2>Get started</h2>
+      <p>Install the <code>stw</code> command, then run a read-only check in any Git checkout.</p>
+    </div>
     <ol class="steps">
       <li>
-        <div class="step-copy">
-          <p class="step-kicker">Step 1</p>
+        <span class="step-num">1</span>
+        <div class="step-body">
           <h3>Install</h3>
-          <p>Homebrew on macOS or Linux, or the installer script published with this site.</p>
-        </div>
-        <div class="install" data-install>
-          <div class="tabs" role="tablist" aria-label="Install method">
-            <button type="button" role="tab" id="tab-brew" aria-controls="panel-brew" aria-selected="true">Homebrew</button>
-            <button type="button" role="tab" id="tab-script" aria-controls="panel-script" aria-selected="false" tabindex="-1">Installer script</button>
-          </div>
-          <div role="tabpanel" id="panel-brew" aria-labelledby="tab-brew">
-            <pre><code>$ brew install wstein/tap/stw</code></pre>
-          </div>
-          <div role="tabpanel" id="panel-script" aria-labelledby="tab-script">
-            <pre><code>$ curl -fsSL https://wstein.github.io/sourcesteward/install.sh | sh</code></pre>
-            <p>The script checks the archive SHA-256 and installs into <code>~/.local/bin</code>. Set <code>STW_INSTALL_DIR</code> for another directory, or append <code>-s -- v0.6.0</code> to pin a release.</p>
+          <div class="install" data-install>
+            <div class="tabs" role="tablist" aria-label="Install method">
+              <button type="button" role="tab" id="tab-brew" aria-controls="panel-brew" aria-selected="true">Homebrew</button>
+              <button type="button" role="tab" id="tab-script" aria-controls="panel-script" aria-selected="false" tabindex="-1">Installer script</button>
+            </div>
+            <div role="tabpanel" id="panel-brew" aria-labelledby="tab-brew">
+              <pre><code>$ brew install wstein/tap/stw</code></pre>
+            </div>
+            <div role="tabpanel" id="panel-script" aria-labelledby="tab-script">
+              <pre><code>$ curl -fsSL https://wstein.github.io/sourcesteward/install.sh | sh</code></pre>
+              <p>The script checks the archive SHA-256 and installs into <code>~/.local/bin</code>. Set <code>STW_INSTALL_DIR</code> for another directory, or append <code>-s -- v0.6.0</code> to pin a release.</p>
+            </div>
           </div>
         </div>
       </li>
       <li>
-        <div class="step-copy">
-          <p class="step-kicker">Step 2</p>
+        <span class="step-num">2</span>
+        <div class="step-body">
           <h3>Run a read-only check</h3>
-          <p>In a Git checkout, see the workspace without changing it.</p>
+          <pre class="code"><code>$ stw status --offline</code></pre>
         </div>
-        <pre class="code"><code>$ stw status --offline</code></pre>
+      </li>
+      <li class="warn" role="note">
+        <p><strong>SourceSteward is experimental.</strong> Review the plan before any operation that changes Git history.</p>
       </li>
     </ol>
-    <p class="warn" role="note"><strong>SourceSteward is experimental.</strong> Review the plan before any operation that changes Git history.</p>
   </section>
   <section class="wrap choose">
     <div class="choose-head">

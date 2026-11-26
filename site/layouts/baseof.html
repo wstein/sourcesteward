@@ -63,9 +63,14 @@
     </div>
     {{ end }}
   </main>
-  <footer class="wrap footer">
-    <a href="https://github.com/wstein/sourcesteward/releases">Releases</a>
-    <a href="https://github.com/wstein/sourcesteward/blob/main/LICENSE">EUPL-1.2</a>
+  <footer class="site-footer">
+    <div class="wrap footer">
+      <a class="wordmark" href="{{ "" | relURL }}"><img class="mark-light" src="{{ "assets/logo-mark.svg" | relURL }}" width="32" height="32" alt=""><img class="mark-dark" src="{{ "assets/logo.svg" | relURL }}" width="32" height="32" alt="">SourceSteward</a>
+      <nav aria-label="Footer">
+        <a href="https://github.com/wstein/sourcesteward/releases">Releases</a>
+        <a href="https://github.com/wstein/sourcesteward/blob/main/LICENSE">EUPL-1.2</a>
+      </nav>
+    </div>
   </footer>
 </body>
 </html>
