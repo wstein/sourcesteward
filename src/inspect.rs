@@ -145,7 +145,8 @@ pub fn local(path: &Path, base: &str, head: &str) -> Report {
 
 fn read_local(report: &mut Report, path: &Path, base: &str, head: &str) -> Result<()> {
     use gix::object::tree::diff::{Action, Change};
-    let discovered = gix::discover(path)?;
+    let discovered = crate::repo::discover::discover(path)
+        .ok_or_else(|| Error::repository("no accessible repository at the requested path"))?;
     let repo = crate::repo::open(discovered.workdir().unwrap_or_else(|| discovered.git_dir()))?;
     let resolve = |revision: &str| -> Result<_> {
         Ok(repo

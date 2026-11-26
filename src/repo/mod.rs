@@ -387,6 +387,13 @@ pub fn open(path: &Path) -> Result<gix::Repository> {
     Ok(repo)
 }
 
+/// Open for commit creation, where the caller requires an explicit Git identity.
+pub(crate) fn open_for_commit(path: &Path) -> Result<gix::Repository> {
+    let mut repo = gix::open(path)?;
+    drop_filter_drivers(&mut repo)?;
+    Ok(repo)
+}
+
 /// Open a repository reading only its own config files (no user, no system config, no environment
 /// selectors). For `stw add`, which inspects a fresh clone and the workspace before any git program runs.
 pub fn open_isolated(path: &Path) -> Result<gix::Repository> {

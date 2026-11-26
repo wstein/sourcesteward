@@ -227,7 +227,7 @@ fn open(path: &Path) -> Result<(gix::Repository, PathBuf)> {
         return Err(Error::repository(error.message));
     }
     let root = path.canonicalize()?;
-    let repo = gix::open(&root)?;
+    let repo = crate::repo::open_for_commit(&root)?;
     if repo
         .workdir()
         .map(Path::canonicalize)
