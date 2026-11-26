@@ -149,6 +149,11 @@ not compared with the current dotagents text rule by rule: UNKNOWN, as for `lint
 ## Watch scenarios (port corpus)
 
 `tests/fixtures/watch/` holds 279 scenarios derived from the Go watcher.
+Use `--repo OWNER/NAME` or `--repo https://github.com/OWNER/NAME` to watch
+a specific repository. Both forms select the same watcher state. Without
+`--repo` or `--workspace`, Watch uses `.stw/watch.toml` if present. With no
+config file, it watches the GitHub `origin` of the current Git repository.
+
 `stw watch` requires an explicit mode. `--once` polls once, `--stream`
 polls until SIGINT, SIGTERM or `--max-idle`, and `--until-event KIND`
 polls until a selected kind appears or the timeout expires. `--status`

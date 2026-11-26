@@ -127,7 +127,7 @@ enum InspectSource {
 
 #[derive(Args)]
 struct WatchArgs {
-    /// OWNER/NAME, repeatable. With neither this nor --workspace, `.stw/watch.toml` is used when it exists.
+    /// OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin.
     #[arg(long = "repo")]
     repo: Vec<String>,
     /// Watch every GitHub repository of the workspace that contains the current directory.
@@ -2455,6 +2455,22 @@ fn load_watch_file(a: &WatchArgs) -> Result<Option<crate::watch::watch_toml::Wat
         .map_err(Error::usage)
 }
 
+fn watch_repo_arg(value: &str) -> Result<String> {
+    let slug = if let Some(path) = value.strip_prefix("https://github.com/") {
+        let path = path.strip_suffix('/').unwrap_or(path);
+        path.strip_suffix(".git").unwrap_or(path)
+    } else {
+        value
+    };
+    if crate::watch_reader::http::valid_repo(slug) {
+        Ok(slug.to_owned())
+    } else {
+        Err(Error::usage(
+            "watch --repo must be OWNER/NAME or https://github.com/OWNER/NAME",
+        ))
+    }
+}
+
 fn run_watch(a: WatchArgs) -> Result<u8> {
     use crate::watch::command::{self, watch_error_exit, StreamLimits};
     use crate::watch::event::Kind;
@@ -2505,7 +2521,10 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
     }
     let file = load_watch_file(&a)?;
     let repos = if !a.repo.is_empty() {
-        a.repo.clone()
+        a.repo
+            .iter()
+            .map(|repo| watch_repo_arg(repo))
+            .collect::<Result<Vec<_>>>()?
     } else if a.workspace {
         workspace_slugs()?
     } else if let Some(file) = &file {
@@ -2514,9 +2533,15 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         }
         file.repos.clone()
     } else {
-        return Err(Error::usage(
-            "name a repository with --repo, --workspace, or .stw/watch.toml",
-        ));
+        let cwd = std::env::current_dir()?;
+        let repo = crate::repo::discover::discover(&cwd)
+            .ok_or_else(|| Error::usage("no current Git repository; use --repo OWNER/NAME"))?;
+        let root = repo.workdir().unwrap_or_else(|| repo.git_dir());
+        let isolated = crate::repo::open_isolated(root)?;
+        let slug = crate::repo::slug(&isolated).ok_or_else(|| {
+            Error::usage("the current repository has no GitHub origin; use --repo OWNER/NAME")
+        })?;
+        vec![watch_repo_arg(&slug)?]
     };
     let interval = match a.interval.as_deref() {
         Some(text) => command::parse_duration_secs(text)

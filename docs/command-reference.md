@@ -1557,7 +1557,7 @@ Usage: stw watch [OPTIONS]
 
 Options:
       --repo <REPO>
-          OWNER/NAME, repeatable. With neither this nor --workspace, `.stw/watch.toml` is used when it exists
+          OWNER/NAME or a GitHub HTTPS repository URL, repeatable. Defaults to .stw/watch.toml if present, otherwise the current repository’s GitHub origin
 
       --workspace
           Watch every GitHub repository of the workspace that contains the current directory

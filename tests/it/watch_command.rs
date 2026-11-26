@@ -1150,6 +1150,65 @@ fn a_pending_class_times_out_once_per_period() {
 }
 
 #[test]
+fn github_repo_url_and_slug_select_the_same_watch_state() {
+    let dir = tempfile::tempdir().unwrap();
+    let status = |repo: &str| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+            .env("XDG_STATE_HOME", dir.path())
+            .args(["watch", "--status", "--repo", repo])
+            .output()
+            .unwrap()
+    };
+    let slug = status("wstein/sourcesteward");
+    assert_eq!(slug.status.code(), Some(5));
+    for url in [
+        "https://github.com/wstein/sourcesteward",
+        "https://github.com/wstein/sourcesteward.git/",
+    ] {
+        let output = status(url);
+        assert_eq!(output.status.code(), slug.status.code());
+        assert_eq!(output.stdout, slug.stdout);
+    }
+    for invalid in [
+        "https://github.com.example/wstein/sourcesteward",
+        "https://github.com/wstein/sourcesteward/pulls",
+        "https://github.com/wstein/sourcesteward?tab=readme",
+        "wstein",
+    ] {
+        let output = status(invalid);
+        assert_eq!(output.status.code(), Some(2), "{invalid}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("watch --repo must be"));
+    }
+}
+
+#[test]
+fn watch_defaults_to_the_current_repository_origin() {
+    let fixture = super::common::Fx::new();
+    let subdir = fixture.path.join("nested");
+    std::fs::create_dir(&subdir).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let status = |args: &[&str]| {
+        std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+            .current_dir(&subdir)
+            .env("XDG_STATE_HOME", dir.path())
+            .args(["watch", "--status"])
+            .args(args)
+            .output()
+            .unwrap()
+    };
+    let explicit = status(&["--repo", "test/fixture"]);
+    assert_eq!(explicit.status.code(), Some(5));
+    let implicit = status(&[]);
+    assert_eq!(
+        implicit.status.code(),
+        explicit.status.code(),
+        "{}",
+        String::from_utf8_lossy(&implicit.stderr)
+    );
+    assert_eq!(implicit.stdout, explicit.stdout);
+}
+
+#[test]
 fn status_with_an_absolute_state_dir_does_not_need_a_repository() {
     let dir = tempfile::TempDir::new().unwrap();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
