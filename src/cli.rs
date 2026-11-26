@@ -27,15 +27,13 @@ Exit codes:
 
 --json prints one JSON object with \"schema_version\" (see README.md).";
 
-const AGENT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
-
-Use stw <command> --help for command-specific flags and output.";
+const AGENT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md";
 
 #[derive(Parser)]
 #[command(
     name = "stw",
     version,
-    about = "SourceSteward: where am I, what can go, what is behind, across every repository of a workspace",
+    about = "SourceSteward: Plan Git changes, inspect branch history, and hand off work across repositories.",
     after_help = EXIT_CODES,
     subcommand_required = true,
     arg_required_else_help = true
@@ -1282,9 +1280,21 @@ enum DevCommand {
 }
 
 fn cli_command() -> clap::Command {
+    fn with_agent_footer(existing: Option<&clap::builder::StyledStr>) -> clap::builder::StyledStr {
+        let mut footer = existing.cloned().unwrap_or_default();
+        if existing.is_some() {
+            footer.push_str("\n\n");
+        }
+        footer.push_str(AGENT_HELP);
+        footer
+    }
+
     fn add_agent_help(command: clap::Command) -> clap::Command {
+        let short = with_agent_footer(command.get_after_help().or(command.get_after_long_help()));
+        let long = with_agent_footer(command.get_after_long_help().or(command.get_after_help()));
         command
-            .before_help(AGENT_HELP)
+            .after_help(short)
+            .after_long_help(long)
             .mut_subcommands(add_agent_help)
     }
 

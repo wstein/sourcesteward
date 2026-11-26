@@ -2,11 +2,7 @@
 source: tests/snapshots_cli.rs
 expression: "stw_stdout(&[\"--help\"])"
 ---
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
-
-Use stw <command> --help for command-specific flags and output.
-
-SourceSteward: where am I, what can go, what is behind, across every repository of a workspace
+SourceSteward: Plan Git changes, inspect branch history, and hand off work across repositories.
 
 Usage: stw <COMMAND>
 
@@ -28,8 +24,11 @@ Commands:
   help         Print this message or the help of the given subcommand(s)
 
 Options:
-  -h, --help     Print help
-  -V, --version  Print version
+  -h, --help
+          Print help (see a summary with '-h')
+
+  -V, --version
+          Print version
 
 Exit codes:
   0  everything asked for worked
@@ -39,3 +38,5 @@ Exit codes:
   2  usage error or unusable workspace (nothing was done)
 
 --json prints one JSON object with "schema_version" (see README.md).
+
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md

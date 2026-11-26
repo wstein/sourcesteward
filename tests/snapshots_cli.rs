@@ -4,9 +4,10 @@ mod common;
 use common::*;
 
 #[test]
-fn agent_hint_appears_once_in_short_long_and_nested_help() {
+fn agent_hint_appears_once_at_the_end_of_short_long_and_nested_help() {
     let hint = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md";
     for args in [
+        &["--help"][..],
         &["watch", "-h"][..],
         &["watch", "--help"][..],
         &["help", "watch"][..],
@@ -14,6 +15,7 @@ fn agent_hint_appears_once_in_short_long_and_nested_help() {
     ] {
         let help = stw_stdout(args);
         assert_eq!(help.matches(hint).count(), 1, "{args:?}: {help}");
+        assert!(help.trim_end().ends_with(hint), "{args:?}: {help}");
     }
 }
 
