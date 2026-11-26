@@ -161,7 +161,11 @@ current standalone Git repository.
 polls until SIGINT, SIGTERM or `--max-idle`, and `--until-event KIND`
 polls until a selected kind appears or the timeout expires. `--status`
 reads the heartbeat and accepted repository state without network or lock.
-The interval defaults to 60s and has a 10s minimum. The cycle emits PR,
+The interval defaults to 60s and has a 10s minimum. A different commit
+at the PR head emits `head-changed`. A switch between Draft and Ready
+for review emits `ready-state-changed`, including when the head stays the
+same. The watcher compares snapshots, so a switch that reverses between
+polls is invisible. The cycle also emits PR,
 check, mergeability, restack and watcher health events. A restart reprints
 journalled events that may have missed stdout. The Go state format is
 unsupported. Polling has no jitter.

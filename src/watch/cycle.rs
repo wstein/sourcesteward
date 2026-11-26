@@ -1,13 +1,13 @@
 //! One poll cycle (W3) on top of the W1 core. A successful first read of a repository is a silent
-//! baseline. Later reads emit `new-pr`, `head-changed`, and `closed`, and the observation's checks,
+//! baseline. Later reads report new and closed PRs, head and readiness changes, and the observation's checks,
 //! mergeability, and class-1 restack. A transient or fatal read leaves the accepted list in place
 //! and records `watch-error`; the next success records `watch-recovered`.
 
 use super::event::{
     event_id, format_utc, key_checks, key_error, key_generation, key_head, key_mergeable,
-    key_merged, key_recovered_error, key_restack, key_timeout, ChecksGreen, ChecksRed, Closed,
-    Details, Event, HeadChanged, MergeableChanged, Merged, NewPr, PendingTimeout, RestackNeeded,
-    WatchError, WatchRecovered, REASON_CHILD_OF_MERGED,
+    key_merged, key_ready, key_recovered_error, key_restack, key_timeout, ChecksGreen, ChecksRed,
+    Closed, Details, Event, HeadChanged, MergeableChanged, Merged, NewPr, PendingTimeout,
+    ReadyStateChanged, RestackNeeded, WatchError, WatchRecovered, REASON_CHILD_OF_MERGED,
 };
 use super::reader::{OpenPr, ReadFailure};
 use super::state::{Class, MergeCandidate, PrState, State};
@@ -636,8 +636,14 @@ fn diff_events(state: &State, repo: &str, prs: &[OpenPr], now: &str) -> Vec<Even
     for pr in prs {
         match rs.prs.get(&pr.number) {
             None => events.push(new_pr_event(rs, repo, pr, now)),
-            Some(prev) if prev.head != pr.head => events.push(head_event(repo, prev, pr, now)),
-            Some(_) => {}
+            Some(prev) => {
+                if prev.head != pr.head {
+                    events.push(head_event(repo, prev, pr, now));
+                }
+                if prev.draft != pr.draft {
+                    events.push(ready_event(repo, prev, pr, now));
+                }
+            }
         }
     }
     for prev in rs.prs.values() {
@@ -690,6 +696,26 @@ fn head_event(repo: &str, prev: &PrState, pr: &OpenPr, now: &str) -> Event {
         Details::HeadChanged(HeadChanged {
             old: prev.head.clone(),
             new: pr.head.clone(),
+        }),
+    )
+}
+
+fn ready_event(repo: &str, prev: &PrState, pr: &OpenPr, now: &str) -> Event {
+    let epoch = prev.epochs.ready.saturating_add(1);
+    let label = |draft| if draft { "draft" } else { "ready" }.to_string();
+    Event::new(
+        event_id(
+            Some(repo),
+            Some(pr.number),
+            super::event::Kind::ReadyStateChanged,
+            &key_ready(epoch),
+        ),
+        now.to_string(),
+        Some(repo.to_string()),
+        Some(pr.number),
+        Details::ReadyStateChanged(ReadyStateChanged {
+            from: label(prev.draft),
+            to: label(pr.draft),
         }),
     )
 }

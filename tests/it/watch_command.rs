@@ -9,6 +9,7 @@ use stw::watch::{Core, Output, Step, WatchError};
 struct Listed {
     head: String,
     next_head: Option<String>,
+    draft: bool,
     hits: std::cell::Cell<usize>,
     error_first: Option<stw::watch_reader::obs::ObserveError>,
     clock: Option<std::rc::Rc<std::cell::Cell<i64>>>,
@@ -24,6 +25,7 @@ impl Listed {
         Self {
             head: head.to_string(),
             next_head: None,
+            draft: false,
             hits: std::cell::Cell::new(0),
             error_first: None,
             clock: None,
@@ -50,6 +52,7 @@ impl Listed {
                 base: "main".into(),
                 head_ref: "topic".into(),
                 head,
+                draft: self.draft,
                 ..stw::watch_reader::obs::PrObs::default()
             }],
             cond: self.cond.clone(),
@@ -271,6 +274,58 @@ impl stw::watch::command::Pace for Moving {
         );
         !matches!(self.stop_at, Some(n) if self.sleeps.len() == n)
     }
+}
+
+#[test]
+fn watch_reports_draft_and_ready_transitions_even_without_a_push() {
+    let (_dir, path) = state_path();
+    let repo = ["o/r".to_string()];
+    let first_head = "a".repeat(40);
+    let second_head = "b".repeat(40);
+    let mut src = Listed::head(&first_head);
+    let poll = |step: i64, src: &mut Listed| {
+        let mut out = Vec::new();
+        stw::watch::command::run_once(
+            &path,
+            &repo,
+            false,
+            1_700_000_000 + step * 60,
+            10,
+            src,
+            &mut out,
+        )
+        .unwrap();
+        String::from_utf8(out)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+            .collect::<Vec<_>>()
+    };
+
+    assert!(poll(0, &mut src).is_empty());
+    src.draft = true;
+    let events = poll(1, &mut src);
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["kind"], "ready-state-changed");
+    assert_eq!(events[0]["id"], "o/r#7:ready-state-changed:r1");
+    assert_eq!(
+        events[0]["details"],
+        serde_json::json!({"from": "ready", "to": "draft"})
+    );
+    assert!(poll(2, &mut src).is_empty());
+
+    src.draft = false;
+    src.next_head = Some(second_head);
+    let events = poll(3, &mut src);
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["kind"], "head-changed");
+    assert_eq!(events[1]["kind"], "ready-state-changed");
+    assert_eq!(events[1]["id"], "o/r#7:ready-state-changed:r2");
+    assert_eq!(
+        events[1]["details"],
+        serde_json::json!({"from": "draft", "to": "ready"})
+    );
+    assert!(poll(4, &mut src).is_empty());
 }
 
 #[test]
