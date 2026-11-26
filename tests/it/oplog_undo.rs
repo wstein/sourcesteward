@@ -254,6 +254,36 @@ fn a_wrong_expect_changes_nothing() {
 }
 
 #[test]
+fn recovery_ref_moved_after_preview_is_refused_in_json() {
+    let (fx, [_, target, observed]) = undo_fx();
+    let plan = json(&fx, &["undo-plan", "work"]);
+    assert_eq!(plan["schema_version"], 1);
+    assert_eq!(plan["current"], observed.to_string());
+    assert_eq!(plan["target"], target.to_string());
+    assert_eq!(plan["executable"], true);
+
+    let newer = fx.commit(Some(observed), &[("f", Some("newer\n"))], "newer");
+    fx.branch("work", newer);
+    let before = tree_snapshot(&fx.path);
+    let target = target.to_string();
+    let observed = observed.to_string();
+    let mut args = undo_args(&target, &observed);
+    args.push("--json");
+    let result = run(&fx, &args);
+    assert_eq!(result.code, 1, "{}{}", result.text, result.err);
+    let refusal: Value = serde_json::from_str(&result.text).unwrap();
+    assert_eq!(refusal["command"], "oplog undo");
+    assert_eq!(refusal["executed"], false);
+    assert_eq!(refusal["current"], newer.to_string());
+    assert!(refusal["checks"].to_string().contains("ref changed since"));
+    assert_eq!(fx.tip("work"), newer);
+    assert!(
+        before == tree_snapshot(&fx.path),
+        "the refusal wrote to the repository"
+    );
+}
+
+#[test]
 fn expect_and_yes_and_to_are_required_and_without_yes_nothing_is_written() {
     let (fx, [_, c2, c3]) = undo_fx();
     let before = tree_snapshot(&fx.path);
