@@ -60,7 +60,7 @@ command in `src/cli.rs`. Decisions are recommendations unless recorded in Chartr
 | PR queue, stack, debt ledger | `internal/pulls/`, `internal/prviews/` | GitHub reads, `stw status --review`, `stw ready-check` | Evaluate a multi-PR triage case before choosing a separate read-only queue ([#34](https://github.com/wstein/whr-anchorage/issues/34)). |
 | Push/workflow policy | `internal/stackpublish/` (core) | shell scripts `scripts/stw-push`, `scripts/stw-workflow`; no Rust commands | Port accepted script behavior per repo policy (M10). |
 | Land stack | `internal/land/shapes.json` has empty shapes | absent | Drop Go `land`. Use Git and `gh` for PR workflows. Reopen automation only for a named workflow under the review and publication rules ([#37](https://github.com/wstein/whr-anchorage/issues/37)). |
-| Watch, metrics, verify landed | `internal/watch/`; other scope varies | `stw watch --once`, `--stream` and `--status` for the open list | Checks, mergeability, restack and `--until-event` stay deferred (M13). |
+| Watch, metrics, verify landed | `internal/watch/`; other scope varies | `stw watch --once`, `--stream` and `--status` | Checks, mergeability, restack events and `--until-event` shipped. See [watch acceptance](#watch-acceptance). |
 | Open issues | `internal/issues/` | `stw status` has counts | Retire standalone Go `issues`. Full open-issue lists belong in default text and JSON status. Counts remain a summary ([#35](https://github.com/wstein/whr-anchorage/issues/35)). |
 | Release build/verify/dispatch | `internal/release/` | absent | Drop the hidden Go release commands. The owner owns releases ([#37](https://github.com/wstein/whr-anchorage/issues/37)). |
 | GitHub access | `internal/hosting/` | `src/auth.rs`, `src/github.rs` REST GETs | Drop Go hosting wrappers. Use GitHub and `gh` for direct queries and keep product reads internal ([#33](https://github.com/wstein/whr-anchorage/issues/33)). |
@@ -128,7 +128,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M10 | Rust push/workflow from accepted scripts. Needs M0/M4/M5, repository policy and local CLEAR evidence contract. | Existing `scripts/test-stw-push` behaviors translated after script acceptance; ff-only default branch, submodules first, no tags/force, exact-head CLEAR; partial remote effects reported and never described as undoable. Pending guard from M12 before deferred flow enabled. | 4 / 3 / 5 |
 | M11 | Historical owner-invoked land candidate. Shelved by [#37](https://github.com/wstein/whr-anchorage/issues/37). If a named workflow later warrants reopening it, reassess M2/M4/M5/M6/M10 and seek explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
 | M12 | Deferred conflicts D and owned resolve worktrees. Needs M1/M2/M5/M6/M7/M0 and accepted D spike. | Real conflicted branches stay at old tips; pending metadata/ref transaction; parent-first resolve; abort preserves pending; stale CAS; binary/delete conflicts; undo; push/land/ready refuse pending state. | 4 / 5 / 5 |
-| M13 | Demand-driven follow-ups: watch, verify landed, metrics, repo profiles, Dayboard integration, merge-noop proof. The open-list `stw watch --once`, `--stream` and `--status` are in; checks, mergeability, restack and `--until-event` are not. Status issue lists are tracked separately in [#35](https://github.com/wstein/whr-anchorage/issues/35). | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
+| M13 | Demand-driven follow-ups: watch, verify landed, metrics, repo profiles, Dayboard integration, merge-noop proof. The Rust watcher includes checks, mergeability, restack events and `--until-event`. See [watch acceptance](#watch-acceptance). Status issue lists are tracked separately in [#35](https://github.com/wstein/whr-anchorage/issues/35). | One owner-selected slice at a time (script/live acceptance only for behavior without a Go counterpart); define scope, contract, and new ratings before implementation. No blanket parity completion criterion. | 2 / 5 / 4 |
 
 Recommended order: **M0 → M3 → M4** for workflow reads; in parallel as a separate workstream,
 **accepted A → M1 → M2 → M5 (slim) → M6** for local stacks. M8 is independent after M3.
@@ -217,7 +217,7 @@ The Rust column records the corresponding command or workflow where present. Go 
 | `pulls` | no separate queue. GitHub reads, `stw status --review` and `stw ready-check` exist | M9 | **defer** a separate queue until the multi-PR triage case records a recurring gap ([#34](https://github.com/wstein/whr-anchorage/issues/34)). | `internal/pulls` (85), `pullscmd` (65), `prviews` (17), `cli/pulls_test.go` |
 | `restack plan` (h) | present: `stw restack plan [BRANCH...] [--onto BASIS] [--old-parent REV] [--json]` | M1/M2 | **port (done) plus whole-stack preview (new)** (owner go, 2026-11-11; no spike for the port part; the whole-stack part and the auto-detection are new behavior without a Go counterpart; owner accepted the plan live on 2026-11-11). Read-only: no ref, file or object on disk, no network, no `git` process (gix only; the in-memory engine of M1). Port: the single-branch prediction `BRANCH --old-parent REV --onto BASIS` (replay, predicted conflicts with paths and kinds, empty commits, merge or root commit refused, old parent no ancestor refused, unrelated histories refused). New: the chain `A B C` replayed level by level, a level above a conflict is `inherited-conflict` (not computed; the spike continued with conflict-marker commits), the chain derived from the local branch topology when no branch is named (starting at the checked-out branch; two candidates, a fork, two names at one commit, a detached head, no common history: refused with the explicit spelling as suggestion), `--onto` default `origin/HEAD` else usage. Fail closed: a level that would be clean is `unknown` with the reason when the replay differs from git (`merge.renames`, `diff.renames`, `merge.renameLimit`, `diff.renameLimit` (pinned 7000, the merge default of git, measured), `diff.algorithm` not at the pinned value, a `merge` attribute in a tree, in the range or in `info/attributes` of the common dir, a commit that changes a submodule); the local default branch is never a level. Limits against a real `git rebase` (directory renames approximated, rename detection pinned, binary files, submodules, merge drivers, rerere unknown, skip by patch-id, dirty work tree not looked at): README "Stack preview". Deviations from Go, one by one (README "Deviations from the Go `restack plan`"): visible, other form and flags (short branch names, `--onto` any revision, old parent optional); not ported: range pairing (needs git range-diff), cherry classification, own-diff equality, identities and the outcome table, overlap, affected refs/worktrees/hooks, lease-push and resync texts, `--expect-head`, `--remote`, `PATH`, attribute and repository hazard refusals (replaced by `unknown`), refusal of a dirty target, operation in progress and bare repository, jj/GitButler refusal, exit status 3 and the byte bound; the gix engine instead of `git merge-tree` (paths of four conflict kinds differ, `src/replay.rs`); exit 0 only for `plan: clean`; own output and JSON (`restack-plan`, schema 2). The oracle is real `git rebase` in disposable repositories (`tests/it/restack_plan.rs`). Go cases that map: `go_*` in that file (clean replay against a real rebase, predicted conflict stops the replay and names the paths, conflict kinds, empty commits, old parent must be an ancestor, unrelated histories, merge commit refused, options validated, nothing written); the others of the 54 + 24 Go tests belong to the evidence that is not ported. | `internal/restack` (54), `conflicts` (24), `cli/testdata/restack-plan-*.json` |
 | `land` | Git and `gh` for PR workflows | M11 (historical) | **drop**, owner decision [#37](https://github.com/wstein/whr-anchorage/issues/37). | `internal/land` (42), `landcmd` (25) |
-| `watch` | `stw watch --once`, `--stream` (`--interval`, `--max-idle`) and `--status` for the open list | M13 | **defer** checks, mergeability, restack and `--until-event`. | `internal/watch` (89), `watchcmd` (50) |
+| `watch` | `stw watch --once`, `--stream` (`--interval`, `--max-idle`, `--until-event`) and `--status` | M13 | **port**. W5 accepted on 2026-11-26. See [watch acceptance](#watch-acceptance). | `internal/watch` (89), `watchcmd` (50) |
 | `issues` | counts in `stw status`, full lists pending | - | **drop** the standalone command. Add full lists to default `stw status` and `stw status --json` ([#35](https://github.com/wstein/whr-anchorage/issues/35)). | `internal/issues` (39), `issuescmd` (28) |
 | `workspace plan` | `workspace worktree-plan` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | `internal/workspace` (965, `testdata/`), `internal/acceptance` |
 | `workspace apply` | `workspace worktree-apply` | - | **drop** the Go wizard interface ([#36](https://github.com/wstein/whr-anchorage/issues/36)). | same |
@@ -244,7 +244,7 @@ The owner retired `cmd/stw-docs` in [#33](https://github.com/wstein/whr-anchorag
 
 Tally: 34 items = the 33 Go leaf commands plus the `sync restore` mode. Flag rows, the two
 extra Go binaries, and commands without a Go counterpart are outside this count.
-Current dispositions: 11 port, 21 drop, 2 defer (`pulls` and `watch`).
+Current dispositions: 12 port, 21 drop, 1 defer (`pulls`).
 
 Test corpus: the Go fixtures are mostly Go code (repository builders such as `internal/carryover/fixture_test.go`), few
 data files (`cli/testdata`, `internal/hosting/testdata`). "Shared corpus" therefore means: per Go test, one named Rust
@@ -286,8 +286,11 @@ The inventory records the decisions under [#32](https://github.com/wstein/whr-an
   branches, open drafts, append commits, and rebase or rewrite branches they
   own or have explicitly taken over. Use `--force-with-lease=<ref>:<observed SHA>`
   for a rewrite and stop to inspect if the remote head has moved. An independent
-  agent reviews the exact PR head. A changed head requires current CLEAR under
-  that repository's rules. The user normally merges PRs and owns releases.
+  agent reviews the exact PR head. Once that head has independent CLEAR, the
+  agent verifies that it is still current, marks the draft ready for review,
+  and hands it over to the owner for the merge decision. A changed head
+  requires fresh CLEAR under that repository's rules before handoff. The owner
+  also decides when to publish releases.
   Anchorage retains independent CLEAR and fast-forward to main under its own
   rules. Revisit publication automation only for a named Rust review workflow
   with exact-head evidence and fast-forward rules. Track the evidence decision
@@ -305,6 +308,82 @@ cover all 34 inventory items, every flag row, and the two extra binaries. Then:
 3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`); changes to
    skills go by pull request in `wstein/dotagents`, on owner request.
 4. Last Go version: v0.2.1 was published on 2026-11-16; Homebrew tap PR #33 merged. The installed channel remains Go until the Rust replacement meets its acceptance gates (decision 4 above).
+
+### CI and release
+
+The owner chose CI first on 2026-11-26. The [SourceSteward CI workflow](../../../.github/workflows/stw-ci.yml)
+runs `cargo test --locked` on Linux and macOS on each push to `main` and
+supports manual runs.
+
+The next stage is a manually started release build for Linux and macOS on
+x86-64 and ARM64. It will produce four archives and `SHA256SUMS`. The first Rust
+release will be `v0.5.0`. Publication requires a separate owner approval.
+Switch the Homebrew tap after testing installation on macOS and meeting the
+cutover criteria above.
+
+### Live acceptance evidence
+
+Owner acceptance is recorded for the scope exercised by each run. Go ports
+follow the test and review criteria above.
+
+| Accepted scope | Date and result | Evidence |
+| --- | --- | --- |
+| `stw prove` and `stw restack plan` | 2026-11-11, 14 checks passed, including `--old-parent`, binary files, and a linked worktree | [Logbook](../../../dayboard/LOGBOOK.md) |
+| Rust `stw status` | 2026-11-11, 17 checks passed. `status-21` remained open. | [Logbook](../../../dayboard/LOGBOOK.md) |
+| `stw add` attribute validation | 2026-11-11, 23 checks passed. `add-lfs-01` and the `whr-add` migration remained open. | [Backlog](../../../dayboard/BACKLOG.md) |
+| `stw absorb` Python plan spike | 2026-11-25, accepted at `7a3163d`. Steps 1, 2, 3, 3b, and 5 passed. Optional step 4 was skipped. | [D-20261125-01](../../../dayboard/DECISIONS.md) |
+| `stw absorb` Rust plan | 2026-11-25, accepted on the binary from `52e973c8`, with the port introduced at `613a27e8`. Steps 1, 2, 3, 3b, 5, 6, 7, 8, and optional 9 passed. | [Logbook](../../../dayboard/LOGBOOK.md) · [D-20261125-09](../../../dayboard/DECISIONS.md) |
+| Rust daily-use fixture on macOS | Owner reported 38 offline checks passed. The exact SHA is unverified. Live GitHub access remains open. | [Logbook](../../../dayboard/LOGBOOK.md) |
+| GraphQL issue-list and review-handoff spikes | The owner accepted the spikes in conversation. | [Issue-list PR #46](https://github.com/wstein/whr-anchorage/pull/46) · [Handoff issue #30](https://github.com/wstein/whr-anchorage/issues/30) |
+
+The [`stw absorb --apply` recipe](../acceptance/rezept-stw-absorb-apply.sh)
+passed on Linux at `33d62f45` on 2026-11-26. The planned hunk reached HEAD,
+the skipped hunk remained staged, the backup pointed to the old HEAD, and
+the index plus the tracked and untracked fixture files stayed byte-identical.
+The owner accepted this result on 2026-11-26.
+
+The [GraphQL issue-list recipe](../acceptance/rezept-stw-status-issues.sh)
+passed against GitHub on Linux at `33d62f45` on 2026-11-26. Terminal and
+JSON lists agreed across the workspace. An unavailable submodule was marked
+incomplete while the other repositories remained complete. The owner
+accepted this result on 2026-11-26.
+
+The [review-handoff recipe](../acceptance/rezept-stw-review-handoff.sh)
+passed on Linux at `33d62f45` on 2026-11-26. The selective commit used the
+staged version and preserved unrelated staging and worktree edits. A stale
+plan was refused. The conflict report reopened with all three saved blob
+versions and detected a moved ref, leaving its new tip in place. The owner
+accepted this result on 2026-11-26. The full
+[cross-agent walkthrough in #31](https://github.com/wstein/whr-anchorage/issues/31)
+remains a separate check.
+
+### Watch acceptance
+
+[#38](https://github.com/wstein/whr-anchorage/issues/38) tracks W2 through W4.
+W2 and W3 shipped in #41 and #42. W4 is on `main` at `d69caa1`.
+[#32](https://github.com/wstein/whr-anchorage/issues/32) records the independent
+CLEAR and 21 targeted tests. The live W4 baseline reached GitHub successfully
+and emitted no event, as expected for a silent baseline. On Linux at
+`33d62f45`, the targeted Rust watch suite passed 157 tests with one ignored.
+
+The W4 live check passed on 2026-11-26 with draft
+[#51](https://github.com/wstein/whr-anchorage/pull/51). The first push
+emitted a byte-identical `head-changed` event on stdout and in
+`journal.jsonl` for `f9ad5be3b633708fd67d92ae5dc24cacd3011fe5`. Codex
+relayed the independent reviewer’s CLEAR as a
+[submitted GitHub review](https://github.com/wstein/whr-anchorage/pull/51#pullrequestreview-6074490763)
+on that commit. The review condition in `ready-check` passed. After the
+second push, the review condition failed with no CLEAR for the new head
+`69790721a3435189b561ffd1e06c37c1b7a1ad6e`. The PR stayed a draft.
+
+For W5, two exports with Go 1.27.2 from the legacy gitlink `90bde0a`
+produced 279 scenarios each. The exports matched each other and the tracked
+JSON byte for byte. The oracle needs a temporary directory outside a Git
+worktree. The Rust suite exercises the versioned JSON output and strict
+state decoder, including the documented separation from Go state. The targeted
+mutations `WC2`, `WC8`, and `WC10` each failed their designated test.
+Independent review of the oracle, Rust test evidence, and versioned output
+found no technical blocker. The owner accepted W5 on 2026-11-26.
 
 ### Order of the ports
 
