@@ -91,3 +91,22 @@
   align-items: center;
   gap: 6px;
 }
+
+.github-link .github-mark-dark,
+:root[data-theme="dark"] .github-link .github-mark-light {
+  display: none;
+}
+
+:root[data-theme="dark"] .github-link .github-mark-dark {
+  display: block;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .github-link .github-mark-light {
+    display: none;
+  }
+
+  :root:not([data-theme="light"]) .github-link .github-mark-dark {
+    display: block;
+  }
+}
