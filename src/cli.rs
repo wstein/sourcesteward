@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-use clap::{Args, CommandFactory, Parser, Subcommand};
+use clap::{Args, CommandFactory, FromArgMatches, Parser, Subcommand};
 use serde_json::{json, Value};
 
 use crate::error::{exit, Error, Kind, Result};
@@ -27,7 +27,7 @@ Exit codes:
 
 --json prints one JSON object with \"schema_version\" (see README.md).";
 
-const ROOT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+const AGENT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
 
 Use stw <command> --help for command-specific flags and output.";
 
@@ -36,7 +36,6 @@ Use stw <command> --help for command-specific flags and output.";
     name = "stw",
     version,
     about = "SourceSteward: where am I, what can go, what is behind, across every repository of a workspace",
-    before_help = ROOT_HELP,
     after_help = EXIT_CODES,
     subcommand_required = true,
     arg_required_else_help = true
@@ -1282,6 +1281,16 @@ enum DevCommand {
     },
 }
 
+fn cli_command() -> clap::Command {
+    fn add_agent_help(command: clap::Command) -> clap::Command {
+        command
+            .before_help(AGENT_HELP)
+            .mut_subcommands(add_agent_help)
+    }
+
+    add_agent_help(Cli::command())
+}
+
 /// Generate the reference from the same command graph used by the CLI.
 fn command_reference() -> String {
     use std::fmt::Write as _;
@@ -1300,7 +1309,7 @@ fn command_reference() -> String {
         }
     }
 
-    let mut command = Cli::command();
+    let mut command = cli_command();
     command.build();
     let mut output = String::from(
         "# SourceSteward command reference\n\nGenerated from the Rust CLI by `stw dev command-reference`.\n\n",
@@ -1697,7 +1706,10 @@ fn workspace(c: &Common, rules_path: Option<&Path>) -> Result<Workspace> {
 
 /// Parse the arguments, run, and return the process exit code.
 pub fn main() -> ExitCode {
-    let cli = match Cli::try_parse() {
+    let cli = match cli_command()
+        .try_get_matches()
+        .and_then(|mut matches| Cli::from_arg_matches_mut(&mut matches))
+    {
         Ok(c) => c,
         Err(e) => {
             let _ = e.print();

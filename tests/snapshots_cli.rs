@@ -4,6 +4,20 @@ mod common;
 use common::*;
 
 #[test]
+fn agent_hint_appears_once_in_short_long_and_nested_help() {
+    let hint = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md";
+    for args in [
+        &["watch", "-h"][..],
+        &["watch", "--help"][..],
+        &["help", "watch"][..],
+        &["workspace", "checkpoint", "-h"][..],
+    ] {
+        let help = stw_stdout(args);
+        assert_eq!(help.matches(hint).count(), 1, "{args:?}: {help}");
+    }
+}
+
+#[test]
 fn help_text() {
     insta::assert_snapshot!(stw_stdout(&["--help"]));
 }

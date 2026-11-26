@@ -50,6 +50,10 @@ Exit codes:
 ## `stw status`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Where am I in every repository (read-only)
 
 Usage: stw status [OPTIONS] [PATH]...
@@ -124,6 +128,10 @@ Exit codes:
 ## `stw tidy`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Branch cleanup: `plan` shows it, `apply` carries it out, `restore` undoes it
 
 Usage: stw tidy <COMMAND>
@@ -152,6 +160,10 @@ Exit codes:
 ## `stw tidy plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Which local branches and worktree registrations can be cleaned up (read-only, deletes nothing)
 
 Usage: stw tidy plan [OPTIONS]
@@ -212,6 +224,10 @@ Exit codes:
 ## `stw tidy apply`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Carry out the plan: delete the local branches it marks `delete`, manifest first; undo with `restore`
 
 Usage: stw tidy apply [OPTIONS]
@@ -256,6 +272,10 @@ Exit codes:
 ## `stw tidy restore`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Re-create branches deleted by `apply` from the manifest (never overwrites)
 
 Usage: stw tidy restore [OPTIONS]
@@ -289,6 +309,10 @@ Exit codes:
 ## `stw tidy history`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 List the stored manifests (the journals of `apply`), newest first, with the number of branches each recorded and how many `restore` could create now (read-only)
 
 Usage: stw tidy history [OPTIONS]
@@ -321,6 +345,10 @@ Exit codes:
 ## `stw sync`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Fast-forward every repository to its upstream (--plan or --dry-run only shows what it would do)
 
 Usage: stw sync [OPTIONS] [COMMAND]
@@ -397,6 +425,10 @@ Exit codes:
 ## `stw sync restore`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Move the branches of a sync run back to the tips they had before it: only where a branch still stands on the tip the run left (else `changed-since`, nothing touched). Pruned refs, stash reapplies and submodule moves stay
 
 Usage: stw sync restore [OPTIONS] [PATH]
@@ -431,6 +463,10 @@ Exit codes:
 ## `stw add`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Bind an existing GitHub repository as a project (git submodule) of the workspace; one local commit
 
 Usage: stw add [OPTIONS] <SPEC> [PATH]
@@ -468,6 +504,10 @@ Exit codes:
 ## `stw ready-check`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Check the read-only preconditions for marking a pull request ready
 
 Usage: stw ready-check [OPTIONS] <NUMBER>
@@ -493,6 +533,10 @@ Options:
 ## `stw review`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Review helpers (read-only)
 
 Usage: stw review <COMMAND>
@@ -518,6 +562,10 @@ Exit codes:
 ## `stw review carry-over`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 May the review of a pull request head be carried over to a rewritten head? Prints the `Carried-over:` line for a yes; posts nothing
 
 Usage: stw review carry-over [OPTIONS] [ID]...
@@ -559,6 +607,10 @@ Exit codes:
 ## `stw prove`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
 
 Usage: stw prove [OPTIONS] [REV]...
@@ -611,6 +663,10 @@ Exit codes:
 ## `stw absorb`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Plan where the staged changes would go: the unpushed commit that owns each hunk (read-only, writes nothing)
 
 Usage: stw absorb [OPTIONS]
@@ -672,6 +728,10 @@ Exit codes:
 ## `stw restack`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
 
 Usage: stw restack <COMMAND>
@@ -699,6 +759,10 @@ Exit codes:
 ## `stw restack plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
 
 Usage: stw restack plan [OPTIONS] [BRANCH]...
@@ -747,6 +811,10 @@ Exit codes:
 ## `stw restack conflict-report`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Persist a conflicting plan and its available blob versions as versioned JSON
 
 Usage: stw restack conflict-report [OPTIONS] --store <STORE> --onto <ONTO> <BRANCHES>...
@@ -774,6 +842,10 @@ Options:
 ## `stw restack show-conflict`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Reopen a stored conflict report and check its input revisions
 
 Usage: stw restack show-conflict [OPTIONS] --store <STORE> <ID>
@@ -798,6 +870,10 @@ Options:
 ## `stw oplog`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
 
 Usage: stw oplog <COMMAND>
@@ -847,6 +923,10 @@ Exit codes:
 ## `stw oplog timeline`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Ref changes from the reflogs and the hook log `refs.log`, newest last, with what the logs do not cover
 
 Usage: stw oplog timeline [OPTIONS]
@@ -906,6 +986,10 @@ Exit codes:
 ## `stw oplog evolog`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 The recorded rewrites (amend, rebase) of a commit, from the hook log `rewrites.log`
 
 Usage: stw oplog evolog [OPTIONS] <REV>
@@ -963,6 +1047,10 @@ Exit codes:
 ## `stw oplog undo-plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 What undoing one local branch to an older reflog value would check; changes nothing
 
 Usage: stw oplog undo-plan [OPTIONS] <REF>
@@ -1026,6 +1114,10 @@ Exit codes:
 ## `stw oplog undo`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Move one local branch back to an older reflog value: backup ref, compare-and-swap update; writes
 
 Usage: stw oplog undo [OPTIONS] --to <OLD> --expect <NEW> <REF>
@@ -1092,6 +1184,10 @@ Exit codes:
 ## `stw oplog hooks`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Install, check or remove the two git hooks that write the op log (post-rewrite, reference-transaction); opt-in per repository
 
 Usage: stw oplog hooks <COMMAND>
@@ -1127,6 +1223,10 @@ Exit codes:
 ## `stw oplog hooks status`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Where the hooks are, whether they are ours, `core.hooksPath`, worktrees, submodules, logs (read-only)
 
 Usage: stw oplog hooks status [OPTIONS]
@@ -1164,6 +1264,10 @@ Exit codes:
 ## `stw oplog hooks install`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Write both hooks into this repository's hooks directory; without --yes only the plan
 
 Usage: stw oplog hooks install [OPTIONS]
@@ -1204,6 +1308,10 @@ Exit codes:
 ## `stw oplog hooks uninstall`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Remove our two hook files (only files that carry our header); the logs stay; without --yes only the plan
 
 Usage: stw oplog hooks uninstall [OPTIONS]
@@ -1244,6 +1352,10 @@ Exit codes:
 ## `stw oplog hooks print`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Print the text of one hook (post-rewrite or reference-transaction); writes nothing
 
 Usage: stw oplog hooks print <NAME>
@@ -1276,6 +1388,10 @@ Exit codes:
 ## `stw workspace`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Save and resume a local task checkpoint
 
 Usage: stw workspace <COMMAND>
@@ -1299,6 +1415,10 @@ Options:
 ## `stw workspace checkpoint`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Save the index and working tree under a local task ref
 
 Usage: stw workspace checkpoint [OPTIONS] --task <TASK>
@@ -1331,6 +1451,10 @@ Options:
 ## `stw workspace inspect`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Show the published checkpoint of a task
 
 Usage: stw workspace inspect [OPTIONS] --task <TASK>
@@ -1352,6 +1476,10 @@ Options:
 ## `stw workspace retirement-plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Preview whether a checkpoint covers the worktree before retirement
 
 Usage: stw workspace retirement-plan [OPTIONS] --task <TASK>
@@ -1373,6 +1501,10 @@ Options:
 ## `stw workspace worktree-plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Plan a detached linked worktree at a local revision
 
 Usage: stw workspace worktree-plan [OPTIONS] <REVISION> <DESTINATION>
@@ -1398,6 +1530,10 @@ Options:
 ## `stw workspace worktree-apply`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Create a detached linked worktree from a saved plan
 
 Usage: stw workspace worktree-apply [OPTIONS] <PLAN>
@@ -1420,6 +1556,10 @@ Options:
 ## `stw workspace commit-plan`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Preview a commit made from selected index or worktree content
 
 Usage: stw workspace commit-plan [OPTIONS] --source <SOURCE> <PATHS>...
@@ -1447,6 +1587,10 @@ Options:
 ## `stw workspace commit-apply`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Apply a saved selective commit plan after revalidating its inputs
 
 Usage: stw workspace commit-apply [OPTIONS] --message <MESSAGE> <PLAN>
@@ -1472,6 +1616,10 @@ Options:
 ## `stw workspace resume`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Restore a checkpoint into a new linked worktree
 
 Usage: stw workspace resume [OPTIONS] <CHECKPOINT> <DESTINATION>
@@ -1497,6 +1645,10 @@ Options:
 ## `stw inspect`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Inspect published PR changes or compare local revisions without checking them out
 
 Usage: stw inspect <COMMAND>
@@ -1514,6 +1666,10 @@ Options:
 ## `stw inspect github`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Compare a GitHub pull request using its pinned base and head
 
 Usage: stw inspect github <REPO> <PR>
@@ -1533,6 +1689,10 @@ Options:
 ## `stw inspect git`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Compare local commits using their merge base
 
 Usage: stw inspect git <REPO> <BASE> <HEAD>
@@ -1555,6 +1715,10 @@ Options:
 ## `stw watch`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Watch GitHub activity and print transitions (read-only)
 
 Usage: stw watch [OPTIONS]
@@ -1658,6 +1822,10 @@ See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md
 ## `stw lint`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Check work products against the working rules (read-only)
 
 Usage: stw lint <COMMAND>
@@ -1685,6 +1853,10 @@ Exit codes:
 ## `stw lint pr`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Check the commits, text and comments of a pull request against the machine-checkable working rules (read-only)
 
 Usage: stw lint pr [OPTIONS] <PR> [PATH]
@@ -1734,6 +1906,10 @@ Exit codes:
 ## `stw lint review`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Check the text of a review comment from a file against the review line rules (read-only, no network)
 
 Usage: stw lint review [OPTIONS] <FILE>
@@ -1783,6 +1959,10 @@ Exit codes:
 ## `stw lint pr-text`
 
 ```text
+For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+
+Use stw <command> --help for command-specific flags and output.
+
 Check the text of a pull request from a file: length, Blocker line, attribution line, session link (read-only, no network)
 
 Usage: stw lint pr-text [OPTIONS] <FILE>
