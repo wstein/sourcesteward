@@ -307,7 +307,7 @@ cover all 34 inventory items, every flag row, and the two extra binaries. Then:
 2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
 3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`); changes to
    skills go by pull request in `wstein/dotagents`, on owner request.
-4. Last Go version: v0.2.1 was published on 2026-11-16; Homebrew tap PR #33 merged. The installed channel remains Go until the Rust replacement meets its acceptance gates (decision 4 above).
+4. Go v0.2.1 was the last Go release. The [Homebrew formula](https://github.com/wstein/homebrew-tap/blob/main/Formula/stw.rb) now installs Rust v0.5.0. Track the remaining cutover evidence in [#12](https://github.com/wstein/sourcesteward/issues/12).
 
 ### CI and release
 
@@ -315,11 +315,13 @@ The owner chose CI first on 2026-11-26. The [SourceSteward CI workflow](../.gith
 runs `cargo test --locked` on Linux and macOS on each push to `main` and
 supports manual runs.
 
-The next stage is a manually started release build for Linux and macOS on
-x86-64 and ARM64. It will produce four archives and `SHA256SUMS`. The first Rust
-release will be `v0.5.0`. Publication requires a separate owner approval.
-Switch the Homebrew tap after testing installation on macOS and meeting the
-cutover criteria above.
+The release build produces four archives for Linux and macOS on x86-64 and
+ARM64, plus `SHA256SUMS`. The owner published
+[Rust v0.5.0](https://github.com/wstein/sourcesteward/releases/tag/v0.5.0)
+and the Homebrew tap has switched. The macOS installation smoke-test evidence
+still needs to be recorded in [#12](https://github.com/wstein/sourcesteward/issues/12).
+The disposition of `pulls` remains open in
+[#15](https://github.com/wstein/sourcesteward/issues/15).
 
 ### Live acceptance evidence
 
