@@ -20,6 +20,7 @@
 .docs-content pre { overflow-x: auto; max-width: 100%; padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; font-size: .9rem; }
 .docs-content code { font-size: .92em; }
 .docs-content .table-scroll { overflow-x: auto; max-width: 100%; margin-block: 1rem; }
+.docs-content .table-scroll:focus-visible { outline: 3px solid var(--accent); outline-offset: 6px; }
 .docs-content table { display: table; width: 100%; border-collapse: collapse; }
 .docs-content th, .docs-content td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; vertical-align: top; overflow-wrap: break-word; }
 .docs-content th:first-child, .docs-content td:first-child { white-space: nowrap; width: 1%; overflow-wrap: normal; }
