@@ -9,7 +9,6 @@ from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES = {
-    "README.md": "/",
     "docs/status-and-sync.md": "/docs/status-and-sync/",
     "docs/cleanup-and-recovery.md": "/docs/cleanup-and-recovery/",
     "docs/worktrees-and-handoff.md": "/docs/worktrees-and-handoff/",
@@ -33,11 +32,8 @@ def stage_markdown(site):
         target.parent.mkdir(parents=True, exist_ok=True)
         header = {"title": first_line.removeprefix("# "), "source": source, "url": route}
         target.write_text(json.dumps(header) + "\n" + body, encoding="utf-8")
-    (site / "content/docs/_index.md").write_text(
-        '+++\ntitle = "Guides"\n+++\n', encoding="utf-8"
-    )
     (site / "data").mkdir()
-    (site / "data/routes.json").write_text(json.dumps(PAGES), encoding="utf-8")
+    (site / "data/routes.json").write_text(json.dumps({"README.md": "/", **PAGES}), encoding="utf-8")
 
 
 def add_coverage_badge(site, report):
