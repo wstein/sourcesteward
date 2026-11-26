@@ -128,6 +128,9 @@ activity.
 | [Pull request review and watch](docs/review-and-watch.md) | Review evidence, carry-over, readiness, lint, and watch events |
 | [Development and compatibility](docs/development.md) | Build and test, Git requirements, implementation details, and known limits |
 
+See the [roadmap](ROADMAP.md) for planned milestones and
+[what `stw` does not do](docs/what-stw-does-not-do.md).
+
 Use the [command reference](docs/command-reference.md) for flags and
 syntax. The [migration plan](docs/migration-plan.md) tracks the cutover from
 [SourceSteward Go](https://github.com/wstein/sourcesteward-go).
