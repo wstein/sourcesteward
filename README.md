@@ -1,4 +1,4 @@
-# sourcesteward (stw)
+# SourceSteward (stw)
 
 ![SourceSteward — Explainable version control](docs/assets/banner.svg)
 
