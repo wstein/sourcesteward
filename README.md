@@ -457,11 +457,18 @@ The REST counts remain a separate summary. If pagination or an API read fails,
 the card retains the issues and metadata already read and marks the list
 incomplete. An empty result is shown only after a successful read.
 
-Each repository's JSON `open_issues` is null when the list was skipped. Otherwise
-it contains `id` (the GitHub repository node ID or null), `coverage`
+In `stw status --json`, each repository has an `open_issues` field.
+The value is `null` when the query was skipped, for example with `--offline`,
+without GitHub credentials, or without a GitHub repository slug. A query result
+contains `id` (the GitHub repository node ID or null), `coverage`
 (`complete` or `incomplete`), `error` (the first failure or null), and
-`issues`. Each issue has
+`issues`. A successful query that finds no open issues reports
+`"coverage": "complete"` and `"issues": []`. Each issue has
 `number`, `title`, `url`, `updated_at`, `labels`, and `assignees`.
+
+The [live acceptance recipe](acceptance/rezept-stw-status-issues.sh) checks the
+issue list across a main repository and two submodules. It requires a built
+`stw` binary and a GitHub token with read access to the fixture repositories.
 
 ## Status flags
 
