@@ -28,6 +28,10 @@ pub(crate) enum WorkspaceCommand {
     WorktreePlan(WorktreePlanArgs),
     /// Create a detached linked worktree from a saved plan
     WorktreeApply(WorktreeApplyArgs),
+    /// Preview a commit made from selected index or worktree content
+    CommitPlan(CommitPlanArgs),
+    /// Apply a saved selective commit plan after revalidating its inputs
+    CommitApply(CommitApplyArgs),
     /// Restore a checkpoint into a new linked worktree
     Resume(ResumeArgs),
 }
@@ -74,6 +78,35 @@ pub(crate) struct WorktreePlanArgs {
 pub(crate) struct WorktreeApplyArgs {
     /// File containing the JSON plan object
     plan: PathBuf,
+    #[command(flatten)]
+    output: OutputArgs,
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum CommitSource {
+    Index,
+    Worktree,
+}
+
+#[derive(Args)]
+pub(crate) struct CommitPlanArgs {
+    /// Source for the selected paths
+    #[arg(long, value_enum)]
+    source: CommitSource,
+    /// Existing regular files relative to the worktree root
+    #[arg(required = true)]
+    paths: Vec<PathBuf>,
+    #[command(flatten)]
+    output: OutputArgs,
+}
+
+#[derive(Args)]
+pub(crate) struct CommitApplyArgs {
+    /// Saved JSON output from commit-plan
+    plan: PathBuf,
+    /// Message for the selective commit
+    #[arg(long)]
+    message: String,
     #[command(flatten)]
     output: OutputArgs,
 }
@@ -135,6 +168,8 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
         WorkspaceCommand::WorktreePlan(a) => ("worktree-plan", &a.output),
         WorkspaceCommand::WorktreeApply(a) => ("worktree-apply", &a.output),
         WorkspaceCommand::Resume(a) => ("resume", &a.output),
+        WorkspaceCommand::CommitPlan(a) => ("commit-plan", &a.output),
+        WorkspaceCommand::CommitApply(a) => ("commit-apply", &a.output),
     };
     let mut report =
         json!({"schema_version": 1, "command": format!("workspace {name}"), "via": "git"});
@@ -153,6 +188,29 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
             WorkspaceCommand::WorktreePlan(a) => worktree_plan(&repo, &root, a, &mut report),
             WorkspaceCommand::WorktreeApply(a) => worktree_apply(&repo, &root, a, &mut report),
             WorkspaceCommand::Resume(a) => resume(&repo, &root, a, &mut report),
+            WorkspaceCommand::CommitPlan(a) => {
+                use crate::selective_commit::{self, Source};
+                let source = match a.source {
+                    CommitSource::Index => Source::Index,
+                    CommitSource::Worktree => Source::Worktree,
+                };
+                report["via"] = json!("gix");
+                report["plan"] =
+                    serde_json::to_value(selective_commit::plan(&root, source, &a.paths)?)?;
+                Ok(())
+            }
+            WorkspaceCommand::CommitApply(a) => {
+                use crate::selective_commit::{self, Plan};
+                report["via"] = json!("gix");
+                let doc: Value = serde_json::from_slice(&fs::read(&a.plan)?)?;
+                let plan: Plan = serde_json::from_value(doc.get("plan").cloned().unwrap_or(doc))
+                    .map_err(|error| {
+                        Error::usage(format!("invalid selective commit plan: {error}"))
+                    })?;
+                report["applied"] =
+                    serde_json::to_value(selective_commit::apply(&root, &plan, &a.message)?)?;
+                Ok(())
+            }
         }
     })();
     let code = match result {

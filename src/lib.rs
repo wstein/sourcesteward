@@ -28,6 +28,7 @@ pub mod restack_plan;
 pub mod review;
 pub mod sha256;
 pub mod signals;
+pub mod selective_commit;
 pub mod status;
 pub mod status_all;
 pub mod status_ci;
