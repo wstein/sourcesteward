@@ -30,3 +30,12 @@ fn status_text_of_a_fixture_workspace() {
         "--offline"
     ]));
 }
+
+#[test]
+fn command_reference_matches_the_public_cli() {
+    let reference = stw_stdout(&["dev", "command-reference"]);
+    assert!(
+        reference == include_str!("../docs/command-reference.md"),
+        "regenerate docs/command-reference.md with stw dev command-reference"
+    );
+}

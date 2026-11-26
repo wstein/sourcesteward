@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, CommandFactory, Parser, Subcommand};
 use serde_json::{json, Value};
 
 use crate::error::{exit, Error, Kind, Result};
@@ -1227,7 +1227,40 @@ fn run_oplog_undo(a: OplogUndoArgs) -> Result<u8> {
 
 #[derive(Subcommand)]
 enum DevCommand {
-    PatchId { repo: PathBuf, revs: Vec<String> },
+    /// Generate Markdown for the public command tree
+    CommandReference,
+    PatchId {
+        repo: PathBuf,
+        revs: Vec<String>,
+    },
+}
+
+/// Generate the reference from the same command graph used by the CLI.
+fn command_reference() -> String {
+    use std::fmt::Write as _;
+    fn render(command: &mut clap::Command, path: &str, output: &mut String) {
+        writeln!(output, "## `{path}`\n\n```text").expect("writing to String cannot fail");
+        for line in command.render_long_help().to_string().trim_end().lines() {
+            writeln!(output, "{}", line.trim_end()).expect("writing to String cannot fail");
+        }
+        output.push_str("```\n\n");
+        for child in command.get_subcommands_mut() {
+            if child.is_hide_set() || child.get_name() == "help" {
+                continue;
+            }
+            let path = format!("{path} {}", child.get_name());
+            render(child, &path, output);
+        }
+    }
+
+    let mut command = Cli::command();
+    command.build();
+    let mut output = String::from(
+        "# SourceSteward command reference\n\nGenerated from the Rust CLI by `stw dev command-reference`.\n\n",
+    );
+    render(&mut command, "stw", &mut output);
+    output.pop();
+    output
 }
 
 /// Options every command shares.
@@ -2353,6 +2386,12 @@ fn run(command: Command) -> Result<u8> {
         Command::Lint {
             command: LintCommand::PrText(a),
         } => run_lint_pr_text(a),
+        Command::Dev {
+            command: DevCommand::CommandReference,
+        } => {
+            print!("{}", command_reference());
+            Ok(exit::OK)
+        }
         Command::Dev {
             command: DevCommand::PatchId { repo, revs },
         } => {

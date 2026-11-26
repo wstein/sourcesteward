@@ -1,5 +1,12 @@
 # stw (SourceSteward)
 
+See the [command reference](docs/command-reference.md) for public commands
+and flags. After changing the CLI, regenerate it from this directory.
+
+```sh
+cargo run --locked --quiet --bin stw -- dev command-reference > docs/command-reference.md
+```
+
 Implementation scope, feature decisions, dependencies, and acceptance gates: [Rust migration plan](docs/migration-plan.md).
 
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on

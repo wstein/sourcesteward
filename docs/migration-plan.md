@@ -240,8 +240,7 @@ The Rust column records the corresponding command or workflow where present. Go 
 | `version` | `stw --version` | - | **drop** the subcommand and its JSON output ([#33](https://github.com/wstein/whr-anchorage/issues/33)). | `cmd/stw/main_test.go` |
 
 Also in the Go repository: `cmd/gh-jj` was dropped by the owner on 2026-11-11.
-The owner retired `cmd/stw-docs` in [#33](https://github.com/wstein/whr-anchorage/issues/33). A Rust command reference generated
-from the CLI definitions is pending in [#39](https://github.com/wstein/whr-anchorage/issues/39).
+The owner retired `cmd/stw-docs` in [#33](https://github.com/wstein/whr-anchorage/issues/33). The [command reference](command-reference.md) is generated from the Rust CLI definitions. [#39](https://github.com/wstein/whr-anchorage/issues/39)
 
 Tally: 34 items = the 33 Go leaf commands plus the `sync restore` mode. Flag rows, the two
 extra Go binaries, and commands without a Go counterpart are outside this count.
@@ -260,9 +259,9 @@ case with the same scenario, or a named deviation. Where the Rust rules are stri
 
 The inventory records the decisions under [#32](https://github.com/wstein/whr-anchorage/issues/32). Follow-up work is tracked separately.
 
-- **Command reference.** Select the output format and publication location before
-  implementation. Generate from the Rust CLI definitions and verify reproducible
-  output covering public commands, subcommands and flags. [#39](https://github.com/wstein/whr-anchorage/issues/39)
+- **Command reference.** Publish [Markdown in the SourceSteward docs](command-reference.md).
+  Generate it from the Rust CLI definitions and test that the checked-in reference
+  matches the generated output. [#39](https://github.com/wstein/whr-anchorage/issues/39)
 - **PR triage.** Compare existing GitHub reads, `stw status --review` and
   `stw ready-check` on a concrete multi-PR case. Record which PR needs attention
   next and why, and document any recurring gap. A separate read-only queue needs
