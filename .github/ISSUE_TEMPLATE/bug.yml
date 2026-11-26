@@ -1,0 +1,37 @@
+name: Bug report
+description: Report a problem you encountered while using SourceSteward.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use [private vulnerability reporting](https://github.com/wstein/sourcesteward/security/advisories/new) for security issues.
+        Remove credentials and private repository contents from commands and logs.
+  - type: input
+    id: version
+    attributes:
+      label: SourceSteward version
+      description: Copy the output of stw --version.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: macOS ARM64, Git 2.49, installed with Homebrew
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Command and steps to reproduce
+      description: Include relevant repository or workspace details.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior
+      description: Describe what you expected and what happened. Include relevant errors.
+    validations:
+      required: true

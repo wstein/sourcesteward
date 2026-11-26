@@ -1,0 +1,18 @@
+name: Feature request
+description: Propose an improvement to SourceSteward.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What are you trying to accomplish, and where does the current workflow fall short?
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Desired outcome
+      description: Describe what you would like SourceSteward to do. Include a command example if helpful.
+    validations:
+      required: true
