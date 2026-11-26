@@ -303,7 +303,7 @@ owner decision to drop it. A port passes the tests derived from Go, documents it
 deviations, and receives independent CLEAR on the exact head. Before archiving,
 the owner resolves each deferred command as a port or a drop. The criteria
 cover all 34 inventory items, every flag row, and the two extra binaries. Then:
-1. Owner: archive the repository `wstein/sourcesteward` (GitHub setting).
+1. Owner: archive the Go repository `wstein/sourcesteward-go` (GitHub setting).
 2. Owner: remove the gitlink `legacy/sourcesteward` or freeze it at the last Go commit.
 3. Agent: update the references in workspace, AGENTS, Chartroom and skills (`grep -rn "legacy/sourcesteward"`); changes to
    skills go by pull request in `wstein/dotagents`, on owner request.
@@ -311,7 +311,7 @@ cover all 34 inventory items, every flag row, and the two extra binaries. Then:
 
 ### CI and release
 
-The owner chose CI first on 2026-11-26. The [SourceSteward CI workflow](../../../.github/workflows/stw-ci.yml)
+The owner chose CI first on 2026-11-26. The [SourceSteward CI workflow](../.github/workflows/stw-ci.yml)
 runs `cargo test --locked` on Linux and macOS on each push to `main` and
 supports manual runs.
 
@@ -328,12 +328,12 @@ follow the test and review criteria above.
 
 | Accepted scope | Date and result | Evidence |
 | --- | --- | --- |
-| `stw prove` and `stw restack plan` | 2026-11-11, 14 checks passed, including `--old-parent`, binary files, and a linked worktree | [Logbook](../../../dayboard/LOGBOOK.md) |
-| Rust `stw status` | 2026-11-11, 17 checks passed. `status-21` remained open. | [Logbook](../../../dayboard/LOGBOOK.md) |
-| `stw add` attribute validation | 2026-11-11, 23 checks passed. `add-lfs-01` and the `whr-add` migration remained open. | [Backlog](../../../dayboard/BACKLOG.md) |
-| `stw absorb` Python plan spike | 2026-11-25, accepted at `7a3163d`. Steps 1, 2, 3, 3b, and 5 passed. Optional step 4 was skipped. | [D-20261125-01](../../../dayboard/DECISIONS.md) |
-| `stw absorb` Rust plan | 2026-11-25, accepted on the binary from `52e973c8`, with the port introduced at `613a27e8`. Steps 1, 2, 3, 3b, 5, 6, 7, 8, and optional 9 passed. | [Logbook](../../../dayboard/LOGBOOK.md) · [D-20261125-09](../../../dayboard/DECISIONS.md) |
-| Rust daily-use fixture on macOS | Owner reported 38 offline checks passed. The exact SHA is unverified. Live GitHub access remains open. | [Logbook](../../../dayboard/LOGBOOK.md) |
+| `stw prove` and `stw restack plan` | 2026-11-11, 14 checks passed, including `--old-parent`, binary files, and a linked worktree | [Logbook](https://github.com/wstein/whr-anchorage/blob/main/dayboard/LOGBOOK.md) |
+| Rust `stw status` | 2026-11-11, 17 checks passed. `status-21` remained open. | [Logbook](https://github.com/wstein/whr-anchorage/blob/main/dayboard/LOGBOOK.md) |
+| `stw add` attribute validation | 2026-11-11, 23 checks passed. `add-lfs-01` and the `whr-add` migration remained open. | [Backlog](https://github.com/wstein/whr-anchorage/blob/main/dayboard/BACKLOG.md) |
+| `stw absorb` Python plan spike | 2026-11-25, accepted at `7a3163d`. Steps 1, 2, 3, 3b, and 5 passed. Optional step 4 was skipped. | [D-20261125-01](https://github.com/wstein/whr-anchorage/blob/main/dayboard/DECISIONS.md) |
+| `stw absorb` Rust plan | 2026-11-25, accepted on the binary from `52e973c8`, with the port introduced at `613a27e8`. Steps 1, 2, 3, 3b, 5, 6, 7, 8, and optional 9 passed. | [Logbook](https://github.com/wstein/whr-anchorage/blob/main/dayboard/LOGBOOK.md) · [D-20261125-09](https://github.com/wstein/whr-anchorage/blob/main/dayboard/DECISIONS.md) |
+| Rust daily-use fixture on macOS | Owner reported 38 offline checks passed. The exact SHA is unverified. Live GitHub access remains open. | [Logbook](https://github.com/wstein/whr-anchorage/blob/main/dayboard/LOGBOOK.md) |
 | GraphQL issue-list and review-handoff spikes | The owner accepted the spikes in conversation. | [Issue-list PR #46](https://github.com/wstein/whr-anchorage/pull/46) · [Handoff issue #30](https://github.com/wstein/whr-anchorage/issues/30) |
 
 The [`stw absorb --apply` recipe](../acceptance/rezept-stw-absorb-apply.sh)

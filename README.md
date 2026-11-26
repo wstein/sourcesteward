@@ -1,5 +1,26 @@
 # stw (SourceSteward)
 
+![SourceSteward — Explainable version control](docs/assets/banner.svg)
+
+[![CI](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml/badge.svg)](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml)
+[![License EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-0b2545)](LICENSE)
+
+`stw` is SourceSteward’s Rust CLI for inspecting Git workspaces, planning
+repository changes, and handing work off for review. Anchorage includes this
+repository as a submodule. The previous Go implementation is maintained in
+[SourceSteward Go](https://github.com/wstein/sourcesteward-go).
+
+Build and check the CLI from the repository root:
+
+```sh
+cargo build --locked --release
+target/release/stw --version
+cargo test --locked
+```
+
+See the [brand assets](brand/README.md) and [migration plan](docs/migration-plan.md).
+
+
 See the [command reference](docs/command-reference.md) for public commands
 and flags. After changing the CLI, regenerate it from this directory.
 

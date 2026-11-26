@@ -1,7 +1,7 @@
 # Diff-first context pilot
 
 Work package: [Anchorage #28](https://github.com/wstein/whr-anchorage/issues/28).
-Source: [Cursor Codebase and STW context](../../../chartroom/sources/stw-agent-workflow/Cursor%20Codebase%20and%20STW%20context.md).
+Source: [Cursor Codebase and STW context](https://github.com/wstein/whr-anchorage/blob/main/chartroom/sources/stw-agent-workflow/Cursor%20Codebase%20and%20STW%20context.md).
 
 ## First comparison
 
