@@ -102,6 +102,7 @@ expression: pretty
         "open": [],
         "review": null
       },
+      "open_issues": null,
       "error": null
     }
   ],
