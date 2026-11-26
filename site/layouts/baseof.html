@@ -6,16 +6,20 @@
   <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}SourceSteward</title>
   <link rel="canonical" href="{{ .Permalink }}">
   <link rel="icon" href="{{ "assets/favicon.svg" | relURL }}" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&amp;family=IBM+Plex+Sans:wght@400;600&amp;family=Inter+Tight:wght@600;700;800&amp;display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ "assets/site.css" | relURL }}">
   <style>.docs-content p > a:has(> img) { display: inline-block; vertical-align: middle; }</style>
   <script src="{{ "assets/theme.js" | relURL }}" defer></script>
+  <script src="{{ "assets/install.js" | relURL }}" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <header class="wrap header">
-    <a class="wordmark" href="{{ "" | relURL }}"><img src="{{ "assets/logo.svg" | relURL }}" width="42" height="42" alt="">SourceSteward</a>
+    <a class="wordmark" href="{{ "" | relURL }}"><img class="mark-light" src="{{ "assets/logo-mark.svg" | relURL }}" width="42" height="42" alt=""><img class="mark-dark" src="{{ "assets/logo.svg" | relURL }}" width="42" height="42" alt="">SourceSteward</a>
     <nav aria-label="Main navigation">
-      <a href="{{ "" | relURL }}#get-started">Get started</a>
+      <a href="{{ "" | relURL }}#start">Get started</a>
       <a href="{{ "docs/" | relURL }}">Guides</a>
       <a class="github-link" href="https://github.com/wstein/sourcesteward">
         {{/* Unmodified Invertocat assets from https://brand.github.com/GitHub_Logos.zip */}}
@@ -29,13 +33,15 @@
       <select id="theme-select"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
     </div>
   </header>
+  {{ $landing := or .IsHome (and (eq .Kind "section") (eq .Section "docs")) }}
   {{ $showContents := and .IsPage (ge (len .Fragments.Identifiers) 4) }}
-  <main id="main" class="wrap docs-page{{ if $showContents }} docs-page-with-index{{ end }}">
+  {{ $contents := "" }}
+  {{ if $showContents }}
+    {{ $contents = replace .TableOfContents `id="TableOfContents"` `aria-label="On this page"` | safeHTML }}
+  {{ end }}
+  <main id="main" class="{{ if $landing }}landing{{ else }}wrap docs-page{{ if $showContents }} docs-page-with-index{{ end }}{{ end }}">
+    {{ if not $landing }}
     <h1>{{ .Title }}</h1>
-    {{ $contents := "" }}
-    {{ if $showContents }}
-      {{ $contents = replace .TableOfContents `id="TableOfContents"` `aria-label="On this page"` | safeHTML }}
-    {{ end }}
     <div{{ if $showContents }} class="docs-layout"{{ end }}>
       {{ if $showContents }}
         <details class="docs-index-mobile">
@@ -43,7 +49,11 @@
           {{ $contents }}
         </details>
       {{ end }}
-      <div class="docs-content">{{ block "main" . }}{{ end }}</div>
+      <div class="docs-content">
+    {{ end }}
+    {{ block "main" . }}{{ end }}
+    {{ if not $landing }}
+      </div>
       {{ if $showContents }}
         <aside class="docs-index-sidebar">
           <p>On this page</p>
@@ -51,6 +61,7 @@
         </aside>
       {{ end }}
     </div>
+    {{ end }}
   </main>
   <footer class="wrap footer">
     <a href="https://github.com/wstein/sourcesteward/releases">Releases</a>

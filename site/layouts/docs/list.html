@@ -1,0 +1,33 @@
+{{ define "main" }}
+  <div class="wrap guides">
+    <p class="crumb"><a href="{{ "" | relURL }}">Home</a> <span aria-hidden="true">/</span> Guides</p>
+    <h1>Guides</h1>
+    <p class="lede">Step-by-step workflows for everyday Git work with stw, and reference pages for the details.</p>
+    <section class="guide-section">
+      <div>
+        <p class="step-kicker">01</p>
+        <h2>Workflows</h2>
+        <p>The paths for a normal day: look at the workspace, move work, clean a branch, and follow a pull request.</p>
+      </div>
+      <ul class="rows">
+        <li><a href="{{ "docs/status-and-sync/" | relURL }}"><span><strong>Status and sync</strong><span>Workspace inspection, GitHub issues, and upstream updates.</span></span><span class="tag">status · sync</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/worktrees-and-handoff/" | relURL }}"><span><strong>Worktrees and handoff</strong><span>Absorb, Restack, and saving or resuming work.</span></span><span class="tag">absorb · restack</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/cleanup-and-recovery/" | relURL }}"><span><strong>Branch cleanup and recovery</strong><span>Tidy, ref history, and undo.</span></span><span class="tag">tidy · oplog</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/review-and-watch/" | relURL }}"><span><strong>Pull request review and watch</strong><span>Review evidence, readiness checks, and GitHub activity.</span></span><span class="tag">review · watch</span><span class="arrow" aria-hidden="true">→</span></a></li>
+      </ul>
+    </section>
+    <section class="guide-section">
+      <div>
+        <p class="step-kicker">02</p>
+        <h2>Reference</h2>
+        <p>Command details, how to build stw, the operation log, and the migration record.</p>
+      </div>
+      <ul class="rows">
+        <li><a href="{{ "reference/" | relURL }}"><span><strong>CLI reference</strong><span>Options and usage for every command.</span></span><span class="tag">stw --help</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/development/" | relURL }}"><span><strong>Development and compatibility</strong><span>Builds, tests, and Git requirements.</span></span><span class="tag">cargo · git</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/oplog-format/" | relURL }}"><span><strong>Operation log format</strong><span>The records written by Oplog.</span></span><span class="tag">oplog</span><span class="arrow" aria-hidden="true">→</span></a></li>
+        <li><a href="{{ "docs/migration-plan/" | relURL }}"><span><strong>Rust migration plan</strong><span>Implementation history and compatibility.</span></span><span class="tag">migration</span><span class="arrow" aria-hidden="true">→</span></a></li>
+      </ul>
+    </section>
+  </div>
+{{ end }}
