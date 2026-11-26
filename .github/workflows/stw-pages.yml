@@ -1,0 +1,66 @@
+name: Documentation and coverage
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stw-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install verified build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools=$(mktemp -d)
+          cd "$tools"
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/gohugoio/hugo/releases/download/v0.168.0/hugo_0.168.0_linux-amd64.tar.gz \
+            -o hugo.tar.gz
+          curl --fail --silent --show-error --location --retry 3 \
+            https://github.com/taiki-e/cargo-llvm-cov/releases/download/v0.9.2/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz \
+            -o cargo-llvm-cov.tar.gz
+          sha256sum --check --strict <<'CHECKSUMS'
+          fada83ad56bb27ed4cb7dd81590303bdac16140f944ac4e66fc248117e2d5594  hugo.tar.gz
+          1e0ed5c64f11e9217f7b9d7c776b3125eab26f27d49313919c909881a2fc7cff  cargo-llvm-cov.tar.gz
+          CHECKSUMS
+          tar -xzf hugo.tar.gz hugo
+          tar -xzf cargo-llvm-cov.tar.gz cargo-llvm-cov
+          echo "$tools" >> "$GITHUB_PATH"
+      - name: Measure Rust source line coverage
+        env:
+          RUST_TEST_THREADS: "4"
+        run: |
+          rustup component add llvm-tools-preview
+          cargo llvm-cov --locked --workspace --json --summary-only \
+            --ignore-filename-regex '(^|/)tests/' --output-path "$RUNNER_TEMP/stw-coverage.json"
+      - name: Build Hugo site
+        run: python3 scripts/build-pages.py "$RUNNER_TEMP/stw-site" --coverage "$RUNNER_TEMP/stw-coverage.json"
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: ${{ runner.temp }}/stw-site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1

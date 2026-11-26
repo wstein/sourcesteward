@@ -294,3 +294,20 @@ it (no `dirfd`/`O_NOFOLLOW`).
 Automated fetch of a private repository over https (the credential answer is unit-tested; one manual run against a private repository worked); `git://` behavior of gix; conflicted
 index during a `sync` run; sparse checkout, `skip-worktree`, case-insensitive path collisions; a real git-lfs
 during fast-forward (a `filter` attribute on a path the update writes and a `filter.*` driver in the config are refused, tested); Windows, and Linux beyond the test suite (the original measurements ran on macOS arm64; the M0 review and tests ran on Linux aarch64; keychain code is macOS-only); cold-cache timings.
+
+
+## Documentation site
+
+GitHub Actions builds the [public documentation site](https://wstein.github.io/sourcesteward/)
+with Hugo. The build publishes selected guides from this repository,
+including the generated command reference. Its line coverage badge uses
+the LLVM report from the instrumented Rust tests.
+
+With Hugo installed, preview the same documentation locally.
+
+```sh
+python3 scripts/build-pages.py /tmp/stw-preview/sourcesteward
+python3 -m http.server --bind 127.0.0.1 --directory /tmp/stw-preview
+```
+
+Open <http://127.0.0.1:8000/sourcesteward/>.

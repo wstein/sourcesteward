@@ -1,0 +1,11 @@
+baseURL = "https://wstein.github.io/sourcesteward/"
+title = "SourceSteward"
+locale = "en"
+disableKinds = ["taxonomy", "term", "RSS"]
+ignoreLogs = ["warning-goldmark-raw-html"]
+
+[markup.goldmark.parser]
+autoHeadingIDType = "github"
+
+[markup.goldmark.renderer]
+unsafe = false

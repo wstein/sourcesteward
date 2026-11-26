@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}SourceSteward</title>
+  <link rel="canonical" href="{{ .Permalink }}">
+  <link rel="icon" href="{{ "assets/favicon.svg" | relURL }}" type="image/svg+xml">
+  <link rel="stylesheet" href="{{ "assets/site.css" | relURL }}">
+  <style>.docs-content p > a:has(> img) { display: inline-block; vertical-align: middle; }</style>
+  <script src="{{ "assets/theme.js" | relURL }}" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="wrap header">
+    <a class="wordmark" href="{{ "" | relURL }}"><img src="{{ "assets/logo.svg" | relURL }}" width="42" height="42" alt="">SourceSteward</a>
+    <nav aria-label="Main navigation">
+      <a href="{{ "docs/" | relURL }}">Guides</a>
+      <a href="{{ "reference/" | relURL }}">CLI reference</a>
+      <a href="{{ "agents/" | relURL }}">Agent guide</a>
+      <a href="https://github.com/wstein/sourcesteward">GitHub</a>
+    </nav>
+    <div class="theme-control" id="theme-control" hidden>
+      <label for="theme-select">Theme</label>
+      <select id="theme-select"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
+    </div>
+  </header>
+  <main id="main" class="wrap docs-page">
+    <h1>{{ .Title }}</h1>
+    <div class="docs-content">{{ block "main" . }}{{ end }}</div>
+  </main>
+  <footer class="wrap footer">
+    <a href="https://github.com/wstein/sourcesteward/releases">SourceSteward releases</a>
+    <a href="https://github.com/wstein/sourcesteward/blob/main/LICENSE">EUPL-1.2</a>
+  </footer>
+</body>
+</html>

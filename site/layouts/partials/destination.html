@@ -1,0 +1,16 @@
+{{- $destination := .destination -}}
+{{- $url := urls.Parse $destination -}}
+{{- if and (not $url.IsAbs) (not $url.Host) $url.Path .page.Params.source -}}
+  {{- $source := path.Join (path.Dir .page.Params.source) $url.Path -}}
+  {{- $route := index hugo.Data.routes $source -}}
+  {{- if $route -}}
+    {{- $destination = strings.TrimPrefix "/" $route | relURL -}}
+  {{- else if hasPrefix $source "docs/assets/" -}}
+    {{- $destination = strings.TrimPrefix "docs/" $source | relURL -}}
+  {{- else -}}
+    {{- $destination = printf "https://github.com/wstein/sourcesteward/blob/main/%s" $source -}}
+  {{- end -}}
+  {{- with $url.RawQuery }}{{ $destination = printf "%s?%s" $destination . }}{{ end -}}
+  {{- with $url.Fragment }}{{ $destination = printf "%s#%s" $destination . }}{{ end -}}
+{{- end -}}
+{{- return $destination -}}
