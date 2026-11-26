@@ -1231,9 +1231,12 @@ fn after_a_rate_limit_no_further_comment_read_starts_and_the_rest_is_unknown() {
             "{h}: {notices}"
         );
         assert!(
-            (h - (K - 1)..=h).any(|count| notices.contains(&format!(
-                "repo: review state not read for {count} pull requests (#"
-            ))),
+            (h - (K - 1)..=h).any(|count| {
+                let plural = if count == 1 { "" } else { "s" };
+                notices.contains(&format!(
+                    "repo: review state not read for {count} pull request{plural} (#"
+                ))
+            }),
             "{h}: {notices}"
         );
         assert!(
