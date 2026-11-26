@@ -118,27 +118,25 @@ pub fn decode_go_keyring(raw: &str) -> Option<String> {
 
 #[cfg(target_os = "macos")]
 fn keychain_token(service: &str) -> Option<String> {
-    use security_framework::item::{ItemClass, ItemSearchOptions, Limit, SearchResult};
-    let results = ItemSearchOptions::new()
+    use security_framework::item::{ItemClass, ItemSearchOptions, Limit};
+    use security_framework::passwords::get_generic_password;
+
+    // Security.framework permits listing password attributes, but not fetching
+    // password bytes with a match limit of All. Read each account separately.
+    let matches = ItemSearchOptions::new()
         .class(ItemClass::generic_password())
         .service(service)
-        .load_data(true)
+        .load_attributes(true)
         .limit(Limit::All)
         .search()
         .ok()?;
-    for r in results {
-        if let SearchResult::Data(d) = r {
-            if let Some(t) = String::from_utf8(d)
-                .ok()
-                .and_then(|s| decode_go_keyring(s.trim()))
-            {
-                if !t.is_empty() {
-                    return Some(t);
-                }
-            }
-        }
-    }
-    None
+    matches.into_iter().find_map(|item| {
+        let attributes = item.simplify_dict()?;
+        let account = attributes.get("acct")?;
+        let bytes = get_generic_password(service, account).ok()?;
+        let raw = String::from_utf8(bytes).ok()?;
+        decode_go_keyring(raw.trim()).filter(|token| !token.is_empty())
+    })
 }
 
 #[cfg(not(target_os = "macos"))]
