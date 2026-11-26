@@ -59,7 +59,25 @@ pub fn changes_opts(
         // `--ignore-submodules=all`: a submodule is not looked into, so one that cannot be read does not make its parent unreadable
         platform = platform.index_worktree_submodules(None);
     }
-    for item in platform.into_iter(Vec::<BString>::new())? {
+    let items: Box<dyn Iterator<Item = gix::Result<Item>>> = match platform
+        .into_iter(Vec::<BString>::new())
+    {
+        Ok(items) => Box::new(items),
+        Err(err) => {
+            let invalid_module_path = repo
+                .submodules()?
+                .is_some_and(|mut modules| modules.any(|module| module.try_path().is_err()));
+            if !invalid_module_path {
+                return Err(err.into());
+            }
+            Box::new(
+                status_with_refused_module_paths(repo, with_untracked, ignore_submodule_changes)?
+                    .into_iter()
+                    .map(Ok),
+            )
+        }
+    };
+    for item in items {
         match item? {
             Item::TreeIndex(ch) => {
                 use gix::diff::index::Change as C;
@@ -113,6 +131,104 @@ pub fn changes_opts(
         dirty_paths: paths.len(),
         paths,
     })
+}
+
+/// gitoxide validates every .gitmodules path before starting its high-level status iterator.
+/// Use its lower-level status readers when a declaration has an invalid path, preserving the
+/// workspace's index-based discovery and inspecting only submodules with accepted paths.
+fn status_with_refused_module_paths(
+    repo: &gix::Repository,
+    with_untracked: bool,
+    ignore_submodule_changes: bool,
+) -> gix::Result<Vec<gix::status::Item>> {
+    use gix::status::{index_worktree, plumbing, tree_index::TrackRenames, Item};
+
+    let index = repo.index_or_empty()?;
+    let mut items = Vec::new();
+    repo.tree_index_status(
+        &repo.head_tree_id_or_empty()?,
+        &index,
+        None,
+        TrackRenames::AsConfigured,
+        |change, _, _| {
+            items.push(Item::TreeIndex(change.into_owned()));
+            Ok(std::ops::ControlFlow::Continue(()))
+        },
+    )?;
+    let options = index_worktree::Options {
+        dirwalk_options: if with_untracked {
+            Some(
+                repo.dirwalk_options()?
+                    .emit_untracked(gix::dir::walk::EmissionMode::CollapseDirectory),
+            )
+        } else {
+            None
+        },
+        ..index_worktree::Options::default()
+    };
+    let mut recorded = plumbing::index_as_worktree_with_renames::Recorder::default();
+    repo.index_worktree_status(
+        &index,
+        Vec::<BString>::new(),
+        &mut recorded,
+        plumbing::index_as_worktree::traits::FastEq,
+        AcceptedSubmoduleStatus {
+            repo: repo.clone().into_sync(),
+            ignore: ignore_submodule_changes,
+        },
+        &mut gix::progress::Discard,
+        &std::sync::atomic::AtomicBool::new(false),
+        options,
+    )?;
+    items.extend(
+        recorded
+            .records
+            .into_iter()
+            .map(|record| Item::IndexWorktree(record.into())),
+    );
+    Ok(items)
+}
+
+#[derive(Clone)]
+struct AcceptedSubmoduleStatus {
+    repo: gix::ThreadSafeRepository,
+    ignore: bool,
+}
+
+impl gix::status::plumbing::index_as_worktree::traits::SubmoduleStatus for AcceptedSubmoduleStatus {
+    type Output = gix::submodule::Status;
+
+    fn status(
+        &mut self,
+        _entry: &gix::index::Entry,
+        path: &gix::bstr::BStr,
+    ) -> gix::Result<Option<Self::Output>> {
+        use gix::submodule::config::Ignore;
+        let repo = self.repo.to_thread_local();
+        let (Some(root), Ok(path_str)) = (repo.workdir(), std::str::from_utf8(path.as_ref()))
+        else {
+            return Ok(None);
+        };
+        if self.ignore || crate::repo::path_rejection(root, path_str).is_some() {
+            return Ok(None);
+        }
+        let modules = repo.submodules()?;
+        let Some(module) = modules.into_iter().flatten().find(|module| {
+            module
+                .try_path()
+                .ok()
+                .flatten()
+                .is_some_and(|configured| configured == path)
+        }) else {
+            return Ok(None);
+        };
+        let ignore = match repo.config_snapshot().string("diff.ignoreSubmodules") {
+            Some(value) => Ignore::try_from(value.as_ref()).unwrap_or_default(),
+            None => module.ignore()?.unwrap_or_default(),
+        };
+        let status = module.status(ignore, true)?;
+        Ok(status.is_dirty().unwrap_or(false).then_some(status))
+    }
 }
 
 /// Count untracked entries the way `git status` shows them: a directory without any tracked file below

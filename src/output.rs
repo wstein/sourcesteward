@@ -28,7 +28,7 @@ pub fn short(id: &str) -> &str {
 }
 
 /// Version of gix this build is pinned to (checked against `Cargo.toml` by a test).
-pub const GIX_VERSION: &str = "0.90.0";
+pub const GIX_VERSION: &str = "0.91.0";
 
 /// `engine` field of every JSON document.
 pub fn engine() -> String {
