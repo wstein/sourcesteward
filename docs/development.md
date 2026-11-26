@@ -11,6 +11,8 @@ cargo run --locked --quiet --bin stw -- dev command-reference > docs/command-ref
 
 Implementation scope, feature decisions, dependencies, and acceptance gates: [Rust migration plan](migration-plan.md).
 
+Planned milestones: [roadmap](../ROADMAP.md). Boundaries of the tool: [what `stw` does not do](what-stw-does-not-do.md).
+
 Everyday git and GitHub workflows for agents and people, in one binary. Written in Rust on
 [gitoxide](https://github.com/GitoxideLabs/gitoxide) (`gix`, pinned to `=0.90.0`) and `clap`.
 stw starts the installed `git` in one place only, the runner (`src/git_runner.rs`; `tests/it/no_binaries.rs` allows a process
