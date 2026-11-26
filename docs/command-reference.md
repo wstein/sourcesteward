@@ -42,7 +42,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw status`
@@ -118,7 +118,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw tidy`
@@ -148,7 +148,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw tidy plan`
@@ -210,7 +210,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw tidy apply`
@@ -256,7 +256,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw tidy restore`
@@ -291,7 +291,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw tidy history`
@@ -325,7 +325,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw sync`
@@ -403,7 +403,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw sync restore`
@@ -439,7 +439,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw add`
@@ -478,7 +478,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw ready-check`
@@ -505,7 +505,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw review`
@@ -532,7 +532,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw review carry-over`
@@ -575,7 +575,7 @@ Exit codes:
   1  not allowed, or a step could not run (the result is still printed)
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw prove`
@@ -629,7 +629,7 @@ Exit codes:
   1  not proved, or a step could not run (the result is still printed)
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw absorb`
@@ -692,7 +692,7 @@ Exit codes:
      with --json the error is the document
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw restack`
@@ -721,7 +721,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw restack plan`
@@ -771,7 +771,7 @@ Exit codes:
   1  conflicts, refused or unknown (the plan is printed)
   2  usage error (also: no --onto and no default branch, a branch that does not exist)
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw restack conflict-report`
@@ -800,7 +800,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw restack show-conflict`
@@ -826,7 +826,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog`
@@ -877,7 +877,7 @@ Exit codes:
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog timeline`
@@ -938,7 +938,7 @@ Exit codes:
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog evolog`
@@ -997,7 +997,7 @@ Exit codes:
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog undo-plan`
@@ -1062,7 +1062,7 @@ Exit codes:
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog undo`
@@ -1130,7 +1130,7 @@ Exit codes:
   1  undo-plan or undo: a check is refused; the update failed; the repository could not be read
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog hooks`
@@ -1167,7 +1167,7 @@ Exit codes:
   1  refused, or the plan without --yes, or a write failed
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog hooks status`
@@ -1206,7 +1206,7 @@ Exit codes:
   1  refused, or the plan without --yes, or a write failed
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog hooks install`
@@ -1248,7 +1248,7 @@ Exit codes:
   1  refused, or the plan without --yes, or a write failed
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog hooks uninstall`
@@ -1290,7 +1290,7 @@ Exit codes:
   1  refused, or the plan without --yes, or a write failed
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw oplog hooks print`
@@ -1324,7 +1324,7 @@ Exit codes:
   1  refused, or the plan without --yes, or a write failed
   2  usage error
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace`
@@ -1349,7 +1349,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace checkpoint`
@@ -1383,7 +1383,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace inspect`
@@ -1406,7 +1406,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace retirement-plan`
@@ -1429,7 +1429,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace worktree-plan`
@@ -1456,7 +1456,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace worktree-apply`
@@ -1480,7 +1480,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace commit-plan`
@@ -1509,7 +1509,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace commit-apply`
@@ -1536,7 +1536,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw workspace resume`
@@ -1563,7 +1563,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw inspect`
@@ -1582,7 +1582,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw inspect github`
@@ -1603,7 +1603,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw inspect git`
@@ -1627,7 +1627,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw watch`
@@ -1739,7 +1739,7 @@ With .stw/watch.toml, start configured repositories with stw watch --stream --al
 
 See https://github.com/wstein/sourcesteward/blob/main/docs/review-and-watch.md
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw lint`
@@ -1768,7 +1768,7 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw lint pr`
@@ -1819,7 +1819,7 @@ Exit codes:
   2  usage error
   3  at least one error finding, or a list was cut at its bound (the output is printed; the result is not a pass)
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw lint review`
@@ -1870,7 +1870,7 @@ Exit codes:
   3  at least one error finding (the output is printed)
   2  usage error (also: FILE not readable or not UTF-8, a revision that does not resolve, no merge base)
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
 
 ## `stw lint pr-text`
@@ -1909,5 +1909,5 @@ Exit codes:
   3  at least one error finding (the output is printed)
   2  usage error (also: FILE not readable or not UTF-8)
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```

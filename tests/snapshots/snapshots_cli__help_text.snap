@@ -39,4 +39,4 @@ Exit codes:
 
 --json prints one JSON object with "schema_version" (see README.md).
 
-For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md
+For AI agents: https://wstein.github.io/sourcesteward/agents/

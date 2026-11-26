@@ -5,7 +5,7 @@ use common::*;
 
 #[test]
 fn agent_hint_appears_once_at_the_end_of_short_long_and_nested_help() {
-    let hint = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md";
+    let hint = "For AI agents: https://wstein.github.io/sourcesteward/agents/";
     for args in [
         &["--help"][..],
         &["watch", "-h"][..],

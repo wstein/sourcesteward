@@ -27,7 +27,7 @@ Exit codes:
 
 --json prints one JSON object with \"schema_version\" (see README.md).";
 
-const AGENT_HELP: &str = "For AI agents: https://github.com/wstein/sourcesteward/blob/main/llms.md";
+const AGENT_HELP: &str = "For AI agents: https://wstein.github.io/sourcesteward/agents/";
 
 #[derive(Parser)]
 #[command(
