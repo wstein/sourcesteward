@@ -16,6 +16,17 @@ Install with Homebrew on macOS or Linux.
 brew install wstein/tap/stw
 ```
 
+On macOS or Linux, you can also download and run the installer. It verifies
+the archive's SHA-256 and installs into `~/.local/bin`.
+
+```sh
+curl -fsSLo install-stw.sh https://raw.githubusercontent.com/wstein/sourcesteward/main/scripts/install.sh
+sh install-stw.sh
+```
+
+Set `STW_INSTALL_DIR` to use another directory, or pass a tag such as
+`sh install-stw.sh v0.5.0` to install a specific release.
+
 Run a read-only status check in a Git checkout.
 
 ```sh
