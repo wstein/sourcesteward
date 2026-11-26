@@ -2,6 +2,7 @@
 //! else: gix never starts `ssh` or `git-upload-pack` itself. Unknown transports (`ext::`) are refused typed
 //! without starting anything. A failed fetch is typed, the URL's password is never printed. Fake programs
 //! first on PATH record every call.
+use crate::common::FixtureCommand as _;
 use std::process::Command;
 
 use crate::common::*;
@@ -39,7 +40,7 @@ fn setup() -> (Fx, std::path::PathBuf, tempfile::TempDir) {
 
 fn run_stw(fx: &Fx, path: &std::path::Path, args: &[&str]) -> (std::process::Output, Value) {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", path)
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -266,7 +267,7 @@ fn offline_never_looks_at_the_remote_kind() {
     fx.set_origin_url("ssh://git@example.invalid/x/y.git");
     for extra in [&["--offline"][..], &["--plan", "--offline"][..]] {
         let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", shim.path())
             .env("HOME", "/nonexistent")
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -339,7 +340,7 @@ fn git_gets_a_null_stdin_even_when_stw_has_a_pipe() {
     .unwrap();
     fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
     let mut child = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", shim.path())
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -410,7 +411,7 @@ fn groups_of_run(terminal: bool) -> (String, String) {
     group_log_git(shim.path(), &log);
     fx.set_origin_url("ssh://git@127.0.0.1:1/x/y.git");
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stw"));
-    cmd.env_clear()
+    cmd.fixture_env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", shim.path().display()))
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

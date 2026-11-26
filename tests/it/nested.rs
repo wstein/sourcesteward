@@ -3,6 +3,7 @@
 //! superproject (up to 16 levels); the walk stops with an error above 256 repositories.
 //!
 //! Harness confinement: everything lives in a tempdir of `World` (git and stw run with a scrubbed environment).
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -88,7 +89,7 @@ fn names(root: &Path) -> Vec<String> {
 
 fn stw(t: &N, cwd: &Path, args: &[&str]) -> (i32, Value, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &t.w.home)
         .env("GIT_CEILING_DIRECTORIES", &t.w.base)
@@ -533,7 +534,7 @@ fn an_uninitialized_gitlink_of_the_rules_checkout_is_reported() {
 
 fn stw_ceiling(t: &N, cwd: &Path, ceiling: &Path, args: &[&str]) -> (i32, Value, String) {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &t.w.home)
         .env("GIT_CEILING_DIRECTORIES", ceiling)

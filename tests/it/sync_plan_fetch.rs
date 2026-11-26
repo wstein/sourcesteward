@@ -1,6 +1,7 @@
 //! `stw sync --plan` / `--dry-run` fetch the remote-tracking refs, like the Go plan (`internal/stwsync/sync.go`,
 //! `TestSyncPlanChangesOnlyRemoteTrackingRefs`), and write nothing else: no branch, no working tree, no recovery
 //! ref, no journal. Remotes are local bare repositories (no network).
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -414,7 +415,7 @@ fn the_plan_text_says_that_the_tracking_refs_were_fetched() {
     let d = setup();
     let run = |args: &[&str]| {
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &d.w.home)
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -492,7 +493,7 @@ fn the_plan_text_after_a_failed_fetch_does_not_claim_that_refs_were_fetched() {
         &["remote", "set-url", "origin", "https://127.0.0.1:1/x/y.git"],
     );
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &d.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

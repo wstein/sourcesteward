@@ -1,5 +1,6 @@
 mod common;
 
+use crate::common::FixtureCommand as _;
 use std::fs;
 use std::process::{Command, Stdio};
 
@@ -9,7 +10,7 @@ use serde_json::{json, Value};
 fn inspect(args: &[&str], api: Option<&str>) -> (i32, Value) {
     let mut command = Command::new(env!("CARGO_BIN_EXE_stw"));
     command
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("PATH", "/nonexistent");
     if let Some(url) = api {

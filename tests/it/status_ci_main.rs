@@ -1,6 +1,7 @@
 //! `stw status`: the `ci-main` source, the CI class of the head of the default branch (port of Go's `ci-main`),
 //! with the Actions runs as the way when the token cannot read check runs. Read and JSON; the text, the
 //! attention reason and the notice are in `status_ci_main_text`.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -91,7 +92,7 @@ pub fn fake(s: Scn) -> FakeRoutes {
 
 pub fn stw(api: Option<&str>, args: &[&str]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN);

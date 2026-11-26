@@ -1,5 +1,6 @@
 //! GitHub REST behavior against a fake API: the token is used but never printed, `--offline` makes no
 //! request, and the JSON field names are the documented ones.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -9,7 +10,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 
 fn stw(api: &str, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN)
@@ -493,7 +494,7 @@ fn an_online_plan_does_not_ask_github_whether_the_remote_moved() {
     let api = FakeApi::start(200, "{}");
     let run = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", shim.path())
             .env("HOME", "/nonexistent")
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

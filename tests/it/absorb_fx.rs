@@ -2,6 +2,7 @@
 //! test-owned global config (identity, default branch; the user's own config is never read or written), and a runner for
 //! the `stw` binary with a cleared environment. Every helper refuses a path outside the scratch directory.
 #![allow(dead_code)]
+use crate::common::FixtureCommand as _;
 use std::cell::Cell;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
@@ -103,7 +104,7 @@ impl Fx {
             "path outside the scratch: {cwd:?}"
         );
         let mut c = Command::new(program);
-        c.env_clear()
+        c.fixture_env_clear()
             .env("PATH", self.path_env())
             .env("HOME", self.s.join("home"))
             .env("GIT_CONFIG_GLOBAL", &self.cfg)

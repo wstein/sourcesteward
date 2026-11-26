@@ -3,6 +3,7 @@
 //! without a gitlink is no repository, and a clone that no gitlink names is never one.
 //!
 //! Harness confinement: everything lives in a tempdir of `World` (git and stw run with a scrubbed environment).
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -74,7 +75,7 @@ impl Ws {
 
 fn stw_in(t: &Ws, cwd: &Path, args: &[&str]) -> (i32, Value) {
     let out = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &t.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -162,7 +163,7 @@ fn the_paths_are_sorted_and_a_conflicted_gitlink_is_listed_once() {
     );
     let mut child = Command::new("git")
         .current_dir(&t.ws)
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &t.w.home)
         .args(["update-index", "--index-info"])

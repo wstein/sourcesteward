@@ -1,3 +1,4 @@
+use crate::common::FixtureCommand as _;
 use stw::ready_check::{evaluate, ready, Facts, Status};
 
 fn good() -> Facts {
@@ -431,7 +432,7 @@ fn cli_ready_check_reads_only_expected_gets() {
         (200, vec![], body.to_string())
     });
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("GH_TOKEN", "TEST-TOKEN")
         .env("STW_GITHUB_API_URL", &api.url)
@@ -470,7 +471,7 @@ fn cli_failure_prints_document_and_skips_head_reads() {
         }
     });
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("GH_TOKEN", "TEST-TOKEN")
         .env("STW_GITHUB_API_URL", &api.url)
@@ -489,7 +490,7 @@ fn cli_human_lists_all_conditions_on_failed_read() {
     use common::FakeRoutes;
     let api = FakeRoutes::start(|_, _| (404, vec![], "{}".into()));
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("GH_TOKEN", "TEST-TOKEN")
         .env("STW_GITHUB_API_URL", &api.url)
@@ -554,7 +555,7 @@ fn cli_with_checks(runs: serde_json::Value, statuses: Vec<serde_json::Value>) ->
         (200, vec![], body.to_string())
     });
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("GH_TOKEN", "TEST-TOKEN")
         .env("STW_GITHUB_API_URL", &api.url)
@@ -668,7 +669,7 @@ fn cli_ready_check_stays_strict_a_403_on_check_runs_is_unknown_and_no_actions_ru
         (200, vec![], body.to_string())
     });
     let result = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("GH_TOKEN", "TEST-TOKEN")
         .env("STW_GITHUB_API_URL", &api.url)

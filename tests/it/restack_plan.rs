@@ -4,6 +4,7 @@
 //! conflict = git stops, same files). Go cases that map here are named in `go_*` tests; the evidence the Go command
 //! adds (range pairing, cherry classification, identities, overlap, effects, lease texts, hooks, exit 3) is not
 //! ported, see README "Deviations from the Go `restack plan`".
+use crate::common::FixtureCommand as _;
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -31,7 +32,7 @@ fn stw(cwd: &Path, args: &[&str]) -> Output {
     assert!(cwd.is_absolute(), "unconfined");
     let home = tempfile::tempdir().unwrap();
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home.path())
         .current_dir(cwd)
@@ -152,7 +153,7 @@ fn git(dir: &Path, args: &[&str]) -> (i32, String) {
         dir.display()
     );
     let o = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", dir.parent().unwrap_or(dir))
         .env("LC_ALL", "C")
@@ -180,7 +181,7 @@ fn oracle(s: &Stack, names: &[&str]) -> Vec<Option<Vec<String>>> {
     let scratch = scratch();
     let clone = scratch.path().join("clone");
     let out = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -559,7 +560,7 @@ fn go_the_old_parent_form_predicts_the_restack_of_one_branch_after_its_parent_wa
     let scratch = scratch();
     let clone = scratch.path().join("clone");
     let out = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -1046,7 +1047,7 @@ fn a_merge_attribute_in_info_attributes_of_the_common_dir_is_seen_from_a_linked_
     let scratch = scratch();
     let wt = scratch.path().join("wt");
     let out = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")

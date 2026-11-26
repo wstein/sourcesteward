@@ -1,5 +1,6 @@
 //! `stw tidy apply` and `stw tidy restore` as a process: flags, JSON, exit codes, default manifest place,
 //! reflog identity of the restored branch.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -23,7 +24,7 @@ fn build() -> Fx {
 
 fn stw(home: &std::path::Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -433,7 +434,7 @@ fn apply_and_restore_call_no_git_gh_or_ssh() {
     }
     let run = |args: &[&str]| {
         Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("HOME", home.path())
             .env("PATH", format!("{}:/usr/bin:/bin", shims.display()))
             .args(args)

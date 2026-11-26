@@ -1,6 +1,7 @@
 //! Repository discovery in the commands: `GIT_CEILING_DIRECTORIES` hides the repository above the start, for
 //! the workspace root (`status`), the root of `stw add` and `review carry-over`. Without the variable the same
 //! start finds the repository, so each assertion on the hidden case has its visible counterpart.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -8,7 +9,7 @@ use crate::common::*;
 fn run(cwd: &std::path::Path, ceiling: Option<&std::path::Path>, args: &[&str]) -> Output {
     assert!(cwd.is_absolute(), "unconfined");
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", cwd)
         .current_dir(cwd);

@@ -1,5 +1,6 @@
 //! `stw sync restore [PATH] [--run ID]` (port of `internal/stwsync/restore.go`; Go cases: `restore_test.go`, the help text
 //! of `cli/sync.go`). Repositories of `sync_journal::setup`: the root `ws` and the submodule `sub`, both behind origin.
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -273,7 +274,7 @@ fn restore_is_given_the_workspace_as_a_path_or_as_root_but_not_both() {
     run(&j);
     let o = |args: &[&str]| {
         std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &j.w.home)
             .current_dir(&j.w.base)

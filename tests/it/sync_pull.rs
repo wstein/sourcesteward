@@ -3,6 +3,7 @@
 //!
 //! Harness confinement as in `sync_flags.rs`: every repository lives in a tempdir, git and `stw` run with a scrubbed
 //! environment and `HOME` inside the tempdir.
+use crate::common::FixtureCommand as _;
 use std::path::PathBuf;
 
 use serde_json::Value;
@@ -357,7 +358,7 @@ fn sync_restore_moves_a_rebased_branch_back() {
     assert_eq!(repo(&v, "ws")["result"], "rebased");
     assert_ne!(head(&d), d.local);
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &d.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -443,7 +444,7 @@ fn the_flags_exclude_each_other_and_are_refused_with_restore() {
     }
     for flag in ["--rebase", "--merge", "--autostash", "--no-autostash"] {
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &d.w.home)
             .current_dir(&d.w.base)
@@ -700,7 +701,7 @@ fn stw_with_git(d: &D, on_update: &str, args: &[&str]) -> (i32, Value, String) {
     );
     let path = format!("{}:{}", dir.display(), std::env::var("PATH").unwrap());
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", path)
         .env("HOME", &d.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

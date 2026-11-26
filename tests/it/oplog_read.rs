@@ -1,5 +1,6 @@
 //! `stw oplog timeline | evolog | undo-plan` (read-only; formats in docs/oplog-format.md). Logs and reflogs are
 //! written by hand into fixture repositories built with gix; the binary runs with a scrubbed environment and no git.
+use crate::common::FixtureCommand as _;
 use std::process::Command;
 
 use crate::common::*;
@@ -23,7 +24,7 @@ fn run(fx: &Fx, args: &[&str]) -> Run {
     assert!(fx.path.is_absolute(), "unconfined");
     let home = tempfile::tempdir().unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/nonexistent")
         .env("HOME", home.path())
         .current_dir(&fx.path)

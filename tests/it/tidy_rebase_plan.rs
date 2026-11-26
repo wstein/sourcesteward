@@ -2,6 +2,7 @@
 //! Rebase merges are rebuilt with gix: the same author, author time and subject on a new parent with a new committer
 //! and committer time. A conflict resolution is a landed commit with one changed line, so that the patch ID differs
 //! and the identity decides.
+use crate::common::FixtureCommand as _;
 use crate::common::*;
 use gix::ObjectId;
 use stw::github::AnyPr;
@@ -1356,7 +1357,7 @@ fn a_shallow_clone_gives_a_plan_and_the_stage_says_where_the_walk_ended() {
 
 pub(crate) fn stw_cli(home: &std::path::Path, args: &[&str]) -> std::process::Output {
     std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")

@@ -1,6 +1,7 @@
 //! The journal of a `stw sync` run: run ID, record, recovery refs, order of the writes, retention (port of the Go
 //! journal, `internal/stwsync/journal.go`; Go cases: `sync_test.go`, `retention_test.go`, `restore_test.go`).
 //! Every repository lives in a tempdir of `sync_flags::World`.
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 
 use serde_json::Value;
@@ -152,7 +153,7 @@ impl J {
 
     pub fn text(&self, args: &[&str]) -> (i32, String, String) {
         let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &self.w.home)
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -802,7 +803,7 @@ fn a_repository_config_that_names_a_program_stops_nothing_and_no_git_is_needed()
         );
     }
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", &j.w.home)
         .current_dir(&j.w.base)
         .args(["sync", "--offline", "--json", "--root"])

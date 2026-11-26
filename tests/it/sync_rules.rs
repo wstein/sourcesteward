@@ -1,4 +1,5 @@
 //! `stw sync` and the agent-rules checkout: the state line, and the fast-forward update with its conditions.
+use crate::common::FixtureCommand as _;
 use crate::common::*;
 use stw::sync::rules::{agent_rules, render_human, to_json, RulesOpts};
 
@@ -919,7 +920,7 @@ fn without_any_owner_identity_nothing_is_admitted() {
     let home = root.join("home");
     std::fs::create_dir(&home).unwrap();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &home)
         .env("GIT_CONFIG_NOSYSTEM", "1")

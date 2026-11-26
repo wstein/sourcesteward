@@ -2,6 +2,7 @@
 //! PR text from a file, read-only, no network. Fixtures: real comments and PR texts, `tests/fixtures/lint/`.
 //! Harness confinement: repositories and files live in tempdirs created here; the binary runs with a scrubbed
 //! environment and starts no network.
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
@@ -20,7 +21,7 @@ fn fixture(name: &str) -> PathBuf {
 fn stw(args: &[&str]) -> Output {
     let home = scratch();
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home.path())
         .current_dir(home.path())

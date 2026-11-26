@@ -1,5 +1,6 @@
 //! `stw status`: counts per repository and in total, separated blocks, exit 0 for notices only, the JSON
 //! `counts` and `totals` objects, and that the command writes nothing.
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -11,7 +12,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 
 fn stw(api: Option<&str>, args: &[&str]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN);

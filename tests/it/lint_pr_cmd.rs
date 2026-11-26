@@ -34,6 +34,7 @@
 //!   malformed (`Link header`). `page=+2` is malformed in both.
 //! - D9 a body of more than one MiB (exactly one MiB is read) is `page-too-large` for comments and
 //!   `malformed-response` for `pulls/N` and commits, as in Go; a 304 is `malformed-response` (`unsolicited 304 response`).
+use crate::common::FixtureCommand as _;
 use std::cell::RefCell;
 use std::process::{Command, Output};
 
@@ -1024,7 +1025,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 
 fn stw(api: &str, cwd: &std::path::Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -1216,7 +1217,7 @@ fn lint_pr_usage_and_read_failures() {
     assert!(err.contains("forbidden"), "{err}");
     // no token: exit 1, no document, no request
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("STW_GITHUB_API_URL", &api.url)

@@ -1,5 +1,6 @@
 //! `stw sync` acts by default, like Go; `--plan` and `--dry-run` (the same flag twice) only report; `--apply` is a hidden
 //! alias without effect (owner decision 2026-11-11). Every repository lives in a tempdir of `sync_flags::World`.
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
@@ -224,7 +225,7 @@ fn every_flag_set_acts_by_default_and_changes_nothing_with_plan_or_dry_run() {
 fn the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it() {
     let d = setup_fetched();
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &d.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -241,7 +242,7 @@ fn the_plan_text_keeps_the_dry_run_marker_and_a_run_does_not_have_it() {
     );
     assert_eq!(d.tip(), d.old);
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &d.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

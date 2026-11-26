@@ -5,6 +5,7 @@
 //! that directory (an empty path is refused), real git runs only `init`, `add`, `commit`, `branch` and the
 //! runner's own `fetch` inside it, with `GIT_CEILING_DIRECTORIES` set to the tempdir's parent. Nothing here
 //! runs gc, reflog expire, reset, update-ref or branch deletion.
+use crate::common::FixtureCommand as _;
 use std::ffi::OsString;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -629,7 +630,7 @@ fn git(dir: &Path, args: &[&str]) {
         "unconfined git: {dir:?}"
     );
     let out = std::process::Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", dir)
         .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -657,7 +658,7 @@ fn git(dir: &Path, args: &[&str]) {
 
 fn rev(dir: &Path, r: &str) -> String {
     let out = std::process::Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", dir)
         .env("GIT_CEILING_DIRECTORIES", dir.parent().unwrap())

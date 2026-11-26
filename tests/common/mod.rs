@@ -6,6 +6,23 @@ use std::sync::atomic::AtomicBool;
 use gix::objs::tree::EntryKind;
 use gix::ObjectId;
 
+/// Keep coverage writes in the runner's profile directory when clearing a fixture's environment.
+pub trait FixtureCommand {
+    fn fixture_env_clear(&mut self) -> &mut Self;
+}
+
+impl FixtureCommand for std::process::Command {
+    fn fixture_env_clear(&mut self) -> &mut Self {
+        self.env_clear();
+        if let Some(profile) =
+            std::env::var_os("LLVM_PROFILE_FILE").filter(|p| Path::new(p).is_absolute())
+        {
+            self.env("LLVM_PROFILE_FILE", profile);
+        }
+        self
+    }
+}
+
 pub struct Fx {
     pub path: PathBuf,
     _tmp: tempfile::TempDir,

@@ -1,5 +1,6 @@
 //! `stw status` and the CI of the default branch: the text line, the attention reason `main-red`, the notice
 //! `ci-not-read`, the exit code, and `status PATH`. The read itself is in `status_ci_main`.
+use crate::common::FixtureCommand as _;
 use std::process::Output;
 
 use super::status_ci_main::*;
@@ -253,7 +254,7 @@ fn path_run(api: &FakeRoutes, extra: &[&str]) -> (String, Value) {
     let fx = status_fixture();
     let run = |json: bool| {
         let mut c = std::process::Command::new(env!("CARGO_BIN_EXE_stw"));
-        c.env_clear()
+        c.fixture_env_clear()
             .env("HOME", "/nonexistent")
             .env("GH_TOKEN", "SECRETTOKEN-0123456789")
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

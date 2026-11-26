@@ -1,5 +1,6 @@
 //! `stw status --json`: the top-level `notices` array. It is made from the same list as the text block
 //! `Notices (N)`: one element per line, same order, same message. Codes: README.md, "Notices".
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -10,7 +11,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 
 fn stw(token: bool, api: Option<&str>, args: &[&str]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service");
     if token {
@@ -213,7 +214,7 @@ fn a_failed_fetch_is_a_notice_and_hostile_characters_stay_escaped() {
         w.git(&ws, &["remote", "set-url", "origin", url]);
         let run = |json: bool| {
             let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-            c.env_clear()
+            c.fixture_env_clear()
                 .env("PATH", std::env::var_os("PATH").unwrap())
                 .env("HOME", &w.home)
                 .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -345,7 +346,7 @@ fn notices_of_several_repositories_keep_the_list_order_and_escape_the_name() {
     }
     let run = |json: bool| {
         let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-        c.env_clear()
+        c.fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &w.home)
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

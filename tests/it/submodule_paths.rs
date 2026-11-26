@@ -3,6 +3,7 @@
 //! own entry (escaped) and nothing there is read or written. Unit part: `repo::path_rejection`, `repo::list_repos`.
 //!
 //! Harness confinement: everything lives in a tempdir of `World` (git and stw run with a scrubbed environment).
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -115,7 +116,7 @@ fn setup_hostile() -> (Ws, Vec<(String, String)>) {
 fn stw(t: &Ws, args: &[&str]) -> (i32, String, Value) {
     let run = |json: bool| {
         let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-        c.env_clear()
+        c.fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &t.w.home)
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

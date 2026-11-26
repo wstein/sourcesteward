@@ -1,5 +1,6 @@
 //! stw writes its own gix ref updates into `refs.log` (context `stw`) and rotates the logs by size
 //! (`docs/oplog-format.md`, 3, 6). Fixtures: the repositories of `sync_journal::setup` (real git builds them, stw runs).
+use crate::common::FixtureCommand as _;
 use std::fs::OpenOptions;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,7 @@ const MIB: usize = 1024 * 1024;
 /// `stw oplog ...` in the workspace repository: (exit code, stdout, stderr).
 fn oplog_cli(j: &J, args: &[&str]) -> (i32, String, String) {
     let o = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/nonexistent")
         .env("HOME", &j.w.home)
         .current_dir(&j.ws)

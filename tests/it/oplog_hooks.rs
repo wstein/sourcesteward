@@ -1,6 +1,7 @@
 //! `stw oplog hooks status | install | uninstall | print`: the two op log hooks (`post-rewrite`, `reference-transaction`) in
 //! one repository, opt-in (docs/oplog-format.md, 11). Repositories are built by the `git` binary in a temporary directory
 //! (reference use, as in the other CLI tests); `stw` itself runs with `PATH=/nonexistent`: the install starts no program.
+use crate::common::FixtureCommand as _;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -35,7 +36,7 @@ fn tmp_base() -> PathBuf {
 fn git_in(home: &Path, dir: &Path, args: &[&str]) -> std::process::Output {
     assert!(dir.is_absolute() && dir.exists(), "unconfined: {dir:?}");
     let o = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/usr/bin:/bin:/usr/local/bin")
         .env("HOME", home)
         .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -91,7 +92,7 @@ impl R {
     fn stw_env(&self, dir: &Path, args: &[&str], env: &[(&str, &str)]) -> Run {
         assert!(dir.is_absolute(), "unconfined");
         let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-        c.env_clear()
+        c.fixture_env_clear()
             .env("PATH", "/nonexistent")
             .env("HOME", &self.home)
             .current_dir(dir)
@@ -123,7 +124,7 @@ impl R {
     /// The top-level `stw oplog <args>` (timeline, evolog).
     fn oplog(&self, args: &[&str]) -> Run {
         let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", "/nonexistent")
             .env("HOME", &self.home)
             .current_dir(&self.repo)
@@ -291,7 +292,7 @@ fn the_installed_text_is_the_text_of_the_spikes() {
     r.install();
     for (name, spike) in spikes {
         let o = Command::new("bash")
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", "/usr/bin:/bin")
             .arg(&spike)
             .arg("print")

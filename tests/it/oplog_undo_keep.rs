@@ -1,6 +1,7 @@
 //! `stw oplog undo REF --to OLD --expect NEW --keep --yes`: the checked-out branch of the current worktree is moved with
 //! `git reset --keep` (docs/oplog-format.md, 8a). The binary runs with git on its PATH here (the only git program of
 //! `oplog`); fixtures are built with gix, the merge conflict and the state checks use the installed git.
+use crate::common::FixtureCommand as _;
 use std::process::Command;
 
 use crate::common::*;
@@ -20,7 +21,7 @@ fn run_in(dir: &std::path::Path, path_env: &str, args: &[&str]) -> Run {
     assert!(dir.is_absolute(), "unconfined");
     let home = tempfile::tempdir().unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", path_env)
         .env("HOME", home.path())
         .current_dir(dir)
@@ -52,7 +53,7 @@ fn git(dir: &std::path::Path, args: &[&str]) -> (i32, String) {
     assert!(dir.is_absolute(), "unconfined");
     let home = tempfile::tempdir().unwrap();
     let o = Command::new("/usr/bin/git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", home.path())
         .current_dir(dir)

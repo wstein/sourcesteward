@@ -1,6 +1,7 @@
 //! `stw prove ALT NEU [--base BASIS]`: the proof that a rewritten branch is the old one rebased. Repositories are
 //! built with gix in a scratch directory (`tests/common`); the binary runs with a scrubbed environment. The
 //! range-diff step needs the installed git (cases skip without it, as `carryover_cli.rs`).
+use crate::common::FixtureCommand as _;
 use std::path::Path;
 use std::process::{Command, Output};
 
@@ -17,7 +18,7 @@ fn git_available() -> bool {
 fn stw(cwd: &Path, home: &Path, args: &[&str]) -> Output {
     assert!(cwd.is_absolute() && home.is_absolute(), "unconfined");
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home)
@@ -151,7 +152,7 @@ fn a_pure_rebase_is_proved_and_ends_with_the_line() {
     // the same line as the carry-over command gives for the same four ids
     let home = tempfile::tempdir().unwrap();
     let c = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home.path())
         .current_dir(&p.fx.path)
@@ -942,7 +943,7 @@ fn an_old_git_is_refused_with_the_command_name() {
     std::fs::write(&git, "#!/bin/sh\necho 'git version 2.40.1'\n").unwrap();
     std::fs::set_permissions(&git, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", bin.path())
         .env("HOME", home.path())
         .current_dir(&p.fx.path)

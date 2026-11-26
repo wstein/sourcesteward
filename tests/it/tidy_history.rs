@@ -1,6 +1,7 @@
 //! `stw tidy history` (port of the Go `tidy history`, `internal/workspace/tidy_v3_history.go`; Go cases:
 //! `tidy_v3_history_test.go`, `cli/tidy_prune_v4_history_test.go` usage cases): the stored manifests of `tidy apply`, newest
 //! first, read-only, every bound visible.
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -27,7 +28,7 @@ fn build() -> Fx {
 
 fn stw(home: &Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -334,7 +335,7 @@ fn the_counts_follow_the_repository() {
     lines += &(line(Path::new("repo"), "rel-exists", &c0) + "\n");
     std::fs::write(md.join("0000000000001-1-0.jsonl"), lines).unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home.path())
         .current_dir(fx.path.parent().unwrap())
         .args([
@@ -504,7 +505,7 @@ fn history_calls_no_git_gh_or_ssh_and_needs_no_workspace() {
         &[line(&fx.path, "free", &fx.tip("merged-a").to_string())],
     );
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home.path())
         .current_dir(home.path())
         .args([

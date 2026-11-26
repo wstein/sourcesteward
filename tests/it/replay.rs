@@ -1,5 +1,6 @@
 //! M1: the in-memory replay engine against the installed Git as oracle. Fixtures are built with gix in a scratch
 //! repository (`tests/common`); Git only reads them, or works in a clone of them inside the same scratch directory.
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -29,7 +30,7 @@ fn git(dir: &Path, args: &[&str]) -> (i32, String) {
     );
     let home = dir.parent().unwrap_or(dir);
     let o = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("HOME", home)
         .env("LC_ALL", "C")
@@ -67,7 +68,7 @@ fn oracle_rebase(fx: &Fx, onto: ObjectId, old_base: ObjectId, tip: ObjectId) -> 
     let scratch = scratch();
     let clone = scratch.path().join("clone");
     let out = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -116,7 +117,7 @@ fn oracle_merge_tree(
     let scratch = scratch();
     let clone = scratch.path().join("clone");
     let out = Command::new("git")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap_or_default())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")
@@ -1030,7 +1031,7 @@ fn committer_ignores_the_environment() {
     without.strip_identity();
     let home = scratch();
     let out = Command::new(std::env::current_exe().unwrap())
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home.path())
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")

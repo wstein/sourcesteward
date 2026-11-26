@@ -1,4 +1,5 @@
 //! The similarity stage of `stw tidy plan` (evidence class `similar-patches`, decision `review`, never `delete`).
+use crate::common::FixtureCommand as _;
 use crate::common::*;
 use gix::ObjectId;
 use serde_json::Value;
@@ -456,7 +457,7 @@ fn apply_never_deletes_a_similar_patches_branch() {
 
 fn stw(home: &std::path::Path, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", home)
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
         .env("GIT_CONFIG_SYSTEM", "/dev/null")

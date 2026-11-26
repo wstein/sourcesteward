@@ -3,6 +3,7 @@
 //!
 //! Harness confinement: every repository lives in a tempdir created here; git and `stw` run with a scrubbed
 //! environment (no inherited `GIT_*`), `HOME` inside the tempdir, `GIT_CEILING_DIRECTORIES` above the work area.
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -42,7 +43,7 @@ impl World {
             "unconfined git: {dir:?}"
         );
         let o = Command::new("git")
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &self.home)
             .env("GIT_CONFIG_NOSYSTEM", "1")
@@ -81,7 +82,7 @@ impl World {
     /// Run `stw sync` with `args` on the workspace at `root`; the JSON document, the exit code and stderr.
     pub fn stw(&self, root: &Path, args: &[&str]) -> (i32, Value, String) {
         let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-            .env_clear()
+            .fixture_env_clear()
             .env("PATH", std::env::var_os("PATH").unwrap())
             .env("HOME", &self.home)
             .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -871,7 +872,7 @@ fn hostile_submodule_paths_are_reported_escaped_and_never_touched() {
     );
     // text: no raw control character reaches the terminal
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &s.w.home)
         .args(["sync", "--plan", "--submodules", "--offline", "--root"])
@@ -939,7 +940,7 @@ fn text_output_names_the_move_and_the_counts() {
     let s = sub_setup();
     s.pin_ahead();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &s.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

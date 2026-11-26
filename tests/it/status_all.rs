@@ -6,6 +6,7 @@
 //!
 //! Harness confinement: every repository lives in a tempdir of `World`; git and stw run with a scrubbed environment
 //! (`HOME` inside the tempdir, `GIT_CEILING_DIRECTORIES` above the work area); GitHub is a fake API on 127.0.0.1.
+use crate::common::FixtureCommand as _;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -100,7 +101,7 @@ impl Run {
 
 fn run(w: &World, cwd: &Path, api: Option<&str>, args: &[&str]) -> Run {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &w.home)
         .env("GIT_CEILING_DIRECTORIES", &w.base)

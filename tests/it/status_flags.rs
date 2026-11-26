@@ -1,5 +1,6 @@
 //! `stw status` flags ported from Go (`internal/cli/status.go`): `--icons`, `--worktrees`, `--fetch`, `--timeout`,
 //! `--stats`, `--verbose`, `--long`. Go cases: `internal/cli/status_command_test.go`, `internal/statuscmd/terminal_test.go`.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -10,7 +11,7 @@ const TOKEN: &str = "SECRETTOKEN-0123456789";
 
 fn stw(api: Option<&str>, args: &[&str]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN);
@@ -470,7 +471,7 @@ fn fetch_setup() -> F {
 /// `stw status` on the workspace of `f` with the git of the test environment (HOME inside the tempdir).
 fn status_of(f: &F, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &f.w.home)
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -682,7 +683,7 @@ fn fetch_sends_no_github_request_with_offline_and_does_not_leak_a_token() {
     let f = fetch_setup();
     let api = FakeRoutes::start(|_, _| (200, vec![], "[]".into()));
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", &f.w.home)
         .env("GH_TOKEN", TOKEN)
@@ -920,7 +921,7 @@ fn stats_without_any_request_say_so_and_leave_the_rate_limit_null() {
     let r = path_str(&fx.path);
     // no token: no client, no request
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .args(["status", "--root", &r, "--stats", "--json"])

@@ -1,6 +1,7 @@
 //! `stw status`: the hint "op log hooks not installed" (docs/oplog-format.md, 11, question 21). One line under a
 //! repository of the text and the additive JSON field `oplog_hooks`; only a hint, nothing is installed or written, the
 //! exit code does not change.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -13,7 +14,7 @@ const MISSING_BOTH: &str =
 
 fn stw_in(fx: &Fx, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/nonexistent")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

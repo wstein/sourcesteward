@@ -1,6 +1,7 @@
 //! A repository that names programs everywhere (filter drivers, textconv, credential helper, hooks, ssh
 //! command) must not make `status`, `tidy plan` or `sync` start any of them. Markers are files the programs
 //! would create; `sh` is on PATH so that a program could really run.
+use crate::common::FixtureCommand as _;
 use std::path::Path;
 use std::process::Command;
 
@@ -71,7 +72,7 @@ fn run(fx: &Fx, args: &[&str]) {
 
 fn run_expect(fx: &Fx, args: &[&str], code: i32) {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
@@ -320,7 +321,7 @@ fn ff_fixture(changed: &str, driver: bool) -> (Fx, tempfile::TempDir, gix::Objec
 
 fn sync_apply(fx: &Fx) -> serde_json::Value {
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", "/usr/bin:/bin")
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")

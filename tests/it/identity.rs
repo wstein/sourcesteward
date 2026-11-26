@@ -1,5 +1,6 @@
 //! The reflog identity of `sync --apply`: GIT_COMMITTER_*, then user.name/email of the Git config, then
 //! the fallback `stw <stw@localhost>`. Runs in an environment without any identity.
+use crate::common::FixtureCommand as _;
 use std::process::Command;
 
 use crate::common::*;
@@ -23,7 +24,7 @@ fn behind() -> Fx {
 fn apply(fx: &Fx, env: &[(&str, &str)]) -> Value {
     let home = tempfile::tempdir().unwrap();
     let o = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         // the journal of the run creates a recovery ref through the installed git
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home.path())

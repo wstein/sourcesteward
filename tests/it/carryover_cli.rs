@@ -1,5 +1,6 @@
 //! `stw review carry-over`: exit codes, output, repository resolution. Core cases: tests/carryover.rs.
 //! Harness confinement: repositories live in tempdirs created here; the binary runs with a scrubbed environment.
+use crate::common::FixtureCommand as _;
 use std::process::{Command, Output};
 
 use crate::common::*;
@@ -14,7 +15,7 @@ fn git_available() -> bool {
 fn stw(cwd: &std::path::Path, home: &std::path::Path, args: &[&str]) -> Output {
     assert!(cwd.is_absolute() && home.is_absolute(), "unconfined");
     Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", home)
         .current_dir(cwd)
@@ -216,7 +217,7 @@ fn an_old_git_is_refused_with_the_command_name() {
     std::fs::write(&git, "#!/bin/sh\necho 'git version 2.40.1'\n").unwrap();
     std::fs::set_permissions(&git, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let out = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", bin.path())
         .env("HOME", home.path())
         .current_dir(&fx.path)

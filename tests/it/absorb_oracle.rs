@@ -5,6 +5,7 @@
 //! cases of the comparison list of the spike README) and pseudo-random ones (seeds 1 to 60), each in the default mode
 //! and with `--ambiguous-newest`. git-absorb 0.9.0 is not installed on this host: the comparison with it is the one the
 //! spike README reports. The test is skipped (and says so) when python3 or the spike is not there.
+use crate::common::FixtureCommand as _;
 use std::path::PathBuf;
 use std::process::Command;
 
@@ -13,8 +14,8 @@ use serde_json::Value;
 use super::absorb_fx::*;
 
 fn spike() -> Option<PathBuf> {
-    let p =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/spikes/absorb/stw-absorb-plan");
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/spikes/absorb/stw-absorb-plan");
     p.is_file().then_some(p)
 }
 
@@ -27,7 +28,7 @@ fn python_available() -> bool {
 
 fn run_spike(fx: &Fx, spike: &std::path::Path, args: &[&str]) -> (i32, String) {
     let o = Command::new("python3")
-        .env_clear()
+        .fixture_env_clear()
         .env("PATH", std::env::var_os("PATH").unwrap())
         .env("HOME", fx.s.join("home"))
         .env("GIT_CONFIG_GLOBAL", &fx.cfg)

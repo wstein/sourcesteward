@@ -3,6 +3,7 @@
 //! M3 parser, `src/review.rs`). Cases follow `internal/reviewstate/state_test.go`: CLEAR at the head, FINDINGS, a
 //! CLEAR of another head, a valid and an invalid carry-over, no review comment, a foreign author, later comments
 //! that win. Deviations from Go are listed in README.md, "Review state in `stw status --review`".
+use crate::common::FixtureCommand as _;
 use std::collections::BTreeMap;
 use std::process::{Command, Output};
 use std::sync::Arc;
@@ -19,7 +20,7 @@ const OTHER_PATCH: &str = "4444444444444444444444444444444444444444";
 
 fn stw(api: Option<&str>, args: &[&str]) -> Output {
     let mut c = Command::new(env!("CARGO_BIN_EXE_stw"));
-    c.env_clear()
+    c.fixture_env_clear()
         .env("HOME", "/nonexistent")
         .env("STW_KEYCHAIN_SERVICE", "stw-test-no-such-service")
         .env("GH_TOKEN", TOKEN);
