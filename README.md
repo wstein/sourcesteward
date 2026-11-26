@@ -3,11 +3,23 @@
 ![SourceSteward — Explainable version control](docs/assets/banner.svg)
 
 [![CI](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml/badge.svg)](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml)
+[![Docs](https://img.shields.io/badge/docs-SourceSteward-0b2545)](https://wstein.github.io/sourcesteward/)
+[![Line coverage](https://wstein.github.io/sourcesteward/coverage.svg)](https://github.com/wstein/sourcesteward/actions/workflows/stw-pages.yml)
+[![GitHub release](https://img.shields.io/github/v/release/wstein/sourcesteward)](https://github.com/wstein/sourcesteward/releases)
+[![Open issues](https://img.shields.io/github/issues/wstein/sourcesteward)](https://github.com/wstein/sourcesteward/issues)
 [![License EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-0b2545)](LICENSE)
 
 `stw` is a Rust CLI for inspecting Git workspaces, previewing changes, and
 preparing work for review. It can report on a main repository and its
 checked-out submodules in one run.
+
+## Motivation
+
+When work spans a repository and its submodules, changes and branches can
+be easy to miss. SourceSteward shows what needs attention across the
+workspace and lets you preview branch cleanup before changing anything.
+Review and handoff commands help humans and agents pick up work with the
+same evidence.
 
 ## SourceSteward 101
 
