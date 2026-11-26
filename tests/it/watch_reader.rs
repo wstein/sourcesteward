@@ -335,6 +335,7 @@ impl Forge {
                 log.lock().unwrap().push(seen.clone());
                 let route = routes.lock().unwrap().get(&uri).cloned();
                 let resp = match (method, route) {
+                    ("POST", Some(r)) if uri == "graphql" => respond(&r, &seen),
                     ("GET", Some(r)) => respond(&r, &seen),
                     ("GET", None) => b"HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}".to_vec(),
                     _ => b"HTTP/1.1 405 Method Not Allowed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_vec(),
@@ -2627,4 +2628,40 @@ fn workflow_poll_detects_fast_and_late_failures_once() {
     assert_eq!(ids, [1, 3].into());
     assert!(poll().1.is_empty());
     assert_eq!(forge.take_log().iter().filter(|r| r.uri == "repos/o/r/actions/runs/1").count(), 1);
+}
+
+#[test]
+fn graph_check_rollup_reads_exact_head_and_falls_back_on_partial_data() {
+    let head = sha('1');
+    let graph_reply = serde_json::json!({
+        "data":{"repository":{"object":{"oid":head,"statusCheckRollup":{"contexts":{
+            "pageInfo":{"hasNextPage":false,"endCursor":null},
+            "nodes":[
+                {"__typename":"CheckRun","name":"CI","status":"COMPLETED","conclusion":"FAILURE"},
+                {"__typename":"StatusContext","context":"deploy","state":"PENDING"}
+            ]
+        }}}}}
+    });
+    let mut routes = standard_routes(&head);
+    routes.push(route("graphql", 200, &graph_reply.to_string(), ""));
+    let forge = Forge::start(&routes);
+    let observer = || observer_over(&forge).with_graph_sources(
+        stw::github::Client::with_base(TOKEN.into(), stw::auth::TokenSource::Env, forge.base.clone()),
+        false, false, false,
+    );
+    let cancel = AtomicBool::new(false);
+    let result = observer().observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    let checks = result.prs[0].checks.as_ref().unwrap();
+    assert_eq!(checks.via, stw::watch_reader::obs::ChecksVia::Graphql);
+    assert_eq!(checks.runs[0].conclusion, "failure");
+    assert_eq!(checks.statuses[0].state, "pending");
+    let log = forge.take_log();
+    assert!(log.iter().any(|r| r.method == "POST" && r.uri == "graphql"));
+    assert!(!log.iter().any(|r| r.uri.contains("/check-runs?")));
+    let mut partial = graph_reply;
+    partial["errors"] = serde_json::json!([{"message":"partial response"}]);
+    forge.set_routes(&[route("graphql", 200, &partial.to_string(), "")]);
+    let result = observer().observe("o/r", &hints(1, vec![]), None, &cancel).unwrap();
+    assert_eq!(result.prs[0].checks.as_ref().unwrap().via, stw::watch_reader::obs::ChecksVia::CheckRuns);
+    assert!(forge.take_log().iter().any(|r| r.uri.contains("/check-runs?")));
 }

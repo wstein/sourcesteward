@@ -1215,6 +1215,87 @@ impl<R: WatchRead> HostObserver<R> {
     /// Reads the check runs and commit statuses of one head. `None` is "unchanged" (both conditional reads answered
     /// 304). `force` sends no validator, so a debounce candidate is confirmed with a fresh read. The class returned
     /// is only used to notice a candidate in flight.
+    fn read_graph_checks(&self, repo: &str, sha: &str) -> Option<ChecksObs> {
+        let client = self.graph.as_ref()?;
+        let (owner, name) = repo.split_once('/')?;
+        let mut cursor = None::<String>;
+        let mut observed = ChecksObs {
+            via: ChecksVia::Graphql,
+            ..ChecksObs::default()
+        };
+        let mut contexts = BTreeSet::new();
+        client.arm_deadline(std::time::Duration::from_secs(10));
+        for _ in 0..MAX_CHECK_PAGES {
+            let response = client.graphql(&serde_json::json!({
+                "query": "query WatchChecks($owner: String!, $name: String!, $oid: GitObjectID!, $after: String) {
+                    repository(owner: $owner, name: $name) {
+                        object(oid: $oid) {
+                            ... on Commit {
+                                oid
+                                statusCheckRollup {
+                                    contexts(first: 100, after: $after) {
+                                        pageInfo { hasNextPage endCursor }
+                                        nodes {
+                                            __typename
+                                            ... on CheckRun { name status conclusion title summary text }
+                                            ... on StatusContext { context state description }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }",
+                "variables": {"owner": owner, "name": name, "oid": sha, "after": cursor}
+            })).ok()?;
+            if response.get("errors").is_some_and(|errors| !errors.as_array().is_some_and(Vec::is_empty)) {
+                return None;
+            }
+            let commit = &response["data"]["repository"]["object"];
+            if commit["oid"].as_str()? != sha {
+                return None;
+            }
+            let rollup = commit.get("statusCheckRollup")?;
+            if rollup.is_null() {
+                return cursor.is_none().then_some(observed);
+            }
+            let page = &rollup["contexts"];
+            for node in page["nodes"].as_array()? {
+                let field = |key| str_of(node.get(key).unwrap_or(&Value::Null));
+                match node["__typename"].as_str()? {
+                    "CheckRun" => observed.runs.push(CheckRun {
+                        name: node["name"].as_str()?.to_owned(),
+                        status: node["status"].as_str()?.to_ascii_lowercase(),
+                        conclusion: field("conclusion")?.to_ascii_lowercase(),
+                        title: field("title")?,
+                        summary: field("summary")?,
+                        text: field("text")?,
+                    }),
+                    "StatusContext" => {
+                        let context = node["context"].as_str()?.to_owned();
+                        if contexts.insert(context.clone()) {
+                            observed.statuses.push(StatusContext {
+                                context,
+                                state: node["state"].as_str()?.to_ascii_lowercase(),
+                                description: field("description")?,
+                            });
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+            if !page["pageInfo"]["hasNextPage"].as_bool()? {
+                return Some(observed);
+            }
+            let next = page["pageInfo"]["endCursor"].as_str()?;
+            if next.is_empty() || cursor.as_deref() == Some(next) {
+                return None;
+            }
+            cursor = Some(next.to_owned());
+        }
+        None
+    }
+
     fn read_checks(
         &mut self,
         repo: &str,
@@ -1223,6 +1304,12 @@ impl<R: WatchRead> HostObserver<R> {
         cond: &mut CondStore,
     ) -> Result<Option<(ChecksObs, &'static str)>, WatchError> {
         let (runs_key, stat_key) = (checks_key(sha, "runs"), checks_key(sha, "statuses"));
+        if let Some(checks) = self.read_graph_checks(repo, sha) {
+            cond.validators.remove(&runs_key);
+            cond.validators.remove(&stat_key);
+            let class = checks_class(&checks.runs, &checks.statuses);
+            return Ok(Some((checks, class)));
+        }
         let tag = |c: &CondStore, k: &str| {
             if force {
                 String::new()
