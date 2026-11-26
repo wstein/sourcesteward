@@ -155,7 +155,8 @@
 .landing .step-copy { flex: 1 1 16rem; }
 .landing .step-kicker { margin: 0 0 8px; font: 500 .8rem/1 "IBM Plex Mono", ui-monospace, monospace; color: var(--land-accent-dark); letter-spacing: .04em; }
 .landing .install, .landing .code { flex: 1 1 22rem; }
-.landing .tabs { display: flex; gap: 8px; }
+.landing .tabs { display: none; }
+.landing .install.is-enhanced .tabs { display: flex; gap: 8px; }
 .landing .tabs button { min-height: 44px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--land-meta); font: 600 .95rem/1 "IBM Plex Sans", Plex, sans-serif; cursor: pointer; }
 .landing .tabs button[aria-selected="true"] { color: var(--land-navy); border-bottom-color: var(--land-accent); }
 .landing .install pre, .landing .code { margin: 12px 0 0; padding: 16px 18px; background: var(--land-band); border: 1px solid var(--land-line); border-radius: 14px; overflow-x: auto; }
