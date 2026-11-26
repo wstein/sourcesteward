@@ -458,29 +458,16 @@ fn worktree_bytes(root: &Path, path: &Path) -> Result<Vec<u8>> {
 
 #[cfg(unix)]
 fn open_worktree_file(root: &Path, path: &Path) -> std::io::Result<fs::File> {
-    use std::ffi::CString;
-    use std::os::fd::{AsRawFd, FromRawFd};
-    use std::os::unix::ffi::OsStrExt;
+    use rustix::fs::{openat, Mode, OFlags};
     let mut file = fs::File::open(root)?;
     let mut components = path.components().peekable();
     while let Some(component) = components.next() {
-        let name = CString::new(component.as_os_str().as_bytes())?;
-        let flags = libc::O_RDONLY
-            | libc::O_CLOEXEC
-            | libc::O_NOFOLLOW
-            | libc::O_NONBLOCK
-            | if components.peek().is_some() {
-                libc::O_DIRECTORY
-            } else {
-                0
-            };
-        // The directory descriptor pins the parent even if another process moves it.
-        let fd = unsafe { libc::openat(file.as_raw_fd(), name.as_ptr(), flags) };
-        if fd < 0 {
-            return Err(std::io::Error::last_os_error());
+        let mut flags = OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW | OFlags::NONBLOCK;
+        if components.peek().is_some() {
+            flags |= OFlags::DIRECTORY;
         }
-        // openat returned a new descriptor owned by this function.
-        file = unsafe { fs::File::from_raw_fd(fd) };
+        // The parent descriptor stays pinned if another process moves the directory.
+        file = openat(&file, component.as_os_str(), flags, Mode::empty())?.into();
     }
     Ok(file)
 }
