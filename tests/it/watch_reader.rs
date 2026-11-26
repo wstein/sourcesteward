@@ -1168,7 +1168,10 @@ impl FakeReader {
 impl WatchRead for FakeReader {
     fn recent_workflows(&self, _repo: &str) -> Result<WatchResponse, WatchError> {
         self.note("workflows".into(), "")?;
-        Ok(Self::ok("", r#"{"workflow_runs":[]}"#))
+        Ok(Self::ok(
+            "",
+            r#"{"workflow_runs":[{"status":"queued"},{"status":"in_progress"}]}"#,
+        ))
     }
 
     fn list_open_pulls(
@@ -1372,6 +1375,7 @@ fn workflows_only_skips_pr_reads_and_all_continues_after_pr_denial() {
         assert!(first.skip_pr_events);
         assert_eq!(first.pr_read_error.is_some(), prs);
         assert_eq!(first.workflows, Some(Ok(vec![])));
+        assert_eq!(first.active_workflows, 2);
         let second = observer
             .observe("o/r", &Hints::default(), None, &cancel)
             .unwrap();

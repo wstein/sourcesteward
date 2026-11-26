@@ -96,17 +96,7 @@ fn poll_report(
         else {
             continue;
         };
-        if issues.coverage == "complete" {
-            diagnostic(
-                out,
-                1,
-                format_args!(
-                    "{} observed {} open issue(s)",
-                    poll.repo,
-                    issues.issues.len()
-                ),
-            );
-        } else {
+        if issues.coverage != "complete" {
             diagnostic(
                 out,
                 0,
@@ -121,15 +111,43 @@ fn poll_report(
         return;
     }
     let mut observed = 0;
-    let mut open = 0;
-    let mut pr_poll = false;
+    let mut totals = std::collections::BTreeMap::new();
+    let mut count = |label, amount| *totals.entry(label).or_insert(0) += amount;
     for poll in polls {
         match &poll.result {
             Ok(obs) => {
                 observed += 1;
+                if let Some(issues) = obs
+                    .issues
+                    .as_ref()
+                    .filter(|issues| issues.coverage == "complete")
+                {
+                    count("open issue(s)", issues.issues.len());
+                }
+                if obs.workflows.as_ref().is_some_and(Result::is_ok) {
+                    count("active workflow run(s)", obs.active_workflows);
+                }
+                for (scope, result) in &obs.activity {
+                    use super::event::ActivityKind;
+                    use crate::watch_reader::obs::ActivityScope;
+                    let Ok(activity) = result else {
+                        continue;
+                    };
+                    match scope {
+                        ActivityScope::Reviews(_) => {
+                            let reviews = activity
+                                .iter()
+                                .filter(|item| item.kind == ActivityKind::Review)
+                                .count();
+                            count("recent review(s)", reviews);
+                            count("recent inline review comment(s)", activity.len() - reviews);
+                        }
+                        ActivityScope::Discussions => count("recent discussion(s)", activity.len()),
+                        ActivityScope::Wiki => count("wiki head(s)", activity.len()),
+                    }
+                }
                 if !obs.skip_pr_events {
-                    pr_poll = true;
-                    open += obs.prs.len();
+                    count("open PR(s)", obs.prs.len());
                     diagnostic(
                         out,
                         2,
@@ -193,12 +211,22 @@ fn poll_report(
             format_args!("emitted {} ({:?})", event.kind().as_str(), event.id),
         );
     }
-    let pull_summary = if pr_poll {
-        format!(", {open} open PR(s)")
-    } else {
-        String::new()
-    };
-    diagnostic(out, 1, format_args!("poll completed in {}ms, {} of {} repository reads succeeded{pull_summary}, {} event(s)", duration.as_millis(), observed, polls.len(), events.len()));
+    let mut summary = String::new();
+    for (label, count) in totals {
+        use std::fmt::Write as _;
+        let _ = write!(summary, ", {count} {label}");
+    }
+    diagnostic(
+        out,
+        1,
+        format_args!(
+            "poll completed in {}ms, {} of {} repository reads succeeded{summary}, {} event(s)",
+            duration.as_millis(),
+            observed,
+            polls.len(),
+            events.len()
+        ),
+    );
 }
 
 /// Clock and wait of a stream. A test supplies one that jumps the clock. `wait` returns false

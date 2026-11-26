@@ -209,7 +209,10 @@ the first read establishes access. Rate-limit responses pause reads
 without discarding the last accepted state.
 
 Use `stw watch --stream --all --interval 10s -v` to see the watched repositories,
-state directory, each poll's outcome and the next wait on stderr. Use
+state directory, each poll's outcome and the next wait on stderr. The
+poll summary counts successfully read sources, including active Actions
+runs in the latest 100-run page. Past completions do not contribute to a
+summary count. Use
 `-vv` to also see repository reads, PR head and readiness comparisons,
 checks awaiting confirmation and emitted event IDs. Event output and
 the journal keep their usual format.

@@ -46,6 +46,7 @@ pub struct RepoObservation {
         Result<Vec<crate::watch::event::Activity>, String>,
     )>,
     pub workflows: Option<Result<Vec<crate::watch::event::WorkflowCompleted>, String>>,
+    pub active_workflows: usize,
     pub default_branch: String,
     /// The complete open list.
     pub prs: Vec<PrObs>,

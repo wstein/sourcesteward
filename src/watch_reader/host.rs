@@ -541,7 +541,7 @@ impl<R: WatchRead> HostObserver<R> {
             }
         }
         let issues = self.read_issues(repo);
-        let workflows = self.read_workflows(repo);
+        let workflows = self.read_workflows(repo, &mut observation.active_workflows);
         let prs = &observation.prs;
         let mut activity = Vec::new();
         if self.reviews {
@@ -715,6 +715,7 @@ impl<R: WatchRead> HostObserver<R> {
     fn read_workflows(
         &mut self,
         repo: &str,
+        active: &mut usize,
     ) -> Option<Result<Vec<crate::watch::event::WorkflowCompleted>, String>> {
         if !self.workflows
             || self.workflows_refused.contains(repo)
@@ -734,12 +735,14 @@ impl<R: WatchRead> HostObserver<R> {
                 return Some(Err(format!("workflows-{}", e.code.as_str())));
             }
         };
-        let parse = || -> Option<Vec<crate::watch::event::WorkflowCompleted>> {
+        let parse = || -> Option<(Vec<crate::watch::event::WorkflowCompleted>, usize)> {
             let payload: Value = serde_json::from_slice(&res.body).ok()?;
             let rows = payload["workflow_runs"].as_array()?;
             let mut runs = Vec::new();
+            let mut pending = 0;
             for row in rows {
                 if row["status"].as_str()? != "completed" {
+                    pending += 1;
                     continue;
                 }
                 let text = |key: &str| row[key].as_str().map(str::to_owned);
@@ -755,9 +758,15 @@ impl<R: WatchRead> HostObserver<R> {
                     url: format!("https://github.com/{repo}/actions/runs/{id}"),
                 });
             }
-            Some(runs)
+            Some((runs, pending))
         };
-        Some(parse().ok_or_else(|| "workflows-malformed-response".into()))
+        Some(match parse() {
+            Some((runs, pending)) => {
+                *active = pending;
+                Ok(runs)
+            }
+            None => Err("workflows-malformed-response".into()),
+        })
     }
 
     fn read_wiki(
