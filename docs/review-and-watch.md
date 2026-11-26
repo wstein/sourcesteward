@@ -435,3 +435,42 @@ Deviations from Go (W2 part of the list of the plan, section 4):
 - A validator that is empty is not stored (Go stored the empty string); a read without validator is the same.
 - `max_open_prs` is a `usize`: the corpus values -1 and 0 are the refused value 0.
 - The call accounting (`take_calls`) is the reader's own, as in Go; `Client::stats` is not fed.
+
+## Watch event templates
+
+Add a `[templates]` table to `watch.toml`, or pass a standalone TOML file
+containing the same table to `--template PATH`. A template can span multiple lines.
+
+```toml
+[templates]
+head-changed = """
+PR {repo}#{pr} moved from {old_head} to {head}.
+Review this exact head on GitHub.
+"""
+checks-red = 'Checks failed on {repo}#{pr} at {details.head}.'
+```
+
+Repeat `--template-string 'KIND=TEXT'` to override individual events.
+
+```sh
+stw watch --stream --prs --repo owner/repo --template templates.toml \
+  --template-string 'head-changed=Review {repo}#{pr} at {head}.'
+```
+Precedence per kind is watch config, standalone file, then inline flags.
+Duplicate entries within a source are usage errors. Use `--config PATH`
+to load the watch config explicitly when also passing `--repo` or
+`--workspace`.
+
+TinyTemplate sees the event fields, including `kind`, `repo`, `pr`, `time`,
+and the event-specific `details`. `head-changed` also exposes `old_head`
+and `head` with the full SHAs. Template text is compiled and rendered
+against representative event contexts before polling. Rendering errors in
+data-dependent paths are reported at runtime with the event retained
+in the journal. Event values are terminal-escaped. Template calls are
+unsupported because TinyTemplate does not limit recursion.
+
+With templates active, stdout prints only matching events. The versioned
+JSON journal retains all events. An `--until-event` kind must have a template
+in this mode. Explicit `--human` uses the human format even if the watch
+config has templates. The template flags conflict with `--human` and
+`--status`, which ignore configured templates.
