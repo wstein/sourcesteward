@@ -124,7 +124,7 @@ on a targeted mutation in a disposable fixture. No test may run GC, expire reflo
 | M6 | Conflict-free local restack apply. Needs M1/M2/M5. | Plan SHA revalidation/CAS; preserve refs on mismatch; clean worktree update or explicit refusal; range-diff result; undo restores local refs; no implicit push or invented CLEAR/carry-over. M4 required to assess review reuse. | 5 / 4 / 5 |
 | M7 | rerere C in explicit resolution. Needs accepted C spike and M0; integrate M12 worktree flow. | Shared cache reuse in two worktrees, exact reused count, failure/no-match fallback; no persistent Git config writes. Preview cache prediction remains optional and UNKNOWN until measured. | 3 / 2 / 3 |
 | M8 | PR lint. Needs M3. | Per-rule positive/negative fixtures for identity, attribution, session links, text limits, malformed review claims; escape hostile titles/comments; runtime error distinct from findings. | 4 / 2 / 2 |
-| M9 | Possible PR/stack queue and debt view. First run the triage comparison in [#34](https://github.com/wstein/whr-anchorage/issues/34). If justified, use M2/M3/M4. | Count units not PRs; stale drafts, rewritten heads, bottom-up order, ledger parse failures, queue/nit rules against current dotagents; pagination and stale data reported. Read-only with versioned JSON. | 4 / 4 / 3 |
+| M9 | Standalone PR queue dropped after the triage trial ([#15](https://github.com/wstein/sourcesteward/issues/15)). Any future stack or debt view requires a separate decision. | Count units not PRs; stale drafts, rewritten heads, bottom-up order, ledger parse failures, queue/nit rules against current dotagents; pagination and stale data reported. Read-only with versioned JSON. | 4 / 4 / 3 |
 | M10 | Rust push/workflow from accepted scripts. Needs M0/M4/M5, repository policy and local CLEAR evidence contract. | Existing `scripts/test-stw-push` behaviors translated after script acceptance; ff-only default branch, submodules first, no tags/force, exact-head CLEAR; partial remote effects reported and never described as undoable. Pending guard from M12 before deferred flow enabled. | 4 / 3 / 5 |
 | M11 | Historical owner-invoked land candidate. Shelved by [#37](https://github.com/wstein/whr-anchorage/issues/37). If a named workflow later warrants reopening it, reassess M2/M4/M5/M6/M10 and seek explicit design approval. | Separate PR/rebase policy from local ff policy; exact reviewed heads and checks, no pending refs, stale remote refusal, fake-forge failure fixtures; owner sandbox live demo before any real publication. Native PR stack shape (child base = previous head branch): retarget/rebase sequence with exact-head review and checks re-evaluated. Required checks come from `rules/branches` (read access); unreadable classic branch protection is a reason to refuse. Go v0.2.1 land fixtures are a shared corpus. | 3 / 5 / 5 |
 | M12 | Deferred conflicts D and owned resolve worktrees. Needs M1/M2/M5/M6/M7/M0 and accepted D spike. | Real conflicted branches stay at old tips; pending metadata/ref transaction; parent-first resolve; abort preserves pending; stale CAS; binary/delete conflicts; undo; push/land/ready refuse pending state. | 4 / 5 / 5 |
@@ -137,7 +137,7 @@ M7 does not require publication; M6 does not push. M12 publication guards must l
 be created in a product used with push/ready commands. These are dependency tracks, not permission to start agents.
 M0 starts directly in `projects/sourcesteward` without a spike (owner decision: infrastructure, the Git boundary is
 already recorded in Chartroom). Scripts-first stays for new behavior without a Go counterpart; ports of Go behavior
-(M3, M4, M8 and the single-branch part of M1/M2) go directly to product. M9 awaits the triage decision.
+(M3, M4, M8 and the single-branch part of M1/M2) go directly to product. The triage decision closed M9 for the standalone PR queue.
 
 ## Decisions, tradeoffs, and open evidence
 
@@ -498,7 +498,7 @@ from Go:
 - Rules table: the anchors cite `claude/CLAUDE.md` and `claude/skills/agent-workflow/SKILL.md` of agent-rules. The test
   `rules_table_anchors_in_agent_rules` runs only with `AGENT_RULES_DIR` (as in Go). The current `.agents` checkout of this workspace has
   no `claude/` directory, so the anchors are UNKNOWN against the current dotagents layout (see the "PR lint" line in "Test corpus").
-The next M9 decision is the multi-PR triage evaluation in [#34](https://github.com/wstein/whr-anchorage/issues/34).
+The [multi-PR triage trial](https://github.com/wstein/whr-anchorage/issues/34) led to the decision to drop the standalone queue ([#15](https://github.com/wstein/sourcesteward/issues/15)).
 
 ## Op log readers (2026-11-12)
 
