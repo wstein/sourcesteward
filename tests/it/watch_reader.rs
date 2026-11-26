@@ -2642,7 +2642,7 @@ fn graph_check_rollup_reads_exact_head_and_falls_back_on_partial_data() {
             "pageInfo":{"hasNextPage":false,"endCursor":null},
             "nodes":[
                 {"__typename":"CheckRun","name":"CI","status":"COMPLETED","conclusion":"FAILURE"},
-                {"__typename":"StatusContext","context":"deploy","state":"PENDING"}
+                {"__typename":"StatusContext","context":"deploy","state":"EXPECTED"}
             ]
         }}}}}
     });

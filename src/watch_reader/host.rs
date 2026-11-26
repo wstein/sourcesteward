@@ -1273,13 +1273,22 @@ impl<R: WatchRead> HostObserver<R> {
                     }),
                     "StatusContext" => {
                         let context = node["context"].as_str()?.to_owned();
-                        if contexts.insert(context.clone()) {
-                            observed.statuses.push(StatusContext {
-                                context,
-                                state: node["state"].as_str()?.to_ascii_lowercase(),
-                                description: field("description")?,
-                            });
+                        if !contexts.insert(context.clone()) {
+                            // REST orders statuses newest first, but the rollup has no such guarantee.
+                            return None;
                         }
+                        let state = match node["state"].as_str()? {
+                            "EXPECTED" | "PENDING" => "pending",
+                            "SUCCESS" => "success",
+                            "FAILURE" => "failure",
+                            "ERROR" => "error",
+                            _ => return None,
+                        };
+                        observed.statuses.push(StatusContext {
+                            context,
+                            state: state.to_owned(),
+                            description: field("description")?,
+                        });
                     }
                     _ => return None,
                 }
