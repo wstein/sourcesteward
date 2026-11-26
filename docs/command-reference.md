@@ -1710,6 +1710,12 @@ Options:
       --human
           Print one human-readable line per event instead of JSON Lines
 
+      --template <PATH>
+          TOML file with event-specific [templates] overrides
+
+      --template-string <KIND=TEXT>
+          Override an event template inline. Repeatable as KIND=TEXT
+
       --status
           Read the heartbeat and the accepted state. No network and no lock
 

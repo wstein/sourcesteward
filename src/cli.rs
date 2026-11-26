@@ -220,6 +220,12 @@ struct WatchArgs {
     /// Print one human-readable line per event instead of JSON Lines.
     #[arg(long, conflicts_with = "status")]
     human: bool,
+    /// TOML file with event-specific [templates] overrides
+    #[arg(long, value_name = "PATH", conflicts_with_all = ["human", "status"])]
+    template: Option<PathBuf>,
+    /// Override an event template inline. Repeatable as KIND=TEXT.
+    #[arg(long, value_name = "KIND=TEXT", conflicts_with_all = ["human", "status"])]
+    template_string: Vec<String>,
     /// Read the heartbeat and the accepted state. No network and no lock.
     #[arg(long)]
     status: bool,
@@ -2692,6 +2698,30 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         Some(_) => return Err(Error::usage("the state directory must be an absolute path")),
         None => command::state_dir_for_repos(&repos),
     };
+    let sources = if a.status || a.human {
+        Default::default()
+    } else {
+        crate::watch::templates::merge(
+            file.map(|f| f.templates).unwrap_or_default(),
+            a.template.as_deref(),
+            &a.template_string,
+        )
+        .map_err(Error::usage)?
+    };
+    let templates = if sources.is_empty() {
+        None
+    } else {
+        let templates =
+            crate::watch::templates::Templates::compile(&sources).map_err(Error::usage)?;
+        for kind in &a.until_event {
+            if !Kind::parse(kind).is_some_and(|kind| templates.contains(kind)) {
+                return Err(Error::usage(format!(
+                    "--until-event {kind:?} requires a template for that event"
+                )));
+            }
+        }
+        Some(templates)
+    };
     let now = crate::tidy::now_secs();
     let code = if a.status {
         command::run_status(&dir, now, &mut std::io::stdout())
@@ -2745,6 +2775,9 @@ fn run_watch(a: WatchArgs) -> Result<u8> {
         }
         let mut output = command::Lines::new(std::io::stdout(), a.human)
             .with_diagnostics(a.verbose, std::io::stderr());
+        if let Some(templates) = templates {
+            output = output.with_templates(templates);
+        }
         if a.stream || until {
             let max_idle = match a.max_idle.as_deref() {
                 Some(text) => command::parse_duration_secs(text).map_err(Error::usage)?,

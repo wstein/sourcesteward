@@ -33,19 +33,26 @@ pub const MIN_INTERVAL_SECS: u64 = 10;
 /// `--stream` interval when the flag is omitted.
 pub const DEFAULT_INTERVAL_SECS: u64 = 60;
 
-pub struct Lines<W> {
+pub struct Lines<'a, W> {
     out: W,
     human: bool,
+    templates: Option<super::templates::Templates<'a>>,
     diagnostics: Option<(u8, Box<dyn Write + Send + Sync>)>,
 }
 
-impl<W: Write> Lines<W> {
+impl<'a, W: Write> Lines<'a, W> {
     pub fn new(out: W, human: bool) -> Self {
         Self {
             out,
             human,
             diagnostics: None,
+            templates: None,
         }
+    }
+
+    pub fn with_templates(mut self, templates: super::templates::Templates<'a>) -> Self {
+        self.templates = Some(templates);
+        self
     }
 
     pub fn with_diagnostics(
@@ -58,13 +65,29 @@ impl<W: Write> Lines<W> {
     }
 }
 
-impl<W: Write> Output for Lines<W> {
+impl<W: Write> Output for Lines<'_, W> {
     fn diagnostics(&mut self, level: u8) -> Option<&mut dyn Write> {
         let (verbosity, writer) = self.diagnostics.as_mut()?;
         (*verbosity >= level).then_some(writer.as_mut())
     }
 
     fn print(&mut self, ev: &Event) -> Result<(), WatchError> {
+        if let Some(templates) = &self.templates {
+            if let Some(text) = templates.render(ev).map_err(WatchError::Io)? {
+                self.out
+                    .write_all(text.as_bytes())
+                    .map_err(|e| WatchError::Io(e.to_string()))?;
+                if !text.ends_with('\n') {
+                    self.out
+                        .write_all(b"\n")
+                        .map_err(|e| WatchError::Io(e.to_string()))?;
+                }
+                self.out
+                    .flush()
+                    .map_err(|e| WatchError::Io(e.to_string()))?;
+            }
+            return Ok(());
+        }
         let line = if self.human {
             super::human::render(ev)
         } else {

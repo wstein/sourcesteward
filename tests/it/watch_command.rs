@@ -9,6 +9,7 @@ use stw::watch::{Core, Output, Step, WatchError};
 struct Listed {
     head: String,
     next_head: Option<String>,
+    add_pr_after_baseline: bool,
     draft: bool,
     hits: std::cell::Cell<usize>,
     error_first: Option<stw::watch_reader::obs::ObserveError>,
@@ -25,6 +26,7 @@ impl Listed {
         Self {
             head: head.to_string(),
             next_head: None,
+            add_pr_after_baseline: false,
             draft: false,
             hits: std::cell::Cell::new(0),
             error_first: None,
@@ -44,17 +46,22 @@ impl Listed {
         } else {
             self.head.clone()
         };
+        let first = stw::watch_reader::obs::PrObs {
+            number: 7,
+            title: "t7".into(),
+            author: "ada".into(),
+            base: "main".into(),
+            head_ref: "topic".into(),
+            head,
+            draft: self.draft,
+            ..stw::watch_reader::obs::PrObs::default()
+        };
+        let mut prs = vec![first.clone()];
+        if self.add_pr_after_baseline && n > 1 {
+            prs.push(stw::watch_reader::obs::PrObs { number: 8, ..first });
+        }
         stw::watch_reader::obs::RepoObservation {
-            prs: vec![stw::watch_reader::obs::PrObs {
-                number: 7,
-                title: "t7".into(),
-                author: "ada".into(),
-                base: "main".into(),
-                head_ref: "topic".into(),
-                head,
-                draft: self.draft,
-                ..stw::watch_reader::obs::PrObs::default()
-            }],
+            prs,
             cond: self.cond.clone(),
             ..stw::watch_reader::obs::RepoObservation::default()
         }
@@ -331,7 +338,7 @@ fn watch_reports_draft_and_ready_transitions_even_without_a_push() {
 #[test]
 fn issue_changes_require_complete_snapshots_and_replay() {
     use stw::issue_list::{Issue, Listed};
-    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::cycle::{Seen, advance_seen};
     use stw::watch::event::{Event, IssueChange};
     use stw::watch_reader::obs::RepoObservation;
 
@@ -366,12 +373,14 @@ fn issue_changes_require_complete_snapshots_and_replay() {
         )
     };
     let mut state = State::new();
-    assert!(poll(
-        &mut state,
-        "complete",
-        vec![issue(7, "original"), issue(8, "closing")]
-    )
-    .is_empty());
+    assert!(
+        poll(
+            &mut state,
+            "complete",
+            vec![issue(7, "original"), issue(8, "closing")]
+        )
+        .is_empty()
+    );
     let mut replay = state.clone();
     assert_eq!(
         poll(&mut state, "incomplete", vec![])[0].kind(),
@@ -402,12 +411,14 @@ fn issue_changes_require_complete_snapshots_and_replay() {
             (8, IssueChange::Closed)
         ]
     );
-    assert!(poll(
-        &mut replay,
-        "complete",
-        vec![issue(7, "edited"), issue(9, "new")]
-    )
-    .is_empty());
+    assert!(
+        poll(
+            &mut replay,
+            "complete",
+            vec![issue(7, "edited"), issue(9, "new")]
+        )
+        .is_empty()
+    );
     let mut edited = issue(7, "edited");
     edited.comment_count = Some(1);
     let events = poll(&mut replay, "complete", vec![edited, issue(9, "new")]);
@@ -418,7 +429,7 @@ fn issue_changes_require_complete_snapshots_and_replay() {
 
 #[test]
 fn repository_workflow_completions_skip_pr_checks_and_remember_attempts() {
-    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::cycle::{Seen, advance_seen};
     use stw::watch::event::WorkflowCompleted;
     use stw::watch_reader::obs::{PrObs, RepoObservation};
 
@@ -460,16 +471,18 @@ fn repository_workflow_completions_skip_pr_checks_and_remember_attempts() {
     ];
     let events = poll(&mut state, runs.clone());
     assert_eq!(events.len(), 2);
-    assert!(events
-        .iter()
-        .all(|event| event.kind() == Kind::WorkflowCompleted));
+    assert!(
+        events
+            .iter()
+            .all(|event| event.kind() == Kind::WorkflowCompleted)
+    );
     assert_eq!(events[0].id, "o/r#-:workflow-completed:1:2");
     assert!(poll(&mut state, runs).is_empty());
 }
 
 #[test]
 fn optional_activity_has_a_silent_baseline_and_source_errors_do_not_close_prs() {
-    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::cycle::{Seen, advance_seen};
     use stw::watch::event::{Activity, ActivityKind, Event};
     use stw::watch_reader::obs::{ActivityScope, PrObs, RepoObservation};
 
@@ -543,7 +556,7 @@ fn optional_activity_has_a_silent_baseline_and_source_errors_do_not_close_prs() 
 
 #[test]
 fn branch_events_replay_and_incomplete_reads_keep_the_previous_heads() {
-    use stw::watch::cycle::{advance_seen, Seen};
+    use stw::watch::cycle::{Seen, advance_seen};
     use stw::watch::event::Event;
     use stw::watch_reader::obs::RepoObservation;
     let poll = |state: &mut State, branches| {
@@ -664,9 +677,11 @@ fn baseline_replaces_the_open_list_without_events() {
 
     let mut status = Vec::new();
     stw::watch::command::run_status(&path, 1_700_000_180, &mut status).unwrap();
-    assert!(String::from_utf8(status)
-        .unwrap()
-        .contains("\"repo\":\"o/r\""));
+    assert!(
+        String::from_utf8(status)
+            .unwrap()
+            .contains("\"repo\":\"o/r\"")
+    );
 }
 
 #[test]
@@ -765,7 +780,7 @@ fn a_stream_stops_on_interrupt_and_on_max_idle() {
 
 #[test]
 fn human_stream_keeps_the_full_sha_in_the_json_journal() {
-    use stw::watch::command::{run_stream_output, Lines, StreamLimits};
+    use stw::watch::command::{Lines, StreamLimits, run_stream_output};
     let (_dir, path) = state_path();
     let mut source = Listed::head(&"a".repeat(40));
     source.next_head = Some("b".repeat(40));
@@ -810,7 +825,7 @@ fn human_stream_keeps_the_full_sha_in_the_json_journal() {
 
 #[test]
 fn verbose_stream_reports_polls_without_changing_event_output() {
-    use stw::watch::command::{run_stream_output, Lines, StreamLimits};
+    use stw::watch::command::{Lines, StreamLimits, run_stream_output};
 
     let mut expected = None;
     for level in 0..=2 {
@@ -1698,4 +1713,72 @@ fn until_event_sleeps_only_until_the_timeout() {
     .unwrap();
     assert_eq!(code, stw::watch::command::EXIT_TIMEOUT);
     assert_eq!(pace.sleeps, vec![5]);
+}
+
+#[test]
+fn template_stream_renders_only_configured_events_and_keeps_full_json_journal() {
+    use stw::watch::command::{Lines, StreamLimits, run_stream_output};
+    use stw::watch::templates::Templates;
+    let (_dir, path) = state_path();
+    let mut source = Listed::head(&"a".repeat(40));
+    source.next_head = Some("b".repeat(40));
+    source.add_pr_after_baseline = true;
+    let mut stdout = Vec::new();
+    let mut pace = Clock {
+        now: 1_700_000_000,
+        sleeps: Vec::new(),
+        stop_at: None,
+    };
+    let sources = [("head-changed".into(), "Review {repo}#{pr} at {head}".into())].into();
+    let templates = Templates::compile(&sources).unwrap();
+    let code = run_stream_output(
+        &path,
+        &["o/r".into()],
+        &mut source,
+        &mut Lines::new(&mut stdout, false).with_templates(templates),
+        StreamLimits {
+            baseline: false,
+            api_base: "https://api.github.com".into(),
+            interval_secs: 60,
+            max_idle_secs: 0,
+            detail_every: 10,
+            until: vec!["head-changed".into()],
+            timeout_secs: 120,
+        },
+        &mut pace,
+    )
+    .unwrap();
+    assert_eq!(code, 0);
+    assert_eq!(
+        String::from_utf8(stdout).unwrap(),
+        format!("Review o/r#7 at {}\n", "b".repeat(40))
+    );
+    let journal = std::fs::read_to_string(path.join("journal.jsonl")).unwrap();
+    assert!(journal.lines().any(|line| {
+        serde_json::from_str::<serde_json::Value>(line).unwrap()["kind"] == "new-pr"
+    }));
+    let change = journal
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
+        .find(|event| event["kind"] == "head-changed")
+        .unwrap();
+    assert_eq!(change["schema_version"], 1);
+    assert_eq!(change["details"]["old"], "a".repeat(40));
+    assert_eq!(change["details"]["new"], "b".repeat(40));
+}
+
+#[test]
+fn invalid_template_flags_fail_before_polling_or_opening_state() {
+    let (_dir, path) = state_path();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_stw"))
+        .args(["watch", "--repo", "o/r", "--prs", "--once", "--state-dir"])
+        .arg(&path)
+        .args(["--template-string", "head-changed={details.missing}"])
+        .env_remove("GH_TOKEN")
+        .env_remove("GITHUB_TOKEN")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("missing"));
+    assert!(!path.exists());
 }
