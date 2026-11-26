@@ -25,9 +25,28 @@
       <select id="theme-select"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
     </div>
   </header>
-  <main id="main" class="wrap docs-page">
+  {{ $showContents := and .IsPage (ge (len .Fragments.Identifiers) 4) }}
+  <main id="main" class="wrap docs-page{{ if $showContents }} docs-page-with-index{{ end }}">
     <h1>{{ .Title }}</h1>
-    <div class="docs-content">{{ block "main" . }}{{ end }}</div>
+    {{ $contents := "" }}
+    {{ if $showContents }}
+      {{ $contents = replace .TableOfContents `id="TableOfContents"` `aria-label="On this page"` | safeHTML }}
+    {{ end }}
+    <div{{ if $showContents }} class="docs-layout"{{ end }}>
+      {{ if $showContents }}
+        <details class="docs-index-mobile">
+          <summary>On this page</summary>
+          {{ $contents }}
+        </details>
+      {{ end }}
+      <div class="docs-content">{{ block "main" . }}{{ end }}</div>
+      {{ if $showContents }}
+        <aside class="docs-index-sidebar">
+          <p>On this page</p>
+          {{ $contents }}
+        </aside>
+      {{ end }}
+    </div>
   </main>
   <footer class="wrap footer">
     <a href="https://github.com/wstein/sourcesteward/releases">SourceSteward releases</a>

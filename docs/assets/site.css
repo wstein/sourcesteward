@@ -34,3 +34,54 @@
 .command-grid pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.8 ui-monospace,monospace;margin-top:18px;color:var(--text)}
 .command-grid code{overflow-wrap:anywhere}.command-grid p code{color:var(--text)}
 @media(max-width:700px){.command-grid{grid-template-columns:minmax(0,1fr)}.command-grid article{padding:20px}}
+
+/* In-page navigation for long guides and the CLI reference. */
+.docs-index-mobile { display: none; }
+.docs-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 15rem);
+  gap: clamp(2rem, 5vw, 4rem);
+}
+.docs-page-with-index { max-width: 1120px; }
+.docs-index-sidebar {
+  position: sticky;
+  top: 2rem;
+  align-self: start;
+  max-height: calc(100vh - 4rem);
+  overflow-y: auto;
+  border-inline-start: 1px solid var(--border);
+  padding-inline: 1.2rem .45rem;
+}
+.docs-index-sidebar > p,
+.docs-index-mobile > summary {
+  font-weight: 700;
+  font-size: .9rem;
+}
+.docs-layout nav ul {
+  list-style: none;
+  margin: .55rem 0;
+  padding-inline-start: 0;
+}
+.docs-layout nav ul ul {
+  padding-inline-start: .9rem;
+}
+.docs-layout nav a {
+  display: block;
+  padding-block: .25rem;
+  font-size: .85rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 860px) {
+  .docs-layout { display: block; }
+  .docs-index-sidebar { display: none; }
+  .docs-index-mobile {
+    display: block;
+    border: 1px solid var(--border);
+    border-radius: .55rem;
+    padding: .65rem .9rem;
+    margin-bottom: 1.25rem;
+    background: var(--surface);
+  }
+  .docs-index-mobile summary { cursor: pointer; }
+}
