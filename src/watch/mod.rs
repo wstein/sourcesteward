@@ -32,6 +32,7 @@ pub mod lock;
 pub mod reader;
 pub mod state;
 pub mod statedir;
+pub mod templates;
 pub mod watch_toml;
 
 /// What can go wrong in the core. The command (W4) maps the variants to exit codes (`Locked` is exit 3, the usage
