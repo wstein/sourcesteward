@@ -872,13 +872,15 @@ fn the_check_rejects_broken_order_names_and_counts() {
 }
 
 #[test]
-fn the_readme_names_the_number_of_scenarios() {
+fn the_watch_guide_names_the_number_of_scenarios() {
     let n = scenarios().len();
-    let readme =
-        fs::read_to_string(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("README.md")).unwrap();
+    let readme = fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("docs/review-and-watch.md"),
+    )
+    .unwrap();
     assert!(
         readme.contains(&format!("holds {n} scenarios")),
-        "README.md must say `holds {n} scenarios` in the section `Watch scenarios (port corpus)`"
+        "The watch guide must say `holds {n} scenarios` in the section `Watch scenarios (port corpus)`"
     );
 }
 

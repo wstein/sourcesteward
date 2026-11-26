@@ -377,11 +377,14 @@ fn json_field_names_are_the_documented_ones() {
     );
 }
 
-/// Every field name above is documented in the README.
+/// Every field name above is documented in the command guides.
 #[test]
-fn readme_mentions_every_documented_field() {
-    let readme =
-        std::fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md")).unwrap();
+fn command_guides_mention_every_documented_field() {
+    let guides = [
+        include_str!("../../docs/status-and-sync.md"),
+        include_str!("../../docs/cleanup-and-recovery.md"),
+        include_str!("../../docs/worktrees-and-handoff.md"),
+    ];
     for f in [
         "schema_version",
         "command",
@@ -458,11 +461,14 @@ fn readme_mentions_every_documented_field() {
         "rebase-identity",
         "no-rebase-evidence",
     ] {
-        assert!(readme.contains(f), "README does not mention `{f}`");
+        assert!(
+            guides.iter().any(|guide| guide.contains(f)),
+            "Command guides do not mention `{f}`"
+        );
     }
     assert!(
-        !readme.contains("next_steps") || readme.contains("no `next_steps`"),
-        "README must say that `next_steps` is gone"
+        !guides[0].contains("next_steps") || guides[0].contains("no `next_steps`"),
+        "The status guide must say that `next_steps` is gone"
     );
 }
 
