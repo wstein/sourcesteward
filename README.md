@@ -5,7 +5,7 @@
 [![CI](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml/badge.svg)](https://github.com/wstein/sourcesteward/actions/workflows/stw-ci.yml)
 [![Docs](https://img.shields.io/badge/docs-SourceSteward-0b2545)](https://wstein.github.io/sourcesteward/)
 [![Line coverage](https://wstein.github.io/sourcesteward/coverage.svg)](https://github.com/wstein/sourcesteward/actions/workflows/stw-pages.yml)
-[![GitHub release](https://img.shields.io/github/v/release/wstein/sourcesteward)](https://github.com/wstein/sourcesteward/releases)
+[![GitHub release](https://img.shields.io/github/v/release/wstein/sourcesteward?sort=semver)](https://github.com/wstein/sourcesteward/releases)
 [![License EUPL-1.2](https://img.shields.io/badge/license-EUPL--1.2-0b2545)](LICENSE)
 
 `stw` is a Rust CLI for working on Git changes before, during, and after
