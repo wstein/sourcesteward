@@ -5,6 +5,7 @@ pub mod absorb_commute;
 pub mod add;
 pub mod auth;
 pub mod carryover;
+pub mod change_id;
 pub mod cli;
 pub(crate) mod conflict_report;
 pub mod dev;
