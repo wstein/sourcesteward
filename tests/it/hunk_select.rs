@@ -1822,6 +1822,12 @@ fn refused_reasons(doc: &Value) -> Vec<(String, String)> {
         .collect()
 }
 
+fn reseal(plan: &mut Value) {
+    plan.as_object_mut().unwrap().remove("plan_sum");
+    let sum = stw::hunk_select::plan_sum_of(plan);
+    plan["plan_sum"] = serde_json::json!(sum);
+}
+
 fn apply_saved(repo: &Repo, plan: &Value, message: &str) -> (u8, Value, String) {
     let path = plan_file(repo);
     fs::write(&path, serde_json::to_string(plan).unwrap()).unwrap();
@@ -2139,4 +2145,179 @@ fn apply_records_the_commit_apply_reflog_and_mode_deleted_renamed_hunks() {
         assert_eq!(code, 0, "{raw}");
         assert!(git(repo.path(), &["ls-files", "-s", "--", "keep.txt"]).starts_with("100755"));
     }
+}
+
+#[test]
+fn a_fully_staged_hunk_is_left_in_the_index() {
+    let repo = Repo::new();
+    seed(&repo);
+    let body: String = (1..10)
+        .map(|i| format!("L{i:02}\n"))
+        .collect::<String>()
+        .replace("L03\n", "S03\n");
+    repo.write("f.txt", body.as_bytes());
+    git(repo.path(), &["add", "--", "f.txt"]);
+    let doc = list(&repo);
+    let id = listed_hunks(&doc)[0]["id"].as_str().unwrap().to_string();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &id,
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(plan["selected"][0]["index_state"], "staged-full", "{raw}");
+    let (code, _, raw) = apply_saved(&repo, &plan, "staged");
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:f.txt"]),
+        body.as_bytes()
+    );
+    assert!(git(repo.path(), &["diff", "--cached", "--name-only"]).is_empty());
+}
+
+#[test]
+fn plan_sum_checks_every_hunk_and_rejects_a_bad_id() {
+    let repo = Repo::new();
+    seed(&repo);
+    let body: String = (1..10)
+        .map(|i| format!("L{i:02}\n"))
+        .collect::<String>()
+        .replace("L03\n", "A03\n")
+        .replace("L07\n", "A07\n");
+    repo.write("f.txt", body.as_bytes());
+    let doc = list(&repo);
+    let ids: Vec<String> = listed_hunks(&doc)
+        .into_iter()
+        .map(|hunk| hunk["id"].as_str().unwrap().to_string())
+        .collect();
+    assert!(ids.len() >= 2, "{doc}");
+    let (code, mut plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &ids[0],
+            "--hunk",
+            &ids[1],
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    plan["plan_sum"] = serde_json::json!("");
+    let (code, doc, raw) = apply_saved(&repo, &plan, "empty sum");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "plan-sum-mismatch", "{raw}");
+
+    let (code, mut plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &ids[0],
+            "--hunk",
+            &ids[1],
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let text = plan["selected"][1]["text"].as_str().unwrap().to_string();
+    plan["selected"][1]["text"] = serde_json::json!(format!("{text}+EVIL\n"));
+    reseal(&mut plan);
+    let (code, doc, raw) = apply_saved(&repo, &plan, "second");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "hunk-id-mismatch", "{raw}");
+
+    let (code, mut plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &ids[0],
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let kept_sum = plan["plan_sum"].as_str().unwrap().to_string();
+    let text = plan["selected"][0]["text"].as_str().unwrap().to_string();
+    let edited = format!("{text}+EVIL\n");
+    let hash = &stw::sha256::hex(edited.as_bytes())[..8];
+    let id = plan["selected"][0]["id"].as_str().unwrap().to_string();
+    let prefix = id.rsplit_once(':').unwrap().0;
+    plan["selected"][0]["text"] = serde_json::json!(edited);
+    plan["selected"][0]["id"] = serde_json::json!(format!("{prefix}:{hash}"));
+    plan["plan_sum"] = serde_json::json!(kept_sum);
+    let (code, doc, raw) = apply_saved(&repo, &plan, "sum omits selected");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "plan-sum-mismatch", "{raw}");
+
+    let (code, mut plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &ids[0],
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let id = plan["selected"][0]["id"].as_str().unwrap().to_string();
+    let prefix = id.rsplit_once(':').unwrap().0;
+    plan["selected"][0]["id"] = serde_json::json!(format!("{prefix}:abc1234"));
+    reseal(&mut plan);
+    let (code, doc, raw) = apply_saved(&repo, &plan, "short id");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "hunk-id-mismatch", "{raw}");
+    plan["selected"][0]["id"] = serde_json::json!(format!("{prefix}:ABCDEF12"));
+    reseal(&mut plan);
+    let (code, doc, raw) = apply_saved(&repo, &plan, "upper id");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "hunk-id-mismatch", "{raw}");
+    plan["selected"][0].as_object_mut().unwrap().remove("id");
+    reseal(&mut plan);
+    let (code, doc, raw) = apply_saved(&repo, &plan, "missing id");
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "hunk-id-mismatch", "{raw}");
+}
+
+#[test]
+fn a_crlf_hunk_commits_the_worktree_bytes() {
+    let repo = Repo::new();
+    repo.write("crlf.txt", b"one\r\ntwo\r\n");
+    git(repo.path(), &["add", "--", "crlf.txt"]);
+    git(repo.path(), &["commit", "-m", "crlf"]);
+    repo.write("crlf.txt", b"one\r\nTWO\r\n");
+    let doc = list(&repo);
+    let id = listed_hunks(&doc)[0]["id"].as_str().unwrap().to_string();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &id,
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let (code, _, raw) = apply_saved(&repo, &plan, "crlf");
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:crlf.txt"]),
+        b"one\r\nTWO\r\n"
+    );
 }
