@@ -378,9 +378,20 @@ id is refused (`hunk-id-mismatch`). A stale plan is refused and leaves
 the branch, the index and the work tree unchanged (`stale-branch`,
 `stale-worktree`, `stale-index`, and the other reasons named in the JSON).
 A symbolic link is refused (`symlink`) and its target is not read. A path
-Git quotes, including a non-ASCII name, stays that path.
+Git quotes, including a non-ASCII name, stays that path after the quotes are
+removed, including a mode change or a rename from `git diff --summary`. A
+path that is not UTF-8 is refused (`non-utf8-path`). A path that contains a
+tab is refused (`tab-in-path`). Hunk text that is not UTF-8 is refused at
+list time (`non-utf8-text`), so a plan never stores a lossy copy. An empty
+untracked file is committed with no hunk body. A file that ends in a lone CR
+keeps that byte. An untracked executable is committed as mode 100755. A path
+recorded with `git add -N` is refused (`intent-to-add`). Apply runs no hooks
+and writes no backup ref and no oplog entry. The branch reflog line is
+`stw: workspace commit-apply`. A missing `plan_sum`, or one that is not a
+string, is refused with `plan_sum is missing or not a string`.
 
-Worked example, in a disposable repository:
+Worked example, in a disposable repository. `ID1` and `ID2` are the first and
+the third hunk of `f.txt` from the list just above (the edits of `L02` and `L08`):
 
 ```text
 git init -b main
@@ -393,7 +404,6 @@ git add staged.txt
 printf 'keep\n' > keep.txt
 git add keep.txt && git commit -m keep -- keep.txt
 printf 'keep\nedited\n' > keep.txt
-printf 'L01\nA02\nL03\nL04\nA05\nL06\nL07\nA08\nL09\n' > f.txt
 stw workspace commit-plan --list-hunks --source worktree --json
 stw workspace commit-plan --source worktree --hunk ID1 --hunk ID2 --json > /tmp/hs-plan.json
 printf 'p\n' > parallel.txt && git add parallel.txt
