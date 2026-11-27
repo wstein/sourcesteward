@@ -1968,3 +1968,44 @@ fn a_quoted_summary_path_is_unquoted_and_a_rename_with_b_slash_keeps_both_sides(
     assert_eq!(code, 0, "{raw}");
     assert_eq!(git_bytes(repo.path(), &["show", "HEAD:z b/z b/z"]), b"z\n");
 }
+
+#[test]
+fn empty_cr_and_executable_untracked_files_commit_their_bytes() {
+    let repo = Repo::new();
+    repo.write("empty.txt", b"");
+    repo.write("cr.txt", b"foo\r");
+    repo.write("run.sh", b"#!/bin/sh\n");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            repo.path().join("run.sh"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+    }
+    let doc = list(&repo);
+    for name in ["empty.txt", "cr.txt", "run.sh"] {
+        let hunk = listed_hunks(&doc)
+            .into_iter()
+            .find(|hunk| hunk["path"] == name)
+            .unwrap_or_else(|| panic!("{name} missing in {doc}"));
+        let (code, plan, raw) = stw(
+            repo.path(),
+            &[
+                "workspace",
+                "commit-plan",
+                "--source",
+                "worktree",
+                "--hunk",
+                hunk["id"].as_str().unwrap(),
+            ],
+        );
+        assert_eq!(code, 0, "{name} {raw}");
+        let (code, _, raw) = apply_saved(&repo, &plan, name);
+        assert_eq!(code, 0, "{name} {raw}");
+    }
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:empty.txt"]), b"");
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:cr.txt"]), b"foo\r");
+    assert!(git(repo.path(), &["ls-files", "-s", "--", "run.sh"]).starts_with("100755"));
+}
