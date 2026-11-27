@@ -395,5 +395,7 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
 
 /// Open a repository at `path` for a resolve run (direct path, like `stw inspect git`).
 pub fn open_repo(path: &Path) -> Result<gix::Repository> {
-    gix::open(path).map_err(|e| Error::repository(format!("cannot open {}: {e}", path.display())))
+    crate::repo::open(path).map_err(|e| {
+        Error::repository(format!("cannot open {}: {e}", path.display()))
+    })
 }
