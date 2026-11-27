@@ -240,8 +240,25 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
         );
     } else {
         println!("workspace {name}: {report}");
+        print_tip_drift(&report);
     }
     Ok(code)
+}
+
+/// Text mode of `worktree-apply`: the notice and the two ways to go on.
+fn print_tip_drift(report: &Value) {
+    if report["tip_drift"] != true {
+        return;
+    }
+    for notice in report["notices"].as_array().into_iter().flatten() {
+        println!("notice: {}", notice.as_str().unwrap_or_default());
+    }
+    let revision = report["revision"].as_str().unwrap_or_default();
+    let destination = report["destination"].as_str().unwrap_or_default();
+    println!(
+        "to use the current commit of the revision: run `stw workspace worktree-plan {revision} <destination>` again; \
+         to continue at the pinned base: work in {destination}"
+    );
 }
 
 fn git(root: &Path, op: Git) -> Result<Vec<u8>> {
@@ -729,41 +746,35 @@ fn worktree_apply(
             resolved_id.as_str()
         )));
     }
-    // Surface tip drift: if the plan recorded a revision spelling that now points
-    // elsewhere, say so and still check out the pinned SHA (owner D-20261127-22).
-    let mut notices: Vec<String> = Vec::new();
+    // Tip drift (owner D-20261127-22): the plan pins `base`. When the revision
+    // spelling saved at plan time now resolves elsewhere or not at all, apply
+    // still uses the pinned commit, sets `tip_drift` and adds a notice.
+    // Plans without `revision` are not checked and carry no `tip_drift`.
     if let Some(revision) = plan.revision.as_deref() {
-        match git(root, Git::ResolveCommit(revision.to_owned())) {
-            Ok(bytes) => {
-                if let Ok(tip) = output_id(bytes) {
-                    if tip != base {
-                        let notice = format!(
-                            "revision {revision} now points to {}; applying pinned base {}",
-                            tip.as_str(),
-                            base.as_str()
-                        );
-                        notices.push(notice);
-                        report["revision"] = json!(revision);
-                        report["revision_tip"] = json!(tip.as_str());
-                        report["pinned_base"] = json!(base.as_str());
-                        report["tip_drift"] = json!(true);
-                    }
+        let tip = git(root, Git::ResolveCommit(revision.to_owned()))
+            .ok()
+            .and_then(|bytes| output_id(bytes).ok());
+        let drift = tip.as_ref() != Some(&base);
+        report["tip_drift"] = json!(drift);
+        if drift {
+            report["revision"] = json!(revision);
+            report["pinned_base"] = json!(base.as_str());
+            let notice = match &tip {
+                Some(tip) => {
+                    report["revision_tip"] = json!(tip.as_str());
+                    format!(
+                        "revision {revision} now points to {}; applying pinned base {}",
+                        tip.as_str(),
+                        base.as_str()
+                    )
                 }
-            }
-            Err(_) => {
-                // Revision name gone or unresolvable: still apply the pinned base.
-                notices.push(format!(
+                None => format!(
                     "revision {revision} no longer resolves; applying pinned base {}",
                     base.as_str()
-                ));
-                report["revision"] = json!(revision);
-                report["pinned_base"] = json!(base.as_str());
-                report["tip_drift"] = json!(true);
-            }
+                ),
+            };
+            report["notices"] = json!([notice]);
         }
-    }
-    if !notices.is_empty() {
-        report["notices"] = json!(notices);
     }
     full_workspace_config(repo)?;
     check_entries(root, &git(root, Git::TreeEntries(base))?, false)?;
