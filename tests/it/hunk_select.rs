@@ -1292,6 +1292,133 @@ fn a_non_ascii_path_is_not_committed_into_the_previous_file() {
 }
 
 #[test]
+fn a_path_with_a_space_stays_that_file() {
+    let repo = Repo::new();
+    repo.write("plain.txt", b"old\n");
+    repo.write("x y.txt", b"old\n");
+    fs::create_dir(repo.path().join("x b")).unwrap();
+    repo.write("x b/y.txt", b"old\n");
+    repo.write("de l.txt", b"old\n");
+    git(
+        repo.path(),
+        &["add", "--", "plain.txt", "x y.txt", "x b/y.txt", "de l.txt"],
+    );
+    git(repo.path(), &["commit", "-m", "seed names"]);
+    repo.write("plain.txt", b"new\n");
+    repo.write("x y.txt", b"new\n");
+    repo.write("x b/y.txt", b"new\n");
+    fs::remove_file(repo.path().join("de l.txt")).unwrap();
+    repo.write("sp ace.txt", b"intent\n");
+    git(repo.path(), &["add", "-N", "--", "sp ace.txt"]);
+    let (code, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let paths: Vec<String> = listed_hunks(&listed)
+        .iter()
+        .filter_map(|hunk| hunk["path"].as_str().map(str::to_string))
+        .collect();
+    for path in [
+        "x y.txt",
+        "x b/y.txt",
+        "de l.txt",
+        "sp ace.txt",
+        "plain.txt",
+    ] {
+        assert!(
+            paths.iter().any(|got| got == path),
+            "{path} missing in {raw}"
+        );
+    }
+    assert!(
+        listed["refused"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["path"] != "x y.txt" && item["path"] != "x b/y.txt"),
+        "{raw}"
+    );
+    let mut ids = Vec::new();
+    for path in ["x y.txt", "x b/y.txt", "de l.txt"] {
+        let hunk = listed_hunks(&listed)
+            .into_iter()
+            .find(|hunk| hunk["path"] == path && hunk["text"].as_str().unwrap_or("").contains("@@"))
+            .unwrap_or_else(|| panic!("{path} has no hunk in {raw}"));
+        ids.push(hunk["id"].as_str().unwrap().to_string());
+    }
+    let mut plan_args = vec![
+        "workspace".to_string(),
+        "commit-plan".to_string(),
+        "--source".to_string(),
+        "worktree".to_string(),
+    ];
+    for id in &ids {
+        plan_args.push("--hunk".to_string());
+        plan_args.push(id.clone());
+    }
+    let plan_refs: Vec<&str> = plan_args.iter().map(String::as_str).collect();
+    let (code, plan, raw) = stw(repo.path(), &plan_refs);
+    assert_eq!(code, 0, "{raw}");
+    let plan_path = plan_file(&repo);
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let (code, _, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            "spaces",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:x y.txt"]), b"new\n");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:x b/y.txt"]),
+        b"new\n"
+    );
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:plain.txt"]),
+        b"old\n"
+    );
+    let missing = Command::new("git")
+        .arg("-C")
+        .arg(repo.path())
+        .args(["cat-file", "-e", "HEAD:de l.txt"])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(!missing.status.success(), "deleted path was committed back");
+    let intent = listed_hunks(&listed)
+        .into_iter()
+        .find(|hunk| hunk["path"] == "sp ace.txt")
+        .unwrap_or_else(|| panic!("intent path missing in {raw}"));
+    // `git add -N` records the empty blob. That is an unrelated stage of the
+    // work-tree bytes, so the plan is refused. The header still names this path.
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            intent["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "unrelated-staged", "{raw}");
+    assert!(raw.contains("sp ace.txt"), "{raw}");
+}
+
+#[test]
 fn a_home_diff_config_does_not_merge_or_reprefix_hunks() {
     let repo = Repo::new();
     let body: String = (1..=30).map(|i| format!("L{i:02}\n")).collect();
