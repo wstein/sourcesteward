@@ -18,6 +18,7 @@ Last reviewed: 2026-11-26.
 3. **No daemon and no writing to GitHub.** `stw` runs once per task and prints versioned JSON on request. See [what `stw` does not do](docs/what-stw-does-not-do.md).
 4. **New behavior is proved before it ships.** Behavior without a Go counterpart goes through a spike, live acceptance by the owner, product code, and an independent review of the exact head. Ports of Go behavior name each deviation.
 5. **JSON schemas are versioned.** Changes are additive. A breaking change raises `schema_version`.
+6. **Pragmatic for people and agents, on top of Git.** `stw` offers a short working model that does not require the index or Git vocabulary for everyday work. Objects, remotes and hooks stay Git's, so `git` and `gh` can read every result.
 
 ## Milestones
 
@@ -34,6 +35,7 @@ Last reviewed: 2026-11-26.
 
 | Idea | Reason |
 | --- | --- |
+| A repository model of its own (jj style) | Decision of 2026-11-11: Git stays the model. Functions such as undo and conflict handling are added to `stw`. |
 | In-memory rerere in the replay | Decision 7 of the [migration plan](docs/migration-plan.md). Git's rerere works during resolution without `stw`. |
 | A daemon or MCP server | Another kind of product with its own permission and token model. Revisit after 0.8 as a thin wrapper around `--json`. |
 | Automatic sparse worktrees | Sparse checkout is [not covered by tests](docs/development.md) and is refused by `stw oplog undo --keep`. |
