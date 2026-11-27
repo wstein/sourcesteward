@@ -1864,16 +1864,20 @@ fn list(repo: &Repo) -> Value {
 #[test]
 fn non_utf8_and_tab_paths_are_refused_at_list_time() {
     let repo = Repo::new();
-    fs::write(
-        repo.path().join(std::ffi::OsStr::from_bytes(b"a\xffb")),
-        b"x\n",
-    )
-    .unwrap();
-    fs::write(
-        repo.path().join(std::ffi::OsStr::from_bytes(b"c\xfed")),
-        b"y\n",
-    )
-    .unwrap();
+    // APFS rejects a name that is not UTF-8 (EILSEQ). Linux stores the bytes.
+    #[cfg(not(target_os = "macos"))]
+    {
+        fs::write(
+            repo.path().join(std::ffi::OsStr::from_bytes(b"a\xffb")),
+            b"x\n",
+        )
+        .unwrap();
+        fs::write(
+            repo.path().join(std::ffi::OsStr::from_bytes(b"c\xfed")),
+            b"y\n",
+        )
+        .unwrap();
+    }
     fs::write(
         repo.path().join(std::ffi::OsStr::from_bytes(b"has\ttab")),
         b"t\n",
@@ -1881,22 +1885,25 @@ fn non_utf8_and_tab_paths_are_refused_at_list_time() {
     .unwrap();
     let doc = list(&repo);
     let refused = refused_reasons(&doc);
-    let utf8: Vec<_> = refused
-        .iter()
-        .filter(|(_, reason)| reason == "non-utf8-path")
-        .map(|(path, _)| path.clone())
-        .collect();
-    assert_eq!(utf8.len(), 2, "{refused:?}");
-    assert_ne!(utf8[0], utf8[1], "{refused:?}");
+    #[cfg(not(target_os = "macos"))]
+    {
+        let utf8: Vec<_> = refused
+            .iter()
+            .filter(|(_, reason)| reason == "non-utf8-path")
+            .map(|(path, _)| path.clone())
+            .collect();
+        assert_eq!(utf8.len(), 2, "{refused:?}");
+        assert_ne!(utf8[0], utf8[1], "{refused:?}");
+        assert!(
+            listed_hunks(&doc)
+                .iter()
+                .all(|hunk| hunk["path"] != utf8[0] && hunk["path"] != utf8[1]),
+            "{doc}"
+        );
+    }
     assert!(
         refused.iter().any(|(_, reason)| reason == "tab-in-path"),
         "{refused:?}"
-    );
-    assert!(
-        listed_hunks(&doc)
-            .iter()
-            .all(|hunk| hunk["path"] != utf8[0] && hunk["path"] != utf8[1]),
-        "{doc}"
     );
 }
 
