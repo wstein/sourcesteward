@@ -146,9 +146,13 @@ struct CheckpointPlan {
 #[serde(deny_unknown_fields)]
 struct WorktreePlan {
     format: String,
+    /// Pinned commit OID. Apply checks out this SHA, never a live tip.
     base: String,
     destination: String,
     common_dir: String,
+    /// Revision spelling used at plan time (branch, tag, or OID). Older plans omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    revision: Option<String>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -684,6 +688,7 @@ fn worktree_plan(
             .to_str()
             .ok_or_else(|| Error::usage("Git common directory must be UTF-8"))?
             .into(),
+        revision: Some(args.revision.clone()),
     };
     report["plan"] = json!(plan);
     report["next"] = json!("worktree-apply");
@@ -708,11 +713,57 @@ fn worktree_apply(
         ));
     }
     let base = parse_id(&plan.base)?;
-    let resolved = git(root, Git::ResolveCommit(plan.base)).map_err(|error| {
-        Error::repository(format!("pinned base is not a local commit: {error}"))
+    // Pinned-base check: the plan binds a concrete commit. Refuse when that object
+    // is missing locally. Never re-resolve a live tip as the checkout target.
+    let resolved = git(root, Git::ResolveCommit(plan.base.clone())).map_err(|error| {
+        Error::repository(format!(
+            "pinned base is not a local commit ({}): {error}",
+            plan.base
+        ))
     })?;
-    if output_id(resolved)? != base {
-        return Err(Error::repository("pinned base is not a local commit"));
+    let resolved_id = output_id(resolved)?;
+    if resolved_id != base {
+        return Err(Error::repository(format!(
+            "pinned base is not a local commit ({} resolved to {})",
+            plan.base,
+            resolved_id.as_str()
+        )));
+    }
+    // Surface tip drift: if the plan recorded a revision spelling that now points
+    // elsewhere, say so and still check out the pinned SHA (owner D-20261127-22).
+    let mut notices: Vec<String> = Vec::new();
+    if let Some(revision) = plan.revision.as_deref() {
+        match git(root, Git::ResolveCommit(revision.to_owned())) {
+            Ok(bytes) => {
+                if let Ok(tip) = output_id(bytes) {
+                    if tip != base {
+                        let notice = format!(
+                            "revision {revision} now points to {}; applying pinned base {}",
+                            tip.as_str(),
+                            base.as_str()
+                        );
+                        notices.push(notice);
+                        report["revision"] = json!(revision);
+                        report["revision_tip"] = json!(tip.as_str());
+                        report["pinned_base"] = json!(base.as_str());
+                        report["tip_drift"] = json!(true);
+                    }
+                }
+            }
+            Err(_) => {
+                // Revision name gone or unresolvable: still apply the pinned base.
+                notices.push(format!(
+                    "revision {revision} no longer resolves; applying pinned base {}",
+                    base.as_str()
+                ));
+                report["revision"] = json!(revision);
+                report["pinned_base"] = json!(base.as_str());
+                report["tip_drift"] = json!(true);
+            }
+        }
+    }
+    if !notices.is_empty() {
+        report["notices"] = json!(notices);
     }
     full_workspace_config(repo)?;
     check_entries(root, &git(root, Git::TreeEntries(base))?, false)?;
