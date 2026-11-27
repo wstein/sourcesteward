@@ -13,13 +13,30 @@ commit is available locally, and that the canonical destination is still
 vacant. The destination's parent must already exist.
 
 Apply checks out the saved commit in a native linked worktree with detached
-HEAD. The plan pins that commit OID; apply never follows a live branch tip. If
-the original revision name now resolves elsewhere, apply still uses the pinned
-SHA and records a `notices` entry (and `tip_drift: true` in JSON) that names
-both tips. If the pinned commit is missing locally, apply refuses. It leaves
-the source checkout, its index, and existing refs in place. If Git reports a
-checkout error, inspect the reported destination and `git worktree list` for
-partial state before retrying.
+HEAD. The plan pins that commit; apply never follows a live branch tip and
+passes only the pinned SHA to `git worktree add`. If the pinned commit is
+missing locally, apply refuses. Apply leaves the source checkout, its index,
+and existing refs in place. If Git reports a checkout error, inspect the
+reported destination and `git worktree list` for partial state before
+retrying.
+
+The plan also records the revision as typed (`revision`). Plans saved before
+this field existed have no `revision` and apply them as before. Older stw
+versions reject a plan that has it. At apply time stw resolves the revision
+again and compares it with the pin:
+
+- Same commit: the JSON report has `"tip_drift": false`.
+- A different commit, or the revision no longer resolves: apply still creates
+  the worktree at the pinned commit and exits 0. The report has
+  `"tip_drift": true`, `revision`, `pinned_base` and, when the revision still
+  resolves, `revision_tip`, plus a `notices` array with one sentence naming
+  both commits. Text output prints the same notice and two ways to go on:
+  run `worktree-plan` for the revision again to get a plan for its current
+  commit, or continue at the pinned commit.
+- Plan without `revision`: no check; `tip_drift` and `notices` are absent.
+
+All of these fields are additive; `base`, `destination` and `created` keep
+their meaning.
 
 Use `stw workspace checkpoint --task NAME --plan --json` to inspect the selection,
 then omit `--plan` to save it. Use `--include PATH` for each explicitly selected
