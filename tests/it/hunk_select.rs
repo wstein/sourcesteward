@@ -1615,3 +1615,135 @@ fn a_symlink_is_not_committed_as_the_target_file() {
     );
     let _ = fs::remove_file(&outside);
 }
+
+fn commit_one(repo: &Repo, path: &str, message: &str) -> String {
+    let (code, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let hits: Vec<_> = listed_hunks(&listed)
+        .into_iter()
+        .filter(|hunk| hunk["path"] == path)
+        .collect();
+    assert_eq!(hits.len(), 1, "{raw}");
+    let text = hits[0]["text"].as_str().unwrap().to_string();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            hits[0]["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let plan_path = plan_file(repo);
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let (code, _, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            message,
+            "--plan-sum",
+            plan["plan_sum"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    text
+}
+
+#[test]
+fn an_untracked_file_without_a_trailing_newline_keeps_its_bytes() {
+    let repo = Repo::new();
+    let bytes = "ü\nx".as_bytes();
+    repo.write("nonew.txt", bytes);
+    let text = commit_one(&repo, "nonew.txt", "nonew");
+    assert!(
+        text.contains("+x\n\\ No newline at end of file\n"),
+        "{text:?}"
+    );
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:nonew.txt"]), bytes);
+    assert_eq!(fs::read(repo.path().join("nonew.txt")).unwrap(), bytes);
+}
+
+#[test]
+fn intent_to_add_and_tracked_newline_changes_keep_the_worktree_bytes() {
+    let repo = Repo::new();
+    let intent = "ü\nx".as_bytes();
+    repo.write("intent.txt", intent);
+    git(repo.path(), &["add", "-N", "--", "intent.txt"]);
+    let (code, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let hit = listed_hunks(&listed)
+        .into_iter()
+        .find(|hunk| hunk["path"] == "intent.txt")
+        .unwrap_or_else(|| panic!("{raw}"));
+    assert!(
+        hit["text"]
+            .as_str()
+            .unwrap()
+            .contains("+x\n\\ No newline at end of file\n"),
+        "{raw}"
+    );
+    // `git add -N` records the empty blob. Planning that path is refused, so
+    // the marker cannot be committed from this state.
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            hit["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "unrelated-staged", "{raw}");
+
+    repo.write("lose.txt", b"one\ntwo\n");
+    git(repo.path(), &["add", "--", "lose.txt"]);
+    git(repo.path(), &["commit", "-m", "lose base"]);
+    repo.write("lose.txt", b"one\ntwo");
+    commit_one(&repo, "lose.txt", "lose nl");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:lose.txt"]),
+        b"one\ntwo"
+    );
+
+    repo.write("gain.txt", b"one\ntwo");
+    git(repo.path(), &["add", "--", "gain.txt"]);
+    git(repo.path(), &["commit", "-m", "gain base"]);
+    repo.write("gain.txt", b"one\ntwo\n");
+    commit_one(&repo, "gain.txt", "gain nl");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:gain.txt"]),
+        b"one\ntwo\n"
+    );
+
+    let crlf = b"a\r\nb\r\n";
+    repo.write("crlf.txt", crlf);
+    commit_one(&repo, "crlf.txt", "crlf");
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:crlf.txt"]), crlf);
+}

@@ -718,6 +718,12 @@ fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
             body.extend_from_slice(line);
         }
         if !data.ends_with(b"\n") && !data.ends_with(b"\r") {
+            // The marker is its own patch line. The added line keeps a newline
+            // here so `git apply` can strip it; without that newline the marker
+            // is committed as file content.
+            if body.last() != Some(&b'\n') {
+                body.push(b'\n');
+            }
             body.extend_from_slice(b"\\ No newline at end of file\n");
         }
         (new_count, body)
