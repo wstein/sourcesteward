@@ -80,6 +80,27 @@ fn stw(dir: &Path, args: &[&str]) -> (i32, String, String) {
     stw_env(dir, args, &[])
 }
 
+fn stw_home(dir: &Path, args: &[&str], home: &Path) -> (i32, String, String) {
+    let out = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .current_dir(dir)
+        .args(args)
+        .env("HOME", home)
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env_remove("GIT_CONFIG_GLOBAL")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env_remove("GIT_AUTHOR_NAME")
+        .env_remove("GIT_AUTHOR_EMAIL")
+        .env_remove("GIT_COMMITTER_NAME")
+        .env_remove("GIT_COMMITTER_EMAIL")
+        .output()
+        .unwrap();
+    (
+        out.status.code().unwrap_or(1),
+        String::from_utf8_lossy(&out.stdout).to_string(),
+        String::from_utf8_lossy(&out.stderr).to_string(),
+    )
+}
+
 fn stw_env(dir: &Path, args: &[&str], extra: &[(&str, &str)]) -> (i32, String, String) {
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_stw"));
     cmd.current_dir(dir)
@@ -906,4 +927,163 @@ fn a_failure_after_the_backup_leaves_the_counter_and_the_backup() {
         .len()
             >= 40
     );
+}
+
+#[test]
+fn a_user_config_identity_is_enough_and_an_author_override_is_refused() {
+    let repo = Repo::new();
+    repo.git(&["config", "--unset", "user.name"]);
+    repo.git(&["config", "--unset", "user.email"]);
+    let home = repo.dir.path().join("home");
+    fs::create_dir(&home).unwrap();
+    fs::write(
+        home.join(".gitconfig"),
+        "[user]\n\tname = Home Tester\n\temail = home@example.invalid\n",
+    )
+    .unwrap();
+    let file = repo.plan_file();
+    let (code, out, err) = stw_home(
+        repo.path(),
+        &[
+            "restack",
+            "prepare",
+            "topic",
+            "main",
+            &file.to_string_lossy(),
+        ],
+        &home,
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, err) = stw_home(
+        repo.path(),
+        &["restack", "apply", &file.to_string_lossy(), "--yes"],
+        &home,
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(
+        repo.git(&["log", "-1", "--format=%cn <%ce>", "topic"]),
+        "Home Tester <home@example.invalid>"
+    );
+
+    let overridden = Repo::new();
+    overridden.git(&["config", "--unset", "user.name"]);
+    overridden.git(&["config", "--unset", "user.email"]);
+    let home = overridden.dir.path().join("home");
+    fs::create_dir(&home).unwrap();
+    fs::write(
+        home.join(".gitconfig"),
+        "[user]\n\tname = Home Tester\n\temail = home@example.invalid\n[author]\n\tname = Other\n\temail = other@example.invalid\n",
+    )
+    .unwrap();
+    let file = overridden.plan_file();
+    let (code, out, err) = stw_home(
+        overridden.path(),
+        &[
+            "restack",
+            "prepare",
+            "topic",
+            "main",
+            &file.to_string_lossy(),
+        ],
+        &home,
+    );
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(err.contains("identity"), "{out}{err}");
+    assert!(!file.exists());
+}
+
+#[test]
+fn an_upstream_branch_prepares_and_a_range_diff_failure_writes_nothing() {
+    let parent = scratch();
+    fs::create_dir_all(&parent).unwrap();
+    let dir = tempfile::tempdir_in(&parent).unwrap();
+    let repo = dir.path().join("repo");
+    fs::create_dir(&repo).unwrap();
+    git(&repo, &["init", "-q", "-b", "main"]);
+    git(&repo, &["config", "user.name", "Spike Tester"]);
+    git(&repo, &["config", "user.email", "spike@example.invalid"]);
+    fs::write(repo.join("base"), "base\n").unwrap();
+    git(&repo, &["add", "base"]);
+    git(&repo, &["commit", "-qm", "base"]);
+    git(&repo, &["branch", "topic"]);
+    fs::write(repo.join("more"), "more\n").unwrap();
+    git(&repo, &["add", "more"]);
+    git(&repo, &["commit", "-qm", "more"]);
+    let plan = dir.path().join("plan");
+    let (code, out, err) = stw(
+        &repo,
+        &[
+            "restack",
+            "prepare",
+            "topic",
+            "main",
+            &plan.to_string_lossy(),
+        ],
+    );
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(!err.contains("does not know an option"), "{out}{err}");
+    assert!(plan.is_file());
+    assert!(out.contains("plan "));
+
+    let repo = Repo::new();
+    let bindir = repo.dir.path().join("bin");
+    fs::create_dir(&bindir).unwrap();
+    let real = String::from_utf8(
+        Command::new("sh")
+            .args(["-c", "command -v git"])
+            .output()
+            .unwrap()
+            .stdout,
+    )
+    .unwrap();
+    fs::write(
+        bindir.join("git"),
+        format!(
+            "#!/bin/sh\nif [ \"$1\" = --version ]; then exec {real} \"$@\"; fi\nfor arg in \"$@\"; do\n  if [ \"$arg\" = range-diff ]; then echo range-diff refused >&2; exit 1; fi\ndone\nexec {real} \"$@\"\n",
+            real = real.trim()
+        ),
+    )
+    .unwrap();
+    Command::new("chmod")
+        .args(["+x", &bindir.join("git").to_string_lossy()])
+        .status()
+        .unwrap();
+    let path = format!("{}:{}", bindir.display(), std::env::var("PATH").unwrap());
+    let file = repo.plan_file();
+    let (code, out, err) = stw_env(
+        repo.path(),
+        &[
+            "restack",
+            "prepare",
+            "topic",
+            "main",
+            &file.to_string_lossy(),
+        ],
+        &[("PATH", &path)],
+    );
+    assert_eq!(code, 1, "{out}{err}");
+    assert!(format!("{out}{err}").contains("range-diff"), "{out}{err}");
+    assert!(!file.exists(), "{out}{err}");
+    assert!(
+        repo.git(&["for-each-ref", "refs/stw/restack-prepared"])
+            .is_empty(),
+        "{out}{err}"
+    );
+    assert_eq!(repo.git(&["rev-parse", "topic"]), repo.old);
+}
+
+#[test]
+fn apply_after_undo_is_refused_and_the_receipt_stays() {
+    let repo = Repo::new();
+    assert_eq!(prepare(&repo).0, 0);
+    assert_eq!(apply(&repo).0, 0);
+    let id = fs::read_to_string(repo.plan_file()).unwrap();
+    let applied = format!("refs/stw/restack-applied/{}", id.trim());
+    let receipt = repo.git(&["rev-parse", &applied]);
+    assert_eq!(undo(&repo).0, 0);
+    assert_eq!(repo.git(&["rev-parse", &applied]), receipt);
+    let (code, out, err) = apply(&repo);
+    assert_eq!(code, 1, "{out}{err}");
+    assert_eq!(repo.git(&["rev-parse", "topic"]), repo.old);
+    assert_eq!(repo.git(&["rev-parse", &applied]), receipt);
 }

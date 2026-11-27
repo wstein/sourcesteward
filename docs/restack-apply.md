@@ -4,13 +4,15 @@
 branch. `undo` moves it back. `stw restack plan` stays the read-only preview and is a different command.
 
 The branch must not be checked out. A merge commit or a conflict is refused and nothing is written. The replayed
-commits keep the author of the original commits. The committer is `user.name` and `user.email` of the repository.
-`author.*` and `committer.*` in that config are refused.
+commits keep the author of the original commits. The committer is `user.name` and `user.email` from the Git
+configuration, so a user config is enough. `author.*` and `committer.*` in that configuration are refused.
 
 Apply runs no hooks. Prepare and undo do not either. The replay is the in-process engine, and the ref update is a
-gix transaction: the commands do not call `git commit`, `git rebase` or `git update-ref`. A global Git config
-(`diff.*`, `rebase.*`, `core.hooksPath`, `commit.gpgsign`, `rerere.*`, `apply.whitespace`) is not read. The only
-`git` program is `range-diff` for the plan text, through the existing runner, without a patch (`--no-patch`).
+gix transaction: the commands do not call `git commit`, `git rebase` or `git update-ref`. The replay does not use
+`diff.*`, `rebase.*`, `core.hooksPath`, `commit.gpgsign`, `rerere.*` or `apply.whitespace`. The only `git`
+program is `range-diff` for the plan text, through the existing runner, without a patch (`--no-patch`). An empty
+replay skips that call. A range-diff failure writes no plan file and no prepared ref. The demonstration below
+sets no repository identity: the configured user identity is the committer.
 
 The plan file is created only when it does not exist and holds the plan id. The objects stay reachable from
 `refs/stw/restack-prepared/<id>`. Apply checks both tips again. A branch or an onto tip that moved is left at the
