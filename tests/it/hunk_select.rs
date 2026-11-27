@@ -72,8 +72,12 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn stw(dir: &Path, args: &[&str]) -> (u8, Value, String) {
-    let out = Command::new(env!("CARGO_BIN_EXE_stw"))
-        .args(args)
+    stw_home(dir, args, None)
+}
+
+fn stw_home(dir: &Path, args: &[&str], home: Option<&Path>) -> (u8, Value, String) {
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_stw"));
+    cmd.args(args)
         .arg("--repo")
         .arg(dir)
         .arg("--json")
@@ -83,9 +87,12 @@ fn stw(dir: &Path, args: &[&str]) -> (u8, Value, String) {
         .env("GIT_AUTHOR_EMAIL", "spike@example.invalid")
         .env("GIT_COMMITTER_NAME", "Spike Tester")
         .env("GIT_COMMITTER_EMAIL", "spike@example.invalid")
-        .env("GIT_TERMINAL_PROMPT", "0")
-        .output()
-        .unwrap();
+        .env("GIT_TERMINAL_PROMPT", "0");
+    if let Some(home) = home {
+        cmd.env("HOME", home);
+        cmd.env("XDG_CONFIG_HOME", home.join("xdg"));
+    }
+    let out = cmd.output().unwrap();
     let stdout = String::from_utf8_lossy(&out.stdout).to_string();
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     let doc = serde_json::from_str(&stdout).unwrap_or(Value::Null);
@@ -1198,4 +1205,286 @@ fn path_plan_still_rejects_a_missing_path_argument() {
         "{}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+fn listed_hunks(doc: &Value) -> Vec<Value> {
+    doc["hunks"].as_array().cloned().unwrap_or_default()
+}
+
+fn git_bytes(dir: &Path, args: &[&str]) -> Vec<u8> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    out.stdout
+}
+
+#[test]
+fn a_non_ascii_path_is_not_committed_into_the_previous_file() {
+    let repo = Repo::new();
+    repo.write("plain.txt", b"old\n");
+    repo.write("café.txt", b"alt\n");
+    git(repo.path(), &["add", "--", "plain.txt", "café.txt"]);
+    git(repo.path(), &["commit", "-m", "seed names"]);
+    repo.write("plain.txt", b"new\n");
+    repo.write("café.txt", b"neu\n");
+    let (code, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let cafe: Vec<Value> = listed_hunks(&listed)
+        .into_iter()
+        .filter(|hunk| hunk["path"] == "café.txt")
+        .collect();
+    assert_eq!(cafe.len(), 1, "{raw}");
+    assert!(
+        listed_hunks(&listed)
+            .iter()
+            .any(|hunk| hunk["path"] == "plain.txt"),
+        "{raw}"
+    );
+    let plan_path = plan_file(&repo);
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            cafe[0]["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let (code, _, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            "cafe",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:café.txt"]), b"neu\n");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:plain.txt"]),
+        b"old\n"
+    );
+}
+
+#[test]
+fn a_home_diff_config_does_not_merge_or_reprefix_hunks() {
+    let repo = Repo::new();
+    let body: String = (1..=30).map(|i| format!("L{i:02}\n")).collect();
+    repo.write("f.txt", body.as_bytes());
+    git(repo.path(), &["add", "--", "f.txt"]);
+    git(repo.path(), &["commit", "-m", "seed"]);
+    let edited = body.replace("L01\n", "A01\n").replace("L20\n", "A20\n");
+    repo.write("f.txt", edited.as_bytes());
+    let home = tempfile::tempdir_in(scratch()).unwrap();
+    fs::create_dir_all(home.path().join("xdg")).unwrap();
+    fs::write(
+        home.path().join(".gitconfig"),
+        "[diff]\n\tmnemonicPrefix = true\n\tnoprefix = true\n\tinterHunkContext = 50\n\tcontext = 20\n\tsrcPrefix = X/\n\tdstPrefix = Y/\n[color]\n\tui = always\n\tdiff = always\n",
+    )
+    .unwrap();
+    let (code, listed, raw) = stw_home(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+        Some(home.path()),
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert!(!raw.contains('\u{1b}'), "{raw}");
+    let hunks: Vec<Value> = listed_hunks(&listed)
+        .into_iter()
+        .filter(|hunk| {
+            hunk["path"] == "f.txt" && hunk["text"].as_str().unwrap_or("").contains("@@")
+        })
+        .collect();
+    assert_eq!(hunks.len(), 2, "{raw}");
+    assert!(
+        hunks
+            .iter()
+            .all(|hunk| hunk["old_count"] == 1 && hunk["new_count"] == 1),
+        "{raw}"
+    );
+    let plan_path = plan_file(&repo);
+    let (code, plan, raw) = stw_home(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            hunks[0]["id"].as_str().unwrap(),
+        ],
+        Some(home.path()),
+    );
+    assert_eq!(code, 0, "{raw}");
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let (code, _, raw) = stw_home(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            "one line",
+        ],
+        Some(home.path()),
+    );
+    assert_eq!(code, 0, "{raw}");
+    let committed = git_bytes(repo.path(), &["show", "HEAD:f.txt"]);
+    let committed = String::from_utf8(committed).unwrap();
+    assert!(committed.contains("A01\n"), "{committed}");
+    assert!(committed.contains("L20\n"), "{committed}");
+    assert!(!committed.contains("A20\n"), "{committed}");
+}
+
+#[test]
+fn apply_whitespace_config_keeps_the_committed_bytes() {
+    for setting in ["fix", "error"] {
+        let repo = Repo::new();
+        seed(&repo);
+        let body: String = (1..10).map(|i| format!("L{i:02}\n")).collect();
+        let edited = body.replace("L02\n", "L02   \n");
+        repo.write("f.txt", edited.as_bytes());
+        git(repo.path(), &["config", "apply.whitespace", setting]);
+        let (code, listed, raw) = stw(
+            repo.path(),
+            &[
+                "workspace",
+                "commit-plan",
+                "--list-hunks",
+                "--source",
+                "worktree",
+            ],
+        );
+        assert_eq!(code, 0, "{setting} {raw}");
+        let hunk = listed_hunks(&listed)
+            .into_iter()
+            .find(|hunk| hunk["path"] == "f.txt" && hunk["kind"] != "mode")
+            .expect(&raw);
+        let plan_path = plan_file(&repo);
+        let (code, plan, raw) = stw(
+            repo.path(),
+            &[
+                "workspace",
+                "commit-plan",
+                "--source",
+                "worktree",
+                "--hunk",
+                hunk["id"].as_str().unwrap(),
+            ],
+        );
+        assert_eq!(code, 0, "{setting} {raw}");
+        fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+        let (code, _, raw) = stw(
+            repo.path(),
+            &[
+                "workspace",
+                "commit-apply",
+                plan_path.to_str().unwrap(),
+                "--message",
+                "keep spaces",
+            ],
+        );
+        assert_eq!(code, 0, "{setting} {raw}");
+        assert_eq!(
+            git_bytes(repo.path(), &["show", "HEAD:f.txt"]),
+            edited.as_bytes(),
+            "{setting}"
+        );
+    }
+}
+
+#[test]
+fn a_symlink_is_not_committed_as_the_target_file() {
+    let repo = Repo::new();
+    seed(&repo);
+    let outside = scratch().join(format!(
+        "secret-{}",
+        repo.path().file_name().unwrap().to_string_lossy()
+    ));
+    fs::write(&outside, b"SECRET-BYTES\n").unwrap();
+    std::os::unix::fs::symlink(&outside, repo.path().join("leak")).unwrap();
+    repo.write("tracked", b"plain\n");
+    git(repo.path(), &["add", "--", "tracked"]);
+    git(repo.path(), &["commit", "-m", "tracked"]);
+    fs::remove_file(repo.path().join("tracked")).unwrap();
+    std::os::unix::fs::symlink(&outside, repo.path().join("tracked")).unwrap();
+    let (code, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert!(!raw.contains("SECRET-BYTES"), "{raw}");
+    let refused = listed["refused"].as_array().cloned().unwrap_or_default();
+    assert!(
+        refused
+            .iter()
+            .any(|item| item["path"] == "leak" && item["reason"] == "symlink"),
+        "{raw}"
+    );
+    assert!(
+        listed_hunks(&listed)
+            .iter()
+            .all(|hunk| hunk["path"] != "leak"),
+        "{raw}"
+    );
+    let tracked: Vec<Value> = listed_hunks(&listed)
+        .into_iter()
+        .filter(|hunk| hunk["path"] == "tracked")
+        .collect();
+    assert!(!tracked.is_empty(), "{raw}");
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            tracked[0]["id"].as_str().unwrap(),
+        ],
+    );
+    assert_ne!(code, 0, "{raw}");
+    assert_eq!(doc["error"]["code"], "symlink", "{raw}");
+    assert_eq!(
+        git_bytes(repo.path(), &["show", "HEAD:tracked"]),
+        b"plain\n"
+    );
+    let _ = fs::remove_file(&outside);
 }

@@ -375,6 +375,8 @@ commit in a temporary index, moves the branch by compare-and-swap, and updates
 the real index only for the selected paths. A stale plan is refused and leaves
 the branch, the index and the work tree unchanged (`stale-branch`,
 `stale-worktree`, `stale-index`, and the other reasons named in the JSON).
+A symbolic link is refused (`symlink`) and its target is not read. A path
+Git quotes, including a non-ASCII name, stays that path.
 
 Worked example, in a disposable repository:
 

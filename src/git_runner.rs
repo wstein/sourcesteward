@@ -527,6 +527,9 @@ impl WorkspaceOp {
             Self::LoadIndex { tree, .. } => v(&["read-tree", tree.as_str()]),
             Self::DiffWorktreeU0 => v(&[
                 "diff",
+                "--no-color",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
                 "-U0",
                 "--find-renames",
                 "--no-ext-diff",
@@ -535,6 +538,9 @@ impl WorkspaceOp {
             ]),
             Self::DiffSummary => v(&[
                 "diff",
+                "--no-color",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
                 "--summary",
                 "--no-ext-diff",
                 "--no-textconv",
@@ -542,6 +548,9 @@ impl WorkspaceOp {
             ]),
             Self::DiffNumstat { path } => v(&[
                 "diff",
+                "--no-color",
+                "--src-prefix=a/",
+                "--dst-prefix=b/",
                 "--numstat",
                 "--no-ext-diff",
                 "--no-textconv",
@@ -566,6 +575,7 @@ impl WorkspaceOp {
                 "apply",
                 "--cached",
                 "--unidiff-zero",
+                "--whitespace=nowarn",
                 "--",
                 &patch.display().to_string(),
             ]),
@@ -894,19 +904,12 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. } => &[],
-            Op::Workspace(_) => &[
-                "--literal-pathspecs",
-                "-c",
-                "core.attributesFile=/dev/null",
-                "-c",
-                "commit.gpgsign=false",
-                "-c",
-                "core.autocrlf=false",
-                "-c",
-                "core.splitIndex=false",
-                "-c",
-                "core.symlinks=true",
-            ],
+            Op::Workspace(
+                WorkspaceOp::DiffWorktreeU0
+                | WorkspaceOp::DiffSummary
+                | WorkspaceOp::DiffNumstat { .. },
+            ) => HUNK_DIFF_LEADING,
+            Op::Workspace(_) => WORKSPACE_LEADING,
             Op::BlameLines { .. } => {
                 &["--literal-pathspecs", "-c", "core.attributesFile=/dev/null"]
             }
@@ -994,6 +997,61 @@ impl Op {
         }
     }
 }
+
+/// Leading arguments of every workspace call. `core.symlinks=true` so a link is not read as a file.
+const WORKSPACE_LEADING: &[&str] = &[
+    "--literal-pathspecs",
+    "-c",
+    "core.attributesFile=/dev/null",
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "core.autocrlf=false",
+    "-c",
+    "core.splitIndex=false",
+    "-c",
+    "core.symlinks=true",
+];
+
+/// Workspace leading plus the diff knobs `DiffRange` pins. A global `diff.mnemonicPrefix`,
+/// `diff.noprefix`, `diff.interHunkContext` or `color.ui` would change the text the hunk parser reads.
+const HUNK_DIFF_LEADING: &[&str] = &[
+    "--literal-pathspecs",
+    "-c",
+    "core.attributesFile=/dev/null",
+    "-c",
+    "commit.gpgsign=false",
+    "-c",
+    "core.autocrlf=false",
+    "-c",
+    "core.splitIndex=false",
+    "-c",
+    "core.symlinks=true",
+    "-c",
+    "diff.ignoreSubmodules=none",
+    "-c",
+    "diff.submodule=short",
+    "-c",
+    "diff.renames=true",
+    "-c",
+    "diff.context=3",
+    "-c",
+    "diff.interHunkContext=0",
+    "-c",
+    "diff.algorithm=myers",
+    "-c",
+    "diff.indentHeuristic=true",
+    "-c",
+    "diff.relative=false",
+    "-c",
+    "diff.suppressBlankEmpty=false",
+    "-c",
+    "diff.noprefix=false",
+    "-c",
+    "diff.mnemonicPrefix=false",
+    "-c",
+    "core.quotePath=true",
+];
 
 /// Leading arguments of every call, after `-C <repo>`.
 const LEADING: &[&str] = &[
