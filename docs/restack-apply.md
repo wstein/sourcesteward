@@ -1,6 +1,6 @@
 # `stw restack prepare`, `apply` and `undo`
 
-`prepare` replays one direct local branch onto one direct local branch and writes a plan file. `apply` moves that
+`prepare BRANCH --onto ONTO --out PLAN` replays one direct local branch onto one direct local branch and writes the plan file. `apply` and `undo` take `PLAN`. `apply` moves that
 branch. `undo` moves it back. `stw restack plan` stays the read-only preview and is a different command.
 
 The branch must not be checked out. A merge commit or a conflict is refused and nothing is written. The replayed
@@ -43,7 +43,7 @@ printf 'topic\n' > /tmp/cursor-restack-demo/repo/topic
 git -C /tmp/cursor-restack-demo/repo add topic
 git -C /tmp/cursor-restack-demo/repo commit -qm topic
 git -C /tmp/cursor-restack-demo/repo switch -q main
-stw restack prepare topic main /tmp/cursor-restack-demo/plan
+stw restack prepare topic --onto main --out /tmp/cursor-restack-demo/plan
 stw restack apply /tmp/cursor-restack-demo/plan --yes
 stw restack undo /tmp/cursor-restack-demo/plan --yes
 ```

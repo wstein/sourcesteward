@@ -336,7 +336,7 @@ enum RestackCommand {
     /// Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
     #[command(after_help = RESTACK_PLAN_HELP)]
     Plan(RestackPlanArgs),
-    /// Replay one local branch onto another and write a plan file. The branch is not moved
+    /// Replay one local branch onto --onto and write --out. The branch is not moved
     #[command(after_help = RESTACK_PREPARE_HELP)]
     Prepare(RestackPrepareArgs),
     /// Move the branch recorded in a plan file, after a backup ref
@@ -978,7 +978,7 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
 }
 
 const RESTACK_PREPARE_HELP: &str = "\
-Replay BRANCH onto ONTO and write FILE. FILE is created only when it does not exist and contains the plan id.
+Replay BRANCH onto --onto ONTO and write --out PLAN. PLAN is created only when it does not exist and contains the plan id.
 The branch must be a direct local branch and must not be checked out. ONTO is a direct local branch. A merge
 commit or a conflict refuses the command and writes nothing. The replayed commits keep their author; the
 committer is user.name and user.email from the Git configuration. author.* and committer.* overrides are
@@ -994,7 +994,7 @@ Exit codes:
   2  usage error";
 
 const RESTACK_APPLY_HELP: &str = "\
-Move the branch in FILE to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
+Move the branch in PLAN to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
 that moved since the plan is left at the newer value and nothing is written. The old tip is stored at
 refs/stw/backup/<run>/1 in the same counter and retention as oplog undo, then one ref transaction checks the
 onto tip and the prepared record and moves the branch. Apply runs no hooks. A failure after the backup says
@@ -1006,7 +1006,7 @@ Exit codes:
   2  usage error (also: --yes missing)";
 
 const RESTACK_UNDO_HELP: &str = "\
-Move the branch in FILE back to the tip recorded at apply. --yes is required. The branch must still be at the
+Move the branch in PLAN back to the tip recorded at apply. --yes is required. The branch must still be at the
 applied tip and the backup ref from that apply must still hold the old tip. Undo writes its own backup first,
 including the old tip, and then moves the branch. A branch that moved since apply is left as it is.
 
@@ -1030,11 +1030,11 @@ struct RestackPrepareArgs {
     #[arg(value_name = "BRANCH")]
     branch: String,
     /// Local branch to replay onto
-    #[arg(value_name = "ONTO")]
+    #[arg(long, value_name = "ONTO")]
     onto: String,
     /// Plan file to create. It is never overwritten
-    #[arg(value_name = "FILE")]
-    file: PathBuf,
+    #[arg(long, value_name = "PLAN")]
+    out: PathBuf,
 }
 
 #[derive(Args)]
@@ -1052,8 +1052,8 @@ struct RestackApplyArgs {
     #[arg(long = "repo", value_name = "NAME")]
     repo: Option<String>,
     /// Plan file written by prepare
-    #[arg(value_name = "FILE")]
-    file: PathBuf,
+    #[arg(value_name = "PLAN")]
+    plan: PathBuf,
 }
 
 #[derive(Args)]
@@ -1071,8 +1071,8 @@ struct RestackUndoArgs {
     #[arg(long = "repo", value_name = "NAME")]
     repo: Option<String>,
     /// Plan file whose apply receipt is undone
-    #[arg(value_name = "FILE")]
-    file: PathBuf,
+    #[arg(value_name = "PLAN")]
+    plan: PathBuf,
 }
 
 fn restack_finish(
@@ -1109,7 +1109,7 @@ fn run_restack_prepare(a: RestackPrepareArgs) -> Result<u8> {
     restack_finish(
         a.json,
         "restack prepare",
-        restack_apply::prepare(&dir, &a.branch, &a.onto, &a.file),
+        restack_apply::prepare(&dir, &a.branch, &a.onto, &a.out),
     )
 }
 
@@ -1118,7 +1118,7 @@ fn run_restack_apply(a: RestackApplyArgs) -> Result<u8> {
         return Err(Error::usage("restack apply requires --yes"));
     }
     let dir = restack_dir(a.root.as_deref(), a.repo.as_deref())?;
-    restack_finish(a.json, "restack apply", restack_apply::apply(&dir, &a.file))
+    restack_finish(a.json, "restack apply", restack_apply::apply(&dir, &a.plan))
 }
 
 fn run_restack_undo(a: RestackUndoArgs) -> Result<u8> {
@@ -1126,7 +1126,7 @@ fn run_restack_undo(a: RestackUndoArgs) -> Result<u8> {
         return Err(Error::usage("restack undo requires --yes"));
     }
     let dir = restack_dir(a.root.as_deref(), a.repo.as_deref())?;
-    restack_finish(a.json, "restack undo", restack_apply::undo(&dir, &a.file))
+    restack_finish(a.json, "restack undo", restack_apply::undo(&dir, &a.plan))
 }
 
 const OPLOG_HELP: &str = "\
