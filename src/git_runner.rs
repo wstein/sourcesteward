@@ -369,14 +369,10 @@ pub enum WorkspaceOp {
         tree: Hex40,
         index: Option<PathBuf>,
     },
-    /// `git diff -U0 --find-renames HEAD`. Exit 1 (differences) is success.
+    /// `git diff -U0 --find-renames --exit-code HEAD`. Exit 1 (differences) is success.
     DiffWorktreeU0,
-    /// `git diff --summary HEAD`. Exit 1 is success.
+    /// `git diff --summary --exit-code HEAD`. Exit 1 (differences) is success.
     DiffSummary,
-    /// `git diff --numstat HEAD -- <path>`. Exit 1 is success.
-    DiffNumstat {
-        path: BlamePath,
-    },
     LsFilesStage {
         path: BlamePath,
     },
@@ -534,6 +530,7 @@ impl WorkspaceOp {
                 "--find-renames",
                 "--no-ext-diff",
                 "--no-textconv",
+                "--exit-code",
                 "HEAD",
             ]),
             Self::DiffSummary => v(&[
@@ -544,19 +541,8 @@ impl WorkspaceOp {
                 "--summary",
                 "--no-ext-diff",
                 "--no-textconv",
+                "--exit-code",
                 "HEAD",
-            ]),
-            Self::DiffNumstat { path } => v(&[
-                "diff",
-                "--no-color",
-                "--src-prefix=a/",
-                "--dst-prefix=b/",
-                "--numstat",
-                "--no-ext-diff",
-                "--no-textconv",
-                "HEAD",
-                "--",
-                path.as_str(),
             ]),
             Self::LsFilesStage { path } => v(&["ls-files", "-s", "-z", "--", path.as_str()]),
             Self::LsFilesOthers => v(&["ls-files", "--others", "--exclude-standard", "-z"]),
@@ -904,11 +890,9 @@ impl Op {
             | Op::FetchOriginPrune { .. }
             | Op::FetchOriginNoPruneTags
             | Op::FetchPullHead { .. } => &[],
-            Op::Workspace(
-                WorkspaceOp::DiffWorktreeU0
-                | WorkspaceOp::DiffSummary
-                | WorkspaceOp::DiffNumstat { .. },
-            ) => HUNK_DIFF_LEADING,
+            Op::Workspace(WorkspaceOp::DiffWorktreeU0 | WorkspaceOp::DiffSummary) => {
+                HUNK_DIFF_LEADING
+            }
             Op::Workspace(_) => WORKSPACE_LEADING,
             Op::BlameLines { .. } => {
                 &["--literal-pathspecs", "-c", "core.attributesFile=/dev/null"]
@@ -1587,11 +1571,7 @@ impl Runner {
         );
         let diff_differences = matches!(
             op,
-            Op::Workspace(
-                WorkspaceOp::DiffWorktreeU0
-                    | WorkspaceOp::DiffSummary
-                    | WorkspaceOp::DiffNumstat { .. }
-            )
+            Op::Workspace(WorkspaceOp::DiffWorktreeU0 | WorkspaceOp::DiffSummary)
         ) && status.code() == Some(1);
         if status.success() || diff_differences {
             return Ok(Output { stdout, stderr });
