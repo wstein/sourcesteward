@@ -362,6 +362,46 @@ are separate updates with guarded rollback on an index publication error.
 An interruption between the updates can leave the new ref with the old
 index. Inspect the branch and index before retrying after such an interruption.
 
+### Hunks from the work tree
+
+`stw workspace commit-plan --list-hunks --source worktree` lists the work tree
+against HEAD as one JSON document (`command` is `hunk-select list`). Optional
+paths limit that list. `--source index` is refused: hunk selection reads the
+work tree. Repeat `--hunk ID` to bind a plan to the branch tip, the work-tree
+blob, the index entry and the HEAD blob. `--hunk` together with paths is
+refused (`hunk-and-paths`). Apply that plan with the existing
+`stw workspace commit-apply PLAN --message MESSAGE`. The apply builds the
+commit in a temporary index, moves the branch by compare-and-swap, and updates
+the real index only for the selected paths. A stale plan is refused and leaves
+the branch, the index and the work tree unchanged (`stale-branch`,
+`stale-worktree`, `stale-index`, and the other reasons named in the JSON).
+
+Worked example, in a disposable repository:
+
+```text
+git init -b main
+git commit --allow-empty -m base
+printf 'L01\nL02\nL03\nL04\nL05\nL06\nL07\nL08\nL09\n' > f.txt
+git add f.txt && git commit -m 'add f'
+printf 'L01\nA02\nL03\nL04\nA05\nL06\nL07\nA08\nL09\n' > f.txt
+printf 'staged\n' > staged.txt
+git add staged.txt
+printf 'keep\n' > keep.txt
+git add keep.txt && git commit -m keep -- keep.txt
+printf 'keep\nedited\n' > keep.txt
+printf 'L01\nA02\nL03\nL04\nA05\nL06\nL07\nA08\nL09\n' > f.txt
+stw workspace commit-plan --list-hunks --source worktree --json
+stw workspace commit-plan --source worktree --hunk ID1 --hunk ID2 --json > /tmp/hs-plan.json
+printf 'p\n' > parallel.txt && git add parallel.txt
+stw workspace commit-apply /tmp/hs-plan.json --message 'two hunks' --json
+```
+
+`git commit -m keep -- keep.txt` commits only `keep.txt`. Without the path,
+the staged `staged.txt` would be committed as well. After apply, `f.txt` and
+`keep.txt` bytes are unchanged, `staged.txt` and `parallel.txt` stay staged,
+and the selected hunks are not a staged reversal against the new HEAD. The
+unselected edit of `f.txt` remains in the work tree.
+
 Use `stw restack conflict-report --repo REPO --store DIR --onto REV BRANCH...`
 to save a conflicting restack plan and its available blob versions. The
 store must be outside the source repository. A second agent can run
