@@ -45,6 +45,7 @@ detection, no warning, no test).
 | `add` | binds an EXISTING GitHub repository as a project (git submodule) of the workspace, see "stw add" | the clone directory, `.gitmodules`, the index, `.git/modules`, one local commit |
 | `prove` | new, no Go counterpart: proves locally that a rewritten branch is the old one rebased and nothing else (eight checks, one `Carried-over:` line for `proved`), see "Local rebase proof" | nothing |
 | `restack plan` | port of the single-branch prediction of the Go `restack plan` plus a whole-stack preview (new): which level of a stack of branches rebases cleanly onto a new base, where a conflict arises (files) and which level only inherits it, see "Stack preview" | nothing (no ref, no file, no object) |
+| `restack prepare`, `apply`, `undo` | replay one direct local branch onto one direct local branch, move it, and move it back. See [restack apply](restack-apply.md) | the plan file, `refs/stw/restack-prepared/<id>`, `refs/stw/restack-applied/<id>`, `refs/stw/backup/<run>`, the branch. Apply runs no hooks |
 | `absorb` | new, no Go counterpart: the PLAN of folding the staged changes into the unpushed commits that own the changed lines, see "`stw absorb plan`". `--apply --plan-sum SUM` folds that plan after an op log backup; `stw oplog undo` is the way back | without `--apply`: nothing. With it: fixup objects, `refs/stw/backup/<run>/1`, the branch, the op log |
 | `ready-check` | the seven read-only conditions for a pull request | nothing |
 | `lint pr` | the commits, the text and the comments of one pull request against the machine-checkable working rules, see "PR lint" | nothing |
@@ -99,7 +100,7 @@ Runner rules (`src/git_runner.rs`):
 ## Git versions
 
 Only `src/git_runner.rs` starts `git`; everything else (status, tidy, restack plan, lint pr, review lines, the merge
-simulation, patch-id, the fast-forward and the journal of `sync`) runs in gix and needs no installed Git. Every runner call
+simulation, patch-id, the fast-forward and the journal of `sync`) runs in gix and needs no installed Git. `restack prepare` is the exception inside that command: the replay and the ref transaction are in process, and the printed range-diff is the one runner call. Every runner call
 checks `git --version` against the minimum of its `Op` (`Op::min_version`) before it starts anything; an older Git, or a
 version text that cannot be read, is refused (fail closed, `git_error: version`, result `unsupported`) with
 `stw needs Git X.Y or newer for <command> (found Z)`.
@@ -113,6 +114,7 @@ version text that cannot be read, is refused (fail closed, `git_error: version`,
 | `workspace` | 2.46 | `GIT_NO_LAZY_FETCH` prevents local checkpoint and resume from fetching missing objects | 2.46.0 |
 | `absorb` | 2.46 | `GIT_NO_LAZY_FETCH` is honored since 2.46; an older git would fetch the missing objects of a partial clone; the one call is `git blame` | 2.46.0 (backends.md of the Go repository) |
 | `review carry-over` (with and without `--fetch`), `prove` | 2.41 | `GIT_ATTR_SOURCE` (2.40 ignores it silently, so a `-diff` attribute could hide a change from `range-diff`) | 2.41.0 |
+| `restack prepare` | 2.41 | the printed `range-diff` (`--no-color --no-patch --no-notes`); apply and undo call no git | 2.41.0 |
 
 The 2.36 bound is documentary: with Git 2.35.3 no test of `add`, `sync --submodules` or `sync restore` failed (48 failures,
 all range-diff or merge-tree tests that need 2.40/2.41; calls seen: check-attr 146, reset --keep 32, reset --hard 19,
