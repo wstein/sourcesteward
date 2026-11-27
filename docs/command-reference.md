@@ -810,10 +810,11 @@ Options:
 Replay BRANCH onto ONTO and write FILE. FILE is created only when it does not exist and contains the plan id.
 The branch must be a direct local branch and must not be checked out. ONTO is a direct local branch. A merge
 commit or a conflict refuses the command and writes nothing. The replayed commits keep their author; the
-committer is user.name and user.email of the repository. author.* and committer.* overrides are refused.
-Nothing is pushed. Apply runs no hooks, and neither does this command: the replay is in process and does not
-call git commit, git rebase or git update-ref. A global Git config (diff, rebase, hooks, gpg, rerere,
-whitespace) is not read. The objects are kept by refs/stw/restack-prepared/<id>.
+committer is user.name and user.email from the Git configuration. author.* and committer.* overrides are
+refused. Nothing is pushed. Apply runs no hooks, and neither does this command: the replay is in process and
+does not call git commit, git rebase or git update-ref. The replay does not use diff, rebase, hooks, gpg,
+rerere or whitespace settings. The objects are kept by refs/stw/restack-prepared/<id>. A range-diff failure
+writes no plan file.
 Demonstration with the values of one run: docs/restack-apply.md. Apply runs no hooks.
 
 Exit codes:

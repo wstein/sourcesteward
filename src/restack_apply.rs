@@ -97,7 +97,7 @@ fn refuse_git_selectors() -> Result<(), Fail> {
 
 fn open_repo(path: &Path) -> Result<gix::Repository, Fail> {
     refuse_git_selectors()?;
-    let repo = crate::repo::open_isolated(path).map_err(|e| fail("repository", e.to_string()))?;
+    let repo = crate::repo::open_for_commit(path).map_err(|e| fail("repository", e.to_string()))?;
     if repo.object_hash() != gix::hash::Kind::Sha1 {
         return Err(fail("sha1-only", "only SHA-1 repositories supported"));
     }
@@ -168,8 +168,22 @@ fn head_branch(git_dir: &Path) -> Option<String> {
         .map(|s| s.trim().to_string())
 }
 
+fn from_config_files(meta: &gix::config::file::Metadata) -> bool {
+    use gix::config::Source;
+    matches!(
+        meta.source,
+        Source::GitInstallation
+            | Source::System
+            | Source::Git
+            | Source::User
+            | Source::Local
+            | Source::Worktree
+    )
+}
+
 fn identity_override(repo: &gix::Repository) -> bool {
     let snap = repo.config_snapshot();
+    let cfg = snap.plumbing();
     [
         "author.name",
         "author.email",
@@ -177,12 +191,12 @@ fn identity_override(repo: &gix::Repository) -> bool {
         "committer.email",
     ]
     .into_iter()
-    .any(|k| snap.string(k).is_some())
+    .any(|k| cfg.string_filter(k, from_config_files).is_some())
 }
 
 /// The branch is checked out in no worktree of this repository, and no worktree has a merge, rebase,
-/// cherry-pick, revert or bisect in progress. The repository config has `user.name` and `user.email`
-/// and no `author.*` or `committer.*` override.
+/// cherry-pick, revert or bisect in progress. `user.name` and `user.email` come from the Git config
+/// chain, and that chain has no `author.*` or `committer.*` override.
 fn inspect(repo: &gix::Repository, branch: &str) -> Result<(), Fail> {
     if identity_override(repo) {
         return Err(fail(
@@ -194,7 +208,7 @@ fn inspect(repo: &gix::Repository, branch: &str) -> Result<(), Fail> {
     replay::configured_committer(repo, now).map_err(|_| {
         fail(
             "missing-identity",
-            "missing Git identity: set user.name and user.email in the repository",
+            "missing Git identity: set user.name and user.email",
         )
     })?;
     for dir in git_dirs(repo) {
@@ -648,6 +662,13 @@ pub fn prepare(root: &Path, branch: &str, onto: &str, file: &Path) -> Result<Rep
         pairs.push(line);
     }
     persist(&repo, &mut replayed.repo)?;
+    // An empty replay (`new` is `onto`) makes `git range-diff` exit 129. A failure of a real
+    // range-diff happens before the record, the prepared ref and the plan file exist.
+    let diff = if new == onto_oid {
+        String::new()
+    } else {
+        range_diff(root, oldbase, old, onto_oid, new)?
+    };
     let mut data = Map::new();
     put(&mut data, "branch", json!(branch));
     put(&mut data, "new", json!(new.to_string()));
@@ -691,7 +712,6 @@ pub fn prepare(root: &Path, branch: &str, onto: &str, file: &Path) -> Result<Rep
             ));
         }
     }
-    let diff = range_diff(root, oldbase, old, onto_oid, new)?;
     let mut text = format!(
         "plan {id}\nbranch {branch}\nonto {onto} {onto_oid}\nold {old}\nnew {new}\nprepared {prepared}\n"
     );
