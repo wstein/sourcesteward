@@ -109,6 +109,21 @@ fn short_hash(body: &[u8]) -> String {
     crate::sha256::hex(body)[..8].to_string()
 }
 
+/// The hunk id ends with the 8 hex digits of `short_hash` over its `text`.
+fn hunk_text_matches_id(hunk: &Value) -> bool {
+    let Some(id) = hunk["id"].as_str() else {
+        return false;
+    };
+    let Some((_, hash)) = id.rsplit_once(':') else {
+        return false;
+    };
+    if hash.len() != 8 || !hash.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return false;
+    }
+    let text = hunk["text"].as_str().unwrap_or("");
+    hash == short_hash(text.as_bytes())
+}
+
 fn hunk_id(
     path: &str,
     old_start: u32,
@@ -1359,12 +1374,20 @@ pub fn apply_plan(
     if message.trim().is_empty() {
         return Err(Fail::new("empty-message", "commit message is empty", 2));
     }
-    let got_sum = plan["plan_sum"]
-        .as_str()
-        .map(str::to_string)
-        .unwrap_or_else(|| plan_sum_of(plan));
+    let Some(got_sum) = plan["plan_sum"].as_str() else {
+        return Err(Fail::new("plan-sum-required", "plan has no plan_sum", 1));
+    };
     if expected_sum.is_some_and(|sum| sum != got_sum) || plan_sum_of(plan) != got_sum {
         return Err(Fail::new("plan-sum-mismatch", "plan_sum does not match", 1));
+    }
+    for hunk in plan["selected"].as_array().cloned().unwrap_or_default() {
+        if !hunk_text_matches_id(&hunk) {
+            return Err(Fail::new(
+                "hunk-id-mismatch",
+                "hunk text does not match the id hash",
+                1,
+            ));
+        }
     }
     recheck(root, plan)?;
     let head = plan["head"].as_str().unwrap_or("").to_string();

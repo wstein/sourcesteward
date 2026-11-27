@@ -1191,6 +1191,85 @@ fn plan_sum_binds_head_and_hunk_body() {
 }
 
 #[test]
+fn plan_without_plan_sum_or_with_edited_hunk_text_is_refused() {
+    let repo = Repo::new();
+    seed(&repo);
+    let body: String = (1..10)
+        .map(|i| format!("L{i:02}\n"))
+        .collect::<String>()
+        .replace("L03\n", "X03\n");
+    repo.write("f.txt", body.as_bytes());
+    let before = fs::read(repo.path().join("f.txt")).unwrap();
+    let head = git(repo.path(), &["rev-parse", "HEAD"]);
+    let (_, listed, _) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    let id = listed["hunks"][0]["id"].as_str().unwrap();
+    let (_, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            id,
+        ],
+    );
+    assert!(plan["plan_sum"].as_str().is_some(), "{raw}");
+
+    let mut missing = plan.clone();
+    missing.as_object_mut().unwrap().remove("plan_sum");
+    let missing_path = plan_file(&repo);
+    fs::write(&missing_path, serde_json::to_string(&missing).unwrap()).unwrap();
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            missing_path.to_str().unwrap(),
+            "--message",
+            "missing sum",
+        ],
+    );
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "plan-sum-required");
+    assert_eq!(git(repo.path(), &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(repo.path().join("f.txt")).unwrap(), before);
+
+    let mut edited = plan.clone();
+    let text = edited["selected"][0]["text"].as_str().unwrap().to_string();
+    edited["selected"][0]["text"] = serde_json::json!(format!("{text}+EVIL\n"));
+    edited.as_object_mut().unwrap().remove("plan_sum");
+    let sum = stw::hunk_select::plan_sum_of(&edited);
+    edited["plan_sum"] = serde_json::json!(sum);
+    fs::write(&missing_path, serde_json::to_string(&edited).unwrap()).unwrap();
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            missing_path.to_str().unwrap(),
+            "--message",
+            "edited text",
+            "--plan-sum",
+            &sum,
+        ],
+    );
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(doc["error"]["code"], "hunk-id-mismatch");
+    assert_eq!(git(repo.path(), &["rev-parse", "HEAD"]), head);
+    assert_eq!(fs::read(repo.path().join("f.txt")).unwrap(), before);
+}
+
+#[test]
 fn path_plan_still_rejects_a_missing_path_argument() {
     let repo = Repo::new();
     seed(&repo);
