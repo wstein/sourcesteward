@@ -4,7 +4,7 @@ mod common;
 use crate::common::FixtureCommand as _;
 use std::process::{Command, Stdio};
 
-use common::{path_str, tree_snapshot, Fx};
+use common::{path_str, tree_snapshot, Fx, Stamp};
 use serde_json::Value;
 
 const CID_A: &str = "0123456789ABCDEFGHJKMNPQR";
@@ -244,18 +244,19 @@ fn change_id_flag_beats_hex_sha_collision() {
 fn range_excludes_commits_outside() {
     let fx = Fx::new();
     let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
-    let outside = fx.commit(
+    // Put CID_A on an ancestor of the excluded tip (`main`), so dropping the
+    // hidden-set check in commits_in_range would still walk it from `topic`.
+    let excluded = fx.commit(
         Some(base),
-        &[("out.txt", Some("o\n"))],
-        &msg("outside", CID_A),
+        &[("excl.txt", Some("e\n"))],
+        &msg("excluded tip", CID_A),
     );
     let tip = fx.commit(
-        Some(base),
+        Some(excluded),
         &[("in.txt", Some("i\n"))],
         &msg("inside", CID_B),
     );
-    fx.branch("main", base);
-    fx.branch("out", outside);
+    fx.branch("main", excluded);
     fx.branch("topic", tip);
 
     let (code, doc) = resolve(&path_str(&fx.path), &["main..topic"], CID_A, &[]);
@@ -419,4 +420,111 @@ fn empty_range_is_usage_error() {
         .unwrap();
     // clap refuses a missing --range before we run.
     assert_ne!(output.status.code(), Some(0));
+}
+
+#[test]
+fn ambiguous_abbreviation_is_reported() {
+    // Known colliding empty-tree commits from the #40 spike (Spike Tester identity).
+    let fx = Fx::new();
+    let stamp_a = Stamp::new("Spike Tester", "spike@example.invalid", 1_000_020_582);
+    let stamp_b = Stamp::new("Spike Tester", "spike@example.invalid", 1_000_039_360);
+    let one = fx.commit_at(None, &[], "n20582\n", stamp_a, stamp_a);
+    let two = fx.commit_at(None, &[], "n39360\n", stamp_b, stamp_b);
+    assert_eq!(one.to_string(), "265315b154219ec467e401031a47081aea52f655");
+    assert_eq!(two.to_string(), "265315ba2d5ce528b554e20c4ceb90f204c9944a");
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    fx.branch("main", base);
+
+    let (code, doc) = resolve(&path_str(&fx.path), &["main"], "265315b", &[]);
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "ambiguous");
+    assert_eq!(doc["reason"], "ambiguous-abbreviation");
+    assert!(doc["commit"].is_null());
+    let commits: std::collections::HashSet<_> = doc["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["commit"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        commits,
+        [one.to_string().as_str(), two.to_string().as_str()]
+            .into_iter()
+            .collect()
+    );
+}
+
+#[test]
+fn full_40_hex_in_range_is_exact_same() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    let tip = fx.commit(Some(base), &[("a.txt", Some("2\n"))], &msg("t", CID_A));
+    fx.branch("main", base);
+    fx.branch("topic", tip);
+
+    let (code, doc) = resolve(&path_str(&fx.path), &["main..topic"], &tip.to_string(), &[]);
+    assert_eq!(code, 0, "{doc}");
+    assert_eq!(doc["confidence"], "exact");
+    assert_eq!(doc["method"], "same");
+    assert_eq!(doc["commit"], tip.to_string());
+    assert_eq!(doc["change_id"], CID_A);
+}
+
+#[test]
+fn unknown_7_hex_and_64_hex_are_unknown_object() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    fx.branch("main", base);
+
+    let (code, doc) = resolve(&path_str(&fx.path), &["main"], "0123456", &[]);
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "none");
+    assert_eq!(doc["reason"], "unknown-object");
+
+    let (code, doc) = resolve(&path_str(&fx.path), &["main"], &"ab".repeat(32), &[]);
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "none");
+    assert_eq!(doc["reason"], "unknown-object");
+}
+
+#[test]
+fn same_change_id_on_two_commits_is_ambiguous() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    // Two spellings of one id (O/I and hyphens) land on two commits after normalisation.
+    let one = fx.commit(
+        Some(base),
+        &[("a.txt", Some("2\n"))],
+        "one\n\nChange-Id: 0G1G0G1G0GABCDEFGHJKMNPQR\n",
+    );
+    let two = fx.commit(
+        Some(one),
+        &[("b.txt", Some("b\n"))],
+        "two\n\nChange-Id: OGIGOGIGOG-abcdefghjk-mnpqr\n",
+    );
+    fx.branch("main", base);
+    fx.branch("topic", two);
+
+    let (code, doc) = resolve(
+        &path_str(&fx.path),
+        &["main..topic"],
+        "0G1G0G1G0GABCDEFGHJKMNPQR",
+        &[],
+    );
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "ambiguous");
+    assert_eq!(doc["reason"], "ambiguous");
+    assert!(doc["commit"].is_null());
+    let commits: std::collections::HashSet<_> = doc["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|c| c["commit"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        commits,
+        [one.to_string().as_str(), two.to_string().as_str()]
+            .into_iter()
+            .collect()
+    );
 }
