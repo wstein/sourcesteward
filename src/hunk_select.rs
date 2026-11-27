@@ -240,9 +240,24 @@ fn blob_hash_bytes(root: &Path, data: &[u8]) -> Result<String, Fail> {
         .to_string())
 }
 
+fn worktree_metadata(full: &Path) -> Result<Option<std::fs::Metadata>, Fail> {
+    match fs::symlink_metadata(full) {
+        Ok(meta) => Ok(Some(meta)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(Fail::new("worktree", error.to_string(), 1)),
+    }
+}
+
 fn worktree_blob(root: &Path, path: &str) -> Result<Option<String>, Fail> {
     let full = root.join(path);
-    if !full.is_file() {
+    let Some(meta) = worktree_metadata(&full)? else {
+        return Ok(None);
+    };
+    // `is_file` and `fs::read` follow a link and would hash a file outside the repository.
+    if meta.file_type().is_symlink() {
+        return Err(Fail::new("symlink", format!("refusing symlink {path}"), 1));
+    }
+    if !meta.is_file() {
         return Ok(None);
     }
     let data = fs::read(&full).map_err(|e| Fail::new("worktree", e.to_string(), 1))?;
@@ -273,6 +288,9 @@ struct RawHunk {
     body: Vec<u8>,
     file_header: Vec<u8>,
     binary: bool,
+    /// The `diff --git` line could not be parsed. The path is empty so a later hunk is not
+    /// attributed to the previous file.
+    unparsed: bool,
 }
 
 fn parse_diff_hunks(diff: &[u8]) -> Vec<RawHunk> {
@@ -300,50 +318,74 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
     while i < lines.len() {
         let line = lines[i];
         let trimmed = trim_nl(line);
-        if let Some(rest) = trimmed.strip_prefix(b"diff --git a/") {
-            if let Some(mid) = find_b_sep(rest) {
-                old_path = unquote_path(&text(&rest[..mid]));
-                new_path = unquote_path(&text(&rest[mid + 3..]));
-                path = if new_path == "/dev/null" {
-                    old_path.clone()
-                } else {
-                    new_path.clone()
-                };
-                file_header = line.to_vec();
-                i += 1;
-                let mut binary = false;
-                while i < lines.len()
-                    && !lines[i].starts_with(b"@@")
-                    && !trim_nl(lines[i]).starts_with(b"diff --git ")
-                {
-                    if lines[i].starts_with(b"Binary files ")
-                        || lines[i].starts_with(b"GIT binary patch")
-                    {
-                        binary = true;
-                    }
-                    file_header.extend_from_slice(lines[i]);
+        if trimmed.starts_with(b"diff --git ") {
+            // Drop the previous file before parsing. A header git quoted, or one we cannot
+            // read, must not keep that file's path for the next hunk.
+            path.clear();
+            old_path.clear();
+            new_path.clear();
+            file_header.clear();
+            i += 1;
+            let Some((old, new)) = parse_diff_header_paths(trimmed) else {
+                while i < lines.len() && !trim_nl(lines[i]).starts_with(b"diff --git ") {
                     i += 1;
                 }
-                if binary {
-                    hunks.push(RawHunk {
-                        path,
-                        old_path,
-                        new_path,
-                        old_start: 0,
-                        old_count: 0,
-                        new_start: 0,
-                        new_count: 0,
-                        body: Vec::new(),
-                        file_header,
-                        binary: true,
-                    });
-                    path = String::new();
-                    old_path = String::new();
-                    new_path = String::new();
-                    file_header = Vec::new();
-                }
+                hunks.push(RawHunk {
+                    path: String::new(),
+                    old_path: String::new(),
+                    new_path: String::new(),
+                    old_start: 0,
+                    old_count: 0,
+                    new_start: 0,
+                    new_count: 0,
+                    body: Vec::new(),
+                    file_header: line.to_vec(),
+                    binary: false,
+                    unparsed: true,
+                });
                 continue;
+            };
+            old_path = old;
+            new_path = new;
+            path = if new_path == "/dev/null" {
+                old_path.clone()
+            } else {
+                new_path.clone()
+            };
+            file_header = line.to_vec();
+            let mut binary = false;
+            while i < lines.len()
+                && !lines[i].starts_with(b"@@")
+                && !trim_nl(lines[i]).starts_with(b"diff --git ")
+            {
+                if lines[i].starts_with(b"Binary files ")
+                    || lines[i].starts_with(b"GIT binary patch")
+                {
+                    binary = true;
+                }
+                file_header.extend_from_slice(lines[i]);
+                i += 1;
             }
+            if binary {
+                hunks.push(RawHunk {
+                    path,
+                    old_path,
+                    new_path,
+                    old_start: 0,
+                    old_count: 0,
+                    new_start: 0,
+                    new_count: 0,
+                    body: Vec::new(),
+                    file_header,
+                    binary: true,
+                    unparsed: false,
+                });
+                path = String::new();
+                old_path = String::new();
+                new_path = String::new();
+                file_header = Vec::new();
+            }
+            continue;
         }
         if let Some((old_start, old_count, new_start, new_count)) = parse_hunk_header(trimmed) {
             let mut body = vec![line.to_vec()];
@@ -364,6 +406,9 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                 }
                 break;
             }
+            if path.is_empty() {
+                continue;
+            }
             hunks.push(RawHunk {
                 path: path.clone(),
                 old_path: old_path.clone(),
@@ -375,6 +420,7 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                 body: body.concat(),
                 file_header: file_header.clone(),
                 binary: false,
+                unparsed: false,
             });
             continue;
         }
@@ -388,9 +434,52 @@ fn trim_nl(line: &[u8]) -> &[u8] {
     line.strip_suffix(b"\r").unwrap_or(line)
 }
 
-fn find_b_sep(rest: &[u8]) -> Option<usize> {
-    let marker = b" b/";
-    rest.windows(marker.len()).rposition(|w| w == marker)
+/// The two paths of a `diff --git` line. Git quotes a non-ASCII path (`core.quotePath`),
+/// so the line is `diff --git "a/caf\303\251" "b/caf\303\251"` rather than `diff --git a/...`.
+fn parse_diff_header_paths(line: &[u8]) -> Option<(String, String)> {
+    let rest = trim_nl(line).strip_prefix(b"diff --git ")?;
+    let (old_token, rest) = split_diff_token(rest)?;
+    let rest = rest.strip_prefix(b" ")?;
+    let (new_token, rest) = split_diff_token(rest)?;
+    if !rest.is_empty() {
+        return None;
+    }
+    let old_path = side_path(old_token, "a/")?;
+    let new_path = side_path(new_token, "b/")?;
+    if old_path.is_empty() || new_path.is_empty() {
+        return None;
+    }
+    Some((old_path, new_path))
+}
+
+fn split_diff_token(input: &[u8]) -> Option<(&[u8], &[u8])> {
+    if input.first() == Some(&b'"') {
+        let mut i = 1;
+        while i < input.len() {
+            if input[i] == b'\\' {
+                i += 2;
+                continue;
+            }
+            if input[i] == b'"' {
+                return Some((&input[..=i], &input[i + 1..]));
+            }
+            i += 1;
+        }
+        return None;
+    }
+    let end = input.iter().position(|b| *b == b' ').unwrap_or(input.len());
+    if end == 0 {
+        return None;
+    }
+    Some((&input[..end], &input[end..]))
+}
+
+fn side_path(token: &[u8], prefix: &str) -> Option<String> {
+    let decoded = unquote_path(&text(token));
+    if decoded == "/dev/null" {
+        return Some(decoded);
+    }
+    decoded.strip_prefix(prefix).map(str::to_string)
 }
 
 fn parse_hunk_header(line: &[u8]) -> Option<(u32, u32, u32, u32)> {
@@ -484,7 +573,18 @@ fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
 
 fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
     let full = root.join(path);
-    if !full.is_file() {
+    let Some(meta) = worktree_metadata(&full)? else {
+        return Ok(None);
+    };
+    if meta.file_type().is_symlink() {
+        return Ok(Some(json!({
+            "refused": true,
+            "path": path,
+            "reason": "symlink",
+            "message": "untracked symlink refused",
+        })));
+    }
+    if !meta.is_file() {
         return Ok(None);
     }
     let data = fs::read(&full).map_err(|e| Fail::new("worktree", e.to_string(), 1))?;
@@ -553,6 +653,14 @@ pub fn list_hunks(root: &Path, only: &[String]) -> Result<Value, Fail> {
     let mut hunks = Vec::new();
     let diff = git(root, WorkspaceOp::DiffWorktreeU0)?;
     for raw in parse_diff_hunks(&diff) {
+        if raw.unparsed || raw.path.is_empty() {
+            refused.push(json!({
+                "path": raw.path,
+                "reason": "unparsed-diff",
+                "message": "diff header could not be parsed",
+            }));
+            continue;
+        }
         if raw.binary {
             refused.push(
                 json!({"path": raw.path, "reason": "binary", "message": "binary change refused"}),
@@ -1296,4 +1404,46 @@ pub fn plan_body(doc: &Value) -> Value {
         .filter(|p| p["command"].as_str() == Some("hunk-select plan"))
         .cloned()
         .unwrap_or_else(|| doc.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_diff_hunks;
+
+    #[test]
+    fn a_quoted_header_names_its_file_and_a_broken_header_drops_the_previous_path() {
+        let diff = concat!(
+            "diff --git a/plain.txt b/plain.txt\n",
+            "--- a/plain.txt\n",
+            "+++ b/plain.txt\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "diff --git \"a/caf\\303\\251.txt\" \"b/caf\\303\\251.txt\"\n",
+            "--- \"a/caf\\303\\251.txt\"\n",
+            "+++ \"b/caf\\303\\251.txt\"\n",
+            "@@ -1 +1 @@\n",
+            "-alt\n",
+            "+neu\n",
+            "diff --git broken\n",
+            "@@ -1 +1 @@\n",
+            "-x\n",
+            "+y\n",
+        );
+        let hunks = parse_diff_hunks(diff.as_bytes());
+        let paths: Vec<(&str, bool)> = hunks
+            .iter()
+            .map(|hunk| (hunk.path.as_str(), hunk.unparsed))
+            .collect();
+        assert_eq!(
+            paths,
+            vec![("plain.txt", false), ("café.txt", false), ("", true)]
+        );
+        assert!(
+            hunks
+                .iter()
+                .all(|hunk| hunk.path != "plain.txt" || !hunk.unparsed),
+            "the broken header must not be committed into plain.txt"
+        );
+    }
 }
