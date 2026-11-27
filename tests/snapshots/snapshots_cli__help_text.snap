@@ -19,6 +19,7 @@ Commands:
   oplog        The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
   workspace    Save and resume a local task checkpoint
   inspect      Inspect published PR changes or compare local revisions without checking them out
+  resolve      Resolve a commit hash or Change-Id to the current commit in an explicit range (read-only)
   watch        Watch GitHub activity and print transitions (read-only)
   lint         Check work products against the working rules (read-only)
   help         Print this message or the help of the given subcommand(s)
