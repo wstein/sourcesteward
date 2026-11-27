@@ -1819,6 +1819,24 @@ fn refused_reasons(doc: &Value) -> Vec<(String, String)> {
         .collect()
 }
 
+fn apply_saved(repo: &Repo, plan: &Value, message: &str) -> (u8, Value, String) {
+    let path = plan_file(repo);
+    fs::write(&path, serde_json::to_string(plan).unwrap()).unwrap();
+    let sum = plan["plan_sum"].as_str().unwrap_or("");
+    stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            path.to_str().unwrap(),
+            "--message",
+            message,
+            "--plan-sum",
+            sum,
+        ],
+    )
+}
+
 fn list(repo: &Repo) -> Value {
     let (code, doc, raw) = stw(
         repo.path(),
@@ -1894,4 +1912,59 @@ fn non_utf8_hunk_text_is_refused_at_list_time() {
             .all(|hunk| hunk["path"] != "latin1.txt"),
         "{doc}"
     );
+}
+
+#[test]
+fn a_quoted_summary_path_is_unquoted_and_a_rename_with_b_slash_keeps_both_sides() {
+    let repo = Repo::new();
+    repo.write("café", b"q\n");
+    git(repo.path(), &["add", "--", "café"]);
+    git(repo.path(), &["commit", "-m", "cafe"]);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(repo.path().join("café"), fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let doc = list(&repo);
+    assert!(
+        listed_hunks(&doc)
+            .iter()
+            .any(|hunk| hunk["kind"] == "mode" && hunk["path"] == "café"),
+        "{doc}"
+    );
+    assert!(
+        listed_hunks(&doc)
+            .iter()
+            .all(|hunk| !hunk["path"].as_str().unwrap_or("").contains("\\303")),
+        "{doc}"
+    );
+
+    let repo = Repo::new();
+    repo.write("z", b"z\n");
+    git(repo.path(), &["add", "--", "z"]);
+    git(repo.path(), &["commit", "-m", "z"]);
+    fs::create_dir_all(repo.path().join("z b/z b")).unwrap();
+    git(repo.path(), &["mv", "z", "z b/z b/z"]);
+    let doc = list(&repo);
+    let hunk = listed_hunks(&doc)
+        .into_iter()
+        .find(|hunk| hunk["kind"] == "renamed")
+        .unwrap_or_else(|| panic!("{doc}"));
+    assert_eq!(hunk["path"], "z b/z b/z", "{doc}");
+    assert_eq!(hunk["old_path"], "z", "{doc}");
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            hunk["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let (code, _, raw) = apply_saved(&repo, &plan, "rename");
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(git_bytes(repo.path(), &["show", "HEAD:z b/z b/z"]), b"z\n");
 }
