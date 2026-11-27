@@ -372,7 +372,9 @@ blob, the index entry and the HEAD blob. `--hunk` together with paths is
 refused (`hunk-and-paths`). Apply that plan with the existing
 `stw workspace commit-apply PLAN --message MESSAGE`. The apply builds the
 commit in a temporary index, moves the branch by compare-and-swap, and updates
-the real index only for the selected paths. A stale plan is refused and leaves
+the real index only for the selected paths. The plan's `plan_sum` is required
+(`plan-sum-required`). A hunk whose text does not match the 8 hex digits in its
+id is refused (`hunk-id-mismatch`). A stale plan is refused and leaves
 the branch, the index and the work tree unchanged (`stale-branch`,
 `stale-worktree`, `stale-index`, and the other reasons named in the JSON).
 A symbolic link is refused (`symlink`) and its target is not read. A path
