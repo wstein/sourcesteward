@@ -6,6 +6,7 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
@@ -940,7 +941,8 @@ fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
     }
     let lines = split_keep(&data);
     let (new_count, body) = if data.is_empty() {
-        (0u32, b"@@ -0,0 +0,0 @@\n".to_vec())
+        // `@@ -0,0 +0,0 @@` is a corrupt patch. Git's empty-file diff has no hunk.
+        (0u32, Vec::new())
     } else {
         let new_count = lines.len() as u32;
         let mut body = format!("@@ -0,0 +1,{new_count} @@\n").into_bytes();
@@ -948,10 +950,11 @@ fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
             body.push(b'+');
             body.extend_from_slice(line);
         }
-        if !data.ends_with(b"\n") && !data.ends_with(b"\r") {
-            // The marker is its own patch line. The added line keeps a newline
-            // here so `git apply` can strip it; without that newline the marker
-            // is committed as file content.
+        // The marker is its own patch line. The added line keeps a newline
+        // here so `git apply` can strip it; without that newline the marker
+        // is committed as file content. A lone CR is not a newline, so it
+        // takes this path too.
+        if !data.ends_with(b"\n") {
             if body.last() != Some(&b'\n') {
                 body.push(b'\n');
             }
@@ -959,8 +962,13 @@ fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
         }
         (new_count, body)
     };
+    let mode = if meta.permissions().mode() & 0o111 == 0 {
+        "100644"
+    } else {
+        "100755"
+    };
     let header = format!(
-        "diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n"
+        "diff --git a/{path} b/{path}\nnew file mode {mode}\n--- /dev/null\n+++ b/{path}\n"
     );
     let new_start = if new_count == 0 { 0 } else { 1 };
     Ok(Some(json!({
