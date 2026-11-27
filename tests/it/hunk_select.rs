@@ -5,29 +5,15 @@ use std::process::Command;
 
 use serde_json::Value;
 
-fn scratch() -> PathBuf {
-    let root =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../scratch/cursor-port-39/repos");
-    // The product checkout is projects/sourcesteward/.worktrees/hunk-select, so three parents
-    // is the anchorage workspace when the manifest lives there. Fall back to the env temp dir.
-    if root.starts_with("/agent") || root.exists() {
-        let _ = fs::create_dir_all(&root);
-        if !root.to_string_lossy().to_ascii_lowercase().contains("hint") {
-            return root;
-        }
-    }
-    std::env::temp_dir().join("cursor-port-39-repos")
-}
-
 struct Repo {
     dir: tempfile::TempDir,
+    plans: tempfile::TempDir,
 }
 
 impl Repo {
     fn new() -> Repo {
-        let parent = scratch();
-        fs::create_dir_all(&parent).unwrap();
-        let dir = tempfile::tempdir_in(&parent).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let plans = tempfile::tempdir().unwrap();
         git(dir.path(), &["init", "-b", "main"]);
         // commit-tree reads the repository identity. The runner drops GIT_AUTHOR_*,
         // and the Ubuntu CI image has no global user.name.
@@ -37,7 +23,7 @@ impl Repo {
             &["config", "user.email", "spike@example.invalid"],
         );
         git(dir.path(), &["commit", "--allow-empty", "-m", "base"]);
-        Repo { dir }
+        Repo { dir, plans }
     }
 
     fn path(&self) -> &Path {
@@ -104,8 +90,7 @@ fn stw_home(dir: &Path, args: &[&str], home: Option<&Path>) -> (u8, Value, Strin
 }
 
 fn plan_file(repo: &Repo) -> PathBuf {
-    let name = repo.path().file_name().unwrap().to_string_lossy();
-    repo.path().with_file_name(format!("{name}.plan.json"))
+    repo.plans.path().join("plan.json")
 }
 
 fn file_sha(path: &Path) -> String {
@@ -288,7 +273,7 @@ fn list_binary_refused_and_mode_and_rename() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|h| h["kind"] == "renamed" || h["path"] == "g.txt"));
+        .any(|h| h["kind"] == "renamed" && h["path"] == "g.txt"));
 
     git(repo.path(), &["commit", "-m", "renamed"]);
     #[cfg(unix)]
@@ -837,13 +822,7 @@ fn stale_worktree_and_index_and_unrelated_and_lock() {
         ],
     );
     assert_eq!(code, 1, "{raw}");
-    assert!(
-        matches!(
-            doc["error"]["code"].as_str(),
-            Some("stale-index" | "unrelated-staged" | "stale-worktree")
-        ),
-        "{raw}"
-    );
+    assert!(doc["error"]["code"] == "stale-index", "{raw}");
     assert_eq!(git(repo.path(), &["rev-parse", "HEAD"]), head_before);
 
     let mid: String = (1..10)
@@ -1506,7 +1485,7 @@ fn a_home_diff_config_does_not_merge_or_reprefix_hunks() {
     git(repo.path(), &["commit", "-m", "seed"]);
     let edited = body.replace("L01\n", "A01\n").replace("L20\n", "A20\n");
     repo.write("f.txt", edited.as_bytes());
-    let home = tempfile::tempdir_in(scratch()).unwrap();
+    let home = tempfile::tempdir().unwrap();
     fs::create_dir_all(home.path().join("xdg")).unwrap();
     fs::write(
         home.path().join(".gitconfig"),
@@ -1634,10 +1613,8 @@ fn apply_whitespace_config_keeps_the_committed_bytes() {
 fn a_symlink_is_not_committed_as_the_target_file() {
     let repo = Repo::new();
     seed(&repo);
-    let outside = scratch().join(format!(
-        "secret-{}",
-        repo.path().file_name().unwrap().to_string_lossy()
-    ));
+    let outside_dir = tempfile::tempdir().unwrap();
+    let outside = outside_dir.path().join("secret");
     fs::write(&outside, b"SECRET-BYTES\n").unwrap();
     std::os::unix::fs::symlink(&outside, repo.path().join("leak")).unwrap();
     repo.write("tracked", b"plain\n");
@@ -1692,7 +1669,6 @@ fn a_symlink_is_not_committed_as_the_target_file() {
         git_bytes(repo.path(), &["show", "HEAD:tracked"]),
         b"plain\n"
     );
-    let _ = fs::remove_file(&outside);
 }
 
 fn commit_one(repo: &Repo, path: &str, message: &str) -> String {
