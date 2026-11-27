@@ -325,13 +325,29 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
             old_path.clear();
             new_path.clear();
             file_header.clear();
+            file_header.extend_from_slice(line);
             i += 1;
-            let Some((old, new)) = parse_diff_header_paths(trimmed) else {
-                while i < lines.len() && !trim_nl(lines[i]).starts_with(b"diff --git ") {
-                    i += 1;
+            let mut preamble: Vec<&[u8]> = Vec::new();
+            let mut binary = false;
+            while i < lines.len()
+                && !lines[i].starts_with(b"@@")
+                && !trim_nl(lines[i]).starts_with(b"diff --git ")
+            {
+                if lines[i].starts_with(b"Binary files ")
+                    || lines[i].starts_with(b"GIT binary patch")
+                {
+                    binary = true;
                 }
+                preamble.push(lines[i]);
+                i += 1;
+            }
+            let parsed =
+                parse_diff_header_paths(trimmed).or_else(|| paths_from_preamble(&preamble));
+            let Some((old, new)) = parsed else {
+                // The running path stays empty, so a following @@ is not attributed to the
+                // previous file. The refusal still names this file when the preamble has one.
                 hunks.push(RawHunk {
-                    path: String::new(),
+                    path: path_hint_from_preamble(&preamble),
                     old_path: String::new(),
                     new_path: String::new(),
                     old_start: 0,
@@ -339,7 +355,7 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                     new_start: 0,
                     new_count: 0,
                     body: Vec::new(),
-                    file_header: line.to_vec(),
+                    file_header: std::mem::take(&mut file_header),
                     binary: false,
                     unparsed: true,
                 });
@@ -352,19 +368,8 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
             } else {
                 new_path.clone()
             };
-            file_header = line.to_vec();
-            let mut binary = false;
-            while i < lines.len()
-                && !lines[i].starts_with(b"@@")
-                && !trim_nl(lines[i]).starts_with(b"diff --git ")
-            {
-                if lines[i].starts_with(b"Binary files ")
-                    || lines[i].starts_with(b"GIT binary patch")
-                {
-                    binary = true;
-                }
-                file_header.extend_from_slice(lines[i]);
-                i += 1;
+            for pre in &preamble {
+                file_header.extend_from_slice(pre);
             }
             if binary {
                 hunks.push(RawHunk {
@@ -436,8 +441,17 @@ fn trim_nl(line: &[u8]) -> &[u8] {
 
 /// The two paths of a `diff --git` line. Git quotes a non-ASCII path (`core.quotePath`),
 /// so the line is `diff --git "a/caf\303\251" "b/caf\303\251"` rather than `diff --git a/...`.
+/// A space is not quoted: `diff --git a/x y.txt b/x y.txt`. Without a rename both sides are
+/// the same path, so the split is the one where `a/P` and `b/P` are equal.
 fn parse_diff_header_paths(line: &[u8]) -> Option<(String, String)> {
     let rest = trim_nl(line).strip_prefix(b"diff --git ")?;
+    if rest.contains(&b'"') {
+        return parse_quoted_header_paths(rest);
+    }
+    split_where_sides_match(rest)
+}
+
+fn parse_quoted_header_paths(rest: &[u8]) -> Option<(String, String)> {
     let (old_token, rest) = split_diff_token(rest)?;
     let rest = rest.strip_prefix(b" ")?;
     let (new_token, rest) = split_diff_token(rest)?;
@@ -450,6 +464,103 @@ fn parse_diff_header_paths(line: &[u8]) -> Option<(String, String)> {
         return None;
     }
     Some((old_path, new_path))
+}
+
+fn split_where_sides_match(rest: &[u8]) -> Option<(String, String)> {
+    let marker = b" b/";
+    let mut from = 0;
+    while from + marker.len() <= rest.len() {
+        let Some(rel) = rest[from..]
+            .windows(marker.len())
+            .position(|window| window == marker)
+        else {
+            break;
+        };
+        let at = from + rel;
+        let left = &rest[..at];
+        let right = &rest[at + 1..];
+        if let (Some(old), Some(new)) = (side_path(left, "a/"), side_path(right, "b/")) {
+            if !old.is_empty() && old == new {
+                return Some((old, new));
+            }
+        }
+        from = at + 1;
+    }
+    None
+}
+
+/// A rename's `diff --git` line has two different paths, so the equal-side split does not
+/// apply. `rename from` / `rename to` name them; `---` / `+++` do when those lines are absent.
+fn paths_from_preamble(lines: &[&[u8]]) -> Option<(String, String)> {
+    let (from, to, minus, plus) = preamble_names(lines);
+    if let (Some(old), Some(new)) = (from, to) {
+        if !old.is_empty() && !new.is_empty() {
+            return Some((old, new));
+        }
+    }
+    match (minus, plus) {
+        (Some(old), Some(new)) if !old.is_empty() && !new.is_empty() => Some((old, new)),
+        _ => None,
+    }
+}
+
+fn path_hint_from_preamble(lines: &[&[u8]]) -> String {
+    let (from, to, minus, plus) = preamble_names(lines);
+    for candidate in [to, plus, from, minus].into_iter().flatten() {
+        if !candidate.is_empty() && candidate != "/dev/null" {
+            return candidate;
+        }
+    }
+    String::new()
+}
+
+fn preamble_names(
+    lines: &[&[u8]],
+) -> (
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+) {
+    let mut from = None;
+    let mut to = None;
+    let mut minus = None;
+    let mut plus = None;
+    for line in lines {
+        let trimmed = trim_nl(line);
+        if let Some(rest) = trimmed.strip_prefix(b"rename from ") {
+            from = Some(unquote_path(&text(rest)));
+        } else if let Some(rest) = trimmed.strip_prefix(b"rename to ") {
+            to = Some(unquote_path(&text(rest)));
+        } else if let Some(rest) = trimmed.strip_prefix(b"--- ") {
+            minus = decode_ab_path(rest);
+        } else if let Some(rest) = trimmed.strip_prefix(b"+++ ") {
+            plus = decode_ab_path(rest);
+        }
+    }
+    (from, to, minus, plus)
+}
+
+fn decode_ab_path(rest: &[u8]) -> Option<String> {
+    let token = if rest.first() == Some(&b'"') {
+        split_diff_token(rest)
+            .map(|(token, _)| token)
+            .unwrap_or(rest)
+    } else {
+        match rest.iter().position(|byte| *byte == b'\t') {
+            Some(at) => &rest[..at],
+            None => rest,
+        }
+    };
+    let decoded = unquote_path(&text(token));
+    if decoded == "/dev/null" {
+        return Some(decoded);
+    }
+    decoded
+        .strip_prefix("a/")
+        .or_else(|| decoded.strip_prefix("b/"))
+        .filter(|path| !path.is_empty())
+        .map(str::to_string)
 }
 
 fn split_diff_token(input: &[u8]) -> Option<(&[u8], &[u8])> {
@@ -1444,6 +1555,57 @@ mod tests {
                 .iter()
                 .all(|hunk| hunk.path != "plain.txt" || !hunk.unparsed),
             "the broken header must not be committed into plain.txt"
+        );
+    }
+
+    #[test]
+    fn a_space_in_the_path_splits_where_both_sides_match() {
+        let diff = concat!(
+            "diff --git a/x y.txt b/x y.txt\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "diff --git a/tabbed y.txt b/tabbed y.txt\n",
+            "--- a/tabbed y.txt\t\n",
+            "+++ b/tabbed y.txt\t\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "diff --git a/x b/y.txt b/x b/y.txt\n",
+            "--- a/x b/y.txt\t\n",
+            "+++ b/x b/y.txt\t\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "diff --git a/old name.txt b/new name.txt\n",
+            "similarity index 80%\n",
+            "rename from old name.txt\n",
+            "rename to new name.txt\n",
+            "--- a/old name.txt\t\n",
+            "+++ b/new name.txt\t\n",
+            "@@ -1 +1 @@\n",
+            "-old\n",
+            "+new\n",
+            "diff --git nonsense\n",
+            "--- a/kept name.txt\t\n",
+            "@@ -1 +1 @@\n",
+            "-x\n",
+            "+y\n",
+        );
+        let hunks = parse_diff_hunks(diff.as_bytes());
+        let found: Vec<(&str, &str, bool)> = hunks
+            .iter()
+            .map(|hunk| (hunk.path.as_str(), hunk.old_path.as_str(), hunk.unparsed))
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("x y.txt", "x y.txt", false),
+                ("tabbed y.txt", "tabbed y.txt", false),
+                ("x b/y.txt", "x b/y.txt", false),
+                ("new name.txt", "old name.txt", false),
+                ("kept name.txt", "", true),
+            ]
         );
     }
 }
