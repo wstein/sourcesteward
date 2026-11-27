@@ -15,7 +15,7 @@ Commands:
   review       Review helpers (read-only)
   prove        Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
   absorb       Plan where the staged changes would go: the unpushed commit that owns each hunk (read-only, writes nothing)
-  restack      Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
+  restack      Predict a rebase (`plan`, read-only), or replay one branch (`prepare`, `apply`, `undo`)
   oplog        The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
   workspace    Save and resume a local task checkpoint
   inspect      Inspect published PR changes or compare local revisions without checking them out

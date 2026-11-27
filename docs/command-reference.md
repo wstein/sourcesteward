@@ -18,7 +18,7 @@ Commands:
   review       Review helpers (read-only)
   prove        Prove locally that a rewritten branch is the old one rebased and nothing else (read-only, no network)
   absorb       Plan where the staged changes would go: the unpushed commit that owns each hunk (read-only, writes nothing)
-  restack      Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
+  restack      Predict a rebase (`plan`, read-only), or replay one branch (`prepare`, `apply`, `undo`)
   oplog        The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
   workspace    Save and resume a local task checkpoint
   inspect      Inspect published PR changes or compare local revisions without checking them out
@@ -698,12 +698,15 @@ For AI agents: https://wstein.github.io/sourcesteward/agents/
 ## `stw restack`
 
 ```text
-Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
+Predict a rebase (`plan`, read-only), or replay one branch (`prepare`, `apply`, `undo`)
 
 Usage: stw restack <COMMAND>
 
 Commands:
   plan             Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
+  prepare          Replay one local branch onto another and write a plan file. The branch is not moved
+  apply            Move the branch recorded in a plan file, after a backup ref
+  undo             Move the branch back, using the apply receipt and its backup ref
   conflict-report  Persist a conflicting plan and its available blob versions as versioned JSON
   show-conflict    Reopen a stored conflict report and check its input revisions
   help             Print this message or the help of the given subcommand(s)
@@ -770,6 +773,133 @@ Exit codes:
   0  plan: clean
   1  conflicts, refused or unknown (the plan is printed)
   2  usage error (also: no --onto and no default branch, a branch that does not exist)
+
+For AI agents: https://wstein.github.io/sourcesteward/agents/
+```
+
+## `stw restack prepare`
+
+```text
+Replay one local branch onto another and write a plan file. The branch is not moved
+
+Usage: stw restack prepare [OPTIONS] <BRANCH> <ONTO> <FILE>
+
+Arguments:
+  <BRANCH>
+          Local branch to replay. It must not be checked out
+
+  <ONTO>
+          Local branch to replay onto
+
+  <FILE>
+          Plan file to create. It is never overwritten
+
+Options:
+      --json
+          Print one JSON object instead of text
+
+      --root <PATH>
+          Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+
+      --repo <NAME>
+          Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Replay BRANCH onto ONTO and write FILE. FILE is created only when it does not exist and contains the plan id.
+The branch must be a direct local branch and must not be checked out. ONTO is a direct local branch. A merge
+commit or a conflict refuses the command and writes nothing. The replayed commits keep their author; the
+committer is user.name and user.email of the repository. author.* and committer.* overrides are refused.
+Nothing is pushed. Apply runs no hooks, and neither does this command: the replay is in process and does not
+call git commit, git rebase or git update-ref. A global Git config (diff, rebase, hooks, gpg, rerere,
+whitespace) is not read. The objects are kept by refs/stw/restack-prepared/<id>.
+Demonstration with the values of one run: docs/restack-apply.md. Apply runs no hooks.
+
+Exit codes:
+  0  the plan file was written
+  1  refused (the reason is printed; a plan file that could not be created leaves the prepared ref)
+  2  usage error
+
+For AI agents: https://wstein.github.io/sourcesteward/agents/
+```
+
+## `stw restack apply`
+
+```text
+Move the branch recorded in a plan file, after a backup ref
+
+Usage: stw restack apply [OPTIONS] --yes <FILE>
+
+Arguments:
+  <FILE>
+          Plan file written by prepare
+
+Options:
+      --json
+          Print one JSON object instead of text
+
+      --yes
+          Confirm the branch update
+
+      --root <PATH>
+          Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+
+      --repo <NAME>
+          Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Move the branch in FILE to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
+that moved since the plan is left at the newer value and nothing is written. The old tip is stored at
+refs/stw/backup/<run>/1 in the same counter and retention as oplog undo, then one ref transaction checks the
+onto tip and the prepared record and moves the branch. Apply runs no hooks. A failure after the backup says
+that the counter, the backup refs and retention may remain, and that the transaction outcome is unknown.
+
+Exit codes:
+  0  the branch was moved
+  1  refused, or the outcome of the transaction is unknown
+  2  usage error (also: --yes missing)
+
+For AI agents: https://wstein.github.io/sourcesteward/agents/
+```
+
+## `stw restack undo`
+
+```text
+Move the branch back, using the apply receipt and its backup ref
+
+Usage: stw restack undo [OPTIONS] --yes <FILE>
+
+Arguments:
+  <FILE>
+          Plan file whose apply receipt is undone
+
+Options:
+      --json
+          Print one JSON object instead of text
+
+      --yes
+          Confirm the branch update
+
+      --root <PATH>
+          Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+
+      --repo <NAME>
+          Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+Move the branch in FILE back to the tip recorded at apply. --yes is required. The branch must still be at the
+applied tip and the backup ref from that apply must still hold the old tip. Undo writes its own backup first,
+including the old tip, and then moves the branch. A branch that moved since apply is left as it is.
+
+Exit codes:
+  0  the branch was moved back
+  1  refused, or the outcome of the transaction is unknown
+  2  usage error (also: --yes missing)
 
 For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```

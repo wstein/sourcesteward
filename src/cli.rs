@@ -13,8 +13,8 @@ use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
     absorb, add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove,
-    restack_plan, status, status_all, status_review, status_stats, sync, tidy, tidy_apply,
-    tidy_history, tidy_similarity,
+    restack_apply, restack_plan, status, status_all, status_review, status_stats, sync, tidy,
+    tidy_apply, tidy_history, tidy_similarity,
 };
 
 const EXIT_CODES: &str = "\
@@ -74,7 +74,7 @@ enum Command {
     /// Plan where the staged changes would go: the unpushed commit that owns each hunk (read-only, writes nothing)
     #[command(after_help = ABSORB_HELP)]
     Absorb(AbsorbArgs),
-    /// Predict a rebase of a stack of branches before it happens (read-only, writes nothing)
+    /// Predict a rebase (`plan`, read-only), or replay one branch (`prepare`, `apply`, `undo`)
     #[command(subcommand_required = true, arg_required_else_help = true, after_help = EXIT_CODES)]
     Restack {
         #[command(subcommand)]
@@ -336,6 +336,15 @@ enum RestackCommand {
     /// Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
     #[command(after_help = RESTACK_PLAN_HELP)]
     Plan(RestackPlanArgs),
+    /// Replay one local branch onto another and write a plan file. The branch is not moved
+    #[command(after_help = RESTACK_PREPARE_HELP)]
+    Prepare(RestackPrepareArgs),
+    /// Move the branch recorded in a plan file, after a backup ref
+    #[command(after_help = RESTACK_APPLY_HELP)]
+    Apply(RestackApplyArgs),
+    /// Move the branch back, using the apply receipt and its backup ref
+    #[command(after_help = RESTACK_UNDO_HELP)]
+    Undo(RestackUndoArgs),
     /// Persist a conflicting plan and its available blob versions as versioned JSON
     ConflictReport {
         /// Repository or worktree path
@@ -966,6 +975,157 @@ fn run_restack_plan(a: RestackPlanArgs) -> Result<u8> {
     } else {
         exit::FAILED
     })
+}
+
+const RESTACK_PREPARE_HELP: &str = "\
+Replay BRANCH onto ONTO and write FILE. FILE is created only when it does not exist and contains the plan id.
+The branch must be a direct local branch and must not be checked out. ONTO is a direct local branch. A merge
+commit or a conflict refuses the command and writes nothing. The replayed commits keep their author; the
+committer is user.name and user.email of the repository. author.* and committer.* overrides are refused.
+Nothing is pushed. Apply runs no hooks, and neither does this command: the replay is in process and does not
+call git commit, git rebase or git update-ref. A global Git config (diff, rebase, hooks, gpg, rerere,
+whitespace) is not read. The objects are kept by refs/stw/restack-prepared/<id>.
+Demonstration with the values of one run: docs/restack-apply.md. Apply runs no hooks.
+
+Exit codes:
+  0  the plan file was written
+  1  refused (the reason is printed; a plan file that could not be created leaves the prepared ref)
+  2  usage error";
+
+const RESTACK_APPLY_HELP: &str = "\
+Move the branch in FILE to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
+that moved since the plan is left at the newer value and nothing is written. The old tip is stored at
+refs/stw/backup/<run>/1 in the same counter and retention as oplog undo, then one ref transaction checks the
+onto tip and the prepared record and moves the branch. Apply runs no hooks. A failure after the backup says
+that the counter, the backup refs and retention may remain, and that the transaction outcome is unknown.
+
+Exit codes:
+  0  the branch was moved
+  1  refused, or the outcome of the transaction is unknown
+  2  usage error (also: --yes missing)";
+
+const RESTACK_UNDO_HELP: &str = "\
+Move the branch in FILE back to the tip recorded at apply. --yes is required. The branch must still be at the
+applied tip and the backup ref from that apply must still hold the old tip. Undo writes its own backup first,
+including the old tip, and then moves the branch. A branch that moved since apply is left as it is.
+
+Exit codes:
+  0  the branch was moved back
+  1  refused, or the outcome of the transaction is unknown
+  2  usage error (also: --yes missing)";
+
+#[derive(Args)]
+struct RestackPrepareArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// Local branch to replay. It must not be checked out
+    #[arg(value_name = "BRANCH")]
+    branch: String,
+    /// Local branch to replay onto
+    #[arg(value_name = "ONTO")]
+    onto: String,
+    /// Plan file to create. It is never overwritten
+    #[arg(value_name = "FILE")]
+    file: PathBuf,
+}
+
+#[derive(Args)]
+struct RestackApplyArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Confirm the branch update
+    #[arg(long, required = true)]
+    yes: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// Plan file written by prepare
+    #[arg(value_name = "FILE")]
+    file: PathBuf,
+}
+
+#[derive(Args)]
+struct RestackUndoArgs {
+    /// Print one JSON object instead of text
+    #[arg(long)]
+    json: bool,
+    /// Confirm the branch update
+    #[arg(long, required = true)]
+    yes: bool,
+    /// Workspace root [default: repository or superproject of the current directory, else $STW_ROOT]
+    #[arg(long, value_name = "PATH")]
+    root: Option<PathBuf>,
+    /// Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
+    #[arg(long = "repo", value_name = "NAME")]
+    repo: Option<String>,
+    /// Plan file whose apply receipt is undone
+    #[arg(value_name = "FILE")]
+    file: PathBuf,
+}
+
+fn restack_finish(
+    json: bool,
+    command: &str,
+    result: std::result::Result<restack_apply::Report, restack_apply::Fail>,
+) -> Result<u8> {
+    match result {
+        Ok(report) => {
+            if json {
+                print_json(&report.value);
+            } else {
+                print!("{}", report.text);
+            }
+            Ok(exit::OK)
+        }
+        Err(f) => {
+            eprintln!("refused: {}", f.message);
+            if json {
+                print_json(&f.to_json(command));
+            }
+            Ok(exit::FAILED)
+        }
+    }
+}
+
+fn restack_dir(root: Option<&Path>, repo_name: Option<&str>) -> Result<PathBuf> {
+    let r = selected_repo(root, repo_name)?;
+    Ok(std::fs::canonicalize(&r.path).unwrap_or(r.path))
+}
+
+fn run_restack_prepare(a: RestackPrepareArgs) -> Result<u8> {
+    let dir = restack_dir(a.root.as_deref(), a.repo.as_deref())?;
+    restack_finish(
+        a.json,
+        "restack prepare",
+        restack_apply::prepare(&dir, &a.branch, &a.onto, &a.file),
+    )
+}
+
+fn run_restack_apply(a: RestackApplyArgs) -> Result<u8> {
+    if !a.yes {
+        return Err(Error::usage("restack apply requires --yes"));
+    }
+    let dir = restack_dir(a.root.as_deref(), a.repo.as_deref())?;
+    restack_finish(a.json, "restack apply", restack_apply::apply(&dir, &a.file))
+}
+
+fn run_restack_undo(a: RestackUndoArgs) -> Result<u8> {
+    if !a.yes {
+        return Err(Error::usage("restack undo requires --yes"));
+    }
+    let dir = restack_dir(a.root.as_deref(), a.repo.as_deref())?;
+    restack_finish(a.json, "restack undo", restack_apply::undo(&dir, &a.file))
 }
 
 const OPLOG_HELP: &str = "\
@@ -2434,6 +2594,15 @@ fn run(command: Command) -> Result<u8> {
         Command::Restack {
             command: RestackCommand::Plan(a),
         } => run_restack_plan(a),
+        Command::Restack {
+            command: RestackCommand::Prepare(a),
+        } => run_restack_prepare(a),
+        Command::Restack {
+            command: RestackCommand::Apply(a),
+        } => run_restack_apply(a),
+        Command::Restack {
+            command: RestackCommand::Undo(a),
+        } => run_restack_undo(a),
         Command::Restack {
             command:
                 RestackCommand::ConflictReport {
