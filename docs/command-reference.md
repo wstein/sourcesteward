@@ -704,7 +704,7 @@ Usage: stw restack <COMMAND>
 
 Commands:
   plan             Which level of the stack rebases cleanly onto the new base, where a conflict arises (files) and which level only inherits it
-  prepare          Replay one local branch onto another and write a plan file. The branch is not moved
+  prepare          Replay one local branch onto --onto and write --out. The branch is not moved
   apply            Move the branch recorded in a plan file, after a backup ref
   undo             Move the branch back, using the apply receipt and its backup ref
   conflict-report  Persist a conflicting plan and its available blob versions as versioned JSON
@@ -780,19 +780,13 @@ For AI agents: https://wstein.github.io/sourcesteward/agents/
 ## `stw restack prepare`
 
 ```text
-Replay one local branch onto another and write a plan file. The branch is not moved
+Replay one local branch onto --onto and write --out. The branch is not moved
 
-Usage: stw restack prepare [OPTIONS] <BRANCH> <ONTO> <FILE>
+Usage: stw restack prepare [OPTIONS] --onto <ONTO> --out <PLAN> <BRANCH>
 
 Arguments:
   <BRANCH>
           Local branch to replay. It must not be checked out
-
-  <ONTO>
-          Local branch to replay onto
-
-  <FILE>
-          Plan file to create. It is never overwritten
 
 Options:
       --json
@@ -804,10 +798,16 @@ Options:
       --repo <NAME>
           Repository of the workspace (name as printed by stw) [default: the repository of the current directory]
 
+      --onto <ONTO>
+          Local branch to replay onto
+
+      --out <PLAN>
+          Plan file to create. It is never overwritten
+
   -h, --help
           Print help (see a summary with '-h')
 
-Replay BRANCH onto ONTO and write FILE. FILE is created only when it does not exist and contains the plan id.
+Replay BRANCH onto --onto ONTO and write --out PLAN. PLAN is created only when it does not exist and contains the plan id.
 The branch must be a direct local branch and must not be checked out. ONTO is a direct local branch. A merge
 commit or a conflict refuses the command and writes nothing. The replayed commits keep their author; the
 committer is user.name and user.email from the Git configuration. author.* and committer.* overrides are
@@ -830,10 +830,10 @@ For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```text
 Move the branch recorded in a plan file, after a backup ref
 
-Usage: stw restack apply [OPTIONS] --yes <FILE>
+Usage: stw restack apply [OPTIONS] --yes <PLAN>
 
 Arguments:
-  <FILE>
+  <PLAN>
           Plan file written by prepare
 
 Options:
@@ -852,7 +852,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-Move the branch in FILE to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
+Move the branch in PLAN to the replayed tip. --yes is required. Both tips are checked again; a branch or onto
 that moved since the plan is left at the newer value and nothing is written. The old tip is stored at
 refs/stw/backup/<run>/1 in the same counter and retention as oplog undo, then one ref transaction checks the
 onto tip and the prepared record and moves the branch. Apply runs no hooks. A failure after the backup says
@@ -871,10 +871,10 @@ For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```text
 Move the branch back, using the apply receipt and its backup ref
 
-Usage: stw restack undo [OPTIONS] --yes <FILE>
+Usage: stw restack undo [OPTIONS] --yes <PLAN>
 
 Arguments:
-  <FILE>
+  <PLAN>
           Plan file whose apply receipt is undone
 
 Options:
@@ -893,7 +893,7 @@ Options:
   -h, --help
           Print help (see a summary with '-h')
 
-Move the branch in FILE back to the tip recorded at apply. --yes is required. The branch must still be at the
+Move the branch in PLAN back to the tip recorded at apply. --yes is required. The branch must still be at the
 applied tip and the backup ref from that apply must still hold the old tip. Undo writes its own backup first,
 including the old tip, and then moves the branch. A branch that moved since apply is left as it is.
 

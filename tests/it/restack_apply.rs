@@ -131,7 +131,9 @@ fn prepare(repo: &Repo) -> (i32, String, String) {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
     )
@@ -362,7 +364,9 @@ fn an_operation_in_progress_and_a_symbolic_branch_are_refused() {
             "restack",
             "prepare",
             "alias",
+            "--onto",
             "main",
+            "--out",
             &repo.plan_file().to_string_lossy(),
         ],
     );
@@ -660,7 +664,9 @@ fn home_config_and_hooks_do_not_affect_the_replay() {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
         &[("HOME", &home.to_string_lossy())],
@@ -690,7 +696,9 @@ fn json_names_the_command_and_a_missing_yes_is_usage() {
             "prepare",
             "--json",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
     );
@@ -715,6 +723,17 @@ fn json_names_the_command_and_a_missing_yes_is_usage() {
     assert_eq!(v["schema_version"], 1);
     let (code, _, _) = stw(repo.path(), &["restack", "undo", &file.to_string_lossy()]);
     assert_eq!(code, 2);
+    let (code, _, err) = stw(
+        repo.path(),
+        &[
+            "restack",
+            "prepare",
+            "topic",
+            "main",
+            &file.to_string_lossy(),
+        ],
+    );
+    assert_eq!(code, 2, "{err}");
 }
 
 #[test]
@@ -726,7 +745,9 @@ fn a_branch_name_with_a_space_is_refused_and_a_non_ascii_name_is_accepted() {
             "restack",
             "prepare",
             "my branch",
+            "--onto",
             "main",
+            "--out",
             &repo.plan_file().to_string_lossy(),
         ],
     );
@@ -739,7 +760,9 @@ fn a_branch_name_with_a_space_is_refused_and_a_non_ascii_name_is_accepted() {
             "restack",
             "prepare",
             "töpíc",
+            "--onto",
             "main",
+            "--out",
             &repo.dir.path().join("plan-unicode").to_string_lossy(),
         ],
     );
@@ -948,7 +971,9 @@ fn a_user_config_identity_is_enough_and_an_author_override_is_refused() {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
         &home,
@@ -982,7 +1007,9 @@ fn a_user_config_identity_is_enough_and_an_author_override_is_refused() {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
         &home,
@@ -1016,7 +1043,9 @@ fn an_upstream_branch_prepares_and_a_range_diff_failure_writes_nothing() {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &plan.to_string_lossy(),
         ],
     );
@@ -1056,7 +1085,9 @@ fn an_upstream_branch_prepares_and_a_range_diff_failure_writes_nothing() {
             "restack",
             "prepare",
             "topic",
+            "--onto",
             "main",
+            "--out",
             &file.to_string_lossy(),
         ],
         &[("PATH", &path)],
