@@ -29,6 +29,13 @@ impl Repo {
         fs::create_dir_all(&parent).unwrap();
         let dir = tempfile::tempdir_in(&parent).unwrap();
         git(dir.path(), &["init", "-b", "main"]);
+        // commit-tree reads the repository identity. The runner drops GIT_AUTHOR_*,
+        // and the Ubuntu CI image has no global user.name.
+        git(dir.path(), &["config", "user.name", "Spike Tester"]);
+        git(
+            dir.path(),
+            &["config", "user.email", "spike@example.invalid"],
+        );
         git(dir.path(), &["commit", "--allow-empty", "-m", "base"]);
         Repo { dir }
     }
