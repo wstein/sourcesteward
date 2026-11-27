@@ -608,6 +608,90 @@ fn worktree_apply_surfaces_tip_drift_and_keeps_pinned_base() {
 }
 
 #[test]
+fn worktree_apply_reports_no_drift_when_the_revision_still_resolves_to_the_pin() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("steady workspace");
+    git(root, &["branch", "steady"]);
+    let report = run(
+        root,
+        &["worktree-plan", "steady", target.to_str().unwrap()],
+        0,
+    );
+    let plan_path = root.with_file_name("steady-plan.json");
+    fs::write(&plan_path, serde_json::to_vec(&report["plan"]).unwrap()).unwrap();
+    let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
+    assert_eq!(report["created"], true);
+    assert_eq!(report["tip_drift"], false);
+    assert!(report.get("notices").is_none());
+    assert!(report.get("revision_tip").is_none());
+}
+
+#[test]
+fn worktree_apply_notices_a_revision_that_no_longer_resolves() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("gone workspace");
+    let base_text = fx.repo().head_id().unwrap().to_string();
+    git(root, &["branch", "short-lived"]);
+    let report = run(
+        root,
+        &["worktree-plan", "short-lived", target.to_str().unwrap()],
+        0,
+    );
+    git(root, &["branch", "-D", "short-lived"]);
+    let plan_path = root.with_file_name("gone-plan.json");
+    fs::write(&plan_path, serde_json::to_vec(&report["plan"]).unwrap()).unwrap();
+    let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
+    assert_eq!(report["created"], true);
+    assert_eq!(report["tip_drift"], true);
+    assert_eq!(report["revision"], "short-lived");
+    assert!(report.get("revision_tip").is_none());
+    assert_eq!(report["pinned_base"], base_text);
+    let notice = report["notices"][0].as_str().unwrap();
+    assert!(
+        notice.contains("short-lived no longer resolves") && notice.contains(&base_text),
+        "{notice}"
+    );
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]).trim(), base_text);
+}
+
+#[test]
+fn worktree_apply_text_output_names_both_tips_and_the_options() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("text workspace");
+    let base = fx.repo().head_id().unwrap().detach();
+    git(root, &["branch", "texty"]);
+    let report = run(
+        root,
+        &["worktree-plan", "texty", target.to_str().unwrap()],
+        0,
+    );
+    let later = fx.commit(Some(base), &[("mixed", Some("ahead\n"))], "ahead");
+    git(root, &["branch", "-f", "texty", &later.to_string()]);
+    let plan_path = root.with_file_name("text-plan.json");
+    fs::write(&plan_path, serde_json::to_vec(&report["plan"]).unwrap()).unwrap();
+    let result = Command::new(env!("CARGO_BIN_EXE_stw"))
+        .current_dir(root)
+        .stdin(Stdio::null())
+        .args(["workspace", "worktree-apply", plan_path.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(0), "{result:?}");
+    let text = String::from_utf8(result.stdout).unwrap();
+    let notice = text
+        .lines()
+        .find(|line| line.starts_with("notice: "))
+        .unwrap_or_else(|| panic!("{text}"));
+    assert!(notice.contains(&later.to_string()) && notice.contains(&base.to_string()));
+    assert!(
+        text.contains("worktree-plan texty") && text.contains("continue at the pinned base"),
+        "{text}"
+    );
+}
+
+#[test]
 fn worktree_apply_accepts_legacy_plans_without_revision() {
     let fx = fixture();
     let root = &fx.path;
