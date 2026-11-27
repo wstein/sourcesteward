@@ -540,12 +540,40 @@ enum PathChoice {
     Missing,
 }
 
+/// Rename lines win over the equal-side split. `diff --git a/z b/z b/z b/z` has an
+/// equal split at `z b/z`, which is not the rename `z` -> `z b/z b/z`.
 fn decide_paths(header: &[u8], preamble: &[&[u8]]) -> PathChoice {
+    if let Some(choice) = rename_choice(preamble) {
+        return choice;
+    }
     match parse_diff_header_paths(header) {
         PathChoice::Missing => paths_from_preamble(preamble)
             .map(|(old, new)| PathChoice::Paths(old, new))
             .unwrap_or(PathChoice::Missing),
         other => other,
+    }
+}
+
+fn rename_choice(lines: &[&[u8]]) -> Option<PathChoice> {
+    let mut from = None;
+    let mut to = None;
+    for line in lines {
+        let trimmed = trim_nl(line);
+        if let Some(rest) = trimmed.strip_prefix(b"rename from ") {
+            from = Some(classify_path(unquote_token(rest)));
+        } else if let Some(rest) = trimmed.strip_prefix(b"rename to ") {
+            to = Some(classify_path(unquote_token(rest)));
+        }
+    }
+    match (from, to) {
+        (None, None) => None,
+        (Some(Err((reason, shown))), _) | (_, Some(Err((reason, shown)))) => {
+            Some(PathChoice::Bad(reason, shown))
+        }
+        (Some(Ok(old)), Some(Ok(new))) if !old.is_empty() && !new.is_empty() => {
+            Some(PathChoice::Paths(old, new))
+        }
+        _ => None,
     }
 }
 
@@ -751,9 +779,22 @@ fn split_count(part: &str) -> Option<(u32, u32)> {
     }
 }
 
-fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
+fn summary_path(raw: &str) -> Result<String, (&'static str, String)> {
+    let token = raw.trim();
+    let bytes = if token.as_bytes().first() == Some(&b'"') {
+        split_diff_token(token.as_bytes())
+            .map(|(token, _)| token)
+            .unwrap_or(token.as_bytes())
+    } else {
+        token.as_bytes()
+    };
+    classify_path(unquote_token(bytes))
+}
+
+fn summary_meta(root: &Path) -> Result<(Vec<Value>, Vec<Value>), Fail> {
     let out = text(&git(root, WorkspaceOp::DiffSummary)?);
     let mut found = Vec::new();
+    let mut refused = Vec::new();
     for line in out.lines() {
         if let Some(rest) = line.trim_start().strip_prefix("mode change ") {
             let mut parts = rest.splitn(3, ' ');
@@ -763,12 +804,23 @@ fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
             if arrow != "=>" {
                 continue;
             }
-            let Some((new_mode, path)) = tail.split_once(' ') else {
+            let Some((new_mode, path_raw)) = tail.split_once(' ') else {
                 continue;
+            };
+            let path = match summary_path(path_raw) {
+                Ok(path) => path,
+                Err((reason, shown)) => {
+                    refused.push(json!({
+                        "path": shown,
+                        "reason": reason,
+                        "message": path_message(reason),
+                    }));
+                    continue;
+                }
             };
             let body = format!("mode change {old_mode} => {new_mode} {path}\n");
             found.push(json!({
-                "id": hunk_id(path, 0, 0, 0, 0, body.as_bytes()),
+                "id": hunk_id(&path, 0, 0, 0, 0, body.as_bytes()),
                 "path": path,
                 "old_start": 0,
                 "old_count": 0,
@@ -798,10 +850,22 @@ fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
                         format!("{prefix}{old_name}").replace("//", "/"),
                         format!("{prefix}{new_name}").replace("//", "/"),
                     )
-                } else if let Some((old_path, new_path)) = paths.split_once(" => ") {
+                } else if let Some((old_path, new_path)) = split_arrow(paths) {
                     (old_path.to_string(), new_path.to_string())
                 } else {
                     continue;
+                };
+                let (old_path, new_path) = match (summary_path(&old_path), summary_path(&new_path))
+                {
+                    (Ok(old_path), Ok(new_path)) => (old_path, new_path),
+                    (Err((reason, shown)), _) | (_, Err((reason, shown))) => {
+                        refused.push(json!({
+                            "path": shown,
+                            "reason": reason,
+                            "message": path_message(reason),
+                        }));
+                        continue;
+                    }
                 };
                 let body = format!("rename {old_path} => {new_path} ({pct}%)\n");
                 found.push(json!({
@@ -819,7 +883,26 @@ fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
             }
         }
     }
-    Ok(found)
+    Ok((found, refused))
+}
+
+/// Split `old => new` outside quotes, so a quoted path may contain spaces.
+fn split_arrow(paths: &str) -> Option<(&str, &str)> {
+    let bytes = paths.as_bytes();
+    let mut i = 0;
+    let mut quoted = false;
+    while i + 4 <= bytes.len() {
+        if bytes[i] == b'"' && (i == 0 || bytes[i - 1] != b'\\') {
+            quoted = !quoted;
+            i += 1;
+            continue;
+        }
+        if !quoted && bytes[i..i + 4] == *b" => " {
+            return Some((&paths[..i], &paths[i + 4..]));
+        }
+        i += 1;
+    }
+    None
 }
 
 fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
@@ -998,7 +1081,9 @@ pub fn list_hunks(root: &Path, only: &[String]) -> Result<Value, Fail> {
         }
         hunks.push(entry);
     }
-    for meta in summary_meta(root)? {
+    let (metas, summary_refused) = summary_meta(root)?;
+    refused.extend(summary_refused);
+    for meta in metas {
         let skip = meta["kind"] == "renamed"
             && hunks
                 .iter()
@@ -1792,6 +1877,45 @@ mod tests {
                 ("x b/y.txt", "x b/y.txt", false),
                 ("new name.txt", "old name.txt", false),
                 ("kept name.txt", "", true),
+            ]
+        );
+    }
+
+    #[test]
+    fn rename_lines_win_over_an_equal_split_and_a_mode_only_header_still_splits() {
+        let diff = concat!(
+            "diff --git a/z b/z b/z b/z\n",
+            "similarity index 100%\n",
+            "rename from z\n",
+            "rename to z b/z b/z\n",
+            "@@ -1 +1 @@\n",
+            "-a\n",
+            "+b\n",
+            "diff --git a/old name.txt b/new name.txt\n",
+            "similarity index 100%\n",
+            "rename from old name.txt\n",
+            "rename to new name.txt\n",
+            "@@ -1 +1 @@\n",
+            "-a\n",
+            "+b\n",
+            "diff --git a/x b/y.txt b/x b/y.txt\n",
+            "old mode 100644\n",
+            "new mode 100755\n",
+            "@@ -1 +1 @@\n",
+            "-a\n",
+            "+b\n",
+        );
+        let hunks = parse_diff_hunks(diff.as_bytes());
+        let found: Vec<(&str, &str)> = hunks
+            .iter()
+            .map(|hunk| (hunk.path.as_str(), hunk.old_path.as_str()))
+            .collect();
+        assert_eq!(
+            found,
+            vec![
+                ("z b/z b/z", "z"),
+                ("new name.txt", "old name.txt"),
+                ("x b/y.txt", "x b/y.txt"),
             ]
         );
     }
