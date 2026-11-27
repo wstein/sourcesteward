@@ -148,7 +148,8 @@ pub fn expand_commit_query(
     }
 }
 
-/// Commits of a git rev-list style range (`A..B`, `B`, `A B ^C`, …), newest-first like `git log`.
+/// Commits of a git rev-list style range (`A..B`, `B`, `A B ^C`, …): every commit
+/// reachable from the tips and not from the excludes (breadth-first over parents).
 pub fn commits_in_range(repo: &gix::Repository, range_args: &[String]) -> Result<Vec<ObjectId>> {
     if range_args.is_empty() {
         return Err(Error::usage("empty-range"));
@@ -286,7 +287,7 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
                     .map(|(_, ids)| ids.clone());
                 wanted_ids = match from_range {
                     Some(ids) => ids,
-                    None => change_id::parse_message(&message_of(repo, full).unwrap_or_default()),
+                    None => change_id::parse_message(&message_of(repo, full)?),
                 };
             }
         } else {
@@ -367,7 +368,10 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
         doc.confidence = "exact";
         doc.method = Some("trailer");
         doc.commit = Some(hit.commit.clone());
-        doc.change_id = hit.change_id.clone().or_else(|| wanted_ids.first().cloned());
+        doc.change_id = hit
+            .change_id
+            .clone()
+            .or_else(|| wanted_ids.first().cloned());
         doc.candidates = trailer_hits;
         doc.reason = None;
         return Ok(doc);
@@ -395,7 +399,6 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
 
 /// Open a repository at `path` for a resolve run (direct path, like `stw inspect git`).
 pub fn open_repo(path: &Path) -> Result<gix::Repository> {
-    crate::repo::open(path).map_err(|e| {
-        Error::repository(format!("cannot open {}: {e}", path.display()))
-    })
+    crate::repo::open(path)
+        .map_err(|e| Error::repository(format!("cannot open {}: {e}", path.display())))
 }
