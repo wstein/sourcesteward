@@ -32,6 +32,7 @@ mod github_reads;
 mod github_rules;
 mod gitlinks;
 mod hostile_repo;
+mod hunk_select;
 mod identity;
 mod issue_list;
 mod lint_files;

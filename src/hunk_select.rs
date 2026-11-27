@@ -1,0 +1,1299 @@
+//! Selected work-tree hunks for `stw workspace commit-plan`.
+//!
+//! The list, plan and apply documents follow the spike `spikes/stw/hunk-select/`
+//! (sourcesteward#39). Git runs only through `git_runner`.
+
+use std::collections::BTreeMap;
+use std::fs;
+use std::io::Write;
+use std::path::{Path, PathBuf};
+
+use serde_json::{json, Value};
+
+use crate::error::exit;
+use crate::git_runner::{self, BlamePath, BranchRef, GitError, Hex40, Op, WorkspaceOp};
+
+const SCHEMA: u8 = 1;
+const COMMAND: &str = "hunk-select";
+
+pub struct Fail {
+    pub code: &'static str,
+    pub message: String,
+    pub status: u8,
+}
+
+impl Fail {
+    fn new(code: &'static str, message: impl Into<String>, status: u8) -> Fail {
+        Fail {
+            code,
+            message: message.into(),
+            status,
+        }
+    }
+}
+
+fn git(root: &Path, op: WorkspaceOp) -> Result<Vec<u8>, Fail> {
+    git_in(root, op, None)
+}
+
+fn git_in(root: &Path, op: WorkspaceOp, input: Option<&[u8]>) -> Result<Vec<u8>, Fail> {
+    match git_runner::shared().run_with_stdin(root, Op::Workspace(op), input) {
+        Ok(out) => Ok(out.stdout),
+        Err(GitError::Exit { stderr, .. }) => Err(Fail::new("git", stderr, 1)),
+        Err(error) => Err(Fail::new("git", error.to_string(), 1)),
+    }
+}
+
+fn git_missing(root: &Path, op: WorkspaceOp) -> Result<Option<Vec<u8>>, Fail> {
+    match git_runner::shared().run(root, Op::Workspace(op)) {
+        Ok(out) => Ok(Some(out.stdout)),
+        Err(GitError::Exit { .. }) => Ok(None),
+        Err(error) => Err(Fail::new("git", error.to_string(), 1)),
+    }
+}
+
+fn text(bytes: &[u8]) -> String {
+    String::from_utf8_lossy(bytes).into_owned()
+}
+
+fn path_arg(path: &str) -> Result<BlamePath, Fail> {
+    BlamePath::parse(path.as_bytes())
+        .ok_or_else(|| Fail::new("bad-path", format!("refused path {path}"), 1))
+}
+
+fn unquote_path(raw: &str) -> String {
+    let bytes = raw.as_bytes();
+    if !(bytes.first() == Some(&b'"') && bytes.last() == Some(&b'"') && bytes.len() >= 2) {
+        return raw.to_string();
+    }
+    let mut out = Vec::new();
+    let mut i = 1;
+    while i < bytes.len() - 1 {
+        if bytes[i] == b'\\' && i + 1 < bytes.len() - 1 {
+            let n = bytes[i + 1];
+            let esc = match n {
+                b'a' => Some(7),
+                b'b' => Some(8),
+                b't' => Some(9),
+                b'n' => Some(10),
+                b'v' => Some(11),
+                b'f' => Some(12),
+                b'r' => Some(13),
+                b'"' => Some(34),
+                b'\\' => Some(92),
+                _ => None,
+            };
+            if let Some(value) = esc {
+                out.push(value);
+                i += 2;
+                continue;
+            }
+            if i + 3 < bytes.len()
+                && bytes[i + 1..i + 4]
+                    .iter()
+                    .all(|b| (b'0'..=b'7').contains(b))
+            {
+                let oct = std::str::from_utf8(&bytes[i + 1..i + 4]).unwrap_or("0");
+                out.push(u8::from_str_radix(oct, 8).unwrap_or(0));
+                i += 4;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    text(&out)
+}
+
+fn short_hash(body: &[u8]) -> String {
+    crate::sha256::hex(body)[..8].to_string()
+}
+
+fn hunk_id(
+    path: &str,
+    old_start: u32,
+    old_count: u32,
+    new_start: u32,
+    new_count: u32,
+    body: &[u8],
+) -> String {
+    format!(
+        "{path}:{old_start}:{old_count}:{new_start}:{new_count}:{}",
+        short_hash(body)
+    )
+}
+
+fn canonical_json(value: &Value) -> String {
+    let mut out = String::new();
+    canon(value, &mut out);
+    out
+}
+
+fn canon(value: &Value, out: &mut String) {
+    match value {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(n) => out.push_str(&n.to_string()),
+        Value::String(s) => {
+            out.push('"');
+            for c in s.chars() {
+                match c {
+                    '"' => out.push_str("\\\""),
+                    '\\' => out.push_str("\\\\"),
+                    '\n' => out.push_str("\\n"),
+                    '\r' => out.push_str("\\r"),
+                    '\t' => out.push_str("\\t"),
+                    '\u{8}' => out.push_str("\\b"),
+                    '\u{c}' => out.push_str("\\f"),
+                    c if c.is_control() => out.push_str(&format!("\\u{:04x}", u32::from(c))),
+                    c => out.push(c),
+                }
+            }
+            out.push('"');
+        }
+        Value::Array(items) => {
+            out.push('[');
+            for (i, item) in items.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                canon(item, out);
+            }
+            out.push(']');
+        }
+        Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            out.push('{');
+            for (i, key) in keys.into_iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push('"');
+                for c in key.chars() {
+                    match c {
+                        '"' => out.push_str("\\\""),
+                        '\\' => out.push_str("\\\\"),
+                        c => out.push(c),
+                    }
+                }
+                out.push_str("\":");
+                canon(&map[key], out);
+            }
+            out.push('}');
+        }
+    }
+}
+
+pub fn plan_sum_of(doc: &Value) -> String {
+    let mut copy = doc.clone();
+    if let Some(map) = copy.as_object_mut() {
+        map.remove("plan_sum");
+    }
+    crate::sha256::hex(canonical_json(&copy).as_bytes())
+}
+
+fn emit(doc: &Value) {
+    println!(
+        "{}",
+        serde_json::to_string_pretty(doc).unwrap_or_else(|_| "{}".into())
+    );
+}
+
+fn effects() -> Value {
+    json!({"writes": [], "network": false, "hooks": false, "prompts": false})
+}
+
+fn head_state(root: &Path) -> Result<(String, String), Fail> {
+    let head = text(&git(root, WorkspaceOp::RevParseHead)?)
+        .trim()
+        .to_string();
+    let symbolic = git_missing(root, WorkspaceOp::SymbolicRefHead)?;
+    let Some(symbolic) = symbolic else {
+        return Err(Fail::new("detached-head", "HEAD is detached", 1));
+    };
+    let reference = text(&symbolic).trim().to_string();
+    if reference.is_empty() {
+        return Err(Fail::new("detached-head", "HEAD is detached", 1));
+    }
+    Ok((head, reference))
+}
+
+fn index_entry_for(root: &Path, path: &str) -> Result<Option<String>, Fail> {
+    let out = git(
+        root,
+        WorkspaceOp::LsFilesStage {
+            path: path_arg(path)?,
+        },
+    )?;
+    let rec = out.split(|b| *b == 0).next().unwrap_or_default();
+    if rec.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(text(rec)))
+    }
+}
+
+fn blob_hash_bytes(root: &Path, data: &[u8]) -> Result<String, Fail> {
+    Ok(text(&git_in(root, WorkspaceOp::HashObject, Some(data))?)
+        .trim()
+        .to_string())
+}
+
+fn worktree_blob(root: &Path, path: &str) -> Result<Option<String>, Fail> {
+    let full = root.join(path);
+    if !full.is_file() {
+        return Ok(None);
+    }
+    let data = fs::read(&full).map_err(|e| Fail::new("worktree", e.to_string(), 1))?;
+    Ok(Some(blob_hash_bytes(root, &data)?))
+}
+
+fn head_blob(root: &Path, path: &str) -> Result<Option<String>, Fail> {
+    let Some(out) = git_missing(
+        root,
+        WorkspaceOp::RevParseHeadPath {
+            path: path_arg(path)?,
+        },
+    )?
+    else {
+        return Ok(None);
+    };
+    Ok(Some(text(&out).trim().to_string()))
+}
+
+struct RawHunk {
+    path: String,
+    old_path: String,
+    new_path: String,
+    old_start: u32,
+    old_count: u32,
+    new_start: u32,
+    new_count: u32,
+    body: Vec<u8>,
+    file_header: Vec<u8>,
+    binary: bool,
+}
+
+fn parse_diff_hunks(diff: &[u8]) -> Vec<RawHunk> {
+    parse_diff_hunks_keep(diff)
+}
+
+fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
+    let mut lines = Vec::new();
+    let mut rest = diff;
+    while !rest.is_empty() {
+        if let Some(pos) = rest.iter().position(|b| *b == b'\n') {
+            lines.push(&rest[..=pos]);
+            rest = &rest[pos + 1..];
+        } else {
+            lines.push(rest);
+            break;
+        }
+    }
+    let mut hunks = Vec::new();
+    let mut i = 0;
+    let mut path = String::new();
+    let mut old_path = String::new();
+    let mut new_path = String::new();
+    let mut file_header: Vec<u8> = Vec::new();
+    while i < lines.len() {
+        let line = lines[i];
+        let trimmed = trim_nl(line);
+        if let Some(rest) = trimmed.strip_prefix(b"diff --git a/") {
+            if let Some(mid) = find_b_sep(rest) {
+                old_path = unquote_path(&text(&rest[..mid]));
+                new_path = unquote_path(&text(&rest[mid + 3..]));
+                path = if new_path == "/dev/null" {
+                    old_path.clone()
+                } else {
+                    new_path.clone()
+                };
+                file_header = line.to_vec();
+                i += 1;
+                let mut binary = false;
+                while i < lines.len()
+                    && !lines[i].starts_with(b"@@")
+                    && !trim_nl(lines[i]).starts_with(b"diff --git ")
+                {
+                    if lines[i].starts_with(b"Binary files ")
+                        || lines[i].starts_with(b"GIT binary patch")
+                    {
+                        binary = true;
+                    }
+                    file_header.extend_from_slice(lines[i]);
+                    i += 1;
+                }
+                if binary {
+                    hunks.push(RawHunk {
+                        path,
+                        old_path,
+                        new_path,
+                        old_start: 0,
+                        old_count: 0,
+                        new_start: 0,
+                        new_count: 0,
+                        body: Vec::new(),
+                        file_header,
+                        binary: true,
+                    });
+                    path = String::new();
+                    old_path = String::new();
+                    new_path = String::new();
+                    file_header = Vec::new();
+                }
+                continue;
+            }
+        }
+        if let Some((old_start, old_count, new_start, new_count)) = parse_hunk_header(trimmed) {
+            let mut body = vec![line.to_vec()];
+            i += 1;
+            while i < lines.len() {
+                let next = lines[i];
+                if next.starts_with(b"@@") || trim_nl(next).starts_with(b"diff --git ") {
+                    break;
+                }
+                if next.starts_with(b"+")
+                    || next.starts_with(b"-")
+                    || next.starts_with(b" ")
+                    || next.starts_with(b"\\")
+                {
+                    body.push(next.to_vec());
+                    i += 1;
+                    continue;
+                }
+                break;
+            }
+            hunks.push(RawHunk {
+                path: path.clone(),
+                old_path: old_path.clone(),
+                new_path: new_path.clone(),
+                old_start,
+                old_count,
+                new_start,
+                new_count,
+                body: body.concat(),
+                file_header: file_header.clone(),
+                binary: false,
+            });
+            continue;
+        }
+        i += 1;
+    }
+    hunks
+}
+
+fn trim_nl(line: &[u8]) -> &[u8] {
+    let line = line.strip_suffix(b"\n").unwrap_or(line);
+    line.strip_suffix(b"\r").unwrap_or(line)
+}
+
+fn find_b_sep(rest: &[u8]) -> Option<usize> {
+    let marker = b" b/";
+    rest.windows(marker.len()).rposition(|w| w == marker)
+}
+
+fn parse_hunk_header(line: &[u8]) -> Option<(u32, u32, u32, u32)> {
+    let line = std::str::from_utf8(line).ok()?;
+    let rest = line.strip_prefix("@@ -")?;
+    let (old, rest) = rest.split_once(" +")?;
+    let (new, _) = rest.split_once(" @@")?;
+    let (old_start, old_count) = split_count(old)?;
+    let (new_start, new_count) = split_count(new)?;
+    Some((old_start, old_count, new_start, new_count))
+}
+
+fn split_count(part: &str) -> Option<(u32, u32)> {
+    if let Some((start, count)) = part.split_once(',') {
+        Some((start.parse().ok()?, count.parse().ok()?))
+    } else {
+        Some((part.parse().ok()?, 1))
+    }
+}
+
+fn summary_meta(root: &Path) -> Result<Vec<Value>, Fail> {
+    let out = text(&git(root, WorkspaceOp::DiffSummary)?);
+    let mut found = Vec::new();
+    for line in out.lines() {
+        if let Some(rest) = line.trim_start().strip_prefix("mode change ") {
+            let mut parts = rest.splitn(3, ' ');
+            let old_mode = parts.next().unwrap_or("");
+            let arrow = parts.next().unwrap_or("");
+            let tail = parts.next().unwrap_or("");
+            if arrow != "=>" {
+                continue;
+            }
+            let Some((new_mode, path)) = tail.split_once(' ') else {
+                continue;
+            };
+            let body = format!("mode change {old_mode} => {new_mode} {path}\n");
+            found.push(json!({
+                "id": hunk_id(path, 0, 0, 0, 0, body.as_bytes()),
+                "path": path,
+                "old_start": 0,
+                "old_count": 0,
+                "new_start": 0,
+                "new_count": 0,
+                "text": body,
+                "kind": "mode",
+                "old_mode": old_mode,
+                "new_mode": new_mode,
+            }));
+            continue;
+        }
+        let trimmed = line.trim_start();
+        if let Some(rest) = trimmed.strip_prefix("rename ") {
+            if let Some((paths, pct)) = rest.rsplit_once(" (") {
+                let Some(pct) = pct.strip_suffix("%)") else {
+                    continue;
+                };
+                let (old_path, new_path) = if let Some((prefix, brace)) = paths.split_once(" {") {
+                    let Some(brace) = brace.strip_suffix('}') else {
+                        continue;
+                    };
+                    let Some((old_name, new_name)) = brace.split_once(" => ") else {
+                        continue;
+                    };
+                    (
+                        format!("{prefix}{old_name}").replace("//", "/"),
+                        format!("{prefix}{new_name}").replace("//", "/"),
+                    )
+                } else if let Some((old_path, new_path)) = paths.split_once(" => ") {
+                    (old_path.to_string(), new_path.to_string())
+                } else {
+                    continue;
+                };
+                let body = format!("rename {old_path} => {new_path} ({pct}%)\n");
+                found.push(json!({
+                    "id": hunk_id(&new_path, 0, 0, 0, 0, body.as_bytes()),
+                    "path": new_path,
+                    "old_path": old_path,
+                    "old_start": 0,
+                    "old_count": 0,
+                    "new_start": 0,
+                    "new_count": 0,
+                    "text": body,
+                    "kind": "renamed",
+                    "similarity": pct.parse::<u32>().unwrap_or(100),
+                }));
+            }
+        }
+    }
+    Ok(found)
+}
+
+fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
+    let full = root.join(path);
+    if !full.is_file() {
+        return Ok(None);
+    }
+    let data = fs::read(&full).map_err(|e| Fail::new("worktree", e.to_string(), 1))?;
+    if data.iter().take(8000).any(|b| *b == 0) {
+        return Ok(Some(json!({
+            "refused": true,
+            "path": path,
+            "reason": "binary",
+            "message": "untracked binary file refused",
+        })));
+    }
+    let lines = split_keep(&data);
+    let (new_count, body) = if data.is_empty() {
+        (0u32, b"@@ -0,0 +0,0 @@\n".to_vec())
+    } else {
+        let new_count = lines.len() as u32;
+        let mut body = format!("@@ -0,0 +1,{new_count} @@\n").into_bytes();
+        for line in &lines {
+            body.push(b'+');
+            body.extend_from_slice(line);
+        }
+        if !data.ends_with(b"\n") && !data.ends_with(b"\r") {
+            body.extend_from_slice(b"\\ No newline at end of file\n");
+        }
+        (new_count, body)
+    };
+    let header = format!(
+        "diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n"
+    );
+    let new_start = if new_count == 0 { 0 } else { 1 };
+    Ok(Some(json!({
+        "id": hunk_id(path, 0, 0, new_start, new_count, &body),
+        "path": path,
+        "old_start": 0,
+        "old_count": 0,
+        "new_start": new_start,
+        "new_count": new_count,
+        "text": text(&body),
+        "kind": "untracked",
+        "file_header": header,
+        "note": "untracked counts as one whole-file hunk",
+    })))
+}
+
+fn split_keep(data: &[u8]) -> Vec<Vec<u8>> {
+    if data.is_empty() {
+        return Vec::new();
+    }
+    let mut lines = Vec::new();
+    let mut rest = data;
+    while !rest.is_empty() {
+        if let Some(pos) = rest.iter().position(|b| *b == b'\n') {
+            lines.push(rest[..=pos].to_vec());
+            rest = &rest[pos + 1..];
+        } else {
+            lines.push(rest.to_vec());
+            break;
+        }
+    }
+    lines
+}
+
+pub fn list_hunks(root: &Path, only: &[String]) -> Result<Value, Fail> {
+    let (head, reference) = head_state(root)?;
+    let mut refused = Vec::new();
+    let mut hunks = Vec::new();
+    let diff = git(root, WorkspaceOp::DiffWorktreeU0)?;
+    for raw in parse_diff_hunks(&diff) {
+        if raw.binary {
+            refused.push(
+                json!({"path": raw.path, "reason": "binary", "message": "binary change refused"}),
+            );
+            continue;
+        }
+        let id = hunk_id(
+            &raw.path,
+            raw.old_start,
+            raw.old_count,
+            raw.new_start,
+            raw.new_count,
+            &raw.body,
+        );
+        let header = &raw.file_header;
+        let kind = if header
+            .windows(b"new file mode".len())
+            .any(|w| w == b"new file mode")
+            || raw.old_path == "/dev/null"
+        {
+            "added"
+        } else if header
+            .windows(b"deleted file mode".len())
+            .any(|w| w == b"deleted file mode")
+            || raw.new_path == "/dev/null"
+        {
+            "deleted"
+        } else if !raw.old_path.is_empty()
+            && !raw.new_path.is_empty()
+            && raw.old_path != raw.new_path
+            && raw.old_path != "/dev/null"
+            && raw.new_path != "/dev/null"
+        {
+            "renamed"
+        } else {
+            "modified"
+        };
+        let mut entry = json!({
+            "id": id,
+            "path": raw.path,
+            "old_start": raw.old_start,
+            "old_count": raw.old_count,
+            "new_start": raw.new_start,
+            "new_count": raw.new_count,
+            "text": text(&raw.body),
+            "kind": kind,
+        });
+        if !header.is_empty() {
+            entry["file_header"] = json!(text(header));
+        }
+        if kind == "renamed" {
+            entry["old_path"] = json!(raw.old_path);
+        }
+        hunks.push(entry);
+    }
+    for meta in summary_meta(root)? {
+        let skip = meta["kind"] == "renamed"
+            && hunks
+                .iter()
+                .any(|h| h["kind"] == "renamed" && h["path"] == meta["path"]);
+        if !skip {
+            hunks.push(meta);
+        }
+    }
+    let others = git(root, WorkspaceOp::LsFilesOthers)?;
+    for raw_path in others.split(|b| *b == 0) {
+        if raw_path.is_empty() {
+            continue;
+        }
+        let path = text(raw_path);
+        let Some(item) = untracked_hunk(root, &path)? else {
+            continue;
+        };
+        if item.get("refused").and_then(Value::as_bool) == Some(true) {
+            refused.push(json!({
+                "path": path,
+                "reason": item["reason"],
+                "message": item["message"],
+            }));
+            continue;
+        }
+        hunks.push(item);
+    }
+    if !only.is_empty() {
+        hunks.retain(|h| only.iter().any(|p| h["path"] == p.as_str()));
+        refused.retain(|h| only.iter().any(|p| h["path"] == p.as_str()));
+    }
+    Ok(json!({
+        "schema_version": SCHEMA,
+        "command": format!("{COMMAND} list"),
+        "head": head,
+        "ref": reference,
+        "context": 0,
+        "hunks": hunks,
+        "refused": refused,
+        "effects": effects(),
+    }))
+}
+
+fn index_blob(entry: Option<&str>) -> Option<String> {
+    let entry = entry?;
+    entry.split_whitespace().nth(1).map(str::to_string)
+}
+
+fn classify_index(root: &Path, path: &str) -> Result<&'static str, Fail> {
+    let entry = index_entry_for(root, path)?;
+    let ib = index_blob(entry.as_deref());
+    let hb = head_blob(root, path)?;
+    let wb = worktree_blob(root, path)?;
+    Ok(match (ib, hb, wb) {
+        (None, _, _) => "absent",
+        (Some(ib), Some(hb), _) if ib == hb => "clean",
+        (Some(ib), _, Some(wb)) if ib == wb => "staged-full",
+        _ => "staged-unrelated",
+    })
+}
+
+pub fn make_plan(root: &Path, ids: &[String]) -> Result<Value, Fail> {
+    if ids.is_empty() {
+        return Err(Fail::new("usage", "plan requires at least one --hunk", 2));
+    }
+    let listed = list_hunks(root, &[])?;
+    let mut by_id = BTreeMap::new();
+    for hunk in listed["hunks"].as_array().cloned().unwrap_or_default() {
+        if let Some(id) = hunk["id"].as_str() {
+            by_id.insert(id.to_string(), hunk);
+        }
+    }
+    let mut selected = Vec::new();
+    for id in ids {
+        let Some(mut hunk) = by_id.get(id).cloned() else {
+            return Err(Fail::new(
+                "unknown-hunk",
+                format!("hunk id not in the current list: {id}"),
+                1,
+            ));
+        };
+        let path = hunk["path"].as_str().unwrap_or("").to_string();
+        let state = classify_index(root, &path)?;
+        if state == "staged-unrelated" {
+            return Err(Fail::new(
+                "unrelated-staged",
+                format!("selected path {path} has unrelated staged changes"),
+                1,
+            ));
+        }
+        hunk["worktree_blob"] = json!(worktree_blob(root, &path)?);
+        hunk["index_entry"] = json!(index_entry_for(root, &path)?);
+        hunk["head_blob"] = json!(head_blob(root, &path)?);
+        hunk["index_state"] = json!(state);
+        selected.push(hunk);
+    }
+    let mut doc = json!({
+        "schema_version": SCHEMA,
+        "command": format!("{COMMAND} plan"),
+        "head": listed["head"],
+        "ref": listed["ref"],
+        "selected": selected,
+        "effects": effects(),
+    });
+    doc["plan_sum"] = json!(plan_sum_of(&doc));
+    Ok(doc)
+}
+
+fn rewrite_header(
+    body: &str,
+    old_start: u32,
+    old_count: u32,
+    new_start: u32,
+    new_count: u32,
+) -> String {
+    let mut lines: Vec<&str> = body.split_inclusive('\n').collect();
+    if lines.is_empty() {
+        return body.to_string();
+    }
+    let Some(rest) = lines[0].strip_prefix("@@ ") else {
+        return body.to_string();
+    };
+    let Some((_, trail)) = rest.split_once(" @@") else {
+        return body.to_string();
+    };
+    lines[0] = "";
+    let owned = format!("@@ -{old_start},{old_count} +{new_start},{new_count} @@{trail}");
+    let mut out = owned;
+    for line in lines.into_iter().skip(1) {
+        out.push_str(line);
+    }
+    out
+}
+
+pub fn renumber_selected_for_apply(selected: &[Value]) -> Vec<Value> {
+    let mut order = Vec::new();
+    let mut by_path: BTreeMap<String, Vec<Value>> = BTreeMap::new();
+    for hunk in selected {
+        let path = hunk["path"].as_str().unwrap_or("").to_string();
+        if !by_path.contains_key(&path) {
+            order.push(path.clone());
+        }
+        by_path.entry(path).or_default().push(hunk.clone());
+    }
+    let mut out = Vec::new();
+    for path in order {
+        let mut group = by_path.remove(&path).unwrap_or_default();
+        group.sort_by(|a, b| {
+            let key = |h: &Value| {
+                (
+                    h["old_start"].as_u64().unwrap_or(0),
+                    h["new_start"].as_u64().unwrap_or(0),
+                    h["id"].as_str().unwrap_or("").to_string(),
+                )
+            };
+            key(a).cmp(&key(b))
+        });
+        let mut offset: i64 = 0;
+        for hunk in group {
+            let mut adj = hunk.clone();
+            let old_start = hunk["old_start"].as_u64().unwrap_or(0) as i64;
+            let old_count = hunk["old_count"].as_u64().unwrap_or(0) as i64;
+            let new_count = hunk["new_count"].as_u64().unwrap_or(0) as i64;
+            let kind = hunk["kind"].as_str().unwrap_or("modified");
+            if matches!(kind, "mode" | "renamed") && old_count == 0 && new_count == 0 {
+                out.push(adj);
+                continue;
+            }
+            let new_start = if old_count == 0 {
+                if old_start == 0 && new_count > 0 {
+                    1 + offset
+                } else if old_start > 0 || offset > 0 || new_count != 0 {
+                    old_start + 1 + offset
+                } else {
+                    0
+                }
+            } else {
+                old_start + offset
+            };
+            adj["new_start"] = json!(new_start);
+            if let Some(text) = adj["text"].as_str() {
+                if text.trim_start().starts_with("@@") {
+                    adj["text"] = json!(rewrite_header(
+                        text,
+                        old_start as u32,
+                        old_count as u32,
+                        new_start as u32,
+                        new_count as u32,
+                    ));
+                }
+            }
+            offset += new_count - old_count;
+            out.push(adj);
+        }
+    }
+    out
+}
+
+fn build_patch(hunk: &Value) -> Vec<u8> {
+    let path = hunk["path"].as_str().unwrap_or("");
+    let kind = hunk["kind"].as_str().unwrap_or("modified");
+    let body = hunk["text"].as_str().unwrap_or("").as_bytes();
+    if kind == "mode" {
+        let old_mode = hunk["old_mode"].as_str().unwrap_or("");
+        let new_mode = hunk["new_mode"].as_str().unwrap_or("");
+        return format!("diff --git a/{path} b/{path}\nold mode {old_mode}\nnew mode {new_mode}\n")
+            .into_bytes();
+    }
+    if kind == "untracked" || kind == "added" {
+        if let Some(header) = hunk["file_header"].as_str() {
+            let mut out = header.as_bytes().to_vec();
+            out.extend_from_slice(body);
+            return out;
+        }
+        let mut out = format!(
+            "diff --git a/{path} b/{path}\nnew file mode 100644\n--- /dev/null\n+++ b/{path}\n"
+        )
+        .into_bytes();
+        out.extend_from_slice(body);
+        return out;
+    }
+    if kind == "deleted" {
+        let mut out = format!(
+            "diff --git a/{path} b/{path}\ndeleted file mode 100644\n--- a/{path}\n+++ /dev/null\n"
+        )
+        .into_bytes();
+        out.extend_from_slice(body);
+        return out;
+    }
+    if kind == "renamed" {
+        let old_path = hunk["old_path"].as_str().unwrap_or(path);
+        let pct = hunk["similarity"].as_u64().unwrap_or(100);
+        let mut header = format!(
+            "diff --git a/{old_path} b/{path}\nsimilarity index {pct}%\nrename from {old_path}\nrename to {path}\n"
+        )
+        .into_bytes();
+        if hunk["old_count"].as_u64() == Some(0)
+            && hunk["new_count"].as_u64() == Some(0)
+            && !hunk["text"].as_str().unwrap_or("").starts_with("@@")
+        {
+            return header;
+        }
+        header.extend(format!("--- a/{old_path}\n+++ b/{path}\n").into_bytes());
+        header.extend_from_slice(body);
+        return header;
+    }
+    let mut out =
+        format!("diff --git a/{path} b/{path}\n--- a/{path}\n+++ b/{path}\n").into_bytes();
+    out.extend_from_slice(body);
+    out
+}
+
+fn tree_entry(root: &Path, commit: &str, path: &str) -> Result<Option<(String, String)>, Fail> {
+    let treeish =
+        Hex40::parse(commit).ok_or_else(|| Fail::new("bad-plan", "commit id is not 40 hex", 1))?;
+    let out = git(
+        root,
+        WorkspaceOp::LsTreePath {
+            treeish,
+            path: path_arg(path)?,
+        },
+    )?;
+    let rec = out.split(|b| *b == 0).next().unwrap_or_default();
+    if rec.is_empty() {
+        return Ok(None);
+    }
+    let meta = rec.split(|b| *b == b'\t').next().unwrap_or_default();
+    let text_meta = text(meta);
+    let mut words = text_meta.split_whitespace();
+    let mode = words.next().unwrap_or("").to_string();
+    let _kind = words.next();
+    let oid = words.next().unwrap_or("").to_string();
+    if mode.is_empty() || oid.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some((mode, oid)))
+}
+
+fn plan_index_actions(root: &Path, plan: &Value, new_commit: &str) -> Result<Vec<Value>, Fail> {
+    let mut by_path = BTreeMap::new();
+    for hunk in plan["selected"].as_array().cloned().unwrap_or_default() {
+        let path = hunk["path"].as_str().unwrap_or("").to_string();
+        by_path.insert(path, hunk);
+    }
+    let mut actions = Vec::new();
+    for (path, hunk) in by_path {
+        let state = hunk["index_state"].as_str().unwrap_or("");
+        let entry = tree_entry(root, new_commit, &path)?;
+        match state {
+            "clean" => {
+                if let Some((mode, oid)) = entry {
+                    actions.push(json!({"path": path, "action": "set-to-new-head", "reason": "was-clean", "mode": mode, "oid": oid}));
+                } else {
+                    actions.push(json!({"path": path, "action": "remove", "reason": "was-clean"}));
+                }
+            }
+            "absent" => {
+                if let Some((mode, oid)) = entry {
+                    actions.push(json!({"path": path, "action": "add", "reason": "was-absent", "mode": mode, "oid": oid}));
+                } else {
+                    actions.push(
+                        json!({"path": path, "action": "none", "reason": "absent-and-deleted"}),
+                    );
+                }
+            }
+            "staged-full" => {
+                actions.push(json!({"path": path, "action": "leave", "reason": "staged-full"}))
+            }
+            _ => {
+                return Err(Fail::new(
+                    "unrelated-staged",
+                    format!("selected path {path} has unrelated staged changes"),
+                    1,
+                ));
+            }
+        }
+    }
+    Ok(actions)
+}
+
+fn git_dir(root: &Path) -> Result<PathBuf, Fail> {
+    let raw = text(&git(root, WorkspaceOp::GitDir)?).trim().to_string();
+    let path = PathBuf::from(&raw);
+    if path.is_absolute() {
+        Ok(path)
+    } else {
+        Ok(root.join(path))
+    }
+}
+
+fn recheck(root: &Path, plan: &Value) -> Result<(), Fail> {
+    let (head, reference) = head_state(root)?;
+    if head != plan["head"].as_str().unwrap_or("")
+        || reference != plan["ref"].as_str().unwrap_or("")
+    {
+        return Err(Fail::new(
+            "stale-branch",
+            "branch tip moved since the plan",
+            1,
+        ));
+    }
+    for hunk in plan["selected"].as_array().cloned().unwrap_or_default() {
+        let path = hunk["path"].as_str().unwrap_or("");
+        let wb = worktree_blob(root, path)?;
+        if wb.as_deref() != hunk["worktree_blob"].as_str()
+            && !(wb.is_none() && hunk["worktree_blob"].is_null())
+        {
+            return Err(Fail::new(
+                "stale-worktree",
+                format!("work tree of {path} changed since the plan"),
+                1,
+            ));
+        }
+        let ie = index_entry_for(root, path)?;
+        let planned = hunk["index_entry"].as_str().map(str::to_string);
+        if ie != planned {
+            return Err(Fail::new(
+                "stale-index",
+                format!("index entry of {path} changed since the plan"),
+                1,
+            ));
+        }
+        if classify_index(root, path)? == "staged-unrelated" {
+            return Err(Fail::new(
+                "unrelated-staged",
+                format!("selected path {path} has unrelated staged changes"),
+                1,
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn build_prepared_index(
+    root: &Path,
+    real_index: &Path,
+    actions: &[Value],
+    scratch: &Path,
+) -> Result<Vec<u8>, Fail> {
+    let prepared = scratch.join("prepared-index");
+    fs::copy(real_index, &prepared).map_err(|e| Fail::new("index", e.to_string(), 1))?;
+    for action in actions {
+        let path = action["path"].as_str().unwrap_or("");
+        match action["action"].as_str().unwrap_or("") {
+            "remove" => {
+                git(
+                    root,
+                    WorkspaceOp::UpdateIndexRemove {
+                        index: prepared.clone(),
+                        path: path_arg(path)?,
+                    },
+                )?;
+            }
+            "set-to-new-head" | "add" => {
+                let mode = action["mode"].as_str().unwrap_or("").to_string();
+                let oid = Hex40::parse(action["oid"].as_str().unwrap_or(""))
+                    .ok_or_else(|| Fail::new("bad-index-action", "oid is not 40 hex", 1))?;
+                let op = if action["action"] == "add" {
+                    WorkspaceOp::UpdateIndexAdd {
+                        index: prepared.clone(),
+                        mode,
+                        oid,
+                        path: path_arg(path)?,
+                    }
+                } else {
+                    WorkspaceOp::UpdateIndexCacheinfo {
+                        index: prepared.clone(),
+                        mode,
+                        oid,
+                        path: path_arg(path)?,
+                    }
+                };
+                git(root, op)?;
+            }
+            "leave" | "none" => {}
+            other => {
+                return Err(Fail::new(
+                    "bad-index-action",
+                    format!("unknown index action {other}"),
+                    1,
+                ))
+            }
+        }
+    }
+    fs::read(&prepared).map_err(|e| Fail::new("index", e.to_string(), 1))
+}
+
+fn publish(
+    root: &Path,
+    plan: &Value,
+    reference: &str,
+    old_head: &str,
+    commit: &str,
+    actions: &[Value],
+    scratch: &Path,
+) -> Result<(), Fail> {
+    let git_dir = git_dir(root)?;
+    let index_path = git_dir.join("index");
+    if !index_path.is_file() {
+        return Err(Fail::new(
+            "missing-index",
+            "repository has no index file",
+            1,
+        ));
+    }
+    let lock_path = git_dir.join("index.lock");
+    let mut lock = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&lock_path)
+        .map_err(|_| Fail::new("index-locked", "the real index is locked", 1))?;
+    let result = (|| {
+        recheck(root, plan)?;
+        let tip = text(&git(root, WorkspaceOp::RevParseHead)?)
+            .trim()
+            .to_string();
+        if tip != old_head {
+            return Err(Fail::new(
+                "stale-branch",
+                "branch tip moved before publication",
+                1,
+            ));
+        }
+        let prepared = build_prepared_index(root, &index_path, actions, scratch)?;
+        lock.write_all(&prepared)
+            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
+        lock.sync_all()
+            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
+        let branch = BranchRef::parse(reference)
+            .ok_or_else(|| Fail::new("bad-ref", "ref is not a branch", 1))?;
+        let new = Hex40::parse(commit)
+            .ok_or_else(|| Fail::new("bad-plan", "commit id is not 40 hex", 1))?;
+        let expected = Hex40::parse(old_head)
+            .ok_or_else(|| Fail::new("bad-plan", "old head is not 40 hex", 1))?;
+        git(
+            root,
+            WorkspaceOp::MoveBranch {
+                reference: branch.clone(),
+                new,
+                expected,
+            },
+        )?;
+        if let Err(error) = fs::rename(&lock_path, &index_path) {
+            let rollback = git(
+                root,
+                WorkspaceOp::MoveBranch {
+                    reference: branch,
+                    new: expected,
+                    expected: new,
+                },
+            );
+            let detail = if rollback.is_ok() {
+                format!("branch restored to {old_head}")
+            } else {
+                format!(
+                    "branch rollback failed; previous head {old_head}, attempted commit {commit}"
+                )
+            };
+            return Err(Fail::new(
+                "index-publish-failed",
+                format!("could not publish the index ({error}); {detail}"),
+                1,
+            ));
+        }
+        Ok(())
+    })();
+    if lock_path.exists() {
+        let _ = fs::remove_file(&lock_path);
+    }
+    result
+}
+
+pub fn apply_plan(
+    root: &Path,
+    plan: &Value,
+    message: &str,
+    expected_sum: Option<&str>,
+) -> Result<Value, Fail> {
+    if plan["schema_version"].as_u64() != Some(SCHEMA as u64) {
+        return Err(Fail::new("bad-plan", "unsupported plan schema_version", 1));
+    }
+    if plan["command"].as_str() != Some(&format!("{COMMAND} plan")) {
+        return Err(Fail::new(
+            "bad-plan",
+            "plan command field is not hunk-select plan",
+            1,
+        ));
+    }
+    if message.trim().is_empty() {
+        return Err(Fail::new("empty-message", "commit message is empty", 2));
+    }
+    let got_sum = plan["plan_sum"]
+        .as_str()
+        .map(str::to_string)
+        .unwrap_or_else(|| plan_sum_of(plan));
+    if expected_sum.is_some_and(|sum| sum != got_sum) || plan_sum_of(plan) != got_sum {
+        return Err(Fail::new("plan-sum-mismatch", "plan_sum does not match", 1));
+    }
+    recheck(root, plan)?;
+    let head = plan["head"].as_str().unwrap_or("").to_string();
+    let reference = plan["ref"].as_str().unwrap_or("").to_string();
+    let tmp = tempfile::tempdir().map_err(|e| Fail::new("temp", e.to_string(), 1))?;
+    if tmp
+        .path()
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .contains("hint")
+    {
+        return Err(Fail::new(
+            "path-contains-hint",
+            "temp path must not contain 'hint'",
+            1,
+        ));
+    }
+    let index_file = tmp.path().join("index");
+    git(
+        root,
+        WorkspaceOp::ReadTreeHead {
+            index: index_file.clone(),
+        },
+    )?;
+    let selected = plan["selected"].as_array().cloned().unwrap_or_default();
+    for hunk in renumber_selected_for_apply(&selected) {
+        let patch = build_patch(&hunk);
+        let patch_path = tmp
+            .path()
+            .join(format!("hunk-{}.patch", short_hash(&patch)));
+        fs::write(&patch_path, &patch).map_err(|e| Fail::new("patch", e.to_string(), 1))?;
+        git(
+            root,
+            WorkspaceOp::ApplyCached {
+                index: index_file.clone(),
+                patch: patch_path,
+            },
+        )?;
+    }
+    let tree = text(&git(root, WorkspaceOp::WriteTree(index_file))?)
+        .trim()
+        .to_string();
+    let head_tree = text(&git(root, WorkspaceOp::RevParseHeadTree)?)
+        .trim()
+        .to_string();
+    if tree == head_tree {
+        return Err(Fail::new(
+            "empty-commit",
+            "selected hunks would make an empty commit",
+            1,
+        ));
+    }
+    let tree_id = Hex40::parse(&tree)
+        .ok_or_else(|| Fail::new("git", "write-tree did not return a sha", 1))?;
+    let parent =
+        Hex40::parse(&head).ok_or_else(|| Fail::new("bad-plan", "head is not 40 hex", 1))?;
+    let mut message_bytes = message.as_bytes().to_vec();
+    if !message_bytes.ends_with(b"\n") {
+        message_bytes.push(b'\n');
+    }
+    let commit = text(&git_in(
+        root,
+        WorkspaceOp::CommitTree {
+            tree: tree_id,
+            parents: vec![parent],
+        },
+        Some(&message_bytes),
+    )?)
+    .trim()
+    .to_string();
+    let actions = plan_index_actions(root, plan, &commit)?;
+    publish(root, plan, &reference, &head, &commit, &actions, tmp.path())?;
+    Ok(json!({
+        "schema_version": SCHEMA,
+        "command": format!("{COMMAND} apply"),
+        "old_head": head,
+        "commit": commit,
+        "ref": reference,
+        "tree": tree,
+        "selected": selected.iter().map(|h| h["id"].clone()).collect::<Vec<_>>(),
+        "index_actions": actions,
+        "plan_sum": got_sum,
+        "outcome": "ok",
+    }))
+}
+
+fn refused(command: &str, fail: &Fail) -> Value {
+    json!({
+        "schema_version": SCHEMA,
+        "command": format!("{COMMAND} {command}"),
+        "error": {"code": fail.code, "message": fail.message},
+        "outcome": "refused",
+    })
+}
+
+pub fn print_list(root: &Path, paths: &[String]) -> u8 {
+    match list_hunks(root, paths) {
+        Ok(doc) => {
+            emit(&doc);
+            exit::OK
+        }
+        Err(fail) => {
+            emit(&refused("list", &fail));
+            eprintln!("stw workspace commit-plan: {}: {}", fail.code, fail.message);
+            fail.status
+        }
+    }
+}
+
+pub fn print_plan(root: &Path, ids: &[String]) -> u8 {
+    match make_plan(root, ids) {
+        Ok(doc) => {
+            emit(&doc);
+            exit::OK
+        }
+        Err(fail) => {
+            emit(&refused("plan", &fail));
+            eprintln!("stw workspace commit-plan: {}: {}", fail.code, fail.message);
+            fail.status
+        }
+    }
+}
+
+pub fn print_apply(root: &Path, plan: &Value, message: &str, expected: Option<&str>) -> u8 {
+    match apply_plan(root, plan, message, expected) {
+        Ok(doc) => {
+            emit(&doc);
+            exit::OK
+        }
+        Err(fail) => {
+            emit(&refused("apply", &fail));
+            eprintln!(
+                "stw workspace commit-apply: {}: {}",
+                fail.code, fail.message
+            );
+            fail.status
+        }
+    }
+}
+
+pub fn is_hunk_plan(doc: &Value) -> bool {
+    doc["command"].as_str() == Some("hunk-select plan")
+        || doc.get("plan").and_then(|p| p["command"].as_str()) == Some("hunk-select plan")
+}
+
+pub fn plan_body(doc: &Value) -> Value {
+    doc.get("plan")
+        .filter(|p| p["command"].as_str() == Some("hunk-select plan"))
+        .cloned()
+        .unwrap_or_else(|| doc.clone())
+}

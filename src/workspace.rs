@@ -90,11 +90,17 @@ enum CommitSource {
 
 #[derive(Args)]
 pub(crate) struct CommitPlanArgs {
-    /// Source for the selected paths
-    #[arg(long, value_enum)]
-    source: CommitSource,
+    /// Source for the selected paths. Hunk selection requires `worktree`.
+    #[arg(long, value_enum, required_unless_present = "list_hunks")]
+    source: Option<CommitSource>,
+    /// List work-tree hunks against HEAD. Optional PATHS limit the list.
+    #[arg(long, conflicts_with = "hunk")]
+    list_hunks: bool,
+    /// Hunk id from `--list-hunks`, repeatable. Plans those hunks and refuses PATHS.
+    #[arg(long = "hunk")]
+    hunk: Vec<String>,
     /// Existing regular files relative to the worktree root
-    #[arg(required = true)]
+    #[arg(required_unless_present_any = ["list_hunks", "hunk"])]
     paths: Vec<PathBuf>,
     #[command(flatten)]
     output: OutputArgs,
@@ -107,6 +113,9 @@ pub(crate) struct CommitApplyArgs {
     /// Message for the selective commit
     #[arg(long)]
     message: String,
+    /// Expected plan_sum of a hunk plan. The stored sum is always checked.
+    #[arg(long)]
+    plan_sum: Option<String>,
     #[command(flatten)]
     output: OutputArgs,
 }
@@ -177,6 +186,7 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
     };
     let mut report =
         json!({"schema_version": 1, "command": format!("workspace {name}"), "via": "git"});
+    let mut printed = None;
     let result = (|| {
         let cwd = opts.repo.clone().unwrap_or(std::env::current_dir()?);
         let repo = crate::repo::discover::discover(&cwd)
@@ -193,20 +203,33 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
             WorkspaceCommand::WorktreeApply(a) => worktree_apply(&repo, &root, a, &mut report),
             WorkspaceCommand::Resume(a) => resume(&repo, &root, a, &mut report),
             WorkspaceCommand::CommitPlan(a) => {
+                if a.list_hunks || !a.hunk.is_empty() {
+                    printed = Some(hunk_commit_plan(&root, a));
+                    return Ok(());
+                }
                 use crate::selective_commit::{self, Source};
                 let source = match a.source {
-                    CommitSource::Index => Source::Index,
-                    CommitSource::Worktree => Source::Worktree,
+                    Some(CommitSource::Index) => Source::Index,
+                    Some(CommitSource::Worktree) => Source::Worktree,
+                    None => return Err(Error::usage("commit-plan requires --source")),
                 };
+                if a.paths.is_empty() {
+                    return Err(Error::usage("commit-plan requires at least one path"));
+                }
                 report["via"] = json!("gix");
                 report["plan"] =
                     serde_json::to_value(selective_commit::plan(&root, source, &a.paths)?)?;
                 Ok(())
             }
             WorkspaceCommand::CommitApply(a) => {
+                let bytes = fs::read(&a.plan)?;
+                let doc: Value = serde_json::from_slice(&bytes)?;
+                if crate::hunk_select::is_hunk_plan(&doc) {
+                    printed = Some(hunk_commit_apply(&root, a, &doc));
+                    return Ok(());
+                }
                 use crate::selective_commit::{self, Plan};
                 report["via"] = json!("gix");
-                let doc: Value = serde_json::from_slice(&fs::read(&a.plan)?)?;
                 let plan: Plan = serde_json::from_value(doc.get("plan").cloned().unwrap_or(doc))
                     .map_err(|error| {
                         Error::usage(format!("invalid selective commit plan: {error}"))
@@ -217,6 +240,9 @@ pub(crate) fn run(command: WorkspaceCommand) -> Result<u8> {
             }
         }
     })();
+    if let Some(code) = printed {
+        return Ok(code);
+    }
     let code = match result {
         Ok(()) => {
             report["outcome"] = json!("ok");
@@ -259,6 +285,50 @@ fn print_tip_drift(report: &Value) {
         "to use the current commit of the revision: run `stw workspace worktree-plan {revision} <destination>` again; \
          to continue at the pinned base: work in {destination}"
     );
+}
+
+fn hunk_commit_plan(root: &Path, args: &CommitPlanArgs) -> u8 {
+    if args.list_hunks && !args.hunk.is_empty() {
+        return crate::hunk_select::print_plan(root, &[]);
+    }
+    if !args.hunk.is_empty() && !args.paths.is_empty() {
+        let doc = serde_json::json!({
+            "schema_version": 1,
+            "command": "hunk-select plan",
+            "error": {"code": "hunk-and-paths", "message": "--hunk and PATHS cannot be combined"},
+            "outcome": "refused",
+        });
+        println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+        eprintln!("stw workspace commit-plan: hunk-and-paths: --hunk and PATHS cannot be combined");
+        return crate::error::exit::FAILED;
+    }
+    if matches!(args.source, Some(CommitSource::Index)) {
+        let doc = serde_json::json!({
+            "schema_version": 1,
+            "command": "hunk-select list",
+            "error": {"code": "source-worktree", "message": "hunk selection requires --source worktree"},
+            "outcome": "refused",
+        });
+        println!("{}", serde_json::to_string_pretty(&doc).unwrap_or_default());
+        eprintln!(
+            "stw workspace commit-plan: source-worktree: hunk selection requires --source worktree"
+        );
+        return crate::error::exit::USAGE;
+    }
+    if args.list_hunks {
+        let paths = args
+            .paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>();
+        return crate::hunk_select::print_list(root, &paths);
+    }
+    crate::hunk_select::print_plan(root, &args.hunk)
+}
+
+fn hunk_commit_apply(root: &Path, args: &CommitApplyArgs, doc: &Value) -> u8 {
+    let plan = crate::hunk_select::plan_body(doc);
+    crate::hunk_select::print_apply(root, &plan, &args.message, args.plan_sum.as_deref())
 }
 
 fn git(root: &Path, op: Git) -> Result<Vec<u8>> {
