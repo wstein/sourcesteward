@@ -22,6 +22,7 @@ Commands:
   oplog        The op log: ref changes (timeline), rewrites of a commit (evolog), undo of one branch and the opt-in git hooks that write it
   workspace    Save and resume a local task checkpoint
   inspect      Inspect published PR changes or compare local revisions without checking them out
+  resolve      Resolve a commit hash or Change-Id to the current commit in an explicit range (read-only)
   watch        Watch GitHub activity and print transitions (read-only)
   lint         Check work products against the working rules (read-only)
   help         Print this message or the help of the given subcommand(s)
@@ -1626,6 +1627,51 @@ Arguments:
 Options:
   -h, --help
           Print help (see a summary with '-h')
+
+For AI agents: https://wstein.github.io/sourcesteward/agents/
+```
+
+## `stw resolve`
+
+```text
+Resolve a commit hash or Change-Id to the current commit in an explicit range (read-only)
+
+Usage: stw resolve [OPTIONS] --repo <PATH> --range <REV>... --query <TEXT>
+
+Options:
+      --repo <PATH>
+          Repository path (a git work tree or bare repository)
+
+      --range <REV>...
+          Rev-list arguments that bound the search (`A..B`, a tip, or `A B ^C`). Required; no default
+
+      --change-id
+          Treat --query as a Change-Id even when it looks like a hex SHA abbreviation
+
+      --query <TEXT>
+          A commit hash (7–40/64 hex) or a Change-Id (full or prefix of at least 10 symbols)
+
+  -h, --help
+          Print help (see a summary with '-h')
+
+New in stw (SourceSteward #40). Resolve a commit hash or a Change-Id against an explicit rev range.
+There is no default range. The search walks every parent path inside the range, so a Change-Id that
+survives only on the second parent of a merge is still found.
+
+A Change-Id is 25 Crockford Base32 symbols (`0-9A-Z` without I L O U). Queries are normalised
+(case, hyphens, I/L→1, O→0). A unique prefix of at least 10 symbols matches. Several matches are
+`ambiguous` and every candidate is listed. The line is recognised anywhere in the commit message.
+
+A query of 7 to 39 hex characters (or a full 40/64-hex object id) is tried as a SHA first. Use
+`--change-id` when a hex-looking string must be treated as a Change-Id. Op-log and patch-id
+fallbacks are not part of this command yet. The command writes nothing.
+
+Usage: stw resolve --repo PATH --range REV... --query TEXT [--change-id]
+
+Exit codes:
+  0  exact (one commit)
+  1  none or ambiguous (the JSON document is still printed)
+  2  usage error
 
 For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```
