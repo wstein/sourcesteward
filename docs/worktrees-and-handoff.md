@@ -13,7 +13,10 @@ commit is available locally, and that the canonical destination is still
 vacant. The destination's parent must already exist.
 
 Apply checks out the saved commit in a native linked worktree with detached
-HEAD, even if the original revision name now resolves elsewhere. It leaves
+HEAD. The plan pins that commit OID; apply never follows a live branch tip. If
+the original revision name now resolves elsewhere, apply still uses the pinned
+SHA and records a `notices` entry (and `tip_drift: true` in JSON) that names
+both tips. If the pinned commit is missing locally, apply refuses. It leaves
 the source checkout, its index, and existing refs in place. If Git reports a
 checkout error, inspect the reported destination and `git worktree list` for
 partial state before retrying.

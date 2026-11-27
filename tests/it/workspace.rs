@@ -532,6 +532,7 @@ fn worktree_plan_leaves_source_intact_and_apply_checks_out_the_saved_commit() {
     );
     let plan = &report["plan"];
     assert_eq!(plan["base"], base_text);
+    assert_eq!(plan["revision"], "named-base");
     let canonical_target = root.canonicalize().unwrap().with_file_name("new workspace");
     assert_eq!(plan["destination"], canonical_target.to_str().unwrap());
     assert!(!target.exists());
@@ -550,6 +551,18 @@ fn worktree_plan_leaves_source_intact_and_apply_checks_out_the_saved_commit() {
     let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
     assert_eq!(report["base"], base_text);
     assert_eq!(report["created"], true);
+    assert_eq!(report["tip_drift"], true);
+    assert_eq!(report["revision"], "named-base");
+    assert_eq!(report["revision_tip"], moved.to_string());
+    assert_eq!(report["pinned_base"], base_text);
+    let notices = report["notices"].as_array().expect("notices");
+    assert_eq!(notices.len(), 1);
+    let notice = notices[0].as_str().unwrap();
+    assert!(
+        notice.contains(&format!("revision named-base now points to {moved}"))
+            && notice.contains(&format!("applying pinned base {base_text}")),
+        "{notice}"
+    );
     assert_eq!(git(&target, &["rev-parse", "HEAD"]).trim(), base_text);
     assert_eq!(
         git(&target, &["status", "--porcelain", "--branch"]),
@@ -563,6 +576,55 @@ fn worktree_plan_leaves_source_intact_and_apply_checks_out_the_saved_commit() {
         fs::read_to_string(root.join("mixed")).unwrap(),
         "worktree\n"
     );
+}
+
+#[test]
+fn worktree_apply_surfaces_tip_drift_and_keeps_pinned_base() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("drift workspace");
+    let base = fx.repo().head_id().unwrap().detach();
+    let base_text = base.to_string();
+    git(root, &["branch", "topic"]);
+    let report = run(
+        root,
+        &["worktree-plan", "topic", target.to_str().unwrap()],
+        0,
+    );
+    let plan = report["plan"].clone();
+    let later = fx.commit(Some(base), &[("mixed", Some("ahead\n"))], "ahead");
+    git(root, &["branch", "-f", "topic", &later.to_string()]);
+    let plan_path = root.with_file_name("drift-plan.json");
+    fs::write(&plan_path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
+    assert_eq!(report["outcome"], "ok");
+    assert_eq!(report["tip_drift"], true);
+    assert_eq!(report["base"], base_text);
+    assert_eq!(git(&target, &["rev-parse", "HEAD"]).trim(), base_text);
+    assert_ne!(
+        git(&target, &["rev-parse", "HEAD"]).trim(),
+        later.to_string()
+    );
+}
+
+#[test]
+fn worktree_apply_accepts_legacy_plans_without_revision() {
+    let fx = fixture();
+    let root = &fx.path;
+    let target = root.with_file_name("legacy workspace");
+    let report = run(
+        root,
+        &["worktree-plan", "HEAD", target.to_str().unwrap()],
+        0,
+    );
+    let mut plan = report["plan"].clone();
+    plan.as_object_mut().unwrap().remove("revision");
+    let plan_path = root.with_file_name("legacy-plan.json");
+    fs::write(&plan_path, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let report = run(root, &["worktree-apply", plan_path.to_str().unwrap()], 0);
+    assert_eq!(report["created"], true);
+    assert!(report.get("tip_drift").is_none());
+    assert!(report.get("notices").is_none());
 }
 
 #[test]
