@@ -1,5 +1,6 @@
 //! Port of the hunk-select spike checks. Disposable repositories only.
 use std::fs;
+use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -1801,4 +1802,96 @@ fn intent_to_add_and_tracked_newline_changes_keep_the_worktree_bytes() {
     repo.write("crlf.txt", crlf);
     commit_one(&repo, "crlf.txt", "crlf");
     assert_eq!(git_bytes(repo.path(), &["show", "HEAD:crlf.txt"]), crlf);
+}
+
+fn refused_reasons(doc: &Value) -> Vec<(String, String)> {
+    doc["refused"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default()
+        .into_iter()
+        .map(|item| {
+            (
+                item["path"].as_str().unwrap_or("").to_string(),
+                item["reason"].as_str().unwrap_or("").to_string(),
+            )
+        })
+        .collect()
+}
+
+fn list(repo: &Repo) -> Value {
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    doc
+}
+
+#[test]
+fn non_utf8_and_tab_paths_are_refused_at_list_time() {
+    let repo = Repo::new();
+    fs::write(
+        repo.path().join(std::ffi::OsStr::from_bytes(b"a\xffb")),
+        b"x\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join(std::ffi::OsStr::from_bytes(b"c\xfed")),
+        b"y\n",
+    )
+    .unwrap();
+    fs::write(
+        repo.path().join(std::ffi::OsStr::from_bytes(b"has\ttab")),
+        b"t\n",
+    )
+    .unwrap();
+    let doc = list(&repo);
+    let refused = refused_reasons(&doc);
+    let utf8: Vec<_> = refused
+        .iter()
+        .filter(|(_, reason)| reason == "non-utf8-path")
+        .map(|(path, _)| path.clone())
+        .collect();
+    assert_eq!(utf8.len(), 2, "{refused:?}");
+    assert_ne!(utf8[0], utf8[1], "{refused:?}");
+    assert!(
+        refused.iter().any(|(_, reason)| reason == "tab-in-path"),
+        "{refused:?}"
+    );
+    assert!(
+        listed_hunks(&doc)
+            .iter()
+            .all(|hunk| hunk["path"] != utf8[0] && hunk["path"] != utf8[1]),
+        "{doc}"
+    );
+}
+
+#[test]
+fn non_utf8_hunk_text_is_refused_at_list_time() {
+    let repo = Repo::new();
+    repo.write("latin1.txt", b"ok\n");
+    git(repo.path(), &["add", "--", "latin1.txt"]);
+    git(repo.path(), &["commit", "-m", "text"]);
+    repo.write("latin1.txt", b"ok\xff\n");
+    let doc = list(&repo);
+    let refused = refused_reasons(&doc);
+    assert!(
+        refused
+            .iter()
+            .any(|(path, reason)| path == "latin1.txt" && reason == "non-utf8-text"),
+        "{refused:?} {doc}"
+    );
+    assert!(
+        listed_hunks(&doc)
+            .iter()
+            .all(|hunk| hunk["path"] != "latin1.txt"),
+        "{doc}"
+    );
 }
