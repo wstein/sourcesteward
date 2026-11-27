@@ -13,7 +13,7 @@ use crate::output::{self, print_json};
 use crate::repo::{self, RepoRef};
 use crate::{
     absorb, add, carryover, dev, git_runner, lint_files, lint_pr, lint_pr_cmd, oplog, prove,
-    restack_plan, status, status_all, status_review, status_stats, sync, tidy, tidy_apply,
+    resolve, restack_plan, status, status_all, status_review, status_stats, sync, tidy, tidy_apply,
     tidy_history, tidy_similarity,
 };
 
@@ -96,6 +96,9 @@ enum Command {
         #[command(subcommand)]
         source: InspectSource,
     },
+    /// Resolve a commit hash or Change-Id to the current commit in an explicit range (read-only)
+    #[command(after_help = RESOLVE_HELP)]
+    Resolve(ResolveArgs),
     /// Watch GitHub activity and print transitions (read-only)
     #[command(after_help = WATCH_HELP)]
     Watch(WatchArgs),
@@ -667,6 +670,42 @@ fn run_carry_over(a: CarryOverArgs) -> Result<u8> {
     } else {
         exit::FAILED
     })
+}
+
+const RESOLVE_HELP: &str = "\
+New in stw (SourceSteward #40). Resolve a commit hash or a Change-Id against an explicit rev range.
+There is no default range. The search walks every parent path inside the range, so a Change-Id that
+survives only on the second parent of a merge is still found.
+
+A Change-Id is 25 Crockford Base32 symbols (`0-9A-Z` without I L O U). Queries are normalised
+(case, hyphens, I/L→1, O→0). A unique prefix of at least 10 symbols matches. Several matches are
+`ambiguous` and every candidate is listed. The line is recognised anywhere in the commit message.
+
+A query of 7 to 39 hex characters (or a full 40/64-hex object id) is tried as a SHA first. Use
+`--change-id` when a hex-looking string must be treated as a Change-Id. Op-log and patch-id
+fallbacks are not part of this command yet. The command writes nothing.
+
+Usage: stw resolve --repo PATH --range REV... --query TEXT [--change-id]
+
+Exit codes:
+  0  exact (one commit)
+  1  none or ambiguous (the JSON document is still printed)
+  2  usage error";
+
+#[derive(Args)]
+struct ResolveArgs {
+    /// Repository path (a git work tree or bare repository)
+    #[arg(long, value_name = "PATH")]
+    repo: PathBuf,
+    /// Rev-list arguments that bound the search (`A..B`, a tip, or `A B ^C`). Required; no default.
+    #[arg(long = "range", value_name = "REV", num_args = 1.., required = true)]
+    range: Vec<String>,
+    /// Treat --query as a Change-Id even when it looks like a hex SHA abbreviation
+    #[arg(long = "change-id")]
+    change_id: bool,
+    /// A commit hash (7–40/64 hex) or a Change-Id (full or prefix of at least 10 symbols)
+    #[arg(long, value_name = "TEXT", required = true)]
+    query: String,
 }
 
 const PROVE_HELP: &str = "\
@@ -2188,6 +2227,7 @@ fn git_command_label(command: &Command) -> &'static str {
         | Command::Oplog { .. }
         | Command::Lint { .. }
         | Command::Inspect { .. }
+        | Command::Resolve(_)
         | Command::Watch(_)
         | Command::Dev { .. } => "this step",
     }
@@ -2297,6 +2337,23 @@ fn run(command: Command) -> Result<u8> {
             };
             print_json(&serde_json::to_value(&report).expect("inspection report uses JSON values"));
             Ok(failed(!report.complete()))
+        }
+        Command::Resolve(a) => {
+            let repo = resolve::open_repo(&a.repo)?;
+            let doc = resolve::resolve(
+                &repo,
+                resolve::Opts {
+                    query: &a.query,
+                    range: &a.range,
+                    force_change_id: a.change_id,
+                },
+            )?;
+            print_json(&doc.to_json());
+            Ok(if doc.is_exact() {
+                exit::OK
+            } else {
+                exit::FAILED
+            })
         }
         Command::Watch(a) => run_watch(a),
         Command::Sync(SyncArgs {
