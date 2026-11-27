@@ -61,16 +61,15 @@ fn path_arg(path: &str) -> Result<BlamePath, Fail> {
         .ok_or_else(|| Fail::new("bad-path", format!("refused path {path}"), 1))
 }
 
-fn unquote_path(raw: &str) -> String {
-    let bytes = raw.as_bytes();
-    if !(bytes.first() == Some(&b'"') && bytes.last() == Some(&b'"') && bytes.len() >= 2) {
-        return raw.to_string();
+fn unquote_token(token: &[u8]) -> Vec<u8> {
+    if !(token.first() == Some(&b'"') && token.last() == Some(&b'"') && token.len() >= 2) {
+        return token.to_vec();
     }
     let mut out = Vec::new();
     let mut i = 1;
-    while i < bytes.len() - 1 {
-        if bytes[i] == b'\\' && i + 1 < bytes.len() - 1 {
-            let n = bytes[i + 1];
+    while i < token.len() - 1 {
+        if token[i] == b'\\' && i + 1 < token.len() - 1 {
+            let n = token[i + 1];
             let esc = match n {
                 b'a' => Some(7),
                 b'b' => Some(8),
@@ -88,21 +87,74 @@ fn unquote_path(raw: &str) -> String {
                 i += 2;
                 continue;
             }
-            if i + 3 < bytes.len()
-                && bytes[i + 1..i + 4]
+            if i + 3 < token.len()
+                && token[i + 1..i + 4]
                     .iter()
                     .all(|b| (b'0'..=b'7').contains(b))
             {
-                let oct = std::str::from_utf8(&bytes[i + 1..i + 4]).unwrap_or("0");
+                let oct = std::str::from_utf8(&token[i + 1..i + 4]).unwrap_or("0");
                 out.push(u8::from_str_radix(oct, 8).unwrap_or(0));
                 i += 4;
                 continue;
             }
         }
-        out.push(bytes[i]);
+        out.push(token[i]);
         i += 1;
     }
-    text(&out)
+    out
+}
+
+fn unquote_path(raw: &str) -> String {
+    text(&unquote_token(raw.as_bytes()))
+}
+
+/// A path Git can name but this command will not list. The display form keeps two
+/// non-UTF-8 names distinct: lossy UTF-8 would turn both into the same replacement.
+fn path_fault(bytes: &[u8]) -> Option<&'static str> {
+    if std::str::from_utf8(bytes).is_err() {
+        return Some("non-utf8-path");
+    }
+    if bytes.contains(&b'\t') {
+        return Some("tab-in-path");
+    }
+    None
+}
+
+fn display_path(bytes: &[u8]) -> String {
+    match std::str::from_utf8(bytes) {
+        Ok(path) if !path.contains('\t') => path.to_string(),
+        _ => {
+            let mut out = String::from("\"");
+            for &byte in bytes {
+                match byte {
+                    b'\\' => out.push_str("\\\\"),
+                    b'"' => out.push_str("\\\""),
+                    b'\t' => out.push_str("\\t"),
+                    0x20..=0x7e => out.push(byte as char),
+                    _ => out.push_str(&format!("\\{byte:03o}")),
+                }
+            }
+            out.push('"');
+            out
+        }
+    }
+}
+
+fn classify_path(bytes: Vec<u8>) -> Result<String, (&'static str, String)> {
+    if let Some(reason) = path_fault(&bytes) {
+        let shown = display_path(&bytes);
+        return Err((reason, shown));
+    }
+    Ok(String::from_utf8(bytes).unwrap_or_default())
+}
+
+fn path_message(reason: &str) -> &'static str {
+    match reason {
+        "non-utf8-path" => "path is not UTF-8",
+        "tab-in-path" => "path contains a tab",
+        "non-utf8-text" => "hunk text is not UTF-8",
+        _ => "path refused",
+    }
 }
 
 fn short_hash(body: &[u8]) -> String {
@@ -306,6 +358,8 @@ struct RawHunk {
     /// The `diff --git` line could not be parsed. The path is empty so a later hunk is not
     /// attributed to the previous file.
     unparsed: bool,
+    /// Named refusal (`non-utf8-path`, `tab-in-path`). `path` is the distinct display form.
+    fault: Option<&'static str>,
 }
 
 fn parse_diff_hunks(diff: &[u8]) -> Vec<RawHunk> {
@@ -356,25 +410,49 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                 preamble.push(lines[i]);
                 i += 1;
             }
-            let parsed =
-                parse_diff_header_paths(trimmed).or_else(|| paths_from_preamble(&preamble));
-            let Some((old, new)) = parsed else {
-                // The running path stays empty, so a following @@ is not attributed to the
-                // previous file. The refusal still names this file when the preamble has one.
-                hunks.push(RawHunk {
-                    path: path_hint_from_preamble(&preamble),
-                    old_path: String::new(),
-                    new_path: String::new(),
-                    old_start: 0,
-                    old_count: 0,
-                    new_start: 0,
-                    new_count: 0,
-                    body: Vec::new(),
-                    file_header: std::mem::take(&mut file_header),
-                    binary: false,
-                    unparsed: true,
-                });
-                continue;
+            let parsed = decide_paths(trimmed, &preamble);
+            let (old, new) = match parsed {
+                PathChoice::Paths(old, new) => (old, new),
+                PathChoice::Bad(reason, shown) => {
+                    hunks.push(RawHunk {
+                        path: shown,
+                        old_path: String::new(),
+                        new_path: String::new(),
+                        old_start: 0,
+                        old_count: 0,
+                        new_start: 0,
+                        new_count: 0,
+                        body: Vec::new(),
+                        file_header: std::mem::take(&mut file_header),
+                        binary: false,
+                        unparsed: false,
+                        fault: Some(reason),
+                    });
+                    path.clear();
+                    old_path.clear();
+                    new_path.clear();
+                    file_header = Vec::new();
+                    continue;
+                }
+                PathChoice::Missing => {
+                    // The running path stays empty, so a following @@ is not attributed to the
+                    // previous file. The refusal still names this file when the preamble has one.
+                    hunks.push(RawHunk {
+                        path: path_hint_from_preamble(&preamble),
+                        old_path: String::new(),
+                        new_path: String::new(),
+                        old_start: 0,
+                        old_count: 0,
+                        new_start: 0,
+                        new_count: 0,
+                        body: Vec::new(),
+                        file_header: std::mem::take(&mut file_header),
+                        binary: false,
+                        unparsed: true,
+                        fault: None,
+                    });
+                    continue;
+                }
             };
             old_path = old;
             new_path = new;
@@ -399,6 +477,7 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                     file_header,
                     binary: true,
                     unparsed: false,
+                    fault: None,
                 });
                 path = String::new();
                 old_path = String::new();
@@ -441,6 +520,7 @@ fn parse_diff_hunks_keep(diff: &[u8]) -> Vec<RawHunk> {
                 file_header: file_header.clone(),
                 binary: false,
                 unparsed: false,
+                fault: None,
             });
             continue;
         }
@@ -454,34 +534,65 @@ fn trim_nl(line: &[u8]) -> &[u8] {
     line.strip_suffix(b"\r").unwrap_or(line)
 }
 
+enum PathChoice {
+    Paths(String, String),
+    Bad(&'static str, String),
+    Missing,
+}
+
+fn decide_paths(header: &[u8], preamble: &[&[u8]]) -> PathChoice {
+    match parse_diff_header_paths(header) {
+        PathChoice::Missing => paths_from_preamble(preamble)
+            .map(|(old, new)| PathChoice::Paths(old, new))
+            .unwrap_or(PathChoice::Missing),
+        other => other,
+    }
+}
+
 /// The two paths of a `diff --git` line. Git quotes a non-ASCII path (`core.quotePath`),
 /// so the line is `diff --git "a/caf\303\251" "b/caf\303\251"` rather than `diff --git a/...`.
 /// A space is not quoted: `diff --git a/x y.txt b/x y.txt`. Without a rename both sides are
 /// the same path, so the split is the one where `a/P` and `b/P` are equal.
-fn parse_diff_header_paths(line: &[u8]) -> Option<(String, String)> {
-    let rest = trim_nl(line).strip_prefix(b"diff --git ")?;
+fn parse_diff_header_paths(line: &[u8]) -> PathChoice {
+    let Some(rest) = trim_nl(line).strip_prefix(b"diff --git ") else {
+        return PathChoice::Missing;
+    };
     if rest.contains(&b'"') {
         return parse_quoted_header_paths(rest);
     }
     split_where_sides_match(rest)
 }
 
-fn parse_quoted_header_paths(rest: &[u8]) -> Option<(String, String)> {
-    let (old_token, rest) = split_diff_token(rest)?;
-    let rest = rest.strip_prefix(b" ")?;
-    let (new_token, rest) = split_diff_token(rest)?;
+fn parse_quoted_header_paths(rest: &[u8]) -> PathChoice {
+    let Some((old_token, rest)) = split_diff_token(rest) else {
+        return PathChoice::Missing;
+    };
+    let Some(rest) = rest.strip_prefix(b" ") else {
+        return PathChoice::Missing;
+    };
+    let Some((new_token, rest)) = split_diff_token(rest) else {
+        return PathChoice::Missing;
+    };
     if !rest.is_empty() {
-        return None;
+        return PathChoice::Missing;
     }
-    let old_path = side_path(old_token, "a/")?;
-    let new_path = side_path(new_token, "b/")?;
+    let old_path = match one_side(old_token, "a/") {
+        Ok(Some(path)) => path,
+        Ok(None) => return PathChoice::Missing,
+        Err((reason, shown)) => return PathChoice::Bad(reason, shown),
+    };
+    let new_path = match one_side(new_token, "b/") {
+        Ok(Some(path)) => path,
+        Ok(None) => return PathChoice::Missing,
+        Err((reason, shown)) => return PathChoice::Bad(reason, shown),
+    };
     if old_path.is_empty() || new_path.is_empty() {
-        return None;
+        return PathChoice::Missing;
     }
-    Some((old_path, new_path))
+    PathChoice::Paths(old_path, new_path)
 }
 
-fn split_where_sides_match(rest: &[u8]) -> Option<(String, String)> {
+fn split_where_sides_match(rest: &[u8]) -> PathChoice {
     let marker = b" b/";
     let mut from = 0;
     while from + marker.len() <= rest.len() {
@@ -494,14 +605,22 @@ fn split_where_sides_match(rest: &[u8]) -> Option<(String, String)> {
         let at = from + rel;
         let left = &rest[..at];
         let right = &rest[at + 1..];
-        if let (Some(old), Some(new)) = (side_path(left, "a/"), side_path(right, "b/")) {
+        let old = match one_side(left, "a/") {
+            Ok(path) => path,
+            Err((reason, shown)) => return PathChoice::Bad(reason, shown),
+        };
+        let new = match one_side(right, "b/") {
+            Ok(path) => path,
+            Err((reason, shown)) => return PathChoice::Bad(reason, shown),
+        };
+        if let (Some(old), Some(new)) = (old, new) {
             if !old.is_empty() && old == new {
-                return Some((old, new));
+                return PathChoice::Paths(old, new);
             }
         }
         from = at + 1;
     }
-    None
+    PathChoice::Missing
 }
 
 /// A rename's `diff --git` line has two different paths, so the equal-side split does not
@@ -567,7 +686,7 @@ fn decode_ab_path(rest: &[u8]) -> Option<String> {
             None => rest,
         }
     };
-    let decoded = unquote_path(&text(token));
+    let decoded = classify_path(unquote_token(token)).ok()?;
     if decoded == "/dev/null" {
         return Some(decoded);
     }
@@ -600,12 +719,18 @@ fn split_diff_token(input: &[u8]) -> Option<(&[u8], &[u8])> {
     Some((&input[..end], &input[end..]))
 }
 
-fn side_path(token: &[u8], prefix: &str) -> Option<String> {
-    let decoded = unquote_path(&text(token));
-    if decoded == "/dev/null" {
-        return Some(decoded);
+fn one_side(token: &[u8], prefix: &str) -> Result<Option<String>, (&'static str, String)> {
+    let decoded = unquote_token(token);
+    if decoded == b"/dev/null" {
+        return Ok(Some("/dev/null".to_string()));
     }
-    decoded.strip_prefix(prefix).map(str::to_string)
+    let Some(rest) = decoded.strip_prefix(prefix.as_bytes()) else {
+        return Ok(None);
+    };
+    if rest.is_empty() {
+        return Ok(None);
+    }
+    classify_path(rest.to_vec()).map(Some)
 }
 
 fn parse_hunk_header(line: &[u8]) -> Option<(u32, u32, u32, u32)> {
@@ -714,6 +839,14 @@ fn untracked_hunk(root: &Path, path: &str) -> Result<Option<Value>, Fail> {
         return Ok(None);
     }
     let data = fs::read(&full).map_err(|e| Fail::new("worktree", e.to_string(), 1))?;
+    if std::str::from_utf8(&data).is_err() {
+        return Ok(Some(json!({
+            "refused": true,
+            "path": path,
+            "reason": "non-utf8-text",
+            "message": path_message("non-utf8-text"),
+        })));
+    }
     if data.iter().take(8000).any(|b| *b == 0) {
         return Ok(Some(json!({
             "refused": true,
@@ -785,11 +918,28 @@ pub fn list_hunks(root: &Path, only: &[String]) -> Result<Value, Fail> {
     let mut hunks = Vec::new();
     let diff = git(root, WorkspaceOp::DiffWorktreeU0)?;
     for raw in parse_diff_hunks(&diff) {
+        if let Some(reason) = raw.fault {
+            refused.push(json!({
+                "path": raw.path,
+                "reason": reason,
+                "message": path_message(reason),
+            }));
+            continue;
+        }
         if raw.unparsed || raw.path.is_empty() {
             refused.push(json!({
                 "path": raw.path,
                 "reason": "unparsed-diff",
                 "message": "diff header could not be parsed",
+            }));
+            continue;
+        }
+        if std::str::from_utf8(&raw.body).is_err() || std::str::from_utf8(&raw.file_header).is_err()
+        {
+            refused.push(json!({
+                "path": raw.path,
+                "reason": "non-utf8-text",
+                "message": path_message("non-utf8-text"),
             }));
             continue;
         }
@@ -862,7 +1012,15 @@ pub fn list_hunks(root: &Path, only: &[String]) -> Result<Value, Fail> {
         if raw_path.is_empty() {
             continue;
         }
-        let path = text(raw_path);
+        if let Err((reason, shown)) = classify_path(raw_path.to_vec()) {
+            refused.push(json!({
+                "path": shown,
+                "reason": reason,
+                "message": path_message(reason),
+            }));
+            continue;
+        }
+        let path = std::str::from_utf8(raw_path).unwrap_or("").to_string();
         let Some(item) = untracked_hunk(root, &path)? else {
             continue;
         };
