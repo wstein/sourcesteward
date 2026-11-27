@@ -26,6 +26,7 @@ pub mod prove;
 pub mod ready_check;
 pub mod replay;
 pub mod repo;
+pub mod resolve;
 pub mod restack_plan;
 pub mod review;
 pub mod sha256;
