@@ -1488,17 +1488,23 @@ For AI agents: https://wstein.github.io/sourcesteward/agents/
 ```text
 Preview a commit made from selected index or worktree content
 
-Usage: stw workspace commit-plan [OPTIONS] --source <SOURCE> <PATHS>...
+Usage: stw workspace commit-plan [OPTIONS] [PATHS]...
 
 Arguments:
-  <PATHS>...
+  [PATHS]...
           Existing regular files relative to the worktree root
 
 Options:
       --source <SOURCE>
-          Source for the selected paths
+          Source for the selected paths. Hunk selection requires `worktree`
 
           [possible values: index, worktree]
+
+      --list-hunks
+          List work-tree hunks against HEAD. Optional PATHS limit the list
+
+      --hunk <HUNK>
+          Hunk id from `--list-hunks`, repeatable. Plans those hunks and refuses PATHS
 
       --repo <REPO>
           Repository or worktree path (default: discover from the working directory)
@@ -1526,6 +1532,9 @@ Arguments:
 Options:
       --message <MESSAGE>
           Message for the selective commit
+
+      --plan-sum <PLAN_SUM>
+          Expected plan_sum of a hunk plan. The stored sum is always checked
 
       --repo <REPO>
           Repository or worktree path (default: discover from the working directory)

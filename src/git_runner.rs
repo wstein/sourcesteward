@@ -369,6 +369,62 @@ pub enum WorkspaceOp {
         tree: Hex40,
         index: Option<PathBuf>,
     },
+    /// `git diff -U0 --find-renames HEAD`. Exit 1 (differences) is success.
+    DiffWorktreeU0,
+    /// `git diff --summary HEAD`. Exit 1 is success.
+    DiffSummary,
+    /// `git diff --numstat HEAD -- <path>`. Exit 1 is success.
+    DiffNumstat {
+        path: BlamePath,
+    },
+    LsFilesStage {
+        path: BlamePath,
+    },
+    LsFilesOthers,
+    /// `git hash-object --stdin`. The caller passes the bytes.
+    HashObject,
+    SymbolicRefHead,
+    RevParseHead,
+    RevParseHeadTree,
+    RevParseHeadPath {
+        path: BlamePath,
+    },
+    GitDir,
+    ApplyCached {
+        index: PathBuf,
+        patch: PathBuf,
+    },
+    ReadTreeHead {
+        index: PathBuf,
+    },
+    UpdateIndexRemove {
+        index: PathBuf,
+        path: BlamePath,
+    },
+    /// `git update-index --add --cacheinfo <mode>,<oid>,<path>`.
+    UpdateIndexAdd {
+        index: PathBuf,
+        mode: String,
+        oid: Hex40,
+        path: BlamePath,
+    },
+    /// `git update-index --cacheinfo <mode>,<oid>,<path>` without `--add`.
+    UpdateIndexCacheinfo {
+        index: PathBuf,
+        mode: String,
+        oid: Hex40,
+        path: BlamePath,
+    },
+    LsTreePath {
+        treeish: Hex40,
+        path: BlamePath,
+    },
+    /// `git update-ref --no-deref <ref> <new> <expected>`.
+    MoveBranch {
+        reference: BranchRef,
+        new: Hex40,
+        expected: Hex40,
+    },
 }
 
 impl WorkspaceOp {
@@ -469,6 +525,83 @@ impl WorkspaceOp {
                 v(&["read-tree", "--reset", "-u", checkpoint.as_str()])
             }
             Self::LoadIndex { tree, .. } => v(&["read-tree", tree.as_str()]),
+            Self::DiffWorktreeU0 => v(&[
+                "diff",
+                "-U0",
+                "--find-renames",
+                "--no-ext-diff",
+                "--no-textconv",
+                "HEAD",
+            ]),
+            Self::DiffSummary => v(&[
+                "diff",
+                "--summary",
+                "--no-ext-diff",
+                "--no-textconv",
+                "HEAD",
+            ]),
+            Self::DiffNumstat { path } => v(&[
+                "diff",
+                "--numstat",
+                "--no-ext-diff",
+                "--no-textconv",
+                "HEAD",
+                "--",
+                path.as_str(),
+            ]),
+            Self::LsFilesStage { path } => v(&["ls-files", "-s", "-z", "--", path.as_str()]),
+            Self::LsFilesOthers => v(&["ls-files", "--others", "--exclude-standard", "-z"]),
+            Self::HashObject => v(&["hash-object", "--stdin"]),
+            Self::SymbolicRefHead => v(&["symbolic-ref", "-q", "HEAD"]),
+            Self::RevParseHead => v(&["rev-parse", "--verify", "HEAD"]),
+            Self::RevParseHeadTree => v(&["rev-parse", "--verify", "HEAD^{tree}"]),
+            Self::RevParseHeadPath { path } => v(&[
+                "rev-parse",
+                "--verify",
+                "--end-of-options",
+                &format!("HEAD:{}", path.as_str()),
+            ]),
+            Self::GitDir => v(&["rev-parse", "--git-dir"]),
+            Self::ApplyCached { patch, .. } => v(&[
+                "apply",
+                "--cached",
+                "--unidiff-zero",
+                "--",
+                &patch.display().to_string(),
+            ]),
+            Self::ReadTreeHead { .. } => v(&["read-tree", "HEAD"]),
+            Self::UpdateIndexRemove { path, .. } => {
+                v(&["update-index", "--remove", "--", path.as_str()])
+            }
+            Self::UpdateIndexAdd {
+                mode, oid, path, ..
+            } => v(&[
+                "update-index",
+                "--add",
+                "--cacheinfo",
+                &format!("{},{},{}", mode, oid.as_str(), path.as_str()),
+            ]),
+            Self::UpdateIndexCacheinfo {
+                mode, oid, path, ..
+            } => v(&[
+                "update-index",
+                "--cacheinfo",
+                &format!("{},{},{}", mode, oid.as_str(), path.as_str()),
+            ]),
+            Self::LsTreePath { treeish, path } => {
+                v(&["ls-tree", "-z", treeish.as_str(), "--", path.as_str()])
+            }
+            Self::MoveBranch {
+                reference,
+                new,
+                expected,
+            } => v(&[
+                "update-ref",
+                "--no-deref",
+                reference.as_str(),
+                new.as_str(),
+                expected.as_str(),
+            ]),
         }
     }
 
@@ -478,10 +611,19 @@ impl WorkspaceOp {
             Self::WriteTree(index)
             | Self::WorktreeChanges(index)
             | Self::Capture { index, .. }
-            | Self::Materialize { index, .. } => Some(index),
+            | Self::Materialize { index, .. }
+            | Self::ApplyCached { index, .. }
+            | Self::ReadTreeHead { index }
+            | Self::UpdateIndexRemove { index, .. }
+            | Self::UpdateIndexAdd { index, .. }
+            | Self::UpdateIndexCacheinfo { index, .. } => Some(index),
             _ => None,
         }
     }
+}
+
+fn mode_octal(mode: &str) -> bool {
+    mode.len() == 6 && mode.bytes().all(|b| (b'0'..=b'7').contains(&b))
 }
 
 pub(crate) fn valid_task_name(name: &str) -> bool {
@@ -542,6 +684,22 @@ impl Op {
         match self {
             Op::Workspace(WorkspaceOp::Publish { task, .. }) if !valid_task_name(task) => {
                 Err(GitError::Argument("invalid workspace task name".into()))
+            }
+            Op::Workspace(
+                WorkspaceOp::UpdateIndexAdd { mode, .. }
+                | WorkspaceOp::UpdateIndexCacheinfo { mode, .. },
+            ) if !mode_octal(mode) => Err(GitError::Argument(
+                "index mode must be six octal digits".into(),
+            )),
+            Op::Workspace(WorkspaceOp::ApplyCached { patch, .. })
+                if !patch.is_absolute()
+                    || patch
+                        .to_str()
+                        .is_none_or(|text| text.contains(['\n', '\r', '\0'])) =>
+            {
+                Err(GitError::Argument(
+                    "patch path must be an absolute path".into(),
+                ))
             }
             Op::FetchPullHead { pr: 0 } => Err(GitError::Argument(
                 "a pull request number starts at 1".into(),
@@ -1369,7 +1527,15 @@ impl Runner {
             &redact(&String::from_utf8_lossy(&stderr), &self.secrets),
             600,
         );
-        if status.success() {
+        let diff_differences = matches!(
+            op,
+            Op::Workspace(
+                WorkspaceOp::DiffWorktreeU0
+                    | WorkspaceOp::DiffSummary
+                    | WorkspaceOp::DiffNumstat { .. }
+            )
+        ) && status.code() == Some(1);
+        if status.success() || diff_differences {
             return Ok(Output { stdout, stderr });
         }
         let lower = stderr.to_ascii_lowercase();
