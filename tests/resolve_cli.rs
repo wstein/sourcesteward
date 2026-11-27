@@ -317,6 +317,94 @@ fn change_id_in_squash_body_is_found() {
 }
 
 #[test]
+fn old_sha_with_two_ids_finds_surviving_second_id() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    let both = format!("feature\n\nChange-Id: {CID_A}\nChange-Id: {CID_B}\n");
+    let old = fx.commit(Some(base), &[("a.txt", Some("2\n"))], &both);
+    // Only B survives in the search range (A is absent from the landed message).
+    let neu = fx.commit(
+        Some(base),
+        &[("a.txt", Some("2\n")), ("extra.txt", Some("e\n"))],
+        &msg("landed", CID_B),
+    );
+    fx.branch("main", base);
+    fx.branch("old", old);
+    fx.branch("topic", neu);
+
+    let abbrev = &old.to_string()[..12];
+    let (code, doc) = resolve(&path_str(&fx.path), &["main..topic"], abbrev, &[]);
+    assert_eq!(code, 0, "{doc}");
+    assert_eq!(doc["confidence"], "exact");
+    assert_eq!(doc["method"], "trailer");
+    assert_eq!(doc["commit"], neu.to_string());
+    assert_eq!(doc["change_id"], CID_B);
+}
+
+#[test]
+fn old_sha_with_two_ids_is_ambiguous_across_commits() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    let both = format!("feature\n\nChange-Id: {CID_A}\nChange-Id: {CID_B}\n");
+    let old = fx.commit(Some(base), &[("a.txt", Some("2\n"))], &both);
+    let tip_a = fx.commit(
+        Some(base),
+        &[("a.txt", Some("2\n")), ("a-only.txt", Some("a\n"))],
+        &msg("keep A", CID_A),
+    );
+    let tip_b = fx.commit(
+        Some(base),
+        &[("a.txt", Some("2\n")), ("b-only.txt", Some("b\n"))],
+        &msg("keep B", CID_B),
+    );
+    // Range includes both tips: `tip_a tip_b ^base`.
+    fx.branch("main", base);
+    fx.branch("old", old);
+    fx.branch("a", tip_a);
+    fx.branch("b", tip_b);
+
+    let abbrev = &old.to_string()[..12];
+    let (code, doc) = resolve(
+        &path_str(&fx.path),
+        &["a", "b", &format!("^{}", base)],
+        abbrev,
+        &[],
+    );
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "ambiguous");
+    assert_eq!(doc["reason"], "ambiguous");
+    assert_eq!(doc["candidates"].as_array().unwrap().len(), 2);
+}
+
+#[test]
+fn prefix_matching_two_ids_on_one_commit_is_ambiguous() {
+    let fx = Fx::new();
+    let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");
+    // Shared 10-symbol prefix; distinct tails.
+    let first = "ZZZZZZZZZZAAAAABBBBBCCCCC";
+    let second = "ZZZZZZZZZZDDDDDEEEEEFFFFF";
+    let body = format!("squash\n\nChange-Id: {first}\nChange-Id: {second}\n");
+    let tip = fx.commit(Some(base), &[("a.txt", Some("2\n"))], &body);
+    fx.branch("main", base);
+    fx.branch("topic", tip);
+
+    let (code, doc) = resolve(&path_str(&fx.path), &["main..topic"], "ZZZZZZZZZZ", &[]);
+    assert_eq!(code, 1, "{doc}");
+    assert_eq!(doc["confidence"], "ambiguous");
+    assert_eq!(doc["reason"], "ambiguous");
+    let candidates = doc["candidates"].as_array().unwrap();
+    assert_eq!(candidates.len(), 2);
+    assert_eq!(candidates[0]["commit"], tip.to_string());
+    assert_eq!(candidates[1]["commit"], tip.to_string());
+    let ids: Vec<_> = candidates
+        .iter()
+        .map(|c| c["change_id"].as_str().unwrap())
+        .collect();
+    assert!(ids.contains(&first));
+    assert!(ids.contains(&second));
+}
+
+#[test]
 fn empty_range_is_usage_error() {
     let fx = Fx::new();
     let base = fx.commit(None, &[("a.txt", Some("1\n"))], "base");

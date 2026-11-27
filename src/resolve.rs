@@ -257,9 +257,12 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
         ids_by_commit.push((sha, ids));
     }
 
-    let mut wanted_id: Option<String> = None;
+    // Hash queries may carry every Change-Id on the source commit (squash messages).
+    // A direct Change-Id query is a single normalised id or prefix.
+    let mut wanted_ids: Vec<String> = Vec::new();
     let mut source_sha: Option<ObjectId> = None;
     let mut hash_miss = false;
+    let mut id_query = false;
 
     let try_as_hash = !opts.force_change_id && change_id::looks_like_hash_query(query);
     if try_as_hash {
@@ -277,16 +280,14 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
         if status == "unique" {
             if let Some(full) = full {
                 source_sha = Some(full);
-                // Prefer the Change-Id of the commit when it is in range; otherwise read its message.
                 let from_range = ids_by_commit
                     .iter()
                     .find(|(id, _)| *id == full)
                     .map(|(_, ids)| ids.clone());
-                let ids = match from_range {
+                wanted_ids = match from_range {
                     Some(ids) => ids,
                     None => change_id::parse_message(&message_of(repo, full).unwrap_or_default()),
                 };
-                wanted_id = ids.into_iter().next();
             }
         } else {
             hash_miss = true;
@@ -299,7 +300,8 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
                 doc.reason = Some("unknown-object");
                 return Ok(doc);
             }
-            wanted_id = norm;
+            id_query = true;
+            wanted_ids = norm.into_iter().collect();
         }
     } else {
         let (norm, reject) = change_id::classify_query(query);
@@ -307,35 +309,54 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
             doc.reason = Some(reason);
             return Ok(doc);
         }
-        wanted_id = norm;
+        id_query = true;
+        wanted_ids = norm.into_iter().collect();
     }
 
-    // A hash query carries a full Change-Id from the source commit (equality only).
-    // A Change-Id query may match by prefix of at least PREFIX_MIN.
+    // One candidate per matching (commit, Change-Id) pair. Hash-sourced ids match by
+    // equality; a Change-Id query may match by prefix (D-20261127-11).
     let mut trailer_hits = Vec::new();
-    if let Some(ref wanted) = wanted_id {
-        for (sha, ids) in &ids_by_commit {
-            for cid in ids {
-                let ok = if source_sha.is_some() {
-                    cid == wanted
-                } else {
-                    change_id::matches(wanted, cid)
-                };
-                if ok {
-                    trailer_hits.push(candidate(*sha, "trailer", Some(cid.clone())));
-                    break;
-                }
+    for (sha, ids) in &ids_by_commit {
+        for cid in ids {
+            let ok = if id_query {
+                wanted_ids
+                    .iter()
+                    .any(|wanted| change_id::matches(wanted, cid))
+            } else {
+                wanted_ids.iter().any(|wanted| cid == wanted)
+            };
+            if ok {
+                trailer_hits.push(candidate(*sha, "trailer", Some(cid.clone())));
             }
         }
     }
 
     if trailer_hits.len() > 1 {
-        doc.confidence = "ambiguous";
-        doc.method = Some("trailer");
-        doc.change_id = wanted_id;
-        doc.candidates = trailer_hits;
-        doc.reason = Some("ambiguous");
-        return Ok(doc);
+        let distinct_commits: HashSet<&str> =
+            trailer_hits.iter().map(|c| c.commit.as_str()).collect();
+        // Several Change-Ids on one commit from a prefix, or several commits, are ambiguous.
+        if distinct_commits.len() > 1 || id_query {
+            doc.confidence = "ambiguous";
+            doc.method = Some("trailer");
+            doc.change_id = wanted_ids.first().cloned();
+            doc.candidates = trailer_hits;
+            doc.reason = Some("ambiguous");
+            return Ok(doc);
+        }
+        // Hash query: several source ids landed on the same commit in range — one exact tip.
+        let hit = trailer_hits[0].clone();
+        if source_sha
+            .map(|s| !present_set.contains(&s))
+            .unwrap_or(true)
+        {
+            doc.confidence = "exact";
+            doc.method = Some("trailer");
+            doc.commit = Some(hit.commit.clone());
+            doc.change_id = hit.change_id.clone();
+            doc.candidates = vec![hit];
+            doc.reason = None;
+            return Ok(doc);
+        }
     }
     if trailer_hits.len() == 1
         && source_sha
@@ -346,8 +367,7 @@ pub fn resolve(repo: &gix::Repository, opts: Opts<'_>) -> Result<Document> {
         doc.confidence = "exact";
         doc.method = Some("trailer");
         doc.commit = Some(hit.commit.clone());
-        // Prefer the canonical id from the trailer over a shorter query prefix.
-        doc.change_id = hit.change_id.clone().or(wanted_id);
+        doc.change_id = hit.change_id.clone().or_else(|| wanted_ids.first().cloned());
         doc.candidates = trailer_hits;
         doc.reason = None;
         return Ok(doc);
