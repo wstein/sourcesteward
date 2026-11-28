@@ -1657,7 +1657,11 @@ pub fn apply_plan(
         return Err(Fail::new("empty-message", "commit message is empty", 2));
     }
     let Some(got_sum) = plan["plan_sum"].as_str() else {
-        return Err(Fail::new("plan-sum-required", "plan has no plan_sum", 1));
+        return Err(Fail::new(
+            "plan-sum-required",
+            "plan_sum is missing or not a string",
+            1,
+        ));
     };
     if expected_sum.is_some_and(|sum| sum != got_sum) || plan_sum_of(plan) != got_sum {
         return Err(Fail::new("plan-sum-mismatch", "plan_sum does not match", 1));
