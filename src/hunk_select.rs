@@ -302,6 +302,24 @@ fn index_entry_for(root: &Path, path: &str) -> Result<Option<String>, Fail> {
     }
 }
 
+/// `git add -N` sets the intent-to-add bit (`0x20000000` in `ls-files --debug`).
+fn intent_to_add(root: &Path, path: &str) -> Result<bool, Fail> {
+    let out = text(&git(
+        root,
+        WorkspaceOp::LsFilesDebug {
+            path: path_arg(path)?,
+        },
+    )?);
+    for line in out.lines() {
+        let Some(flags) = line.split("flags:").nth(1) else {
+            continue;
+        };
+        let flags = u32::from_str_radix(flags.trim(), 16).unwrap_or(0);
+        return Ok(flags & 0x2000_0000 != 0);
+    }
+    Ok(false)
+}
+
 fn blob_hash_bytes(root: &Path, data: &[u8]) -> Result<String, Fail> {
     Ok(text(&git_in(root, WorkspaceOp::HashObject, Some(data))?)
         .trim()
@@ -1184,6 +1202,13 @@ pub fn make_plan(root: &Path, ids: &[String]) -> Result<Value, Fail> {
         let path = hunk["path"].as_str().unwrap_or("").to_string();
         let state = classify_index(root, &path)?;
         if state == "staged-unrelated" {
+            if intent_to_add(root, &path)? {
+                return Err(Fail::new(
+                    "intent-to-add",
+                    format!("selected path {path} is recorded with git add -N"),
+                    1,
+                ));
+            }
             return Err(Fail::new(
                 "unrelated-staged",
                 format!("selected path {path} has unrelated staged changes"),

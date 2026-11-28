@@ -1459,8 +1459,7 @@ fn a_path_with_a_space_stays_that_file() {
         .into_iter()
         .find(|hunk| hunk["path"] == "sp ace.txt")
         .unwrap_or_else(|| panic!("intent path missing in {raw}"));
-    // `git add -N` records the empty blob. That is an unrelated stage of the
-    // work-tree bytes, so the plan is refused. The header still names this path.
+    // `git add -N` is named. The exit code stays 1. The header still names this path.
     let (code, doc, raw) = stw(
         repo.path(),
         &[
@@ -1473,7 +1472,7 @@ fn a_path_with_a_space_stays_that_file() {
         ],
     );
     assert_eq!(code, 1, "{raw}");
-    assert_eq!(doc["error"]["code"], "unrelated-staged", "{raw}");
+    assert_eq!(doc["error"]["code"], "intent-to-add", "{raw}");
     assert!(raw.contains("sp ace.txt"), "{raw}");
 }
 
@@ -1762,8 +1761,8 @@ fn intent_to_add_and_tracked_newline_changes_keep_the_worktree_bytes() {
             .contains("+x\n\\ No newline at end of file\n"),
         "{raw}"
     );
-    // `git add -N` records the empty blob. Planning that path is refused, so
-    // the marker cannot be committed from this state.
+    // `git add -N` is named intent-to-add. The exit code stays 1, so the
+    // marker cannot be committed from this state.
     let (code, doc, raw) = stw(
         repo.path(),
         &[
@@ -1776,7 +1775,7 @@ fn intent_to_add_and_tracked_newline_changes_keep_the_worktree_bytes() {
         ],
     );
     assert_eq!(code, 1, "{raw}");
-    assert_eq!(doc["error"]["code"], "unrelated-staged", "{raw}");
+    assert_eq!(doc["error"]["code"], "intent-to-add", "{raw}");
 
     repo.write("lose.txt", b"one\ntwo\n");
     git(repo.path(), &["add", "--", "lose.txt"]);
@@ -2008,4 +2007,32 @@ fn empty_cr_and_executable_untracked_files_commit_their_bytes() {
     assert_eq!(git_bytes(repo.path(), &["show", "HEAD:empty.txt"]), b"");
     assert_eq!(git_bytes(repo.path(), &["show", "HEAD:cr.txt"]), b"foo\r");
     assert!(git(repo.path(), &["ls-files", "-s", "--", "run.sh"]).starts_with("100755"));
+}
+
+#[test]
+fn intent_to_add_is_named() {
+    let repo = Repo::new();
+    repo.write("intent.txt", b"intent\n");
+    git(repo.path(), &["add", "-N", "--", "intent.txt"]);
+    let doc = list(&repo);
+    let id = listed_hunks(&doc)
+        .into_iter()
+        .find(|hunk| hunk["path"] == "intent.txt")
+        .unwrap_or_else(|| panic!("{doc}"))["id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            &id,
+        ],
+    );
+    assert_eq!(code, 1, "{raw}");
+    assert_eq!(plan["error"]["code"], "intent-to-add", "{raw}");
 }

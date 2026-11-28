@@ -376,6 +376,10 @@ pub enum WorkspaceOp {
     LsFilesStage {
         path: BlamePath,
     },
+    /// `git ls-files --debug -- <path>`. The flags line names intent-to-add.
+    LsFilesDebug {
+        path: BlamePath,
+    },
     LsFilesOthers,
     /// `git hash-object --stdin`. The caller passes the bytes.
     HashObject,
@@ -545,6 +549,7 @@ impl WorkspaceOp {
                 "HEAD",
             ]),
             Self::LsFilesStage { path } => v(&["ls-files", "-s", "-z", "--", path.as_str()]),
+            Self::LsFilesDebug { path } => v(&["ls-files", "--debug", "--", path.as_str()]),
             Self::LsFilesOthers => v(&["ls-files", "--others", "--exclude-standard", "-z"]),
             Self::HashObject => v(&["hash-object", "--stdin"]),
             Self::SymbolicRefHead => v(&["symbolic-ref", "-q", "HEAD"]),
