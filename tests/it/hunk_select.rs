@@ -1221,6 +1221,10 @@ fn plan_without_plan_sum_or_with_edited_hunk_text_is_refused() {
     );
     assert_eq!(code, 1, "{raw}");
     assert_eq!(doc["error"]["code"], "plan-sum-required");
+    assert_eq!(
+        doc["error"]["message"],
+        "plan_sum is missing or not a string"
+    );
     assert_eq!(git(repo.path(), &["rev-parse", "HEAD"]), head);
     assert_eq!(fs::read(repo.path().join("f.txt")).unwrap(), before);
 
