@@ -489,6 +489,11 @@ fn objects_present(repo: &gix::Repository, roots: &[ObjectId]) -> Result<(), Fai
                     .map_err(|e| fail("missing-object", e.to_string()))?;
                 for entry in tree.iter() {
                     let entry = entry.map_err(|e| fail("missing-object", e.to_string()))?;
+                    // A gitlink names a commit in another repository. That object is not
+                    // stored here, and requiring it refuses apply before any backup.
+                    if entry.mode().is_commit() {
+                        continue;
+                    }
                     stack.push(entry.oid().to_owned());
                 }
             }

@@ -155,6 +155,46 @@ fn undo(repo: &Repo) -> (i32, String, String) {
     )
 }
 
+/// A gitlink names a commit that lives in the other repository. Apply must not
+/// require that object in this one.
+#[test]
+fn a_gitlink_whose_commit_is_absent_does_not_block_apply() {
+    let repo = Repo::new();
+    let absent = "cb6edf004e1ff425f4332792d707b4f5f49f247b";
+    let missing = Command::new("git")
+        .arg("-C")
+        .arg(repo.path())
+        .args(["cat-file", "-t", absent])
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .stderr(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(!missing.success());
+    repo.git(&[
+        "update-index",
+        "--add",
+        "--cacheinfo",
+        &format!("160000,{absent},legacy/workharbor"),
+    ]);
+    repo.git(&["commit", "-qm", "record legacy/workharbor"]);
+    let (code, out, err) = prepare(&repo);
+    assert_eq!(code, 0, "{out}{err}");
+    let (code, out, err) = apply(&repo);
+    assert_eq!(code, 0, "{out}{err}");
+    assert!(!err.contains("missing object"), "{err}");
+    let new = repo.git(&["rev-parse", "topic"]);
+    assert_ne!(new, repo.old);
+    assert_eq!(repo.git(&["rev-parse", "HEAD:legacy/workharbor"]), absent);
+    assert_eq!(
+        repo.git(&["rev-parse", &format!("{new}:legacy/workharbor")]),
+        absent
+    );
+    let (code, out, err) = undo(&repo);
+    assert_eq!(code, 0, "{out}{err}");
+    assert_eq!(repo.git(&["rev-parse", "topic"]), repo.old);
+}
+
 #[test]
 fn apply_and_undo_round_trip_keeps_the_tree_and_the_backup() {
     let repo = Repo::new();
