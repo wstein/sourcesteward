@@ -303,9 +303,14 @@ fn hunk_commit_plan(root: &Path, args: &CommitPlanArgs) -> u8 {
         return crate::error::exit::FAILED;
     }
     if matches!(args.source, Some(CommitSource::Index)) {
+        let command = if args.hunk.is_empty() {
+            "hunk-select list"
+        } else {
+            "hunk-select plan"
+        };
         let doc = serde_json::json!({
             "schema_version": 1,
-            "command": "hunk-select list",
+            "command": command,
             "error": {"code": "source-worktree", "message": "hunk selection requires --source worktree"},
             "outcome": "refused",
         });

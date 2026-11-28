@@ -2038,6 +2038,42 @@ fn intent_to_add_is_named() {
 }
 
 #[test]
+fn index_source_with_a_hunk_names_the_plan() {
+    let repo = Repo::new();
+    repo.write("f.txt", b"one\n");
+    git(repo.path(), &["add", "--", "f.txt"]);
+    git(repo.path(), &["commit", "-m", "f"]);
+    repo.write("f.txt", b"two\n");
+    let doc = list(&repo);
+    let id = listed_hunks(&doc)[0]["id"].as_str().unwrap().to_string();
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "index",
+            "--hunk",
+            &id,
+        ],
+    );
+    assert_eq!(code, 2, "{raw}");
+    assert_eq!(doc["command"], "hunk-select plan", "{raw}");
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "index",
+            "--list-hunks",
+        ],
+    );
+    assert_eq!(code, 2, "{raw}");
+    assert_eq!(doc["command"], "hunk-select list", "{raw}");
+}
+
+#[test]
 fn apply_records_the_commit_apply_reflog_and_mode_deleted_renamed_hunks() {
     let repo = Repo::new();
     repo.write("keep.txt", b"keep\n");
