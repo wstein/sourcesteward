@@ -419,7 +419,7 @@ pub enum WorkspaceOp {
         treeish: Hex40,
         path: BlamePath,
     },
-    /// `git update-ref --no-deref <ref> <new> <expected>`.
+    /// `git update-ref --no-deref -m <message> <ref> <new> <expected>`.
     MoveBranch {
         reference: BranchRef,
         new: Hex40,
@@ -599,6 +599,8 @@ impl WorkspaceOp {
             } => v(&[
                 "update-ref",
                 "--no-deref",
+                "-m",
+                "stw: workspace commit-apply",
                 reference.as_str(),
                 new.as_str(),
                 expected.as_str(),
@@ -1992,4 +1994,32 @@ fn mask_authorization(s: &str) -> String {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod move_branch_args {
+    use super::{BranchRef, Hex40, WorkspaceOp};
+
+    #[test]
+    fn move_branch_keeps_the_expected_value_and_names_the_reflog() {
+        let op = WorkspaceOp::MoveBranch {
+            reference: BranchRef::parse("refs/heads/topic").unwrap(),
+            new: Hex40::parse("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa").unwrap(),
+            expected: Hex40::parse("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb").unwrap(),
+        };
+        let args = op.args();
+        assert!(args.iter().any(|arg| arg == "stw: workspace commit-apply"));
+        assert!(args
+            .iter()
+            .any(|arg| arg == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"));
+        let expected_at = args
+            .iter()
+            .position(|arg| arg == "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+            .unwrap();
+        let new_at = args
+            .iter()
+            .position(|arg| arg == "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+            .unwrap();
+        assert!(new_at + 1 == expected_at);
+    }
 }
