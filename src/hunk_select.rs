@@ -1586,6 +1586,15 @@ fn build_prepared_index(
     fs::read(&prepared).map_err(|e| Fail::new("index", e.to_string(), 1))
 }
 
+/// `leave` and `none` do not change an index entry. Rewriting those same bytes
+/// would give the real index a new timestamp and hide a racy edit this commit
+/// did not select.
+fn index_entries_stay(actions: &[Value]) -> bool {
+    actions
+        .iter()
+        .all(|action| matches!(action["action"].as_str(), Some("leave") | Some("none")))
+}
+
 fn publish(
     root: &Path,
     plan: &Value,
@@ -1622,17 +1631,28 @@ fn publish(
                 1,
             ));
         }
-        let prepared = build_prepared_index(root, &index_path, actions, scratch)?;
-        lock.write_all(&prepared)
-            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
-        lock.sync_all()
-            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
         let branch = BranchRef::parse(reference)
             .ok_or_else(|| Fail::new("bad-ref", "ref is not a branch", 1))?;
         let new = Hex40::parse(commit)
             .ok_or_else(|| Fail::new("bad-plan", "commit id is not 40 hex", 1))?;
         let expected = Hex40::parse(old_head)
             .ok_or_else(|| Fail::new("bad-plan", "old head is not 40 hex", 1))?;
+        if index_entries_stay(actions) {
+            git(
+                root,
+                WorkspaceOp::MoveBranch {
+                    reference: branch,
+                    new,
+                    expected,
+                },
+            )?;
+            return Ok(());
+        }
+        let prepared = build_prepared_index(root, &index_path, actions, scratch)?;
+        lock.write_all(&prepared)
+            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
+        lock.sync_all()
+            .map_err(|e| Fail::new("index", e.to_string(), 1))?;
         git(
             root,
             WorkspaceOp::MoveBranch {
