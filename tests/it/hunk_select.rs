@@ -1006,6 +1006,110 @@ fn an_unselected_same_size_edit_stays_visible() {
     );
 }
 
+/// A fully staged selection does not change the index. Publishing the same
+/// bytes under a new timestamp would hide an unselected racy edit.
+#[test]
+fn a_fully_staged_hunk_keeps_the_index_timestamp() {
+    let repo = Repo::new();
+    git(repo.path(), &["config", "core.checkStat", "minimal"]);
+    repo.write("f", b"alpha\nbeta\n");
+    repo.write("g", b"aaaa\n");
+    git(repo.path(), &["add", "--", "f", "g"]);
+    git(repo.path(), &["commit", "-m", "base files"]);
+    repo.write("f", b"alpha\nBETA\n");
+    git(repo.path(), &["add", "--", "f"]);
+    repo.write("g", b"bbbb\n");
+    let cached = cached_mtime(repo.path(), "g");
+    set_mtime(&repo.path().join("g"), cached);
+    set_mtime(&repo.path().join(".git/index"), cached);
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+
+    let (_, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+            "f",
+        ],
+    );
+    let id = listed["hunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|h| h["path"] == "f")
+        .expect(&raw)["id"]
+        .as_str()
+        .unwrap();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            id,
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(plan["selected"][0]["index_state"], "staged-full", "{raw}");
+    let plan_path = repo.plans.path().join("staged.json");
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let index = repo.path().join(".git/index");
+    let mtime_before = mtime_ns(&index);
+    let bytes_before = fs::read(&index).unwrap();
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            "selected f",
+            "--plan-sum",
+            plan["plan_sum"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(doc["outcome"], "ok", "{raw}");
+    assert_eq!(
+        mtime_ns(&index),
+        mtime_before,
+        "apply published a new timestamp onto an unchanged index"
+    );
+    assert_eq!(fs::read(&index).unwrap(), bytes_before);
+
+    let status = git_stdout(repo.path(), &["status", "--short"]);
+    assert!(
+        status.lines().any(|line| line == " M g"),
+        "unselected edit disappeared from git status: {status:?}"
+    );
+    let diff = git(repo.path(), &["diff", "--", "g"]);
+    assert!(
+        diff.contains("+bbbb"),
+        "git diff -- g lost the unselected edit: {diff}"
+    );
+    assert_eq!(git(repo.path(), &["show", "HEAD:g"]), "aaaa");
+    assert_eq!(git(repo.path(), &["show", "HEAD:f"]), "alpha\nBETA");
+    assert_eq!(
+        git(repo.path(), &["show", "--name-only", "--format=", "HEAD"]),
+        "f"
+    );
+}
+
+fn mtime_ns(path: &Path) -> u128 {
+    fs::metadata(path)
+        .unwrap()
+        .modified()
+        .unwrap()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos()
+}
+
 fn cached_mtime(dir: &Path, file: &str) -> std::time::SystemTime {
     let debug = git(dir, &["ls-files", "--debug", "--", file]);
     for line in debug.lines() {
