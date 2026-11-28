@@ -921,6 +921,133 @@ fn stale_worktree_and_index_and_unrelated_and_lock() {
     fs::remove_file(&lock).unwrap();
 }
 
+/// A same-size edit whose timestamp sits in the index's racy window must stay
+/// visible after a commit that did not select it.
+#[test]
+fn an_unselected_same_size_edit_stays_visible() {
+    let repo = Repo::new();
+    // A rewrite changes ctime. The default stat check would show `g` for that
+    // reason. `minimal` is the one-second window in which a same-size edit is racy.
+    git(repo.path(), &["config", "core.checkStat", "minimal"]);
+    repo.write("f", b"alpha\nbeta\n");
+    repo.write("g", b"aaaa\n");
+    git(repo.path(), &["add", "--", "f", "g"]);
+    git(repo.path(), &["commit", "-m", "base files"]);
+    repo.write("f", b"alpha\nBETA\n");
+    repo.write("g", b"bbbb\n");
+    let cached = cached_mtime(repo.path(), "g");
+    set_mtime(&repo.path().join("g"), cached);
+    set_mtime(&repo.path().join(".git/index"), cached);
+    std::thread::sleep(std::time::Duration::from_millis(1200));
+
+    let (_, listed, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--list-hunks",
+            "--source",
+            "worktree",
+            "f",
+        ],
+    );
+    let id = listed["hunks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|h| h["path"] == "f")
+        .expect(&raw)["id"]
+        .as_str()
+        .unwrap();
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            id,
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let plan_path = repo.plans.path().join("plan.json");
+    fs::write(&plan_path, serde_json::to_string(&plan).unwrap()).unwrap();
+    let (code, doc, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-apply",
+            plan_path.to_str().unwrap(),
+            "--message",
+            "selected f",
+            "--plan-sum",
+            plan["plan_sum"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    assert_eq!(doc["outcome"], "ok", "{raw}");
+
+    let status = git_stdout(repo.path(), &["status", "--short"]);
+    assert!(
+        status.lines().any(|line| line == " M g"),
+        "unselected edit disappeared from git status: {status:?}"
+    );
+    let diff = git(repo.path(), &["diff", "--", "g"]);
+    assert!(
+        diff.contains("+bbbb"),
+        "git diff -- g lost the unselected edit: {diff}"
+    );
+    assert_eq!(git(repo.path(), &["show", "HEAD:g"]), "aaaa");
+    assert_eq!(git(repo.path(), &["show", "HEAD:f"]), "alpha\nBETA");
+    assert_eq!(
+        git(repo.path(), &["show", "--name-only", "--format=", "HEAD"]),
+        "f"
+    );
+}
+
+fn cached_mtime(dir: &Path, file: &str) -> std::time::SystemTime {
+    let debug = git(dir, &["ls-files", "--debug", "--", file]);
+    for line in debug.lines() {
+        let line = line.trim();
+        let Some(rest) = line.strip_prefix("mtime:") else {
+            continue;
+        };
+        let mut parts = rest.split(':');
+        let sec: u64 = parts.next().unwrap().trim().parse().unwrap();
+        let nsec: u32 = parts.next().unwrap().trim().parse().unwrap();
+        return std::time::UNIX_EPOCH + std::time::Duration::new(sec, nsec);
+    }
+    panic!("no cached mtime for {file}: {debug}");
+}
+
+fn set_mtime(path: &Path, mtime: std::time::SystemTime) {
+    let file = fs::File::options().write(true).open(path).unwrap();
+    file.set_modified(mtime).unwrap();
+}
+
+fn git_stdout(dir: &Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Spike Tester")
+        .env("GIT_AUTHOR_EMAIL", "spike@example.invalid")
+        .env("GIT_COMMITTER_NAME", "Spike Tester")
+        .env("GIT_COMMITTER_EMAIL", "spike@example.invalid")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8_lossy(&out.stdout).to_string()
+}
+
 #[test]
 fn crlf_and_untracked_apply_and_plan_sum_mismatch() {
     let repo = Repo::new();
