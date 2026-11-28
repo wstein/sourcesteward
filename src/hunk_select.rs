@@ -5,7 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 
@@ -1498,6 +1498,40 @@ fn recheck(root: &Path, plan: &Value) -> Result<(), Fail> {
     Ok(())
 }
 
+/// Copy the index and keep the source timestamp. `fs::copy` stamps the copy
+/// with "now", so a same-size edit in the source's racy window no longer looks
+/// racy and Git trusts the stale stat. Read the bytes and the timestamp from
+/// the same open file, then set the timestamp before Git reads the copy.
+fn copy_index_preserving_mtime(src: &Path, dst: &Path) -> Result<(), Fail> {
+    let mut file = fs::File::open(src).map_err(|e| Fail::new("index", e.to_string(), 1))?;
+    let modified = file
+        .metadata()
+        .and_then(|meta| meta.modified())
+        .map_err(|e| {
+            Fail::new(
+                "index-mtime",
+                format!("could not read the index timestamp: {e}"),
+                1,
+            )
+        })?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)
+        .map_err(|e| Fail::new("index", e.to_string(), 1))?;
+    fs::write(dst, &bytes).map_err(|e| Fail::new("index", e.to_string(), 1))?;
+    fs::File::options()
+        .write(true)
+        .open(dst)
+        .and_then(|out| out.set_modified(modified))
+        .map_err(|e| {
+            Fail::new(
+                "index-mtime",
+                format!("could not keep the index timestamp: {e}"),
+                1,
+            )
+        })?;
+    Ok(())
+}
+
 fn build_prepared_index(
     root: &Path,
     real_index: &Path,
@@ -1505,7 +1539,7 @@ fn build_prepared_index(
     scratch: &Path,
 ) -> Result<Vec<u8>, Fail> {
     let prepared = scratch.join("prepared-index");
-    fs::copy(real_index, &prepared).map_err(|e| Fail::new("index", e.to_string(), 1))?;
+    copy_index_preserving_mtime(real_index, &prepared)?;
     for action in actions {
         let path = action["path"].as_str().unwrap_or("");
         match action["action"].as_str().unwrap_or("") {
