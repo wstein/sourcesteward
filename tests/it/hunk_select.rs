@@ -2036,3 +2036,67 @@ fn intent_to_add_is_named() {
     assert_eq!(code, 1, "{raw}");
     assert_eq!(plan["error"]["code"], "intent-to-add", "{raw}");
 }
+
+#[test]
+fn apply_records_the_commit_apply_reflog_and_mode_deleted_renamed_hunks() {
+    let repo = Repo::new();
+    repo.write("keep.txt", b"keep\n");
+    repo.write("gone.txt", b"gone\n");
+    git(repo.path(), &["add", "--", "keep.txt", "gone.txt"]);
+    git(repo.path(), &["commit", "-m", "files"]);
+    fs::remove_file(repo.path().join("gone.txt")).unwrap();
+    let doc = list(&repo);
+    let hunk = listed_hunks(&doc)
+        .into_iter()
+        .find(|hunk| hunk["path"] == "gone.txt" && hunk["kind"] == "deleted")
+        .unwrap_or_else(|| panic!("{doc}"));
+    let (code, plan, raw) = stw(
+        repo.path(),
+        &[
+            "workspace",
+            "commit-plan",
+            "--source",
+            "worktree",
+            "--hunk",
+            hunk["id"].as_str().unwrap(),
+        ],
+    );
+    assert_eq!(code, 0, "{raw}");
+    let (code, _, raw) = apply_saved(&repo, &plan, "delete");
+    assert_eq!(code, 0, "{raw}");
+    let reflog = git(repo.path(), &["reflog", "-1", "--format=%gs", "main"]);
+    assert!(reflog.contains("stw: workspace commit-apply"), "{reflog}");
+    assert!(git(repo.path(), &["ls-tree", "-r", "--name-only", "HEAD"])
+        .lines()
+        .all(|line| line != "gone.txt"));
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(
+            repo.path().join("keep.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        let doc = list(&repo);
+        let hunk = listed_hunks(&doc)
+            .into_iter()
+            .find(|hunk| hunk["kind"] == "mode" && hunk["path"] == "keep.txt")
+            .unwrap_or_else(|| panic!("{doc}"));
+        let (code, plan, raw) = stw(
+            repo.path(),
+            &[
+                "workspace",
+                "commit-plan",
+                "--source",
+                "worktree",
+                "--hunk",
+                hunk["id"].as_str().unwrap(),
+            ],
+        );
+        assert_eq!(code, 0, "{raw}");
+        let (code, _, raw) = apply_saved(&repo, &plan, "mode");
+        assert_eq!(code, 0, "{raw}");
+        assert!(git(repo.path(), &["ls-files", "-s", "--", "keep.txt"]).starts_with("100755"));
+    }
+}
